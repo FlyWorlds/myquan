@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>持仓盯盘 · 000893 / 600552 / 002171</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #f3f6f4;
+      --bg1: #e7efe9;
+      --ink: #14201a;
+      --muted: #5c6f66;
+      --line: #c9d6cf;
+      --card: rgba(255,255,255,0.82);
+      --up: #0b7a45;
+      --down: #b42318;
+      --accent: #1f6b4a;
+      --warn: #9a6700;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "IBM Plex Sans", "Noto Sans SC", sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #d9ebe0 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #e4eef8 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+    }
+    .wrap { width: min(1100px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
+    .hero {
+      display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: end;
+      margin-bottom: 16px;
+    }
+    .hero h1 {
+      margin: 0 0 6px; font-size: clamp(1.6rem, 3vw, 2.2rem); letter-spacing: -0.02em;
+    }
+    .hero p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    .summary {
+      min-width: 220px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      backdrop-filter: blur(8px);
+    }
+    .summary .label { color: var(--muted); font-size: 0.85rem; }
+    .summary .value { font-size: 1.8rem; font-weight: 700; margin-top: 4px; }
+    .summary .sub { color: var(--muted); font-size: 0.9rem; margin-top: 2px; }
+    .index-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .index-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      backdrop-filter: blur(8px);
+      padding: 14px 16px;
+    }
+    .index-name { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .index-name strong { font-size: 1.05rem; }
+    .index-name code { color: var(--muted); font-size: 0.85rem; }
+    .index-metrics {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .index-metrics span { display: block; color: var(--muted); font-size: 0.78rem; }
+    .index-metrics b { font-size: 1.05rem; font-weight: 700; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--card);
+      backdrop-filter: blur(8px);
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(20, 32, 26, 0.04);
+      transition: background 0.25s ease, border-color 0.25s ease;
+    }
+    /* 将买入：红底；将卖出：绿底（A股习惯） */
+    .card.warn-buy {
+      background: rgba(255, 214, 214, 0.92);
+      border-color: #e08a8a;
+      box-shadow: 0 10px 28px rgba(180, 35, 24, 0.12);
+    }
+    .card.warn-sell {
+      background: rgba(198, 236, 214, 0.92);
+      border-color: #6fbf8f;
+      box-shadow: 0 10px 28px rgba(11, 122, 69, 0.12);
+    }
+    .card header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .market {
+      display: inline-block; font-size: 0.75rem; color: var(--accent);
+      border: 1px solid #b7d2c4; border-radius: 999px; padding: 2px 8px; margin-bottom: 6px;
+    }
+    .title h2 { margin: 0; font-size: 1.2rem; }
+    .title code { color: var(--muted); font-size: 0.9rem; }
+    .alert-badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .card.warn-buy .alert-badge {
+      background: #f5b4b4;
+      color: #8f1610;
+    }
+    .card.warn-sell .alert-badge {
+      background: #9fd9b5;
+      color: #0a5c34;
+    }
+    .price { text-align: right; }
+    .last { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
+    .chg { font-size: 0.95rem; margin-top: 4px; }
+    .grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px;
+      border-top: 1px dashed var(--line); padding-top: 12px;
+    }
+    .grid div span { display: block; color: var(--muted); font-size: 0.78rem; }
+    .grid div b { font-size: 0.98rem; font-weight: 600; }
+    .up { color: var(--up); }
+    .down { color: var(--down); }
+    .flat { color: var(--muted); }
+    .tag-yes { color: var(--accent); }
+    .tag-warn { color: var(--warn); }
+    .tag-buy { color: var(--down); }
+    .tag-sell { color: var(--up); }
+    .err { color: var(--down); font-size: 0.9rem; }
+    footer { margin-top: 12px; color: var(--muted); font-size: 0.8rem; }
+    .note { margin-top: 18px; color: var(--muted); font-size: 0.86rem; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1>持仓盯盘</h1>
+        <p>000893 / 600552 / 002171 · 开盘±2.5% 策略参考 · 2026-07-27 11:19:13</p>
+      </div>
+      <div class="summary">
+        <div class="label">合计浮盈</div>
+        <div class="value up">
+          +41.80
+        </div>
+        <div class="sub">
+          市值 19584.00
+          · 成本 19542.20
+          · +0.21%
+        </div>
+      </div>
+    </div>
+    <div class="index-row">
+      
+            <div class="index-card">
+              <div class="index-name">
+                <span class="market">上证</span>
+                <strong>上证指数</strong>
+                <code>sh000001</code>
+              </div>
+              
+              <div class="index-metrics">
+                <div><span>点数</span><b>3823.60</b></div>
+                <div><span>涨跌点数</span><b class="up">+9.41</b></div>
+                <div><span>涨跌幅</span><b class="up">+0.25%</b></div>
+              </div>
+              
+            </div>
+            
+            <div class="index-card">
+              <div class="index-name">
+                <span class="market">深证</span>
+                <strong>深证成指</strong>
+                <code>sz399001</code>
+              </div>
+              
+              <div class="index-metrics">
+                <div><span>点数</span><b>13949.64</b></div>
+                <div><span>涨跌点数</span><b class="up">+174.96</b></div>
+                <div><span>涨跌幅</span><b class="up">+1.27%</b></div>
+              </div>
+              
+            </div>
+            
+    </div>
+    <div class="cards">
+      
+            <article class="card">
+              <header>
+                <div class="title">
+                  <span class="market">深证</span>
+                  <h2>亚钾国际</h2>
+                  <code>000893</code>
+                  
+                </div>
+                <div class="price">
+                  <div class="last">47.74</div>
+                  <div class="chg up">
+                    当日 +2.95%
+                  </div>
+                </div>
+              </header>
+              
+              <div class="grid">
+                <div><span>开盘</span><b>46.13</b></div>
+                <div><span>最高</span><b>48.45</b></div>
+                <div><span>最低</span><b>45.71</b></div>
+                <div><span>较开盘</span><b class="up">+3.49</b></div>
+                <div><span>买点 +2.5%</span><b class="">47.28</b></div>
+                <div><span>止损 -2.5%</span><b class="">44.98</b></div>
+                <div><span>已触买</span><b class="tag-yes">是</b></div>
+                <div><span>已触止损</span><b class="">否</b></div>
+                <div><span>预警</span><b class="">-</b></div>
+                <div><span>持仓</span><b>200</b></div>
+                <div><span>成本</span><b>47.705</b></div>
+                <div><span>浮盈</span><b class="up">7.00</b></div>
+                <div><span>浮盈%</span><b class="up">+0.07%</b></div>
+              </div>
+              <footer>更新 11:20:00</footer>
+            </article>
+            
+            <article class="card">
+              <header>
+                <div class="title">
+                  <span class="market">上证</span>
+                  <h2>凯盛科技</h2>
+                  <code>600552</code>
+                  
+                </div>
+                <div class="price">
+                  <div class="last">15.98</div>
+                  <div class="chg up">
+                    当日 +2.77%
+                  </div>
+                </div>
+              </header>
+              
+              <div class="grid">
+                <div><span>开盘</span><b>15.56</b></div>
+                <div><span>最高</span><b>16.26</b></div>
+                <div><span>最低</span><b>15.22</b></div>
+                <div><span>较开盘</span><b class="up">+2.70</b></div>
+                <div><span>买点 +2.5%</span><b class="">15.95</b></div>
+                <div><span>止损 -2.5%</span><b class="">15.17</b></div>
+                <div><span>已触买</span><b class="tag-yes">是</b></div>
+                <div><span>已触止损</span><b class="">否</b></div>
+                <div><span>预警</span><b class="">-</b></div>
+                <div><span>持仓</span><b>400</b></div>
+                <div><span>成本</span><b>15.952</b></div>
+                <div><span>浮盈</span><b class="up">11.20</b></div>
+                <div><span>浮盈%</span><b class="up">+0.18%</b></div>
+              </div>
+              <footer>更新 11:20:00</footer>
+            </article>
+            
+            <article class="card">
+              <header>
+                <div class="title">
+                  <span class="market">深证</span>
+                  <h2>楚江新材</h2>
+                  <code>002171</code>
+                  
+                </div>
+                <div class="price">
+                  <div class="last">9.11</div>
+                  <div class="chg up">
+                    当日 +3.05%
+                  </div>
+                </div>
+              </header>
+              
+              <div class="grid">
+                <div><span>开盘</span><b>8.90</b></div>
+                <div><span>最高</span><b>9.17</b></div>
+                <div><span>最低</span><b>8.87</b></div>
+                <div><span>较开盘</span><b class="up">+2.36</b></div>
+                <div><span>买点 +2.5%</span><b class="">9.12</b></div>
+                <div><span>止损 -2.5%</span><b class="">8.68</b></div>
+                <div><span>已触买</span><b class="tag-yes">是</b></div>
+                <div><span>已触止损</span><b class="">否</b></div>
+                <div><span>预警</span><b class="">-</b></div>
+                <div><span>持仓</span><b>400</b></div>
+                <div><span>成本</span><b>9.051</b></div>
+                <div><span>浮盈</span><b class="up">23.60</b></div>
+                <div><span>浮盈%</span><b class="up">+0.65%</b></div>
+              </div>
+              <footer>更新 11:20:00</footer>
+            </article>
+            
+    </div>
+    <p class="note">
+      大盘：点数=最新指数点位；涨跌点数/涨跌幅相对昨收。
+      个股：当日涨幅=(现价/昨收-1)×100；较开盘点=(现价/开盘-1)×100；
+      买点=开盘×1.025；止损=开盘×0.975。
+      未触发且距买卖点 ≤1 点：将买入红底、将卖出绿底。刷新请重新运行
+      <code>python index.py</code> 或 <code>python index.py html</code>。
+    </p>
+  </div>
+</body>
+</html>

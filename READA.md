@@ -51,8 +51,29 @@ uvx maturin develop
 
 ```
 myquan/
-├── READA.md      # 本文档
-└── quan.py       # 缠论简化策略示例（日线回测）
+├── READA.md                 # 本文档
+├── holdingStocks/           # 持仓盯盘（多标的）
+├── zz500/                   # 中证500ETF (510500)
+│   ├── ZZ500ETF.py          # 主策略（参数优化）
+│   ├── zz500ETF2.py         # 开盘±N% / 首阳连阳
+│   ├── zz500ETF3.py         # 动态牛熊版
+│   └── 510500_*.parquet/csv # 行情缓存与报告
+├── hs300/                   # 沪深300ETF (510300)
+│   ├── HS300ETF.py
+│   └── 510300_*             # 缓存与报告
+├── kskj600552/              # 凯盛科技 (600552)
+│   ├── KSKJ600552.PY        # 开盘±2.5% 策略
+│   └── _scan_*.py           # 参数扫描
+└── _misc/                   # 示例杂项（demo / quan）
+```
+
+运行示例：
+
+```bash
+cd myquan/zz500 && python ZZ500ETF.py
+cd myquan/hs300 && python HS300ETF.py
+cd myquan/kskj600552 && python KSKJ600552.PY
+cd myquan/holdingStocks && python index.py
 ```
 
 ---
