@@ -14,7 +14,7 @@
   · 佣金：万 0.854（买卖双向）；印花税：卖出 0.1%
   · 限价对齐：买入触发价 ceil、止损触发价 floor（至少达到 ±2.5%）
 
-回测：2015-05-29 → 至今；前复权日线；T+1。
+回测：2025-01-01 → 至今；前复权日线；T+1。
 运行：python kskj.py
 
 K 线形态边界（相对当日 open，非前收）：
@@ -44,7 +44,7 @@ from akquant import CurrentClose, Strategy  # [akquant] 策略基类、成交模
 
 SYMBOL = "sh600552"
 SYMBOL_NAME = "凯盛科技"
-START_DATE = "20150529"
+START_DATE = "20250101"
 END_DATE = dt.date.today().strftime("%Y%m%d")
 
 INITIAL_CASH = 100_000.0
