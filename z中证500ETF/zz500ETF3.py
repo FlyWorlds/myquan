@@ -4,13 +4,16 @@ zz500ETF3.py
 
 中证500ETF(510500) 动态牛熊策略
 
-升级：
-1. MA60判断市场状态
-2. 熊市止损1.2%
-3. 震荡止损1.5%
-4. 牛市止损2.0%
-5. 牛市取消阴线立即卖出，改用MA20趋势退出
-6. 牛市盈利10%后启动5%移动止盈
+买入（盘中可触发，不依赖收盘是否阳线）：
+  · 当天最高价相对开盘 ≥ ENTRY_PCT（默认 1.2%）→ 按开盘+阈值价买入
+  · 前一日必须是：阴线，或涨幅 < 1% 的小阳线（避免连续两根阳线追买）
+
+持仓 / 退出：
+1. MA60 判断市场状态（牛/熊/震荡）
+2. 熊市止损 1.2% / 震荡 1.5% / 牛市 2.0%
+3. 牛市取消阴线立即卖出，改用 MA20 趋势退出
+4. 牛市盈利 10% 后启动 5% 移动止盈
+5. 非牛市：阴线收盘卖出（收盘后才可判定）
 
 运行:
 python zz500ETF3.py
@@ -40,6 +43,8 @@ TARGET_PCT = 0.95
 LOT_SIZE = 100
 
 ENTRY_PCT = 0.012
+# 前一日小阳线：相对开盘涨幅上限（小于 1 个点）
+PREV_SMALL_YANG_PCT = 0.01
 
 STOP_BEAR = 0.012
 STOP_SIDE = 0.015
@@ -186,6 +191,17 @@ def entry_price(open_px):
 
 
 
+def prev_day_allows_entry(prev_open: float, prev_close: float) -> bool:
+    """前一日是否允许今日买入：阴线，或涨幅 < 1% 的小阳；禁止连续两根阳线追买。"""
+    if prev_open <= 0:
+        return False
+    # 阴线（含收平按允许）
+    if prev_close <= prev_open:
+        return True
+    # 小阳：相对开盘涨幅 < 1 个点
+    return (prev_close / prev_open - 1.0) < PREV_SMALL_YANG_PCT
+
+
 class BullBearETFStrategy(Strategy):
 
     def on_start(self):
@@ -194,11 +210,14 @@ class BullBearETFStrategy(Strategy):
 
         self.entry_price = None
         self.highest_price = None
+        self.prev_open: float | None = None
+        self.prev_close: float | None = None
 
         self.regime = "SIDE"
 
         self.log(
-            "中证500ETF动态牛熊策略启动"
+            f"中证500ETF动态牛熊 | 买入: high>=open×{1+ENTRY_PCT:.3f}；"
+            f"前日须阴线或小阳(<{PREV_SMALL_YANG_PCT*100:.0f}%)"
         )
 
 
@@ -279,114 +298,111 @@ class BullBearETFStrategy(Strategy):
         day = self.to_local_time(bar.timestamp).strftime("%Y-%m-%d")
         ma20, ma60 = MA_BY_DAY.get(day, (float("nan"), float("nan")))
 
-
-        self.regime = self.update_regime(
-            c,
-            ma60
-        )
-
-
-        pos=float(
-            self.get_position(SYMBOL)
-        )
-
-
-        # 空仓买入
-        if pos<=0:
-
-            buy_px=entry_price(o)
-
-            if h>=buy_px:
-
-                self.buy(
-                    buy_px
-                )
-
-                return
-
-
-        # 持仓管理
-
-        if pos>0:
-
-
-            if self.highest_price is None:
-                self.highest_price=c
-
-
-            self.highest_price=max(
-                self.highest_price,
-                h
+        try:
+            self.regime = self.update_regime(
+                c,
+                ma60
             )
 
 
-            stop_price=o*(1-self.stop_pct())
+            pos=float(
+                self.get_position(SYMBOL)
+            )
 
 
-            # 动态止盈
-            if (
-                self.regime=="BULL"
-                and self.entry_price
-                and c/self.entry_price-1>=0.10
-            ):
+            # 空仓买入：只认盘中冲高≥阈值；前日须阴线或小阳（不看当日收盘是否阳）
+            if pos<=0 and self.prev_open is not None and self.prev_close is not None:
 
-                if c <= self.highest_price*0.95:
+                buy_px=entry_price(o)
+
+                if h>=buy_px and prev_day_allows_entry(self.prev_open, self.prev_close):
+
+                    self.buy(
+                        buy_px
+                    )
+                    return
+
+
+            # 持仓管理
+
+            if pos>0:
+
+
+                if self.highest_price is None:
+                    self.highest_price=c
+
+
+                self.highest_price=max(
+                    self.highest_price,
+                    h
+                )
+
+
+                stop_price=o*(1-self.stop_pct())
+
+
+                # 动态止盈
+                if (
+                    self.regime=="BULL"
+                    and self.entry_price
+                    and c/self.entry_price-1>=0.10
+                ):
+
+                    if c <= self.highest_price*0.95:
+
+                        self.sell_all(
+                            c,
+                            "牛市移动止盈"
+                        )
+                        return
+
+
+
+                # 止损
+
+                if l<=stop_price:
 
                     self.sell_all(
-                        c,
-                        "牛市移动止盈"
+                        stop_price,
+                        f"{self.regime}止损"
                     )
-
                     return
 
 
 
-            # 止损
+                # 牛市保护趋势
 
-            if l<=stop_price:
+                if (
+                    self.regime=="BULL"
+                    and not pd.isna(ma20)
+                    and c<ma20
+                ):
 
-                self.sell_all(
-                    stop_price,
-                    f"{self.regime}止损"
-                )
-
-                return
-
-
-
-            # 牛市保护趋势
-
-            if (
-                self.regime=="BULL"
-                and not pd.isna(ma20)
-                and c<ma20
-            ):
-
-                self.sell_all(
-                    c,
-                    "牛市跌破MA20"
-                )
-
-                return
+                    self.sell_all(
+                        c,
+                        "牛市跌破MA20"
+                    )
+                    return
 
 
 
-            # 非牛市保持原规则
+                # 非牛市保持原规则
 
-            if (
-                self.regime!="BULL"
-                and c<o
-            ):
+                if (
+                    self.regime!="BULL"
+                    and c<o
+                ):
 
-                self.sell_all(
-                    c,
-                    "阴线卖出"
-                )
+                    self.sell_all(
+                        c,
+                        "阴线卖出"
+                    )
+                    return
 
-                return
-
-
-
+        finally:
+            # 无论是否交易，更新“前一日”OHLC，供次日买入过滤
+            self.prev_open = o
+            self.prev_close = c
 
 def print_yearly(result: aq.BacktestResult, data: pd.DataFrame) -> None:
     """按自然年对比策略收益 vs 买入持有。"""

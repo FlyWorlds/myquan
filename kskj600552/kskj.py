@@ -2,16 +2,19 @@
 
 规则：
   · 买入：空仓可买时，当天最高价 ≥ 开盘价×1.025 → 按开盘+2.5% 买入约 95%
+    - 前一日须阴线，或相对开盘涨幅 < 2.5% 的小阳线
+    - 前一日与前二日不能连续两根阳线（前面双阳不买）
   · 卖出（有仓时，优先级从上到下）：
     1) 止损：当天最低价 ≤ 开盘价×0.975 → 按开盘-2.5% 卖出
     2) 阴线：收盘价 < 开盘价 → 按收盘价卖出
   · 阳线（收盘 > 开盘）：持有不动
   · 卖出后可再次等待下一次冲高 +2.5%
   · 日线近似：high/low 触及即视为盘中按触发价成交
-  · 滑点：买卖各 0.1 个点（0.1%）
+  · 滑点：买卖各 0.1%（0.1 个点）
+  · 佣金：万 0.854（买卖双向）；印花税：卖出 0.1%
 
 回测：2024-01-01 → 至今；前复权日线；T+1。
-运行：python KSKJ600552.PY
+运行：python kskj.py
 """
 
 from __future__ import annotations
@@ -33,12 +36,14 @@ END_DATE = dt.date.today().strftime("%Y%m%d")
 INITIAL_CASH = 100_000.0
 TARGET_PCT = 0.95
 LOT_SIZE = 100
-COMMISSION_RATE = 0.0003
+COMMISSION_RATE = 0.0000854  # 万 0.854
 STAMP_TAX_RATE = 0.001
-# 相对开盘 ±2.5 个点；滑点 0.1 个点
+# 相对开盘 ±2.5 个点；滑点 0.1%
 ENTRY_PCT = 0.025
 STOP_PCT = 0.025
-SLIPPAGE = {"type": "percent", "value": 0.001}
+# 前一日小阳线：相对开盘涨幅须低于此阈值（2.5 个点）
+PREV_SMALL_YANG_PCT = 0.025
+SLIPPAGE = {"type": "percent", "value": 0.001}  # 0.1%
 
 FILL_CLOSE = CurrentClose()
 REPORT_PATH = Path(__file__).with_name("kskj600552_report.html")
@@ -79,6 +84,34 @@ def stop_trigger_price(open_px: float) -> float:
     return round(float(open_px) * (1.0 - STOP_PCT), 2)
 
 
+def is_yang(open_px: float, close_px: float) -> bool:
+    """收盘 > 开盘 为阳线。"""
+    return float(close_px) > float(open_px)
+
+
+def prev_day_allows_entry(prev_open: float, prev_close: float) -> bool:
+    """前一日允许今日买入：阴线，或相对开盘涨幅 < 2.5% 的小阳。"""
+    if prev_open <= 0:
+        return False
+    if prev_close <= prev_open:
+        return True
+    return (prev_close / prev_open - 1.0) < PREV_SMALL_YANG_PCT
+
+
+def has_double_yang_before(
+    prev2_open: float | None,
+    prev2_close: float | None,
+    prev_open: float | None,
+    prev_close: float | None,
+) -> bool:
+    """前二日与前一日均为阳线 → 前面双阳，禁止买入。"""
+    if None in (prev2_open, prev2_close, prev_open, prev_close):
+        return False
+    if prev2_open <= 0 or prev_open <= 0:
+        return False
+    return is_yang(prev2_open, prev2_close) and is_yang(prev_open, prev_close)
+
+
 class OpenBreak3Strategy(Strategy):
     """相对开盘：+2.5%买入；-2.5%止损或阴线收盘卖；阳线持有。"""
 
@@ -87,10 +120,15 @@ class OpenBreak3Strategy(Strategy):
         self.lot_size = LOT_SIZE
         self.armed = True
         self.entry_price: float | None = None
+        self.prev_open: float | None = None
+        self.prev_close: float | None = None
+        self.prev2_open: float | None = None
+        self.prev2_close: float | None = None
         self.log(
             f"{SYMBOL_NAME}({SYMBOL}) 开盘±{ENTRY_PCT*100:.1f}% "
             f"(+买/-止损，阴线收盘出，阳线持有) | "
-            f"滑点{SLIPPAGE['value']*100:.1f}点 | {START_DATE}~{END_DATE}"
+            f"前日须阴线或小阳(<{PREV_SMALL_YANG_PCT*100:.1f}%)，禁前面双阳 | "
+            f"佣金万0.854 滑点{SLIPPAGE['value']*100:.1f}% | {START_DATE}~{END_DATE}"
         )
 
     def _hold_pnl_pct(self, mark_px: float) -> float | None:
@@ -129,6 +167,13 @@ class OpenBreak3Strategy(Strategy):
             )
         return False
 
+    def _roll_prev_bars(self, open_px: float, close_px: float) -> None:
+        """滚动前二日 / 前一日 OHLC，供次日买入过滤。"""
+        self.prev2_open = self.prev_open
+        self.prev2_close = self.prev_close
+        self.prev_open = open_px
+        self.prev_close = close_px
+
     def on_bar(self, bar) -> None:
         if bar.symbol != SYMBOL:
             return
@@ -138,60 +183,89 @@ class OpenBreak3Strategy(Strategy):
         low = float(bar.low)
         c = float(bar.close)
         day = self.to_local_time(bar.timestamp).strftime("%Y-%m-%d")
-        pos = float(self.get_position(SYMBOL))
 
-        entry_px = entry_trigger_price(o)
-        stop_px = stop_trigger_price(o)
-        hit_entry = h + 1e-12 >= entry_px
-        hit_stop = low - 1e-12 <= stop_px
-        yin = c < o  # 阴线
-        yang = c > o  # 阳线
+        try:
+            pos = float(self.get_position(SYMBOL))
 
-        # 1) 空仓可买：最高价触及开盘+2.5% → 按+2.5%价买入
-        if self.armed and pos <= 0 and hit_entry:
-            self.order_target_percent(
-                symbol=SYMBOL,
-                target_percent=TARGET_PCT,
-                price=entry_px,
-                fill_mode=FILL_CLOSE,
-                slippage=SLIPPAGE,
-            )
-            self.armed = False
-            self.entry_price = entry_px
-            self.log(
-                f"{day} 开盘+{ENTRY_PCT*100:.1f}%买入 @ {entry_px:.2f}(+滑点) "
-                f"(open={o:.2f} high={h:.2f}) 持有收益=+0.00%"
-            )
+            entry_px = entry_trigger_price(o)
+            stop_px = stop_trigger_price(o)
+            hit_entry = h + 1e-12 >= entry_px
+            hit_stop = low - 1e-12 <= stop_px
+            yin = c < o  # 阴线
+            yang = c > o  # 阳线
 
-        # 2) 有仓卖出：止损优先，其次阴线收盘出；阳线不动
-        pos = float(self.get_position(SYMBOL))
-        avail = float(self.get_available_position(SYMBOL))
-        if pos <= 0 and avail <= 0:
-            return
+            # 1) 空仓可买：最高价触及开盘+2.5%，且前日形态符合
+            if self.armed and pos <= 0 and hit_entry:
+                can_buy = (
+                    self.prev_open is not None
+                    and self.prev_close is not None
+                    and prev_day_allows_entry(self.prev_open, self.prev_close)
+                    and not has_double_yang_before(
+                        self.prev2_open,
+                        self.prev2_close,
+                        self.prev_open,
+                        self.prev_close,
+                    )
+                )
+                if can_buy:
+                    self.order_target_percent(
+                        symbol=SYMBOL,
+                        target_percent=TARGET_PCT,
+                        price=entry_px,
+                        fill_mode=FILL_CLOSE,
+                        slippage=SLIPPAGE,
+                    )
+                    self.armed = False
+                    self.entry_price = entry_px
+                    self.log(
+                        f"{day} 开盘+{ENTRY_PCT*100:.1f}%买入 @ {entry_px:.2f}(+滑点) "
+                        f"(open={o:.2f} high={h:.2f}) 持有收益=+0.00%"
+                    )
+                elif self.prev_open is not None and self.prev_close is not None:
+                    if not prev_day_allows_entry(self.prev_open, self.prev_close):
+                        self.log(
+                            f"{day} 触及买点但前日不符(须阴线或小阳"
+                            f"<{PREV_SMALL_YANG_PCT*100:.1f}%) skip"
+                        )
+                    elif has_double_yang_before(
+                        self.prev2_open,
+                        self.prev2_close,
+                        self.prev_open,
+                        self.prev_close,
+                    ):
+                        self.log(f"{day} 触及买点但前面双阳 skip")
 
-        if hit_stop:
-            self._exit_all(
-                day=day,
-                avail=avail,
-                pos=pos,
-                price=stop_px,
-                reason=f"开盘-{STOP_PCT*100:.1f}%止损(low={low:.2f})",
-            )
-            return
+            # 2) 有仓卖出：止损优先，其次阴线收盘出；阳线不动
+            pos = float(self.get_position(SYMBOL))
+            avail = float(self.get_available_position(SYMBOL))
+            if pos <= 0 and avail <= 0:
+                return
 
-        if yin:
-            self._exit_all(
-                day=day,
-                avail=avail,
-                pos=pos,
-                price=c,
-                reason="阴线收盘卖出",
-            )
-            return
+            if hit_stop:
+                self._exit_all(
+                    day=day,
+                    avail=avail,
+                    pos=pos,
+                    price=stop_px,
+                    reason=f"开盘-{STOP_PCT*100:.1f}%止损(low={low:.2f})",
+                )
+                return
 
-        if yang:
-            # 阳线持有不动
-            return
+            if yin:
+                self._exit_all(
+                    day=day,
+                    avail=avail,
+                    pos=pos,
+                    price=c,
+                    reason="阴线收盘卖出",
+                )
+                return
+
+            if yang:
+                # 阳线持有不动
+                pass
+        finally:
+            self._roll_prev_bars(o, c)
 
 
 def _metric(metrics_df: pd.DataFrame, name: str) -> float:
@@ -212,10 +286,14 @@ def print_summary(result: aq.BacktestResult, data: pd.DataFrame) -> None:
     print(f"日线根数: {len(data)}")
     print(f"买入: high>=open×{1+ENTRY_PCT:.3f}，成交@开盘+2.5%")
     print(
+        f"      前日须阴线或小阳(<{PREV_SMALL_YANG_PCT*100:.1f}%)，禁前面双阳"
+    )
+    print(
         f"卖出: ①low<=open×{1-STOP_PCT:.3f}@开盘-2.5%；"
         f"②阴线@收盘；阳线持有"
     )
-    print(f"滑点: {SLIPPAGE['value']*100:.1f}个点")
+    print(f"佣金: 万0.854 ({COMMISSION_RATE})；印花税(卖): {STAMP_TAX_RATE*100:.1f}%")
+    print(f"滑点: {SLIPPAGE['value']*100:.1f}%")
     print(f"总盈亏: {_metric(m, 'total_pnl'):.2f}")
     print(f"累计收益%: {_metric(m, 'total_return_pct'):.4f}")
     print(f"最大回撤%: {_metric(m, 'max_drawdown_pct'):.4f}")
