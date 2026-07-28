@@ -1,13 +1,13 @@
-"""持仓记录与盯盘：深证000893 / 上证600552 / 深证002171
+"""持仓记录与盯盘：深证000893 / 上证600552 / 深证002171 / 上证510580
 
 功能：
   · 拉取当日开盘、最高、最低、现价（新浪1分钟）
-  · 与 kskj600552 一致：买点 ceil(open×1.025)、止损 floor(open×0.975)
+  · 默认与 kskj600552 一致 ±2.5%（ceil/floor）；510580 为 ±1.2%
   · 空仓：已触买/将买入 → 建议限价买@触发价；有仓：已触止损/将止损/阴线卖 → 建议挂单价
   · 本地 JSON 记录持仓成本与数量，计算浮盈亏；T+1 买入日提示不可卖
 
 用法：
-  python index.py              # 查看三只标的行情 + 持仓，并生成 HTML
+  python index.py              # 查看标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
   python index.py buy 002171 9.05 1000
   python index.py sell 002171 9.20 500
@@ -35,17 +35,26 @@ HOLDINGS_FILE = ROOT / "holdings.json"
 TRADES_FILE = ROOT / "trades.jsonl"
 REPORT_FILE = ROOT / "holdings_report.html"
 
-# 对称 ±2.5 个点（与 kskj600552 策略一致）
-ENTRY_PCT = 0.025
-STOP_PCT = 0.025
+# 默认对称阈值（与 kskj600552 一致 ±2.5%）；单标的可在 WATCHLIST 用 pct 覆盖
+DEFAULT_PCT = 0.025
+ENTRY_PCT = DEFAULT_PCT
+STOP_PCT = DEFAULT_PCT
 TICK_SIZE = 0.01
 # 距买点/止损点若干「点」内触发预警（相对开盘的百分点）
 NEAR_POINTS = 1.0
 
-WATCHLIST: list[dict[str, str]] = [
+WATCHLIST: list[dict[str, Any]] = [
     {"code": "000893", "sina": "sz000893", "market": "深证", "name": "亚钾国际"},
     {"code": "600552", "sina": "sh600552", "market": "上证", "name": "凯盛科技"},
     {"code": "002171", "sina": "sz002171", "market": "深证", "name": "楚江新材"},
+    {
+        "code": "510580",
+        "sina": "sh510580",
+        "market": "上证",
+        "name": "易方达中证500ETF",
+        "pct": 0.012,
+        "tick": 0.001,
+    },
 ]
 
 # 大盘指数（新浪 spot）
@@ -63,12 +72,32 @@ def _code_key(code: str) -> str:
     return "".join(ch for ch in str(code) if ch.isdigit()).zfill(6)[-6:]
 
 
-def _find_meta(code: str) -> dict[str, str]:
+def _watch_pct(item: dict[str, Any]) -> float:
+    return float(item.get("pct", DEFAULT_PCT))
+
+
+def _watch_tick(item: dict[str, Any]) -> float:
+    return float(item.get("tick", TICK_SIZE))
+
+
+def _empty_position(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": item["name"],
+        "market": item["market"],
+        "qty": 0,
+        "cost": None,
+        "buy_time": None,
+        "note": "",
+    }
+
+
+def _find_meta(code: str) -> dict[str, Any]:
     key = _code_key(code)
     for item in WATCHLIST:
         if item["code"] == key:
             return item
-    raise KeyError(f"不在监控列表: {code}（仅支持 000893/600552/002171）")
+    codes = "/".join(w["code"] for w in WATCHLIST)
+    raise KeyError(f"不在监控列表: {code}（仅支持 {codes}）")
 
 
 def load_holdings() -> dict[str, Any]:
@@ -76,21 +105,18 @@ def load_holdings() -> dict[str, Any]:
         data = {
             "updated_at": None,
             "positions": {
-                w["code"]: {
-                    "name": w["name"],
-                    "market": w["market"],
-                    "qty": 0,
-                    "cost": None,
-                    "buy_time": None,
-                    "note": "",
-                }
+                w["code"]: _empty_position(w)
                 for w in WATCHLIST
             },
         }
         save_holdings(data)
         return data
     with HOLDINGS_FILE.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    positions = data.setdefault("positions", {})
+    for w in WATCHLIST:
+        positions.setdefault(w["code"], _empty_position(w))
+    return data
 
 
 def save_holdings(data: dict[str, Any]) -> None:
@@ -176,9 +202,15 @@ def floor_to_tick(px: float, tick: float = TICK_SIZE) -> float:
     return round(math.floor((float(px) + 1e-12) / tick) * tick, decimals)
 
 
-def strategy_levels(open_px: float) -> dict[str, float]:
-    buy = ceil_to_tick(float(open_px) * (1.0 + ENTRY_PCT))
-    stop = floor_to_tick(float(open_px) * (1.0 - STOP_PCT))
+def strategy_levels(
+    open_px: float,
+    *,
+    entry_pct: float = DEFAULT_PCT,
+    stop_pct: float = DEFAULT_PCT,
+    tick: float = TICK_SIZE,
+) -> dict[str, float]:
+    buy = ceil_to_tick(float(open_px) * (1.0 + entry_pct), tick)
+    stop = floor_to_tick(float(open_px) * (1.0 - stop_pct), tick)
     return {"buy_trigger": buy, "stop": stop}
 
 
@@ -216,6 +248,8 @@ def strategy_signal(
     qty: int,
     buy_time: str | None,
     vs_open_pts: float,
+    entry_pct: float = DEFAULT_PCT,
+    stop_pct: float = DEFAULT_PCT,
 ) -> dict[str, Any]:
     """按 kskj 规则生成预警与建议挂单价（盯盘用现价近似收盘判阴阳）。"""
     holding = qty > 0
@@ -223,8 +257,8 @@ def strategy_signal(
     hit_stop = low_px <= stop_px + 1e-12
     yin = is_yin(open_px, last_px)
     t1_lock = holding and _is_t1_buy_day(buy_time, session)
-    buy_lvl = ENTRY_PCT * 100.0
-    stop_lvl = -STOP_PCT * 100.0
+    buy_lvl = entry_pct * 100.0
+    stop_lvl = -stop_pct * 100.0
 
     base: dict[str, Any] = {
         "near_buy": False,
@@ -377,9 +411,15 @@ def collect_rows() -> list[dict[str, Any]]:
 
     for w in WATCHLIST:
         code = w["code"]
+        entry_pct = _watch_pct(w)
+        stop_pct = entry_pct
+        tick = _watch_tick(w)
+        pct_pct = round(entry_pct * 100.0, 2)
         try:
             q = fetch_today_quote(w["sina"])
-            lv = strategy_levels(q["open"])
+            lv = strategy_levels(
+                q["open"], entry_pct=entry_pct, stop_pct=stop_pct, tick=tick
+            )
             vs = points_vs_open(q["open"], q["last"])
             day_chg = q.get("day_chg_pct")
             hit_buy = q["high"] + 1e-12 >= lv["buy_trigger"]
@@ -398,6 +438,8 @@ def collect_rows() -> list[dict[str, Any]]:
                 qty=qty,
                 buy_time=buy_time,
                 vs_open_pts=vs,
+                entry_pct=entry_pct,
+                stop_pct=stop_pct,
             )
             cost = pos.get("cost")
             pnl = None
@@ -426,6 +468,7 @@ def collect_rows() -> list[dict[str, Any]]:
                     "现价": q["last"],
                     "当日涨幅": None if day_chg is None else round(float(day_chg), 2),
                     "较开盘点": round(vs, 2),
+                    "阈值%": pct_pct,
                     "买点": lv["buy_trigger"],
                     "止损": lv["stop"],
                     "已触买": "是" if hit_buy else "否",
@@ -461,6 +504,7 @@ def collect_rows() -> list[dict[str, Any]]:
                     "现价": None,
                     "当日涨幅": None,
                     "较开盘点": None,
+                    "阈值%": pct_pct,
                     "买点": None,
                     "止损": None,
                     "已触买": "-",
@@ -574,6 +618,8 @@ def write_html_report(
                 f'{" · " + escape(suggest_note) if suggest_note else ""}'
                 f"</div>"
             )
+        th_pct = r.get("阈值%")
+        th_label = f"{float(th_pct):g}" if th_pct is not None else "2.5"
         card_cls = f"card {bg}".strip()
         cards.append(
             f"""
@@ -600,8 +646,8 @@ def write_html_report(
                 <div><span>最低</span><b>{_fmt_num(r.get('最低'))}</b></div>
                 <div><span>较开盘</span><b class="{_cls_chg(vs_open)}">{('-' if vs_open is None else f'{float(vs_open):+.2f}')}</b></div>
                 <div><span>形态</span><b>{escape(str(r.get('形态') or '-'))}</b></div>
-                <div><span>买点 +2.5%</span><b class="{'tag-buy' if r.get('近买点') else ''}">{_fmt_num(r.get('买点'))}</b></div>
-                <div><span>止损 -2.5%</span><b class="{'tag-sell' if r.get('近止损') else ''}">{_fmt_num(r.get('止损'))}</b></div>
+                <div><span>买点 +{th_label}%</span><b class="{'tag-buy' if r.get('近买点') else ''}">{_fmt_num(r.get('买点'))}</b></div>
+                <div><span>止损 -{th_label}%</span><b class="{'tag-sell' if r.get('近止损') else ''}">{_fmt_num(r.get('止损'))}</b></div>
                 <div><span>已触买</span><b class="{'tag-yes' if r.get('已触买')=='是' else ''}">{escape(str(r.get('已触买')))}</b></div>
                 <div><span>已触止损</span><b class="{'tag-sell' if r.get('已触止损')=='是' else ''}">{escape(str(r.get('已触止损')))}</b></div>
                 <div><span>预警</span><b class="{'tag-alert' if alert else ''}">{escape(alert) if alert else '-'}</b></div>
@@ -620,7 +666,7 @@ def write_html_report(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>持仓盯盘 · 000893 / 600552 / 002171</title>
+  <title>持仓盯盘 · 000893 / 600552 / 002171 / 510580</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -775,7 +821,7 @@ def write_html_report(
     <div class="hero">
       <div>
         <h1>持仓盯盘</h1>
-        <p>000893 / 600552 / 002171 · 开盘±2.5% 策略参考 · {_now()}</p>
+        <p>000893 / 600552 / 002171 ±2.5% · 510580 ±1.2% · {_now()}</p>
       </div>
       <div class="summary">
         <div class="label">合计浮盈</div>
@@ -797,8 +843,7 @@ def write_html_report(
     </div>
     <p class="note">
       大盘：点数=最新指数点位；涨跌点数/涨跌幅相对昨收。
-      个股：当日涨幅=(现价/昨收-1)×100；较开盘点=(现价/开盘-1)×100；
-      买点=ceil(开盘×1.025)；止损=floor(开盘×0.975)，与 kskj600552 一致。
+      个股：默认 ±2.5%（ceil/floor，同 kskj600552）；510580 为 ±1.2%。
       空仓：已触买/将买入 → 建议限价@买点；有仓：已触止损/将止损/阴线卖 → 建议挂单价。
       未触发且距买卖点 ≤1 点：将买入红底、将止损绿底。刷新请重新运行
       <code>python index.py</code> 或 <code>python index.py html</code>。
@@ -815,7 +860,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     rows = collect_rows()
     indices = fetch_indices()
     print(f"\n持仓盯盘  {_now()}")
-    print(f"策略参考: 相对开盘 +{ENTRY_PCT*100:.1f}%买 / -{STOP_PCT*100:.1f}%止损 / 阴线收盘出")
+    print(f"策略参考: 默认 ±{DEFAULT_PCT*100:.1f}%（510580 ±1.2%）/ 阴线收盘出")
     print(f"持仓文件: {HOLDINGS_FILE}")
     print("-" * 108)
     print("【大盘】")
@@ -843,6 +888,7 @@ def cmd_status(args: argparse.Namespace) -> None:
                 "现价": "-" if r["现价"] is None else r["现价"],
                 "当日涨幅": "-" if r["当日涨幅"] is None else r["当日涨幅"],
                 "较开盘点": "-" if r["较开盘点"] is None else r["较开盘点"],
+                "阈值%": r.get("阈值%"),
                 "最高": "-" if r["最高"] is None else r["最高"],
                 "最低": "-" if r["最低"] is None else r["最低"],
                 "买点": "-" if r["买点"] is None else r["买点"],
@@ -861,7 +907,7 @@ def cmd_status(args: argparse.Namespace) -> None:
             }
         )
     cols = [
-        "市场", "代码", "名称", "开盘", "现价", "当日涨幅", "较开盘点",
+        "市场", "代码", "名称", "开盘", "现价", "当日涨幅", "较开盘点", "阈值%",
         "最高", "最低", "买点", "止损", "已触买", "已触止损", "形态", "预警",
         "建议挂单", "挂单说明", "持仓", "成本", "浮盈", "浮盈%", "更新",
     ]
@@ -873,7 +919,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     if not getattr(args, "no_open", False):
         webbrowser.open(report.resolve().as_uri())
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘点=(现价/开盘-1)×100")
-    print("     买点=ceil(开盘×1.025)；止损=floor(开盘×0.975)")
+    print("     买点/止损按各标的阈值 ceil/floor；510580=±1.2%，其余=±2.5%")
     print("     预警触发时显示建议挂单价；有仓优先止损/阴线，空仓才提示买入")
 
 

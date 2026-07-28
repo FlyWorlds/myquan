@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>持仓盯盘 · 000893 / 600552 / 002171</title>
+  <title>持仓盯盘 · 000893 / 600552 / 002171 / 510580</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -112,14 +112,15 @@
       font-size: 0.82rem;
       font-weight: 700;
       letter-spacing: 0.02em;
+      color: var(--down);
+      background: rgba(180, 35, 24, 0.12);
+      border: 1px solid rgba(180, 35, 24, 0.35);
     }
-    .card.warn-buy .alert-badge {
-      background: #f5b4b4;
-      color: #8f1610;
-    }
+    .card.warn-buy .alert-badge,
     .card.warn-sell .alert-badge {
-      background: #9fd9b5;
-      color: #0a5c34;
+      color: var(--down);
+      background: rgba(180, 35, 24, 0.16);
+      border-color: rgba(180, 35, 24, 0.45);
     }
     .suggest-order {
       margin: 0 0 10px;
@@ -144,6 +145,7 @@
     .flat { color: var(--muted); }
     .tag-yes { color: var(--accent); }
     .tag-warn { color: var(--warn); }
+    .tag-alert { color: var(--down); font-weight: 700; }
     .tag-buy { color: var(--down); }
     .tag-sell { color: var(--up); }
     .err { color: var(--down); font-size: 0.9rem; }
@@ -156,7 +158,7 @@
     <div class="hero">
       <div>
         <h1>持仓盯盘</h1>
-        <p>000893 / 600552 / 002171 · 开盘±2.5% 策略参考 · 2026-07-28 08:49:12</p>
+        <p>000893 / 600552 / 002171 ±2.5% · 510580 ±1.2% · 2026-07-28 09:20:50</p>
       </div>
       <div class="summary">
         <div class="label">合计浮盈</div>
@@ -180,9 +182,9 @@
               </div>
               
               <div class="index-metrics">
-                <div><span>点数</span><b>3858.24</b></div>
-                <div><span>涨跌点数</span><b class="up">+44.05</b></div>
-                <div><span>涨跌幅</span><b class="up">+1.16%</b></div>
+                <div><span>点数</span><b>3857.63</b></div>
+                <div><span>涨跌点数</span><b class="down">-0.61</b></div>
+                <div><span>涨跌幅</span><b class="down">-0.02%</b></div>
               </div>
               
             </div>
@@ -195,9 +197,9 @@
               </div>
               
               <div class="index-metrics">
-                <div><span>点数</span><b>14148.73</b></div>
-                <div><span>涨跌点数</span><b class="up">+374.05</b></div>
-                <div><span>涨跌幅</span><b class="up">+2.72%</b></div>
+                <div><span>点数</span><b>0.00</b></div>
+                <div><span>涨跌点数</span><b class="flat">+0.00</b></div>
+                <div><span>涨跌幅</span><b class="flat">+0.00%</b></div>
               </div>
               
             </div>
@@ -211,7 +213,7 @@
                   <span class="market">深证</span>
                   <h2>亚钾国际</h2>
                   <code>000893</code>
-                  <div class="alert-badge">T+1不可卖</div>
+                  <div class="alert-badge tag-alert">T+1不可卖</div>
                 </div>
                 <div class="price">
                   <div class="last">47.91</div>
@@ -232,7 +234,7 @@
                 <div><span>止损 -2.5%</span><b class="">44.97</b></div>
                 <div><span>已触买</span><b class="tag-yes">是</b></div>
                 <div><span>已触止损</span><b class="">否</b></div>
-                <div><span>预警</span><b class="">T+1不可卖</b></div>
+                <div><span>预警</span><b class="tag-alert">T+1不可卖</b></div>
                 <div><span>持仓</span><b>200</b></div>
                 <div><span>成本</span><b>47.705</b></div>
                 <div><span>浮盈</span><b class="up">41.00</b></div>
@@ -247,7 +249,7 @@
                   <span class="market">上证</span>
                   <h2>凯盛科技</h2>
                   <code>600552</code>
-                  <div class="alert-badge">T+1不可卖</div>
+                  <div class="alert-badge tag-alert">T+1不可卖</div>
                 </div>
                 <div class="price">
                   <div class="last">16.39</div>
@@ -268,7 +270,7 @@
                 <div><span>止损 -2.5%</span><b class="">15.17</b></div>
                 <div><span>已触买</span><b class="tag-yes">是</b></div>
                 <div><span>已触止损</span><b class="">否</b></div>
-                <div><span>预警</span><b class="">T+1不可卖</b></div>
+                <div><span>预警</span><b class="tag-alert">T+1不可卖</b></div>
                 <div><span>持仓</span><b>400</b></div>
                 <div><span>成本</span><b>15.952</b></div>
                 <div><span>浮盈</span><b class="up">175.20</b></div>
@@ -283,7 +285,7 @@
                   <span class="market">深证</span>
                   <h2>楚江新材</h2>
                   <code>002171</code>
-                  <div class="alert-badge">T+1不可卖</div>
+                  <div class="alert-badge tag-alert">T+1不可卖</div>
                 </div>
                 <div class="price">
                   <div class="last">9.20</div>
@@ -304,7 +306,7 @@
                 <div><span>止损 -2.5%</span><b class="">8.67</b></div>
                 <div><span>已触买</span><b class="tag-yes">是</b></div>
                 <div><span>已触止损</span><b class="">否</b></div>
-                <div><span>预警</span><b class="">T+1不可卖</b></div>
+                <div><span>预警</span><b class="tag-alert">T+1不可卖</b></div>
                 <div><span>持仓</span><b>400</b></div>
                 <div><span>成本</span><b>9.051</b></div>
                 <div><span>浮盈</span><b class="up">59.60</b></div>
@@ -313,11 +315,46 @@
               <footer>更新 15:00:00</footer>
             </article>
             
+            <article class="card warn-buy">
+              <header>
+                <div class="title">
+                  <span class="market">上证</span>
+                  <h2>易方达中证500ETF</h2>
+                  <code>510580</code>
+                  <div class="alert-badge tag-alert">已触买</div>
+                </div>
+                <div class="price">
+                  <div class="last">4.07</div>
+                  <div class="chg up">
+                    当日 +2.80%
+                  </div>
+                </div>
+              </header>
+              
+              <div class="suggest-order">建议挂单 <strong>4.01</strong> · 限价买@4.01</div>
+              <div class="grid">
+                <div><span>开盘</span><b>3.96</b></div>
+                <div><span>最高</span><b>4.08</b></div>
+                <div><span>最低</span><b>3.93</b></div>
+                <div><span>较开盘</span><b class="up">+2.80</b></div>
+                <div><span>形态</span><b>阳</b></div>
+                <div><span>买点 +1.2%</span><b class="tag-buy">4.01</b></div>
+                <div><span>止损 -1.2%</span><b class="">3.91</b></div>
+                <div><span>已触买</span><b class="tag-yes">是</b></div>
+                <div><span>已触止损</span><b class="">否</b></div>
+                <div><span>预警</span><b class="tag-alert">已触买</b></div>
+                <div><span>持仓</span><b>0</b></div>
+                <div><span>成本</span><b>-</b></div>
+                <div><span>浮盈</span><b class="">-</b></div>
+                <div><span>浮盈%</span><b class="">-</b></div>
+              </div>
+              <footer>更新 15:00:00</footer>
+            </article>
+            
     </div>
     <p class="note">
       大盘：点数=最新指数点位；涨跌点数/涨跌幅相对昨收。
-      个股：当日涨幅=(现价/昨收-1)×100；较开盘点=(现价/开盘-1)×100；
-      买点=ceil(开盘×1.025)；止损=floor(开盘×0.975)，与 kskj600552 一致。
+      个股：默认 ±2.5%（ceil/floor，同 kskj600552）；510580 为 ±1.2%。
       空仓：已触买/将买入 → 建议限价@买点；有仓：已触止损/将止损/阴线卖 → 建议挂单价。
       未触发且距买卖点 ≤1 点：将买入红底、将止损绿底。刷新请重新运行
       <code>python index.py</code> 或 <code>python index.py html</code>。
