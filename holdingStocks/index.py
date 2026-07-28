@@ -2,14 +2,16 @@
 
 功能：
   · 拉取当日开盘、最高、最低、现价（新浪1分钟）
-  · 按「相对开盘 ±2.5点」显示买入触发价 / 止损价，以及现价相对开盘涨跌点
-  · 本地 JSON 记录持仓成本与数量，计算浮盈亏
+  · 与 kskj600552 一致：买点 ceil(open×1.025)、止损 floor(open×0.975)
+  · 空仓：已触买/将买入 → 建议限价买@触发价；有仓：已触止损/将止损/阴线卖 → 建议挂单价
+  · 本地 JSON 记录持仓成本与数量，计算浮盈亏；T+1 买入日提示不可卖
 
 用法：
   python index.py              # 查看三只标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
   python index.py buy 002171 9.05 1000
   python index.py sell 002171 9.20 500
+  python index.py set-cost 600552 15.95 --qty 400
   python index.py clear 002171
   python index.py history
 """
@@ -18,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import webbrowser
 from datetime import datetime
 from html import escape
@@ -32,9 +35,10 @@ HOLDINGS_FILE = ROOT / "holdings.json"
 TRADES_FILE = ROOT / "trades.jsonl"
 REPORT_FILE = ROOT / "holdings_report.html"
 
-# 对称 ±2.5 个点（与 KSKJ600552 策略一致）
+# 对称 ±2.5 个点（与 kskj600552 策略一致）
 ENTRY_PCT = 0.025
 STOP_PCT = 0.025
+TICK_SIZE = 0.01
 # 距买点/止损点若干「点」内触发预警（相对开盘的百分点）
 NEAR_POINTS = 1.0
 
@@ -156,61 +160,154 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     }
 
 
+def ceil_to_tick(px: float, tick: float = TICK_SIZE) -> float:
+    """买入触发价：向上取整到 tick（与 kskj 一致）。"""
+    if tick <= 0:
+        return float(px)
+    decimals = max(0, -int(round(math.log10(tick)))) if tick < 1 else 0
+    return round(math.ceil((float(px) - 1e-12) / tick) * tick, decimals)
+
+
+def floor_to_tick(px: float, tick: float = TICK_SIZE) -> float:
+    """止损触发价：向下取整到 tick（与 kskj 一致）。"""
+    if tick <= 0:
+        return float(px)
+    decimals = max(0, -int(round(math.log10(tick)))) if tick < 1 else 0
+    return round(math.floor((float(px) + 1e-12) / tick) * tick, decimals)
+
+
 def strategy_levels(open_px: float) -> dict[str, float]:
-    buy = round(open_px * (1.0 + ENTRY_PCT), 2)
-    stop = round(open_px * (1.0 - STOP_PCT), 2)
+    buy = ceil_to_tick(float(open_px) * (1.0 + ENTRY_PCT))
+    stop = floor_to_tick(float(open_px) * (1.0 - STOP_PCT))
     return {"buy_trigger": buy, "stop": stop}
 
 
-def near_trade_alerts(
-    vs_open_pts: float,
-    *,
-    hit_buy: bool,
-    hit_stop: bool,
-) -> dict[str, Any]:
-    """未触发策略时，若现价距买点/止损点 ≤1 个点，标记将触发预警。
+def is_yin(open_px: float, close_px: float) -> bool:
+    return float(close_px) < float(open_px)
 
-    - 将买入：未触买，且较开盘点数在买点±1点内 → 红底
-    - 将卖出：未触止损，且较开盘点数在止损点±1点内 → 绿底
-    """
+
+def is_yang(open_px: float, close_px: float) -> bool:
+    return float(close_px) > float(open_px)
+
+
+def bar_shape(open_px: float, last_px: float) -> str:
+    if is_yang(open_px, last_px):
+        return "阳"
+    if is_yin(open_px, last_px):
+        return "阴"
+    return "十字"
+
+
+def _is_t1_buy_day(buy_time: str | None, session: str) -> bool:
+    if not buy_time:
+        return False
+    return str(buy_time)[:10] == str(session)[:10]
+
+
+def strategy_signal(
+    *,
+    open_px: float,
+    high_px: float,
+    low_px: float,
+    last_px: float,
+    session: str,
+    buy_trigger: float,
+    stop_px: float,
+    qty: int,
+    buy_time: str | None,
+    vs_open_pts: float,
+) -> dict[str, Any]:
+    """按 kskj 规则生成预警与建议挂单价（盯盘用现价近似收盘判阴阳）。"""
+    holding = qty > 0
+    hit_buy = high_px + 1e-12 >= buy_trigger
+    hit_stop = low_px <= stop_px + 1e-12
+    yin = is_yin(open_px, last_px)
+    t1_lock = holding and _is_t1_buy_day(buy_time, session)
     buy_lvl = ENTRY_PCT * 100.0
     stop_lvl = -STOP_PCT * 100.0
-    pending_buy = (not hit_buy) and abs(vs_open_pts - buy_lvl) <= NEAR_POINTS + 1e-12
-    pending_sell = (not hit_stop) and abs(vs_open_pts - stop_lvl) <= NEAR_POINTS + 1e-12
 
-    # 卖出预警优先（持仓风控）
-    if pending_sell:
-        return {
-            "near_buy": False,
-            "near_stop": True,
-            "pending_buy": False,
-            "pending_sell": True,
-            "alert": "将卖出",
-            "bg_class": "warn-sell",
-            "dist_buy": round(vs_open_pts - buy_lvl, 2),
-            "dist_stop": round(vs_open_pts - stop_lvl, 2),
-        }
-    if pending_buy:
-        return {
-            "near_buy": True,
-            "near_stop": False,
-            "pending_buy": True,
-            "pending_sell": False,
-            "alert": "将买入",
-            "bg_class": "warn-buy",
-            "dist_buy": round(vs_open_pts - buy_lvl, 2),
-            "dist_stop": round(vs_open_pts - stop_lvl, 2),
-        }
-    return {
+    base: dict[str, Any] = {
         "near_buy": False,
         "near_stop": False,
         "pending_buy": False,
         "pending_sell": False,
         "alert": "",
         "bg_class": "",
+        "建议挂单": None,
+        "挂单说明": "",
+        "形态": bar_shape(open_px, last_px),
+        "t1_lock": t1_lock,
         "dist_buy": round(vs_open_pts - buy_lvl, 2),
         "dist_stop": round(vs_open_pts - stop_lvl, 2),
     }
+
+    if holding:
+        if t1_lock:
+            base["alert"] = "T+1不可卖"
+            base["挂单说明"] = "今日买入，明日再判止损/阴线"
+            return base
+        if hit_stop:
+            base.update(
+                {
+                    "pending_sell": True,
+                    "alert": "已触止损",
+                    "bg_class": "warn-sell",
+                    "建议挂单": stop_px,
+                    "挂单说明": f"条件卖@{stop_px:.2f}；未成交则尾盘市价",
+                }
+            )
+            return base
+        if yin:
+            close_limit = round(last_px, 2)
+            base.update(
+                {
+                    "pending_sell": True,
+                    "alert": "阴线卖",
+                    "bg_class": "warn-sell",
+                    "建议挂单": close_limit,
+                    "挂单说明": f"尾盘限价卖@{close_limit:.2f}（以收盘价为准）",
+                }
+            )
+            return base
+        if abs(vs_open_pts - stop_lvl) <= NEAR_POINTS + 1e-12:
+            base.update(
+                {
+                    "near_stop": True,
+                    "pending_sell": True,
+                    "alert": "将止损",
+                    "bg_class": "warn-sell",
+                    "建议挂单": stop_px,
+                    "挂单说明": f"预埋条件卖@{stop_px:.2f}",
+                }
+            )
+            return base
+        return base
+
+    # 空仓：仅提示买入相关
+    if hit_buy:
+        base.update(
+            {
+                "pending_buy": True,
+                "alert": "已触买",
+                "bg_class": "warn-buy",
+                "建议挂单": buy_trigger,
+                "挂单说明": f"限价买@{buy_trigger:.2f}",
+            }
+        )
+        return base
+    if abs(vs_open_pts - buy_lvl) <= NEAR_POINTS + 1e-12:
+        base.update(
+            {
+                "near_buy": True,
+                "pending_buy": True,
+                "alert": "将买入",
+                "bg_class": "warn-buy",
+                "建议挂单": buy_trigger,
+                "挂单说明": f"预埋限价买@{buy_trigger:.2f}",
+            }
+        )
+        return base
+    return base
 
 
 def points_vs_open(open_px: float, px: float) -> float:
@@ -286,10 +383,22 @@ def collect_rows() -> list[dict[str, Any]]:
             vs = points_vs_open(q["open"], q["last"])
             day_chg = q.get("day_chg_pct")
             hit_buy = q["high"] + 1e-12 >= lv["buy_trigger"]
-            hit_stop = q["low"] - 1e-12 <= lv["stop"]
-            alerts = near_trade_alerts(vs, hit_buy=hit_buy, hit_stop=hit_stop)
+            hit_stop = q["low"] <= lv["stop"] + 1e-12
             pos = positions.get(code, {})
             qty = int(pos.get("qty") or 0)
+            buy_time = pos.get("buy_time")
+            sig = strategy_signal(
+                open_px=q["open"],
+                high_px=q["high"],
+                low_px=q["low"],
+                last_px=q["last"],
+                session=q["session"],
+                buy_trigger=lv["buy_trigger"],
+                stop_px=lv["stop"],
+                qty=qty,
+                buy_time=buy_time,
+                vs_open_pts=vs,
+            )
             cost = pos.get("cost")
             pnl = None
             pnl_pct = None
@@ -321,10 +430,13 @@ def collect_rows() -> list[dict[str, Any]]:
                     "止损": lv["stop"],
                     "已触买": "是" if hit_buy else "否",
                     "已触止损": "是" if hit_stop else "否",
-                    "预警": alerts["alert"],
-                    "近买点": alerts["pending_buy"],
-                    "近止损": alerts["pending_sell"],
-                    "bg_class": alerts["bg_class"],
+                    "形态": sig["形态"],
+                    "预警": sig["alert"],
+                    "建议挂单": sig["建议挂单"],
+                    "挂单说明": sig["挂单说明"],
+                    "近买点": sig["pending_buy"],
+                    "近止损": sig["pending_sell"],
+                    "bg_class": sig["bg_class"],
                     "持仓": qty,
                     "成本": None if cost is None else float(cost),
                     "浮盈": None if pnl is None else round(float(pnl), 2),
@@ -353,7 +465,10 @@ def collect_rows() -> list[dict[str, Any]]:
                     "止损": None,
                     "已触买": "-",
                     "已触止损": "-",
+                    "形态": "-",
                     "预警": "",
+                    "建议挂单": None,
+                    "挂单说明": "",
                     "近买点": False,
                     "近止损": False,
                     "bg_class": "",
@@ -446,9 +561,19 @@ def write_html_report(
         pnl_pct = r.get("浮盈%")
         alert = r.get("预警") or ""
         bg = r.get("bg_class") or ""
+        suggest_px = r.get("建议挂单")
+        suggest_note = r.get("挂单说明") or ""
         alert_html = ""
         if alert:
-            alert_html = f'<div class="alert-badge">{escape(alert)}</div>'
+            alert_html = f'<div class="alert-badge tag-alert">{escape(alert)}</div>'
+        suggest_html = ""
+        if suggest_px is not None:
+            suggest_html = (
+                f'<div class="suggest-order">'
+                f'建议挂单 <strong>{_fmt_num(suggest_px)}</strong>'
+                f'{" · " + escape(suggest_note) if suggest_note else ""}'
+                f"</div>"
+            )
         card_cls = f"card {bg}".strip()
         cards.append(
             f"""
@@ -468,16 +593,18 @@ def write_html_report(
                 </div>
               </header>
               {"<p class='err'>行情失败: " + escape(str(err)) + "</p>" if err else ""}
+              {suggest_html}
               <div class="grid">
                 <div><span>开盘</span><b>{_fmt_num(r.get('开盘'))}</b></div>
                 <div><span>最高</span><b>{_fmt_num(r.get('最高'))}</b></div>
                 <div><span>最低</span><b>{_fmt_num(r.get('最低'))}</b></div>
                 <div><span>较开盘</span><b class="{_cls_chg(vs_open)}">{('-' if vs_open is None else f'{float(vs_open):+.2f}')}</b></div>
+                <div><span>形态</span><b>{escape(str(r.get('形态') or '-'))}</b></div>
                 <div><span>买点 +2.5%</span><b class="{'tag-buy' if r.get('近买点') else ''}">{_fmt_num(r.get('买点'))}</b></div>
                 <div><span>止损 -2.5%</span><b class="{'tag-sell' if r.get('近止损') else ''}">{_fmt_num(r.get('止损'))}</b></div>
                 <div><span>已触买</span><b class="{'tag-yes' if r.get('已触买')=='是' else ''}">{escape(str(r.get('已触买')))}</b></div>
                 <div><span>已触止损</span><b class="{'tag-sell' if r.get('已触止损')=='是' else ''}">{escape(str(r.get('已触止损')))}</b></div>
-                <div><span>预警</span><b class="{'tag-buy' if r.get('近买点') else ('tag-sell' if r.get('近止损') else '')}">{escape(alert) if alert else '-'}</b></div>
+                <div><span>预警</span><b class="{'tag-alert' if alert else ''}">{escape(alert) if alert else '-'}</b></div>
                 <div><span>持仓</span><b>{escape(str(r.get('持仓')))}</b></div>
                 <div><span>成本</span><b>{_fmt_num(r.get('成本'), 3)}</b></div>
                 <div><span>浮盈</span><b class="{_cls_chg(pnl)}">{_fmt_num(pnl)}</b></div>
@@ -602,15 +729,25 @@ def write_html_report(
       font-size: 0.82rem;
       font-weight: 700;
       letter-spacing: 0.02em;
+      color: var(--down);
+      background: rgba(180, 35, 24, 0.12);
+      border: 1px solid rgba(180, 35, 24, 0.35);
     }}
-    .card.warn-buy .alert-badge {{
-      background: #f5b4b4;
-      color: #8f1610;
-    }}
+    .card.warn-buy .alert-badge,
     .card.warn-sell .alert-badge {{
-      background: #9fd9b5;
-      color: #0a5c34;
+      color: var(--down);
+      background: rgba(180, 35, 24, 0.16);
+      border-color: rgba(180, 35, 24, 0.45);
     }}
+    .suggest-order {{
+      margin: 0 0 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      background: rgba(255,255,255,0.55);
+      border: 1px dashed var(--line);
+    }}
+    .suggest-order strong {{ font-size: 1.05rem; margin-left: 4px; }}
     .price {{ text-align: right; }}
     .last {{ font-size: 1.7rem; font-weight: 700; line-height: 1.1; }}
     .chg {{ font-size: 0.95rem; margin-top: 4px; }}
@@ -625,6 +762,7 @@ def write_html_report(
     .flat {{ color: var(--muted); }}
     .tag-yes {{ color: var(--accent); }}
     .tag-warn {{ color: var(--warn); }}
+    .tag-alert {{ color: var(--down); font-weight: 700; }}
     .tag-buy {{ color: var(--down); }}
     .tag-sell {{ color: var(--up); }}
     .err {{ color: var(--down); font-size: 0.9rem; }}
@@ -660,8 +798,9 @@ def write_html_report(
     <p class="note">
       大盘：点数=最新指数点位；涨跌点数/涨跌幅相对昨收。
       个股：当日涨幅=(现价/昨收-1)×100；较开盘点=(现价/开盘-1)×100；
-      买点=开盘×1.025；止损=开盘×0.975。
-      未触发且距买卖点 ≤1 点：将买入红底、将卖出绿底。刷新请重新运行
+      买点=ceil(开盘×1.025)；止损=floor(开盘×0.975)，与 kskj600552 一致。
+      空仓：已触买/将买入 → 建议限价@买点；有仓：已触止损/将止损/阴线卖 → 建议挂单价。
+      未触发且距买卖点 ≤1 点：将买入红底、将止损绿底。刷新请重新运行
       <code>python index.py</code> 或 <code>python index.py html</code>。
     </p>
   </div>
@@ -676,7 +815,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     rows = collect_rows()
     indices = fetch_indices()
     print(f"\n持仓盯盘  {_now()}")
-    print(f"策略参考: 相对开盘 +{ENTRY_PCT*100:.1f}%买入 / -{STOP_PCT*100:.1f}%止损 / 阴线收盘出")
+    print(f"策略参考: 相对开盘 +{ENTRY_PCT*100:.1f}%买 / -{STOP_PCT*100:.1f}%止损 / 阴线收盘出")
     print(f"持仓文件: {HOLDINGS_FILE}")
     print("-" * 108)
     print("【大盘】")
@@ -710,7 +849,10 @@ def cmd_status(args: argparse.Namespace) -> None:
                 "止损": "-" if r["止损"] is None else r["止损"],
                 "已触买": r["已触买"],
                 "已触止损": r["已触止损"],
+                "形态": r.get("形态") or "-",
                 "预警": r.get("预警") or "-",
+                "建议挂单": "-" if r.get("建议挂单") is None else r["建议挂单"],
+                "挂单说明": r.get("挂单说明") or "-",
                 "持仓": r["持仓"],
                 "成本": "-" if r["成本"] is None else r["成本"],
                 "浮盈": r["error"] if r.get("error") else ("-" if r["浮盈"] is None else r["浮盈"]),
@@ -720,8 +862,8 @@ def cmd_status(args: argparse.Namespace) -> None:
         )
     cols = [
         "市场", "代码", "名称", "开盘", "现价", "当日涨幅", "较开盘点",
-        "最高", "最低", "买点", "止损", "已触买", "已触止损", "预警",
-        "持仓", "成本", "浮盈", "浮盈%", "更新",
+        "最高", "最低", "买点", "止损", "已触买", "已触止损", "形态", "预警",
+        "建议挂单", "挂单说明", "持仓", "成本", "浮盈", "浮盈%", "更新",
     ]
     print(pd.DataFrame(show_rows)[cols].to_string(index=False))
     print("-" * 108)
@@ -731,8 +873,8 @@ def cmd_status(args: argparse.Namespace) -> None:
     if not getattr(args, "no_open", False):
         webbrowser.open(report.resolve().as_uri())
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘点=(现价/开盘-1)×100")
-    print("     买点=开盘×1.025；止损=开盘×0.975")
-    print("     未触发且距买卖点≤1点：将买入(红底) / 将卖出(绿底)")
+    print("     买点=ceil(开盘×1.025)；止损=floor(开盘×0.975)")
+    print("     预警触发时显示建议挂单价；有仓优先止损/阴线，空仓才提示买入")
 
 
 def cmd_html(args: argparse.Namespace) -> None:
