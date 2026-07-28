@@ -3,7 +3,7 @@
 功能：
   · 拉取当日开盘、最高、最低、现价（新浪1分钟）
   · 默认与 kskj600552 一致 ±2.5%（ceil/floor）；510580 为 ±1.2%
-  · 空仓：已触买/将买入 → 建议限价买@触发价；有仓：已触止损/将止损/阴线卖 → 建议挂单价
+  · 空仓：已触买/将买入 → 翻转并建议限价买；有仓：默认「持有」，触止损/将止损 → 翻转并建议挂单价
   · 本地 JSON 记录持仓成本与数量，计算浮盈亏；T+1 买入日提示不可卖
 
 用法：
@@ -118,6 +118,7 @@ def load_holdings() -> dict[str, Any]:
                 w["code"]: _empty_position(w)
                 for w in WATCHLIST
             },
+            "realized_today": {},
         }
         save_holdings(data)
         return data
@@ -126,6 +127,7 @@ def load_holdings() -> dict[str, Any]:
     positions = data.setdefault("positions", {})
     for w in WATCHLIST:
         positions.setdefault(w["code"], _empty_position(w))
+    data.setdefault("realized_today", {})
     return data
 
 
@@ -133,6 +135,97 @@ def save_holdings(data: dict[str, Any]) -> None:
     data["updated_at"] = _now()
     with HOLDINGS_FILE.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _purge_stale_realized(data: dict[str, Any], session: str) -> None:
+    """清除非当日已实现记录，避免隔日污染合计。"""
+    realized = data.setdefault("realized_today", {})
+    stale = [k for k, v in realized.items() if str(v.get("session") or "") != session]
+    for k in stale:
+        del realized[k]
+
+
+def apply_stop_fill(
+    *,
+    code: str,
+    meta: dict[str, Any],
+    stop_px: float,
+    qty: int,
+    cost: float | None,
+    session: str,
+    buy_time: str | None,
+    prev_close: float | None,
+    open_px: float,
+    px_digits: int,
+) -> dict[str, Any]:
+    """止损视为已成交：按止损价锁定盈亏、清仓，并写入当日已实现。"""
+    data = load_holdings()
+    _purge_stale_realized(data, session)
+    realized = data.setdefault("realized_today", {})
+    existing = realized.get(code)
+    if (
+        existing
+        and str(existing.get("session") or "") == session
+        and existing.get("reason") == "止损成交"
+    ):
+        return existing
+
+    cost_f = float(cost) if cost is not None else None
+    pnl = (stop_px - cost_f) * qty if cost_f is not None else None
+    pnl_pct = (stop_px / cost_f - 1.0) * 100.0 if cost_f and cost_f > 0 else None
+
+    bought_today = _is_t1_buy_day(buy_time, session)
+    if bought_today:
+        base_px = cost_f if cost_f is not None else float(open_px)
+    elif prev_close is not None and float(prev_close) > 0:
+        base_px = float(prev_close)
+    else:
+        base_px = cost_f if cost_f is not None else float(open_px)
+    day_pnl = (stop_px - base_px) * qty if base_px else None
+    day_pnl_pct = (
+        (stop_px / base_px - 1.0) * 100.0 if base_px and base_px > 0 else None
+    )
+
+    rec = {
+        "session": session,
+        "name": meta["name"],
+        "market": meta["market"],
+        "qty": int(qty),
+        "price": round(float(stop_px), px_digits),
+        "cost": None if cost_f is None else round(cost_f, 4),
+        "pnl": None if pnl is None else round(float(pnl), 2),
+        "pnl_pct": None if pnl_pct is None else round(float(pnl_pct), 2),
+        "day_pnl": None if day_pnl is None else round(float(day_pnl), 2),
+        "day_pnl_pct": None if day_pnl_pct is None else round(float(day_pnl_pct), 2),
+        "reason": "止损成交",
+        "time": _now(),
+    }
+    realized[code] = rec
+
+    pos = data["positions"].setdefault(code, _empty_position(meta))
+    pos["qty"] = 0
+    pos["cost"] = None
+    pos["buy_time"] = None
+    pos["name"] = meta["name"]
+    pos["market"] = meta["market"]
+    pos["note"] = f"止损成交@{rec['price']} ({session})"
+
+    save_holdings(data)
+    append_trade(
+        {
+            "time": rec["time"],
+            "side": "sell",
+            "code": code,
+            "name": meta["name"],
+            "price": rec["price"],
+            "qty": qty,
+            "after_qty": 0,
+            "cost": rec["cost"],
+            "pnl": rec["pnl"],
+            "note": "止损成交(自动)",
+        }
+    )
+    return rec
 
 
 def append_trade(record: dict[str, Any]) -> None:
@@ -263,11 +356,10 @@ def strategy_signal(
     px_digits: int = 2,
     t0: bool = False,
 ) -> dict[str, Any]:
-    """按 kskj 规则生成预警与建议挂单价（盯盘用现价近似收盘判阴阳）。"""
+    """生成持有状态 / 策略触发翻转（有仓默认持有；触止损等则翻转预警）。"""
     holding = qty > 0
     hit_buy = high_px + 1e-12 >= buy_trigger
     hit_stop = low_px <= stop_px + 1e-12
-    yin = is_yin(open_px, last_px)
     t1_lock = holding and (not t0) and _is_t1_buy_day(buy_time, session)
     buy_lvl = entry_pct * 100.0
     stop_lvl = -stop_pct * 100.0
@@ -290,9 +382,15 @@ def strategy_signal(
 
     if holding:
         if t1_lock:
-            base["alert"] = "T+1不可卖"
-            base["挂单说明"] = "今日买入，明日再判止损/阴线"
+            base.update(
+                {
+                    "alert": "持有·T+1",
+                    "bg_class": "status-hold",
+                    "挂单说明": "今日买入，明日再判止损",
+                }
+            )
             return base
+        # 触发策略 → 翻转（卖出侧）
         if hit_stop:
             base.update(
                 {
@@ -301,18 +399,6 @@ def strategy_signal(
                     "bg_class": "warn-sell",
                     "建议挂单": stop_px,
                     "挂单说明": f"条件卖@{pf.format(stop_px)}；未成交则尾盘市价",
-                }
-            )
-            return base
-        if yin:
-            close_limit = round(last_px, px_digits)
-            base.update(
-                {
-                    "pending_sell": True,
-                    "alert": "阴线卖",
-                    "bg_class": "warn-sell",
-                    "建议挂单": close_limit,
-                    "挂单说明": f"尾盘限价卖@{pf.format(close_limit)}（以收盘价为准）",
                 }
             )
             return base
@@ -328,9 +414,17 @@ def strategy_signal(
                 }
             )
             return base
+        # 默认持有状态
+        base.update(
+            {
+                "alert": "持有",
+                "bg_class": "status-hold",
+                "挂单说明": "未触发策略，继续持有",
+            }
+        )
         return base
 
-    # 空仓：仅提示买入相关
+    # 空仓：触发策略 → 翻转（买入侧）
     if hit_buy:
         base.update(
             {
@@ -354,6 +448,13 @@ def strategy_signal(
             }
         )
         return base
+    base.update(
+        {
+            "alert": "空仓",
+            "bg_class": "status-flat",
+            "挂单说明": "等待冲高买点",
+        }
+    )
     return base
 
 
@@ -417,10 +518,12 @@ def fetch_indices() -> list[dict[str, Any]]:
 
 
 def collect_rows() -> list[dict[str, Any]]:
-    """拉取行情并合并持仓，返回行字典列表。"""
+    """拉取行情并合并持仓；已触止损视为成交并锁定当日收益。"""
     holdings = load_holdings()
     positions = holdings.get("positions", {})
+    realized_map = holdings.get("realized_today", {})
     rows: list[dict[str, Any]] = []
+    session_today: str | None = None
 
     for w in WATCHLIST:
         code = w["code"]
@@ -431,6 +534,7 @@ def collect_rows() -> list[dict[str, Any]]:
         pct_pct = round(entry_pct * 100.0, 2)
         try:
             q = fetch_today_quote(w["sina"])
+            session_today = q["session"]
             lv = strategy_levels(
                 q["open"], entry_pct=entry_pct, stop_pct=stop_pct, tick=tick
             )
@@ -441,6 +545,87 @@ def collect_rows() -> list[dict[str, Any]]:
             pos = positions.get(code, {})
             qty = int(pos.get("qty") or 0)
             buy_time = pos.get("buy_time")
+            cost = pos.get("cost")
+            t0 = bool(w.get("t0"))
+            t1_lock = qty > 0 and (not t0) and _is_t1_buy_day(buy_time, q["session"])
+
+            # 已触止损且可卖 → 视为成交，锁定收益并清仓
+            if qty > 0 and hit_stop and not t1_lock:
+                apply_stop_fill(
+                    code=code,
+                    meta=w,
+                    stop_px=float(lv["stop"]),
+                    qty=qty,
+                    cost=float(cost) if cost is not None else None,
+                    session=q["session"],
+                    buy_time=buy_time,
+                    prev_close=q.get("prev_close"),
+                    open_px=float(q["open"]),
+                    px_digits=px_digits,
+                )
+                holdings = load_holdings()
+                positions = holdings.get("positions", {})
+                realized_map = holdings.get("realized_today", {})
+                pos = positions.get(code, {})
+                qty = int(pos.get("qty") or 0)
+                cost = pos.get("cost")
+                buy_time = pos.get("buy_time")
+
+            # 当日已止损成交：收益冻结，不再跟现价
+            realized = realized_map.get(code)
+            if (
+                realized
+                and str(realized.get("session") or "") == q["session"]
+                and realized.get("reason") == "止损成交"
+            ):
+                fill_px = float(realized["price"])
+                sold_qty = int(realized.get("qty") or 0)
+                rows.append(
+                    {
+                        "市场": w["market"],
+                        "代码": code,
+                        "名称": w["name"],
+                        "交易日": q["session"],
+                        "开盘": round(q["open"], px_digits),
+                        "最高": round(q["high"], px_digits),
+                        "最低": round(q["low"], px_digits),
+                        "现价": round(fill_px, px_digits),
+                        "昨收": None
+                        if q.get("prev_close") is None
+                        else round(float(q["prev_close"]), px_digits),
+                        "当日涨幅": None if day_chg is None else round(float(day_chg), 2),
+                        "较开盘点": round(points_vs_open(q["open"], fill_px), 2),
+                        "阈值%": pct_pct,
+                        "买点": lv["buy_trigger"],
+                        "止损": lv["stop"],
+                        "已触买": "是" if hit_buy else "否",
+                        "已触止损": "是",
+                        "形态": bar_shape(q["open"], fill_px),
+                        "预警": "止损成交",
+                        "建议挂单": None,
+                        "挂单说明": f"已按止损价成交@{fill_px:.{px_digits}f}，收益已锁定",
+                        "近买点": False,
+                        "近止损": False,
+                        "bg_class": "warn-sell",
+                        "持仓": 0,
+                        "卖出数量": sold_qty,
+                        "成本": realized.get("cost"),
+                        "浮盈": realized.get("pnl"),
+                        "浮盈%": realized.get("pnl_pct"),
+                        "当日盈亏": realized.get("day_pnl"),
+                        "当日盈亏%": realized.get("day_pnl_pct"),
+                        "市值": 0.0,
+                        "成本额": None,
+                        "已实现": True,
+                        "价位小数": px_digits,
+                        "更新": q["last_ts"][11:19]
+                        if len(q["last_ts"]) >= 19
+                        else q["last_ts"],
+                        "error": None,
+                    }
+                )
+                continue
+
             sig = strategy_signal(
                 open_px=q["open"],
                 high_px=q["high"],
@@ -455,9 +640,8 @@ def collect_rows() -> list[dict[str, Any]]:
                 entry_pct=entry_pct,
                 stop_pct=stop_pct,
                 px_digits=px_digits,
-                t0=bool(w.get("t0")),
+                t0=t0,
             )
-            cost = pos.get("cost")
             pnl = None
             pnl_pct = None
             market_value = (q["last"] * qty) if qty > 0 else None
@@ -473,13 +657,14 @@ def collect_rows() -> list[dict[str, Any]]:
                 else:
                     pnl = q["last"] - cost_f
 
-            # 当日盈亏：隔夜仓=(现价-昨收)×数量；当日买入=(现价-成本)×数量（无成本则用开盘）
             if qty > 0:
                 bought_today = _is_t1_buy_day(buy_time, q["session"])
                 if bought_today:
                     base_px = float(cost) if cost is not None else float(q["open"])
                     day_pnl = (q["last"] - base_px) * qty
-                    day_pnl_pct = (q["last"] / base_px - 1.0) * 100.0 if base_px > 0 else None
+                    day_pnl_pct = (
+                        (q["last"] / base_px - 1.0) * 100.0 if base_px > 0 else None
+                    )
                 elif q.get("prev_close") is not None and float(q["prev_close"]) > 0:
                     base_px = float(q["prev_close"])
                     day_pnl = (q["last"] - base_px) * qty
@@ -517,11 +702,16 @@ def collect_rows() -> list[dict[str, Any]]:
                     "浮盈": None if pnl is None else round(float(pnl), 2),
                     "浮盈%": None if pnl_pct is None else round(float(pnl_pct), 2),
                     "当日盈亏": None if day_pnl is None else round(float(day_pnl), 2),
-                    "当日盈亏%": None if day_pnl_pct is None else round(float(day_pnl_pct), 2),
+                    "当日盈亏%": None
+                    if day_pnl_pct is None
+                    else round(float(day_pnl_pct), 2),
                     "市值": None if market_value is None else round(float(market_value), 2),
                     "成本额": None if cost_value is None else round(float(cost_value), 2),
+                    "已实现": False,
                     "价位小数": px_digits,
-                    "更新": q["last_ts"][11:19] if len(q["last_ts"]) >= 19 else q["last_ts"],
+                    "更新": q["last_ts"][11:19]
+                    if len(q["last_ts"]) >= 19
+                    else q["last_ts"],
                     "error": None,
                 }
             )
@@ -560,11 +750,32 @@ def collect_rows() -> list[dict[str, Any]]:
                     "当日盈亏%": None,
                     "市值": None,
                     "成本额": None,
+                    "已实现": False,
                     "价位小数": px_digits,
                     "更新": "-",
                     "error": str(e),
                 }
             )
+
+    if session_today:
+        data = load_holdings()
+        before = dict(data.get("realized_today") or {})
+        _purge_stale_realized(data, session_today)
+        if data.get("realized_today") != before:
+            save_holdings(data)
+
+    total_mv = sum(
+        float(r["市值"])
+        for r in rows
+        if r.get("市值") is not None and int(r.get("持仓") or 0) > 0
+    )
+    for r in rows:
+        qty = int(r.get("持仓") or 0)
+        mv = r.get("市值")
+        if qty > 0 and mv is not None and total_mv > 0:
+            r["仓位%"] = round(float(mv) / total_mv * 100.0, 1)
+        else:
+            r["仓位%"] = 0.0 if r.get("已实现") else None
     return rows
 
 
@@ -666,15 +877,30 @@ def write_html_report(
         day_pnl = r.get("当日盈亏")
         day_pnl_pct = r.get("当日盈亏%")
         alert = r.get("预警") or ""
+        weight = r.get("仓位%")
+        weight_txt = "" if weight is None else f" {float(weight):.1f}%"
+        status_txt = f"{alert}{weight_txt}" if alert else (weight_txt.strip() or "-")
         bg = r.get("bg_class") or ""
         suggest_px = r.get("建议挂单")
         suggest_note = r.get("挂单说明") or ""
         alert_html = ""
         if alert:
-            alert_html = f'<div class="alert-badge tag-alert">{escape(alert)}</div>'
+            badge_cls = "tag-alert"
+            if bg == "status-hold":
+                badge_cls = "tag-hold"
+            elif bg == "status-flat":
+                badge_cls = "tag-flat"
+            wt_html = (
+                f'<span class="wt">{escape(weight_txt)}</span>' if weight_txt else ""
+            )
+            alert_html = (
+                f'<div class="alert-badge {badge_cls}">'
+                f"{escape(alert)}{wt_html}</div>"
+            )
         pdg = int(r.get("价位小数") or 2)
         suggest_html = ""
-        if suggest_px is not None:
+        # 仅策略翻转（买卖触发）时展示建议挂单；持有/空仓不占版面
+        if suggest_px is not None and bg in ("warn-buy", "warn-sell"):
             suggest_html = (
                 f'<div class="suggest-order">'
                 f'建议挂单 <strong>{_fmt_num(suggest_px, pdg)}</strong>'
@@ -713,7 +939,7 @@ def write_html_report(
                 <div><span>止损 -{th_label}%</span><b class="{'tag-sell' if r.get('近止损') else ''}">{_fmt_num(r.get('止损'), pdg)}</b></div>
                 <div><span>已触买</span><b class="{'tag-yes' if r.get('已触买')=='是' else ''}">{escape(str(r.get('已触买')))}</b></div>
                 <div><span>已触止损</span><b class="{'tag-sell' if r.get('已触止损')=='是' else ''}">{escape(str(r.get('已触止损')))}</b></div>
-                <div><span>预警</span><b class="{'tag-alert' if alert else ''}">{escape(alert) if alert else '-'}</b></div>
+                <div><span>状态</span><b class="{'tag-alert' if bg in ('warn-buy','warn-sell') else ('tag-hold' if bg=='status-hold' else ('tag-flat' if bg=='status-flat' else ''))}">{escape(status_txt)}</b></div>
                 <div><span>持仓</span><b>{escape(str(r.get('持仓')))}</b></div>
                 <div><span>成本</span><b>{_fmt_num(r.get('成本'), max(3, pdg))}</b></div>
                 <div><span>浮盈</span><b class="{_cls_chg(pnl)}">{_fmt_num(pnl)}</b></div>
@@ -814,42 +1040,50 @@ def write_html_report(
     .index-metrics b {{ font-size: 1.05rem; font-weight: 700; }}
     .cards {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
     }}
     .card {{
       border: 1px solid var(--line);
-      border-radius: 16px;
+      border-radius: 12px;
       background: var(--card);
       backdrop-filter: blur(8px);
-      padding: 16px;
-      box-shadow: 0 10px 30px rgba(20, 32, 26, 0.04);
+      padding: 10px 12px;
+      box-shadow: 0 6px 18px rgba(20, 32, 26, 0.04);
       transition: background 0.25s ease, border-color 0.25s ease;
     }}
-    /* 将买入：红底；将卖出：绿底（A股习惯） */
+    /* 将买入：红底；将卖出：绿底（A股习惯）；持有/空仓为中性态 */
     .card.warn-buy {{
       background: rgba(255, 214, 214, 0.92);
       border-color: #e08a8a;
-      box-shadow: 0 10px 28px rgba(180, 35, 24, 0.12);
+      box-shadow: 0 8px 20px rgba(180, 35, 24, 0.10);
     }}
     .card.warn-sell {{
       background: rgba(198, 236, 214, 0.92);
       border-color: #6fbf8f;
-      box-shadow: 0 10px 28px rgba(11, 122, 69, 0.12);
+      box-shadow: 0 8px 20px rgba(11, 122, 69, 0.10);
     }}
-    .card header {{ display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; }}
+    .card.status-hold {{
+      background: rgba(255,255,255,0.88);
+      border-color: var(--line);
+    }}
+    .card.status-flat {{
+      background: rgba(255,255,255,0.72);
+      border-color: #d5ddd8;
+    }}
+    .card header {{ display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }}
     .market {{
-      display: inline-block; font-size: 0.75rem; color: var(--accent);
-      border: 1px solid #b7d2c4; border-radius: 999px; padding: 2px 8px; margin-bottom: 6px;
+      display: inline-block; font-size: 0.68rem; color: var(--accent);
+      border: 1px solid #b7d2c4; border-radius: 999px; padding: 1px 6px; margin-bottom: 3px;
     }}
-    .title h2 {{ margin: 0; font-size: 1.2rem; }}
-    .title code {{ color: var(--muted); font-size: 0.9rem; }}
+    .title h2 {{ margin: 0; font-size: 1.0rem; }}
+    .title code {{ color: var(--muted); font-size: 0.78rem; }}
     .alert-badge {{
       display: inline-block;
-      margin-top: 8px;
-      padding: 3px 10px;
-      border-radius: 6px;
-      font-size: 0.82rem;
+      margin-top: 4px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-size: 0.72rem;
       font-weight: 700;
       letter-spacing: 0.02em;
       color: var(--up);
@@ -862,24 +1096,41 @@ def write_html_report(
       background: rgba(180, 35, 24, 0.16);
       border-color: rgba(180, 35, 24, 0.45);
     }}
+    .card.status-hold .alert-badge {{
+      color: var(--accent);
+      background: rgba(31, 107, 74, 0.10);
+      border-color: rgba(31, 107, 74, 0.30);
+    }}
+    .card.status-flat .alert-badge {{
+      color: var(--muted);
+      background: rgba(92, 111, 102, 0.08);
+      border-color: rgba(92, 111, 102, 0.25);
+    }}
+    .alert-badge .wt {{
+      margin-left: 2px;
+      font-weight: 600;
+      opacity: 0.85;
+    }}
+    .tag-hold {{ color: var(--accent); font-weight: 700; }}
+    .tag-flat {{ color: var(--muted); }}
     .suggest-order {{
-      margin: 0 0 10px;
-      padding: 8px 10px;
-      border-radius: 8px;
-      font-size: 0.88rem;
+      margin: 0 0 8px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 0.78rem;
       background: rgba(255,255,255,0.55);
       border: 1px dashed var(--line);
     }}
-    .suggest-order strong {{ font-size: 1.05rem; margin-left: 4px; }}
+    .suggest-order strong {{ font-size: 0.92rem; margin-left: 4px; }}
     .price {{ text-align: right; }}
-    .last {{ font-size: 1.7rem; font-weight: 700; line-height: 1.1; }}
-    .chg {{ font-size: 0.95rem; margin-top: 4px; }}
+    .last {{ font-size: 1.35rem; font-weight: 700; line-height: 1.1; }}
+    .chg {{ font-size: 0.8rem; margin-top: 2px; }}
     .grid {{
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px;
-      border-top: 1px dashed var(--line); padding-top: 12px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px;
+      border-top: 1px dashed var(--line); padding-top: 8px;
     }}
-    .grid div span {{ display: block; color: var(--muted); font-size: 0.78rem; }}
-    .grid div b {{ font-size: 0.98rem; font-weight: 600; }}
+    .grid div span {{ display: block; color: var(--muted); font-size: 0.68rem; }}
+    .grid div b {{ font-size: 0.86rem; font-weight: 600; }}
     .up {{ color: var(--up); }}
     .down {{ color: var(--down); }}
     .flat {{ color: var(--muted); }}
@@ -888,9 +1139,12 @@ def write_html_report(
     .tag-alert {{ color: var(--up); font-weight: 700; }}
     .tag-buy {{ color: var(--up); }}
     .tag-sell {{ color: var(--down); }}
-    .err {{ color: var(--up); font-size: 0.9rem; }}
-    footer {{ margin-top: 12px; color: var(--muted); font-size: 0.8rem; }}
+    .err {{ color: var(--up); font-size: 0.8rem; }}
+    footer {{ margin-top: 8px; color: var(--muted); font-size: 0.72rem; }}
     .note {{ margin-top: 18px; color: var(--muted); font-size: 0.86rem; line-height: 1.5; }}
+    @media (min-width: 900px) {{
+      .cards {{ grid-template-columns: repeat(4, 1fr); }}
+    }}
   </style>
 </head>
 <body>
@@ -934,7 +1188,8 @@ def write_html_report(
       市值=现价×持仓数量（全部有仓合计）；成本/浮盈仅统计已登记成本的仓位。
       若有未登记成本仓（如510580），会出现「市值−成本≠浮盈」，属正常。
       当日盈亏：隔夜仓=(现价−昨收)×数量；当日买入=(现价−成本)×数量。
-      空仓：已触买/将买入 → 建议限价@买点；有仓：已触止损/将止损/阴线卖 → 建议挂单价。
+      空仓默认「空仓」，已触买/将买入 → 翻转红底并建议限价@买点；
+      有仓默认「持有」，已触止损/将止损 → 翻转绿底并建议挂单价。
       未触发且距买卖点 ≤1 点：将买入红底、将止损绿底。刷新请重新运行
       <code>python index.py</code> 或 <code>python index.py html</code>。
     </p>
@@ -950,7 +1205,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     rows = collect_rows()
     indices = fetch_indices()
     print(f"\n持仓盯盘  {_now()}")
-    print(f"策略参考: 默认 ±{DEFAULT_PCT*100:.1f}%（510580 ±1.2%）/ 阴线收盘出")
+    print(f"策略参考: 默认 ±{DEFAULT_PCT*100:.1f}%（510580 ±1.2%）/ 有仓默认持有，触发止损才翻转")
     print(f"持仓文件: {HOLDINGS_FILE}")
     print("-" * 108)
     print("【大盘】")
@@ -991,7 +1246,14 @@ def cmd_status(args: argparse.Namespace) -> None:
                 "已触买": r["已触买"],
                 "已触止损": r["已触止损"],
                 "形态": r.get("形态") or "-",
-                "预警": r.get("预警") or "-",
+                "状态": (
+                    (r.get("预警") or "-")
+                    + (
+                        f" {float(r['仓位%']):.1f}%"
+                        if r.get("仓位%") is not None
+                        else ""
+                    )
+                ),
                 "建议挂单": _p(r.get("建议挂单")),
                 "挂单说明": r.get("挂单说明") or "-",
                 "持仓": r["持仓"],
@@ -1005,7 +1267,7 @@ def cmd_status(args: argparse.Namespace) -> None:
         )
     cols = [
         "市场", "代码", "名称", "开盘", "现价", "当日涨幅", "较开盘点", "阈值%",
-        "最高", "最低", "买点", "止损", "已触买", "已触止损", "形态", "预警",
+        "最高", "最低", "买点", "止损", "已触买", "已触止损", "形态", "状态",
         "建议挂单", "挂单说明", "持仓", "成本", "浮盈", "浮盈%", "当日盈亏", "当日盈亏%", "更新",
     ]
     print(pd.DataFrame(show_rows)[cols].to_string(index=False))
@@ -1035,8 +1297,9 @@ def cmd_status(args: argparse.Namespace) -> None:
         webbrowser.open(report.resolve().as_uri())
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘点=(现价/开盘-1)×100")
     print("     当日盈亏: 隔夜仓=(现价-昨收)×数量；当日买入=(现价-成本)×数量")
+    print("     有仓默认「持有」；触发止损/将止损才翻转并显示建议挂单；空仓触买同理")
     print("     买点/止损按各标的阈值 ceil/floor；510580=±1.2%，其余=±2.5%")
-    print("     预警触发时显示建议挂单价；有仓优先止损/阴线，空仓才提示买入")
+    print("     已取消阴线卖规则")
 
 
 def cmd_html(args: argparse.Namespace) -> None:
