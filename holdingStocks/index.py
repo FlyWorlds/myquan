@@ -1248,7 +1248,8 @@ def write_html_report(
   const INTERVAL = {sec};
   const metaUrl = "/holdings_watch.json";
   const cdEl = document.getElementById("watch-countdown");
-  let lastStamp = null;
+  const seenKey = "holdings_watch_seen";
+  let lastStamp = sessionStorage.getItem(seenKey) || null;
   let left = INTERVAL;
   let reloading = false;
 
@@ -1259,38 +1260,42 @@ def write_html_report(
   function reloadSamePage() {{
     if (reloading) return;
     reloading = true;
-    // 强制刷新当前页（同 URL），避免开新页/走缓存
     const url = location.pathname + "?t=" + Date.now();
     location.replace(url);
   }}
 
   function parseStamp(s) {{
     if (!s) return null;
-    // "YYYY-MM-DD HH:MM:SS" → 本地时间
     const m = String(s).match(/^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})[ T](\\d{{2}}):(\\d{{2}}):(\\d{{2}})/);
     if (!m) return null;
     return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
   }}
 
   async function syncFromServer() {{
+    if (reloading) return;
     try {{
       const r = await fetch(metaUrl + "?t=" + Date.now(), {{ cache: "no-store" }});
       if (!r.ok) return;
       const j = await r.json();
       const stamp = j && (j.updated_at || j.ts);
       if (!stamp) return;
-      if (lastStamp && stamp !== lastStamp) {{
+
+      // 只有服务端真的写出新数据才刷新本页（避免倒计时到0空刷）
+      if (lastStamp && String(stamp) !== String(lastStamp)) {{
+        sessionStorage.setItem(seenKey, String(stamp));
         reloadSamePage();
         return;
       }}
-      lastStamp = stamp;
+      lastStamp = String(stamp);
+      sessionStorage.setItem(seenKey, lastStamp);
+
       const interval = Number(j.refresh_sec) || INTERVAL;
       const ts = (typeof j.ts === "number") ? j.ts : parseStamp(stamp);
       if (ts) {{
         const elapsed = Math.floor((Date.now() - ts) / 1000);
+        // 到点后停在 0，等待服务端更新时间戳，不再强制 reload
         left = Math.max(0, interval - elapsed);
         renderCd();
-        if (left <= 0) reloadSamePage();
       }}
     }} catch (e) {{}}
   }}
@@ -1299,19 +1304,16 @@ def write_html_report(
   syncFromServer();
   setInterval(function () {{
     if (reloading) return;
-    left -= 1;
-    if (left <= 0) {{
-      left = 0;
+    if (left > 0) {{
+      left -= 1;
       renderCd();
-      // 到点：先跟服务器确认，有新数据或已超时都刷新本页
-      syncFromServer();
-      return;
     }}
-    renderCd();
+    // 每秒轻量同步；到 0 后也持续等新时间戳
+    if (left <= 0) syncFromServer();
   }}, 1000);
   setInterval(function () {{
     if (!reloading) syncFromServer();
-  }}, 2000);
+  }}, 3000);
 }})();
 </script>
 """
@@ -1351,8 +1353,7 @@ def write_html_report(
     }}
     .wrap {{ width: min(1100px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }}
     .hero {{
-      display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: end;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }}
     .hero h1 {{
       margin: 0 0 6px; font-size: clamp(1.6rem, 3vw, 2.2rem); letter-spacing: -0.02em;
@@ -1360,8 +1361,15 @@ def write_html_report(
     .hero p {{ margin: 0; color: var(--muted); font-size: 0.95rem; }}
     .watch-live {{ color: var(--accent); font-weight: 600; }}
     #watch-countdown {{ color: var(--accent); font-variant-numeric: tabular-nums; }}
+    .top-row {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items: stretch;
+    }}
     .summary {{
-      min-width: 260px;
+      min-width: 0;
       padding: 14px 16px;
       border: 1px solid var(--line);
       border-radius: 14px;
@@ -1369,7 +1377,7 @@ def write_html_report(
       backdrop-filter: blur(8px);
     }}
     .summary .label {{ color: var(--muted); font-size: 0.85rem; }}
-    .summary .value {{ font-size: 1.8rem; font-weight: 700; margin-top: 4px; }}
+    .summary .value {{ font-size: 1.55rem; font-weight: 700; margin-top: 4px; }}
     .summary .sub {{ color: var(--muted); font-size: 0.9rem; margin-top: 2px; }}
     .summary .day-line {{
       margin-top: 10px;
@@ -1381,20 +1389,15 @@ def write_html_report(
       gap: 12px;
     }}
     .summary .day-line .day-label {{ color: var(--muted); font-size: 0.85rem; }}
-    .summary .day-line .day-value {{ font-size: 1.15rem; font-weight: 700; }}
-    .summary .meta {{ color: var(--muted); font-size: 0.86rem; margin-top: 8px; }}
-    .index-row {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 12px;
-      margin-bottom: 16px;
-    }}
+    .summary .day-line .day-value {{ font-size: 1.05rem; font-weight: 700; }}
+    .summary .meta {{ color: var(--muted); font-size: 0.78rem; margin-top: 8px; line-height: 1.4; }}
     .index-card {{
       border: 1px solid var(--line);
       border-radius: 14px;
       background: var(--card);
       backdrop-filter: blur(8px);
       padding: 14px 16px;
+      min-width: 0;
     }}
     .index-name {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }}
     .index-name strong {{ font-size: 1.05rem; }}
@@ -1404,6 +1407,9 @@ def write_html_report(
     }}
     .index-metrics span {{ display: block; color: var(--muted); font-size: 0.78rem; }}
     .index-metrics b {{ font-size: 1.05rem; font-weight: 700; }}
+    @media (max-width: 900px) {{
+      .top-row {{ grid-template-columns: 1fr; }}
+    }}
     .cards {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1520,6 +1526,9 @@ def write_html_report(
         <h1>持仓盯盘</h1>
         <p>000893 / 600552 / 002171 ±2.5% · 510580 ±1.2% · {_now()}{hero_extra}</p>
       </div>
+    </div>
+    <div class="top-row">
+      {''.join(index_cards)}
       <div class="summary">
         <div class="label">合计盈亏</div>
         <div class="value {_cls_chg(total_pnl if has_pos else None)}">
@@ -1542,9 +1551,6 @@ def write_html_report(
           {f' · 今日结算{settled_n}笔 盈亏{settled_pnl:+.2f}/当日{settled_day:+.2f}' if settled_n > 0 else ''}
         </div>
       </div>
-    </div>
-    <div class="index-row">
-      {''.join(index_cards)}
     </div>
     <div class="cards">
       {''.join(cards)}
