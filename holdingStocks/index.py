@@ -174,6 +174,7 @@ def apply_stop_fill(
     pnl = (stop_px - cost_f) * qty if cost_f is not None else None
     pnl_pct = (stop_px / cost_f - 1.0) * 100.0 if cost_f and cost_f > 0 else None
 
+    # 当日盈亏基数：隔夜用昨收；当日买用成本（无成本用开盘）
     bought_today = _is_t1_buy_day(buy_time, session)
     if bought_today:
         base_px = cost_f if cost_f is not None else float(open_px)
@@ -181,6 +182,7 @@ def apply_stop_fill(
         base_px = float(prev_close)
     else:
         base_px = cost_f if cost_f is not None else float(open_px)
+    day_base = float(base_px) * qty if base_px else None
     day_pnl = (stop_px - base_px) * qty if base_px else None
     day_pnl_pct = (
         (stop_px / base_px - 1.0) * 100.0 if base_px and base_px > 0 else None
@@ -195,6 +197,7 @@ def apply_stop_fill(
         "cost": None if cost_f is None else round(cost_f, 4),
         "pnl": None if pnl is None else round(float(pnl), 2),
         "pnl_pct": None if pnl_pct is None else round(float(pnl_pct), 2),
+        "day_base": None if day_base is None else round(float(day_base), 2),
         "day_pnl": None if day_pnl is None else round(float(day_pnl), 2),
         "day_pnl_pct": None if day_pnl_pct is None else round(float(day_pnl_pct), 2),
         "reason": "止损成交",
@@ -580,6 +583,14 @@ def collect_rows() -> list[dict[str, Any]]:
             ):
                 fill_px = float(realized["price"])
                 sold_qty = int(realized.get("qty") or 0)
+                # 兼容旧记录：补当日基数
+                if realized.get("day_base") is None and realized.get("day_pnl") is not None:
+                    dpct = realized.get("day_pnl_pct")
+                    if dpct is not None and abs(float(dpct)) > 1e-12:
+                        realized["day_base"] = round(
+                            float(realized["day_pnl"]) / (float(dpct) / 100.0), 2
+                        )
+                live_last = round(q["last"], px_digits)
                 rows.append(
                     {
                         "市场": w["market"],
@@ -589,21 +600,26 @@ def collect_rows() -> list[dict[str, Any]]:
                         "开盘": round(q["open"], px_digits),
                         "最高": round(q["high"], px_digits),
                         "最低": round(q["low"], px_digits),
-                        "现价": round(fill_px, px_digits),
+                        # 现价继续跟行情；成交价单独保留，盈亏仍按成交锁定
+                        "现价": live_last,
+                        "成交价": round(fill_px, px_digits),
                         "昨收": None
                         if q.get("prev_close") is None
                         else round(float(q["prev_close"]), px_digits),
                         "当日涨幅": None if day_chg is None else round(float(day_chg), 2),
-                        "较开盘点": round(points_vs_open(q["open"], fill_px), 2),
+                        "较开盘点": round(vs, 2),
                         "阈值%": pct_pct,
                         "买点": lv["buy_trigger"],
                         "止损": lv["stop"],
                         "已触买": "是" if hit_buy else "否",
                         "已触止损": "是",
-                        "形态": bar_shape(q["open"], fill_px),
+                        "形态": bar_shape(q["open"], q["last"]),
                         "预警": "止损成交",
                         "建议挂单": None,
-                        "挂单说明": f"已按止损价成交@{fill_px:.{px_digits}f}，收益已锁定",
+                        "挂单说明": (
+                            f"已按止损价成交@{fill_px:.{px_digits}f}，"
+                            f"盈亏已锁定；现价仍实时更新"
+                        ),
                         "近买点": False,
                         "近止损": False,
                         "bg_class": "warn-sell",
@@ -614,6 +630,7 @@ def collect_rows() -> list[dict[str, Any]]:
                         "浮盈%": realized.get("pnl_pct"),
                         "当日盈亏": realized.get("day_pnl"),
                         "当日盈亏%": realized.get("day_pnl_pct"),
+                        "当日基数": realized.get("day_base"),
                         "市值": 0.0,
                         "成本额": None,
                         "已实现": True,
@@ -648,6 +665,7 @@ def collect_rows() -> list[dict[str, Any]]:
             cost_value = None
             day_pnl = None
             day_pnl_pct = None
+            day_base = None
             if cost is not None:
                 cost_f = float(cost)
                 pnl_pct = (q["last"] / cost_f - 1.0) * 100.0
@@ -661,14 +679,15 @@ def collect_rows() -> list[dict[str, Any]]:
                 bought_today = _is_t1_buy_day(buy_time, q["session"])
                 if bought_today:
                     base_px = float(cost) if cost is not None else float(q["open"])
-                    day_pnl = (q["last"] - base_px) * qty
-                    day_pnl_pct = (
-                        (q["last"] / base_px - 1.0) * 100.0 if base_px > 0 else None
-                    )
                 elif q.get("prev_close") is not None and float(q["prev_close"]) > 0:
                     base_px = float(q["prev_close"])
-                    day_pnl = (q["last"] - base_px) * qty
-                    day_pnl_pct = (q["last"] / base_px - 1.0) * 100.0
+                else:
+                    base_px = float(q["open"])
+                day_base = base_px * qty
+                day_pnl = (q["last"] - base_px) * qty
+                day_pnl_pct = (
+                    (q["last"] / base_px - 1.0) * 100.0 if base_px > 0 else None
+                )
 
             rows.append(
                 {
@@ -705,6 +724,7 @@ def collect_rows() -> list[dict[str, Any]]:
                     "当日盈亏%": None
                     if day_pnl_pct is None
                     else round(float(day_pnl_pct), 2),
+                    "当日基数": None if day_base is None else round(float(day_base), 2),
                     "市值": None if market_value is None else round(float(market_value), 2),
                     "成本额": None if cost_value is None else round(float(cost_value), 2),
                     "已实现": False,
@@ -807,35 +827,50 @@ def write_html_report(
 ) -> Path:
     """生成持仓盯盘 HTML。"""
     indices = indices or []
-    total_pnl = 0.0
-    total_day_pnl = 0.0
+    total_pnl = 0.0  # 未平仓浮盈 + 今日已结算盈亏
+    total_day_pnl = 0.0  # 未平仓当日 + 已结算当日
     total_mv = 0.0
     total_mv_no_cost = 0.0
-    total_cost = 0.0
-    total_day_base = 0.0  # 当日盈亏分母：昨收×数量（当日买则用成本/开盘）
+    total_cost = 0.0  # 未平仓成本 + 已结算成本（用于总盈亏%）
+    total_day_base = 0.0
+    settled_pnl = 0.0
+    settled_day = 0.0
+    settled_n = 0
     has_pos = False
     has_day = False
     for r in rows:
         qty = int(r.get("持仓") or 0)
-        if r.get("浮盈") is not None and qty > 0:
+        realized = bool(r.get("已实现"))
+        # 总盈亏：持仓浮盈 + 已结算锁定盈亏
+        if r.get("浮盈") is not None and (qty > 0 or realized):
             total_pnl += float(r["浮盈"])
             has_pos = True
-        if r.get("当日盈亏") is not None and qty > 0:
+        if r.get("当日盈亏") is not None and (qty > 0 or realized):
             total_day_pnl += float(r["当日盈亏"])
             has_day = True
-            # 由金额与百分比反推基数；无%时用 市值-当日盈亏
-            dpct = r.get("当日盈亏%")
-            if dpct is not None and abs(float(dpct)) > 1e-12:
-                total_day_base += float(r["当日盈亏"]) / (float(dpct) / 100.0)
-            elif r.get("市值") is not None:
-                total_day_base += float(r["市值"]) - float(r["当日盈亏"])
+            db = r.get("当日基数")
+            if db is not None and float(db) > 0:
+                total_day_base += float(db)
+            else:
+                dpct = r.get("当日盈亏%")
+                if dpct is not None and abs(float(dpct)) > 1e-12:
+                    total_day_base += float(r["当日盈亏"]) / (float(dpct) / 100.0)
+                elif r.get("市值") is not None and not realized:
+                    total_day_base += float(r["市值"]) - float(r["当日盈亏"])
+        if realized:
+            settled_n += 1
+            if r.get("浮盈") is not None:
+                settled_pnl += float(r["浮盈"])
+            if r.get("当日盈亏") is not None:
+                settled_day += float(r["当日盈亏"])
+            if r.get("成本") is not None and r.get("卖出数量"):
+                total_cost += float(r["成本"]) * int(r["卖出数量"])
         if r.get("市值") is not None and qty > 0:
             mv = float(r["市值"])
             total_mv += mv
-            # 无成本仓市值单独统计，避免「市值-成本≠浮盈」误解
             if r.get("成本额") is None:
                 total_mv_no_cost += mv
-        if r.get("成本额") is not None:
+        if r.get("成本额") is not None and qty > 0:
             total_cost += float(r["成本额"])
     total_pnl_pct = (total_pnl / total_cost * 100.0) if total_cost > 0 else None
     total_day_pct = (
@@ -922,8 +957,8 @@ def write_html_report(
                 </div>
                 <div class="price">
                   <div class="last">{_fmt_num(r.get('现价'), pdg)}</div>
-                  <div class="chg {_cls_chg(day_pnl if int(r.get('持仓') or 0) > 0 else day_chg)}">
-                    {f"当日 {('-' if day_pnl is None else f'{float(day_pnl):+.2f}')} {('-' if day_pnl_pct is None else f'{float(day_pnl_pct):+.2f}%')}" if int(r.get('持仓') or 0) > 0 else f"当日 {('-' if day_chg is None else f'{float(day_chg):+.2f}%')}"}
+                  <div class="chg {_cls_chg(day_pnl if (int(r.get('持仓') or 0) > 0 or r.get('已实现')) else day_chg)}">
+                    {f"当日 {('-' if day_pnl is None else f'{float(day_pnl):+.2f}')} {('-' if day_pnl_pct is None else f'{float(day_pnl_pct):+.2f}%')}" if (int(r.get('持仓') or 0) > 0 or r.get('已实现')) else f"当日 {('-' if day_chg is None else f'{float(day_chg):+.2f}%')}"}
                   </div>
                 </div>
               </header>
@@ -934,17 +969,18 @@ def write_html_report(
                 <div><span>最高</span><b>{_fmt_num(r.get('最高'), pdg)}</b></div>
                 <div><span>最低</span><b>{_fmt_num(r.get('最低'), pdg)}</b></div>
                 <div><span>较开盘</span><b class="{_cls_chg(vs_open)}">{('-' if vs_open is None else f'{float(vs_open):+.2f}')}</b></div>
+                {('<div><span>成交价</span><b>' + _fmt_num(r.get('成交价'), pdg) + '</b></div>') if r.get('已实现') and r.get('成交价') is not None else ''}
                 <div><span>形态</span><b>{escape(str(r.get('形态') or '-'))}</b></div>
                 <div><span>买点 +{th_label}%</span><b class="{'tag-buy' if r.get('近买点') else ''}">{_fmt_num(r.get('买点'), pdg)}</b></div>
                 <div><span>止损 -{th_label}%</span><b class="{'tag-sell' if r.get('近止损') else ''}">{_fmt_num(r.get('止损'), pdg)}</b></div>
                 <div><span>已触买</span><b class="{'tag-yes' if r.get('已触买')=='是' else ''}">{escape(str(r.get('已触买')))}</b></div>
                 <div><span>已触止损</span><b class="{'tag-sell' if r.get('已触止损')=='是' else ''}">{escape(str(r.get('已触止损')))}</b></div>
                 <div><span>状态</span><b class="{'tag-alert' if bg in ('warn-buy','warn-sell') else ('tag-hold' if bg=='status-hold' else ('tag-flat' if bg=='status-flat' else ''))}">{escape(status_txt)}</b></div>
-                <div><span>持仓</span><b>{escape(str(r.get('持仓')))}</b></div>
+                <div><span>持仓</span><b>{escape(str(r.get('卖出数量') if r.get('已实现') else r.get('持仓')))}{'(已卖)' if r.get('已实现') else ''}</b></div>
                 <div><span>成本</span><b>{_fmt_num(r.get('成本'), max(3, pdg))}</b></div>
-                <div><span>浮盈</span><b class="{_cls_chg(pnl)}">{_fmt_num(pnl)}</b></div>
+                <div><span>浮盈</span><b class="{_cls_chg(pnl)}">{_fmt_num(pnl)}{' (已结算)' if r.get('已实现') else ''}</b></div>
                 <div><span>浮盈%</span><b class="{_cls_chg(pnl_pct)}">{'-' if pnl_pct is None else f'{float(pnl_pct):+.2f}%'}</b></div>
-                <div><span>当日盈亏</span><b class="{_cls_chg(day_pnl)}">{_fmt_num(day_pnl)}</b></div>
+                <div><span>当日盈亏</span><b class="{_cls_chg(day_pnl)}">{_fmt_num(day_pnl)}{' (锁定)' if r.get('已实现') else ''}</b></div>
                 <div><span>当日盈亏%</span><b class="{_cls_chg(day_pnl_pct)}">{'-' if day_pnl_pct is None else f'{float(day_pnl_pct):+.2f}%'}</b></div>
               </div>
               <footer>更新 {escape(str(r.get('更新') or '-'))}</footer>
@@ -1155,7 +1191,7 @@ def write_html_report(
         <p>000893 / 600552 / 002171 ±2.5% · 510580 ±1.2% · {_now()}</p>
       </div>
       <div class="summary">
-        <div class="label">合计浮盈</div>
+        <div class="label">合计盈亏</div>
         <div class="value {_cls_chg(total_pnl if has_pos else None)}">
           {('-' if not has_pos else f'{total_pnl:+.2f}')}
           <span style="font-size:0.95rem;font-weight:600;margin-left:6px;">
@@ -1173,6 +1209,7 @@ def write_html_report(
           市值 {_fmt_num(total_mv if total_mv else None)}
           · 成本 {_fmt_num(total_cost if total_cost else None)}
           {f' · 未计成本市值 {_fmt_num(total_mv_no_cost)}' if total_mv_no_cost > 0 else ''}
+          {f' · 今日结算{settled_n}笔 盈亏{settled_pnl:+.2f}/当日{settled_day:+.2f}' if settled_n > 0 else ''}
         </div>
       </div>
     </div>
@@ -1185,13 +1222,12 @@ def write_html_report(
     <p class="note">
       大盘：点数=最新指数点位；涨跌点数/涨跌幅相对昨收。
       个股：默认 ±2.5%（ceil/floor，同 kskj600552）；510580 为 ±1.2%。
-      市值=现价×持仓数量（全部有仓合计）；成本/浮盈仅统计已登记成本的仓位。
-      若有未登记成本仓（如510580），会出现「市值−成本≠浮盈」，属正常。
-      当日盈亏：隔夜仓=(现价−昨收)×数量；当日买入=(现价−成本)×数量。
+      合计盈亏=未平仓浮盈 + 今日已结算锁定盈亏；已结算部分不再随现价变。
+      当日盈亏=未平仓当日变动 + 今日已止损结算（按止损价锁定）。
+      仓位%=剩余持仓市值占比；已结算标的仓位为 0%。
       空仓默认「空仓」，已触买/将买入 → 翻转红底并建议限价@买点；
-      有仓默认「持有」，已触止损/将止损 → 翻转绿底并建议挂单价。
-      未触发且距买卖点 ≤1 点：将买入红底、将止损绿底。刷新请重新运行
-      <code>python index.py</code> 或 <code>python index.py html</code>。
+      有仓默认「持有」，已触止损 → 自动结算；将止损 → 翻转绿底预警。
+      刷新请重新运行 <code>python index.py</code> 或 <code>python index.py html</code>。
     </p>
   </div>
 </body>
@@ -1276,13 +1312,15 @@ def cmd_status(args: argparse.Namespace) -> None:
     day_base = 0.0
     day_n = 0
     for r in rows:
-        if r.get("当日盈亏") is not None and int(r.get("持仓") or 0) > 0:
+        if r.get("当日盈亏") is not None and (
+            int(r.get("持仓") or 0) > 0 or r.get("已实现")
+        ):
             day_total += float(r["当日盈亏"])
             day_n += 1
             dpct = r.get("当日盈亏%")
             if dpct is not None and abs(float(dpct)) > 1e-12:
                 day_base += float(r["当日盈亏"]) / (float(dpct) / 100.0)
-            elif r.get("市值") is not None:
+            elif r.get("市值") is not None and not r.get("已实现"):
                 day_base += float(r["市值"]) - float(r["当日盈亏"])
     if day_n:
         day_pct = (day_total / day_base * 100.0) if day_base > 0 else None
@@ -1297,7 +1335,8 @@ def cmd_status(args: argparse.Namespace) -> None:
         webbrowser.open(report.resolve().as_uri())
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘点=(现价/开盘-1)×100")
     print("     当日盈亏: 隔夜仓=(现价-昨收)×数量；当日买入=(现价-成本)×数量")
-    print("     有仓默认「持有」；触发止损/将止损才翻转并显示建议挂单；空仓触买同理")
+    print("     已触止损=视为已成交：按止损价锁定浮盈/当日盈亏并清仓，之后不再随现价变动")
+    print("     有仓默认「持有」；将止损仅预警未成交；空仓触买同理")
     print("     买点/止损按各标的阈值 ceil/floor；510580=±1.2%，其余=±2.5%")
     print("     已取消阴线卖规则")
 
