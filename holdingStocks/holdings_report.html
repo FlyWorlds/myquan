@@ -15,8 +15,8 @@
       --muted: #5c6f66;
       --line: #c9d6cf;
       --card: rgba(255,255,255,0.82);
-      --up: #0b7a45;
-      --down: #b42318;
+      --up: #b42318;
+      --down: #0b7a45;
       --accent: #1f6b4a;
       --warn: #9a6700;
     }
@@ -41,7 +41,7 @@
     }
     .hero p { margin: 0; color: var(--muted); font-size: 0.95rem; }
     .summary {
-      min-width: 220px;
+      min-width: 260px;
       padding: 14px 16px;
       border: 1px solid var(--line);
       border-radius: 14px;
@@ -51,6 +51,18 @@
     .summary .label { color: var(--muted); font-size: 0.85rem; }
     .summary .value { font-size: 1.8rem; font-weight: 700; margin-top: 4px; }
     .summary .sub { color: var(--muted); font-size: 0.9rem; margin-top: 2px; }
+    .summary .day-line {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .summary .day-line .day-label { color: var(--muted); font-size: 0.85rem; }
+    .summary .day-line .day-value { font-size: 1.15rem; font-weight: 700; }
+    .summary .meta { color: var(--muted); font-size: 0.86rem; margin-top: 8px; }
     .index-row {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -112,13 +124,13 @@
       font-size: 0.82rem;
       font-weight: 700;
       letter-spacing: 0.02em;
-      color: var(--down);
+      color: var(--up);
       background: rgba(180, 35, 24, 0.12);
       border: 1px solid rgba(180, 35, 24, 0.35);
     }
     .card.warn-buy .alert-badge,
     .card.warn-sell .alert-badge {
-      color: var(--down);
+      color: var(--up);
       background: rgba(180, 35, 24, 0.16);
       border-color: rgba(180, 35, 24, 0.45);
     }
@@ -145,10 +157,10 @@
     .flat { color: var(--muted); }
     .tag-yes { color: var(--accent); }
     .tag-warn { color: var(--warn); }
-    .tag-alert { color: var(--down); font-weight: 700; }
-    .tag-buy { color: var(--down); }
-    .tag-sell { color: var(--up); }
-    .err { color: var(--down); font-size: 0.9rem; }
+    .tag-alert { color: var(--up); font-weight: 700; }
+    .tag-buy { color: var(--up); }
+    .tag-sell { color: var(--down); }
+    .err { color: var(--up); font-size: 0.9rem; }
     footer { margin-top: 12px; color: var(--muted); font-size: 0.8rem; }
     .note { margin-top: 18px; color: var(--muted); font-size: 0.86rem; line-height: 1.5; }
   </style>
@@ -158,17 +170,27 @@
     <div class="hero">
       <div>
         <h1>持仓盯盘</h1>
-        <p>000893 / 600552 / 002171 ±2.5% · 510580 ±1.2% · 2026-07-28 09:34:55</p>
+        <p>000893 / 600552 / 002171 ±2.5% · 510580 ±1.2% · 2026-07-28 09:56:38</p>
       </div>
       <div class="summary">
         <div class="label">合计浮盈</div>
         <div class="value up">
-          +239.80
+          +459.60
+          <span style="font-size:0.95rem;font-weight:600;margin-left:6px;">
+            +1.91%
+          </span>
         </div>
-        <div class="sub">
-          市值 19782.00
-          · 成本 19542.20
-          · +1.23%
+        <div class="day-line">
+          <span class="day-label">当日盈亏</span>
+          <span class="day-value up">
+            +183.60
+             +0.76%
+          </span>
+        </div>
+        <div class="meta">
+          市值 24479.70
+          · 成本 24020.10
+          
         </div>
       </div>
     </div>
@@ -182,9 +204,9 @@
               </div>
               
               <div class="index-metrics">
-                <div><span>点数</span><b>3833.98</b></div>
-                <div><span>涨跌点数</span><b class="down">-24.27</b></div>
-                <div><span>涨跌幅</span><b class="down">-0.63%</b></div>
+                <div><span>点数</span><b>3838.88</b></div>
+                <div><span>涨跌点数</span><b class="down">-19.36</b></div>
+                <div><span>涨跌幅</span><b class="down">-0.50%</b></div>
               </div>
               
             </div>
@@ -197,9 +219,9 @@
               </div>
               
               <div class="index-metrics">
-                <div><span>点数</span><b>13921.77</b></div>
-                <div><span>涨跌点数</span><b class="down">-226.96</b></div>
-                <div><span>涨跌幅</span><b class="down">-1.60%</b></div>
+                <div><span>点数</span><b>13831.94</b></div>
+                <div><span>涨跌点数</span><b class="down">-316.79</b></div>
+                <div><span>涨跌幅</span><b class="down">-2.24%</b></div>
               </div>
               
             </div>
@@ -207,40 +229,42 @@
     </div>
     <div class="cards">
       
-            <article class="card warn-sell">
+            <article class="card">
               <header>
                 <div class="title">
                   <span class="market">深证</span>
                   <h2>亚钾国际</h2>
                   <code>000893</code>
-                  <div class="alert-badge tag-alert">阴线卖</div>
+                  
                 </div>
                 <div class="price">
-                  <div class="last">47.33</div>
-                  <div class="chg down">
-                    当日 -1.21%
+                  <div class="last">49.07</div>
+                  <div class="chg up">
+                    当日 +232.00 +2.42%
                   </div>
                 </div>
               </header>
               
-              <div class="suggest-order">建议挂单 <strong>47.33</strong> · 尾盘限价卖@47.33（以收盘价为准）</div>
+              
               <div class="grid">
                 <div><span>开盘</span><b>47.37</b></div>
-                <div><span>最高</span><b>47.55</b></div>
+                <div><span>最高</span><b>49.30</b></div>
                 <div><span>最低</span><b>46.66</b></div>
-                <div><span>较开盘</span><b class="down">-0.08</b></div>
-                <div><span>形态</span><b>阴</b></div>
+                <div><span>较开盘</span><b class="up">+3.59</b></div>
+                <div><span>形态</span><b>阳</b></div>
                 <div><span>买点 +2.5%</span><b class="">48.56</b></div>
-                <div><span>止损 -2.5%</span><b class="tag-sell">46.18</b></div>
-                <div><span>已触买</span><b class="">否</b></div>
+                <div><span>止损 -2.5%</span><b class="">46.18</b></div>
+                <div><span>已触买</span><b class="tag-yes">是</b></div>
                 <div><span>已触止损</span><b class="">否</b></div>
-                <div><span>预警</span><b class="tag-alert">阴线卖</b></div>
+                <div><span>预警</span><b class="">-</b></div>
                 <div><span>持仓</span><b>200</b></div>
-                <div><span>成本</span><b>47.705</b></div>
-                <div><span>浮盈</span><b class="down">-75.00</b></div>
-                <div><span>浮盈%</span><b class="down">-0.79%</b></div>
+                <div><span>成本</span><b>47.704</b></div>
+                <div><span>浮盈</span><b class="up">273.20</b></div>
+                <div><span>浮盈%</span><b class="up">+2.86%</b></div>
+                <div><span>当日盈亏</span><b class="up">232.00</b></div>
+                <div><span>当日盈亏%</span><b class="up">+2.42%</b></div>
               </div>
-              <footer>更新 09:34:00</footer>
+              <footer>更新 09:57:00</footer>
             </article>
             
             <article class="card">
@@ -252,9 +276,9 @@
                   
                 </div>
                 <div class="price">
-                  <div class="last">16.69</div>
+                  <div class="last">16.64</div>
                   <div class="chg up">
-                    当日 +1.83%
+                    当日 +100.00 +1.53%
                   </div>
                 </div>
               </header>
@@ -264,7 +288,7 @@
                 <div><span>开盘</span><b>16.50</b></div>
                 <div><span>最高</span><b>17.11</b></div>
                 <div><span>最低</span><b>16.42</b></div>
-                <div><span>较开盘</span><b class="up">+1.15</b></div>
+                <div><span>较开盘</span><b class="up">+0.85</b></div>
                 <div><span>形态</span><b>阳</b></div>
                 <div><span>买点 +2.5%</span><b class="">16.92</b></div>
                 <div><span>止损 -2.5%</span><b class="">16.08</b></div>
@@ -273,10 +297,12 @@
                 <div><span>预警</span><b class="">-</b></div>
                 <div><span>持仓</span><b>400</b></div>
                 <div><span>成本</span><b>15.952</b></div>
-                <div><span>浮盈</span><b class="up">295.20</b></div>
-                <div><span>浮盈%</span><b class="up">+4.63%</b></div>
+                <div><span>浮盈</span><b class="up">275.20</b></div>
+                <div><span>浮盈%</span><b class="up">+4.31%</b></div>
+                <div><span>当日盈亏</span><b class="up">100.00</b></div>
+                <div><span>当日盈亏%</span><b class="up">+1.53%</b></div>
               </div>
-              <footer>更新 09:35:00</footer>
+              <footer>更新 09:57:00</footer>
             </article>
             
             <article class="card">
@@ -288,9 +314,9 @@
                   
                 </div>
                 <div class="price">
-                  <div class="last">9.10</div>
+                  <div class="last">9.06</div>
                   <div class="chg down">
-                    当日 -1.09%
+                    当日 -56.00 -1.52%
                   </div>
                 </div>
               </header>
@@ -298,9 +324,9 @@
               
               <div class="grid">
                 <div><span>开盘</span><b>9.05</b></div>
-                <div><span>最高</span><b>9.12</b></div>
+                <div><span>最高</span><b>9.17</b></div>
                 <div><span>最低</span><b>9.02</b></div>
-                <div><span>较开盘</span><b class="up">+0.55</b></div>
+                <div><span>较开盘</span><b class="up">+0.11</b></div>
                 <div><span>形态</span><b>阳</b></div>
                 <div><span>买点 +2.5%</span><b class="">9.28</b></div>
                 <div><span>止损 -2.5%</span><b class="">8.82</b></div>
@@ -309,52 +335,59 @@
                 <div><span>预警</span><b class="">-</b></div>
                 <div><span>持仓</span><b>400</b></div>
                 <div><span>成本</span><b>9.051</b></div>
-                <div><span>浮盈</span><b class="up">19.60</b></div>
-                <div><span>浮盈%</span><b class="up">+0.54%</b></div>
+                <div><span>浮盈</span><b class="up">3.60</b></div>
+                <div><span>浮盈%</span><b class="up">+0.10%</b></div>
+                <div><span>当日盈亏</span><b class="down">-56.00</b></div>
+                <div><span>当日盈亏%</span><b class="down">-1.52%</b></div>
               </div>
-              <footer>更新 09:35:00</footer>
+              <footer>更新 09:57:00</footer>
             </article>
             
-            <article class="card">
+            <article class="card warn-sell">
               <header>
                 <div class="title">
                   <span class="market">上证</span>
                   <h2>易方达中证500ETF</h2>
                   <code>510580</code>
-                  <div class="alert-badge tag-alert">T+1不可卖</div>
+                  <div class="alert-badge tag-alert">阴线卖</div>
                 </div>
                 <div class="price">
-                  <div class="last">4.01</div>
+                  <div class="last">3.987</div>
                   <div class="chg down">
-                    当日 -1.50%
+                    当日 -92.40 -2.06%
                   </div>
                 </div>
               </header>
               
-              
+              <div class="suggest-order">建议挂单 <strong>3.987</strong> · 尾盘限价卖@3.987（以收盘价为准）</div>
               <div class="grid">
-                <div><span>开盘</span><b>3.99</b></div>
-                <div><span>最高</span><b>4.02</b></div>
-                <div><span>最低</span><b>3.99</b></div>
-                <div><span>较开盘</span><b class="up">+0.50</b></div>
-                <div><span>形态</span><b>阳</b></div>
-                <div><span>买点 +1.2%</span><b class="">4.04</b></div>
-                <div><span>止损 -1.2%</span><b class="">3.94</b></div>
+                <div><span>开盘</span><b>3.990</b></div>
+                <div><span>最高</span><b>4.019</b></div>
+                <div><span>最低</span><b>3.984</b></div>
+                <div><span>较开盘</span><b class="down">-0.08</b></div>
+                <div><span>形态</span><b>阴</b></div>
+                <div><span>买点 +1.2%</span><b class="">4.038</b></div>
+                <div><span>止损 -1.2%</span><b class="tag-sell">3.942</b></div>
                 <div><span>已触买</span><b class="">否</b></div>
                 <div><span>已触止损</span><b class="">否</b></div>
-                <div><span>预警</span><b class="tag-alert">T+1不可卖</b></div>
+                <div><span>预警</span><b class="tag-alert">阴线卖</b></div>
                 <div><span>持仓</span><b>1100</b></div>
-                <div><span>成本</span><b>-</b></div>
-                <div><span>浮盈</span><b class="">-</b></div>
-                <div><span>浮盈%</span><b class="">-</b></div>
+                <div><span>成本</span><b>4.071</b></div>
+                <div><span>浮盈</span><b class="down">-92.40</b></div>
+                <div><span>浮盈%</span><b class="down">-2.06%</b></div>
+                <div><span>当日盈亏</span><b class="down">-92.40</b></div>
+                <div><span>当日盈亏%</span><b class="down">-2.06%</b></div>
               </div>
-              <footer>更新 09:35:00</footer>
+              <footer>更新 09:57:00</footer>
             </article>
             
     </div>
     <p class="note">
       大盘：点数=最新指数点位；涨跌点数/涨跌幅相对昨收。
       个股：默认 ±2.5%（ceil/floor，同 kskj600552）；510580 为 ±1.2%。
+      市值=现价×持仓数量（全部有仓合计）；成本/浮盈仅统计已登记成本的仓位。
+      若有未登记成本仓（如510580），会出现「市值−成本≠浮盈」，属正常。
+      当日盈亏：隔夜仓=(现价−昨收)×数量；当日买入=(现价−成本)×数量。
       空仓：已触买/将买入 → 建议限价@买点；有仓：已触止损/将止损/阴线卖 → 建议挂单价。
       未触发且距买卖点 ≤1 点：将买入红底、将止损绿底。刷新请重新运行
       <code>python index.py</code> 或 <code>python index.py html</code>。
