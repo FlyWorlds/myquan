@@ -46,9 +46,9 @@ python index.py status --no-open
 # 只生成/打开报告
 python index.py html
 
-# 长驻盯盘：本地 HTTP + 每 30 秒更新行情，页面自动刷新
+# 长驻盯盘：本地 HTTP + 每 60 秒更新；页头有倒计时并自动刷新
 python index.py watch
-python index.py watch --interval 30 --port 8765
+python index.py watch --interval 60 --port 8765
 # 浏览器打开：http://127.0.0.1:8765/holdings_report.html
 # 停止：终端 Ctrl+C
 ```

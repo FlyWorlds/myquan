@@ -10,7 +10,7 @@
 用法：
   python index.py              # 查看标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
-  python index.py watch        # 长驻：每30秒更新行情，本地页自动刷新
+  python index.py watch        # 长驻：每60秒更新行情，本地页倒计时自动刷新
   python index.py buy 002171 9.05 1000
   python index.py sell 002171 9.20 500
   python index.py set-cost 600552 15.95 --qty 400
@@ -1232,34 +1232,86 @@ def write_html_report(
     if refresh_sec is not None and int(refresh_sec) > 0:
         sec = int(refresh_sec)
         refresh_head = (
-            f'\n  <meta http-equiv="refresh" content="{sec}" />'
             f'\n  <meta name="holdings-watch" content="{sec}" />'
         )
-        hero_extra = f' · <span style="color:var(--accent);font-weight:600;">盯盘中 · {sec}s</span>'
+        hero_extra = (
+            f' · <span class="watch-live">盯盘中</span>'
+            f' · 下次更新 <strong id="watch-countdown">{sec}</strong>s'
+        )
         watch_hint = (
-            f"盯盘模式：服务端每 {sec} 秒重拉行情写报告；本页自动刷新。"
+            f"盯盘模式：服务端每 {sec} 秒重拉行情；倒计时到 0 后自动刷新本页。"
             " 停止请在终端 Ctrl+C。"
         )
         refresh_script = f"""
 <script>
 (function () {{
-  const metaUrl = "holdings_watch.json";
-  let last = null;
-  async function tick() {{
+  const INTERVAL = {sec};
+  const metaUrl = "/holdings_watch.json";
+  const cdEl = document.getElementById("watch-countdown");
+  let lastStamp = null;
+  let left = INTERVAL;
+  let reloading = false;
+
+  function renderCd() {{
+    if (cdEl) cdEl.textContent = String(Math.max(0, left));
+  }}
+
+  function reloadSamePage() {{
+    if (reloading) return;
+    reloading = true;
+    // 强制刷新当前页（同 URL），避免开新页/走缓存
+    const url = location.pathname + "?t=" + Date.now();
+    location.replace(url);
+  }}
+
+  function parseStamp(s) {{
+    if (!s) return null;
+    // "YYYY-MM-DD HH:MM:SS" → 本地时间
+    const m = String(s).match(/^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})[ T](\\d{{2}}):(\\d{{2}}):(\\d{{2}})/);
+    if (!m) return null;
+    return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+  }}
+
+  async function syncFromServer() {{
     try {{
       const r = await fetch(metaUrl + "?t=" + Date.now(), {{ cache: "no-store" }});
       if (!r.ok) return;
       const j = await r.json();
       const stamp = j && (j.updated_at || j.ts);
-      if (stamp && last && stamp !== last) {{
-        location.reload();
+      if (!stamp) return;
+      if (lastStamp && stamp !== lastStamp) {{
+        reloadSamePage();
         return;
       }}
-      if (stamp) last = stamp;
+      lastStamp = stamp;
+      const interval = Number(j.refresh_sec) || INTERVAL;
+      const ts = (typeof j.ts === "number") ? j.ts : parseStamp(stamp);
+      if (ts) {{
+        const elapsed = Math.floor((Date.now() - ts) / 1000);
+        left = Math.max(0, interval - elapsed);
+        renderCd();
+        if (left <= 0) reloadSamePage();
+      }}
     }} catch (e) {{}}
   }}
-  tick();
-  setInterval(tick, Math.min(5000, {sec} * 1000));
+
+  renderCd();
+  syncFromServer();
+  setInterval(function () {{
+    if (reloading) return;
+    left -= 1;
+    if (left <= 0) {{
+      left = 0;
+      renderCd();
+      // 到点：先跟服务器确认，有新数据或已超时都刷新本页
+      syncFromServer();
+      return;
+    }}
+    renderCd();
+  }}, 1000);
+  setInterval(function () {{
+    if (!reloading) syncFromServer();
+  }}, 2000);
 }})();
 </script>
 """
@@ -1306,6 +1358,8 @@ def write_html_report(
       margin: 0 0 6px; font-size: clamp(1.6rem, 3vw, 2.2rem); letter-spacing: -0.02em;
     }}
     .hero p {{ margin: 0; color: var(--muted); font-size: 0.95rem; }}
+    .watch-live {{ color: var(--accent); font-weight: 600; }}
+    #watch-countdown {{ color: var(--accent); font-variant-numeric: tabular-nums; }}
     .summary {{
       min-width: 260px;
       padding: 14px 16px;
@@ -1515,7 +1569,11 @@ def write_html_report(
     if refresh_sec is not None and int(refresh_sec) > 0:
         WATCH_META_FILE.write_text(
             json.dumps(
-                {"updated_at": _now(), "refresh_sec": int(refresh_sec)},
+                {
+                    "updated_at": _now(),
+                    "refresh_sec": int(refresh_sec),
+                    "ts": int(datetime.now().timestamp() * 1000),
+                },
                 ensure_ascii=False,
             ),
             encoding="utf-8",
@@ -1823,10 +1881,15 @@ def cmd_watch(args: argparse.Namespace) -> None:
     host = str(args.host)
     port = int(args.port)
     stop = threading.Event()
+    refresh_lock = threading.Lock()
+
+    def safe_refresh() -> Path:
+        with refresh_lock:
+            return _refresh_once(interval)
 
     print(f"首次拉取行情…")
     try:
-        report = _refresh_once(interval)
+        report = safe_refresh()
         print(f"报告已生成: {report}")
     except Exception as e:
         print(f"首次更新失败: {e}")
@@ -1835,7 +1898,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     def loop() -> None:
         while not stop.wait(interval):
             try:
-                _refresh_once(interval)
+                safe_refresh()
                 print(f"[{_now()}] 行情已更新 → {REPORT_FILE.name}")
             except Exception as e:
                 print(f"[{_now()}] 更新失败: {e}")
@@ -1851,17 +1914,51 @@ def cmd_watch(args: argparse.Namespace) -> None:
             path = getattr(self, "path", "") or ""
             if WATCH_META_FILE.name in path or REPORT_FILE.name in path:
                 return
+            if path.startswith("/api/"):
+                return
             super().log_message(fmt, *log_args)
 
         def end_headers(self) -> None:
-            # 防止浏览器缓存报告/元数据导致不刷新
-            if self.path.split("?", 1)[0] in (
+            path = self.path.split("?", 1)[0]
+            if path in (
                 f"/{REPORT_FILE.name}",
                 f"/{WATCH_META_FILE.name}",
+                "/api/refresh",
             ):
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
                 self.send_header("Pragma", "no-cache")
             super().end_headers()
+
+        def _send_json(self, code: int, payload: dict[str, Any]) -> None:
+            raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def _handle_refresh(self) -> None:
+            try:
+                safe_refresh()
+                print(f"[{_now()}] 手动更新 → {REPORT_FILE.name}")
+                self._send_json(200, {"ok": True, "updated_at": _now()})
+            except Exception as e:
+                print(f"[{_now()}] 手动更新失败: {e}")
+                self._send_json(500, {"ok": False, "error": str(e)})
+
+        def do_GET(self) -> None:  # noqa: N802
+            path = self.path.split("?", 1)[0]
+            if path == "/api/refresh":
+                self._handle_refresh()
+                return
+            super().do_GET()
+
+        def do_POST(self) -> None:  # noqa: N802
+            path = self.path.split("?", 1)[0]
+            if path == "/api/refresh":
+                self._handle_refresh()
+                return
+            self.send_error(404, "Not Found")
 
     server = ThreadingHTTPServer((host, port), _Handler)
     url = f"http://{host}:{port}/{REPORT_FILE.name}"
@@ -1891,8 +1988,8 @@ def build_parser() -> argparse.ArgumentParser:
     html_p.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     html_p.set_defaults(func=cmd_html)
 
-    w = sub.add_parser("watch", help="长驻盯盘：每30秒更新行情并自动刷新页面")
-    w.add_argument("--interval", type=int, default=30, help="刷新秒数，默认30")
+    w = sub.add_parser("watch", help="长驻盯盘：每60秒更新行情并自动刷新页面")
+    w.add_argument("--interval", type=int, default=60, help="刷新秒数，默认60")
     w.add_argument("--host", default="127.0.0.1", help="监听地址")
     w.add_argument("--port", type=int, default=8765, help="端口，默认8765")
     w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
