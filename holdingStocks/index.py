@@ -145,6 +145,47 @@ def _purge_stale_realized(data: dict[str, Any], session: str) -> None:
         del realized[k]
 
 
+def update_high_after_stop(
+    *,
+    code: str,
+    stop_px: float,
+    high_after: float | None,
+    low_after: float | None,
+    qty: int,
+    px_digits: int,
+) -> dict[str, Any] | None:
+    """刷新已结算记录中的「止损后最高/最低」，并估算踏空幅度/金额。"""
+    if high_after is None and low_after is None:
+        return None
+    data = load_holdings()
+    realized = data.setdefault("realized_today", {})
+    rec = realized.get(code)
+    if not rec or rec.get("reason") != "止损成交":
+        return None
+    stop_px = float(stop_px)
+    if high_after is not None:
+        ha = float(high_after)
+        old_h = rec.get("high_after_stop")
+        if old_h is not None:
+            ha = max(float(old_h), ha)
+        rec["high_after_stop"] = round(ha, px_digits)
+    if low_after is not None:
+        la = float(low_after)
+        old_l = rec.get("low_after_stop")
+        if old_l is not None:
+            la = min(float(old_l), la)
+        rec["low_after_stop"] = round(la, px_digits)
+    sold_qty = int(rec.get("qty") or qty)
+    if rec.get("high_after_stop") is not None:
+        ha = float(rec["high_after_stop"])
+        rebound_pct = (ha / stop_px - 1.0) * 100.0 if stop_px > 0 else None
+        miss_pnl = (ha - stop_px) * sold_qty
+        rec["rebound_pct"] = None if rebound_pct is None else round(rebound_pct, 2)
+        rec["miss_pnl"] = round(miss_pnl, 2)
+    save_holdings(data)
+    return rec
+
+
 def apply_stop_fill(
     *,
     code: str,
@@ -236,6 +277,29 @@ def append_trade(record: dict[str, Any]) -> None:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+def extremes_after_stop_touch(
+    day: pd.DataFrame, stop_px: float
+) -> tuple[float | None, float | None]:
+    """触及止损后（含触及那根分钟）到现在的最高价、最低价。"""
+    if day is None or getattr(day, "empty", True):
+        return None, None
+    stop_px = float(stop_px)
+    touched = day[day["low"] <= stop_px + 1e-12]
+    if touched.empty:
+        return None, None
+    first_ts = touched.iloc[0]["ts"]
+    after = day[day["ts"] >= first_ts]
+    if after.empty:
+        return None, None
+    return float(after["high"].max()), float(after["low"].min())
+
+
+def high_after_stop_touch(day: pd.DataFrame, stop_px: float) -> float | None:
+    """触及止损后（含触及那根分钟）到现在的最高价。"""
+    ha, _ = extremes_after_stop_touch(day, stop_px)
+    return ha
+
+
 def fetch_today_quote(sina: str) -> dict[str, Any]:
     """用1分钟线拼当日开高低收（现价=最新分钟收盘）；并取昨收算当日涨幅。"""
     raw = ak.stock_zh_a_minute(symbol=sina, period="1", adjust="")
@@ -289,6 +353,7 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
         "prev_close": prev_close,
         "day_chg_pct": day_chg,
         "last_ts": str(last_ts),
+        "_day_bars": day,  # 供止损后最高价统计
     }
 
 
@@ -590,7 +655,33 @@ def collect_rows() -> list[dict[str, Any]]:
                         realized["day_base"] = round(
                             float(realized["day_pnl"]) / (float(dpct) / 100.0), 2
                         )
+                # 触及止损后最高/最低（分钟线，含触及那根）
+                ha, la = extremes_after_stop_touch(q.get("_day_bars"), float(lv["stop"]))
+                updated = update_high_after_stop(
+                    code=code,
+                    stop_px=float(lv["stop"]),
+                    high_after=ha,
+                    low_after=la,
+                    qty=sold_qty,
+                    px_digits=px_digits,
+                )
+                if updated:
+                    realized = updated
+                    realized_map[code] = updated
                 live_last = round(q["last"], px_digits)
+                ha_show = realized.get("high_after_stop")
+                la_show = realized.get("low_after_stop")
+                rebound = realized.get("rebound_pct")
+                miss = realized.get("miss_pnl")
+                note = (
+                    f"已按止损价成交@{fill_px:.{px_digits}f}，盈亏已锁定；现价仍实时更新"
+                )
+                if ha_show is not None:
+                    note += f"；止损后最高{float(ha_show):.{px_digits}f}"
+                    if rebound is not None:
+                        note += f"（回抽{float(rebound):+.2f}%）"
+                if la_show is not None:
+                    note += f"；最低{float(la_show):.{px_digits}f}"
                 rows.append(
                     {
                         "市场": w["market"],
@@ -603,6 +694,10 @@ def collect_rows() -> list[dict[str, Any]]:
                         # 现价继续跟行情；成交价单独保留，盈亏仍按成交锁定
                         "现价": live_last,
                         "成交价": round(fill_px, px_digits),
+                        "止损后最高": ha_show,
+                        "止损后最低": la_show,
+                        "回抽%": rebound,
+                        "踏空金额": miss,
                         "昨收": None
                         if q.get("prev_close") is None
                         else round(float(q["prev_close"]), px_digits),
@@ -616,10 +711,7 @@ def collect_rows() -> list[dict[str, Any]]:
                         "形态": bar_shape(q["open"], q["last"]),
                         "预警": "止损成交",
                         "建议挂单": None,
-                        "挂单说明": (
-                            f"已按止损价成交@{fill_px:.{px_digits}f}，"
-                            f"盈亏已锁定；现价仍实时更新"
-                        ),
+                        "挂单说明": note,
                         "近买点": False,
                         "近止损": False,
                         "bg_class": "warn-sell",
@@ -975,6 +1067,10 @@ def write_html_report(
                 <div><span>止损 -{th_label}%</span><b class="{'tag-sell' if r.get('近止损') else ''}">{_fmt_num(r.get('止损'), pdg)}</b></div>
                 <div><span>已触买</span><b class="{'tag-yes' if r.get('已触买')=='是' else ''}">{escape(str(r.get('已触买')))}</b></div>
                 <div><span>已触止损</span><b class="{'tag-sell' if r.get('已触止损')=='是' else ''}">{escape(str(r.get('已触止损')))}</b></div>
+                {('<div><span>止损后最高</span><b>' + _fmt_num(r.get('止损后最高'), pdg) + '</b></div>') if r.get('已实现') and r.get('止损后最高') is not None else ''}
+                {('<div><span>止损后最低</span><b>' + _fmt_num(r.get('止损后最低'), pdg) + '</b></div>') if r.get('已实现') and r.get('止损后最低') is not None else ''}
+                {('<div><span>回抽%</span><b class="' + _cls_chg(r.get('回抽%')) + '">' + ('-' if r.get('回抽%') is None else f"{float(r.get('回抽%')):+.2f}%") + '</b></div>') if r.get('已实现') and r.get('止损后最高') is not None else ''}
+                {('<div><span>踏空金额</span><b class="' + _cls_chg(r.get('踏空金额')) + '">' + _fmt_num(r.get('踏空金额')) + '</b></div>') if r.get('已实现') and r.get('踏空金额') is not None else ''}
                 <div><span>状态</span><b class="{'tag-alert' if bg in ('warn-buy','warn-sell') else ('tag-hold' if bg=='status-hold' else ('tag-flat' if bg=='status-flat' else ''))}">{escape(status_txt)}</b></div>
                 <div><span>持仓</span><b>{escape(str(r.get('卖出数量') if r.get('已实现') else r.get('持仓')))}{'(已卖)' if r.get('已实现') else ''}</b></div>
                 <div><span>成本</span><b>{_fmt_num(r.get('成本'), max(3, pdg))}</b></div>
@@ -1298,13 +1394,18 @@ def cmd_status(args: argparse.Namespace) -> None:
                 "浮盈%": "-" if r["浮盈%"] is None else r["浮盈%"],
                 "当日盈亏": "-" if r.get("当日盈亏") is None else r["当日盈亏"],
                 "当日盈亏%": "-" if r.get("当日盈亏%") is None else r["当日盈亏%"],
+                "止损后最高": _p(r.get("止损后最高")),
+                "止损后最低": _p(r.get("止损后最低")),
+                "回抽%": "-" if r.get("回抽%") is None else r.get("回抽%"),
+                "踏空": "-" if r.get("踏空金额") is None else r.get("踏空金额"),
                 "更新": r["更新"],
             }
         )
     cols = [
         "市场", "代码", "名称", "开盘", "现价", "当日涨幅", "较开盘点", "阈值%",
         "最高", "最低", "买点", "止损", "已触买", "已触止损", "形态", "状态",
-        "建议挂单", "挂单说明", "持仓", "成本", "浮盈", "浮盈%", "当日盈亏", "当日盈亏%", "更新",
+        "建议挂单", "挂单说明", "持仓", "成本", "浮盈", "浮盈%", "当日盈亏", "当日盈亏%",
+        "止损后最高", "止损后最低", "回抽%", "踏空", "更新",
     ]
     print(pd.DataFrame(show_rows)[cols].to_string(index=False))
     print("-" * 108)

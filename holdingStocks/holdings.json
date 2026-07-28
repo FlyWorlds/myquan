@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-28 11:00:00",
+  "updated_at": "2026-07-28 11:19:14",
   "positions": {
     "000893": {
       "name": "亚钾国际",
@@ -48,7 +48,11 @@
       "day_pnl": -141.9,
       "day_pnl_pct": -3.17,
       "reason": "止损成交",
-      "time": "2026-07-28 11:00:00"
+      "time": "2026-07-28 11:00:00",
+      "high_after_stop": 3.962,
+      "rebound_pct": 0.51,
+      "miss_pnl": 22.0,
+      "low_after_stop": 3.93
     }
   }
 }
