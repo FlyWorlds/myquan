@@ -645,6 +645,14 @@ def points_vs_open(open_px: float, px: float) -> float:
     return (px / open_px - 1.0) * 100.0
 
 
+def pct_vs_open(open_px: float, px: float) -> float | None:
+    """较开盘涨幅% = (现价/开盘-1)×100。"""
+    v = points_vs_open(open_px, px)
+    if v != v:
+        return None
+    return round(float(v), 2)
+
+
 def fetch_indices() -> list[dict[str, Any]]:
     """拉取上证指数 / 深证成指：最新点数、涨跌点数、涨跌幅。"""
     try:
@@ -720,6 +728,7 @@ def collect_rows() -> list[dict[str, Any]]:
                 q["open"], entry_pct=entry_pct, stop_pct=stop_pct, tick=tick
             )
             vs = points_vs_open(q["open"], q["last"])
+            vs_pct = pct_vs_open(q["open"], q["last"])
             day_chg = q.get("day_chg_pct")
             hit_buy = q["high"] + 1e-12 >= lv["buy_trigger"]
             hit_stop = q["low"] <= lv["stop"] + 1e-12
@@ -849,7 +858,8 @@ def collect_rows() -> list[dict[str, Any]]:
                         if q.get("prev_close") is None
                         else round(float(q["prev_close"]), px_digits),
                         "当日涨幅": None if day_chg is None else round(float(day_chg), 2),
-                        "较开盘点": round(vs, 2),
+                        "较开盘点": vs_pct,
+                        "较开盘涨幅": vs_pct,
                         "阈值%": pct_pct,
                         "买点": lv["buy_trigger"],
                         "止损": lv["stop"],
@@ -942,7 +952,8 @@ def collect_rows() -> list[dict[str, Any]]:
                     if q.get("prev_close") is None
                     else round(float(q["prev_close"]), px_digits),
                     "当日涨幅": None if day_chg is None else round(float(day_chg), 2),
-                    "较开盘点": round(vs, 2),
+                    "较开盘点": vs_pct,
+                    "较开盘涨幅": vs_pct,
                     "阈值%": pct_pct,
                     "买点": lv["buy_trigger"],
                     "止损": lv["stop"],
@@ -988,6 +999,7 @@ def collect_rows() -> list[dict[str, Any]]:
                     "现价": None,
                     "当日涨幅": None,
                     "较开盘点": None,
+                    "较开盘涨幅": None,
                     "阈值%": pct_pct,
                     "买点": None,
                     "止损": None,
@@ -1148,6 +1160,7 @@ def write_html_report(
         err = r.get("error")
         day_chg = r.get("当日涨幅")
         vs_open = r.get("较开盘点")
+        vs_open_pct = r.get("较开盘涨幅")
         pnl = r.get("浮盈")
         pnl_pct = r.get("浮盈%")
         day_pnl = r.get("当日盈亏")
@@ -1209,7 +1222,8 @@ def write_html_report(
                 <div><span>开盘</span><b>{_fmt_num(r.get('开盘'), pdg)}</b></div>
                 <div><span>最高</span><b>{_fmt_num(r.get('最高'), pdg)}</b></div>
                 <div><span>最低</span><b>{_fmt_num(r.get('最低'), pdg)}</b></div>
-                <div><span>较开盘</span><b class="{_cls_chg(vs_open)}">{('-' if vs_open is None else f'{float(vs_open):+.2f}')}</b></div>
+                <div><span>较开盘点</span><b class="{_cls_chg(vs_open)}">{('-' if vs_open is None else f'{float(vs_open):+.2f}')}</b></div>
+                <div><span>较开盘涨幅</span><b class="{_cls_chg(vs_open_pct)}">{('-' if vs_open_pct is None else f'{float(vs_open_pct):+.2f}%')}</b></div>
                 {('<div><span>成交价</span><b>' + _fmt_num(r.get('成交价'), pdg) + '</b></div>') if r.get('已实现') and r.get('成交价') is not None else ''}
                 <div><span>形态</span><b>{escape(str(r.get('形态') or '-'))}</b></div>
                 <div><span>买点 +{th_label}%</span><b class="{'tag-buy' if r.get('近买点') else ''}">{_fmt_num(r.get('买点'), pdg)}</b></div>
@@ -1634,6 +1648,9 @@ def cmd_status(args: argparse.Namespace) -> None:
                 "现价": _p(r["现价"]),
                 "当日涨幅": "-" if r["当日涨幅"] is None else r["当日涨幅"],
                 "较开盘点": "-" if r["较开盘点"] is None else r["较开盘点"],
+                "较开盘涨幅": "-"
+                if r.get("较开盘涨幅") is None
+                else f"{float(r['较开盘涨幅']):+.2f}%",
                 "阈值%": r.get("阈值%"),
                 "最高": _p(r["最高"]),
                 "最低": _p(r["最低"]),
@@ -1666,7 +1683,7 @@ def cmd_status(args: argparse.Namespace) -> None:
             }
         )
     cols = [
-        "市场", "代码", "名称", "开盘", "现价", "当日涨幅", "较开盘点", "阈值%",
+        "市场", "代码", "名称", "开盘", "现价", "当日涨幅", "较开盘点", "较开盘涨幅", "阈值%",
         "最高", "最低", "买点", "止损", "已触买", "已触止损", "形态", "状态",
         "建议挂单", "挂单说明", "持仓", "成本", "浮盈", "浮盈%", "当日盈亏", "当日盈亏%",
         "止损后最高", "止损后最低", "回抽%", "踏空", "更新",
@@ -1698,7 +1715,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(f"HTML 报告: {report}")
     if not getattr(args, "no_open", False):
         webbrowser.open(report.resolve().as_uri())
-    print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘点=(现价/开盘-1)×100")
+    print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
     print("     当日盈亏: 隔夜仓=(现价-昨收)×数量；当日买入=(现价-成本)×数量")
     print("     已触止损=视为已成交：按止损价锁定浮盈/当日盈亏并清仓，之后不再随现价变动")
     print("     未触止损但尾盘(≥14:55)仍收阴=按现价阴线结算（对齐 kskj）")

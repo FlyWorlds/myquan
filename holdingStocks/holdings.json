@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-28 13:02:30",
+  "updated_at": "2026-07-28 15:13:56",
   "positions": {
     "000893": {
       "name": "亚钾国际",
@@ -12,18 +12,18 @@
     "600552": {
       "name": "凯盛科技",
       "market": "上证",
-      "qty": 400,
-      "cost": 15.952,
-      "buy_time": "2026-07-27",
-      "note": ""
+      "qty": 0,
+      "cost": null,
+      "buy_time": null,
+      "note": "止损成交@16.08 (2026-07-28)"
     },
     "002171": {
       "name": "楚江新材",
       "market": "深证",
-      "qty": 400,
-      "cost": 9.051,
-      "buy_time": "2026-07-27",
-      "note": ""
+      "qty": 0,
+      "cost": null,
+      "buy_time": null,
+      "note": "阴线收盘卖@8.97 (2026-07-28)"
     },
     "510580": {
       "name": "易方达中证500ETF",
@@ -52,7 +52,41 @@
       "high_after_stop": 3.965,
       "rebound_pct": 0.58,
       "miss_pnl": 25.3,
-      "low_after_stop": 3.93
+      "low_after_stop": 3.9
+    },
+    "600552": {
+      "session": "2026-07-28",
+      "name": "凯盛科技",
+      "market": "上证",
+      "qty": 400,
+      "price": 16.08,
+      "cost": 15.952,
+      "pnl": 51.2,
+      "pnl_pct": 0.8,
+      "day_base": 6556.0,
+      "day_pnl": -124.0,
+      "day_pnl_pct": -1.89,
+      "reason": "止损成交",
+      "time": "2026-07-28 14:01:25",
+      "high_after_stop": 16.13,
+      "low_after_stop": 15.82,
+      "rebound_pct": 0.31,
+      "miss_pnl": 20.0
+    },
+    "002171": {
+      "session": "2026-07-28",
+      "name": "楚江新材",
+      "market": "深证",
+      "qty": 400,
+      "price": 8.98,
+      "cost": 9.051,
+      "pnl": -28.4,
+      "pnl_pct": -0.78,
+      "day_base": 3680.0,
+      "day_pnl": -88.0,
+      "day_pnl_pct": -2.39,
+      "reason": "阴线收盘卖",
+      "time": "2026-07-28 14:55:08"
     }
   }
 }
