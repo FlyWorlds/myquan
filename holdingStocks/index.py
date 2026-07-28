@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import threading
 import webbrowser
 from datetime import datetime
@@ -75,6 +76,13 @@ INDEX_WATCH: list[dict[str, str]] = [
 
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
+    """先写临时文件再替换，避免浏览器读到半截 HTML 导致布局闪乱。"""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding=encoding)
+    os.replace(tmp, path)
 
 
 def _code_key(code: str) -> str:
@@ -1571,9 +1579,11 @@ def write_html_report(
 </body>
 </html>
 """
-    path.write_text(html, encoding="utf-8")
+    _atomic_write_text(path, html, encoding="utf-8")
     if refresh_sec is not None and int(refresh_sec) > 0:
-        WATCH_META_FILE.write_text(
+        # 必须先写完 HTML，再更新时间戳，避免刷新时读到旧布局/半截文件
+        _atomic_write_text(
+            WATCH_META_FILE,
             json.dumps(
                 {
                     "updated_at": _now(),
