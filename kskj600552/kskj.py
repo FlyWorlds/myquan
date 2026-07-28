@@ -1,56 +1,100 @@
 """凯盛科技 (sh600552) — 相对开盘 ±2.5% 策略.
 
 规则：
-  · 买入：空仓可买时，当天最高价 ≥ 开盘价×1.025 → 按开盘+2.5% 买入约 95%
-    - 前一日须阴线，或相对开盘涨幅 < 2.5% 的小阳线
+  · 买入：空仓可买时，当天最高价 ≥ 触发价（open×1.025 向上取整到 0.01）→ 限价买入约 95%
+    - 前一日须阴线，或收盘严格低于 open×1.025（小阳线）
     - 前一日与前二日不能连续两根阳线（前面双阳不买）
-  · 卖出（有仓时，优先级从上到下）：
-    1) 止损：当天最低价 ≤ 开盘价×0.975 → 按开盘-2.5% 卖出
+  · 卖出（有仓时，优先级从上到下；买入当日不执行任何卖出判断）：
+    1) 止损：low ≤ 触发价（open×0.975 向下取整到 0.01）→ 限价止损
     2) 阴线：收盘价 < 开盘价 → 按收盘价卖出
-  · 阳线（收盘 > 开盘）：持有不动
+  · 阳线（收盘 > 开盘）：持有；十字星（收盘 = 开盘）：持有
   · 卖出后可再次等待下一次冲高 +2.5%
   · 日线近似：high/low 触及即视为盘中按触发价成交
-  · 滑点：买卖各 0.1%（0.1 个点）
+  · 滑点：买卖各 0.1%，仅在 run_backtest(slippage=) 配置一次
   · 佣金：万 0.854（买卖双向）；印花税：卖出 0.1%
+  · 限价对齐：买入触发价 ceil、止损触发价 floor（至少达到 ±2.5%）
 
-回测：2024-01-01 → 至今；前复权日线；T+1。
+回测：2015-05-29 → 至今；前复权日线；T+1。
 运行：python kskj.py
+
+K 线形态边界（相对当日 open，非前收）：
+  · 十字星 c==o：既不阴也不阳 → 持有，不触发阴线卖出
+  · 大幅低开但收阳 c>o：若 low 触止损则先止损；否则持有
+  · 高开低走 c<o（收盘可仍高于前收）：按阴线规则收盘卖出
+
+AKQuant 成交说明：
+  · run_backtest(fill_policy=CurrentClose) 表示「当根 K 线周期内撮合」
+  · 订单显式传 price= 时为限价单：触价后按 limit±全局 slippage 成交，非 bar.close
+  · 滑点/commission 仅走 run_backtest 全局参数，订单层不再重复传
+  · tick_size=0.01 交给引擎校验最小变动价位
+  非 akquant：fetch_daily 用 akshare；形态过滤与跳空定价为策略自写逻辑。
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import math
 from pathlib import Path
 from typing import Any
 
-import akquant as aq
-import akshare as ak
+import akquant as aq  # [akquant] 回测入口 run_backtest、BacktestResult
+import akshare as ak  # 非 akquant：仅用于 fetch_daily 拉历史 K 线
 import pandas as pd
-from akquant import CurrentClose, Strategy
+from akquant import CurrentClose, Strategy  # [akquant] 策略基类、成交模式
 
 SYMBOL = "sh600552"
 SYMBOL_NAME = "凯盛科技"
-START_DATE = "20240101"
+START_DATE = "20150529"
 END_DATE = dt.date.today().strftime("%Y%m%d")
 
 INITIAL_CASH = 100_000.0
 TARGET_PCT = 0.95
-LOT_SIZE = 100
-COMMISSION_RATE = 0.0000854  # 万 0.854
-STAMP_TAX_RATE = 0.001
+LOT_SIZE = 100  # [akquant] run_backtest(lot_size=) A 股最小交易单位
+COMMISSION_RATE = 0.0000854  # [akquant] run_backtest(commission_rate=) 万 0.854
+STAMP_TAX_RATE = 0.001  # [akquant] run_backtest(stamp_tax_rate=) 卖出印花税
 # 相对开盘 ±2.5 个点；滑点 0.1%
 ENTRY_PCT = 0.025
 STOP_PCT = 0.025
 # 前一日小阳线：相对开盘涨幅须低于此阈值（2.5 个点）
 PREV_SMALL_YANG_PCT = 0.025
-SLIPPAGE = {"type": "percent", "value": 0.001}  # 0.1%
+TICK_SIZE = 0.01  # A 股最小变动价位
+SLIPPAGE = {"type": "percent", "value": 0.001}  # [akquant] 仅 run_backtest(slippage=)
 
-FILL_CLOSE = CurrentClose()
+FILL_CLOSE = CurrentClose()  # [akquant] 当根 K 线周期撮合；限价单触价成交见模块说明
 REPORT_PATH = Path(__file__).with_name("kskj600552_report.html")
 
 
+def ceil_to_tick(px: float, tick: float = TICK_SIZE) -> float:
+    """向上取整到 tick（买入触发：至少达到 +pct）。"""
+    if tick <= 0:
+        return float(px)
+    decimals = max(0, -int(round(math.log10(tick)))) if tick < 1 else 0
+    return round(math.ceil((float(px) - 1e-12) / tick) * tick, decimals)
+
+
+def floor_to_tick(px: float, tick: float = TICK_SIZE) -> float:
+    """向下取整到 tick（止损触发：至少达到 −pct）。"""
+    if tick <= 0:
+        return float(px)
+    decimals = max(0, -int(round(math.log10(tick)))) if tick < 1 else 0
+    return round(math.floor((float(px) + 1e-12) / tick) * tick, decimals)
+
+
+def entry_trigger_price(open_px: float) -> float:
+    """买入触发价：开盘价 +2.5%，向上取整到 tick。"""
+    return ceil_to_tick(float(open_px) * (1.0 + ENTRY_PCT))
+
+
+def stop_trigger_price(open_px: float) -> float:
+    """止损触发价：开盘价 −2.5%，向下取整到 tick。"""
+    return floor_to_tick(float(open_px) * (1.0 - STOP_PCT))
+
+
 def fetch_daily(symbol: str, start: str, end: str) -> pd.DataFrame:
-    """前复权日线，清洗为 akquant 标准列；时间戳落到当日 15:00。"""
+    """前复权日线，清洗为 akquant 标准列；时间戳落到当日 15:00。
+
+    输出列 date/open/high/low/close/volume/symbol 供 run_backtest(data=) 使用。
+    """
     raw = ak.stock_zh_a_daily(
         symbol=symbol, start_date=start, end_date=end, adjust="qfq"
     )
@@ -74,28 +118,24 @@ def fetch_daily(symbol: str, start: str, end: str) -> pd.DataFrame:
     )
 
 
-def entry_trigger_price(open_px: float) -> float:
-    """开盘价 +2.5 个点。"""
-    return round(float(open_px) * (1.0 + ENTRY_PCT), 2)
-
-
-def stop_trigger_price(open_px: float) -> float:
-    """开盘价 -2.5 个点。"""
-    return round(float(open_px) * (1.0 - STOP_PCT), 2)
+def is_yin(open_px: float, close_px: float) -> bool:
+    """阴线：收盘 < 开盘（不含十字星）。"""
+    return float(close_px) < float(open_px)
 
 
 def is_yang(open_px: float, close_px: float) -> bool:
-    """收盘 > 开盘 为阳线。"""
+    """阳线：收盘 > 开盘。"""
     return float(close_px) > float(open_px)
 
 
 def prev_day_allows_entry(prev_open: float, prev_close: float) -> bool:
-    """前一日允许今日买入：阴线，或相对开盘涨幅 < 2.5% 的小阳。"""
+    """前一日允许今日买入：阴线，或收盘严格低于 open×(1+2.5%)（价格比较，避免浮点误差）。"""
     if prev_open <= 0:
         return False
     if prev_close <= prev_open:
         return True
-    return (prev_close / prev_open - 1.0) < PREV_SMALL_YANG_PCT
+    limit_px = prev_open * (1.0 + PREV_SMALL_YANG_PCT)
+    return float(prev_close) < limit_px - 1e-8
 
 
 def has_double_yang_before(
@@ -113,17 +153,21 @@ def has_double_yang_before(
 
 
 class OpenBreak3Strategy(Strategy):
-    """相对开盘：+2.5%买入；-2.5%止损或阴线收盘卖；阳线持有。"""
+    """相对开盘：+2.5%买入；-2.5%止损或阴线收盘卖；阳线持有。
+
+    [akquant] 继承 Strategy，由引擎在每个 bar 上调用 on_bar。
+    """
 
     def on_start(self) -> None:
-        self.subscribe(SYMBOL)
-        self.lot_size = LOT_SIZE
+        self.subscribe(SYMBOL)  # [akquant] 订阅标的行情
+        self.lot_size = LOT_SIZE  # [akquant] 策略内下单手数提示（与 run_backtest lot_size 一致）
         self.armed = True
         self.entry_price: float | None = None
         self.prev_open: float | None = None
         self.prev_close: float | None = None
         self.prev2_open: float | None = None
         self.prev2_close: float | None = None
+        self.buy_day: str | None = None  # 买入当日不再执行卖出判断
         self.log(
             f"{SYMBOL_NAME}({SYMBOL}) 开盘±{ENTRY_PCT*100:.1f}% "
             f"(+买/-止损，阴线收盘出，阳线持有) | "
@@ -143,27 +187,38 @@ class OpenBreak3Strategy(Strategy):
             return "持有收益=n/a"
         return f"持有收益={pct:+.2f}%"
 
+    def _sync_position_state(self) -> float:
+        """每根 K 线开头按实际持仓同步 armed（委托是否成交在 bar 结束后才入账）。"""
+        pos = float(self.get_position(SYMBOL))
+        if pos <= 0:
+            self.armed = True
+            self.entry_price = None
+            self.buy_day = None
+        else:
+            self.armed = False
+        return pos
+
     def _exit_all(
         self, *, day: str, avail: float, pos: float, price: float, reason: str
     ) -> bool:
         hold_txt = self._fmt_hold(price)
         if avail > 0:
-            self.sell(
+            self.sell(  # [akquant] 卖出；数量用 avail（T+1 可卖量）
                 SYMBOL,
                 avail,
                 price=price,
-                fill_mode=FILL_CLOSE,
-                slippage=SLIPPAGE,
             )
             self.log(
-                f"{day} {reason} qty={avail:.0f} @ {price:.2f}(+滑点) {hold_txt}"
+                f"{day} {reason} qty={avail:.0f} 限价={price:.2f} {hold_txt}"
             )
             self.armed = True
             self.entry_price = None
+            self.buy_day = None
             return True
         if pos > 0:
+            # [akquant] T+1：当日买入 pos>0 但 avail=0
             self.log(
-                f"{day} {reason} 但 T+1 不可用 avail=0 pos={pos:.0f} {hold_txt}"
+                f"{day} {reason} 跳过(T+1 买入日不可卖) avail=0 pos={pos:.0f} {hold_txt}"
             )
         return False
 
@@ -175,26 +230,28 @@ class OpenBreak3Strategy(Strategy):
         self.prev_close = close_px
 
     def on_bar(self, bar) -> None:
+        # [akquant] 每个 bar 回调一次；bar 为引擎推送的 K 线对象
         if bar.symbol != SYMBOL:
             return
 
-        o = float(bar.open)
+        o = float(bar.open)  # [akquant] Bar 字段
         h = float(bar.high)
         low = float(bar.low)
         c = float(bar.close)
-        day = self.to_local_time(bar.timestamp).strftime("%Y-%m-%d")
+        day = self.to_local_time(bar.timestamp).strftime("%Y-%m-%d")  # [akquant] 时区转换
 
+        bought_today = False
         try:
-            pos = float(self.get_position(SYMBOL))
+            pos = self._sync_position_state()
 
             entry_px = entry_trigger_price(o)
             stop_px = stop_trigger_price(o)
             hit_entry = h + 1e-12 >= entry_px
-            hit_stop = low - 1e-12 <= stop_px
-            yin = c < o  # 阴线
-            yang = c > o  # 阳线
+            hit_stop = low <= stop_px + 1e-12
+            yin = is_yin(o, c)
+            yang = is_yang(o, c)
 
-            # 1) 空仓可买：最高价触及开盘+2.5%，且前日形态符合
+            # 1) 空仓可买：最高价触及触发价，且前日形态符合
             if self.armed and pos <= 0 and hit_entry:
                 can_buy = (
                     self.prev_open is not None
@@ -212,13 +269,13 @@ class OpenBreak3Strategy(Strategy):
                         symbol=SYMBOL,
                         target_percent=TARGET_PCT,
                         price=entry_px,
-                        fill_mode=FILL_CLOSE,
-                        slippage=SLIPPAGE,
                     )
                     self.armed = False
                     self.entry_price = entry_px
+                    self.buy_day = day
+                    bought_today = True
                     self.log(
-                        f"{day} 开盘+{ENTRY_PCT*100:.1f}%买入 @ {entry_px:.2f}(+滑点) "
+                        f"{day} 开盘+{ENTRY_PCT*100:.1f}%买入 限价={entry_px:.2f} "
                         f"(open={o:.2f} high={h:.2f}) 持有收益=+0.00%"
                     )
                 elif self.prev_open is not None and self.prev_close is not None:
@@ -235,9 +292,12 @@ class OpenBreak3Strategy(Strategy):
                     ):
                         self.log(f"{day} 触及买点但前面双阳 skip")
 
-            # 2) 有仓卖出：止损优先，其次阴线收盘出；阳线不动
-            pos = float(self.get_position(SYMBOL))
-            avail = float(self.get_available_position(SYMBOL))
+            # 2) 有仓卖出：买入当日跳过；止损优先，其次阴线收盘出
+            if bought_today or self.buy_day == day:
+                return
+
+            pos = float(self.get_position(SYMBOL))  # [akquant]
+            avail = float(self.get_available_position(SYMBOL))  # [akquant] T+1 可卖数量
             if pos <= 0 and avail <= 0:
                 return
 
@@ -247,7 +307,7 @@ class OpenBreak3Strategy(Strategy):
                     avail=avail,
                     pos=pos,
                     price=stop_px,
-                    reason=f"开盘-{STOP_PCT*100:.1f}%止损(low={low:.2f})",
+                    reason=f"开盘-{STOP_PCT*100:.1f}%止损(open={o:.2f} low={low:.2f})",
                 )
                 return
 
@@ -256,13 +316,13 @@ class OpenBreak3Strategy(Strategy):
                     day=day,
                     avail=avail,
                     pos=pos,
-                    price=c,
+                    price=float(c),
                     reason="阴线收盘卖出",
                 )
                 return
 
             if yang:
-                # 阳线持有不动
+                # 阳线持有；十字星 c==o 亦不在此分支，默认持有
                 pass
         finally:
             self._roll_prev_bars(o, c)
@@ -275,7 +335,8 @@ def _metric(metrics_df: pd.DataFrame, name: str) -> float:
 
 
 def print_summary(result: aq.BacktestResult, data: pd.DataFrame) -> None:
-    m = result.metrics_df
+    # [akquant] BacktestResult：metrics_df / executions_df / equity_curve_daily 等
+    m = result.metrics_df  # [akquant] 绩效指标表
     c0 = float(data.iloc[0]["close"])
     c1 = float(data.iloc[-1]["close"])
     bh_pct = (c1 / c0 - 1.0) * 100.0
@@ -284,13 +345,12 @@ def print_summary(result: aq.BacktestResult, data: pd.DataFrame) -> None:
     print(f"标的: {SYMBOL_NAME} ({SYMBOL})")
     print(f"区间: {data['date'].iloc[0]} → {data['date'].iloc[-1]}")
     print(f"日线根数: {len(data)}")
-    print(f"买入: high>=open×{1+ENTRY_PCT:.3f}，成交@开盘+2.5%")
+    print(f"买入: high>=ceil(open×{1+ENTRY_PCT:.3f})，止损 low<=floor(open×{1-STOP_PCT:.3f})")
     print(
-        f"      前日须阴线或小阳(<{PREV_SMALL_YANG_PCT*100:.1f}%)，禁前面双阳"
+        f"      前日须阴线或收盘严格<open×{1+PREV_SMALL_YANG_PCT:.3f}，禁前面双阳"
     )
     print(
-        f"卖出: ①low<=open×{1-STOP_PCT:.3f}@开盘-2.5%；"
-        f"②阴线@收盘；阳线持有"
+        f"卖出: ①止损@触发价；②阴线@收盘；阳/十字持有；买入日不卖"
     )
     print(f"佣金: 万0.854 ({COMMISSION_RATE})；印花税(卖): {STAMP_TAX_RATE*100:.1f}%")
     print(f"滑点: {SLIPPAGE['value']*100:.1f}%")
@@ -317,7 +377,7 @@ def print_summary(result: aq.BacktestResult, data: pd.DataFrame) -> None:
 
 def print_yearly(result: aq.BacktestResult, data: pd.DataFrame) -> None:
     """按自然年输出策略收益 / 买入持有 / 成交与闭环交易。"""
-    eq = result.equity_curve_daily
+    eq = result.equity_curve_daily  # [akquant] 日权益曲线
     if eq is None or eq.empty:
         print("\n========== 分年数据 ==========")
         print("(无权益曲线，跳过)")
@@ -337,8 +397,8 @@ def print_yearly(result: aq.BacktestResult, data: pd.DataFrame) -> None:
     px = px.set_index("date").sort_index()
     px_daily = px["close"].resample("D").last().dropna()
 
-    exec_df = result.executions_df
-    trades_df = result.trades_df if hasattr(result, "trades_df") else pd.DataFrame()
+    exec_df = result.executions_df  # [akquant] 逐笔成交
+    trades_df = result.trades_df if hasattr(result, "trades_df") else pd.DataFrame()  # [akquant] 闭环交易
 
     years = sorted(set(eq.index.year.tolist()) | set(px_daily.index.year.tolist()))
     rows: list[dict[str, Any]] = []
@@ -351,7 +411,7 @@ def print_yearly(result: aq.BacktestResult, data: pd.DataFrame) -> None:
         end_eq = float(eq_y.iloc[-1])
         # 用年末相对上年年末；首年用年初首值
         prev = eq[eq.index.year < y]
-        base_eq = float(prev.iloc[-1]) if not prev.empty else start_eq
+        base_eq = float(prev.iloc[-1]) if not prev.empty else INITIAL_CASH
         strat_pct = (end_eq / base_eq - 1.0) * 100.0 if base_eq > 0 else float("nan")
 
         if not px_y.empty:
@@ -424,7 +484,7 @@ def print_yearly(result: aq.BacktestResult, data: pd.DataFrame) -> None:
         print("(无)")
         return
     print(pd.DataFrame(rows).to_string(index=False))
-    print("说明: 策略收益%=该年末权益/上年年末权益-1；首年相对当年首日权益。")
+    print("说明: 策略收益%=该年末权益/上年年末权益-1；首年相对 INITIAL_CASH。")
     print("     买入持有%=该年末收盘/上年年末收盘-1（首年用当年首收）。")
 
 def main() -> None:
@@ -436,18 +496,18 @@ def main() -> None:
         f"区间: {daily['date'].iloc[0]} → {daily['date'].iloc[-1]}"
     )
 
-    result = aq.run_backtest(
+    result = aq.run_backtest(  # [akquant] 回测主入口
         data=daily,
         strategy=OpenBreak3Strategy,
         symbols=SYMBOL,
         initial_cash=INITIAL_CASH,
-        commission_rate=COMMISSION_RATE,
-        stamp_tax_rate=STAMP_TAX_RATE,
-        t_plus_one=True,
-        lot_size=LOT_SIZE,
-        fill_policy=FILL_CLOSE,
-        slippage=SLIPPAGE,
-        timezone="Asia/Shanghai",
+        commission_rate=COMMISSION_RATE,  # [akquant] 佣金率
+        stamp_tax_rate=STAMP_TAX_RATE,  # [akquant] 卖出印花税
+        t_plus_one=True,  # [akquant] A 股 T+1：当日买入不可卖，get_available_position=0
+        lot_size=LOT_SIZE,  # [akquant] 100 股整数倍
+        fill_policy=FILL_CLOSE,  # [akquant] 当根 K 线撮合；限价单见模块说明
+        slippage=SLIPPAGE,  # [akquant] 全局滑点（订单层不再重复）
+        timezone="Asia/Shanghai",  # [akquant] bar 与日志时区
         show_progress=False,
     )
 
@@ -456,7 +516,7 @@ def main() -> None:
     print_summary(result, daily)
 
     print(f"\n生成 HTML: {REPORT_PATH}")
-    result.viz.report(
+    result.viz.report(  # [akquant] 生成交互式 HTML 回测报告
         title=(
             f"{SYMBOL_NAME} 开盘±2.5%(阳持/阴出) "
             f"滑点0.1点 ({START_DATE}~{END_DATE})"
