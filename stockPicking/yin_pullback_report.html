@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>阴线冲高回落选股</title>
+<style>
+  :root {
+    --ink: #14201a; --muted: #5c6f66; --line: #c9d6cf;
+    --bg: #f4f7f5; --card: #fff; --accent: #1f6b4a;
+  }
+  body { font-family: "IBM Plex Sans","Noto Sans SC",sans-serif; margin: 24px; background:var(--bg); color:var(--ink); }
+  h1 { font-size: 1.35rem; margin: 0 0 6px; }
+  .meta { color:var(--muted); margin-bottom: 8px; }
+  .hint { color:var(--muted); font-size: 0.88rem; margin: 0 0 12px; }
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center;
+    margin-bottom: 10px; padding: 12px 14px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .filters label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; color: var(--muted); }
+  .filters label.auto { margin-left: 4px; }
+  .filters input[type="number"] {
+    width: 72px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+    font: inherit; color: var(--ink); background: #fafcfb;
+  }
+  .filters .sep { color: var(--muted); }
+  .filters button {
+    border: 0; background: var(--accent); color: #fff; padding: 7px 14px;
+    border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .filters button:hover { filter: brightness(1.05); }
+  .filters button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  .filters .count { margin-left: auto; font-size: 0.9rem; color: var(--muted); }
+  .tbl { border-collapse: collapse; width: 100%; background: var(--card); }
+  .tbl th, .tbl td { border-bottom: 1px solid #d5e0da; padding: 8px 10px; text-align: left; font-size: 0.92rem; }
+  .tbl th { background: #e8f0eb; position: sticky; top: 0; }
+  .tbl tr.hidden { display: none; }
+  .tbl td.flash { background: #e8f6ee; transition: background 0.8s; }
+  #live-ts { color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+  <h1>阴线次日 · 冲高回落选股</h1>
+  <p class="meta">昨阴 · 今高≥昨收×2.5% · 较最高回落[1%, 3%] · 主板非ST · 选股时刻 2026-07-28 12:10:33 · 共 <span id="total-n">6</span> 只 · <span id="live-ts">现价未刷新</span></p>
+  
+  <div class="filters">
+    <label>回落%(最高→现价) <input id="f-dd-lo" type="number" step="0.1" value="1" placeholder="下限" /></label>
+    <span class="sep">~</span>
+    <label><input id="f-dd-hi" type="number" step="0.1" value="3" placeholder="不限" /></label>
+    <label>冲高%≥ <input id="f-surge" type="number" step="0.1" value="2.5" /></label>
+    <label>较开盘% <input id="f-open-lo" type="number" step="0.1" placeholder="下限" /></label>
+    <span class="sep">~</span>
+    <label><input id="f-open-hi" type="number" step="0.1" placeholder="上限" /></label>
+    <button type="button" id="btn-filter">过滤</button>
+    <button type="button" id="btn-reset" class="ghost">重置</button>
+    <button type="button" id="btn-refresh">刷新现价</button>
+    <label class="auto"><input type="checkbox" id="f-auto" checked /> 每15秒自动刷新</label>
+    <span class="count" id="filter-count">显示 6 / 6</span>
+  </div>
+  <p class="hint">回落% = (当日最高 − 现价) / 最高 × 100，现价/最高随行情动态更新后再按过滤条件筛。</p>
+  <table class="tbl" id="pick-table">
+    <thead><tr><th>代码</th><th>名称</th><th>昨阴日</th><th>昨开</th><th>昨收</th><th>今开</th><th>最高</th><th>最低</th><th>现价</th><th>冲高%</th><th title="回落%=(最高−现价)/最高，随现价刷新">回落%</th><th>较开盘%</th><th>昨实体%</th></tr></thead>
+    <tbody>
+      <tr data-sina="sz002545" data-open="18.140000" data-prev="18.420000" data-high="19.110000" data-low="17.870000" data-last="18.890000" data-dd="1.1512" data-surge="3.7459" data-vsopen="4.1345"><td>2545</td><td>东方铁塔</td><td>2026-07-27</td><td>18.670</td><td>18.420</td><td>18.140</td><td data-field="最高">19.110</td><td data-field="最低">17.870</td><td data-field="现价">18.890</td><td data-field="冲高%">3.75</td><td data-field="回落%">1.15</td><td data-field="较开盘%">+4.13</td><td>-1.34</td></tr><tr data-sina="sh600653" data-open="1.590000" data-prev="1.590000" data-high="1.650000" data-low="1.580000" data-last="1.630000" data-dd="1.2121" data-surge="3.7736" data-vsopen="2.5157"><td>600653</td><td>申华控股</td><td>2026-07-27</td><td>1.590</td><td>1.590</td><td>1.590</td><td data-field="最高">1.650</td><td data-field="最低">1.580</td><td data-field="现价">1.630</td><td data-field="冲高%">3.77</td><td data-field="回落%">1.21</td><td data-field="较开盘%">+2.52</td><td>+0.00</td></tr><tr data-sina="sz000017" data-open="5.860000" data-prev="5.890000" data-high="6.130000" data-low="5.770000" data-last="6.030000" data-dd="1.6313" data-surge="4.0747" data-vsopen="2.9010"><td>17</td><td>深中华A</td><td>2026-07-27</td><td>5.950</td><td>5.890</td><td>5.860</td><td data-field="最高">6.130</td><td data-field="最低">5.770</td><td data-field="现价">6.030</td><td data-field="冲高%">4.07</td><td data-field="回落%">1.63</td><td data-field="较开盘%">+2.90</td><td>-1.01</td></tr><tr data-sina="sh601127" data-open="55.000000" data-prev="55.410000" data-high="57.100000" data-low="54.750000" data-last="56.140000" data-dd="1.6813" data-surge="3.0500" data-vsopen="2.0727"><td>601127</td><td>赛力斯</td><td>2026-07-27</td><td>55.410</td><td>55.410</td><td>55.000</td><td data-field="最高">57.100</td><td data-field="最低">54.750</td><td data-field="现价">56.140</td><td data-field="冲高%">3.05</td><td data-field="回落%">1.68</td><td data-field="较开盘%">+2.07</td><td>+0.00</td></tr><tr data-sina="sh603519" data-open="13.900000" data-prev="14.050000" data-high="14.420000" data-low="13.750000" data-last="14.030000" data-dd="2.7046" data-surge="2.6335" data-vsopen="0.9353"><td>603519</td><td>立霸股份</td><td>2026-07-27</td><td>14.610</td><td>14.050</td><td>13.900</td><td data-field="最高">14.420</td><td data-field="最低">13.750</td><td data-field="现价">14.030</td><td data-field="冲高%">2.63</td><td data-field="回落%">2.70</td><td data-field="较开盘%">+0.94</td><td>-3.83</td></tr><tr data-sina="sh603665" data-open="20.700000" data-prev="21.120000" data-high="21.970000" data-low="20.300000" data-last="21.330000" data-dd="2.9131" data-surge="4.0246" data-vsopen="3.0435"><td>603665</td><td>康隆达</td><td>2026-07-27</td><td>21.350</td><td>21.120</td><td>20.700</td><td data-field="最高">21.970</td><td data-field="最低">20.300</td><td data-field="现价">21.330</td><td data-field="冲高%">4.02</td><td data-field="回落%">2.91</td><td data-field="较开盘%">+3.04</td><td>-1.08</td></tr>
+    </tbody>
+  </table>
+  <p id="empty-msg" hidden>当前过滤无结果。</p>
+
+<script>
+(function () {
+  const table = document.getElementById("pick-table");
+  if (!table) return;
+  const rows = Array.from(table.querySelectorAll("tbody tr"));
+  const emptyMsg = document.getElementById("empty-msg");
+  const countEl = document.getElementById("filter-count");
+  const liveTs = document.getElementById("live-ts");
+  const total = rows.length;
+  let timer = null;
+
+  const num = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const v = el.value.trim();
+    if (v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  function setField(tr, name, text) {
+    const td = tr.querySelector('td[data-field="' + name + '"]');
+    if (!td) return;
+    if (td.textContent !== text) {
+      td.textContent = text;
+      td.classList.remove("flash");
+      void td.offsetWidth;
+      td.classList.add("flash");
+    }
+  }
+
+  function recomputeRow(tr) {
+    const high = Number(tr.dataset.high);
+    const low = Number(tr.dataset.low);
+    const last = Number(tr.dataset.last);
+    const open = Number(tr.dataset.open);
+    const prev = Number(tr.dataset.prev);
+    if (!(high > 0 && last > 0)) return;
+    // 回落：最高 → 现价（动态）
+    const dd = (high - last) / high * 100;
+    const surge = prev > 0 ? (high / prev - 1) * 100 : Number(tr.dataset.surge);
+    const vs = open > 0 ? (last / open - 1) * 100 : Number(tr.dataset.vsopen);
+    tr.dataset.dd = String(dd);
+    tr.dataset.surge = String(surge);
+    tr.dataset.vsopen = String(vs);
+    setField(tr, "最高", high.toFixed(3));
+    setField(tr, "最低", low.toFixed(3));
+    setField(tr, "现价", last.toFixed(3));
+    setField(tr, "冲高%", surge.toFixed(2));
+    setField(tr, "回落%", dd.toFixed(2));
+    setField(tr, "较开盘%", (vs >= 0 ? "+" : "") + vs.toFixed(2));
+  }
+
+  function applyFilter() {
+    const ddLo = num("f-dd-lo");
+    const ddHi = num("f-dd-hi");
+    const surgeMin = num("f-surge");
+    const openLo = num("f-open-lo");
+    const openHi = num("f-open-hi");
+    let shown = 0;
+    rows.forEach((tr) => {
+      const dd = Number(tr.dataset.dd);
+      const surge = Number(tr.dataset.surge);
+      const vs = Number(tr.dataset.vsopen);
+      let ok = true;
+      if (ddLo != null && dd < ddLo) ok = false;
+      if (ddHi != null && dd > ddHi) ok = false;
+      if (surgeMin != null && surge < surgeMin) ok = false;
+      if (openLo != null && vs < openLo) ok = false;
+      if (openHi != null && vs > openHi) ok = false;
+      tr.classList.toggle("hidden", !ok);
+      if (ok) shown += 1;
+    });
+    if (countEl) countEl.textContent = "显示 " + shown + " / " + total;
+    if (emptyMsg) emptyMsg.hidden = shown > 0;
+    table.hidden = shown === 0;
+  }
+
+  function resetFilter() {
+    const defaults = {
+      "f-dd-lo": "1",
+      "f-dd-hi": "3",
+      "f-surge": "2.5",
+      "f-open-lo": "",
+      "f-open-hi": "",
+    };
+    Object.keys(defaults).forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = defaults[id];
+    });
+    applyFilter();
+  }
+
+  function applyQuotes() {
+    rows.forEach((tr) => {
+      const sina = tr.dataset.sina;
+      const raw = window["hq_str_" + sina];
+      if (!raw) return;
+      const p = String(raw).split(",");
+      // 1今开 2昨收 3现价 4最高 5最低
+      const open = Number(p[1]);
+      const prev = Number(p[2]);
+      const last = Number(p[3]);
+      const high = Number(p[4]);
+      const low = Number(p[5]);
+      if (!(last > 0)) return;
+      if (open > 0) tr.dataset.open = String(open);
+      if (prev > 0) tr.dataset.prev = String(prev);
+      tr.dataset.last = String(last);
+      if (high > 0) tr.dataset.high = String(Math.max(Number(tr.dataset.high) || 0, high));
+      if (low > 0) {
+        const oldLow = Number(tr.dataset.low);
+        tr.dataset.low = String(oldLow > 0 ? Math.min(oldLow, low) : low);
+      }
+      recomputeRow(tr);
+    });
+    if (liveTs) {
+      const t = new Date();
+      liveTs.textContent = "现价刷新 " + t.toLocaleTimeString();
+    }
+    applyFilter();
+  }
+
+  function refreshQuotes() {
+    const sinas = rows.map((tr) => tr.dataset.sina).filter(Boolean);
+    if (!sinas.length) return;
+    const s = document.createElement("script");
+    s.charset = "gbk";
+    s.src = "https://hq.sinajs.cn/rn=" + Date.now() + "&list=" + sinas.join(",");
+    s.onload = function () {
+      applyQuotes();
+      s.remove();
+    };
+    s.onerror = function () {
+      if (liveTs) liveTs.textContent = "现价刷新失败（可检查网络/跨域）";
+      s.remove();
+    };
+    document.body.appendChild(s);
+  }
+
+  function syncAuto() {
+    if (timer) { clearInterval(timer); timer = null; }
+    const auto = document.getElementById("f-auto");
+    if (auto && auto.checked) {
+      timer = setInterval(refreshQuotes, 15000);
+    }
+  }
+
+  document.getElementById("btn-filter")?.addEventListener("click", applyFilter);
+  document.getElementById("btn-reset")?.addEventListener("click", resetFilter);
+  document.getElementById("btn-refresh")?.addEventListener("click", refreshQuotes);
+  document.getElementById("f-auto")?.addEventListener("change", syncAuto);
+  ["f-dd-lo","f-dd-hi","f-surge","f-open-lo","f-open-hi"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyFilter();
+    });
+  });
+
+  // 打开页面先刷一次，并按勾选自动刷新
+  refreshQuotes();
+  syncAuto();
+})();
+</script>
+</body>
+</html>
