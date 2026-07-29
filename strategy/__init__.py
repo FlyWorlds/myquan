@@ -1,4 +1,8 @@
-"""开盘 ±pct 反转策略（kskj2 / open_break）共享逻辑."""
+"""多策略模块化框架（当前内置 OpenBreak3）。
+
+共用: data, minute, base, registry
+OpenBreak3: open_break, backtest, config, runner, gap945_analysis
+"""
 
 from strategy.open_break import (
     DEFAULT_PCT,
@@ -12,35 +16,51 @@ from strategy.open_break import (
     REASON_STOP,
     REASON_YIN,
     STOP_PCT,
+    STRATEGY_RULES,
     TICK_SIZE,
     YIN_EXIT_HOUR,
     YIN_EXIT_MINUTE,
-    bar_shape,
-    bar_close_at_time,
     bar_close_5m_940_945,
-    gap945_exit_close,
+    bar_close_at_time,
+    bar_shape,
     build_gap_down_945_map,
     build_gap_down_945_proxy_map,
-    STRATEGY_RULES,
-    morning_high_before_gap945,
     ceil_to_tick,
     entry_trigger_price,
     eval_gap_down_945,
     floor_to_tick,
-    has_double_yang_before,
+    gap945_exit_close,
     gap_down_flipped_red,
+    has_double_yang_before,
+    is_gap_down_945_window,
     is_gap_down_exit_window,
     is_t1_buy_day,
     is_yang,
     is_yin,
     is_yin_exit_window,
+    morning_high_before_gap945,
     prev_day_allows_entry,
     stop_trigger_price,
     strategy_levels,
     strategy_signal,
 )
+from strategy.config import KAICHENG, ZZ500_ETF, BacktestConfig
+from strategy.gap945_analysis import (
+    CERTAIN_CATS,
+    classify_gap_days,
+    compare_gap945_on_off,
+    exit_without_gap945,
+    format_metric,
+    per_event_compare,
+    replay_holding_days,
+    yearly_equity_diff,
+)
+from strategy.data import fetch_daily
+from strategy.base import CommonBacktestParams, run_akquant_backtest, run_backtest_pipeline
+from strategy.registry import REGISTRY, StrategyEntry, get_strategy, list_strategies
 from strategy.minute import fetch_minute_1m
-from strategy.backtest import OpenBreak3Strategy, fetch_daily, print_summary, print_yearly
+from strategy.runner import build_gap_map, load_minute, run_open_break, run_open_break_backtest
+from strategy.backtest import OpenBreak3Strategy, metric, print_summary, print_yearly
 
 __all__ = [
     "DEFAULT_PCT",
@@ -58,6 +78,10 @@ __all__ = [
     "REASON_STOP",
     "REASON_YIN",
     "REASON_GAP945",
+    "BacktestConfig",
+    "KAICHENG",
+    "ZZ500_ETF",
+    "CERTAIN_CATS",
     "ceil_to_tick",
     "floor_to_tick",
     "entry_trigger_price",
@@ -79,11 +103,30 @@ __all__ = [
     "eval_gap_down_945",
     "build_gap_down_945_map",
     "build_gap_down_945_proxy_map",
+    "classify_gap_days",
+    "replay_holding_days",
+    "exit_without_gap945",
+    "per_event_compare",
+    "yearly_equity_diff",
+    "compare_gap945_on_off",
+    "format_metric",
     "is_t1_buy_day",
     "strategy_signal",
     "OpenBreak3Strategy",
     "fetch_daily",
+    "CommonBacktestParams",
+    "run_akquant_backtest",
+    "run_backtest_pipeline",
+    "REGISTRY",
+    "StrategyEntry",
+    "get_strategy",
+    "list_strategies",
     "fetch_minute_1m",
+    "build_gap_map",
+    "load_minute",
+    "run_open_break",
+    "run_open_break_backtest",
+    "metric",
     "print_summary",
     "print_yearly",
 ]
