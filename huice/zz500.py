@@ -55,16 +55,17 @@ def main(*, show_report: bool = True) -> None:
         f"区间: {daily['date'].iloc[0]} → {daily['date'].iloc[-1]}"
     )
 
-    print("拉取 1 分钟线（低开 9:45 前未翻红 → 9:45 出）…")
+    print("拉取 1 分钟线（9:45 分钟收盘价）…")
     minute = fetch_minute_1m(
         sina_symbol=SYMBOL,
         em_symbol=EM_SYMBOL,
         cache_path=MIN1_CACHE_PATH,
+        start_date=START_DATE,
+        end_date=END_DATE,
     )
     gap_map = build_gap_down_945_map(daily, minute)
     n_1m = sum(1 for v in gap_map.values() if v.get("source") == "1m")
-    n_proxy = sum(1 for v in gap_map.values() if v.get("source") == "daily_proxy")
-    print(f"  低开规则可触发日: {len(gap_map)}（1分钟={n_1m}，日线近似={n_proxy}）")
+    print(f"  低开945可触发日: {len(gap_map)}（均有09:45分钟收盘价={n_1m}）")
 
     OpenBreak3Strategy.symbol = SYMBOL
     OpenBreak3Strategy.symbol_name = SYMBOL_NAME

@@ -49,32 +49,56 @@ def fetch_minute_1m(
     cache_path: Path,
     refresh: bool = False,
     lookback_days: int = 10,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> pd.DataFrame:
+    """拉取 1 分钟线；回测可传 start_date/end_date（YYYYMMDD）拉全区间。"""
     cached = pd.DataFrame()
     if cache_path.exists() and not refresh:
         cached = standardize_minute_1m(pd.read_parquet(cache_path))
 
-    end_dt = dt.datetime.now()
-    start_dt = end_dt - dt.timedelta(days=max(lookback_days, 3))
     chunks: list[pd.DataFrame] = []
-    try:
-        em = ak.stock_zh_a_hist_min_em(
-            symbol=em_symbol,
-            period="1",
-            start_date=start_dt.strftime("%Y-%m-%d 09:30:00"),
-            end_date=end_dt.strftime("%Y-%m-%d 15:00:00"),
-            adjust="qfq",
-        )
-        chunks.append(standardize_minute_1m(em))
-    except Exception:
-        pass
-    try:
-        sina = standardize_minute_1m(
-            ak.stock_zh_a_minute(symbol=sina_symbol, period="1", adjust="qfq")
-        )
-        chunks.append(sina)
-    except Exception:
-        pass
+    if start_date and end_date:
+        start_dt = dt.datetime.strptime(start_date, "%Y%m%d")
+        end_dt = dt.datetime.strptime(end_date, "%Y%m%d")
+        cur = start_dt
+        while cur <= end_dt:
+            chunk_end = min(cur + dt.timedelta(days=40), end_dt)
+            try:
+                em = ak.stock_zh_a_hist_min_em(
+                    symbol=em_symbol,
+                    period="1",
+                    start_date=cur.strftime("%Y-%m-%d 09:30:00"),
+                    end_date=chunk_end.strftime("%Y-%m-%d 15:00:00"),
+                    adjust="qfq",
+                )
+                part = standardize_minute_1m(em)
+                if not part.empty:
+                    chunks.append(part)
+            except Exception:
+                pass
+            cur = chunk_end + dt.timedelta(days=1)
+    else:
+        end_dt = dt.datetime.now()
+        start_dt = end_dt - dt.timedelta(days=max(lookback_days, 3))
+        try:
+            em = ak.stock_zh_a_hist_min_em(
+                symbol=em_symbol,
+                period="1",
+                start_date=start_dt.strftime("%Y-%m-%d 09:30:00"),
+                end_date=end_dt.strftime("%Y-%m-%d 15:00:00"),
+                adjust="qfq",
+            )
+            chunks.append(standardize_minute_1m(em))
+        except Exception:
+            pass
+        try:
+            sina = standardize_minute_1m(
+                ak.stock_zh_a_minute(symbol=sina_symbol, period="1", adjust="qfq")
+            )
+            chunks.append(sina)
+        except Exception:
+            pass
 
     fresh = pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
     parts = [x for x in (cached, fresh) if x is not None and not x.empty]

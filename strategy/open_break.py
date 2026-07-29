@@ -1,11 +1,6 @@
 """相对开盘 ±pct 策略核心（回测与盯盘共用）。
 
-规则摘要（默认 ±2.5%）：
-  · 买入：high >= ceil(open×(1+entry_pct))，且前日形态过滤通过
-  · 卖出（有仓，买入当日不卖）：
-    1) 低开且 9:45 前未翻红（high<昨收）→ 9:45 价止损
-    2) low <= floor(open×(1-stop_pct)) 止损
-    3) 收盘 < 开盘 阴线卖
+详见同文件 STRATEGY_RULES 常量。
 """
 
 from __future__ import annotations
@@ -17,6 +12,50 @@ from typing import Any
 
 import pandas as pd
 
+# --- 策略规则说明（回测 / 盯盘 / 文档共用）---
+STRATEGY_RULES = """
+================================================================================
+  开盘突破策略（OpenBreak3）— 默认阈值 ±2.5%
+================================================================================
+
+【空仓 · 买入】
+  触发：当日最高价 >= ceil(开盘价 × (1 + 阈值))，按触发价限价买入，仓位约 95%。
+  过滤（须同时满足）：
+    · 前一日为阴线，或「小阳」：收盘涨幅严格 < 阈值（收盘 < 开盘×(1+阈值)）
+    · 前一日之前不能连续两根阳线（禁「前面双阳」）
+  T+1：A 股买入当日不可卖（ETF 可设 t0=True 当日可卖）。
+
+【有仓 · 卖出】优先级从高到低（买入当日不卖，除非 t0）：
+
+  ① 低开 9:45 未翻红 → 全清
+     · 前提：开盘价 < 昨收（低开）
+     · 翻红（触及即算，9:45 前不含 9:45 那根 1 分钟 K）：
+         9:45 前最高价 >= 昨收 → 视为已翻红，不卖，继续按 ②③④ 处理
+     · 未翻红：到了 09:45 仍满足 9:45 前最高 < 昨收 → 全部可卖仓位清仓
+     · 成交价（二选一，由 GAP945_EXIT_MODE 配置）：
+         - "1m"：09:45 那根 1 分钟 K 线的收盘价
+         - "5m"：09:40~09:45 这根 5 分钟 K 线的收盘价（由 1 分钟线合成）
+     · 无对应分钟 K 线则不触发（回测可用 proxy 开盘价近似，仅作历史对比）
+
+  ② 止损
+     · 当日最低价 <= floor(开盘价 × (1 - 阈值)) → 按止损触发价全清
+
+  ③ 阴线收盘
+     · 未触 ①②，且收盘 < 开盘 → 按收盘价全清
+     · 盯盘：≥14:55 仍收阴则按现价结算
+
+  ④ 阳线 / 十字
+     · 继续持有
+
+【术语】
+  · 翻红：低开日后，9:45 前价格曾触及或超过昨收（>= 昨收）
+  · 全清：可用仓位 100% 卖出，不是减半仓
+
+【费用假设（回测默认）】
+  · 佣金万 0.854；卖出印花税 0.1%；滑点 0.1%
+================================================================================
+"""
+
 # --- 默认参数 ---
 DEFAULT_PCT = 0.025
 ENTRY_PCT = DEFAULT_PCT
@@ -27,6 +66,8 @@ NEAR_POINTS = 1.0
 
 GAP_DOWN_EXIT_HOUR = 9
 GAP_DOWN_EXIT_MINUTE = 45
+# 945 卖出价："1m"=09:45 分钟收盘价；"5m"=09:40~09:45 五分钟收盘价
+GAP945_EXIT_MODE = "1m"
 YIN_EXIT_HOUR = 14
 YIN_EXIT_MINUTE = 55
 
@@ -150,6 +191,88 @@ def is_gap_down_945_window(now: datetime | None = None) -> bool:
     return is_gap_down_exit_window(now)
 
 
+def _gap945_cutoff_ts(day0: pd.Timestamp) -> pd.Timestamp:
+    ts = pd.Timestamp(day0).normalize() + pd.Timedelta(
+        hours=GAP_DOWN_EXIT_HOUR, minutes=GAP_DOWN_EXIT_MINUTE
+    )
+    if ts.tzinfo is None:
+        return ts.tz_localize("Asia/Shanghai")
+    return ts.tz_convert("Asia/Shanghai")
+
+
+def bar_close_at_time(
+    bars: pd.DataFrame | None,
+    hour: int = GAP_DOWN_EXIT_HOUR,
+    minute: int = GAP_DOWN_EXIT_MINUTE,
+) -> float | None:
+    """取指定时刻的 1 分钟 K 线收盘价（如 09:45 那根）。"""
+    if bars is None or bars.empty:
+        return None
+    b = bars.sort_values("ts")
+    mask = (b["ts"].dt.hour == hour) & (b["ts"].dt.minute == minute)
+    hit = b[mask]
+    if hit.empty:
+        return None
+    return float(hit.iloc[-1]["close"])
+
+
+def bar_close_5m_940_945(
+    bars: pd.DataFrame | None,
+    *,
+    day0: pd.Timestamp | None = None,
+) -> float | None:
+    """09:40~09:45 五分钟 K 线收盘价（由 1 分钟线合成：窗口内最后一根 1m 的收盘价）。
+
+    窗口 [09:40, 09:45] 含 09:45 那根 1 分钟 K，与「5 分钟 K 在 9:45 收盘」一致。
+    """
+    if bars is None or bars.empty:
+        return None
+    b = bars.sort_values("ts")
+    if day0 is None:
+        day0 = pd.Timestamp(b.iloc[0]["ts"]).normalize()
+    if day0.tzinfo is None:
+        day0 = day0.tz_localize("Asia/Shanghai")
+    else:
+        day0 = day0.tz_convert("Asia/Shanghai")
+    start = day0 + pd.Timedelta(hours=9, minutes=40)
+    end = day0 + pd.Timedelta(hours=9, minutes=GAP_DOWN_EXIT_MINUTE)
+    slot = b[(b["ts"] >= start) & (b["ts"] <= end)]
+    if slot.empty:
+        return None
+    return float(slot.iloc[-1]["close"])
+
+
+def gap945_exit_close(
+    bars: pd.DataFrame | None,
+    *,
+    mode: str = GAP945_EXIT_MODE,
+    day0: pd.Timestamp | None = None,
+) -> float | None:
+    """低开 945 规则卖出价：1m 或 5m 收盘价。"""
+    if mode == "5m":
+        return bar_close_5m_940_945(bars, day0=day0)
+    return bar_close_at_time(bars)
+
+
+def morning_high_before_gap945(
+    bars: pd.DataFrame | None,
+    *,
+    open_px: float,
+    day0: pd.Timestamp | None = None,
+) -> float:
+    """9:45 前（不含 9:45 这根）的最高价；无分钟线时用 open。"""
+    if bars is None or bars.empty:
+        return float(open_px)
+    b = bars.sort_values("ts")
+    if day0 is None:
+        day0 = pd.Timestamp(b.iloc[0]["ts"]).normalize()
+    cutoff = _gap945_cutoff_ts(day0)
+    before = b[b["ts"] < cutoff]
+    if before.empty:
+        return float(open_px)
+    return max(float(open_px), float(before["high"].max()))
+
+
 def eval_gap_down_945(
     *,
     open_px: float,
@@ -158,10 +281,11 @@ def eval_gap_down_945(
     last_px: float,
     high_px: float | None = None,
     now: datetime | None = None,
+    exit_mode: str = GAP945_EXIT_MODE,
 ) -> dict[str, Any]:
-    """低开 + 9:45 前未翻红 → 止损。
+    """低开 + 9:45 前未翻红 → 按 gap945_exit_close 全仓卖出。
 
-    翻红：9:45 前 high >= 昨收。无分钟线时用当日 high_px 近似。
+    翻红：9:45 前（不含 9:45 这根）high >= 昨收（触及即算，不卖）。
     """
     now = now or datetime.now()
     out: dict[str, Any] = {
@@ -179,45 +303,40 @@ def eval_gap_down_945(
         return out
     out["active"] = True
 
-    morning_high = float(open_px)
-    exit_px = float(last_px)
+    day0: pd.Timestamp | None = None
     if day_bars is not None and not day_bars.empty:
-        bars = day_bars.sort_values("ts")
-        day0 = pd.Timestamp(bars.iloc[0]["ts"]).normalize()
-        cutoff = day0 + pd.Timedelta(
-            hours=GAP_DOWN_EXIT_HOUR, minutes=GAP_DOWN_EXIT_MINUTE
+        day0 = pd.Timestamp(day_bars.iloc[0]["ts"]).normalize()
+        if day0.tzinfo is None:
+            day0 = day0.tz_localize("Asia/Shanghai")
+        else:
+            day0 = day0.tz_convert("Asia/Shanghai")
+        morning_high = morning_high_before_gap945(
+            day_bars, open_px=open_px, day0=day0
         )
-        morning = bars[bars["ts"] <= cutoff]
-        if not morning.empty:
-            morning_high = float(morning["high"].max())
-            bar_exit = morning[
-                (morning["ts"].dt.hour == GAP_DOWN_EXIT_HOUR)
-                & (morning["ts"].dt.minute == GAP_DOWN_EXIT_MINUTE)
-            ]
-            if not bar_exit.empty:
-                exit_px = float(bar_exit.iloc[-1]["close"])
-            elif is_gap_down_exit_window(now):
-                exit_px = float(morning.iloc[-1]["close"])
+        exit_px = gap945_exit_close(day_bars, mode=exit_mode, day0=day0)
     else:
         day_high = float(high_px) if high_px is not None else float(last_px)
         morning_high = max(float(open_px), day_high)
+        exit_px = None
 
     out["morning_high"] = morning_high
     flipped = gap_down_flipped_red(morning_high, prev_close)
     out["flipped"] = flipped
     if flipped:
         return out
-    if is_gap_down_exit_window(now):
+    if is_gap_down_exit_window(now) and exit_px is not None:
         out["should_exit"] = True
-        out["exit_px"] = exit_px
+        out["exit_px"] = float(exit_px)
     return out
 
 
 def build_gap_down_945_map(
     daily: pd.DataFrame,
     minute: pd.DataFrame | None = None,
+    *,
+    exit_mode: str = GAP945_EXIT_MODE,
 ) -> dict[str, dict[str, float | str]]:
-    """回测用：预计算每个交易日是否触发低开 9:45 未翻红止损。"""
+    """回测用：预计算触发日；卖出价=gap945_exit_close（无则跳过）。"""
     daily = daily.copy()
     ts = pd.to_datetime(daily["date"])
     if ts.dt.tz is None:
@@ -247,36 +366,69 @@ def build_gap_down_945_map(
 
         day_min = by_day.get(day)
         if day_min is not None and not day_min.empty:
-            cutoff = day_min["ts"].dt.normalize().iloc[0] + pd.Timedelta(
-                hours=GAP_DOWN_EXIT_HOUR, minutes=GAP_DOWN_EXIT_MINUTE
-            )
-            morning = day_min[day_min["ts"] <= cutoff]
-            if morning.empty:
+            day0 = day_min["ts"].dt.normalize().iloc[0]
+            mh = morning_high_before_gap945(day_min, open_px=open_px, day0=day0)
+            if gap_down_flipped_red(mh, prev_close):
                 continue
-            if gap_down_flipped_red(float(morning["high"].max()), prev_close):
+            exit_close = gap945_exit_close(day_min, mode=exit_mode, day0=day0)
+            if exit_close is None:
                 continue
-            bar_exit = morning[
-                morning["ts"].dt.time
-                == dt.time(GAP_DOWN_EXIT_HOUR, GAP_DOWN_EXIT_MINUTE)
-            ]
-            if bar_exit.empty:
-                bar_exit = morning.iloc[[-1]]
+            src = "1m" if exit_mode == "1m" else "5m"
             out[day] = {
-                "exit_px": float(bar_exit.iloc[-1]["close"]),
+                "exit_px": float(exit_close),
                 "prev_close": prev_close,
                 "open_px": open_px,
-                "source": "1m",
+                "source": src,
             }
-            continue
+    return out
 
-        day_high = float(row["high"])
-        if gap_down_flipped_red(day_high, prev_close):
+
+def build_gap_down_945_proxy_map(
+    daily: pd.DataFrame,
+    minute: pd.DataFrame | None = None,
+    *,
+    proxy: str = "open",
+    exit_mode: str = GAP945_EXIT_MODE,
+) -> dict[str, dict[str, float | str]]:
+    """回测用：有分钟线用精确 gap945 价；否则低开且日高<昨收时用 proxy 近似。
+
+    proxy: open=开盘价近似；mid=(open+high)/2
+    """
+    out = build_gap_down_945_map(daily, minute, exit_mode=exit_mode)
+    daily = daily.copy()
+    ts = pd.to_datetime(daily["date"])
+    if ts.dt.tz is None:
+        ts = ts.dt.tz_localize("Asia/Shanghai")
+    else:
+        ts = ts.dt.tz_convert("Asia/Shanghai")
+    daily["day"] = ts.dt.strftime("%Y-%m-%d")
+    daily["open"] = pd.to_numeric(daily["open"], errors="coerce")
+    daily["high"] = pd.to_numeric(daily["high"], errors="coerce")
+    daily["close"] = pd.to_numeric(daily["close"], errors="coerce")
+
+    for i in range(1, len(daily)):
+        row = daily.iloc[i]
+        day = str(row["day"])
+        if day in out:
             continue
+        prev_close = float(daily.iloc[i - 1]["close"])
+        open_px = float(row["open"])
+        high_px = float(row["high"])
+        if prev_close <= 0 or open_px <= 0 or open_px + 1e-12 >= prev_close:
+            continue
+        if high_px + 1e-12 >= prev_close:
+            continue
+        if proxy == "mid":
+            exit_px = (open_px + high_px) / 2.0
+            src = "proxy_mid"
+        else:
+            exit_px = open_px
+            src = "proxy_open"
         out[day] = {
-            "exit_px": open_px,
+            "exit_px": float(exit_px),
             "prev_close": prev_close,
             "open_px": open_px,
-            "source": "daily_proxy",
+            "source": src,
         }
     return out
 
@@ -354,8 +506,9 @@ def strategy_signal(
                         "建议挂单": exit_px,
                         "挂单说明": (
                             f"低开且{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
-                            f"前未翻红(昨收{prev_s})，按{GAP_DOWN_EXIT_HOUR:02d}:"
-                            f"{GAP_DOWN_EXIT_MINUTE:02d}价止损@{pf.format(exit_px)}"
+                            f"前未翻红(昨收{prev_s})，"
+                            f"按{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
+                            f"分钟收盘价全清@{pf.format(exit_px)}"
                         ),
                     }
                 )
@@ -369,7 +522,7 @@ def strategy_signal(
                     "挂单说明": (
                         f"低开(昨收{prev_s})，"
                         f"≥{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
-                        f"未翻红则止损"
+                        f"未翻红则{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}全清"
                     ),
                 }
             )

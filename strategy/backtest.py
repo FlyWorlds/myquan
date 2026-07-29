@@ -78,7 +78,7 @@ def fetch_daily(symbol: str, start: str, end: str) -> pd.DataFrame:
 
 
 class OpenBreak3Strategy(Strategy):
-    """相对开盘 ±pct 买入；低开945未翻红/止损/阴线卖出。"""
+    """相对开盘 ±pct 买入；低开945未翻红全清/止损/阴线卖出。"""
 
     symbol: str = "sh600552"
     symbol_name: str = "凯盛科技"
@@ -88,6 +88,7 @@ class OpenBreak3Strategy(Strategy):
     end_date: str = ""
     slippage_value: float = 0.001
     gap_down_945_map: dict[str, dict[str, float | str]] = {}
+    enable_gap945: bool = True
     entry_pct: float = ENTRY_PCT
     stop_pct: float = STOP_PCT
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT
@@ -107,7 +108,7 @@ class OpenBreak3Strategy(Strategy):
         n_gap = len(self.gap_down_945_map)
         self.log(
             f"{self.symbol_name}({self.symbol}) 开盘±{self.entry_pct*100:.1f}% "
-            f"(+买/-止损，低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红止损，阴线收盘出) | "
+            f"(+买/-止损，低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红全清，阴线收盘出) | "
             f"前日须阴线或小阳(<{self.prev_small_yang_pct*100:.1f}%)，禁前面双阳 | "
             f"低开规则日历日={n_gap} | "
             f"佣金万0.854 滑点{self.slippage_value*100:.1f}% | "
@@ -233,7 +234,7 @@ class OpenBreak3Strategy(Strategy):
             if pos <= 0 and avail <= 0:
                 return
 
-            gap = self.gap_down_945_map.get(day)
+            gap = self.gap_down_945_map.get(day) if self.enable_gap945 else None
             if gap is not None:
                 exit_px = float(gap["exit_px"])
                 src = str(gap.get("source") or "1m")
@@ -244,8 +245,8 @@ class OpenBreak3Strategy(Strategy):
                     pos=pos,
                     price=exit_px,
                     reason=(
-                        f"低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红止损"
-                        f"(open={o:.2f}<prev={prev_c:.2f} exit={exit_px:.2f} {src})"
+                        f"低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红全清"
+                        f"(open={o:.2f}<prev={prev_c:.2f} exit945={exit_px:.2f} {src})"
                     ),
                 )
                 return
@@ -307,7 +308,7 @@ def print_summary(
     )
     print(
         f"卖出: ①低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
-        f"前未翻红(high<昨收)则9:45止损；②止损@触发价；③阴线@收盘；阳/十字持有；买入日不卖"
+        f"前未翻红(high<昨收)则按09:45分钟收盘价全清；②止损@触发价清仓；③阴线@收盘；阳/十字持有；买入日不卖"
     )
     print(f"佣金: 万0.854 ({commission_rate})；印花税(卖): {stamp_tax_rate*100:.1f}%")
     print(f"滑点: {slippage_value*100:.1f}%")
