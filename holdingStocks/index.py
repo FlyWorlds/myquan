@@ -1,4 +1,4 @@
-"""持仓记录与盯盘：深证000893 / 上证600552 / 深证002171 / 上证510580
+"""持仓记录与盯盘：凯盛600552 / 楚江002171 / 国风000859 / 天通600330
 
 功能：
   · 拉取当日开盘、最高、最低、现价（新浪1分钟）
@@ -73,17 +73,10 @@ REPORT_FILE = ROOT / "holdings_report.html"
 WATCH_META_FILE = ROOT / "holdings_watch.json"
 
 WATCHLIST: list[dict[str, Any]] = [
-    {"code": "000893", "sina": "sz000893", "market": "深证", "name": "亚钾国际"},
     {"code": "600552", "sina": "sh600552", "market": "上证", "name": "凯盛科技"},
     {"code": "002171", "sina": "sz002171", "market": "深证", "name": "楚江新材"},
-    {
-        "code": "510580",
-        "sina": "sh510580",
-        "market": "上证",
-        "name": "易方达中证500ETF",
-        "tick": 0.001,
-        "t0": True,  # ETF 当日可买卖
-    },
+    {"code": "000859", "sina": "sz000859", "market": "深证", "name": "国风新材"},
+    {"code": "600330", "sina": "sh600330", "market": "上证", "name": "天通股份"},
 ]
 
 # 大盘指数（新浪 spot）
@@ -102,6 +95,10 @@ def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding=encoding)
     os.replace(tmp, path)
+
+
+def _watchlist_codes_label() -> str:
+    return " / ".join(w["code"] for w in WATCHLIST)
 
 
 def _code_key(code: str) -> str:
@@ -1494,7 +1491,7 @@ def write_html_report(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />{refresh_head}
-  <title>持仓盯盘 · 000893 / 600552 / 002171 / 510580</title>
+  <title>持仓盯盘 · {_watchlist_codes_label()}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -1737,7 +1734,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p>000893 / 600552 / 002171 ±2.5% · 510580 ±1.2% · {_now()}{hero_extra}</p>
+          <p>{_watchlist_codes_label()} ±2.5% · {_now()}{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1786,7 +1783,7 @@ def write_html_report(
     </div>
     <p class="note">
       大盘：点数=最新指数点位；涨跌点数/涨跌幅相对昨收。
-      个股：默认 ±2.5%（ceil/floor，同 kskj600552）；510580 为 ±1.2%。
+      个股：默认 ±2.5%（ceil/floor，同 strategy/open_break.py）。
       合计盈亏=总资产相对日初总资产的变动（有登记日初总资产时）；否则=未平仓浮盈+今日已结算。
       当日盈亏=未平仓当日变动 + 今日已结算锁定；盈亏%分母优先用日初总资产。
       仓位%=个股市值/总资产；已结算标的仓位为 0%。
@@ -1991,7 +1988,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     print("     已触止损=视为已成交：按止损价锁定浮盈/当日盈亏并清仓，之后不再随现价变动")
     print("     未触止损但尾盘(≥14:55)仍收阴=按现价阴线结算（对齐 kskj2）")
     print("     有仓默认「持有」；低开·待945/将止损仅预警未成交；盘中暂阴仅预警")
-    print("     买点/止损按各标的阈值 ceil/floor；510580=±1.2%，其余=±2.5%")
+    print("     买点/止损按 ±2.5% ceil/floor（同 strategy/open_break.py）")
 
 
 def cmd_html(args: argparse.Namespace) -> None:

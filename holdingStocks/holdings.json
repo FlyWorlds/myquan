@@ -1,21 +1,13 @@
 {
-  "updated_at": "2026-07-30 14:37:08",
+  "updated_at": "2026-07-31 07:45:11",
   "positions": {
-    "000893": {
-      "name": "亚钾国际",
-      "market": "深证",
-      "qty": 0,
-      "cost": null,
-      "buy_time": null,
-      "note": "低开945未翻红@49.95 (2026-07-29)"
-    },
     "600552": {
       "name": "凯盛科技",
       "market": "上证",
-      "qty": 0,
-      "cost": null,
-      "buy_time": null,
-      "note": "止损成交@15.28 (2026-07-30)"
+      "qty": 600,
+      "cost": 15.701,
+      "buy_time": "2026-07-30 09:15:13",
+      "note": "实盘同步@中航"
     },
     "002171": {
       "name": "楚江新材",
@@ -25,16 +17,16 @@
       "buy_time": "2026-07-30 09:15:14",
       "note": "实盘同步@中航"
     },
-    "510580": {
-      "name": "易方达中证500ETF",
-      "market": "上证",
-      "qty": 0,
+    "000859": {
+      "name": "国风新材",
+      "market": "深证",
+      "qty": 700,
       "cost": null,
       "buy_time": null,
-      "note": "止损成交@3.942 (2026-07-28)"
+      "note": ""
     },
-    "600821": {
-      "name": "金开新能",
+    "600330": {
+      "name": "天通股份",
       "market": "上证",
       "qty": 0,
       "cost": null,
@@ -42,30 +34,10 @@
       "note": ""
     }
   },
-  "realized_today": {
-    "600552": {
-      "session": "2026-07-30",
-      "name": "凯盛科技",
-      "market": "上证",
-      "qty": 600,
-      "price": 15.28,
-      "cost": 15.701,
-      "pnl": -252.6,
-      "pnl_pct": -2.68,
-      "day_base": 9420.6,
-      "day_pnl": -252.6,
-      "day_pnl_pct": -2.68,
-      "reason": "止损成交",
-      "time": "2026-07-30 09:55:53",
-      "high_after_stop": 15.49,
-      "low_after_stop": 14.61,
-      "rebound_pct": 1.37,
-      "miss_pnl": 126.0
-    }
-  },
-  "account_total": 19598.2,
-  "account_cash": 19598.2,
-  "account_total_open": 29002.2,
+  "realized_today": {},
+  "account_total": 28471.0,
+  "account_cash": null,
+  "account_total_open": 28471.0,
   "account_total_open_session": "2026-07-30",
-  "last_session": "2026-07-30"
+  "last_session": "2026-07-31"
 }
