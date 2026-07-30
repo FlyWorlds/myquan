@@ -32,6 +32,14 @@
       "cost": null,
       "buy_time": null,
       "note": ""
+    },
+    "000021": {
+      "name": "深科技",
+      "market": "深证",
+      "qty": 0,
+      "cost": null,
+      "buy_time": null,
+      "note": ""
     }
   },
   "realized_today": {},
