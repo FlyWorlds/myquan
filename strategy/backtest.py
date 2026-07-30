@@ -276,6 +276,7 @@ def print_summary(
     print(f"期末市值: {_metric(m, 'end_market_value'):.2f}")
     print(f"买入持有(首收→末收): {bh_pct:.2f}%  ({c0:.2f} → {c1:.2f})")
     print_yearly(result, data, initial_cash=initial_cash)
+    print_monthly(result, data, initial_cash=initial_cash)
 
     if not result.executions_df.empty:
         print("\n--- 成交明细（节选前 40）---")
@@ -294,26 +295,13 @@ def print_yearly(
     *,
     initial_cash: float,
 ) -> None:
-    eq = result.equity_curve_daily
-    if eq is None or eq.empty:
+    prepared = _prepare_equity_and_close(result, data)
+    if prepared is None:
         print("\n========== 分年数据 ==========")
         print("(无权益曲线，跳过)")
         return
 
-    eq = eq.copy()
-    if eq.index.tz is not None:
-        eq.index = eq.index.tz_convert("Asia/Shanghai")
-    eq = eq.sort_index()
-
-    px = data.copy()
-    px["date"] = pd.to_datetime(px["date"])
-    if px["date"].dt.tz is None:
-        px["date"] = px["date"].dt.tz_localize("Asia/Shanghai")
-    else:
-        px["date"] = px["date"].dt.tz_convert("Asia/Shanghai")
-    px = px.set_index("date").sort_index()
-    px_daily = px["close"].resample("D").last().dropna()
-
+    eq, px_daily = prepared
     exec_df = result.executions_df
     trades_df = result.trades_df if hasattr(result, "trades_df") else pd.DataFrame()
 
@@ -402,3 +390,93 @@ def print_yearly(
     print(pd.DataFrame(rows).to_string(index=False))
     print("说明: 策略收益%=该年末权益/上年年末权益-1；首年相对 INITIAL_CASH。")
     print("     买入持有%=该年末收盘/上年年末收盘-1（首年用当年首收）。")
+
+
+def _prepare_equity_and_close(
+    result: aq.BacktestResult,
+    data: pd.DataFrame,
+) -> tuple[pd.Series, pd.Series] | None:
+    eq = result.equity_curve_daily
+    if eq is None or eq.empty:
+        return None
+
+    eq = eq.copy()
+    if eq.index.tz is not None:
+        eq.index = eq.index.tz_convert("Asia/Shanghai")
+    eq = eq.sort_index()
+
+    px = data.copy()
+    px["date"] = pd.to_datetime(px["date"])
+    if px["date"].dt.tz is None:
+        px["date"] = px["date"].dt.tz_localize("Asia/Shanghai")
+    else:
+        px["date"] = px["date"].dt.tz_convert("Asia/Shanghai")
+    px = px.set_index("date").sort_index()
+    px_daily = px["close"].resample("D").last().dropna()
+    return eq, px_daily
+
+
+def monthly_returns_df(
+    result: aq.BacktestResult,
+    data: pd.DataFrame,
+    *,
+    initial_cash: float,
+) -> pd.DataFrame:
+    prepared = _prepare_equity_and_close(result, data)
+    if prepared is None:
+        return pd.DataFrame(columns=["月份", "策略收益%", "持有收益%"])
+
+    eq, px_daily = prepared
+    months = sorted(
+        set(eq.index.to_period("M").astype(str).tolist())
+        | set(px_daily.index.to_period("M").astype(str).tolist())
+    )
+    rows: list[dict[str, Any]] = []
+    for month in months:
+        period = pd.Period(month, freq="M")
+        eq_m = eq[eq.index.to_period("M") == period]
+        px_m = px_daily[px_daily.index.to_period("M") == period]
+        if eq_m.empty and px_m.empty:
+            continue
+
+        if not eq_m.empty:
+            end_eq = float(eq_m.iloc[-1])
+            prev_eq = eq[eq.index.to_period("M") < period]
+            base_eq = float(prev_eq.iloc[-1]) if not prev_eq.empty else initial_cash
+            strat_pct = (end_eq / base_eq - 1.0) * 100.0 if base_eq > 0 else float("nan")
+        else:
+            strat_pct = float("nan")
+
+        if not px_m.empty:
+            c0 = float(px_m.iloc[0])
+            c1 = float(px_m.iloc[-1])
+            prev_px = px_daily[px_daily.index.to_period("M") < period]
+            base_px = float(prev_px.iloc[-1]) if not prev_px.empty else c0
+            bh_pct = (c1 / base_px - 1.0) * 100.0 if base_px > 0 else float("nan")
+        else:
+            bh_pct = float("nan")
+
+        rows.append(
+            {
+                "月份": month,
+                "策略收益%": round(strat_pct, 2) if strat_pct == strat_pct else None,
+                "持有收益%": round(bh_pct, 2) if bh_pct == bh_pct else None,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def print_monthly(
+    result: aq.BacktestResult,
+    data: pd.DataFrame,
+    *,
+    initial_cash: float,
+) -> None:
+    df = monthly_returns_df(result, data, initial_cash=initial_cash)
+    print("\n========== 分月数据 ==========")
+    if df.empty:
+        print("(无)")
+        return
+    print(df.to_string(index=False))
+    print("说明: 策略收益%=该月末权益/上月末权益-1；首月相对 INITIAL_CASH。")
+    print("     持有收益%=该月末收盘/上月末收盘-1（首月用当月首收）。")

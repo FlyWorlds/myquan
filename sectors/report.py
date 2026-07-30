@@ -171,7 +171,7 @@ def write_rotation_report(payload: dict[str, Any], path: Path) -> Path:
       <div id="stocks-body"></div>
     </div>
     <p class="note" id="fund-note"></p>
-    <p class="note">更新时间 {updated} · 行业历史=申万二级；概念历史=同花顺；今日均用东财实时补齐。</p>
+    <p class="note">更新时间 {updated} · 行业/概念=同花顺（与 App 一致）；Mac / Windows 均可，无需本地通达信。</p>
   </div>
   <script type="application/json" id="rot-data">{data}</script>
   <script>

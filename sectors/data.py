@@ -172,9 +172,19 @@ def fetch_board_members(label: str) -> pd.DataFrame:
 
 
 def fetch_board_members_by_name(kind: str, name: str) -> pd.DataFrame:
-    """按板块名称拉成分：先东财，再按新浪 label 回退。"""
+    """按板块名称拉成分：优先同花顺，再东财/新浪。"""
     kind = str(kind).strip()
     name = str(name).strip()
+    try:
+        from .ths import fetch_ths_board_members, ths_availability
+
+        if ths_availability().get("ok"):
+            df = fetch_ths_board_members(kind, name)
+            if df is not None and not df.empty:
+                return df
+    except Exception:
+        pass
+
     try:
         if kind == "行业":
             raw = ak.stock_board_industry_cons_em(symbol=name)

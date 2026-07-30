@@ -60,7 +60,7 @@ from strategy.base import CommonBacktestParams, run_akquant_backtest, run_backte
 from strategy.registry import REGISTRY, StrategyEntry, get_strategy, list_strategies
 from strategy.minute import fetch_minute_1m
 from strategy.runner import build_gap_map, load_minute, run_open_break, run_open_break_backtest
-from strategy.backtest import OpenBreak3Strategy, metric, print_summary, print_yearly
+from strategy.backtest import OpenBreak3Strategy, metric, print_monthly, print_summary, print_yearly
 
 __all__ = [
     "DEFAULT_PCT",
@@ -129,4 +129,5 @@ __all__ = [
     "metric",
     "print_summary",
     "print_yearly",
+    "print_monthly",
 ]
