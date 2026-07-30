@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -350,6 +351,203 @@ def fetch_sw_industry_history(days: int = 5) -> list[dict[str, Any]]:
     return snaps
 
 
+def _ths_concept_clid_cache() -> Path:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return CACHE_DIR / "ths_concept_clids.json"
+
+
+def load_ths_concept_clid_map(*, force: bool = False) -> dict[str, str]:
+    """同花顺概念名 → 指数 clid（如 885728），带本地缓存。"""
+    path = _ths_concept_clid_cache()
+    if path.exists() and not force:
+        try:
+            cached = json.loads(path.read_text(encoding="utf-8"))
+            items = cached.get("items") or {}
+            # 缓存超过 7 天则刷新
+            ts = str(cached.get("updated_at") or "")
+            if items and ts:
+                try:
+                    age = datetime.now() - datetime.fromisoformat(ts)
+                    if age.days < 7:
+                        return {str(k): str(v) for k, v in items.items()}
+                except Exception:
+                    if items:
+                        return {str(k): str(v) for k, v in items.items()}
+        except Exception:
+            pass
+
+    sess = _http()
+    sess.headers["Referer"] = "https://q.10jqka.com.cn/"
+    r = sess.get("https://q.10jqka.com.cn/gn/", timeout=20)
+    r.encoding = "gbk"
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(r.text, "lxml")
+    box = soup.find("div", class_="cate_inner")
+    if not box:
+        if path.exists():
+            try:
+                return {
+                    str(k): str(v)
+                    for k, v in (json.loads(path.read_text(encoding="utf-8")).get("items") or {}).items()
+                }
+            except Exception:
+                return {}
+        return {}
+
+    detail_pairs: list[tuple[str, str]] = []
+    for a in box.find_all("a", href=True):
+        href = a["href"]
+        name = a.get_text(strip=True)
+        if "/gn/detail/code/" in href and name:
+            detail_pairs.append((name, href.rstrip("/").split("/")[-1]))
+
+    def _clid(item: tuple[str, str]) -> tuple[str, str | None]:
+        name, detail = item
+        try:
+            rr = sess.get(
+                f"https://q.10jqka.com.cn/gn/detail/code/{detail}/",
+                timeout=15,
+            )
+            rr.encoding = "gbk"
+            m = re.search(r'id=["\']clid["\'][^>]*value=["\'](\d+)["\']', rr.text)
+            if not m:
+                m = re.search(r'value=["\'](\d+)["\'][^>]*id=["\']clid["\']', rr.text)
+            return name, m.group(1) if m else None
+        except Exception:
+            return name, None
+
+    print(f"  同花顺概念代码映射: {len(detail_pairs)} 个…")
+    mapping: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futs = [pool.submit(_clid, p) for p in detail_pairs]
+        done = 0
+        for fut in as_completed(futs):
+            name, clid = fut.result()
+            if name and clid:
+                mapping[name] = clid
+            done += 1
+            if done % 50 == 0 or done == len(detail_pairs):
+                print(f"    概念代码进度 {done}/{len(detail_pairs)} · 有效 {len(mapping)}")
+
+    path.write_text(
+        json.dumps(
+            {"updated_at": datetime.now().isoformat(timespec="seconds"), "items": mapping},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return mapping
+
+
+def _parse_ths_last_js(text: str) -> list[tuple[str, float, float | None]]:
+    """解析 last.js → [(date, close, amount), ...]"""
+    m = re.search(r"last\((.*)\)\s*$", text, re.S)
+    if not m:
+        return []
+    try:
+        obj = json.loads(m.group(1))
+    except Exception:
+        return []
+    rows: list[tuple[str, float, float | None]] = []
+    for part in str(obj.get("data") or "").split(";"):
+        cols = part.split(",")
+        if len(cols) < 5 or not cols[4]:
+            continue
+        try:
+            close = float(cols[4])
+        except ValueError:
+            continue
+        amt = None
+        if len(cols) > 6 and cols[6]:
+            try:
+                amt = float(cols[6])
+            except ValueError:
+                amt = None
+        d = cols[0]
+        if len(d) == 8:
+            d = f"{d[:4]}-{d[4:6]}-{d[6:8]}"
+        rows.append((d, close, amt))
+    return rows
+
+
+def fetch_ths_concept_history(days: int = 5) -> list[dict[str, Any]]:
+    """同花顺概念近 N 个交易日涨跌（用于概念历史列）。"""
+    mapping = load_ths_concept_clid_map()
+    if not mapping:
+        print("  同花顺概念代码为空，跳过概念历史")
+        return []
+
+    sess = _http()
+    sess.headers.update(
+        {
+            "Referer": "http://q.10jqka.com.cn",
+            "Host": "d.10jqka.com.cn",
+        }
+    )
+
+    # date -> {name: {涨跌幅, 资金}}
+    by_date: dict[str, dict[str, dict[str, Any]]] = {}
+
+    def _one(item: tuple[str, str]) -> tuple[str, list[tuple[str, float, float | None]]]:
+        name, clid = item
+        try:
+            r = sess.get(
+                f"https://d.10jqka.com.cn/v4/line/bk_{clid}/01/last.js",
+                timeout=12,
+            )
+            closes = _parse_ths_last_js(r.text)
+            out: list[tuple[str, float, float | None]] = []
+            for i in range(1, len(closes)):
+                d, c, a = closes[i]
+                prev = closes[i - 1][1]
+                if not prev:
+                    continue
+                out.append((d, (c / prev - 1.0) * 100.0, a))
+            return name, out[-(days + 1) :]
+        except Exception:
+            return name, []
+
+    items = list(mapping.items())
+    print(f"  拉取同花顺概念近几日: {len(items)} 个…")
+    done = 0
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        futs = [pool.submit(_one, it) for it in items]
+        for fut in as_completed(futs):
+            name, series = fut.result()
+            for d, chg, amt in series:
+                by_date.setdefault(d, {})[name] = {
+                    "涨跌幅": chg,
+                    "资金": amt,
+                }
+            done += 1
+            if done % 80 == 0 or done == len(items):
+                print(f"    概念行情进度 {done}/{len(items)}")
+
+    dates = sorted(by_date.keys())
+    if not dates:
+        return []
+    dates = dates[-days:]
+    snaps: list[dict[str, Any]] = []
+    for d in dates:
+        boards = []
+        for name, vals in by_date[d].items():
+            boards.append(
+                {
+                    "板块": name,
+                    "label": mapping.get(name, ""),
+                    "涨跌幅": _clean(vals.get("涨跌幅")),
+                    "涨停数": 0,
+                    "资金": _clean(vals.get("资金")),
+                    "资金口径": "成交额",
+                    "领涨名称": "",
+                    "领涨涨幅": None,
+                }
+            )
+        snaps.append({"date": d, "kind": "概念", "boards": boards, "source": "同花顺概念"})
+    return snaps
+
+
 def _merge_snaps(
     hist: list[dict[str, Any]],
     today_snap: dict[str, Any] | None,
@@ -458,6 +656,8 @@ def build_rotation_payload(
 
     print("  拉取申万二级行业近几日…")
     sw_hist = fetch_sw_industry_history(days=days)
+    print("  拉取同花顺概念近几日…")
+    ths_concept_hist = fetch_ths_concept_history(days=days)
 
     for kind in ("行业", "概念"):
         print(f"  刷新今日 {kind}…")
@@ -494,9 +694,7 @@ def build_rotation_payload(
         if kind == "行业":
             snaps = _merge_snaps(sw_hist, today_snap, days=days)
         else:
-            # 概念：历史依赖本地快照 + 今日
-            local = load_snapshots(kind, days=days)
-            snaps = _merge_snaps(local, today_snap, days=days)
+            snaps = _merge_snaps(ths_concept_hist, today_snap, days=days)
 
         snaps_desc = list(reversed(snaps))
         dates = [_session_label(str(s.get("date") or "")) for s in snaps_desc]
@@ -523,7 +721,7 @@ def build_rotation_payload(
 
         note = "行业历史=申万二级；今日=东财实时。资金优先净流入/成交额。"
         if kind == "概念":
-            note = "概念今日=东财实时；历史列来自本地日快照（每日运行会增多）。"
+            note = "概念历史=同花顺；今日=东财实时。资金优先净流入/成交额。"
 
         payload["kinds"][kind] = {
             "dates": dates,
