@@ -81,7 +81,6 @@ WATCHLIST: list[dict[str, Any]] = [
         "sina": "sh510580",
         "market": "上证",
         "name": "易方达中证500ETF",
-        "pct": 0.012,
         "tick": 0.001,
         "t0": True,  # ETF 当日可买卖
     },
@@ -1849,7 +1848,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     rows = collect_rows()
     indices = fetch_indices()
     print(f"\n持仓盯盘  {_now()}")
-    print(f"策略参考: kskj2 ±{DEFAULT_PCT*100:.1f}%（510580 ±1.2%）/ 有仓默认持有")
+    print(f"策略参考: kskj2 ±{DEFAULT_PCT*100:.1f}% / 有仓默认持有")
     print(f"  卖出优先: ①低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红 ②止损 ③阴线≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}")
     print(f"持仓文件: {HOLDINGS_FILE}")
     holdings_meta = load_holdings()
