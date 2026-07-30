@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>板块轮动</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --card: #fff;
+      --line: #e3e6eb;
+      --text: #1a1a1a;
+      --muted: #6b7280;
+      --up: #e11d2e;
+      --down: #0a9b57;
+      --r1: #e11d2e;
+      --r2: #f05a28;
+      --r3: #f5a623;
+      --hl: #ff8c3a;
+      --head: #c62828;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "DIN Alternate", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text); background: var(--bg);
+    }
+    .topbar {
+      background: linear-gradient(180deg, #d32f2f 0%, #c62828 100%);
+      color: #fff; padding: 12px 14px 10px;
+    }
+    .topbar h1 { margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.02em; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 0 0 40px; }
+    .controls {
+      display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px;
+      background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5;
+    }
+    .tabs { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .tab {
+      appearance: none; border: 0; background: #fff; padding: 7px 14px; cursor: pointer;
+      font-size: 0.88rem; color: var(--muted);
+    }
+    .tab.active { background: #fff5f5; color: var(--head); font-weight: 700; }
+    select {
+      appearance: none; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+      padding: 7px 28px 7px 10px; font-size: 0.88rem; color: var(--text);
+      background-image: linear-gradient(45deg, transparent 50%, #888 50%),
+        linear-gradient(135deg, #888 50%, transparent 50%);
+      background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+      background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+    }
+    .selected {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+      padding: 8px 12px; background: #fff; border-bottom: 1px solid var(--line);
+      font-size: 0.9rem; min-height: 40px;
+    }
+    .selected .name { font-weight: 700; }
+    .selected .chg.up { color: var(--up); }
+    .selected .chg.down { color: var(--down); }
+    .selected .actions { margin-left: auto; display: flex; gap: 10px; }
+    .selected a, .selected button.link {
+      color: #2563eb; text-decoration: none; background: none; border: 0;
+      cursor: pointer; font-size: 0.85rem; padding: 0;
+    }
+    .grid-wrap { overflow: auto; background: #fff; max-height: 70vh; }
+    table.heat {
+      border-collapse: collapse; font-size: 0.78rem; min-width: 100%;
+    }
+    table.heat th, table.heat td {
+      border: 1px solid var(--line); padding: 0; text-align: center; vertical-align: middle;
+    }
+    table.heat th {
+      position: sticky; top: 0; z-index: 2; background: #fafafa; color: var(--muted);
+      font-weight: 600; padding: 6px 4px; white-space: nowrap;
+    }
+    table.heat th.rank-h, table.heat td.rank {
+      position: sticky; left: 0; z-index: 3; background: #fff; width: 28px; min-width: 28px;
+      color: var(--muted); font-weight: 700;
+    }
+    table.heat th.rank-h { z-index: 4; }
+    table.heat td.rank.bot { color: var(--down); }
+    .cell {
+      display: block; width: 100%; min-width: 88px; padding: 6px 4px; cursor: pointer;
+      background: #fff; border: 0; font: inherit; color: inherit; text-align: center;
+    }
+    .cell:hover { filter: brightness(0.97); }
+    .cell .n { display: block; font-weight: 600; line-height: 1.2; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; max-width: 96px; margin: 0 auto; }
+    .cell .v { display: block; font-size: 0.75rem; margin-top: 2px; }
+    .cell .v.up { color: var(--up); }
+    .cell .v.down { color: var(--down); }
+    .cell.r1 { background: var(--r1); color: #fff; }
+    .cell.r1 .v { color: #fff; }
+    .cell.r2 { background: var(--r2); color: #fff; }
+    .cell.r2 .v { color: #fff; }
+    .cell.r3 { background: var(--r3); color: #fff; }
+    .cell.r3 .v { color: #fff; }
+    .cell.hl { background: var(--hl) !important; color: #fff !important; }
+    .cell.hl .v { color: #fff !important; }
+    .cell.empty { color: #ccc; cursor: default; }
+    tr.sep td { background: #f0f2f5; height: 6px; padding: 0; border-left: 0; border-right: 0; }
+    .panel {
+      margin: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+      background: #fff; display: none;
+    }
+    .panel.show { display: block; }
+    .panel h3 { margin: 0 0 8px; font-size: 1rem; }
+    .panel table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .panel th, .panel td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+    .panel th { color: var(--muted); background: #fafafa; }
+    .up { color: var(--up); font-weight: 700; }
+    .down { color: var(--down); font-weight: 700; }
+    .note { margin: 10px 12px; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar"><h1>板块轮动</h1></div>
+    <div class="controls">
+      <div class="tabs" id="kind-tabs">
+        <button type="button" class="tab active" data-kind="行业">行业</button>
+        <button type="button" class="tab" data-kind="概念">概念</button>
+      </div>
+      <select id="metric">
+        <option value="涨幅">涨幅</option>
+        <option value="涨停数">涨停数</option>
+        <option value="资金">资金</option>
+      </select>
+      <select id="range" disabled>
+        <option>前后10</option>
+      </select>
+      <select id="days" disabled>
+        <option id="days-label">近5日</option>
+      </select>
+    </div>
+    <div class="selected" id="selected">
+      <span class="muted">点击格子选中板块，追踪轮动；再点可查看个股</span>
+      <div class="actions">
+        <button type="button" class="link" id="btn-stocks" hidden>查看个股</button>
+        <button type="button" class="link" id="btn-clear" hidden>取消高亮</button>
+      </div>
+    </div>
+    <div class="grid-wrap"><table class="heat" id="heat"></table></div>
+    <div class="panel" id="stocks-panel">
+      <h3 id="stocks-title">个股</h3>
+      <div id="stocks-body"></div>
+    </div>
+    <p class="note" id="fund-note"></p>
+    <p class="note">更新时间 2026-07-30 13:08:22 · 行业近几日来自申万二级，今日用东财实时补齐；概念历史依赖每日快照。</p>
+  </div>
+  <script type="application/json" id="rot-data">{"updated_at": "2026-07-30 13:08:22", "session": "2026-07-30", "top_n": 10, "days": 5, "metrics": ["涨幅", "涨停数", "资金"], "kinds": {"行业": {"dates": ["07月30日", "07月29日", "07月28日", "07月27日", "07月24日"], "by_metric": {"涨幅": {"top": [[{"name": "宠物食品", "value": 5.71, "rank": 1, "label": "BK1507", "metric": "涨幅"}, {"name": "白酒Ⅱ", "value": 4.53, "rank": 2, "label": "BK1277", "metric": "涨幅"}, {"name": "白酒Ⅲ", "value": 4.53, "rank": 3, "label": "BK1575", "metric": "涨幅"}, {"name": "医美耗材", "value": 4.37, "rank": 4, "label": "BK1500", "metric": "涨幅"}, {"name": "厨房电器", "value": 4.24, "rank": 5, "label": "BK1451", "metric": "涨幅"}, {"name": "电动乘用车", "value": 3.74, "rank": 6, "label": "BK1519", "metric": "涨幅"}, {"name": "厨卫电器", "value": 3.63, "rank": 7, "label": "BK1240", "metric": "涨幅"}, {"name": "餐饮", "value": 3.37, "rank": 8, "label": "BK1559", "metric": "涨幅"}, {"name": "医疗美容", "value": 3.28, "rank": 9, "label": "BK1253", "metric": "涨幅"}, {"name": "培训教育", "value": 2.88, "rank": 10, "label": "BK1557", "metric": "涨幅"}], [{"name": "教育", "value": 5.56, "rank": 1, "label": "", "metric": "涨幅"}, {"name": "游戏Ⅱ", "value": 5.43, "rank": 2, "label": "", "metric": "涨幅"}, {"name": "休闲食品", "value": 4.57, "rank": 3, "label": "", "metric": "涨幅"}, {"name": "专业连锁Ⅱ", "value": 3.73, "rank": 4, "label": "", "metric": "涨幅"}, {"name": "小家电", "value": 3.66, "rank": 5, "label": "", "metric": "涨幅"}, {"name": "饮料乳品", "value": 3.63, "rank": 6, "label": "", "metric": "涨幅"}, {"name": "非白酒", "value": 3.44, "rank": 7, "label": "", "metric": "涨幅"}, {"name": "一般零售", "value": 3.29, "rank": 8, "label": "", "metric": "涨幅"}, {"name": "旅游零售Ⅱ", "value": 3.27, "rank": 9, "label": "", "metric": "涨幅"}, {"name": "能源金属", "value": 3.17, "rank": 10, "label": "", "metric": "涨幅"}], [{"name": "休闲食品", "value": 3.75, "rank": 1, "label": "", "metric": "涨幅"}, {"name": "体育Ⅱ", "value": 2.74, "rank": 2, "label": "", "metric": "涨幅"}, {"name": "国有大型银行Ⅱ", "value": 2.56, "rank": 3, "label": "", "metric": "涨幅"}, {"name": "工程咨询服务Ⅱ", "value": 2.41, "rank": 4, "label": "", "metric": "涨幅"}, {"name": "白酒Ⅱ", "value": 2.36, "rank": 5, "label": "", "metric": "涨幅"}, {"name": "教育", "value": 2.28, "rank": 6, "label": "", "metric": "涨幅"}, {"name": "饮料乳品", "value": 2.27, "rank": 7, "label": "", "metric": "涨幅"}, {"name": "酒店餐饮", "value": 2.2, "rank": 8, "label": "", "metric": "涨幅"}, {"name": "一般零售", "value": 2.18, "rank": 9, "label": "", "metric": "涨幅"}, {"name": "旅游零售Ⅱ", "value": 1.96, "rank": 10, "label": "", "metric": "涨幅"}], [{"name": "玻璃玻纤", "value": 9.65, "rank": 1, "label": "", "metric": "涨幅"}, {"name": "元件", "value": 6.25, "rank": 2, "label": "", "metric": "涨幅"}, {"name": "综合Ⅱ", "value": 5.33, "rank": 3, "label": "", "metric": "涨幅"}, {"name": "酒店餐饮", "value": 5.27, "rank": 4, "label": "", "metric": "涨幅"}, {"name": "化妆品", "value": 5.12, "rank": 5, "label": "", "metric": "涨幅"}, {"name": "汽车服务", "value": 5.1, "rank": 6, "label": "", "metric": "涨幅"}, {"name": "工程咨询服务Ⅱ", "value": 5.06, "rank": 7, "label": "", "metric": "涨幅"}, {"name": "林业Ⅱ", "value": 4.86, "rank": 8, "label": "", "metric": "涨幅"}, {"name": "医疗美容", "value": 4.68, "rank": 9, "label": "", "metric": "涨幅"}, {"name": "电子化学品Ⅱ", "value": 4.61, "rank": 10, "label": "", "metric": "涨幅"}], [{"name": "地面兵装Ⅱ", "value": 2.23, "rank": 1, "label": "", "metric": "涨幅"}, {"name": "摩托车及其他", "value": 1.63, "rank": 2, "label": "", "metric": "涨幅"}, {"name": "国有大型银行Ⅱ", "value": 0.84, "rank": 3, "label": "", "metric": "涨幅"}, {"name": "半导体", "value": 0.59, "rank": 4, "label": "", "metric": "涨幅"}, {"name": "股份制银行Ⅱ", "value": 0.32, "rank": 5, "label": "", "metric": "涨幅"}, {"name": "城商行Ⅱ", "value": -0.11, "rank": 6, "label": "", "metric": "涨幅"}, {"name": "电子化学品Ⅱ", "value": -0.21, "rank": 7, "label": "", "metric": "涨幅"}, {"name": "白色家电", "value": -0.35, "rank": 8, "label": "", "metric": "涨幅"}, {"name": "纺织制造", "value": -0.44, "rank": 9, "label": "", "metric": "涨幅"}, {"name": "汽车服务", "value": -0.57, "rank": 10, "label": "", "metric": "涨幅"}]], "bottom": [[{"name": "电子化学品Ⅱ", "value": -6.22, "rank": 10, "label": "BK1039", "metric": "涨幅"}, {"name": "电子化学品Ⅲ", "value": -6.22, "rank": 9, "label": "BK1332", "metric": "涨幅"}, {"name": "集成电路制造", "value": -6.29, "rank": 8, "label": "BK1329", "metric": "涨幅"}, {"name": "半导体", "value": -6.38, "rank": 7, "label": "BK1036", "metric": "涨幅"}, {"name": "集成电路封测", "value": -6.75, "rank": 6, "label": "BK1328", "metric": "涨幅"}, {"name": "印制电路板", "value": -6.97, "rank": 5, "label": "BK1340", "metric": "涨幅"}, {"name": "通信网络设备及器件", "value": -7.06, "rank": 4, "label": "BK1591", "metric": "涨幅"}, {"name": "半导体材料", "value": -7.23, "rank": 3, "label": "BK1325", "metric": "涨幅"}, {"name": "分立器件", "value": -7.43, "rank": 2, "label": "BK1327", "metric": "涨幅"}, {"name": "半导体设备", "value": -7.55, "rank": 1, "label": "BK1326", "metric": "涨幅"}], [{"name": "塑料", "value": -0.7, "rank": 10, "label": "", "metric": "涨幅"}, {"name": "通用设备", "value": -0.79, "rank": 9, "label": "", "metric": "涨幅"}, {"name": "工程咨询服务Ⅱ", "value": -0.97, "rank": 8, "label": "", "metric": "涨幅"}, {"name": "非金属材料Ⅱ", "value": -1.08, "rank": 7, "label": "", "metric": "涨幅"}, {"name": "元件", "value": -1.18, "rank": 6, "label": "", "metric": "涨幅"}, {"name": "IT服务Ⅱ", "value": -1.22, "rank": 5, "label": "", "metric": "涨幅"}, {"name": "橡胶", "value": -1.53, "rank": 4, "label": "", "metric": "涨幅"}, {"name": "计算机设备", "value": -1.59, "rank": 3, "label": "", "metric": "涨幅"}, {"name": "电子化学品Ⅱ", "value": -1.62, "rank": 2, "label": "", "metric": "涨幅"}, {"name": "半导体", "value": -1.8, "rank": 1, "label": "", "metric": "涨幅"}], [{"name": "消费电子", "value": -4.85, "rank": 10, "label": "", "metric": "涨幅"}, {"name": "自动化设备", "value": -5.17, "rank": 9, "label": "", "metric": "涨幅"}, {"name": "其他电源设备Ⅱ", "value": -5.2, "rank": 8, "label": "", "metric": "涨幅"}, {"name": "非金属材料Ⅱ", "value": -6.01, "rank": 7, "label": "", "metric": "涨幅"}, {"name": "电子化学品Ⅱ", "value": -6.1, "rank": 6, "label": "", "metric": "涨幅"}, {"name": "其他电子Ⅱ", "value": -6.46, "rank": 5, "label": "", "metric": "涨幅"}, {"name": "玻璃玻纤", "value": -7.14, "rank": 4, "label": "", "metric": "涨幅"}, {"name": "半导体", "value": -7.47, "rank": 3, "label": "", "metric": "涨幅"}, {"name": "元件", "value": -9.31, "rank": 2, "label": "", "metric": "涨幅"}, {"name": "通信设备", "value": -12.44, "rank": 1, "label": "", "metric": "涨幅"}], [{"name": "股份制银行Ⅱ", "value": -0.04, "rank": 10, "label": "", "metric": "涨幅"}, {"name": "白酒Ⅱ", "value": -0.05, "rank": 9, "label": "", "metric": "涨幅"}, {"name": "水泥", "value": -0.09, "rank": 8, "label": "", "metric": "涨幅"}, {"name": "白色家电", "value": -0.12, "rank": 7, "label": "", "metric": "涨幅"}, {"name": "城商行Ⅱ", "value": -0.12, "rank": 6, "label": "", "metric": "涨幅"}, {"name": "煤炭开采", "value": -0.25, "rank": 5, "label": "", "metric": "涨幅"}, {"name": "保险Ⅱ", "value": -1.03, "rank": 4, "label": "", "metric": "涨幅"}, {"name": "饮料乳品", "value": -1.43, "rank": 3, "label": "", "metric": "涨幅"}, {"name": "油气开采Ⅱ", "value": -1.89, "rank": 2, "label": "", "metric": "涨幅"}, {"name": "油服工程", "value": -3.08, "rank": 1, "label": "", "metric": "涨幅"}], [{"name": "体育Ⅱ", "value": -4.4, "rank": 10, "label": "", "metric": "涨幅"}, {"name": "影视院线", "value": -4.48, "rank": 9, "label": "", "metric": "涨幅"}, {"name": "化学制药", "value": -4.49, "rank": 8, "label": "", "metric": "涨幅"}, {"name": "综合Ⅱ", "value": -4.49, "rank": 7, "label": "", "metric": "涨幅"}, {"name": "航天装备Ⅱ", "value": -4.55, "rank": 6, "label": "", "metric": "涨幅"}, {"name": "软件开发", "value": -4.56, "rank": 5, "label": "", "metric": "涨幅"}, {"name": "能源金属", "value": -4.9, "rank": 4, "label": "", "metric": "涨幅"}, {"name": "工业金属", "value": -4.93, "rank": 3, "label": "", "metric": "涨幅"}, {"name": "医疗美容", "value": -5.51, "rank": 2, "label": "", "metric": "涨幅"}, {"name": "贵金属", "value": -5.56, "rank": 1, "label": "", "metric": "涨幅"}]]}, "涨停数": {"top": [[{"name": "宠物食品", "value": 0, "rank": 1, "label": "BK1507", "metric": "涨停数"}, {"name": "白酒Ⅱ", "value": 0, "rank": 2, "label": "BK1277", "metric": "涨停数"}, {"name": "白酒Ⅲ", "value": 0, "rank": 3, "label": "BK1575", "metric": "涨停数"}, {"name": "医美耗材", "value": 0, "rank": 4, "label": "BK1500", "metric": "涨停数"}, {"name": "厨房电器", "value": 0, "rank": 5, "label": "BK1451", "metric": "涨停数"}, {"name": "电动乘用车", "value": 0, "rank": 6, "label": "BK1519", "metric": "涨停数"}, {"name": "厨卫电器", "value": 0, "rank": 7, "label": "BK1240", "metric": "涨停数"}, {"name": "餐饮", "value": 0, "rank": 8, "label": "BK1559", "metric": "涨停数"}, {"name": "医疗美容", "value": 0, "rank": 9, "label": "BK1253", "metric": "涨停数"}, {"name": "培训教育", "value": 0, "rank": 10, "label": "BK1557", "metric": "涨停数"}], [{"name": "厨卫电器", "value": 0, "rank": 1, "label": "", "metric": "涨停数"}, {"name": "小家电", "value": 0, "rank": 2, "label": "", "metric": "涨停数"}, {"name": "黑色家电", "value": 0, "rank": 3, "label": "", "metric": "涨停数"}, {"name": "白色家电", "value": 0, "rank": 4, "label": "", "metric": "涨停数"}, {"name": "软件开发", "value": 0, "rank": 5, "label": "", "metric": "涨停数"}, {"name": "商用车", "value": 0, "rank": 6, "label": "", "metric": "涨停数"}, {"name": "通信设备", "value": 0, "rank": 7, "label": "", "metric": "涨停数"}, {"name": "计算机设备", "value": 0, "rank": 8, "label": "", "metric": "涨停数"}, {"name": "乘用车", "value": 0, "rank": 9, "label": "", "metric": "涨停数"}, {"name": "汽车零部件", "value": 0, "rank": 10, "label": "", "metric": "涨停数"}], [{"name": "小家电", "value": 0, "rank": 1, "label": "", "metric": "涨停数"}, {"name": "黑色家电", "value": 0, "rank": 2, "label": "", "metric": "涨停数"}, {"name": "白色家电", "value": 0, "rank": 3, "label": "", "metric": "涨停数"}, {"name": "软件开发", "value": 0, "rank": 4, "label": "", "metric": "涨停数"}, {"name": "电子化学品Ⅱ", "value": 0, "rank": 5, "label": "", "metric": "涨停数"}, {"name": "IT服务Ⅱ", "value": 0, "rank": 6, "label": "", "metric": "涨停数"}, {"name": "商用车", "value": 0, "rank": 7, "label": "", "metric": "涨停数"}, {"name": "计算机设备", "value": 0, "rank": 8, "label": "", "metric": "涨停数"}, {"name": "乘用车", "value": 0, "rank": 9, "label": "", "metric": "涨停数"}, {"name": "汽车零部件", "value": 0, "rank": 10, "label": "", "metric": "涨停数"}], [{"name": "厨卫电器", "value": 0, "rank": 1, "label": "", "metric": "涨停数"}, {"name": "小家电", "value": 0, "rank": 2, "label": "", "metric": "涨停数"}, {"name": "黑色家电", "value": 0, "rank": 3, "label": "", "metric": "涨停数"}, {"name": "白色家电", "value": 0, "rank": 4, "label": "", "metric": "涨停数"}, {"name": "汽车服务", "value": 0, "rank": 5, "label": "", "metric": "涨停数"}, {"name": "软件开发", "value": 0, "rank": 6, "label": "", "metric": "涨停数"}, {"name": "计算机设备", "value": 0, "rank": 7, "label": "", "metric": "涨停数"}, {"name": "通信设备", "value": 0, "rank": 8, "label": "", "metric": "涨停数"}, {"name": "商用车", "value": 0, "rank": 9, "label": "", "metric": "涨停数"}, {"name": "乘用车", "value": 0, "rank": 10, "label": "", "metric": "涨停数"}], [{"name": "厨卫电器", "value": 0, "rank": 1, "label": "", "metric": "涨停数"}, {"name": "小家电", "value": 0, "rank": 2, "label": "", "metric": "涨停数"}, {"name": "黑色家电", "value": 0, "rank": 3, "label": "", "metric": "涨停数"}, {"name": "白色家电", "value": 0, "rank": 4, "label": "", "metric": "涨停数"}, {"name": "汽车服务", "value": 0, "rank": 5, "label": "", "metric": "涨停数"}, {"name": "软件开发", "value": 0, "rank": 6, "label": "", "metric": "涨停数"}, {"name": "计算机设备", "value": 0, "rank": 7, "label": "", "metric": "涨停数"}, {"name": "通信设备", "value": 0, "rank": 8, "label": "", "metric": "涨停数"}, {"name": "商用车", "value": 0, "rank": 9, "label": "", "metric": "涨停数"}, {"name": "乘用车", "value": 0, "rank": 10, "label": "", "metric": "涨停数"}]], "bottom": [[{"name": "电子化学品Ⅱ", "value": 0, "rank": 10, "label": "BK1039", "metric": "涨停数"}, {"name": "电子化学品Ⅲ", "value": 0, "rank": 9, "label": "BK1332", "metric": "涨停数"}, {"name": "集成电路制造", "value": 0, "rank": 8, "label": "BK1329", "metric": "涨停数"}, {"name": "半导体", "value": 0, "rank": 7, "label": "BK1036", "metric": "涨停数"}, {"name": "集成电路封测", "value": 0, "rank": 6, "label": "BK1328", "metric": "涨停数"}, {"name": "印制电路板", "value": 0, "rank": 5, "label": "BK1340", "metric": "涨停数"}, {"name": "通信网络设备及器件", "value": 0, "rank": 4, "label": "BK1591", "metric": "涨停数"}, {"name": "半导体材料", "value": 0, "rank": 3, "label": "BK1325", "metric": "涨停数"}, {"name": "分立器件", "value": 0, "rank": 2, "label": "BK1327", "metric": "涨停数"}, {"name": "半导体设备", "value": 0, "rank": 1, "label": "BK1326", "metric": "涨停数"}], [{"name": "装修建材", "value": 0, "rank": 10, "label": "", "metric": "涨停数"}, {"name": "房屋建设Ⅱ", "value": 0, "rank": 9, "label": "", "metric": "涨停数"}, {"name": "装修装饰Ⅱ", "value": 0, "rank": 8, "label": "", "metric": "涨停数"}, {"name": "基础建设", "value": 0, "rank": 7, "label": "", "metric": "涨停数"}, {"name": "专业工程", "value": 0, "rank": 6, "label": "", "metric": "涨停数"}, {"name": "工程咨询服务Ⅱ", "value": 0, "rank": 5, "label": "", "metric": "涨停数"}, {"name": "电机Ⅱ", "value": 0, "rank": 4, "label": "", "metric": "涨停数"}, {"name": "其他电源设备Ⅱ", "value": 0, "rank": 3, "label": "", "metric": "涨停数"}, {"name": "体育Ⅱ", "value": 0, "rank": 2, "label": "", "metric": "涨停数"}, {"name": "林业Ⅱ", "value": 0, "rank": 1, "label": "", "metric": "涨停数"}], [{"name": "基础建设", "value": 0, "rank": 10, "label": "", "metric": "涨停数"}, {"name": "装修装饰Ⅱ", "value": 0, "rank": 9, "label": "", "metric": "涨停数"}, {"name": "其他电源设备Ⅱ", "value": 0, "rank": 8, "label": "", "metric": "涨停数"}, {"name": "装修建材", "value": 0, "rank": 7, "label": "", "metric": "涨停数"}, {"name": "玻璃玻纤", "value": 0, "rank": 6, "label": "", "metric": "涨停数"}, {"name": "水泥", "value": 0, "rank": 5, "label": "", "metric": "涨停数"}, {"name": "综合Ⅱ", "value": 0, "rank": 4, "label": "", "metric": "涨停数"}, {"name": "通信服务", "value": 0, "rank": 3, "label": "", "metric": "涨停数"}, {"name": "酒店餐饮", "value": 0, "rank": 2, "label": "", "metric": "涨停数"}, {"name": "房屋建设Ⅱ", "value": 0, "rank": 1, "label": "", "metric": "涨停数"}], [{"name": "装修装饰Ⅱ", "value": 0, "rank": 10, "label": "", "metric": "涨停数"}, {"name": "房屋建设Ⅱ", "value": 0, "rank": 9, "label": "", "metric": "涨停数"}, {"name": "装修建材", "value": 0, "rank": 8, "label": "", "metric": "涨停数"}, {"name": "电机Ⅱ", "value": 0, "rank": 7, "label": "", "metric": "涨停数"}, {"name": "水泥", "value": 0, "rank": 6, "label": "", "metric": "涨停数"}, {"name": "综合Ⅱ", "value": 0, "rank": 5, "label": "", "metric": "涨停数"}, {"name": "通信服务", "value": 0, "rank": 4, "label": "", "metric": "涨停数"}, {"name": "酒店餐饮", "value": 0, "rank": 3, "label": "", "metric": "涨停数"}, {"name": "专业服务", "value": 0, "rank": 2, "label": "", "metric": "涨停数"}, {"name": "玻璃玻纤", "value": 0, "rank": 1, "label": "", "metric": "涨停数"}], [{"name": "基础建设", "value": 0, "rank": 10, "label": "", "metric": "涨停数"}, {"name": "装修装饰Ⅱ", "value": 0, "rank": 9, "label": "", "metric": "涨停数"}, {"name": "房屋建设Ⅱ", "value": 0, "rank": 8, "label": "", "metric": "涨停数"}, {"name": "其他电源设备Ⅱ", "value": 0, "rank": 7, "label": "", "metric": "涨停数"}, {"name": "玻璃玻纤", "value": 0, "rank": 6, "label": "", "metric": "涨停数"}, {"name": "水泥", "value": 0, "rank": 5, "label": "", "metric": "涨停数"}, {"name": "综合Ⅱ", "value": 0, "rank": 4, "label": "", "metric": "涨停数"}, {"name": "通信服务", "value": 0, "rank": 3, "label": "", "metric": "涨停数"}, {"name": "酒店餐饮", "value": 0, "rank": 2, "label": "", "metric": "涨停数"}, {"name": "装修建材", "value": 0, "rank": 1, "label": "", "metric": "涨停数"}]]}, "资金": {"top": [[{"name": "白酒Ⅱ", "value": 1487238592.0, "rank": 1, "label": "BK1277", "metric": "资金"}, {"name": "白酒Ⅲ", "value": 1487238592.0, "rank": 2, "label": "BK1575", "metric": "资金"}, {"name": "食品饮料", "value": 1299357296.0, "rank": 3, "label": "BK0438", "metric": "资金"}, {"name": "银行", "value": 837435648.0, "rank": 4, "label": "BK1283", "metric": "资金"}, {"name": "银行Ⅱ", "value": 837435648.0, "rank": 5, "label": "BK0475", "metric": "资金"}, {"name": "乘用车", "value": 672805600.0, "rank": 6, "label": "BK1262", "metric": "资金"}, {"name": "黄金", "value": 608132800.0, "rank": 7, "label": "BK1617", "metric": "资金"}, {"name": "股份制银行Ⅲ", "value": 592761328.0, "rank": 8, "label": "BK1610", "metric": "资金"}, {"name": "电动乘用车", "value": 542284000.0, "rank": 9, "label": "BK1519", "metric": "资金"}, {"name": "国有大型银行Ⅲ", "value": 482640864.0, "rank": 10, "label": "BK1611", "metric": "资金"}], [], [], [], []], "bottom": [[{"name": "数字芯片设计", "value": -5770434304.0, "rank": 10, "label": "BK1331", "metric": "资金"}, {"name": "消费电子零部件及组装", "value": -6152610816.0, "rank": 9, "label": "BK1338", "metric": "资金"}, {"name": "消费电子", "value": -6224887808.0, "rank": 8, "label": "BK1037", "metric": "资金"}, {"name": "印制电路板", "value": -7565791232.0, "rank": 7, "label": "BK1340", "metric": "资金"}, {"name": "元件", "value": -9257574400.0, "rank": 6, "label": "BK0459", "metric": "资金"}, {"name": "通信网络设备及器件", "value": -13355347200.0, "rank": 5, "label": "BK1591", "metric": "资金"}, {"name": "通信设备", "value": -15022883840.0, "rank": 4, "label": "BK0448", "metric": "资金"}, {"name": "通信", "value": -15500281600.0, "rank": 3, "label": "BK1215", "metric": "资金"}, {"name": "半导体", "value": -16739796224.0, "rank": 2, "label": "BK1036", "metric": "资金"}, {"name": "电子", "value": -37569945600.0, "rank": 1, "label": "BK1201", "metric": "资金"}], [], [], [], []]}}, "members": {}, "fund_note": "行业历史=申万二级；今日=东财实时。资金优先净流入/成交额。", "board_count": 493}, "概念": {"dates": ["07月30日"], "by_metric": {"涨幅": {"top": [[{"name": "昨日打二板以上表现", "value": 7.4, "rank": 1, "label": "BK1645", "metric": "涨幅"}, {"name": "历史新高", "value": 6.95, "rank": 2, "label": "BK1675", "metric": "涨幅"}, {"name": "昨日连板_含一字", "value": 5.09, "rank": 3, "label": "BK1051", "metric": "涨幅"}, {"name": "昨日连板", "value": 4.11, "rank": 4, "label": "BK0816", "metric": "涨幅"}, {"name": "酿酒概念", "value": 2.77, "rank": 5, "label": "BK0477", "metric": "涨幅"}, {"name": "汽车整车", "value": 2.21, "rank": 6, "label": "BK1029", "metric": "涨幅"}, {"name": "百日新高", "value": 2.06, "rank": 7, "label": "BK1676", "metric": "涨幅"}, {"name": "白酒", "value": 2.05, "rank": 8, "label": "BK0896", "metric": "涨幅"}, {"name": "社区团购", "value": 1.77, "rank": 9, "label": "BK0965", "metric": "涨幅"}, {"name": "退税商店", "value": 1.77, "rank": 10, "label": "BK0933", "metric": "涨幅"}]], "bottom": [[{"name": "中芯概念", "value": -5.85, "rank": 10, "label": "BK0935", "metric": "涨幅"}, {"name": "先进封装", "value": -6.02, "rank": 9, "label": "BK1101", "metric": "涨幅"}, {"name": "F5G概念", "value": -6.05, "rank": 8, "label": "BK1088", "metric": "涨幅"}, {"name": "科技风格", "value": -6.14, "rank": 7, "label": "BK1713", "metric": "涨幅"}, {"name": "光刻机", "value": -6.17, "rank": 6, "label": "BK0884", "metric": "涨幅"}, {"name": "基金重仓", "value": -6.2, "rank": 5, "label": "BK0536", "metric": "涨幅"}, {"name": "百元股", "value": -6.37, "rank": 4, "label": "BK1059", "metric": "涨幅"}, {"name": "高带宽内存", "value": -6.46, "rank": 3, "label": "BK1152", "metric": "涨幅"}, {"name": "光通信模块", "value": -6.67, "rank": 2, "label": "BK1136", "metric": "涨幅"}, {"name": "CPO概念", "value": -8.12, "rank": 1, "label": "BK1128", "metric": "涨幅"}]]}, "涨停数": {"top": [[{"name": "昨日打二板以上表现", "value": 0, "rank": 1, "label": "BK1645", "metric": "涨停数"}, {"name": "历史新高", "value": 0, "rank": 2, "label": "BK1675", "metric": "涨停数"}, {"name": "昨日连板_含一字", "value": 0, "rank": 3, "label": "BK1051", "metric": "涨停数"}, {"name": "昨日连板", "value": 0, "rank": 4, "label": "BK0816", "metric": "涨停数"}, {"name": "酿酒概念", "value": 0, "rank": 5, "label": "BK0477", "metric": "涨停数"}, {"name": "汽车整车", "value": 0, "rank": 6, "label": "BK1029", "metric": "涨停数"}, {"name": "百日新高", "value": 0, "rank": 7, "label": "BK1676", "metric": "涨停数"}, {"name": "白酒", "value": 0, "rank": 8, "label": "BK0896", "metric": "涨停数"}, {"name": "社区团购", "value": 0, "rank": 9, "label": "BK0965", "metric": "涨停数"}, {"name": "退税商店", "value": 0, "rank": 10, "label": "BK0933", "metric": "涨停数"}]], "bottom": [[{"name": "中芯概念", "value": 0, "rank": 10, "label": "BK0935", "metric": "涨停数"}, {"name": "先进封装", "value": 0, "rank": 9, "label": "BK1101", "metric": "涨停数"}, {"name": "F5G概念", "value": 0, "rank": 8, "label": "BK1088", "metric": "涨停数"}, {"name": "科技风格", "value": 0, "rank": 7, "label": "BK1713", "metric": "涨停数"}, {"name": "光刻机", "value": 0, "rank": 6, "label": "BK0884", "metric": "涨停数"}, {"name": "基金重仓", "value": 0, "rank": 5, "label": "BK0536", "metric": "涨停数"}, {"name": "百元股", "value": 0, "rank": 4, "label": "BK1059", "metric": "涨停数"}, {"name": "高带宽内存", "value": 0, "rank": 3, "label": "BK1152", "metric": "涨停数"}, {"name": "光通信模块", "value": 0, "rank": 2, "label": "BK1136", "metric": "涨停数"}, {"name": "CPO概念", "value": 0, "rank": 1, "label": "BK1128", "metric": "涨停数"}]]}, "资金": {"top": [[{"name": "白酒", "value": 1428916080.0, "rank": 1, "label": "BK0896", "metric": "资金"}, {"name": "酿酒概念", "value": 1426854496.0, "rank": 2, "label": "BK0477", "metric": "资金"}, {"name": "味蕾经济", "value": 1218819808.0, "rank": 3, "label": "BK1653", "metric": "资金"}, {"name": "跨境支付", "value": 1124108544.0, "rank": 4, "label": "BK1071", "metric": "资金"}, {"name": "大盘价值", "value": 1056721920.0, "rank": 5, "label": "BK1666", "metric": "资金"}, {"name": "超级品牌", "value": 1048770656.0, "rank": 6, "label": "BK0811", "metric": "资金"}, {"name": "汽车整车", "value": 933806192.0, "rank": 7, "label": "BK1029", "metric": "资金"}, {"name": "趋势股", "value": 920273920.0, "rank": 8, "label": "BK1715", "metric": "资金"}, {"name": "消费风格", "value": 766003456.0, "rank": 9, "label": "BK1711", "metric": "资金"}, {"name": "红利破净股", "value": 739278848.0, "rank": 10, "label": "BK1636", "metric": "资金"}]], "bottom": [[{"name": "2026中报预增", "value": -32987742208.0, "rank": 10, "label": "BK1749", "metric": "资金"}, {"name": "昨日高振幅", "value": -34763873536.0, "rank": 9, "label": "BK1633", "metric": "资金"}, {"name": "通信技术", "value": -36136998912.0, "rank": 8, "label": "BK1650", "metric": "资金"}, {"name": "大盘股", "value": -38626189312.0, "rank": 7, "label": "BK1663", "metric": "资金"}, {"name": "科技风格", "value": -40143228928.0, "rank": 6, "label": "BK1713", "metric": "资金"}, {"name": "深成500", "value": -40890937344.0, "rank": 5, "label": "BK0568", "metric": "资金"}, {"name": "MSCI中国", "value": -48152711168.0, "rank": 4, "label": "BK0821", "metric": "资金"}, {"name": "富时罗素", "value": -48936910848.0, "rank": 3, "label": "BK0867", "metric": "资金"}, {"name": "深股通", "value": -49856806912.0, "rank": 2, "label": "BK0804", "metric": "资金"}, {"name": "融资融券", "value": -77360275456.0, "rank": 1, "label": "BK0596", "metric": "资金"}]]}}, "members": {}, "fund_note": "概念今日=东财实时；历史列来自本地日快照（每日运行会增多）。", "board_count": 502}}}</script>
+  <script>
+  (function () {
+    const raw = document.getElementById("rot-data").textContent;
+    let DATA; try { DATA = JSON.parse(raw); } catch (e) { return; }
+    const topN = DATA.top_n || 10;
+    let kind = "行业";
+    let metric = "涨幅";
+    let selected = null;
+
+    const heat = document.getElementById("heat");
+    const selectedEl = document.getElementById("selected");
+    const panel = document.getElementById("stocks-panel");
+    const stocksBody = document.getElementById("stocks-body");
+    const stocksTitle = document.getElementById("stocks-title");
+    const daysLabel = document.getElementById("days-label");
+    const fundNote = document.getElementById("fund-note");
+
+    function fmtVal(metric, v) {
+      if (v === null || v === undefined || Number.isNaN(Number(v))) return "-";
+      const x = Number(v);
+      if (metric === "涨幅") return x.toFixed(2) + "%";
+      if (metric === "涨停数") return String(Math.round(x));
+      const abs = Math.abs(x);
+      if (abs >= 1e8) return (x / 1e8).toFixed(2) + "亿";
+      if (abs >= 1e4) return (x / 1e4).toFixed(1) + "万";
+      return x.toFixed(0);
+    }
+    function clsNum(v) {
+      const x = Number(v);
+      if (!Number.isFinite(x) || x === 0) return "flat";
+      return x > 0 ? "up" : "down";
+    }
+    function cellClass(rank, isTop, name) {
+      let c = "cell";
+      if (isTop && rank === 1) c += " r1";
+      else if (isTop && rank === 2) c += " r2";
+      else if (isTop && rank === 3) c += " r3";
+      if (selected && name === selected) c += " hl";
+      return c;
+    }
+
+    function renderSelected() {
+      if (!selected) {
+        selectedEl.innerHTML =
+          '<span style="color:var(--muted)">点击格子选中板块，追踪轮动；再点可查看个股</span>' +
+          '<div class="actions"><button type="button" class="link" id="btn-stocks" hidden>查看个股</button>' +
+          '<button type="button" class="link" id="btn-clear" hidden>取消高亮</button></div>';
+        panel.classList.remove("show");
+        return;
+      }
+      const k = DATA.kinds[kind] || {};
+      const by = (k.by_metric || {})[metric] || { top: [], bottom: [] };
+      let val = null;
+      const tops = by.top || [];
+      if (tops.length) {
+        (tops[0] || []).forEach(function (c) { if (c.name === selected) val = c.value; });
+        if (val === null) (by.bottom[0] || []).forEach(function (c) { if (c.name === selected) val = c.value; });
+      }
+      selectedEl.innerHTML =
+        '<span>选中板块: <span class="name">' + selected + '</span> ' +
+        '<span class="chg ' + clsNum(val) + '">' + fmtVal(metric, val) + '</span></span>' +
+        '<div class="actions">' +
+          '<button type="button" class="link" id="btn-stocks">查看个股</button>' +
+          '<button type="button" class="link" id="btn-clear">取消高亮</button>' +
+        '</div>';
+      document.getElementById("btn-stocks").onclick = showStocks;
+      document.getElementById("btn-clear").onclick = function () {
+        selected = null; render(); renderSelected();
+      };
+    }
+
+    function showStocks() {
+      if (!selected) return;
+      const members = ((DATA.kinds[kind] || {}).members || {})[selected] || [];
+      stocksTitle.textContent = selected + " · 成分股";
+      if (!members.length) {
+        stocksBody.innerHTML = '<p style="color:var(--muted)">暂无成分数据（可稍后重跑并开启成分缓存）</p>';
+      } else {
+        const rows = members.map(function (m) {
+          return "<tr><td>" + (m["代码"] || "") + "</td><td>" + (m["名称"] || "") +
+            "</td><td>" + (m["现价"] == null ? "-" : Number(m["现价"]).toFixed(2)) +
+            "</td><td class='" + clsNum(m["涨跌幅"]) + "'>" +
+            (m["涨跌幅"] == null ? "-" : Number(m["涨跌幅"]).toFixed(2) + "%") +
+            "</td><td>" + (m["换手率"] == null ? "-" : Number(m["换手率"]).toFixed(2)) +
+            "</td></tr>";
+        }).join("");
+        stocksBody.innerHTML = "<table><thead><tr><th>代码</th><th>名称</th><th>现价</th><th>涨跌幅</th><th>换手%</th></tr></thead><tbody>" +
+          rows + "</tbody></table>";
+      }
+      panel.classList.add("show");
+      panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function pickCell(name) {
+      if (!name) return;
+      if (selected === name) { showStocks(); return; }
+      selected = name;
+      render();
+      renderSelected();
+    }
+
+    function render() {
+      const k = DATA.kinds[kind] || {};
+      const dates = k.dates || [];
+      const by = (k.by_metric || {})[metric] || { top: [], bottom: [] };
+      daysLabel.textContent = "近" + Math.max(dates.length, 1) + "日";
+      fundNote.textContent = (k.fund_note || "") + " · " + kind + "共 " + (k.board_count || 0) + " 个板块";
+
+      let html = "<thead><tr><th class='rank-h'></th>";
+      dates.forEach(function (d) { html += "<th>" + d + "</th>"; });
+      html += "</tr></thead><tbody>";
+
+      for (let r = 1; r <= topN; r++) {
+        html += "<tr><td class='rank'>" + r + "</td>";
+        dates.forEach(function (_, di) {
+          const cell = ((by.top[di] || [])[r - 1]) || null;
+          if (!cell) {
+            html += "<td><span class='cell empty'>-</span></td>";
+            return;
+          }
+          const cls = cellClass(cell.rank, true, cell.name);
+          html += "<td><button type='button' class='" + cls + "' data-name='" + cell.name.replace(/'/g, "") +
+            "'><span class='n'>" + cell.name +
+            "</span><span class='v " + clsNum(cell.value) + "'>" + fmtVal(metric, cell.value) +
+            "</span></button></td>";
+        });
+        html += "</tr>";
+      }
+      html += "<tr class='sep'><td colspan='" + (dates.length + 1) + "'></td></tr>";
+      for (let i = 0; i < topN; i++) {
+        const rankLabel = topN - i;
+        html += "<tr><td class='rank bot'>" + rankLabel + "</td>";
+        dates.forEach(function (_, di) {
+          const cell = ((by.bottom[di] || [])[i]) || null;
+          if (!cell) {
+            html += "<td><span class='cell empty'>-</span></td>";
+            return;
+          }
+          const cls = cellClass(cell.rank, false, cell.name);
+          html += "<td><button type='button' class='" + cls + "' data-name='" + cell.name.replace(/'/g, "") +
+            "'><span class='n'>" + cell.name +
+            "</span><span class='v " + clsNum(cell.value) + "'>" + fmtVal(metric, cell.value) +
+            "</span></button></td>";
+        });
+        html += "</tr>";
+      }
+      html += "</tbody>";
+      heat.innerHTML = html;
+      heat.querySelectorAll("button.cell").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          pickCell(btn.getAttribute("data-name"));
+        });
+      });
+    }
+
+    document.getElementById("kind-tabs").addEventListener("click", function (ev) {
+      const btn = ev.target.closest(".tab");
+      if (!btn) return;
+      kind = btn.getAttribute("data-kind");
+      document.querySelectorAll(".tab").forEach(function (t) {
+        t.classList.toggle("active", t === btn);
+      });
+      selected = null;
+      render();
+      renderSelected();
+    });
+    document.getElementById("metric").addEventListener("change", function (ev) {
+      metric = ev.target.value;
+      render();
+      renderSelected();
+    });
+
+    render();
+    renderSelected();
+  })();
+  </script>
+</body>
+</html>

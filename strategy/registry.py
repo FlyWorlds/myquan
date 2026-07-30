@@ -29,6 +29,8 @@ def _rules_yin_yang() -> str:
 
 def _load_entries() -> dict[str, StrategyEntry]:
     from strategy.config import KAICHENG, ZZ500_ETF
+    from strategy.daban.config import KAICHENG_DABAN
+    from strategy.daban.runner import run_daban
     from strategy.runner import run_open_break
     from strategy.yin_yang.config import KAICHENG_YIN_YANG
     from strategy.yin_yang.runner import run_yin_yang
@@ -62,6 +64,13 @@ def _load_entries() -> dict[str, StrategyEntry]:
             default_config=_oversold_cfg(),
             print_rules=_rules_oversold,
         ),
+        "daban": StrategyEntry(
+            id="daban",
+            name="打板战法 涨停封板",
+            run=run_daban,
+            default_config=KAICHENG_DABAN,
+            print_rules=_rules_daban,
+        ),
     }
 
 
@@ -73,6 +82,12 @@ def _oversold_cfg():
 
 def _rules_oversold() -> str:
     from strategy.oversold_bounce.rules import STRATEGY_RULES
+
+    return STRATEGY_RULES.strip()
+
+
+def _rules_daban() -> str:
+    from strategy.daban.rules import STRATEGY_RULES
 
     return STRATEGY_RULES.strip()
 

@@ -263,10 +263,16 @@ def morning_high_before_gap945(
     """9:45 前（不含 9:45 这根）的最高价；无分钟线时用 open。"""
     if bars is None or bars.empty:
         return float(open_px)
-    b = bars.sort_values("ts")
+    b = bars.sort_values("ts").copy()
+    b["ts"] = pd.to_datetime(b["ts"])
     if day0 is None:
         day0 = pd.Timestamp(b.iloc[0]["ts"]).normalize()
     cutoff = _gap945_cutoff_ts(day0)
+    # 与分钟线对齐：比较时统一去掉时区，避免 datetime64[us] vs tz Timestamp
+    if getattr(cutoff, "tzinfo", None) is not None:
+        cutoff = cutoff.tz_localize(None)
+    if getattr(b["ts"].dt, "tz", None) is not None:
+        b["ts"] = b["ts"].dt.tz_localize(None)
     before = b[b["ts"] < cutoff]
     if before.empty:
         return float(open_px)

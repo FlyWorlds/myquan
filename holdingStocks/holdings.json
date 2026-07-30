@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-29 12:04:33",
+  "updated_at": "2026-07-30 14:37:08",
   "positions": {
     "000893": {
       "name": "亚钾国际",
@@ -15,15 +15,15 @@
       "qty": 0,
       "cost": null,
       "buy_time": null,
-      "note": "止损成交@16.08 (2026-07-28)"
+      "note": "止损成交@15.28 (2026-07-30)"
     },
     "002171": {
       "name": "楚江新材",
       "market": "深证",
-      "qty": 0,
-      "cost": null,
-      "buy_time": null,
-      "note": "阴线收盘卖@8.97 (2026-07-28)"
+      "qty": 1000,
+      "cost": 9.171,
+      "buy_time": "2026-07-30 09:15:14",
+      "note": "实盘同步@中航"
     },
     "510580": {
       "name": "易方达中证500ETF",
@@ -43,24 +43,29 @@
     }
   },
   "realized_today": {
-    "000893": {
-      "session": "2026-07-29",
-      "name": "亚钾国际",
-      "market": "深证",
-      "qty": 200,
-      "price": 49.95,
-      "cost": 47.704,
-      "pnl": 449.2,
-      "pnl_pct": 4.71,
-      "day_base": 10106.0,
-      "day_pnl": -116.0,
-      "day_pnl_pct": -1.15,
-      "reason": "低开945未翻红",
-      "time": "2026-07-29 12:04:33"
+    "600552": {
+      "session": "2026-07-30",
+      "name": "凯盛科技",
+      "market": "上证",
+      "qty": 600,
+      "price": 15.28,
+      "cost": 15.701,
+      "pnl": -252.6,
+      "pnl_pct": -2.68,
+      "day_base": 9420.6,
+      "day_pnl": -252.6,
+      "day_pnl_pct": -2.68,
+      "reason": "止损成交",
+      "time": "2026-07-30 09:55:53",
+      "high_after_stop": 15.49,
+      "low_after_stop": 14.61,
+      "rebound_pct": 1.37,
+      "miss_pnl": 126.0
     }
   },
-  "account_total": null,
-  "account_total_open": null,
-  "account_total_open_session": null,
-  "last_session": "2026-07-29"
+  "account_total": 19598.2,
+  "account_cash": 19598.2,
+  "account_total_open": 29002.2,
+  "account_total_open_session": "2026-07-30",
+  "last_session": "2026-07-30"
 }

@@ -36,6 +36,7 @@ from typing import Any
 
 import akshare as ak
 import pandas as pd
+import requests
 
 _MYQUAN_ROOT = Path(__file__).resolve().parents[1]
 if str(_MYQUAN_ROOT) not in sys.path:
@@ -149,6 +150,8 @@ def load_holdings() -> dict[str, Any]:
     if not HOLDINGS_FILE.exists():
         data = {
             "updated_at": None,
+            "account_total": None,
+            "account_cash": None,
             "positions": {
                 w["code"]: _empty_position(w)
                 for w in WATCHLIST
@@ -163,7 +166,116 @@ def load_holdings() -> dict[str, Any]:
     for w in WATCHLIST:
         positions.setdefault(w["code"], _empty_position(w))
     data.setdefault("realized_today", {})
+    data.setdefault("account_total", None)
+    data.setdefault("account_cash", None)
+    data.setdefault("account_total_open", None)
+    data.setdefault("account_total_open_session", None)
     return data
+
+
+def _account_total_open(data: dict[str, Any] | None = None) -> float | None:
+    data = data if data is not None else load_holdings()
+    return _as_money(data.get("account_total_open"))
+
+
+def _ensure_account_open_session(
+    data: dict[str, Any],
+    *,
+    session: str,
+    account_total: float | None,
+) -> None:
+    """跨日或首次：锁定日初总资产，供合计/当日盈亏%分母。"""
+    open_session = str(data.get("account_total_open_session") or "")
+    if open_session == session and _account_total_open(data) is not None:
+        return
+    if account_total is None or account_total <= 0:
+        return
+    data["account_total_open"] = round(float(account_total), 2)
+    data["account_total_open_session"] = session
+    save_holdings(data)
+
+
+def _as_money(v: Any) -> float | None:
+    if v is None or v == "":
+        return None
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return None
+    return x if x > 0 else None
+
+
+def _account_cash(data: dict[str, Any] | None = None) -> float | None:
+    data = data if data is not None else load_holdings()
+    return _as_money(data.get("account_cash"))
+
+
+def _holdings_market_value(rows: list[dict[str, Any]]) -> float:
+    return sum(
+        float(r["市值"])
+        for r in rows
+        if r.get("市值") is not None and int(r.get("持仓") or 0) > 0
+    )
+
+
+def _account_total(
+    rows: list[dict[str, Any]] | None = None,
+    data: dict[str, Any] | None = None,
+) -> float | None:
+    """总资产：优先 现金+市值；否则用登记的 account_total。"""
+    data = data if data is not None else load_holdings()
+    cash = _account_cash(data)
+    if cash is not None and rows is not None:
+        return round(cash + _holdings_market_value(rows), 2)
+    return _as_money(data.get("account_total"))
+
+
+def _available_cash(
+    rows: list[dict[str, Any]],
+    data: dict[str, Any] | None = None,
+) -> float | None:
+    data = data if data is not None else load_holdings()
+    cash = _account_cash(data)
+    if cash is not None:
+        return round(cash, 2)
+    total = _as_money(data.get("account_total"))
+    if total is None:
+        return None
+    return round(total - _holdings_market_value(rows), 2)
+
+
+def _today_opened_cost(rows: list[dict[str, Any]], session: str | None = None) -> float:
+    """当日新开仓成本额（买入日记为当日的持仓）。"""
+    session = session or str(pd.Timestamp.now().date())
+    total = 0.0
+    positions = load_holdings().get("positions", {})
+    for r in rows:
+        code = str(r.get("代码") or "")
+        qty = int(r.get("持仓") or 0)
+        if qty <= 0:
+            continue
+        pos = positions.get(code) or {}
+        if not is_t1_buy_day(pos.get("buy_time"), session):
+            continue
+        cv = r.get("成本额")
+        if cv is not None:
+            total += float(cv)
+        elif pos.get("cost") is not None:
+            total += float(pos["cost"]) * qty
+    return round(total, 2)
+
+
+def _sync_account_total(rows: list[dict[str, Any]]) -> float | None:
+    """有现金登记时，用 现金+市值 回写总资产。"""
+    data = load_holdings()
+    cash = _account_cash(data)
+    if cash is None:
+        return _as_money(data.get("account_total"))
+    total = round(cash + _holdings_market_value(rows), 2)
+    if data.get("account_total") != total:
+        data["account_total"] = total
+        save_holdings(data)
+    return total
 
 
 def save_holdings(data: dict[str, Any]) -> None:
@@ -427,42 +539,167 @@ def high_after_stop_touch(day: pd.DataFrame, stop_px: float) -> float | None:
     return ha
 
 
+def fetch_sina_spot(sina: str) -> dict[str, Any] | None:
+    """新浪实时行情（竞价/开盘后分钟线未到时可用）。"""
+    try:
+        resp = requests.get(
+            f"https://hq.sinajs.cn/list={sina}",
+            headers={
+                "Referer": "https://finance.sina.com.cn",
+                "User-Agent": "Mozilla/5.0",
+            },
+            timeout=8,
+        )
+        text = resp.content.decode("gbk", "ignore").strip()
+    except Exception:  # noqa: BLE001
+        return None
+    if '="' not in text:
+        return None
+    payload = text.split('="', 1)[1].rstrip('";')
+    parts = payload.split(",")
+    if len(parts) < 32:
+        return None
+
+    def _f(i: int) -> float:
+        try:
+            return float(parts[i])
+        except (TypeError, ValueError):
+            return 0.0
+
+    open_px = _f(1)
+    prev_close = _f(2)
+    last_px = _f(3)
+    high_px = _f(4)
+    low_px = _f(5)
+    bid = _f(6)
+    ask = _f(7)
+    # 竞价阶段 open/last 常为 0，用买卖一价作撮合参考
+    if open_px <= 0:
+        open_px = bid or ask or last_px
+    if last_px <= 0:
+        last_px = open_px or bid or ask
+    if high_px <= 0:
+        high_px = max(open_px, last_px)
+    if low_px <= 0:
+        low_px = min(x for x in (open_px, last_px) if x > 0) if open_px or last_px else 0.0
+    if open_px <= 0 or last_px <= 0 or prev_close <= 0:
+        return None
+    session = parts[30] or str(pd.Timestamp.now().date())
+    stamp = f"{session} {parts[31]}" if parts[31] else f"{session} 09:25:00"
+    return {
+        "session": session,
+        "open": open_px,
+        "high": high_px,
+        "low": low_px,
+        "last": last_px,
+        "prev_close": prev_close,
+        "last_ts": stamp,
+    }
+
+
+def _day_key_series(ts: pd.Series) -> pd.Series:
+    """统一按日历日比较，避免 datetime64[us] 与 Timestamp 直接比较报错。"""
+    return pd.to_datetime(ts).dt.strftime("%Y-%m-%d")
+
+
 def fetch_today_quote(sina: str) -> dict[str, Any]:
-    """用1分钟线拼当日开高低收（现价=最新分钟收盘）；并取昨收算当日涨幅。"""
-    raw = ak.stock_zh_a_minute(symbol=sina, period="1", adjust="")
+    """用1分钟线拼当日开高低收；竞价/开盘初分钟线未到时回退新浪现价。"""
+    today = str(pd.Timestamp.now().date())
+    spot = fetch_sina_spot(sina)
+
+    day = pd.DataFrame()
+    prev_close: float | None = None
+    try:
+        raw = ak.stock_zh_a_minute(symbol=sina, period="1", adjust="")
+    except Exception:  # noqa: BLE001
+        raw = None
+
+    if raw is not None and not raw.empty:
+        df = raw.copy()
+        df["ts"] = pd.to_datetime(df["day"])
+        day_keys = _day_key_series(df["ts"])
+        day = df[day_keys == today].copy()
+        for col in ("open", "high", "low", "close"):
+            if not day.empty:
+                day[col] = pd.to_numeric(day[col], errors="coerce")
+        if not day.empty:
+            day = day.dropna(subset=["open", "high", "low", "close"]).sort_values("ts")
+
+        prev = df[day_keys < today].copy()
+        if not prev.empty:
+            prev["close"] = pd.to_numeric(prev["close"], errors="coerce")
+            prev = prev.dropna(subset=["close"]).sort_values("ts")
+            if not prev.empty:
+                prev_last = _day_key_series(prev["ts"]).iloc[-1]
+                prev_day = prev[_day_key_series(prev["ts"]) == prev_last]
+                if not prev_day.empty:
+                    prev_close = float(prev_day.iloc[-1]["close"])
+
+    # 当日分钟线已到：优先用分钟 OHLC
+    if not day.empty:
+        open_px = float(day.iloc[0]["open"])
+        high_px = float(day["high"].max())
+        low_px = float(day["low"].min())
+        last_px = float(day.iloc[-1]["close"])
+        last_ts = day.iloc[-1]["ts"]
+        if prev_close is None and spot is not None:
+            prev_close = float(spot["prev_close"])
+        day_chg = None
+        if prev_close is not None and prev_close > 0:
+            day_chg = (last_px / prev_close - 1.0) * 100.0
+        return {
+            "session": today,
+            "open": open_px,
+            "high": high_px,
+            "low": low_px,
+            "last": last_px,
+            "prev_close": prev_close,
+            "day_chg_pct": day_chg,
+            "last_ts": str(last_ts),
+            "_day_bars": day,
+        }
+
+    # 竞价/开盘初：分钟线尚无今日，用新浪现价
+    if spot is not None and spot["session"] == today:
+        day_chg = None
+        prev_close = float(spot["prev_close"])
+        last_px = float(spot["last"])
+        if prev_close > 0:
+            day_chg = (last_px / prev_close - 1.0) * 100.0
+        return {
+            "session": today,
+            "open": float(spot["open"]),
+            "high": float(spot["high"]),
+            "low": float(spot["low"]),
+            "last": last_px,
+            "prev_close": prev_close,
+            "day_chg_pct": day_chg,
+            "last_ts": str(spot["last_ts"]),
+            "_day_bars": pd.DataFrame(),
+        }
+
+    # 非交易时段：退回最近一个交易日全日分钟线
     if raw is None or raw.empty:
         raise RuntimeError(f"无分钟行情: {sina}")
     df = raw.copy()
     df["ts"] = pd.to_datetime(df["day"])
-    today = pd.Timestamp.now().normalize()
-    day = df[df["ts"].dt.normalize() == today].copy()
-    if day.empty:
-        # 非交易时段：退回最近一个交易日全日
-        last_day = df["ts"].dt.normalize().max()
-        day = df[df["ts"].dt.normalize() == last_day].copy()
-        session_ts = last_day
-        session = str(last_day.date())
-    else:
-        session_ts = today
-        session = str(today.date())
-
+    day_keys = _day_key_series(df["ts"])
+    last_day = day_keys.max()
+    day = df[day_keys == last_day].copy()
     for col in ("open", "high", "low", "close"):
         day[col] = pd.to_numeric(day[col], errors="coerce")
     day = day.dropna(subset=["open", "high", "low", "close"]).sort_values("ts")
     if day.empty:
         raise RuntimeError(f"当日无有效分钟线: {sina}")
-
-    # 昨收：会话日前一交易日最后一根分钟收盘
-    prev_days = df[df["ts"].dt.normalize() < session_ts]
-    prev_close = None
-    if not prev_days.empty:
-        prev_last_day = prev_days["ts"].dt.normalize().max()
-        prev = prev_days[prev_days["ts"].dt.normalize() == prev_last_day].copy()
+    prev = df[day_keys < last_day].copy()
+    if not prev.empty:
         prev["close"] = pd.to_numeric(prev["close"], errors="coerce")
         prev = prev.dropna(subset=["close"]).sort_values("ts")
         if not prev.empty:
-            prev_close = float(prev.iloc[-1]["close"])
-
+            prev_last = _day_key_series(prev["ts"]).iloc[-1]
+            prev_day = prev[_day_key_series(prev["ts"]) == prev_last]
+            if not prev_day.empty:
+                prev_close = float(prev_day.iloc[-1]["close"])
     open_px = float(day.iloc[0]["open"])
     high_px = float(day["high"].max())
     low_px = float(day["low"].min())
@@ -472,7 +709,7 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     if prev_close is not None and prev_close > 0:
         day_chg = (last_px / prev_close - 1.0) * 100.0
     return {
-        "session": session,
+        "session": last_day,
         "open": open_px,
         "high": high_px,
         "low": low_px,
@@ -480,7 +717,7 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
         "prev_close": prev_close,
         "day_chg_pct": day_chg,
         "last_ts": str(last_ts),
-        "_day_bars": day,  # 供止损后最高价统计
+        "_day_bars": day,
     }
 
 
@@ -917,11 +1154,15 @@ def collect_rows() -> list[dict[str, Any]]:
         for r in rows
         if r.get("市值") is not None and int(r.get("持仓") or 0) > 0
     )
+    account_total = _sync_account_total(rows)
+    pos_base = account_total if account_total and account_total > 0 else (
+        total_mv if total_mv > 0 else None
+    )
     for r in rows:
         qty = int(r.get("持仓") or 0)
         mv = r.get("市值")
-        if qty > 0 and mv is not None and total_mv > 0:
-            r["仓位%"] = round(float(mv) / total_mv * 100.0, 1)
+        if qty > 0 and mv is not None and pos_base and pos_base > 0:
+            r["仓位%"] = round(float(mv) / pos_base * 100.0, 1)
         else:
             r["仓位%"] = 0.0 if r.get("已实现") else None
     return rows
@@ -1011,6 +1252,33 @@ def write_html_report(
     total_day_pct = (
         (total_day_pnl / total_day_base * 100.0) if has_day and total_day_base > 0 else None
     )
+    holdings_meta = load_holdings()
+    account_total = _account_total(rows, holdings_meta)
+    available_cash = _available_cash(rows, holdings_meta)
+    session_for_open = next(
+        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
+        str(pd.Timestamp.now().date()),
+    )
+    _ensure_account_open_session(
+        holdings_meta,
+        session=session_for_open,
+        account_total=account_total,
+    )
+    holdings_meta = load_holdings()
+    account_open = _account_total_open(holdings_meta)
+    # 有日初总资产时：合计盈亏=总资产相对日初变动；盈亏%统一用日初总资产做分母
+    if account_total is not None and account_open is not None:
+        total_pnl = round(float(account_total) - float(account_open), 2)
+        has_pos = True
+        total_pnl_pct = round(total_pnl / float(account_open) * 100.0, 2)
+    if has_day and account_open is not None and account_open > 0:
+        total_day_pct = round(total_day_pnl / float(account_open) * 100.0, 2)
+    position_pct = (
+        round(total_mv / account_total * 100.0, 1)
+        if account_total and account_total > 0 and total_mv > 0
+        else None
+    )
+    today_opened = _today_opened_cost(rows, session_for_open)
 
     index_cards = []
     for ix in indices:
@@ -1503,8 +1771,12 @@ def write_html_report(
           </span>
         </div>
         <div class="meta sensitive">
-          市值 {_fmt_num(total_mv if total_mv else None)}
+          总资产 {_fmt_num(account_total)}
+          · 可用 {_fmt_num(available_cash)}
+          · 仓位 {('-' if position_pct is None else f'{position_pct:.1f}%')}
+          · 市值 {_fmt_num(total_mv if total_mv else None)}
           · 成本 {_fmt_num(total_cost if total_cost else None)}
+          · 当日开仓 {_fmt_num(today_opened if today_opened > 0 else None)}
           {f' · 未计成本市值 {_fmt_num(total_mv_no_cost)}' if total_mv_no_cost > 0 else ''}
           {f' · 今日结算{settled_n}笔 盈亏{settled_pnl:+.2f}/当日{settled_day:+.2f}' if settled_n > 0 else ''}
         </div>
@@ -1516,9 +1788,10 @@ def write_html_report(
     <p class="note">
       大盘：点数=最新指数点位；涨跌点数/涨跌幅相对昨收。
       个股：默认 ±2.5%（ceil/floor，同 kskj600552）；510580 为 ±1.2%。
-      合计盈亏=未平仓浮盈 + 今日已结算锁定盈亏；已结算部分不再随现价变。
-      当日盈亏=未平仓当日变动 + 今日已止损结算（按止损价锁定）。
-      仓位%=剩余持仓市值占比；已结算标的仓位为 0%。
+      合计盈亏=总资产相对日初总资产的变动（有登记日初总资产时）；否则=未平仓浮盈+今日已结算。
+      当日盈亏=未平仓当日变动 + 今日已结算锁定；盈亏%分母优先用日初总资产。
+      仓位%=个股市值/总资产；已结算标的仓位为 0%。
+      总资产=可用现金+持仓市值；当日开仓=今日买入持仓的成本额。
       空仓默认「空仓」，已触买/将买入 → 翻转红底并建议限价@买点；
       有仓默认「持有」，低开≥09:45未翻红 → 按09:45分钟收盘价全清；已触止损 → 自动清仓；将止损 → 翻转绿底预警；
       未触止损但盘中收阴 →「阴线·待尾盘」；≥14:55 仍阴 → 按现价阴线结算。
@@ -1579,6 +1852,27 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(f"策略参考: kskj2 ±{DEFAULT_PCT*100:.1f}%（510580 ±1.2%）/ 有仓默认持有")
     print(f"  卖出优先: ①低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红 ②止损 ③阴线≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}")
     print(f"持仓文件: {HOLDINGS_FILE}")
+    holdings_meta = load_holdings()
+    account_total = _account_total(rows, holdings_meta)
+    available = _available_cash(rows, holdings_meta)
+    total_mv = _holdings_market_value(rows)
+    position_pct = (
+        round(total_mv / account_total * 100.0, 1)
+        if account_total and account_total > 0 and total_mv > 0
+        else None
+    )
+    session_for_open = next(
+        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
+        str(pd.Timestamp.now().date()),
+    )
+    today_opened = _today_opened_cost(rows, session_for_open)
+    if account_total is not None:
+        print(
+            f"总资产: {account_total:.2f} 元 · 可用: "
+            f"{available if available is not None else '-'} 元 · "
+            f"仓位: {('-' if position_pct is None else f'{position_pct:.1f}%')} · "
+            f"当日开仓: {today_opened:.2f} 元"
+        )
     print("-" * 108)
     print("【大盘】")
     for ix in indices:
@@ -1653,22 +1947,37 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(pd.DataFrame(show_rows)[cols].to_string(index=False))
     print("-" * 108)
     day_total = 0.0
-    day_base = 0.0
     day_n = 0
-    for r in rows:
-        if r.get("当日盈亏") is not None and (
-            int(r.get("持仓") or 0) > 0 or r.get("已实现")
+    stock_pnl = 0.0
+    stock_n = 0
+    for r in show_rows:
+        raw = next((x for x in rows if x["代码"] == r["代码"]), {})
+        if raw.get("浮盈") is not None and (
+            int(raw.get("持仓") or 0) > 0 or raw.get("已实现")
         ):
-            day_total += float(r["当日盈亏"])
-            day_n += 1
-            dpct = r.get("当日盈亏%")
-            if dpct is not None and abs(float(dpct)) > 1e-12:
-                day_base += float(r["当日盈亏"]) / (float(dpct) / 100.0)
-            elif r.get("市值") is not None and not r.get("已实现"):
-                day_base += float(r["市值"]) - float(r["当日盈亏"])
+            stock_pnl += float(raw["浮盈"])
+            stock_n += 1
+        if r["当日盈亏"] != "-":
+            try:
+                day_total += float(r["当日盈亏"])
+                day_n += 1
+            except (TypeError, ValueError):
+                pass
+    holdings_meta = load_holdings()
+    account_total = _account_total(rows, holdings_meta)
+    account_open = _account_total_open(holdings_meta)
+    if account_total is not None and account_open is not None:
+        eq_pnl = round(float(account_total) - float(account_open), 2)
+        eq_pct = round(eq_pnl / float(account_open) * 100.0, 2)
+        print(f"合计盈亏: {eq_pnl:+.2f} ({eq_pct:+.2f}%)  [总资产 {account_total:.2f} vs 日初 {account_open:.2f}]")
+    elif stock_n:
+        print(f"合计盈亏: {stock_pnl:+.2f}  [持股浮盈+已结算]")
     if day_n:
-        day_pct = (day_total / day_base * 100.0) if day_base > 0 else None
-        pct_txt = "-" if day_pct is None else f"{day_pct:+.2f}%"
+        if account_open is not None and account_open > 0:
+            day_pct = day_total / float(account_open) * 100.0
+            pct_txt = f"{day_pct:+.2f}%"
+        else:
+            pct_txt = "-"
         print(f"合计当日盈亏: {day_total:+.2f} ({pct_txt})")
     else:
         print("合计当日盈亏: -")
@@ -1704,6 +2013,27 @@ def cmd_html(args: argparse.Namespace) -> None:
         )
     if not getattr(args, "no_open", False):
         webbrowser.open(report.resolve().as_uri())
+
+
+def cmd_set_account(args: argparse.Namespace) -> None:
+    total = float(args.total)
+    if total <= 0:
+        raise ValueError("总资产必须 > 0")
+    data = load_holdings()
+    data["account_total"] = round(total, 2)
+    # 若未单独登记现金，用总资产反推（需已有市值时更准，此处仅记总值）
+    save_holdings(data)
+    print(f"已设总资产: {data['account_total']:.2f} 元")
+
+
+def cmd_set_cash(args: argparse.Namespace) -> None:
+    cash = float(args.cash)
+    if cash < 0:
+        raise ValueError("可用现金不能为负")
+    data = load_holdings()
+    data["account_cash"] = round(cash, 2)
+    save_holdings(data)
+    print(f"已设可用现金: {data['account_cash']:.2f} 元")
 
 
 def cmd_set_cost(args: argparse.Namespace) -> None:
@@ -1775,6 +2105,9 @@ def cmd_buy(args: argparse.Namespace) -> None:
         pos["note"] = args.note
     pos["name"] = meta["name"]
     pos["market"] = meta["market"]
+    cash = _account_cash(data)
+    if cash is not None:
+        data["account_cash"] = round(cash - price * qty, 2)
     save_holdings(data)
     append_trade(
         {
@@ -1811,12 +2144,46 @@ def cmd_sell(args: argparse.Namespace) -> None:
     if qty > old_qty:
         raise RuntimeError(f"卖出数量 {qty} > 持仓 {old_qty}")
     cost = float(pos["cost"]) if pos.get("cost") is not None else price
+    buy_time = pos.get("buy_time")
     pnl = (price - cost) * qty
     new_qty = old_qty - qty
     pos["qty"] = new_qty
     if new_qty == 0:
         pos["cost"] = None
         pos["buy_time"] = None
+    cash = _account_cash(data)
+    if cash is not None:
+        data["account_cash"] = round(cash + price * qty, 2)
+
+    # 全清时写入当日已实现，供合计盈亏/卡片锁定展示
+    session = str(pd.Timestamp.now().date())
+    note = args.note or ""
+    if new_qty == 0:
+        _purge_stale_realized(data, session)
+        reason = REASON_STOP if "止损" in note else "阴线收盘卖"
+        bought_today = is_t1_buy_day(buy_time, session)
+        base_px = cost if (bought_today or cost) else price
+        day_base = float(base_px) * qty
+        day_pnl = (price - base_px) * qty
+        day_pnl_pct = (price / base_px - 1.0) * 100.0 if base_px > 0 else None
+        px_digits = 3 if abs(price) < 10 else 2
+        data.setdefault("realized_today", {})[code] = {
+            "session": session,
+            "name": meta["name"],
+            "market": meta["market"],
+            "qty": int(qty),
+            "price": round(price, px_digits),
+            "cost": round(cost, 4),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round((price / cost - 1.0) * 100.0, 2) if cost > 0 else None,
+            "day_base": round(day_base, 2),
+            "day_pnl": round(day_pnl, 2),
+            "day_pnl_pct": None if day_pnl_pct is None else round(day_pnl_pct, 2),
+            "reason": reason,
+            "time": _now(),
+        }
+        pos["note"] = f"{reason}@{price} ({session})"
+
     save_holdings(data)
     append_trade(
         {
@@ -1829,7 +2196,7 @@ def cmd_sell(args: argparse.Namespace) -> None:
             "after_qty": new_qty,
             "avg_cost": cost,
             "realized_pnl": round(pnl, 2),
-            "note": args.note or "",
+            "note": note,
         }
     )
     print(
@@ -2015,6 +2382,14 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--qty", type=int, default=None, help="可选：同时登记数量")
     sc.add_argument("--note", default="")
     sc.set_defaults(func=cmd_set_cost)
+
+    sa = sub.add_parser("set-account", help="登记账户总资产")
+    sa.add_argument("total", type=float, help="账户总资产（元）")
+    sa.set_defaults(func=cmd_set_account)
+
+    scash = sub.add_parser("set-cash", help="登记可用现金")
+    scash.add_argument("cash", type=float, help="可用现金（元）")
+    scash.set_defaults(func=cmd_set_cash)
 
     h = sub.add_parser("history", help="查看成交流水")
     h.set_defaults(func=cmd_history)

@@ -67,6 +67,8 @@ python index.py watch --interval 30 --port 8765
 python index.py buy 002171 9.05 1000
 python index.py sell 002171 9.20 500
 python index.py set-cost 600552 15.95 --qty 400
+python index.py set-account 29002.20
+python index.py set-cash 10430.20
 python index.py clear 002171
 python index.py history
 ```
@@ -76,7 +78,7 @@ python index.py history
 | 文件 | 作用 |
 |------|------|
 | `index.py` | 主程序 |
-| `holdings.json` | 持仓成本/数量、当日已实现盈亏 |
+| `holdings.json` | 持仓成本/数量、可用现金、总资产、当日已实现盈亏 |
 | `trades.jsonl` | 买卖流水（含自动止损/阴线卖） |
 | `holdings_report.html` | 盯盘报告 |
 | `holdings_watch.json` | `watch` 模式更新时间戳（供页面轮询刷新） |
@@ -84,6 +86,7 @@ python index.py history
 ## 注意
 
 - **`python index.py` 只跑一次**，不会后台自动更新；要自动刷新请用 **`watch`**，并用本地服务地址打开页面（不要只开 `file://`）。
-- 行情来源：新浪 1 分钟线拼当日 OHLC；大盘指数用新浪 spot。
+- 报告汇总显示：总资产、可用、仓位%、当日开仓成本；个股仓位%=市值/总资产。
+- 行情来源：新浪 1 分钟线拼当日 OHLC（开盘初分钟线未到时回退新浪现价）；大盘指数用新浪 spot。
 - 自动结算是盯盘侧记账，**不会下真实委托**；实盘请按报告「建议挂单」自行下单。
 - 尾盘阴线结算时刻：`YIN_EXIT_HOUR` / `YIN_EXIT_MINUTE`（默认 14:55）。

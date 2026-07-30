@@ -53,6 +53,9 @@ uvx maturin develop
 myquan/
 ├── READA.md                 # 本文档
 ├── holdingStocks/           # 持仓盯盘（多标的）
+├── sectors/                 # 板块轮动（行业/概念）
+├── strategy/                # 多策略模块化框架
+├── huice/                   # 回测入口脚本
 ├── zz500/                   # 中证500ETF (510500)
 │   ├── ZZ500ETF.py          # 主策略（参数优化）
 │   ├── zz500ETF2.py         # 开盘±N% / 首阳连阳
@@ -74,6 +77,7 @@ cd myquan/zz500 && python ZZ500ETF.py
 cd myquan/hs300 && python HS300ETF.py
 cd myquan/kskj600552 && python KSKJ600552.PY
 cd myquan/holdingStocks && python index.py
+cd myquan/sectors && python index.py
 ```
 
 ---
