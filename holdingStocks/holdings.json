@@ -1,27 +1,33 @@
 {
-  "updated_at": "2026-07-31 07:45:11",
+  "updated_at": "2026-07-31 15:08:02",
   "positions": {
     "600552": {
       "name": "凯盛科技",
       "market": "上证",
-      "qty": 600,
-      "cost": 15.701,
-      "buy_time": "2026-07-30 09:15:13",
-      "note": "实盘同步@中航"
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
     },
     "002171": {
       "name": "楚江新材",
       "market": "深证",
-      "qty": 1000,
-      "cost": 9.171,
-      "buy_time": "2026-07-30 09:15:14",
-      "note": "实盘同步@中航"
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
     },
     "000859": {
       "name": "国风新材",
       "market": "深证",
-      "qty": 700,
+      "qty": 0,
+      "available": null,
       "cost": null,
+      "today_cost": null,
       "buy_time": null,
       "note": ""
     },
@@ -29,7 +35,9 @@
       "name": "天通股份",
       "market": "上证",
       "qty": 0,
+      "available": null,
       "cost": null,
+      "today_cost": null,
       "buy_time": null,
       "note": ""
     },
@@ -37,15 +45,18 @@
       "name": "深科技",
       "market": "深证",
       "qty": 0,
+      "available": null,
       "cost": null,
+      "today_cost": null,
       "buy_time": null,
       "note": ""
     }
   },
   "realized_today": {},
-  "account_total": 28471.0,
+  "account_total": null,
   "account_cash": null,
-  "account_total_open": 28471.0,
-  "account_total_open_session": "2026-07-30",
-  "last_session": "2026-07-31"
+  "account_total_open": null,
+  "account_total_open_session": null,
+  "last_session": null,
+  "alert_sticky": {}
 }

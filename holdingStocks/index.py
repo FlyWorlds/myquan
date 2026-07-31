@@ -2,7 +2,7 @@
 
 功能：
   · 拉取当日开盘、最高、最低、现价（新浪1分钟）
-  · 策略规则见 myquan/strategy/open_break.py（与 idnex.py / kskj2 一致）
+  · 策略规则见 myquan/strategy/open_break.py（与 kskj2 一致）
   · 有仓：默认「持有」；低开 9:45 前未翻红 → 9:45 分钟收盘价全清
   · 触止损 → 自动结算；未触止损但尾盘收阴(≥14:55) → 按现价结算
   · 空仓：已触买/将买入 → 翻转并建议限价买
@@ -15,6 +15,7 @@
   python index.py buy 002171 9.05 1000
   python index.py sell 002171 9.20 500
   python index.py set-cost 600552 15.95 --qty 400
+  python index.py set-cost 600552 15.445 --qty 800 --available 600 --today-cost 15.78
   python index.py clear 002171
   python index.py history
 """
@@ -44,15 +45,12 @@ if str(_MYQUAN_ROOT) not in sys.path:
 
 from strategy.open_break import (
     DEFAULT_PCT,
-    ENTRY_PCT,
     EXIT_REASONS,
     GAP_DOWN_EXIT_HOUR,
     GAP_DOWN_EXIT_MINUTE,
-    NEAR_POINTS,
     REASON_GAP945,
     REASON_STOP,
     REASON_YIN,
-    STOP_PCT,
     TICK_SIZE,
     YIN_EXIT_HOUR,
     YIN_EXIT_MINUTE,
@@ -60,7 +58,6 @@ from strategy.open_break import (
     eval_gap_down_945,
     is_t1_buy_day,
     is_yin,
-    is_yang,
     is_yin_exit_window,
     strategy_levels,
     strategy_signal,
@@ -71,6 +68,88 @@ HOLDINGS_FILE = ROOT / "holdings.json"
 TRADES_FILE = ROOT / "trades.jsonl"
 REPORT_FILE = ROOT / "holdings_report.html"
 WATCH_META_FILE = ROOT / "holdings_watch.json"
+WATCH_PID_FILE = ROOT / "holdings_watch.pid"
+
+
+def _empty_position(meta: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": meta["name"],
+        "market": meta["market"],
+        "qty": 0,
+        "available": None,
+        "cost": None,
+        "today_cost": None,
+        "buy_time": None,
+        "note": "",
+    }
+
+
+def _sellable_qty(
+    pos: dict[str, Any],
+    qty: int,
+    buy_time: str | None,
+    session: str,
+    *,
+    t0: bool = False,
+) -> int:
+    """可卖数量：优先用持仓里的 available；否则买入日整仓不可卖。"""
+    if qty <= 0:
+        return 0
+    if t0:
+        return int(qty)
+    raw = pos.get("available")
+    if raw is not None:
+        try:
+            return max(0, min(int(raw), int(qty)))
+        except (TypeError, ValueError):
+            pass
+    if is_t1_buy_day(buy_time, session):
+        return 0
+    return int(qty)
+
+
+def _calc_day_pnl(
+    *,
+    last: float,
+    qty: int,
+    available: int,
+    cost: float | None,
+    prev_close: float | None,
+    open_px: float,
+    today_cost: float | None = None,
+) -> tuple[float | None, float | None, float | None]:
+    """分段当日盈亏：可用(=隔夜)按昨收，锁定(=今买)按今日买入价(非均价)。
+
+    返回 (day_pnl, day_pnl_pct, day_base)。
+    """
+    if qty <= 0:
+        return None, None, None
+    avail = max(0, min(int(available), int(qty)))
+    locked = int(qty) - avail
+    last = float(last)
+    open_px = float(open_px)
+    cost_f = float(cost) if cost is not None else None
+    today_f = float(today_cost) if today_cost is not None else None
+    prev = float(prev_close) if prev_close is not None and float(prev_close) > 0 else None
+
+    day_pnl = 0.0
+    day_base = 0.0
+    if avail > 0:
+        base_ov = prev if prev is not None else (cost_f if cost_f is not None else open_px)
+        day_pnl += (last - base_ov) * avail
+        day_base += base_ov * avail
+    if locked > 0:
+        # 今买部分必须用成交价，不能用持仓均价
+        base_td = (
+            today_f
+            if today_f is not None
+            else (cost_f if cost_f is not None else open_px)
+        )
+        day_pnl += (last - base_td) * locked
+        day_base += base_td * locked
+    if day_base <= 0:
+        return round(day_pnl, 2), None, None
+    return round(day_pnl, 2), round(day_pnl / day_base * 100.0, 2), round(day_base, 2)
 
 WATCHLIST: list[dict[str, Any]] = [
     {"code": "600552", "sina": "sh600552", "market": "上证", "name": "凯盛科技"},
@@ -123,17 +202,6 @@ def _px_digits(tick: float) -> int:
     return max(0, -int(round(math.log10(tick))))
 
 
-def _empty_position(item: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": item["name"],
-        "market": item["market"],
-        "qty": 0,
-        "cost": None,
-        "buy_time": None,
-        "note": "",
-    }
-
-
 def _find_meta(code: str) -> dict[str, Any]:
     key = _code_key(code)
     for item in WATCHLIST:
@@ -167,6 +235,7 @@ def load_holdings() -> dict[str, Any]:
     data.setdefault("account_cash", None)
     data.setdefault("account_total_open", None)
     data.setdefault("account_total_open_session", None)
+    data.setdefault("alert_sticky", {})
     return data
 
 
@@ -200,6 +269,100 @@ def _as_money(v: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return x if x > 0 else None
+
+
+def _alert_sticky_map(data: dict[str, Any] | None = None) -> dict[str, Any]:
+    data = data if data is not None else load_holdings()
+    raw = data.get("alert_sticky")
+    return raw if isinstance(raw, dict) else {}
+
+
+def _save_alert_sticky(session: str, sticky: dict[str, Any]) -> None:
+    data = load_holdings()
+    # 仅保留当日，避免跨日绿底粘住
+    kept = {
+        k: v
+        for k, v in sticky.items()
+        if isinstance(v, dict) and str(v.get("session") or "") == session
+    }
+    data["alert_sticky"] = kept
+    save_holdings(data)
+
+
+def _stabilize_sell_warn(
+    *,
+    code: str,
+    session: str,
+    sig: dict[str, Any],
+    open_px: float,
+    last_px: float,
+    stop_px: float,
+    vs_open_pts: float,
+    stop_lvl: float,
+    near_points: float = 1.0,
+    sticky: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """绿底防抖：阴线/将止损触发后，需明显翻红才取消，避免 30s 刷新闪没。"""
+    sticky = sticky if sticky is not None else _alert_sticky_map()
+    prev = sticky.get(code) if isinstance(sticky.get(code), dict) else None
+    if prev and str(prev.get("session") or "") != session:
+        prev = None
+
+    bg = str(sig.get("bg_class") or "")
+    alert = str(sig.get("alert") or "")
+
+    if bg == "warn-sell":
+        sticky[code] = {
+            "session": session,
+            "bg_class": "warn-sell",
+            "alert": alert,
+            "pending_sell": True,
+            "建议挂单": sig.get("建议挂单"),
+            "挂单说明": sig.get("挂单说明"),
+            "near_stop": bool(sig.get("near_stop")),
+        }
+        return sig
+
+    # 当前已非卖出预警：若仍处于阴线/近止损缓冲带，则保持上一帧绿底
+    if prev and prev.get("bg_class") == "warn-sell":
+        keep = False
+        prev_alert = str(prev.get("alert") or "")
+        # 阴线类：现价仍低于开盘 ×1.002（约 0.2% 缓冲）则保持
+        if ("阴" in prev_alert) or ("阴线" in prev_alert):
+            if open_px > 0 and last_px < open_px * 1.002:
+                keep = True
+        # 将止损：距止损阈值仍在 near+0.5 内则保持
+        elif "将止损" in prev_alert or prev.get("near_stop"):
+            if abs(vs_open_pts - stop_lvl) <= (near_points + 0.5) + 1e-12:
+                keep = True
+        # 低开待945 / 已触止损：价格仍在止损价下方或附近则保持
+        elif "止损" in prev_alert or "945" in prev_alert or "低开" in prev_alert:
+            if last_px <= stop_px * 1.003:
+                keep = True
+
+        if keep:
+            out = dict(sig)
+            out["bg_class"] = "warn-sell"
+            out["pending_sell"] = True
+            out["alert"] = prev_alert or alert or "将卖出"
+            if prev.get("建议挂单") is not None and out.get("建议挂单") is None:
+                out["建议挂单"] = prev.get("建议挂单")
+            if prev.get("挂单说明") and not out.get("挂单说明"):
+                out["挂单说明"] = prev.get("挂单说明")
+            sticky[code] = {
+                "session": session,
+                "bg_class": "warn-sell",
+                "alert": out["alert"],
+                "pending_sell": True,
+                "建议挂单": out.get("建议挂单"),
+                "挂单说明": out.get("挂单说明"),
+                "near_stop": bool(prev.get("near_stop")),
+            }
+            return out
+
+        sticky.pop(code, None)
+
+    return sig
 
 
 def _account_cash(data: dict[str, Any] | None = None) -> float | None:
@@ -242,7 +405,7 @@ def _available_cash(
 
 
 def _today_opened_cost(rows: list[dict[str, Any]], session: str | None = None) -> float:
-    """当日新开仓成本额（买入日记为当日的持仓）。"""
+    """当日新开仓成本额（锁定股 = 持仓 − 可用）。"""
     session = session or str(pd.Timestamp.now().date())
     total = 0.0
     positions = load_holdings().get("positions", {})
@@ -252,13 +415,16 @@ def _today_opened_cost(rows: list[dict[str, Any]], session: str | None = None) -
         if qty <= 0:
             continue
         pos = positions.get(code) or {}
-        if not is_t1_buy_day(pos.get("buy_time"), session):
+        sellable = _sellable_qty(
+            pos, qty, pos.get("buy_time"), session, t0=False
+        )
+        locked = max(0, qty - sellable)
+        if locked <= 0:
             continue
-        cv = r.get("成本额")
-        if cv is not None:
-            total += float(cv)
+        if pos.get("today_cost") is not None:
+            total += float(pos["today_cost"]) * locked
         elif pos.get("cost") is not None:
-            total += float(pos["cost"]) * qty
+            total += float(pos["cost"]) * locked
     return round(total, 2)
 
 
@@ -345,7 +511,7 @@ def apply_exit_fill(
     reason: str,
     trade_note: str,
 ) -> dict[str, Any]:
-    """卖出视为已成交：按成交价锁定盈亏、清仓，并写入当日已实现。"""
+    """卖出视为已成交：按成交价锁定盈亏；可只卖可用股，剩余锁定仓继续持有。"""
     data = load_holdings()
     _purge_stale_realized(data, session)
     realized = data.setdefault("realized_today", {})
@@ -357,20 +523,30 @@ def apply_exit_fill(
     ):
         return existing
 
+    pos = data["positions"].setdefault(code, _empty_position(meta))
+    old_qty = int(pos.get("qty") or 0)
+    sell_qty = max(0, min(int(qty), old_qty))
+    if sell_qty <= 0:
+        return existing or {}
+
     fill_px = float(fill_px)
     cost_f = float(cost) if cost is not None else None
-    pnl = (fill_px - cost_f) * qty if cost_f is not None else None
+    pnl = (fill_px - cost_f) * sell_qty if cost_f is not None else None
     pnl_pct = (fill_px / cost_f - 1.0) * 100.0 if cost_f and cost_f > 0 else None
 
-    bought_today = is_t1_buy_day(buy_time, session)
-    if bought_today:
-        base_px = cost_f if cost_f is not None else float(open_px)
+    # 卖出可用(=隔夜)按昨收计当日盈亏；否则按成本
+    avail_before = _sellable_qty(pos, old_qty, buy_time, session, t0=False)
+    overnight_sell = sell_qty <= avail_before and avail_before > 0
+    if overnight_sell and prev_close is not None and float(prev_close) > 0:
+        base_px = float(prev_close)
+    elif (not overnight_sell) and cost_f is not None:
+        base_px = cost_f
     elif prev_close is not None and float(prev_close) > 0:
         base_px = float(prev_close)
     else:
         base_px = cost_f if cost_f is not None else float(open_px)
-    day_base = float(base_px) * qty if base_px else None
-    day_pnl = (fill_px - base_px) * qty if base_px else None
+    day_base = float(base_px) * sell_qty if base_px else None
+    day_pnl = (fill_px - base_px) * sell_qty if base_px else None
     day_pnl_pct = (
         (fill_px / base_px - 1.0) * 100.0 if base_px and base_px > 0 else None
     )
@@ -379,7 +555,7 @@ def apply_exit_fill(
         "session": session,
         "name": meta["name"],
         "market": meta["market"],
-        "qty": int(qty),
+        "qty": int(sell_qty),
         "price": round(fill_px, px_digits),
         "cost": None if cost_f is None else round(cost_f, 4),
         "pnl": None if pnl is None else round(float(pnl), 2),
@@ -392,13 +568,28 @@ def apply_exit_fill(
     }
     realized[code] = rec
 
-    pos = data["positions"].setdefault(code, _empty_position(meta))
-    pos["qty"] = 0
-    pos["cost"] = None
-    pos["buy_time"] = None
+    new_qty = old_qty - sell_qty
+    pos["qty"] = new_qty
     pos["name"] = meta["name"]
     pos["market"] = meta["market"]
-    pos["note"] = f"{reason}@{rec['price']} ({session})"
+    if new_qty <= 0:
+        pos["qty"] = 0
+        pos["cost"] = None
+        pos["buy_time"] = None
+        pos["available"] = None
+        pos["today_cost"] = None
+        pos["note"] = f"{reason}@{rec['price']} ({session})"
+    else:
+        raw_avail = pos.get("available")
+        if raw_avail is not None:
+            try:
+                pos["available"] = max(0, int(raw_avail) - sell_qty)
+            except (TypeError, ValueError):
+                pos["available"] = 0
+        else:
+            pos["available"] = 0
+        # 卖的是隔夜可用仓，今日买入成本保留
+        pos["note"] = f"{reason}@{rec['price']}×{sell_qty} 剩{new_qty} ({session})"
 
     save_holdings(data)
     append_trade(
@@ -408,8 +599,8 @@ def apply_exit_fill(
             "code": code,
             "name": meta["name"],
             "price": rec["price"],
-            "qty": qty,
-            "after_qty": 0,
+            "qty": sell_qty,
+            "after_qty": int(pos["qty"]),
             "cost": rec["cost"],
             "pnl": rec["pnl"],
             "note": trade_note,
@@ -530,12 +721,6 @@ def extremes_after_stop_touch(
     return float(after["high"].max()), float(after["low"].min())
 
 
-def high_after_stop_touch(day: pd.DataFrame, stop_px: float) -> float | None:
-    """触及止损后（含触及那根分钟）到现在的最高价。"""
-    ha, _ = extremes_after_stop_touch(day, stop_px)
-    return ha
-
-
 def fetch_sina_spot(sina: str) -> dict[str, Any] | None:
     """新浪实时行情（竞价/开盘后分钟线未到时可用）。"""
     try:
@@ -600,7 +785,7 @@ def _day_key_series(ts: pd.Series) -> pd.Series:
 
 
 def fetch_today_quote(sina: str) -> dict[str, Any]:
-    """用1分钟线拼当日开高低收；竞价/开盘初分钟线未到时回退新浪现价。"""
+    """用1分钟线拼当日开高低；现价优先新浪实时，避免分钟末根滞后。"""
     today = str(pd.Timestamp.now().date())
     spot = fetch_sina_spot(sina)
 
@@ -621,6 +806,10 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
                 day[col] = pd.to_numeric(day[col], errors="coerce")
         if not day.empty:
             day = day.dropna(subset=["open", "high", "low", "close"]).sort_values("ts")
+            # 开盘初偶发 open=0 的脏分钟，丢掉无效价
+            day = day[
+                (day["open"] > 0) & (day["high"] > 0) & (day["low"] > 0) & (day["close"] > 0)
+            ]
 
         prev = df[day_keys < today].copy()
         if not prev.empty:
@@ -632,14 +821,29 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
                 if not prev_day.empty:
                     prev_close = float(prev_day.iloc[-1]["close"])
 
-    # 当日分钟线已到：优先用分钟 OHLC
+    spot_ok = spot is not None and str(spot.get("session") or "") == today
+
+    # 当日分钟线已到：OHLC 用分钟，现价优先新浪实时
     if not day.empty:
         open_px = float(day.iloc[0]["open"])
         high_px = float(day["high"].max())
         low_px = float(day["low"].min())
         last_px = float(day.iloc[-1]["close"])
-        last_ts = day.iloc[-1]["ts"]
-        if prev_close is None and spot is not None:
+        last_ts = str(day.iloc[-1]["ts"])
+        if spot_ok:
+            # 实时现价覆盖滞后的分钟收盘；开盘价固定用首根分钟，避免新浪 open 抖动导致阴/阳翻转（绿底闪没）
+            last_px = float(spot["last"])
+            last_ts = str(spot["last_ts"])
+            high_px = max(high_px, float(spot["high"]) if float(spot["high"]) > 0 else high_px)
+            low_cand = float(spot["low"])
+            if low_cand > 0:
+                low_px = min(low_px, low_cand)
+            if prev_close is None:
+                prev_close = float(spot["prev_close"])
+            # 仅当分钟开盘异常时才用新浪开盘兜底
+            if open_px <= 0 and float(spot["open"]) > 0:
+                open_px = float(spot["open"])
+        elif prev_close is None and spot is not None:
             prev_close = float(spot["prev_close"])
         day_chg = None
         if prev_close is not None and prev_close > 0:
@@ -652,12 +856,12 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
             "last": last_px,
             "prev_close": prev_close,
             "day_chg_pct": day_chg,
-            "last_ts": str(last_ts),
+            "last_ts": last_ts,
             "_day_bars": day,
         }
 
     # 竞价/开盘初：分钟线尚无今日，用新浪现价
-    if spot is not None and spot["session"] == today:
+    if spot_ok:
         day_chg = None
         prev_close = float(spot["prev_close"])
         last_px = float(spot["last"])
@@ -686,6 +890,7 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     for col in ("open", "high", "low", "close"):
         day[col] = pd.to_numeric(day[col], errors="coerce")
     day = day.dropna(subset=["open", "high", "low", "close"]).sort_values("ts")
+    day = day[(day["open"] > 0) & (day["high"] > 0) & (day["low"] > 0) & (day["close"] > 0)]
     if day.empty:
         raise RuntimeError(f"当日无有效分钟线: {sina}")
     prev = df[day_keys < last_day].copy()
@@ -790,6 +995,7 @@ def collect_rows() -> list[dict[str, Any]]:
     holdings = load_holdings()
     positions = holdings.get("positions", {})
     realized_map = holdings.get("realized_today", {})
+    sticky = _alert_sticky_map(holdings)
     rows: list[dict[str, Any]] = []
     session_today: str | None = None
 
@@ -816,7 +1022,7 @@ def collect_rows() -> list[dict[str, Any]]:
             buy_time = pos.get("buy_time")
             cost = pos.get("cost")
             t0 = bool(w.get("t0"))
-            t1_lock = qty > 0 and (not t0) and is_t1_buy_day(buy_time, q["session"])
+            sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
             gap945 = eval_gap_down_945(
                 open_px=float(q["open"]),
                 prev_close=q.get("prev_close"),
@@ -825,13 +1031,13 @@ def collect_rows() -> list[dict[str, Any]]:
                 high_px=float(q["high"]),
             )
 
-            # 低开 9:45 未翻红且可卖 → 视为成交（优先于止损）
-            if qty > 0 and gap945["should_exit"] and not t1_lock:
+            # 低开 9:45 未翻红且可卖 → 视为成交（优先于止损；只卖可用）
+            if qty > 0 and gap945["should_exit"] and sellable > 0:
                 apply_gap_down_945_fill(
                     code=code,
                     meta=w,
                     exit_px=float(gap945["exit_px"]),
-                    qty=qty,
+                    qty=sellable,
                     cost=float(cost) if cost is not None else None,
                     session=q["session"],
                     buy_time=buy_time,
@@ -846,14 +1052,15 @@ def collect_rows() -> list[dict[str, Any]]:
                 qty = int(pos.get("qty") or 0)
                 cost = pos.get("cost")
                 buy_time = pos.get("buy_time")
+                sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
 
-            # 已触止损且可卖 → 视为成交，锁定收益并清仓
-            if qty > 0 and hit_stop and not t1_lock:
+            # 已触止损且可卖 → 视为成交，锁定收益（只卖可用）
+            if qty > 0 and hit_stop and sellable > 0:
                 apply_stop_fill(
                     code=code,
                     meta=w,
                     stop_px=float(lv["stop"]),
-                    qty=qty,
+                    qty=sellable,
                     cost=float(cost) if cost is not None else None,
                     session=q["session"],
                     buy_time=buy_time,
@@ -868,12 +1075,13 @@ def collect_rows() -> list[dict[str, Any]]:
                 qty = int(pos.get("qty") or 0)
                 cost = pos.get("cost")
                 buy_time = pos.get("buy_time")
+                sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
 
-            # 未触止损、可卖、尾盘仍收阴 → 按现价结算（对齐 kskj 阴线收盘卖）
+            # 未触止损、可卖、尾盘仍收阴 → 按现价结算（只卖可用）
             if (
                 qty > 0
                 and (not hit_stop)
-                and (not t1_lock)
+                and sellable > 0
                 and is_yin(float(q["open"]), float(q["last"]))
                 and is_yin_exit_window()
             ):
@@ -881,7 +1089,7 @@ def collect_rows() -> list[dict[str, Any]]:
                     code=code,
                     meta=w,
                     close_px=float(q["last"]),
-                    qty=qty,
+                    qty=sellable,
                     cost=float(cost) if cost is not None else None,
                     session=q["session"],
                     buy_time=buy_time,
@@ -896,14 +1104,15 @@ def collect_rows() -> list[dict[str, Any]]:
                 qty = int(pos.get("qty") or 0)
                 cost = pos.get("cost")
                 buy_time = pos.get("buy_time")
+                sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
 
-            # 当日已卖出结算：收益冻结，不再跟现价
+            # 当日已卖出结算：全清时冻结收益；部分卖出则继续展示剩余仓
             realized = realized_map.get(code)
             if (
                 realized
                 and str(realized.get("session") or "") == q["session"]
-                and realized.get("reason")
-                in ("止损成交", "阴线收盘卖", "低开945未翻红", REASON_GAP945)
+                and realized.get("reason") in EXIT_REASONS
+                and qty <= 0
             ):
                 fill_px = float(realized["price"])
                 sold_qty = int(realized.get("qty") or 0)
@@ -967,7 +1176,7 @@ def collect_rows() -> list[dict[str, Any]]:
                         if q.get("prev_close") is None
                         else round(float(q["prev_close"]), px_digits),
                         "当日涨幅": None if day_chg is None else round(float(day_chg), 2),
-                        "较开盘点": vs_pct,
+                        "较开盘点": vs,
                         "较开盘涨幅": vs_pct,
                         "阈值%": pct_pct,
                         "买点": lv["buy_trigger"],
@@ -1010,7 +1219,8 @@ def collect_rows() -> list[dict[str, Any]]:
                 buy_trigger=lv["buy_trigger"],
                 stop_px=lv["stop"],
                 qty=qty,
-                buy_time=buy_time,
+                # 有可卖股时不当作整仓 T+1，避免「持有·T+1」误锁信号
+                buy_time=None if sellable > 0 else buy_time,
                 vs_open_pts=vs,
                 entry_pct=entry_pct,
                 stop_pct=stop_pct,
@@ -1019,6 +1229,24 @@ def collect_rows() -> list[dict[str, Any]]:
                 prev_close=q.get("prev_close"),
                 day_bars=q.get("_day_bars"),
             )
+            sig = _stabilize_sell_warn(
+                code=code,
+                session=q["session"],
+                sig=sig,
+                open_px=float(q["open"]),
+                last_px=float(q["last"]),
+                stop_px=float(lv["stop"]),
+                vs_open_pts=float(vs) if vs == vs else 0.0,
+                stop_lvl=-stop_pct * 100.0,
+                sticky=sticky,
+            )
+            if qty > 0 and sellable > 0 and sellable < qty:
+                # 部分 T+1：状态标为持有·部分T+1
+                alert = str(sig.get("alert") or "")
+                if alert.startswith("持有"):
+                    sig = dict(sig)
+                    rest = alert[len("持有") :]
+                    sig["alert"] = f"持有·部分T+1{rest}" if rest else "持有·部分T+1"
             pnl = None
             pnl_pct = None
             market_value = (q["last"] * qty) if qty > 0 else None
@@ -1036,18 +1264,30 @@ def collect_rows() -> list[dict[str, Any]]:
                     pnl = q["last"] - cost_f
 
             if qty > 0:
-                bought_today = is_t1_buy_day(buy_time, q["session"])
-                if bought_today:
-                    base_px = float(cost) if cost is not None else float(q["open"])
-                elif q.get("prev_close") is not None and float(q["prev_close"]) > 0:
-                    base_px = float(q["prev_close"])
-                else:
-                    base_px = float(q["open"])
-                day_base = base_px * qty
-                day_pnl = (q["last"] - base_px) * qty
-                day_pnl_pct = (
-                    (q["last"] / base_px - 1.0) * 100.0 if base_px > 0 else None
+                today_cost = pos.get("today_cost")
+                day_pnl, day_pnl_pct, day_base = _calc_day_pnl(
+                    last=float(q["last"]),
+                    qty=qty,
+                    available=sellable,
+                    cost=float(cost) if cost is not None else None,
+                    prev_close=q.get("prev_close"),
+                    open_px=float(q["open"]),
+                    today_cost=float(today_cost) if today_cost is not None else None,
                 )
+                # 同日已部分卖出：把已实现当日盈亏并入
+                if (
+                    realized
+                    and str(realized.get("session") or "") == q["session"]
+                    and realized.get("reason") in EXIT_REASONS
+                ):
+                    rd = realized.get("day_pnl")
+                    rb = realized.get("day_base")
+                    if rd is not None:
+                        day_pnl = round(float(day_pnl or 0) + float(rd), 2)
+                    if rb is not None:
+                        day_base = round(float(day_base or 0) + float(rb), 2)
+                    if day_base and day_base > 0 and day_pnl is not None:
+                        day_pnl_pct = round(float(day_pnl) / float(day_base) * 100.0, 2)
 
             rows.append(
                 {
@@ -1063,7 +1303,7 @@ def collect_rows() -> list[dict[str, Any]]:
                     if q.get("prev_close") is None
                     else round(float(q["prev_close"]), px_digits),
                     "当日涨幅": None if day_chg is None else round(float(day_chg), 2),
-                    "较开盘点": vs_pct,
+                    "较开盘点": vs,
                     "较开盘涨幅": vs_pct,
                     "阈值%": pct_pct,
                     "买点": lv["buy_trigger"],
@@ -1078,6 +1318,7 @@ def collect_rows() -> list[dict[str, Any]]:
                     "近止损": sig["pending_sell"],
                     "bg_class": sig["bg_class"],
                     "持仓": qty,
+                    "可用": sellable if qty > 0 else 0,
                     "成本": None if cost is None else float(cost),
                     "浮盈": None if pnl is None else round(float(pnl), 2),
                     "浮盈%": None if pnl_pct is None else round(float(pnl_pct), 2),
@@ -1145,6 +1386,7 @@ def collect_rows() -> list[dict[str, Any]]:
         _purge_stale_realized(data, session_today)
         if data.get("realized_today") != before:
             save_holdings(data)
+        _save_alert_sticky(session_today, sticky)
 
     total_mv = sum(
         float(r["市值"])
@@ -1358,8 +1600,17 @@ def write_html_report(
                 </div>
                 <div class="price">
                   <div class="last">{_s(_fmt_num(r.get('现价'), pdg))}</div>
-                  <div class="chg {_cls_chg(day_pnl if (int(r.get('持仓') or 0) > 0 or r.get('已实现')) else day_chg)}">
-                    {_s(f"当日 {('-' if day_pnl is None else f'{float(day_pnl):+.2f}')} {('-' if day_pnl_pct is None else f'{float(day_pnl_pct):+.2f}%')}" if (int(r.get('持仓') or 0) > 0 or r.get('已实现')) else f"当日 {('-' if day_chg is None else f'{float(day_chg):+.2f}%')}")}
+                  <div class="chg {_cls_chg(day_chg if day_chg is not None else (day_pnl if (int(r.get('持仓') or 0) > 0 or r.get('已实现')) else None))}">
+                    {_s(
+                        (
+                            f"当日涨幅 {('-' if day_chg is None else f'{float(day_chg):+.2f}%')}"
+                            + (
+                                f" · 盈亏 {float(day_pnl):+.2f}"
+                                if (int(r.get('持仓') or 0) > 0 or r.get('已实现')) and day_pnl is not None
+                                else ""
+                            )
+                        )
+                    )}
                   </div>
                 </div>
               </header>
@@ -1369,6 +1620,7 @@ def write_html_report(
                 <div><span>开盘</span><b>{_s(_fmt_num(r.get('开盘'), pdg))}</b></div>
                 <div><span>最高</span><b>{_s(_fmt_num(r.get('最高'), pdg))}</b></div>
                 <div><span>最低</span><b>{_s(_fmt_num(r.get('最低'), pdg))}</b></div>
+                <div><span>当日涨幅</span><b class="{_cls_chg(day_chg)}">{_s('-' if day_chg is None else f'{float(day_chg):+.2f}%')}</b></div>
                 <div><span>较开盘点</span><b class="{_cls_chg(vs_open)}">{_s('-' if vs_open is None else f'{float(vs_open):+.2f}')}</b></div>
                 <div><span>较开盘涨幅</span><b class="{_cls_chg(vs_open_pct)}">{_s('-' if vs_open_pct is None else f'{float(vs_open_pct):+.2f}%')}</b></div>
                 {('<div><span>成交价</span><b>' + _s(_fmt_num(r.get('成交价'), pdg)) + '</b></div>') if r.get('已实现') and r.get('成交价') is not None else ''}
@@ -1383,6 +1635,13 @@ def write_html_report(
                 {('<div><span>踏空金额</span><b class="' + _cls_chg(r.get('踏空金额')) + '">' + _s(_fmt_num(r.get('踏空金额'))) + '</b></div>') if r.get('已实现') and r.get('踏空金额') is not None else ''}
                 <div><span>状态</span><b class="{'tag-alert' if bg in ('warn-buy','warn-sell') else ('tag-hold' if bg=='status-hold' else ('tag-flat' if bg=='status-flat' else ''))}">{escape(status_txt)}</b></div>
                 <div><span>持仓</span><b>{_s(escape(str(r.get('卖出数量') if r.get('已实现') else r.get('持仓'))) + ('(已卖)' if r.get('已实现') else ''))}</b></div>
+                {(
+                    '<div><span>可用</span><b>'
+                    + _s(escape(str(r.get('可用'))))
+                    + '</b></div>'
+                    if (not r.get('已实现')) and int(r.get('持仓') or 0) > 0 and r.get('可用') is not None
+                    else ''
+                )}
                 <div><span>成本</span><b>{_s(_fmt_num(r.get('成本'), max(3, pdg)))}</b></div>
                 <div><span>浮盈</span><b class="{_cls_chg(pnl)}">{_s(_fmt_num(pnl) + (' (已结算)' if r.get('已实现') else ''))}</b></div>
                 <div><span>浮盈%</span><b class="{_cls_chg(pnl_pct)}">{_s('-' if pnl_pct is None else f'{float(pnl_pct):+.2f}%')}</b></div>
@@ -1400,15 +1659,13 @@ def write_html_report(
     hero_extra = ""
     if refresh_sec is not None and int(refresh_sec) > 0:
         sec = int(refresh_sec)
-        refresh_head = (
-            f'\n  <meta name="holdings-watch" content="{sec}" />'
-        )
+        refresh_head = ""
         hero_extra = (
             f' · <span class="watch-live">盯盘中</span>'
             f' · 下次更新 <strong id="watch-countdown">{sec}</strong>s'
         )
         watch_hint = (
-            f"盯盘模式：服务端每 {sec} 秒重拉行情；倒计时到 0 后自动刷新本页。"
+            f"盯盘模式：服务端每 {sec} 秒重拉行情；有新数据后自动刷新本页。"
             " 停止请在终端 Ctrl+C。"
         )
         refresh_script = f"""
@@ -1418,9 +1675,10 @@ def write_html_report(
   const metaUrl = "/holdings_watch.json";
   const cdEl = document.getElementById("watch-countdown");
   const seenKey = "holdings_watch_seen";
-  let lastStamp = sessionStorage.getItem(seenKey) || null;
+  let lastTs = sessionStorage.getItem(seenKey) || null;
   let left = INTERVAL;
   let reloading = false;
+  let syncing = false;
 
   function renderCd() {{
     if (cdEl) cdEl.textContent = String(Math.max(0, left));
@@ -1429,44 +1687,36 @@ def write_html_report(
   function reloadSamePage() {{
     if (reloading) return;
     reloading = true;
-    const url = location.pathname + "?t=" + Date.now();
-    location.replace(url);
-  }}
-
-  function parseStamp(s) {{
-    if (!s) return null;
-    const m = String(s).match(/^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})[ T](\\d{{2}}):(\\d{{2}}):(\\d{{2}})/);
-    if (!m) return null;
-    return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+    location.replace(location.pathname + "?t=" + Date.now());
   }}
 
   async function syncFromServer() {{
-    if (reloading) return;
+    if (reloading || syncing) return;
+    syncing = true;
     try {{
       const r = await fetch(metaUrl + "?t=" + Date.now(), {{ cache: "no-store" }});
       if (!r.ok) return;
       const j = await r.json();
-      const stamp = j && (j.updated_at || j.ts);
-      if (!stamp) return;
+      const ts = (j && typeof j.ts === "number") ? String(j.ts) : null;
+      if (!ts) return;
 
-      // 只有服务端真的写出新数据才刷新本页（避免倒计时到0空刷）
-      if (lastStamp && String(stamp) !== String(lastStamp)) {{
-        sessionStorage.setItem(seenKey, String(stamp));
+      // 仅当服务端写出新时间戳才整页刷新（避免倒计时到 0 空刷）
+      if (lastTs && ts !== lastTs) {{
+        sessionStorage.setItem(seenKey, ts);
         reloadSamePage();
         return;
       }}
-      lastStamp = String(stamp);
-      sessionStorage.setItem(seenKey, lastStamp);
+      lastTs = ts;
+      sessionStorage.setItem(seenKey, lastTs);
 
       const interval = Number(j.refresh_sec) || INTERVAL;
-      const ts = (typeof j.ts === "number") ? j.ts : parseStamp(stamp);
-      if (ts) {{
-        const elapsed = Math.floor((Date.now() - ts) / 1000);
-        // 到点后停在 0，等待服务端更新时间戳，不再强制 reload
-        left = Math.max(0, interval - elapsed);
-        renderCd();
-      }}
-    }} catch (e) {{}}
+      const elapsed = Math.floor((Date.now() - Number(ts)) / 1000);
+      left = Math.max(0, interval - elapsed);
+      renderCd();
+    }} catch (e) {{
+    }} finally {{
+      syncing = false;
+    }}
   }}
 
   renderCd();
@@ -1477,12 +1727,9 @@ def write_html_report(
       left -= 1;
       renderCd();
     }}
-    // 每秒轻量同步；到 0 后也持续等新时间戳
-    if (left <= 0) syncFromServer();
+    // 到点后每秒轮询 meta；平时每 3 秒校准一次倒计时
+    if (left <= 0 || left % 3 === 0) syncFromServer();
   }}, 1000);
-  setInterval(function () {{
-    if (!reloading) syncFromServer();
-  }}, 3000);
 }})();
 </script>
 """
@@ -1507,7 +1754,6 @@ def write_html_report(
       --up: #b42318;
       --down: #0b7a45;
       --accent: #1f6b4a;
-      --warn: #9a6700;
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -1717,7 +1963,6 @@ def write_html_report(
     .down {{ color: var(--down); }}
     .flat {{ color: var(--muted); }}
     .tag-yes {{ color: var(--accent); }}
-    .tag-warn {{ color: var(--warn); }}
     .tag-alert {{ color: var(--up); font-weight: 700; }}
     .tag-buy {{ color: var(--up); }}
     .tag-sell {{ color: var(--down); }}
@@ -1790,7 +2035,7 @@ def write_html_report(
       仓位%=个股市值/总资产；已结算标的仓位为 0%。
       总资产=可用现金+持仓市值；当日开仓=今日买入持仓的成本额。
       空仓默认「空仓」，已触买/将买入 → 翻转红底并建议限价@买点；
-      有仓默认「持有」，低开≥09:45未翻红 → 按09:45分钟收盘价全清；已触止损 → 自动清仓；将止损 → 翻转绿底预警；
+      有仓默认「持有」，低开≥09:45未翻红 → 按09:45分钟收盘价全清；已触止损 → 自动清仓；将止损/阴线 → 绿底预警（带防抖，刷新不闪没）；
       未触止损但盘中收阴 →「阴线·待尾盘」；≥14:55 仍阴 → 按现价阴线结算。
       {watch_hint}
     </p>
@@ -1979,12 +2224,13 @@ def cmd_status(args: argparse.Namespace) -> None:
     else:
         print("合计当日盈亏: -")
 
-    report = write_html_report(rows, indices=indices)
+    report = _write_html_respecting_watch(rows, indices=indices)
     print(f"HTML 报告: {report}")
     if not getattr(args, "no_open", False):
-        webbrowser.open(report.resolve().as_uri())
+        url = _report_url_if_watching()
+        webbrowser.open(url if url else report.resolve().as_uri())
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
-    print("     当日盈亏: 隔夜仓=(现价-昨收)×数量；当日买入=(现价-成本)×数量")
+    print("     当日盈亏: 隔夜仓=(现价-昨收)×可用；今买=(现价-今买成交价)×锁定")
     print("     低开≥09:45且9:45前未翻红=按09:45分钟K线收盘价全清")
     print("     已触止损=视为已成交：按止损价锁定浮盈/当日盈亏并清仓，之后不再随现价变动")
     print("     未触止损但尾盘(≥14:55)仍收阴=按现价阴线结算（对齐 kskj2）")
@@ -1995,7 +2241,7 @@ def cmd_status(args: argparse.Namespace) -> None:
 def cmd_html(args: argparse.Namespace) -> None:
     rows = collect_rows()
     indices = fetch_indices()
-    report = write_html_report(rows, indices=indices)
+    report = _write_html_respecting_watch(rows, indices=indices)
     print(f"HTML 报告已生成: {report}")
     for ix in indices:
         if ix.get("error"):
@@ -2009,7 +2255,8 @@ def cmd_html(args: argparse.Namespace) -> None:
             f"涨跌幅 {('-' if pct is None else f'{pct:+.2f}%')}"
         )
     if not getattr(args, "no_open", False):
-        webbrowser.open(report.resolve().as_uri())
+        url = _report_url_if_watching()
+        webbrowser.open(url if url else report.resolve().as_uri())
 
 
 def cmd_set_account(args: argparse.Namespace) -> None:
@@ -2041,30 +2288,35 @@ def cmd_set_cost(args: argparse.Namespace) -> None:
     if cost <= 0:
         raise ValueError("成本价必须 > 0")
     data = load_holdings()
-    pos = data["positions"].setdefault(
-        code,
-        {
-            "name": meta["name"],
-            "market": meta["market"],
-            "qty": 0,
-            "cost": None,
-            "buy_time": None,
-            "note": "",
-        },
-    )
+    pos = data["positions"].setdefault(code, _empty_position(meta))
     pos["cost"] = round(cost, 4)
     pos["name"] = meta["name"]
     pos["market"] = meta["market"]
     if args.qty is not None:
         pos["qty"] = int(args.qty)
+    if getattr(args, "available", None) is not None:
+        avail = int(args.available)
+        qty_now = int(pos.get("qty") or 0)
+        if avail < 0 or (qty_now > 0 and avail > qty_now):
+            raise ValueError(f"可用数量须在 0..持仓({qty_now}) 之间")
+        pos["available"] = avail
+    if getattr(args, "today_cost", None) is not None:
+        tc = float(args.today_cost)
+        if tc <= 0:
+            raise ValueError("今日买入价必须 > 0")
+        pos["today_cost"] = round(tc, 4)
     if not pos.get("buy_time"):
         pos["buy_time"] = _now()
     if args.note:
         pos["note"] = args.note
     save_holdings(data)
+    avail_s = pos.get("available")
+    tc_s = pos.get("today_cost")
     print(
         f"已设成本: {meta['market']}{code} {meta['name']} "
         f"成本={pos['cost']} 持仓={pos.get('qty', 0)}"
+        + (f" 可用={avail_s}" if avail_s is not None else "")
+        + (f" 今买价={tc_s}" if tc_s is not None else "")
     )
 
 
@@ -2077,26 +2329,44 @@ def cmd_buy(args: argparse.Namespace) -> None:
         raise ValueError("价格/数量必须 > 0")
 
     data = load_holdings()
-    pos = data["positions"].setdefault(
-        code,
-        {
-            "name": meta["name"],
-            "market": meta["market"],
-            "qty": 0,
-            "cost": None,
-            "buy_time": None,
-            "note": "",
-        },
-    )
+    pos = data["positions"].setdefault(code, _empty_position(meta))
     old_qty = int(pos.get("qty") or 0)
     old_cost = float(pos["cost"]) if pos.get("cost") is not None else None
+    # 加仓前可卖股保留；新买部分 T+1 锁定
+    if old_qty > 0:
+        if pos.get("available") is not None:
+            try:
+                old_avail = max(0, min(int(pos["available"]), old_qty))
+            except (TypeError, ValueError):
+                old_avail = old_qty
+        else:
+            session = str(pd.Timestamp.now().date())
+            old_avail = (
+                0
+                if is_t1_buy_day(pos.get("buy_time"), session)
+                else old_qty
+            )
+    else:
+        old_avail = 0
+    locked_before = max(0, old_qty - old_avail)
+    old_today = (
+        float(pos["today_cost"]) if pos.get("today_cost") is not None else None
+    )
     new_qty = old_qty + qty
     if old_qty > 0 and old_cost is not None:
         new_cost = (old_cost * old_qty + price * qty) / new_qty
     else:
         new_cost = price
+    # 今日买入均价（仅锁定股的成交价加权）
+    if locked_before > 0 and old_today is not None:
+        pos["today_cost"] = round(
+            (old_today * locked_before + price * qty) / (locked_before + qty), 4
+        )
+    else:
+        pos["today_cost"] = round(price, 4)
     pos["qty"] = new_qty
     pos["cost"] = round(new_cost, 4)
+    pos["available"] = int(old_avail)
     pos["buy_time"] = _now()
     if args.note:
         pos["note"] = args.note
@@ -2121,7 +2391,8 @@ def cmd_buy(args: argparse.Namespace) -> None:
     )
     print(
         f"买入记录: {meta['market']}{code} {meta['name']} "
-        f"{qty}股 @ {price:.2f} → 持仓{new_qty} 成本{pos['cost']:.4f}"
+        f"{qty}股 @ {price:.2f} → 持仓{new_qty} 可用{pos['available']} "
+        f"成本{pos['cost']:.4f} 今买价{pos['today_cost']:.4f}"
     )
 
 
@@ -2145,9 +2416,17 @@ def cmd_sell(args: argparse.Namespace) -> None:
     pnl = (price - cost) * qty
     new_qty = old_qty - qty
     pos["qty"] = new_qty
+    raw_avail = pos.get("available")
+    if raw_avail is not None:
+        try:
+            pos["available"] = max(0, min(int(raw_avail) - qty, new_qty))
+        except (TypeError, ValueError):
+            pos["available"] = 0 if new_qty > 0 else None
     if new_qty == 0:
         pos["cost"] = None
         pos["buy_time"] = None
+        pos["available"] = None
+        pos["today_cost"] = None
     cash = _account_cash(data)
     if cash is not None:
         data["account_cash"] = round(cash + price * qty, 2)
@@ -2213,8 +2492,30 @@ def cmd_clear(args: argparse.Namespace) -> None:
     pos["qty"] = 0
     pos["cost"] = None
     pos["buy_time"] = None
+    pos["available"] = None
+    pos["today_cost"] = None
+    pos["note"] = ""
+    sticky = data.get("alert_sticky")
+    if isinstance(sticky, dict):
+        sticky.pop(code, None)
     save_holdings(data)
     print(f"已清空持仓: {code} {meta['name']}")
+
+
+def cmd_clear_all(_: argparse.Namespace) -> None:
+    """清空全部盯盘标的持仓与当日已实现、绿底粘滞。"""
+    data = load_holdings()
+    for w in WATCHLIST:
+        data["positions"][w["code"]] = _empty_position(w)
+    data["realized_today"] = {}
+    data["alert_sticky"] = {}
+    data["account_total"] = None
+    data["account_cash"] = None
+    data["account_total_open"] = None
+    data["account_total_open_session"] = None
+    data["last_session"] = None
+    save_holdings(data)
+    print(f"已清空全部持仓（{len(WATCHLIST)} 只）与当日结算记录")
 
 
 def cmd_history(_: argparse.Namespace) -> None:
@@ -2235,11 +2536,114 @@ def _refresh_once(refresh_sec: int) -> Path:
     return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
 
 
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
+            if handle:
+                ctypes.windll.kernel32.CloseHandle(handle)
+                return True
+            return False
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _read_watch_lock() -> dict[str, Any] | None:
+    if not WATCH_PID_FILE.exists():
+        return None
+    try:
+        raw = WATCH_PID_FILE.read_text(encoding="utf-8").strip()
+        if raw.startswith("{"):
+            data = json.loads(raw)
+            pid = int(data.get("pid") or 0)
+        else:
+            pid = int(raw)
+            data = {"pid": pid}
+        if pid and _pid_alive(pid):
+            return data
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return None
+
+
+def _acquire_watch_lock(*, host: str, port: int) -> None:
+    """防止多个 watch 同时写 HTML，页面会来回跳变。"""
+    existing = _read_watch_lock()
+    if existing:
+        old = int(existing.get("pid") or 0)
+        if old and old != os.getpid():
+            raise SystemExit(
+                f"盯盘已在运行 (pid={old})。\n"
+                f"请先在对应终端 Ctrl+C 停掉，再重新启动，"
+                f"否则新旧进程会抢写报告。"
+            )
+    WATCH_PID_FILE.write_text(
+        json.dumps(
+            {"pid": os.getpid(), "host": host, "port": int(port)},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _release_watch_lock() -> None:
+    try:
+        if not WATCH_PID_FILE.exists():
+            return
+        raw = WATCH_PID_FILE.read_text(encoding="utf-8").strip()
+        if raw.startswith("{"):
+            cur = int(json.loads(raw).get("pid") or 0)
+        else:
+            cur = int(raw)
+        if cur == os.getpid():
+            WATCH_PID_FILE.unlink(missing_ok=True)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        pass
+
+
+def _report_url_if_watching() -> str | None:
+    lock = _read_watch_lock()
+    if not lock:
+        return None
+    host = str(lock.get("host") or "127.0.0.1")
+    port = lock.get("port")
+    if port is None:
+        return None
+    return f"http://{host}:{int(port)}/{REPORT_FILE.name}"
+
+
+def _write_html_respecting_watch(
+    rows: list[dict[str, Any]],
+    indices: list[dict[str, Any]] | None = None,
+) -> Path:
+    """status/html 写报告时：若盯盘在跑则保留刷新脚本，避免撕掉自动刷新。"""
+    lock = _read_watch_lock()
+    if not lock:
+        return write_html_report(rows, indices=indices)
+    refresh_sec = 60
+    try:
+        meta = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
+        refresh_sec = int(meta.get("refresh_sec") or refresh_sec)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        pass
+    print(
+        f"检测到盯盘进程 (pid={lock.get('pid')})，保留自动刷新写入报告。"
+    )
+    return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
+
+
 def cmd_watch(args: argparse.Namespace) -> None:
     """长驻进程：本地 HTTP + 定时拉行情写报告，浏览器自动刷新。"""
     interval = max(15, int(args.interval))
     host = str(args.host)
     port = int(args.port)
+    _acquire_watch_lock(host=host, port=port)
     stop = threading.Event()
     refresh_lock = threading.Lock()
 
@@ -2247,11 +2651,12 @@ def cmd_watch(args: argparse.Namespace) -> None:
         with refresh_lock:
             return _refresh_once(interval)
 
-    print(f"首次拉取行情…")
+    print("首次拉取行情…")
     try:
         report = safe_refresh()
         print(f"报告已生成: {report}")
     except Exception as e:
+        _release_watch_lock()
         print(f"首次更新失败: {e}")
         raise
 
@@ -2274,70 +2679,44 @@ def cmd_watch(args: argparse.Namespace) -> None:
             path = getattr(self, "path", "") or ""
             if WATCH_META_FILE.name in path or REPORT_FILE.name in path:
                 return
-            if path.startswith("/api/"):
-                return
             super().log_message(fmt, *log_args)
 
         def end_headers(self) -> None:
             path = self.path.split("?", 1)[0]
-            if path in (
-                f"/{REPORT_FILE.name}",
-                f"/{WATCH_META_FILE.name}",
-                "/api/refresh",
-            ):
+            if path in (f"/{REPORT_FILE.name}", f"/{WATCH_META_FILE.name}"):
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
                 self.send_header("Pragma", "no-cache")
             super().end_headers()
 
-        def _send_json(self, code: int, payload: dict[str, Any]) -> None:
-            raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            self.send_response(code)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
-
-        def _handle_refresh(self) -> None:
-            try:
-                safe_refresh()
-                print(f"[{_now()}] 手动更新 → {REPORT_FILE.name}")
-                self._send_json(200, {"ok": True, "updated_at": _now()})
-            except Exception as e:
-                print(f"[{_now()}] 手动更新失败: {e}")
-                self._send_json(500, {"ok": False, "error": str(e)})
-
-        def do_GET(self) -> None:  # noqa: N802
-            path = self.path.split("?", 1)[0]
-            if path == "/api/refresh":
-                self._handle_refresh()
-                return
-            super().do_GET()
-
-        def do_POST(self) -> None:  # noqa: N802
-            path = self.path.split("?", 1)[0]
-            if path == "/api/refresh":
-                self._handle_refresh()
-                return
-            self.send_error(404, "Not Found")
-
-    server = ThreadingHTTPServer((host, port), _Handler)
+    try:
+        server = ThreadingHTTPServer((host, port), _Handler)
+    except OSError as e:
+        _release_watch_lock()
+        raise SystemExit(
+            f"端口 {host}:{port} 无法绑定（可能已有盯盘在跑）。\n"
+            f"请先停掉旧进程再启动，避免抢写报告。\n{e}"
+        ) from e
     url = f"http://{host}:{port}/{REPORT_FILE.name}"
     print(f"盯盘服务已启动: {url}")
     print(f"刷新间隔: {interval}s · Ctrl+C 停止")
+    print("展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）")
     if not args.no_open:
         webbrowser.open(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n正在停止…")
+        print("\n已停止盯盘")
     finally:
         stop.set()
-        server.shutdown()
-        print("已停止盯盘服务")
+        try:
+            server.shutdown()
+        except Exception:  # noqa: BLE001
+            pass
+        _release_watch_lock()
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="三只股票持仓记录与盯盘")
+    p = argparse.ArgumentParser(description="持仓记录与盯盘")
     sub = p.add_subparsers(dest="cmd")
 
     s = sub.add_parser("status", help="查看行情+持仓并生成 HTML（默认）")
@@ -2373,10 +2752,20 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("code")
     c.set_defaults(func=cmd_clear)
 
+    ca = sub.add_parser("clear-all", help="清空全部持仓与当日结算")
+    ca.set_defaults(func=cmd_clear_all)
+
     sc = sub.add_parser("set-cost", help="登记/修改成本价")
     sc.add_argument("code")
     sc.add_argument("cost", type=float)
     sc.add_argument("--qty", type=int, default=None, help="可选：同时登记数量")
+    sc.add_argument("--available", type=int, default=None, help="可选：可卖数量（T+1）")
+    sc.add_argument(
+        "--today-cost",
+        type=float,
+        default=None,
+        help="可选：今日买入成交价（当日盈亏用，非持仓均价）",
+    )
     sc.add_argument("--note", default="")
     sc.set_defaults(func=cmd_set_cost)
 
