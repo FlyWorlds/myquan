@@ -59,6 +59,17 @@ KAICHENG = BacktestConfig(
     gap945_proxy="open",
 )
 
+HANGTIANDIANZI = BacktestConfig(
+    symbol="sh600879",
+    symbol_name="航天电子",
+    em_symbol="600879",
+    threshold_pct=0.025,
+    start_date="20200101",
+    enable_gap945=True,
+    gap945_use_proxy=True,
+    gap945_proxy="open",
+)
+
 ZZ500_ETF = BacktestConfig(
     symbol="sh510580",
     symbol_name="中证500ETF",

@@ -45,7 +45,7 @@ from strategy.open_break import (
     strategy_levels,
     strategy_signal,
 )
-from strategy.config import KAICHENG, ZZ500_ETF, BacktestConfig
+from strategy.config import KAICHENG, HANGTIANDIANZI, ZZ500_ETF, BacktestConfig
 from strategy.gap945_analysis import (
     CERTAIN_CATS,
     classify_gap_days,
@@ -82,6 +82,7 @@ __all__ = [
     "REASON_GAP945",
     "BacktestConfig",
     "KAICHENG",
+    "HANGTIANDIANZI",
     "ZZ500_ETF",
     "CERTAIN_CATS",
     "ceil_to_tick",
