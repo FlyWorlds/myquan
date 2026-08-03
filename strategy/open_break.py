@@ -62,7 +62,9 @@ ENTRY_PCT = DEFAULT_PCT
 STOP_PCT = DEFAULT_PCT
 PREV_SMALL_YANG_PCT = 0.025
 TICK_SIZE = 0.01
+# 盯盘：|现价/因子价−1|×100 ≤ 此值 →「将买入/将止损」
 NEAR_POINTS = 1.0
+NEAR_FACTOR_PCT = NEAR_POINTS
 
 GAP_DOWN_EXIT_HOUR = 9
 GAP_DOWN_EXIT_MINUTE = 45
@@ -457,9 +459,13 @@ def strategy_signal(
     t0: bool = False,
     prev_close: float | None = None,
     day_bars: pd.DataFrame | None = None,
-    near_points: float = NEAR_POINTS,
+    near_points: float = NEAR_FACTOR_PCT,
 ) -> dict[str, Any]:
-    """盯盘：生成持有/翻转状态与挂单建议。"""
+    """盯盘：按持仓输出一侧因子状态。
+
+    · 接近预警：|现价/因子价 − 1|×100 ≤ near_points（默认 1%）
+    · 统一字段：因子侧 / 因子价 / 因子触发 / 距因子价差 / 距因子%
+    """
     holding = qty > 0
     hit_buy = high_px + 1e-12 >= buy_trigger
     hit_stop = low_px <= stop_px + 1e-12
@@ -475,6 +481,25 @@ def strategy_signal(
     stop_lvl = -stop_pct * 100.0
     pf = f"{{:.{px_digits}f}}"
 
+    dist_buy_px = round(float(last_px) - float(buy_trigger), px_digits)
+    dist_stop_px = round(float(last_px) - float(stop_px), px_digits)
+    dist_buy_pct = (
+        round((float(last_px) / float(buy_trigger) - 1.0) * 100.0, 2)
+        if float(buy_trigger) > 0
+        else None
+    )
+    dist_stop_pct = (
+        round((float(last_px) / float(stop_px) - 1.0) * 100.0, 2)
+        if float(stop_px) > 0
+        else None
+    )
+    near_buy_band = (
+        dist_buy_pct is not None and abs(float(dist_buy_pct)) <= near_points + 1e-12
+    )
+    near_stop_band = (
+        dist_stop_pct is not None and abs(float(dist_stop_pct)) <= near_points + 1e-12
+    )
+
     base: dict[str, Any] = {
         "near_buy": False,
         "near_stop": False,
@@ -488,7 +513,94 @@ def strategy_signal(
         "t1_lock": t1_lock,
         "dist_buy": round(vs_open_pts - buy_lvl, 2),
         "dist_stop": round(vs_open_pts - stop_lvl, 2),
+        "距买点价差": dist_buy_px,
+        "距买点%": dist_buy_pct,
+        "距止损价差": dist_stop_px,
+        "距止损%": dist_stop_pct,
+        "side": "sell" if holding else "buy",
+        "因子侧": "卖出" if holding else "买入",
+        "因子价": None,
+        "因子触发": "不可用",
+        "持仓状态": "待买入",
+        "hit_buy": hit_buy,
+        "hit_stop": hit_stop,
+        "actionable": False,
+        "near_pct": near_points,
     }
+
+    def _finish(out: dict[str, Any]) -> dict[str, Any]:
+        sell = out["side"] == "sell"
+        if sell:
+            out["因子侧"] = "卖出"
+            if out.get("t1_lock"):
+                out["因子价"] = None
+                out["距因子价差"] = None
+                out["距因子%"] = None
+                out["因子触发"] = "不可用"
+                out["建议挂单"] = None
+            else:
+                # 默认因子价=止损价；945/阴线收盘决策价覆盖，并重算距因子
+                if out.get("_suggest_factor_px") is not None:
+                    fp = float(out["_suggest_factor_px"])
+                    out["因子价"] = round(fp, px_digits)
+                    out["距因子价差"] = round(float(last_px) - fp, px_digits)
+                    out["距因子%"] = (
+                        round((float(last_px) / fp - 1.0) * 100.0, 2) if fp > 0 else None
+                    )
+                else:
+                    out["因子价"] = round(float(stop_px), px_digits)
+                    out["距因子价差"] = dist_stop_px
+                    out["距因子%"] = dist_stop_pct
+                out["actionable"] = True
+                alert = str(out.get("alert") or "")
+                if out.get("hit_stop") or "已触止损" in alert:
+                    out["因子触发"] = "已触发"
+                elif "945未翻红" in alert or alert == "低开945未翻红":
+                    out["因子触发"] = "已触发"
+                elif "低开" in alert or "945" in alert:
+                    out["因子触发"] = "接近"
+                elif "阴线收盘卖" in alert:
+                    out["因子触发"] = "已触发"
+                elif "阴线" in alert:
+                    out["因子触发"] = "接近"
+                elif out.get("near_stop") or "将止损" in alert:
+                    out["因子触发"] = "接近"
+                else:
+                    out["因子触发"] = "未触发"
+                # 建议挂单：仅已给出时强制对齐因子价
+                if out.get("建议挂单") is not None and out.get("因子价") is not None:
+                    out["建议挂单"] = round(float(out["因子价"]), px_digits)
+                elif out.get("建议挂单") is not None and out.get("因子价") is None:
+                    out["建议挂单"] = None
+        else:
+            out["因子侧"] = "买入"
+            out["因子价"] = round(float(buy_trigger), px_digits)
+            out["距因子价差"] = dist_buy_px
+            out["距因子%"] = dist_buy_pct
+            out["actionable"] = True
+            if out.get("hit_buy"):
+                out["因子触发"] = "已触发"
+            elif out.get("near_buy") or out.get("pending_buy"):
+                out["因子触发"] = "接近"
+            else:
+                out["因子触发"] = "未触发"
+            if out.get("建议挂单") is not None:
+                out["建议挂单"] = round(float(buy_trigger), px_digits)
+        out.pop("_suggest_factor_px", None)
+        # 持仓状态：待买入仅预警带内；待卖出仅卖出预警；否则空仓/持有
+        if sell:
+            if out.get("t1_lock"):
+                out["持仓状态"] = "持有"
+            elif bool(out.get("pending_sell")):
+                out["持仓状态"] = "待卖出"
+            else:
+                out["持仓状态"] = "持有"
+        else:
+            if bool(out.get("pending_buy")):
+                out["持仓状态"] = "待买入"
+            else:
+                out["持仓状态"] = "空仓"
+        return out
 
     if holding:
         if t1_lock:
@@ -496,10 +608,16 @@ def strategy_signal(
                 {
                     "alert": "持有·T+1",
                     "bg_class": "status-hold",
-                    "挂单说明": "今日买入，明日再判止损",
+                    "挂单说明": "",
+                    "建议挂单": None,
+                    "pending_sell": False,
+                    "near_stop": False,
+                    "actionable": False,
                 }
             )
-            return base
+            return _finish(base)
+        base["actionable"] = True
+        # 低开未翻红：盘中预警；09:45 才决策并给挂单价
         if gap945["active"] and not gap945["flipped"]:
             prev_s = pf.format(float(prev_close)) if prev_close is not None else "-"
             if gap945["should_exit"]:
@@ -509,30 +627,30 @@ def strategy_signal(
                         "pending_sell": True,
                         "alert": "低开945未翻红",
                         "bg_class": "warn-sell",
+                        "_suggest_factor_px": exit_px,
                         "建议挂单": exit_px,
                         "挂单说明": (
                             f"低开且{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
                             f"前未翻红(昨收{prev_s})，"
-                            f"按{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
-                            f"分钟收盘价全清@{pf.format(exit_px)}"
+                            f"按因子价(09:45收盘)全清@{pf.format(exit_px)}"
                         ),
                     }
                 )
-                return base
+                return _finish(base)
             base.update(
                 {
                     "pending_sell": True,
                     "alert": "低开·待945",
                     "bg_class": "warn-sell",
-                    "建议挂单": round(float(last_px), px_digits),
+                    "建议挂单": None,  # 9:45 前只预警，不做挂单决策
                     "挂单说明": (
-                        f"低开(昨收{prev_s})，"
-                        f"≥{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
-                        f"未翻红则{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}全清"
+                        f"低开未翻红(昨收{prev_s})，盘中预警；"
+                        f"{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
+                        f"仍未翻红才按09:45因子价全清"
                     ),
                 }
             )
-            return base
+            return _finish(base)
         if hit_stop:
             base.update(
                 {
@@ -543,8 +661,8 @@ def strategy_signal(
                     "挂单说明": f"条件卖@{pf.format(stop_px)}；未成交则尾盘市价",
                 }
             )
-            return base
-        if abs(vs_open_pts - stop_lvl) <= near_points + 1e-12:
+            return _finish(base)
+        if near_stop_band:
             base.update(
                 {
                     "near_stop": True,
@@ -552,20 +670,26 @@ def strategy_signal(
                     "alert": "将止损",
                     "bg_class": "warn-sell",
                     "建议挂单": stop_px,
-                    "挂单说明": f"预埋条件卖@{pf.format(stop_px)}",
+                    "挂单说明": (
+                        f"距止损因子价在{near_points:g}%内（现差{dist_stop_pct:+.2f}%），"
+                        f"预埋条件卖@{pf.format(stop_px)}"
+                    ),
                 }
             )
-            return base
+            return _finish(base)
         if is_yin(open_px, last_px):
             if is_yin_exit_window():
+                # 阴线收盘因子价=现价（收盘）
+                yin_px = round(float(last_px), px_digits)
                 base.update(
                     {
                         "pending_sell": True,
                         "alert": "阴线收盘卖",
                         "bg_class": "warn-sell",
-                        "建议挂单": round(float(last_px), px_digits),
+                        "_suggest_factor_px": yin_px,
+                        "建议挂单": yin_px,
                         "挂单说明": (
-                            f"未触止损但收阴，尾盘按现价卖@{pf.format(last_px)}"
+                            f"未触止损但收阴，尾盘按收盘因子价卖@{pf.format(yin_px)}"
                         ),
                     }
                 )
@@ -575,22 +699,24 @@ def strategy_signal(
                         "pending_sell": True,
                         "alert": "阴线·待尾盘",
                         "bg_class": "warn-sell",
-                        "建议挂单": round(float(last_px), px_digits),
+                        "建议挂单": None,  # 尾盘前只预警
                         "挂单说明": (
                             f"暂阴(现价<开盘)；≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}"
-                            f"仍收阴则按收盘卖，阳线翻红则继续持有"
+                            f"仍收阴则按收盘因子价卖，阳线翻红则继续持有"
                         ),
                     }
                 )
-            return base
+            return _finish(base)
         base.update(
             {
                 "alert": "持有",
                 "bg_class": "status-hold",
-                "挂单说明": "未触发策略，继续持有",
+                "挂单说明": "",
+                "建议挂单": None,
+                "pending_sell": False,
             }
         )
-        return base
+        return _finish(base)
 
     if hit_buy:
         base.update(
@@ -602,8 +728,8 @@ def strategy_signal(
                 "挂单说明": f"限价买@{pf.format(buy_trigger)}",
             }
         )
-        return base
-    if abs(vs_open_pts - buy_lvl) <= near_points + 1e-12:
+        return _finish(base)
+    if near_buy_band:
         base.update(
             {
                 "near_buy": True,
@@ -611,15 +737,20 @@ def strategy_signal(
                 "alert": "将买入",
                 "bg_class": "warn-buy",
                 "建议挂单": buy_trigger,
-                "挂单说明": f"预埋限价买@{pf.format(buy_trigger)}",
+                "挂单说明": (
+                    f"距买点因子价在{near_points:g}%内（现差{dist_buy_pct:+.2f}%），"
+                    f"预埋限价买@{pf.format(buy_trigger)}"
+                ),
             }
         )
-        return base
+        return _finish(base)
     base.update(
         {
             "alert": "空仓",
             "bg_class": "status-flat",
-            "挂单说明": "等待冲高买点",
+            "挂单说明": "",
+            "建议挂单": None,
+            "pending_buy": False,
         }
     )
-    return base
+    return _finish(base)

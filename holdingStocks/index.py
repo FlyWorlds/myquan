@@ -1,4 +1,4 @@
-"""持仓记录与盯盘：凯盛600552 / 楚江002171 / 国风000859 / 天通600330 / 深科技000021
+"""持仓记录与盯盘：凯盛600552 / 楚江002171 / 国风000859 / 天通600330 / 深科技000021 / 航天电子600879 / 协鑫能科002015
 
 功能：
   · 拉取当日开盘、最高、最低、现价（新浪1分钟）
@@ -48,6 +48,7 @@ from strategy.open_break import (
     EXIT_REASONS,
     GAP_DOWN_EXIT_HOUR,
     GAP_DOWN_EXIT_MINUTE,
+    NEAR_FACTOR_PCT,
     REASON_GAP945,
     REASON_STOP,
     REASON_YIN,
@@ -157,6 +158,8 @@ WATCHLIST: list[dict[str, Any]] = [
     {"code": "000859", "sina": "sz000859", "market": "深证", "name": "国风新材"},
     {"code": "600330", "sina": "sh600330", "market": "上证", "name": "天通股份"},
     {"code": "000021", "sina": "sz000021", "market": "深证", "name": "深科技"},
+    {"code": "600879", "sina": "sh600879", "market": "上证", "name": "航天电子"},
+    {"code": "002015", "sina": "sz002015", "market": "深证", "name": "协鑫能科"},
 ]
 
 # 大盘指数（新浪 spot）
@@ -299,7 +302,7 @@ def _stabilize_sell_warn(
     stop_px: float,
     vs_open_pts: float,
     stop_lvl: float,
-    near_points: float = 1.0,
+    near_points: float = NEAR_FACTOR_PCT,
     sticky: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """绿底防抖：阴线/将止损触发后，需明显翻红才取消，避免 30s 刷新闪没。"""
@@ -331,10 +334,12 @@ def _stabilize_sell_warn(
         if ("阴" in prev_alert) or ("阴线" in prev_alert):
             if open_px > 0 and last_px < open_px * 1.002:
                 keep = True
-        # 将止损：距止损阈值仍在 near+0.5 内则保持
+        # 将止损：距止损因子价仍在 near+0.5% 内则保持
         elif "将止损" in prev_alert or prev.get("near_stop"):
-            if abs(vs_open_pts - stop_lvl) <= (near_points + 0.5) + 1e-12:
-                keep = True
+            if stop_px > 0:
+                dist_pct = abs(float(last_px) / float(stop_px) - 1.0) * 100.0
+                if dist_pct <= (near_points + 0.5) + 1e-12:
+                    keep = True
         # 低开待945 / 已触止损：价格仍在止损价下方或附近则保持
         elif "止损" in prev_alert or "945" in prev_alert or "低开" in prev_alert:
             if last_px <= stop_px * 1.003:
@@ -1183,6 +1188,16 @@ def collect_rows() -> list[dict[str, Any]]:
                         "止损": lv["stop"],
                         "已触买": "是" if hit_buy else "否",
                         "已触止损": "是" if hit_stop or reason == REASON_STOP else "否",
+                        "因子侧": "买入",
+                        "因子价": lv["buy_trigger"],
+                        "因子触发": "未触发",
+                        "持仓状态": "待买入",
+                        "距因子价差": round(live_last - float(lv["buy_trigger"]), px_digits),
+                        "距因子%": round(
+                            (live_last / float(lv["buy_trigger"]) - 1.0) * 100.0, 2
+                        )
+                        if float(lv["buy_trigger"]) > 0
+                        else None,
                         "形态": bar_shape(q["open"], q["last"]),
                         "预警": reason,
                         "建议挂单": None,
@@ -1310,6 +1325,14 @@ def collect_rows() -> list[dict[str, Any]]:
                     "止损": lv["stop"],
                     "已触买": "是" if hit_buy else "否",
                     "已触止损": "是" if hit_stop else "否",
+                    "因子侧": sig.get("因子侧"),
+                    "因子价": sig.get("因子价"),
+                    "因子触发": sig.get("因子触发"),
+                    "持仓状态": sig.get("持仓状态") or (
+                        "持有" if qty > 0 else "待买入"
+                    ),
+                    "距因子价差": sig.get("距因子价差"),
+                    "距因子%": sig.get("距因子%"),
                     "形态": sig["形态"],
                     "预警": sig["alert"],
                     "建议挂单": sig["建议挂单"],
@@ -1357,6 +1380,12 @@ def collect_rows() -> list[dict[str, Any]]:
                     "止损": None,
                     "已触买": "-",
                     "已触止损": "-",
+                    "因子侧": "-",
+                    "因子价": None,
+                    "因子触发": "-",
+                    "持仓状态": "-",
+                    "距因子价差": None,
+                    "距因子%": None,
                     "形态": "-",
                     "预警": "",
                     "建议挂单": None,
@@ -1555,39 +1584,94 @@ def write_html_report(
         day_pnl = r.get("当日盈亏")
         day_pnl_pct = r.get("当日盈亏%")
         alert = r.get("预警") or ""
+        pos_status = str(r.get("持仓状态") or "")
         weight = r.get("仓位%")
         weight_txt = "" if weight is None else f" {float(weight):.1f}%"
-        status_txt = f"{alert}{weight_txt}" if alert else (weight_txt.strip() or "-")
         bg = r.get("bg_class") or ""
         suggest_px = r.get("建议挂单")
         suggest_note = r.get("挂单说明") or ""
-        alert_html = ""
-        if alert:
+        # 角标：持仓状态为主；附带策略明细（已触买/将止损/T+1 等）
+        if alert.startswith("持有"):
+            badge_txt = alert
+            badge_cls = "tag-hold"
+        elif pos_status == "持有":
+            badge_txt = "持有"
+            badge_cls = "tag-hold"
+        elif pos_status == "待卖出":
+            badge_txt = f"待卖出 · {alert}" if alert and alert != "待卖出" else "待卖出"
             badge_cls = "tag-alert"
-            if bg == "status-hold":
-                badge_cls = "tag-hold"
-            elif bg == "status-flat":
-                badge_cls = "tag-flat"
+        elif pos_status == "待买入":
+            badge_txt = f"待买入 · {alert}" if alert and alert not in ("空仓", "待买入") else "待买入"
+            badge_cls = "tag-alert"
+        elif pos_status == "空仓":
+            badge_txt = "空仓"
+            badge_cls = "tag-flat"
+        else:
+            badge_txt = alert or pos_status or "-"
+            badge_cls = "tag-alert"
+        alert_html = ""
+        if badge_txt and badge_txt != "-":
             wt_html = (
                 f'<span class="wt sensitive">{escape(weight_txt)}</span>' if weight_txt else ""
             )
             alert_html = (
                 f'<div class="alert-badge {badge_cls}">'
-                f"{escape(alert)}{wt_html}</div>"
+                f"{escape(badge_txt)}{wt_html}</div>"
             )
         pdg = int(r.get("价位小数") or 2)
         suggest_html = ""
-        # 仅策略翻转（买卖触发）时展示建议挂单；持有/空仓不占版面
-        if suggest_px is not None and bg in ("warn-buy", "warn-sell"):
+        # 仅待买入/待卖出且已有因子挂单价时展示；价格必须=因子价
+        factor_px_row = r.get("因子价")
+        if (
+            suggest_px is not None
+            and pos_status in ("待买入", "待卖出")
+            and bg in ("warn-buy", "warn-sell")
+            and factor_px_row is not None
+            and abs(float(suggest_px) - float(factor_px_row)) <= 1e-9
+        ):
             suggest_html = (
                 f'<div class="suggest-order sensitive">'
                 f'建议挂单 <strong>{_fmt_num(suggest_px, pdg)}</strong>'
                 f'{" · " + escape(suggest_note) if suggest_note else ""}'
                 f"</div>"
             )
-        th_pct = r.get("阈值%")
-        th_label = f"{float(th_pct):g}" if th_pct is not None else "2.5"
         card_cls = f"card {bg}".strip()
+        factor_side = str(r.get("因子侧") or "-")
+        factor_px = r.get("因子价")
+        factor_hit = str(r.get("因子触发") or "-")
+        dist_px = r.get("距因子价差")
+        dist_pct = r.get("距因子%")
+        hit_cls = (
+            "tag-buy"
+            if factor_side == "买入" and factor_hit in ("已触发", "接近")
+            else (
+                "tag-sell"
+                if factor_side == "卖出" and factor_hit in ("已触发", "接近")
+                else ("tag-flat" if factor_hit == "不可用" else "")
+            )
+        )
+        side_cls = (
+            "tag-buy"
+            if factor_side == "买入"
+            else ("tag-sell" if factor_side == "卖出" else "")
+        )
+        pos_cls = (
+            "tag-hold"
+            if pos_status == "持有"
+            else (
+                "tag-alert"
+                if pos_status in ("待卖出", "待买入")
+                else ("tag-flat" if pos_status == "空仓" else "")
+            )
+        )
+        dist_html = (
+            f'<div class="dist-factor"><span>距因子</span>'
+            f'<b class="{_cls_chg(dist_pct)}">'
+            f'{_s(f"{float(dist_px):+.{pdg}f} ({float(dist_pct):+.2f}%)")}'
+            f'</b></div>'
+            if dist_px is not None and dist_pct is not None
+            else '<div class="dist-factor"><span>距因子</span><b>-</b></div>'
+        )
         cards.append(
             f"""
             <article class="{card_cls}">
@@ -1600,53 +1684,22 @@ def write_html_report(
                 </div>
                 <div class="price">
                   <div class="last">{_s(_fmt_num(r.get('现价'), pdg))}</div>
-                  <div class="chg {_cls_chg(day_chg if day_chg is not None else (day_pnl if (int(r.get('持仓') or 0) > 0 or r.get('已实现')) else None))}">
-                    {_s(
-                        (
-                            f"当日涨幅 {('-' if day_chg is None else f'{float(day_chg):+.2f}%')}"
-                            + (
-                                f" · 盈亏 {float(day_pnl):+.2f}"
-                                if (int(r.get('持仓') or 0) > 0 or r.get('已实现')) and day_pnl is not None
-                                else ""
-                            )
-                        )
-                    )}
+                  <div class="chg {_cls_chg(day_chg)}">
+                    {_s('-' if day_chg is None else f'{float(day_chg):+.2f}%')}
                   </div>
                 </div>
               </header>
               {"<p class='err'>行情失败: " + escape(str(err)) + "</p>" if err else ""}
               {suggest_html}
               <div class="grid">
-                <div><span>开盘</span><b>{_s(_fmt_num(r.get('开盘'), pdg))}</b></div>
-                <div><span>最高</span><b>{_s(_fmt_num(r.get('最高'), pdg))}</b></div>
-                <div><span>最低</span><b>{_s(_fmt_num(r.get('最低'), pdg))}</b></div>
+                <div><span>持仓状态</span><b class="{pos_cls}">{escape(pos_status or '-')}</b></div>
                 <div><span>当日涨幅</span><b class="{_cls_chg(day_chg)}">{_s('-' if day_chg is None else f'{float(day_chg):+.2f}%')}</b></div>
-                <div><span>较开盘点</span><b class="{_cls_chg(vs_open)}">{_s('-' if vs_open is None else f'{float(vs_open):+.2f}')}</b></div>
+                <div><span>开盘</span><b>{_s(_fmt_num(r.get('开盘'), pdg))}</b></div>
                 <div><span>较开盘涨幅</span><b class="{_cls_chg(vs_open_pct)}">{_s('-' if vs_open_pct is None else f'{float(vs_open_pct):+.2f}%')}</b></div>
-                {('<div><span>成交价</span><b>' + _s(_fmt_num(r.get('成交价'), pdg)) + '</b></div>') if r.get('已实现') and r.get('成交价') is not None else ''}
-                <div><span>形态</span><b>{escape(str(r.get('形态') or '-'))}</b></div>
-                <div><span>买点 +{th_label}%</span><b class="{'tag-buy' if r.get('近买点') else ''}">{_s(_fmt_num(r.get('买点'), pdg))}</b></div>
-                <div><span>止损 -{th_label}%</span><b class="{'tag-sell' if r.get('近止损') else ''}">{_s(_fmt_num(r.get('止损'), pdg))}</b></div>
-                <div><span>已触买</span><b class="{'tag-yes' if r.get('已触买')=='是' else ''}">{escape(str(r.get('已触买')))}</b></div>
-                <div><span>已触止损</span><b class="{'tag-sell' if r.get('已触止损')=='是' else ''}">{escape(str(r.get('已触止损')))}</b></div>
-                {('<div><span>止损后最高</span><b>' + _s(_fmt_num(r.get('止损后最高'), pdg)) + '</b></div>') if r.get('已实现') and r.get('止损后最高') is not None else ''}
-                {('<div><span>止损后最低</span><b>' + _s(_fmt_num(r.get('止损后最低'), pdg)) + '</b></div>') if r.get('已实现') and r.get('止损后最低') is not None else ''}
-                {('<div><span>回抽%</span><b class="' + _cls_chg(r.get('回抽%')) + '">' + _s('-' if r.get('回抽%') is None else f"{float(r.get('回抽%')):+.2f}%") + '</b></div>') if r.get('已实现') and r.get('止损后最高') is not None else ''}
-                {('<div><span>踏空金额</span><b class="' + _cls_chg(r.get('踏空金额')) + '">' + _s(_fmt_num(r.get('踏空金额'))) + '</b></div>') if r.get('已实现') and r.get('踏空金额') is not None else ''}
-                <div><span>状态</span><b class="{'tag-alert' if bg in ('warn-buy','warn-sell') else ('tag-hold' if bg=='status-hold' else ('tag-flat' if bg=='status-flat' else ''))}">{escape(status_txt)}</b></div>
-                <div><span>持仓</span><b>{_s(escape(str(r.get('卖出数量') if r.get('已实现') else r.get('持仓'))) + ('(已卖)' if r.get('已实现') else ''))}</b></div>
-                {(
-                    '<div><span>可用</span><b>'
-                    + _s(escape(str(r.get('可用'))))
-                    + '</b></div>'
-                    if (not r.get('已实现')) and int(r.get('持仓') or 0) > 0 and r.get('可用') is not None
-                    else ''
-                )}
-                <div><span>成本</span><b>{_s(_fmt_num(r.get('成本'), max(3, pdg)))}</b></div>
-                <div><span>浮盈</span><b class="{_cls_chg(pnl)}">{_s(_fmt_num(pnl) + (' (已结算)' if r.get('已实现') else ''))}</b></div>
-                <div><span>浮盈%</span><b class="{_cls_chg(pnl_pct)}">{_s('-' if pnl_pct is None else f'{float(pnl_pct):+.2f}%')}</b></div>
-                <div><span>当日盈亏</span><b class="{_cls_chg(day_pnl)}">{_s(_fmt_num(day_pnl) + (' (锁定)' if r.get('已实现') else ''))}</b></div>
-                <div><span>当日盈亏%</span><b class="{_cls_chg(day_pnl_pct)}">{_s('-' if day_pnl_pct is None else f'{float(day_pnl_pct):+.2f}%')}</b></div>
+                <div><span>因子侧</span><b class="{side_cls}">{escape(factor_side)}</b></div>
+                <div><span>因子价</span><b class="{side_cls}">{_s(_fmt_num(factor_px, pdg) if factor_px is not None else '-')}</b></div>
+                <div><span>因子触发</span><b class="{hit_cls}">{escape(factor_hit)}</b></div>
+                {dist_html}
               </div>
               <footer>更新 {escape(str(r.get('更新') or '-'))}</footer>
             </article>
@@ -1959,6 +2012,14 @@ def write_html_report(
     }}
     .grid div span {{ display: block; color: var(--muted); font-size: 0.68rem; }}
     .grid div b {{ font-size: 0.86rem; font-weight: 600; }}
+    .grid .dist-factor {{
+      grid-column: 1 / -1;
+    }}
+    .grid .dist-factor b {{
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.01em;
+    }}
     .up {{ color: var(--up); }}
     .down {{ color: var(--down); }}
     .flat {{ color: var(--muted); }}
@@ -2028,15 +2089,11 @@ def write_html_report(
       {''.join(cards)}
     </div>
     <p class="note">
-      大盘：点数=最新指数点位；涨跌点数/涨跌幅相对昨收。
-      个股：默认 ±2.5%（ceil/floor，同 strategy/open_break.py）。
-      合计盈亏=总资产相对日初总资产的变动（有登记日初总资产时）；否则=未平仓浮盈+今日已结算。
-      当日盈亏=未平仓当日变动 + 今日已结算锁定；盈亏%分母优先用日初总资产。
-      仓位%=个股市值/总资产；已结算标的仓位为 0%。
-      总资产=可用现金+持仓市值；当日开仓=今日买入持仓的成本额。
-      空仓默认「空仓」，已触买/将买入 → 翻转红底并建议限价@买点；
-      有仓默认「持有」，低开≥09:45未翻红 → 按09:45分钟收盘价全清；已触止损 → 自动清仓；将止损/阴线 → 绿底预警（带防抖，刷新不闪没）；
-      未触止损但盘中收阴 →「阴线·待尾盘」；≥14:55 仍阴 → 按现价阴线结算。
+      持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入卖出预警（止损1%带/低开945预警/阴线）；否则空仓或持有。
+      低开未翻红：盘中预警，09:45 才决策并给挂单价。建议挂单严格等于因子价。
+      个股卡片：持仓状态、开盘、当日涨幅、较开盘涨幅、因子侧、因子价、因子触发、距因子。
+      因子价=买点（空仓）或止损/945/阴线决策价；|距因子%|≤1% → 将买入/将止损。
+      合计区仍显示总资产与盈亏。默认 ±2.5%（ceil/floor，同 strategy/open_break.py）。
       {watch_hint}
     </p>
   </div>
