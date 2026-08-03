@@ -1,5 +1,6 @@
-"""持仓记录与盯盘：凯盛600552 / 楚江002171 / 国风000859 / 天通600330 / 深科技000021 / 航天电子600879 / 协鑫能科002015
+"""持仓记录与盯盘：A策略夏普≥1 合格池（沪深300/中证500主板+补测，见 README）
 
+策略锁定 OpenBreak A：买点=今日开盘，前日阴/小阳可买。
 功能：
   · 拉取当日开盘、最高、最低、现价（新浪1分钟）
   · 策略规则见 myquan/strategy/open_break.py（与 kskj2 一致）
@@ -12,11 +13,11 @@
   python index.py              # 查看标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
   python index.py watch        # 长驻：每60秒更新行情，本地页倒计时自动刷新
-  python index.py buy 002171 9.05 1000
-  python index.py sell 002171 9.20 500
+  python index.py buy 600552 15.50 400
+  python index.py sell 600552 16.20 400
   python index.py set-cost 600552 15.95 --qty 400
   python index.py set-cost 600552 15.445 --qty 800 --available 600 --today-cost 15.78
-  python index.py clear 002171
+  python index.py clear 600552
   python index.py history
 """
 
@@ -153,13 +154,56 @@ def _calc_day_pnl(
     return round(day_pnl, 2), round(day_pnl / day_base * 100.0, 2), round(day_base, 2)
 
 WATCHLIST: list[dict[str, Any]] = [
-    {"code": "600552", "sina": "sh600552", "market": "上证", "name": "凯盛科技"},
-    {"code": "002171", "sina": "sz002171", "market": "深证", "name": "楚江新材"},
-    {"code": "000859", "sina": "sz000859", "market": "深证", "name": "国风新材"},
+    {"code": "001309", "sina": "sz001309", "market": "深证", "name": "德明利"},
+    {"code": "001389", "sina": "sz001389", "market": "深证", "name": "广合科技"},
+    {"code": "600660", "sina": "sh600660", "market": "上证", "name": "福耀玻璃"},
+    {"code": "002335", "sina": "sz002335", "market": "深证", "name": "科华数据"},
     {"code": "600330", "sina": "sh600330", "market": "上证", "name": "天通股份"},
-    {"code": "000021", "sina": "sz000021", "market": "深证", "name": "深科技"},
-    {"code": "600879", "sina": "sh600879", "market": "上证", "name": "航天电子"},
+    {"code": "605117", "sina": "sh605117", "market": "上证", "name": "德业股份"},
+    {"code": "002008", "sina": "sz002008", "market": "深证", "name": "大族激光"},
+    {"code": "002837", "sina": "sz002837", "market": "深证", "name": "英维克"},
+    {"code": "600105", "sina": "sh600105", "market": "上证", "name": "永鼎股份"},
+    {"code": "002812", "sina": "sz002812", "market": "深证", "name": "恩捷股份"},
+    {"code": "000988", "sina": "sz000988", "market": "深证", "name": "华工科技"},
     {"code": "002015", "sina": "sz002015", "market": "深证", "name": "协鑫能科"},
+    {"code": "600862", "sina": "sh600862", "market": "上证", "name": "中航高科"},
+    {"code": "600111", "sina": "sh600111", "market": "上证", "name": "北方稀土"},
+    {"code": "603119", "sina": "sh603119", "market": "上证", "name": "浙江荣泰"},
+    {"code": "600988", "sina": "sh600988", "market": "上证", "name": "赤峰黄金"},
+    {"code": "601869", "sina": "sh601869", "market": "上证", "name": "长飞光纤"},
+    {"code": "002460", "sina": "sz002460", "market": "深证", "name": "赣锋锂业"},
+    {"code": "601689", "sina": "sh601689", "market": "上证", "name": "拓普集团"},
+    {"code": "000737", "sina": "sz000737", "market": "深证", "name": "北方铜业"},
+    {"code": "002466", "sina": "sz002466", "market": "深证", "name": "天齐锂业"},
+    {"code": "002436", "sina": "sz002436", "market": "深证", "name": "兴森科技"},
+    {"code": "000591", "sina": "sz000591", "market": "深证", "name": "太阳能"},
+    {"code": "603256", "sina": "sh603256", "market": "上证", "name": "宏和科技"},
+    {"code": "603019", "sina": "sh603019", "market": "上证", "name": "中科曙光"},
+    {"code": "002261", "sina": "sz002261", "market": "深证", "name": "拓维信息"},
+    {"code": "002851", "sina": "sz002851", "market": "深证", "name": "麦格米特"},
+    {"code": "603986", "sina": "sh603986", "market": "上证", "name": "兆易创新"},
+    {"code": "000021", "sina": "sz000021", "market": "深证", "name": "深科技"},
+    {"code": "603920", "sina": "sh603920", "market": "上证", "name": "世运电路"},
+    {"code": "000733", "sina": "sz000733", "market": "深证", "name": "振华科技"},
+    {"code": "002603", "sina": "sz002603", "market": "深证", "name": "以岭药业"},
+    {"code": "002241", "sina": "sz002241", "market": "深证", "name": "歌尔股份"},
+    {"code": "002625", "sina": "sz002625", "market": "深证", "name": "光启技术"},
+    {"code": "000997", "sina": "sz000997", "market": "深证", "name": "新大陆"},
+    {"code": "600552", "sina": "sh600552", "market": "上证", "name": "凯盛科技"},
+    {"code": "003022", "sina": "sz003022", "market": "深证", "name": "联泓新科"},
+    {"code": "600584", "sina": "sh600584", "market": "上证", "name": "长电科技"},
+    {"code": "002126", "sina": "sz002126", "market": "深证", "name": "银轮股份"},
+    {"code": "600132", "sina": "sh600132", "market": "上证", "name": "重庆啤酒"},
+    {"code": "600879", "sina": "sh600879", "market": "上证", "name": "航天电子"},
+    {"code": "002155", "sina": "sz002155", "market": "深证", "name": "湖南黄金"},
+    {"code": "600089", "sina": "sh600089", "market": "上证", "name": "特变电工"},
+    {"code": "601888", "sina": "sh601888", "market": "上证", "name": "中国中免"},
+    {"code": "600176", "sina": "sh600176", "market": "上证", "name": "中国巨石"},
+    {"code": "600141", "sina": "sh600141", "market": "上证", "name": "兴发集团"},
+    {"code": "001696", "sina": "sz001696", "market": "深证", "name": "宗申动力"},
+    {"code": "002432", "sina": "sz002432", "market": "深证", "name": "九安医疗"},
+    {"code": "002916", "sina": "sz002916", "market": "深证", "name": "深南电路"},
+    {"code": "002402", "sina": "sz002402", "market": "深证", "name": "和而泰"},
 ]
 
 # 大盘指数（新浪 spot）

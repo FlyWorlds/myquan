@@ -46,6 +46,10 @@ class OpenBreak3Strategy(Strategy):
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT
     tick: float = TICK_SIZE
     t0: bool = False
+    # today_open | prev_open_on_small_yang
+    entry_ref: str = "today_open"
+    # yin_or_small_yang | yin_only（小阳次日不买）
+    prev_entry_mode: str = "yin_or_small_yang"
 
     def on_start(self) -> None:
         self.subscribe(self.symbol)
@@ -58,10 +62,21 @@ class OpenBreak3Strategy(Strategy):
         self.prev2_close: float | None = None
         self.buy_day: str | None = None
         n_gap = len(self.gap_down_945_map)
+        entry_txt = (
+            "买点=前日小阳开盘×(1+pct)"
+            if self.entry_ref == "prev_open_on_small_yang"
+            else "买点=今日开盘×(1+pct)"
+        )
+        prev_txt = (
+            "前日仅阴线（小阳次日不买）"
+            if self.prev_entry_mode == "yin_only"
+            else f"前日须阴线或小阳(<{self.prev_small_yang_pct*100:.1f}%)"
+        )
         self.log(
             f"{self.symbol_name}({self.symbol}) 开盘±{self.entry_pct*100:.1f}% "
             f"(+买/-止损，低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红全清，阴线收盘出) | "
-            f"前日须阴线或小阳(<{self.prev_small_yang_pct*100:.1f}%)，禁前面双阳 | "
+            f"{prev_txt}，禁前面双阳 | "
+            f"{entry_txt} | "
             f"低开规则日历日={n_gap} | "
             f"佣金万0.854 滑点{self.slippage_value*100:.1f}% | "
             f"{self.start_date}~{self.end_date}"
@@ -124,7 +139,23 @@ class OpenBreak3Strategy(Strategy):
         bought_today = False
         try:
             pos = self._sync_position_state()
-            entry_px = entry_trigger_price(o, entry_pct=self.entry_pct, tick=self.tick)
+            # 买点基准：默认今日开盘；优化版在前日小阳时改用前日开盘
+            entry_base = o
+            if (
+                self.entry_ref == "prev_open_on_small_yang"
+                and self.prev_open is not None
+                and self.prev_close is not None
+                and is_yang(self.prev_open, self.prev_close)
+                and prev_day_allows_entry(
+                    self.prev_open,
+                    self.prev_close,
+                    prev_small_yang_pct=self.prev_small_yang_pct,
+                )
+            ):
+                entry_base = float(self.prev_open)
+            entry_px = entry_trigger_price(
+                entry_base, entry_pct=self.entry_pct, tick=self.tick
+            )
             stop_px = stop_trigger_price(o, stop_pct=self.stop_pct, tick=self.tick)
             hit_entry = h + 1e-12 >= entry_px
             hit_stop = low <= stop_px + 1e-12
@@ -138,6 +169,7 @@ class OpenBreak3Strategy(Strategy):
                         self.prev_open,
                         self.prev_close,
                         prev_small_yang_pct=self.prev_small_yang_pct,
+                        prev_entry_mode=self.prev_entry_mode,
                     )
                     and not has_double_yang_before(
                         self.prev2_open,
@@ -165,11 +197,14 @@ class OpenBreak3Strategy(Strategy):
                         self.prev_open,
                         self.prev_close,
                         prev_small_yang_pct=self.prev_small_yang_pct,
+                        prev_entry_mode=self.prev_entry_mode,
                     ):
-                        self.log(
-                            f"{day} 触及买点但前日不符(须阴线或小阳"
-                            f"<{self.prev_small_yang_pct*100:.1f}%) skip"
+                        need = (
+                            "须阴线(小阳次日不买)"
+                            if self.prev_entry_mode == "yin_only"
+                            else f"须阴线或小阳<{self.prev_small_yang_pct*100:.1f}%"
                         )
+                        self.log(f"{day} 触及买点但前日不符({need}) skip")
                     elif has_double_yang_before(
                         self.prev2_open,
                         self.prev2_close,

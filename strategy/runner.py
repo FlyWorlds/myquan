@@ -64,6 +64,10 @@ def apply_strategy_config(
     OpenBreak3Strategy.prev_small_yang_pct = cfg.threshold_pct
     OpenBreak3Strategy.tick = cfg.tick
     OpenBreak3Strategy.t0 = cfg.t0
+    OpenBreak3Strategy.entry_ref = getattr(cfg, "entry_ref", "today_open") or "today_open"
+    OpenBreak3Strategy.prev_entry_mode = (
+        getattr(cfg, "prev_entry_mode", "yin_or_small_yang") or "yin_or_small_yang"
+    )
 
 
 def run_open_break_backtest(

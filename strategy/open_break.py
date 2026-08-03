@@ -145,11 +145,15 @@ def prev_day_allows_entry(
     prev_close: float,
     *,
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT,
+    # yin_or_small_yang=阴线或小阳可买；yin_only=仅阴线，小阳次日不买
+    prev_entry_mode: str = "yin_or_small_yang",
 ) -> bool:
     if prev_open <= 0:
         return False
     if prev_close <= prev_open:
         return True
+    if prev_entry_mode == "yin_only":
+        return False
     limit_px = prev_open * (1.0 + prev_small_yang_pct)
     return float(prev_close) < limit_px - 1e-8
 

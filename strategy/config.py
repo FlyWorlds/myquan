@@ -29,6 +29,10 @@ class BacktestConfig:
     gap945_use_proxy: bool = False
     gap945_proxy: str = "open"  # open | mid
     gap945_exit_mode: str = GAP945_EXIT_MODE
+    # 买点基准：today_open=今日开盘；prev_open_on_small_yang=前日小阳时用前日开盘
+    entry_ref: str = "today_open"
+    # 前日过滤：yin_or_small_yang=阴线或小阳；yin_only=仅阴线（小阳次日不买）
+    prev_entry_mode: str = "yin_or_small_yang"
     min1_cache: Path | None = None
     report_path: Path | None = None
 
@@ -39,8 +43,14 @@ class BacktestConfig:
     def report_title_suffix(self) -> str:
         mode = "945未翻红全清" if self.enable_gap945 else "无945"
         t1 = " T+1" if not self.t0 else ""
+        entry = (
+            "买点=前日小阳开盘"
+            if self.entry_ref == "prev_open_on_small_yang"
+            else "买点=今日开盘"
+        )
+        prev = "仅阴后买" if self.prev_entry_mode == "yin_only" else "阴/小阳后买"
         return (
-            f"开盘±{self.threshold_pct * 100:.1f}%({mode}/阳持/阴出) "
+            f"开盘±{self.threshold_pct * 100:.1f}%({mode}/阳持/阴出/{entry}/{prev}) "
             f"滑点{self.slippage_value * 100:.1f}点{t1} "
             f"({self.start_date}~{self.end_date})"
         )
@@ -63,6 +73,17 @@ HANGTIANDIANZI = BacktestConfig(
     symbol="sh600879",
     symbol_name="航天电子",
     em_symbol="600879",
+    threshold_pct=0.025,
+    start_date="20200101",
+    enable_gap945=True,
+    gap945_use_proxy=True,
+    gap945_proxy="open",
+)
+
+XIEXINNENGKE = BacktestConfig(
+    symbol="sz002015",
+    symbol_name="协鑫能科",
+    em_symbol="002015",
     threshold_pct=0.025,
     start_date="20200101",
     enable_gap945=True,

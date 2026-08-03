@@ -1,9 +1,499 @@
 {
-  "updated_at": "2026-08-03 11:54:56",
+  "updated_at": "2026-08-03 12:47:39",
   "positions": {
+    "001309": {
+      "name": "德明利",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "001389": {
+      "name": "广合科技",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600660": {
+      "name": "福耀玻璃",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002335": {
+      "name": "科华数据",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600330": {
+      "name": "天通股份",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "605117": {
+      "name": "德业股份",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002008": {
+      "name": "大族激光",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002837": {
+      "name": "英维克",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600105": {
+      "name": "永鼎股份",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002812": {
+      "name": "恩捷股份",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "000988": {
+      "name": "华工科技",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002015": {
+      "name": "协鑫能科",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600862": {
+      "name": "中航高科",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600111": {
+      "name": "北方稀土",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "603119": {
+      "name": "浙江荣泰",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600988": {
+      "name": "赤峰黄金",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "601869": {
+      "name": "长飞光纤",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002460": {
+      "name": "赣锋锂业",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "601689": {
+      "name": "拓普集团",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "000737": {
+      "name": "北方铜业",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002466": {
+      "name": "天齐锂业",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002436": {
+      "name": "兴森科技",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "000591": {
+      "name": "太阳能",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "603256": {
+      "name": "宏和科技",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "603019": {
+      "name": "中科曙光",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002261": {
+      "name": "拓维信息",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002851": {
+      "name": "麦格米特",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "603986": {
+      "name": "兆易创新",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "000021": {
+      "name": "深科技",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "603920": {
+      "name": "世运电路",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "000733": {
+      "name": "振华科技",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002603": {
+      "name": "以岭药业",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002241": {
+      "name": "歌尔股份",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002625": {
+      "name": "光启技术",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "000997": {
+      "name": "新大陆",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
     "600552": {
       "name": "凯盛科技",
       "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "003022": {
+      "name": "联泓新科",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600584": {
+      "name": "长电科技",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002126": {
+      "name": "银轮股份",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600132": {
+      "name": "重庆啤酒",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600879": {
+      "name": "航天电子",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002155": {
+      "name": "湖南黄金",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600089": {
+      "name": "特变电工",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "601888": {
+      "name": "中国中免",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600176": {
+      "name": "中国巨石",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "600141": {
+      "name": "兴发集团",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "001696": {
+      "name": "宗申动力",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002432": {
+      "name": "九安医疗",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002916": {
+      "name": "深南电路",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002402": {
+      "name": "和而泰",
+      "market": "深证",
       "qty": 0,
       "available": null,
       "cost": null,
@@ -30,46 +520,6 @@
       "today_cost": null,
       "buy_time": null,
       "note": ""
-    },
-    "600330": {
-      "name": "天通股份",
-      "market": "上证",
-      "qty": 0,
-      "available": null,
-      "cost": null,
-      "today_cost": null,
-      "buy_time": null,
-      "note": ""
-    },
-    "000021": {
-      "name": "深科技",
-      "market": "深证",
-      "qty": 0,
-      "available": null,
-      "cost": null,
-      "today_cost": null,
-      "buy_time": null,
-      "note": ""
-    },
-    "600879": {
-      "name": "航天电子",
-      "market": "上证",
-      "qty": 0,
-      "available": null,
-      "cost": null,
-      "today_cost": null,
-      "buy_time": null,
-      "note": ""
-    },
-    "002015": {
-      "name": "协鑫能科",
-      "market": "深证",
-      "qty": 0,
-      "available": null,
-      "cost": null,
-      "today_cost": null,
-      "buy_time": null,
-      "note": ""
     }
   },
   "realized_today": {},
@@ -80,15 +530,19 @@
   "last_session": null,
   "alert_sticky": {},
   "strategy": {
-    "600552": {
+    "001309": {
       "holding": false,
       "buy_time": null
     },
-    "002171": {
+    "001389": {
       "holding": false,
       "buy_time": null
     },
-    "000859": {
+    "600660": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002335": {
       "holding": false,
       "buy_time": null
     },
@@ -96,7 +550,143 @@
       "holding": false,
       "buy_time": null
     },
+    "605117": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002008": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002837": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600105": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002812": {
+      "holding": false,
+      "buy_time": null
+    },
+    "000988": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002015": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600862": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600111": {
+      "holding": false,
+      "buy_time": null
+    },
+    "603119": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600988": {
+      "holding": false,
+      "buy_time": null
+    },
+    "601869": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002460": {
+      "holding": false,
+      "buy_time": null
+    },
+    "601689": {
+      "holding": false,
+      "buy_time": null
+    },
+    "000737": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002466": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002436": {
+      "holding": false,
+      "buy_time": null
+    },
+    "000591": {
+      "holding": false,
+      "buy_time": null
+    },
+    "603256": {
+      "holding": false,
+      "buy_time": null
+    },
+    "603019": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002261": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002851": {
+      "holding": false,
+      "buy_time": null
+    },
+    "603986": {
+      "holding": false,
+      "buy_time": null
+    },
     "000021": {
+      "holding": false,
+      "buy_time": null
+    },
+    "603920": {
+      "holding": false,
+      "buy_time": null
+    },
+    "000733": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002603": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002241": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002625": {
+      "holding": false,
+      "buy_time": null
+    },
+    "000997": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600552": {
+      "holding": false,
+      "buy_time": null
+    },
+    "003022": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600584": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002126": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600132": {
       "holding": false,
       "buy_time": null
     },
@@ -104,7 +694,39 @@
       "holding": false,
       "buy_time": null
     },
-    "002015": {
+    "002155": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600089": {
+      "holding": false,
+      "buy_time": null
+    },
+    "601888": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600176": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600141": {
+      "holding": false,
+      "buy_time": null
+    },
+    "001696": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002432": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002916": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002402": {
       "holding": false,
       "buy_time": null
     }

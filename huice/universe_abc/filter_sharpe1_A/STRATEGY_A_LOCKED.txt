@@ -1,0 +1,5 @@
+策略锁定: A (entry_ref=today_open, prev_entry_mode=yin_or_small_yang)
+筛选: A夏普 >= 1.0
+沪深300+中证500主板入选: 47 只 -> A_sharpe_ge_1.csv
+含盯盘补测合并: 50 只 -> A_sharpe_ge_1_plus_watch.csv
+盯盘池已剔除楚江002171、国风000859
