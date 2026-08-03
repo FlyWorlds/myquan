@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-31 15:08:02",
+  "updated_at": "2026-08-03 11:14:15",
   "positions": {
     "600552": {
       "name": "凯盛科技",
@@ -50,6 +50,26 @@
       "today_cost": null,
       "buy_time": null,
       "note": ""
+    },
+    "600879": {
+      "name": "航天电子",
+      "market": "上证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
+    },
+    "002015": {
+      "name": "协鑫能科",
+      "market": "深证",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
+      "note": ""
     }
   },
   "realized_today": {},
@@ -58,5 +78,35 @@
   "account_total_open": null,
   "account_total_open_session": null,
   "last_session": null,
-  "alert_sticky": {}
+  "alert_sticky": {},
+  "strategy": {
+    "600552": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002171": {
+      "holding": false,
+      "buy_time": null
+    },
+    "000859": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600330": {
+      "holding": false,
+      "buy_time": null
+    },
+    "000021": {
+      "holding": false,
+      "buy_time": null
+    },
+    "600879": {
+      "holding": false,
+      "buy_time": null
+    },
+    "002015": {
+      "holding": false,
+      "buy_time": null
+    }
+  }
 }
