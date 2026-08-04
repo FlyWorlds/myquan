@@ -18,12 +18,8 @@ BASE_CFG = BacktestConfig(
     em_symbol="600330",
     threshold_pct=0.025,
     start_date="20200101",
-    enable_gap945=True,
-    gap945_use_proxy=True,
-    gap945_proxy="open",
 )
 
-MIN1_CACHE = Path(__file__).with_name("sh600330_1m_qfq.parquet")
 DEFAULT_THRESHOLD = 2.5
 
 
@@ -33,13 +29,11 @@ def _artifact_paths(threshold: float) -> tuple[Path, Path]:
     return d / f"{stem}_report.html", d / f"{stem}_monthly.csv"
 
 
-def _build_cfg(*, threshold: float, gap945_mode: str) -> BacktestConfig:
+def _build_cfg(*, threshold: float) -> BacktestConfig:
     report_path, _ = _artifact_paths(threshold)
     return replace(
         BASE_CFG,
         threshold_pct=threshold / 100.0,
-        gap945_exit_mode=gap945_mode,
-        min1_cache=MIN1_CACHE,
         report_path=report_path,
     )
 
@@ -48,9 +42,8 @@ def main(
     *,
     threshold: float = DEFAULT_THRESHOLD,
     show_report: bool = True,
-    gap945_mode: str = BASE_CFG.gap945_exit_mode,
 ) -> None:
-    cfg = _build_cfg(threshold=threshold, gap945_mode=gap945_mode)
+    cfg = _build_cfg(threshold=threshold)
     _, monthly_csv = _artifact_paths(threshold)
     result, daily = run_open_break(cfg, show_report=show_report)
     df = monthly_returns_df(result, daily, initial_cash=cfg.initial_cash)
@@ -70,12 +63,6 @@ if __name__ == "__main__":
         default=DEFAULT_THRESHOLD,
         help="开盘±阈值 %%（默认 2.5）",
     )
-    parser.add_argument(
-        "--gap945-mode",
-        choices=("1m", "5m"),
-        default=BASE_CFG.gap945_exit_mode,
-        help="945 卖价：1m 或 5m",
-    )
     args = parser.parse_args()
     if args.rules:
         print(STRATEGY_RULES.strip())
@@ -83,5 +70,4 @@ if __name__ == "__main__":
     main(
         threshold=args.threshold,
         show_report=not args.no_open,
-        gap945_mode=args.gap945_mode,
     )

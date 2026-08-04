@@ -12,45 +12,27 @@ import requests
 def fetch_daily(symbol: str, start: str, end: str) -> pd.DataFrame:
     raw: pd.DataFrame | None = None
     sym = str(symbol or "").strip().lower()
-    is_hk = sym.startswith("hk") or (sym.isdigit() and len(sym) in (4, 5))
+    if not sym.startswith(("sh", "sz")):
+        raise ValueError(f"仅支持 A 股 sh/sz 标的: {symbol}")
 
-    if is_hk:
-        hk_code = sym[2:] if sym.startswith("hk") else sym
-        hk_code = hk_code.zfill(5)
+    try:
+        raw = ak.stock_zh_a_daily(
+            symbol=symbol, start_date=start, end_date=end, adjust="qfq"
+        )
+    except Exception:
+        raw = None
+    if raw is None or raw.empty:
+        code = symbol[2:]
         try:
-            raw = ak.stock_hk_daily(symbol=hk_code, adjust="qfq")
-        except Exception:
-            raw = None
-        if raw is None or raw.empty:
-            try:
-                raw = ak.stock_hk_hist(
-                    symbol=hk_code,
-                    period="daily",
-                    start_date=start,
-                    end_date=end,
-                    adjust="qfq",
-                )
-            except Exception:
-                raw = None
-    else:
-        try:
-            raw = ak.stock_zh_a_daily(
-                symbol=symbol, start_date=start, end_date=end, adjust="qfq"
+            raw = ak.fund_etf_hist_em(
+                symbol=code,
+                period="daily",
+                start_date=start,
+                end_date=end,
+                adjust="qfq",
             )
         except Exception:
             raw = None
-        if raw is None or raw.empty:
-            code = symbol[2:] if len(symbol) > 2 and symbol[:2] in ("sh", "sz") else symbol
-            try:
-                raw = ak.fund_etf_hist_em(
-                    symbol=code,
-                    period="daily",
-                    start_date=start,
-                    end_date=end,
-                    adjust="qfq",
-                )
-            except Exception:
-                raw = None
 
     if raw is None or raw.empty:
         raise RuntimeError(f"未获取到日线: {symbol} {start}~{end}")
@@ -68,7 +50,7 @@ def fetch_daily(symbol: str, start: str, end: str) -> pd.DataFrame:
     if "date" not in df.columns and "日期" in df.columns:
         df = df.rename(columns={"日期": "date"})
     df["date"] = pd.to_datetime(df["date"])
-    # 按回测区间裁剪（港股 daily 常返回全历史）
+    # 按回测区间裁剪。
     start_ts = pd.Timestamp(start)
     end_ts = pd.Timestamp(end) + pd.Timedelta(days=1)
     df = df[(df["date"] >= start_ts) & (df["date"] < end_ts)]
@@ -80,12 +62,9 @@ def fetch_daily(symbol: str, start: str, end: str) -> pd.DataFrame:
     df = df.dropna(subset=["open", "high", "low", "close"]).sort_values("date")
     if df.empty:
         raise RuntimeError(f"日线裁剪后为空: {symbol} {start}~{end}")
-    out_symbol = f"hk{hk_code}" if is_hk else symbol
-    df["symbol"] = out_symbol
-    # 港股收盘约 16:00；A 股 15:00
-    close_hour = 16 if is_hk else 15
-    df["date"] = df["date"].dt.normalize() + pd.Timedelta(hours=close_hour)
-    tz = "Asia/Hong_Kong" if is_hk else "Asia/Shanghai"
+    df["symbol"] = symbol
+    df["date"] = df["date"].dt.normalize() + pd.Timedelta(hours=15)
+    tz = "Asia/Shanghai"
     if df["date"].dt.tz is None:
         df["date"] = df["date"].dt.tz_localize(tz)
     else:

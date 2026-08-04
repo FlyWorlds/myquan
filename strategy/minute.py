@@ -322,6 +322,48 @@ def fetch_minute_1m(
     )
 
 
+def fetch_minute_5m(
+    *,
+    sina_symbol: str,
+    em_symbol: str,
+    cache_path: Path,
+    refresh: bool = False,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> pd.DataFrame:
+    """拉取 5 分钟线并写缓存（baostock 长历史 + 东财/新浪近期）。"""
+    return fetch_minute_bars(
+        period="5",
+        sina_symbol=sina_symbol,
+        em_symbol=em_symbol,
+        cache_path=cache_path,
+        refresh=refresh,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+def fetch_minute_30m(
+    *,
+    sina_symbol: str,
+    em_symbol: str,
+    cache_path: Path,
+    refresh: bool = False,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> pd.DataFrame:
+    """拉取 30 分钟线并写缓存（baostock 长历史 + 东财/新浪近期）。"""
+    return fetch_minute_bars(
+        period="30",
+        sina_symbol=sina_symbol,
+        em_symbol=em_symbol,
+        cache_path=cache_path,
+        refresh=refresh,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
 def fetch_minute_bars(
     *,
     period: str = "1",
@@ -337,6 +379,7 @@ def fetch_minute_bars(
 
     period='1'：东财/新浪近几日。
     period='5' 等：优先 baostock 拉长历史（量额齐全），再合并东财/新浪近期。
+    若本地缓存已覆盖请求区间，跳过 baostock 全量重拉（仅补近期）。
     """
     del lookback_days
     period = str(period).strip()
@@ -348,12 +391,25 @@ def fetch_minute_bars(
         except Exception:
             cached = pd.DataFrame()
 
+    cache_covers = False
+    if not cached.empty and start_date and end_date:
+        dmin = cached["ts"].min()
+        dmax = cached["ts"].max()
+        start_ts = pd.Timestamp(start_date).tz_localize("Asia/Shanghai")
+        end_ts = pd.Timestamp(end_date).tz_localize("Asia/Shanghai") + pd.Timedelta(
+            hours=23, minutes=59
+        )
+        # 起点不晚于请求起点后 5 日；终点不早于请求终点前 5 日
+        cache_covers = (dmin <= start_ts + pd.Timedelta(days=5)) and (
+            dmax >= end_ts - pd.Timedelta(days=5)
+        )
+
     parts: list[pd.DataFrame] = []
     if not cached.empty:
         parts.append(cached)
 
-    # 长历史：baostock（5/15/30/60）
-    if period in ("5", "15", "30", "60"):
+    # 长历史：仅在缓存不足或强制刷新时走 baostock
+    if period in ("5", "15", "30", "60") and (refresh or not cache_covers):
         try:
             bs_df = pull_baostock_min(
                 period=period,
@@ -368,16 +424,19 @@ def fetch_minute_bars(
         except Exception:
             pass
 
-    fresh = pull_akshare_min(
-        period=period,
-        em_symbol=em_symbol or _em_code_from_sina(sina_symbol),
-        sina_symbol=sina_symbol,
-        adjust="qfq",
-        start_date=start_date,
-        end_date=end_date,
-    )
-    if not fresh.empty:
-        parts.append(fresh)
+    # 近期补充（1m 总是拉；5m 在缓存将尽或强制刷新时拉）
+    need_fresh = refresh or period == "1" or not cache_covers
+    if need_fresh:
+        fresh = pull_akshare_min(
+            period=period,
+            em_symbol=em_symbol or _em_code_from_sina(sina_symbol),
+            sina_symbol=sina_symbol,
+            adjust="qfq",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if not fresh.empty:
+            parts.append(fresh)
 
     if not parts:
         return pd.DataFrame()

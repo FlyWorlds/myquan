@@ -40,9 +40,9 @@ VARIANTS = [
 ]
 
 SYMBOLS = [
-    (KAICHENG, "sh600552_1m_qfq.parquet"),
-    (HANGTIANDIANZI, "sh600879_1m_qfq.parquet"),
-    (XIEXINNENGKE, "sz002015_1m_qfq.parquet"),
+    KAICHENG,
+    HANGTIANDIANZI,
+    XIEXINNENGKE,
 ]
 
 METRIC_KEYS = [
@@ -63,13 +63,12 @@ def _get(m, k: str) -> float | None:
     return float(m.loc[k].iloc[0])
 
 
-def run_one(base, cache: Path, variant: dict) -> dict[str, float | None]:
+def run_one(base, variant: dict) -> dict[str, float | None]:
     report = ROOT / f"{base.symbol_name}{variant['suffix']}_report.html"
     cfg = replace(
         base,
         entry_ref=variant["entry_ref"],
         prev_entry_mode=variant["prev_entry_mode"],
-        min1_cache=cache,
         report_path=report,
     )
     result, _ = run_open_break(cfg, show_report=False, verbose=False)
@@ -102,14 +101,13 @@ def _winner(vals: dict[str, float], *, higher_better: bool, is_dd: bool = False)
 
 def main() -> None:
     all_rows: dict[str, dict[str, dict[str, float | None]]] = {}
-    for base, cache_name in SYMBOLS:
-        cache = ROOT / cache_name
+    for base in SYMBOLS:
         print("=" * 72)
         print(f"{base.symbol_name} ({base.em_symbol})")
         print("=" * 72)
         all_rows[base.symbol_name] = {}
         for v in VARIANTS:
-            all_rows[base.symbol_name][v["key"]] = run_one(base, cache, v)
+            all_rows[base.symbol_name][v["key"]] = run_one(base, v)
 
     rows = [
         ("累计收益%", "total_return_pct", True, False),

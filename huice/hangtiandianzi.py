@@ -13,7 +13,6 @@ from strategy import HANGTIANDIANZI, STRATEGY_RULES, run_open_break
 
 CFG = replace(
     HANGTIANDIANZI,
-    min1_cache=Path(__file__).with_name(f"{HANGTIANDIANZI.symbol}_1m_qfq.parquet"),
     report_path=Path(__file__).with_name(f"{HANGTIANDIANZI.symbol_name}_report.html"),
 )
 
@@ -21,10 +20,8 @@ CFG = replace(
 def main(
     *,
     show_report: bool = True,
-    gap945_mode: str = HANGTIANDIANZI.gap945_exit_mode,
 ) -> None:
-    cfg = replace(CFG, gap945_exit_mode=gap945_mode)
-    run_open_break(cfg, show_report=show_report)
+    run_open_break(CFG, show_report=show_report)
 
 
 if __name__ == "__main__":
@@ -33,14 +30,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--no-open", action="store_true", help="不自动打开 HTML")
     parser.add_argument("--rules", action="store_true", help="打印策略规则")
-    parser.add_argument(
-        "--gap945-mode",
-        choices=("1m", "5m"),
-        default=CFG.gap945_exit_mode,
-        help="945 卖价：1m 或 5m",
-    )
     args = parser.parse_args()
     if args.rules:
         print(STRATEGY_RULES.strip())
         raise SystemExit(0)
-    main(show_report=not args.no_open, gap945_mode=args.gap945_mode)
+    main(show_report=not args.no_open)

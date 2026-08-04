@@ -2,13 +2,13 @@
 
 策略锁定 · 因子1（唯一在用）：
   · 买：high≥ceil(open×1.025)；前日阴/小阳；禁前面双阳；T+1
-  · 卖（全清）：①低开945未翻红 ②止损−2.5% ③阴线收盘（≥14:55）
-  · 禁用：软减半 / 回撤仓位 / 因子2 / 因子3（见 strategy/README.md）
+  · 卖（全清）：仅止损−2.5%
+  · 卖出：仅开盘 −2.5% 止损全清
 
 功能：
   · 拉取当日开盘、最高、最低、现价（新浪1分钟）
   · 规则与回测共用 strategy/open_break.py
-  · 有仓：945/止损/阴线自动结算（全清）；空仓：已触买/将买入建议限价
+  · 有仓：仅止损自动结算（全清）；空仓：已触买/将买入建议限价
   · 本地 JSON 记录持仓；T+1 买入日不可卖
 
 用法：
@@ -49,39 +49,23 @@ if str(_MYQUAN_ROOT) not in sys.path:
 from strategy.minute import pull_akshare_1m
 from strategy.open_break import (
     DEFAULT_PCT,
-    ENABLE_DD_SIZING,
-    ENABLE_SOFT_HALF_EXIT,
     EXIT_REASONS,
-    GAP945_EXIT_MODE,
-    GAP_DOWN_EXIT_HOUR,
-    GAP_DOWN_EXIT_MINUTE,
     LOT_SIZE,
     NEAR_FACTOR_PCT,
-    REASON_GAP945,
     REASON_STOP,
-    REASON_YIN,
     TICK_SIZE,
-    YIN_EXIT_HOUR,
-    YIN_EXIT_MINUTE,
     bar_shape,
     entry_filters_ok,
-    eval_gap_down_945,
     format_trigger_md,
     is_t1_buy_day,
-    is_yin,
-    is_yin_exit_window,
     replay_last_factor_triggers,
     strategy_levels,
     strategy_signal,
 )
 from strategy.data import fetch_daily
 
-# 盯盘与回测共用：仅因子1（全清）；禁止软减半/仓位管理/因子2·3
+# 盯盘与回测共用：仅保留开盘−2.5%止损全清
 STRATEGY_NAME = "因子1"
-if ENABLE_SOFT_HALF_EXIT or ENABLE_DD_SIZING:
-    raise RuntimeError(
-        "盯盘必须与因子1同步：ENABLE_SOFT_HALF_EXIT / ENABLE_DD_SIZING 须为 False"
-    )
 
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
@@ -416,7 +400,7 @@ def _stabilize_sell_warn(
     near_points: float = NEAR_FACTOR_PCT,
     sticky: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """绿底防抖：阴线/将止损触发后，需明显翻红才取消，避免 30s 刷新闪没。"""
+    """绿底防抖：止损预警短时波动时避免30秒刷新闪没。"""
     sticky = sticky if sticky is not None else _alert_sticky_map()
     prev = sticky.get(code) if isinstance(sticky.get(code), dict) else None
     if prev and str(prev.get("session") or "") != session:
@@ -437,22 +421,18 @@ def _stabilize_sell_warn(
         }
         return sig
 
-    # 当前已非卖出预警：若仍处于阴线/近止损缓冲带，则保持上一帧绿底
+    # 当前已非卖出预警：若仍处于近止损缓冲带，则保持上一帧绿底
     if prev and prev.get("bg_class") == "warn-sell":
         keep = False
         prev_alert = str(prev.get("alert") or "")
-        # 阴线类：现价仍低于开盘 ×1.002（约 0.2% 缓冲）则保持
-        if ("阴" in prev_alert) or ("阴线" in prev_alert):
-            if open_px > 0 and last_px < open_px * 1.002:
-                keep = True
         # 将止损：距止损因子价仍在 near+0.5% 内则保持
-        elif "将止损" in prev_alert or prev.get("near_stop"):
+        if "将止损" in prev_alert or prev.get("near_stop"):
             if stop_px > 0:
                 dist_pct = abs(float(last_px) / float(stop_px) - 1.0) * 100.0
                 if dist_pct <= (near_points + 0.5) + 1e-12:
                     keep = True
-        # 低开待945 / 已触止损：价格仍在止损价下方或附近则保持
-        elif "止损" in prev_alert or "945" in prev_alert or "低开" in prev_alert:
+        # 已触止损：价格仍在止损价下方或附近则保持
+        elif "止损" in prev_alert:
             if last_px <= stop_px * 1.003:
                 keep = True
 
@@ -752,66 +732,6 @@ def apply_stop_fill(
         px_digits=px_digits,
         reason=REASON_STOP,
         trade_note=f"{REASON_STOP}(自动)",
-    )
-
-
-def apply_yin_fill(
-    *,
-    code: str,
-    meta: dict[str, Any],
-    close_px: float,
-    qty: int,
-    cost: float | None,
-    session: str,
-    buy_time: str | None,
-    prev_close: float | None,
-    open_px: float,
-    px_digits: int,
-) -> dict[str, Any]:
-    """尾盘收阴视为已成交：按现价/收盘价锁定盈亏并清仓。"""
-    return apply_exit_fill(
-        code=code,
-        meta=meta,
-        fill_px=float(close_px),
-        qty=qty,
-        cost=cost,
-        session=session,
-        buy_time=buy_time,
-        prev_close=prev_close,
-        open_px=open_px,
-        px_digits=px_digits,
-        reason=REASON_YIN,
-        trade_note=f"{REASON_YIN}(自动)",
-    )
-
-
-def apply_gap_down_945_fill(
-    *,
-    code: str,
-    meta: dict[str, Any],
-    exit_px: float,
-    qty: int,
-    cost: float | None,
-    session: str,
-    buy_time: str | None,
-    prev_close: float | None,
-    open_px: float,
-    px_digits: int,
-) -> dict[str, Any]:
-    """低开 9:45 未翻红：按 9:45 分钟 K 线收盘价全仓卖出并清仓。"""
-    return apply_exit_fill(
-        code=code,
-        meta=meta,
-        fill_px=float(exit_px),
-        qty=qty,
-        cost=cost,
-        session=session,
-        buy_time=buy_time,
-        prev_close=prev_close,
-        open_px=open_px,
-        px_digits=px_digits,
-        reason=REASON_GAP945,
-        trade_note=f"{REASON_GAP945}(自动)",
     )
 
 
@@ -1144,72 +1064,12 @@ def collect_rows() -> list[dict[str, Any]]:
             cost = pos.get("cost")
             t0 = bool(w.get("t0"))
             sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
-            gap945 = eval_gap_down_945(
-                open_px=float(q["open"]),
-                prev_close=q.get("prev_close"),
-                day_bars=q.get("_day_bars"),
-                last_px=float(q["last"]),
-                high_px=float(q["high"]),
-            )
-
-            # 低开 9:45 未翻红且可卖 → 视为成交（优先于止损；只卖可用）
-            if qty > 0 and gap945["should_exit"] and sellable > 0:
-                apply_gap_down_945_fill(
-                    code=code,
-                    meta=w,
-                    exit_px=float(gap945["exit_px"]),
-                    qty=sellable,
-                    cost=float(cost) if cost is not None else None,
-                    session=q["session"],
-                    buy_time=buy_time,
-                    prev_close=q.get("prev_close"),
-                    open_px=float(q["open"]),
-                    px_digits=px_digits,
-                )
-                holdings = load_holdings()
-                positions = holdings.get("positions", {})
-                realized_map = holdings.get("realized_today", {})
-                pos = positions.get(code, {})
-                qty = int(pos.get("qty") or 0)
-                cost = pos.get("cost")
-                buy_time = pos.get("buy_time")
-                sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
-
             # 已触止损且可卖 → 视为成交，锁定收益（只卖可用）
             if qty > 0 and hit_stop and sellable > 0:
                 apply_stop_fill(
                     code=code,
                     meta=w,
                     stop_px=float(lv["stop"]),
-                    qty=sellable,
-                    cost=float(cost) if cost is not None else None,
-                    session=q["session"],
-                    buy_time=buy_time,
-                    prev_close=q.get("prev_close"),
-                    open_px=float(q["open"]),
-                    px_digits=px_digits,
-                )
-                holdings = load_holdings()
-                positions = holdings.get("positions", {})
-                realized_map = holdings.get("realized_today", {})
-                pos = positions.get(code, {})
-                qty = int(pos.get("qty") or 0)
-                cost = pos.get("cost")
-                buy_time = pos.get("buy_time")
-                sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
-
-            # 未触止损、可卖、尾盘仍收阴 → 按现价结算（只卖可用）
-            if (
-                qty > 0
-                and (not hit_stop)
-                and sellable > 0
-                and is_yin(float(q["open"]), float(q["last"]))
-                and is_yin_exit_window()
-            ):
-                apply_yin_fill(
-                    code=code,
-                    meta=w,
-                    close_px=float(q["last"]),
                     qty=sellable,
                     cost=float(cost) if cost is not None else None,
                     session=q["session"],
@@ -1294,10 +1154,6 @@ def collect_rows() -> list[dict[str, Any]]:
                     stop_pct=stop_pct,
                     px_digits=px_digits,
                     t0=t0,
-                    prev_close=q.get("prev_close"),
-                    day_bars=q.get("_day_bars"),
-                    sellable_qty=0,
-                    lot_size=LOT_SIZE,
                     allow_entry=allow_entry,
                 )
                 row0 = {
@@ -1384,10 +1240,6 @@ def collect_rows() -> list[dict[str, Any]]:
                 stop_pct=stop_pct,
                 px_digits=px_digits,
                 t0=t0,
-                prev_close=q.get("prev_close"),
-                day_bars=q.get("_day_bars"),
-                sellable_qty=sellable,
-                lot_size=LOT_SIZE,
                 allow_entry=allow_entry,
             )
             sig = _stabilize_sell_warn(
@@ -2219,7 +2071,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 945={GAP945_EXIT_MODE}全清 · {_now()}{hero_extra}</p>
+          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清 · {_now()}{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2267,13 +2119,13 @@ def write_html_report(
       {''.join(cards)}
     </div>
     <p class="note">
-      策略锁定 {STRATEGY_NAME}（与 strategy/open_break 回测同源；软减半/因子2·3 已禁用）。
-      持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入卖出预警（止损1%带/低开945预警/阴线）；否则空仓或持有。
+      策略锁定 {STRATEGY_NAME}（与 strategy/open_break 回测同源；卖出仅保留止损）。
+      持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入止损预警；否则空仓或持有。
       因子侧：待卖出预警→卖出；待买入预警→买入；其余→持有或空仓。
       因子触发：盘中预警写「已触发 M/D」；否则为最近一次因子触发日（无年份）。空仓距因子对齐该次触发价。
-      卖出优先全清：①低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红({GAP945_EXIT_MODE}) ②止损 ③阴线≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}。
+      卖出全清：仅止损。
       个股卡片：持仓状态、持股数、可卖、开盘、当日涨幅、较开盘涨幅、因子侧、因子价、因子触发、距因子。
-      因子价=买点（空仓预警）或止损/945/阴线决策价；|距因子%|≤{NEAR_FACTOR_PCT:g}% → 将买入/将止损。
+      因子价=买点（空仓预警）或止损价；|距因子%|≤{NEAR_FACTOR_PCT:g}% → 将买入/将止损。
       {watch_hint}
     </p>
   </div>
@@ -2330,11 +2182,10 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(f"\n持仓盯盘  {_now()}")
     print(
         f"策略: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% "
-        f"（软减半={ENABLE_SOFT_HALF_EXIT} 回撤仓位={ENABLE_DD_SIZING} 945={GAP945_EXIT_MODE}）"
+        f"（卖出仅保留止损）"
     )
     print(
-        f"  卖出优先全清: ①低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红 "
-        f"②止损 ③阴线≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}"
+        f"  卖出全清: 仅止损"
     )
     print(f"持仓文件: {HOLDINGS_FILE}")
     holdings_meta = load_holdings()
@@ -2476,12 +2327,10 @@ def cmd_status(args: argparse.Namespace) -> None:
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
     print("     当日盈亏: 隔夜仓=(现价-昨收)×可用；今买=(现价-今买成交价)×锁定")
     print(
-        f"     卖出全清: ①低开≥{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红"
-        f"（{GAP945_EXIT_MODE}）②止损 ③阴线≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}"
+        f"     卖出全清: 仅止损"
     )
-    print("     已触止损/945/阴线=视为成交并锁定盈亏；盘中预警未成交仅提示")
+    print("     已触止损=视为成交并锁定盈亏；盘中预警未成交仅提示")
     print("     买入过滤: 前日阴/小阳 + 禁前面双阳；T+1 当日不可卖")
-    print(f"     软减半={ENABLE_SOFT_HALF_EXIT} 回撤仓位={ENABLE_DD_SIZING}（因子1须均为 False）")
 
 
 def cmd_html(args: argparse.Namespace) -> None:
@@ -2682,7 +2531,7 @@ def cmd_sell(args: argparse.Namespace) -> None:
     note = args.note or ""
     if new_qty == 0:
         _purge_stale_realized(data, session)
-        reason = REASON_STOP if "止损" in note else "阴线收盘卖"
+        reason = REASON_STOP if "止损" in note else "手动卖出"
         bought_today = is_t1_buy_day(buy_time, session)
         base_px = cost if (bought_today or cost) else price
         day_base = float(base_px) * qty
@@ -3020,8 +2869,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     url = f"http://{host}:{port}/{REPORT_FILE.name}"
     print(f"盯盘服务已启动: {url}")
     print(
-        f"策略同步: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 945={GAP945_EXIT_MODE}全清 · "
-        f"软减半={ENABLE_SOFT_HALF_EXIT} · 回撤仓位={ENABLE_DD_SIZING}"
+        f"策略同步: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清"
     )
     print(f"刷新间隔: {interval}s · Ctrl+C 停止")
     print(

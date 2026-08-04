@@ -19,21 +19,16 @@ CFG = replace(
         em_symbol="603283",
         threshold_pct=0.025,
         start_date="20200101",
-        enable_gap945=True,
-        gap945_use_proxy=True,
-        gap945_proxy="open",
     ),
-    min1_cache=Path(__file__).with_name("sh603283_1m_qfq.parquet"),
     report_path=Path(__file__).with_name("赛腾股份_report.html"),
 )
 
 MONTHLY_CSV = Path(__file__).with_name("赛腾股份_monthly.csv")
 
 
-def main(*, show_report: bool = True, gap945_mode: str = CFG.gap945_exit_mode) -> None:
-    cfg = replace(CFG, gap945_exit_mode=gap945_mode)
-    result, daily = run_open_break(cfg, show_report=show_report)
-    df = monthly_returns_df(result, daily, initial_cash=cfg.initial_cash)
+def main(*, show_report: bool = True) -> None:
+    result, daily = run_open_break(CFG, show_report=show_report)
+    df = monthly_returns_df(result, daily, initial_cash=CFG.initial_cash)
     if not df.empty:
         df.to_csv(MONTHLY_CSV, index=False, encoding="utf-8-sig")
         print(f"\n分月 CSV: {MONTHLY_CSV}")
@@ -45,14 +40,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--no-open", action="store_true", help="不自动打开 HTML")
     parser.add_argument("--rules", action="store_true", help="打印策略规则")
-    parser.add_argument(
-        "--gap945-mode",
-        choices=("1m", "5m"),
-        default=CFG.gap945_exit_mode,
-        help="945 卖价：1m 或 5m",
-    )
     args = parser.parse_args()
     if args.rules:
         print(STRATEGY_RULES.strip())
         raise SystemExit(0)
-    main(show_report=not args.no_open, gap945_mode=args.gap945_mode)
+    main(show_report=not args.no_open)

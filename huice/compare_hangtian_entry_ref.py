@@ -16,7 +16,6 @@ from strategy import HANGTIANDIANZI, run_open_break
 logging.disable(logging.CRITICAL)
 
 ROOT = Path(__file__).resolve().parent
-CACHE = ROOT / f"{HANGTIANDIANZI.symbol}_1m_qfq.parquet"
 
 
 def _metrics(result) -> dict[str, float]:
@@ -68,7 +67,6 @@ def _print_block(title: str, result, daily: pd.DataFrame, cfg) -> dict[str, floa
 def main() -> None:
     base = replace(
         HANGTIANDIANZI,
-        min1_cache=CACHE,
         report_path=None,
     )
 

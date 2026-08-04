@@ -13,7 +13,6 @@ from strategy import ZZ500_ETF, run_open_break
 
 CFG = replace(
     ZZ500_ETF,
-    min1_cache=Path(__file__).with_name(f"{ZZ500_ETF.symbol}_1m_qfq.parquet"),
     report_path=Path(__file__).with_name(f"{ZZ500_ETF.symbol_name}_report.html"),
 )
 
