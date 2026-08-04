@@ -142,6 +142,139 @@ def strategy_levels(
     }
 
 
+def format_trigger_md(d: dt.date | datetime | pd.Timestamp | str | None) -> str | None:
+    """因子触发日期展示：M/D（无年份、无前导零）。"""
+    if d is None:
+        return None
+    if isinstance(d, str):
+        ts = pd.Timestamp(d[:10])
+    else:
+        ts = pd.Timestamp(d)
+    if pd.isna(ts):
+        return None
+    return f"{int(ts.month)}/{int(ts.day)}"
+
+
+def replay_last_factor_triggers(
+    daily: pd.DataFrame,
+    *,
+    entry_pct: float = DEFAULT_PCT,
+    stop_pct: float = DEFAULT_PCT,
+    tick: float = TICK_SIZE,
+    prev_entry_mode: str = "yin_or_small_yang",
+) -> dict[str, Any]:
+    """用日线简化重放，找最近一次买/卖因子触发（含价）。945 无分钟时跳过。"""
+    out: dict[str, Any] = {
+        "last_buy_date": None,
+        "last_buy_px": None,
+        "last_sell_date": None,
+        "last_sell_px": None,
+        "holding": False,
+        "last_trigger_date": None,
+        "last_trigger_px": None,
+        "last_trigger_side": None,
+    }
+    if daily is None or daily.empty:
+        return out
+    df = daily.copy()
+    df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
+    df = df.dropna(subset=["open", "high", "low", "close"]).sort_values("date")
+    if len(df) < 2:
+        return out
+
+    holding = False
+    buy_day: pd.Timestamp | None = None
+    for i in range(1, len(df)):
+        row = df.iloc[i]
+        prev = df.iloc[i - 1]
+        prev2 = df.iloc[i - 2] if i >= 2 else None
+        day = pd.Timestamp(row["date"]).normalize()
+        o = float(row["open"])
+        h = float(row["high"])
+        l = float(row["low"])
+        c = float(row["close"])
+        if o <= 0:
+            continue
+        buy_px = entry_trigger_price(o, entry_pct=entry_pct, tick=tick)
+        stop_px = stop_trigger_price(o, stop_pct=stop_pct, tick=tick)
+        allows = prev_day_allows_entry(
+            float(prev["open"]),
+            float(prev["close"]),
+            prev_small_yang_pct=entry_pct,
+            prev_entry_mode=prev_entry_mode,
+        )
+        double = False
+        if prev2 is not None:
+            double = has_double_yang_before(
+                float(prev2["open"]),
+                float(prev2["close"]),
+                float(prev["open"]),
+                float(prev["close"]),
+            )
+
+        if holding:
+            # T+1：买入当日不卖
+            if buy_day is not None and day == buy_day:
+                continue
+            if l <= stop_px + 1e-12:
+                out["last_sell_date"] = day.date()
+                out["last_sell_px"] = float(stop_px)
+                holding = False
+                buy_day = None
+                continue
+            if is_yin(o, c):
+                out["last_sell_date"] = day.date()
+                out["last_sell_px"] = float(c)
+                holding = False
+                buy_day = None
+                continue
+            continue
+
+        if allows and (not double) and (h + 1e-12 >= buy_px):
+            out["last_buy_date"] = day.date()
+            out["last_buy_px"] = float(buy_px)
+            holding = True
+            buy_day = day
+
+    out["holding"] = holding
+    if out["last_sell_date"] and (
+        out["last_buy_date"] is None or out["last_sell_date"] >= out["last_buy_date"]
+    ):
+        out["last_trigger_date"] = out["last_sell_date"]
+        out["last_trigger_px"] = out["last_sell_px"]
+        out["last_trigger_side"] = "sell"
+    elif out["last_buy_date"] is not None:
+        out["last_trigger_date"] = out["last_buy_date"]
+        out["last_trigger_px"] = out["last_buy_px"]
+        out["last_trigger_side"] = "buy"
+    return out
+
+
+def entry_filters_ok(
+    prev_open: float | None,
+    prev_close: float | None,
+    prev2_open: float | None = None,
+    prev2_close: float | None = None,
+    *,
+    entry_pct: float = DEFAULT_PCT,
+    prev_entry_mode: str = "yin_or_small_yang",
+) -> bool:
+    """今日是否允许开仓（前日阴/小阳 + 禁前面双阳）。"""
+    if prev_open is None or prev_close is None:
+        return False
+    if not prev_day_allows_entry(
+        float(prev_open),
+        float(prev_close),
+        prev_small_yang_pct=entry_pct,
+        prev_entry_mode=prev_entry_mode,
+    ):
+        return False
+    if has_double_yang_before(prev2_open, prev2_close, prev_open, prev_close):
+        return False
+    return True
+
+
+
 def is_yin(open_px: float, close_px: float) -> bool:
     return float(close_px) < float(open_px)
 
@@ -484,14 +617,16 @@ def strategy_signal(
     near_points: float = NEAR_FACTOR_PCT,
     sellable_qty: int | None = None,
     lot_size: int = LOT_SIZE,
+    allow_entry: bool = True,
 ) -> dict[str, Any]:
     """盯盘：按持仓输出一侧因子状态。
 
     · 接近预警：|现价/因子价 − 1|×100 ≤ near_points（默认 1%）
     · 统一字段：因子侧 / 因子价 / 因子触发 / 距因子价差 / 距因子%
+    · allow_entry=False 时不因触买点进入待买入（前日过滤未过）
     """
     holding = qty > 0
-    hit_buy = high_px + 1e-12 >= buy_trigger
+    hit_buy = bool(allow_entry) and (high_px + 1e-12 >= buy_trigger)
     hit_stop = low_px <= stop_px + 1e-12
     t1_lock = holding and (not t0) and is_t1_buy_day(buy_time, session)
     gap945 = eval_gap_down_945(
@@ -559,7 +694,6 @@ def strategy_signal(
     def _finish(out: dict[str, Any]) -> dict[str, Any]:
         sell = out["side"] == "sell"
         if sell:
-            out["因子侧"] = "卖出"
             if out.get("t1_lock"):
                 out["因子价"] = None
                 out["距因子价差"] = None
@@ -601,7 +735,6 @@ def strategy_signal(
                 elif out.get("建议挂单") is not None and out.get("因子价") is None:
                     out["建议挂单"] = None
         else:
-            out["因子侧"] = "买入"
             out["因子价"] = round(float(buy_trigger), px_digits)
             out["距因子价差"] = dist_buy_px
             out["距因子%"] = dist_buy_pct
@@ -628,6 +761,16 @@ def strategy_signal(
                 out["持仓状态"] = "待买入"
             else:
                 out["持仓状态"] = "空仓"
+        # 因子侧：仅预警时标买卖；其余与持仓状态一致（持有/空仓）
+        pos_st = str(out.get("持仓状态") or "")
+        if pos_st == "待卖出":
+            out["因子侧"] = "卖出"
+        elif pos_st == "待买入":
+            out["因子侧"] = "买入"
+        elif pos_st == "持有":
+            out["因子侧"] = "持有"
+        else:
+            out["因子侧"] = "空仓"
         return out
 
     if holding:
@@ -757,7 +900,7 @@ def strategy_signal(
             }
         )
         return _finish(base)
-    if near_buy_band:
+    if allow_entry and near_buy_band:
         base.update(
             {
                 "near_buy": True,

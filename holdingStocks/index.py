@@ -1,13 +1,15 @@
-"""持仓记录与盯盘：A策略夏普≥1 合格池（沪深300/中证500主板+补测，见 README）
+"""持仓记录与盯盘：与 strategy OpenBreak3「因子1」严格同步。
 
-策略锁定 OpenBreak A：买点=今日开盘，前日阴/小阳可买。
+策略锁定 · 因子1（唯一在用）：
+  · 买：high≥ceil(open×1.025)；前日阴/小阳；禁前面双阳；T+1
+  · 卖（全清）：①低开945未翻红 ②止损−2.5% ③阴线收盘（≥14:55）
+  · 禁用：软减半 / 回撤仓位 / 因子2 / 因子3（见 strategy/README.md）
+
 功能：
   · 拉取当日开盘、最高、最低、现价（新浪1分钟）
-  · 策略规则见 myquan/strategy/open_break.py（与 kskj2 一致）
-  · 有仓：默认「持有」；低开 9:45 前未翻红 → 9:45 分钟收盘价全清
-  · 触止损 → 自动结算；未触止损但尾盘收阴(≥14:55) → 按现价结算
-  · 空仓：已触买/将买入 → 翻转并建议限价买
-  · 本地 JSON 记录持仓成本与数量，计算浮盈亏；T+1 买入日提示不可卖
+  · 规则与回测共用 strategy/open_break.py
+  · 有仓：945/止损/阴线自动结算（全清）；空仓：已触买/将买入建议限价
+  · 本地 JSON 记录持仓；T+1 买入日不可卖
 
 用法：
   python index.py              # 查看标的行情 + 持仓，并生成 HTML
@@ -47,7 +49,10 @@ if str(_MYQUAN_ROOT) not in sys.path:
 from strategy.minute import pull_akshare_1m
 from strategy.open_break import (
     DEFAULT_PCT,
+    ENABLE_DD_SIZING,
+    ENABLE_SOFT_HALF_EXIT,
     EXIT_REASONS,
+    GAP945_EXIT_MODE,
     GAP_DOWN_EXIT_HOUR,
     GAP_DOWN_EXIT_MINUTE,
     LOT_SIZE,
@@ -59,13 +64,24 @@ from strategy.open_break import (
     YIN_EXIT_HOUR,
     YIN_EXIT_MINUTE,
     bar_shape,
+    entry_filters_ok,
     eval_gap_down_945,
+    format_trigger_md,
     is_t1_buy_day,
     is_yin,
     is_yin_exit_window,
+    replay_last_factor_triggers,
     strategy_levels,
     strategy_signal,
 )
+from strategy.data import fetch_daily
+
+# 盯盘与回测共用：仅因子1（全清）；禁止软减半/仓位管理/因子2·3
+STRATEGY_NAME = "因子1"
+if ENABLE_SOFT_HALF_EXIT or ENABLE_DD_SIZING:
+    raise RuntimeError(
+        "盯盘必须与因子1同步：ENABLE_SOFT_HALF_EXIT / ENABLE_DD_SIZING 须为 False"
+    )
 
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
@@ -159,6 +175,7 @@ def _calc_day_pnl(
 WATCHLIST: list[dict[str, Any]] = [
     {"code": "600552", "sina": "sh600552", "market": "上证", "name": "凯盛科技"},
     {"code": "600330", "sina": "sh600330", "market": "上证", "name": "天通股份"},
+    {"code": "600879", "sina": "sh600879", "market": "上证", "name": "航天电子"},
 ]
 
 # 竞价结束后强制刷新盯盘开盘价（写入报告/重算止损买点）；随 WATCHLIST 变化
@@ -206,6 +223,97 @@ def _px_digits(tick: float) -> int:
     if tick >= 1:
         return 0
     return max(0, -int(round(math.log10(tick))))
+
+
+# 日线缓存：当日只拉一次，供前日过滤与最近因子触发
+_DAILY_CACHE: dict[str, tuple[str, pd.DataFrame]] = {}
+
+
+def _watch_daily(sina: str, *, lookback_days: int = 120) -> pd.DataFrame:
+    today = str(pd.Timestamp.now().date())
+    cached = _DAILY_CACHE.get(sina)
+    if cached and cached[0] == today and cached[1] is not None and not cached[1].empty:
+        return cached[1]
+    start = (pd.Timestamp.now() - pd.Timedelta(days=lookback_days)).strftime("%Y%m%d")
+    end = pd.Timestamp.now().strftime("%Y%m%d")
+    try:
+        df = fetch_daily(sina, start, end)
+    except Exception:
+        df = pd.DataFrame()
+    _DAILY_CACHE[sina] = (today, df)
+    return df
+
+
+def _prev_bars_from_daily(
+    daily: pd.DataFrame, session: str
+) -> tuple[float | None, float | None, float | None, float | None]:
+    """返回 (prev_open, prev_close, prev2_open, prev2_close)。"""
+    if daily is None or daily.empty:
+        return None, None, None, None
+    d = daily.copy()
+    d["date"] = pd.to_datetime(d["date"]).dt.tz_localize(None)
+    d = d.dropna(subset=["open", "close"]).sort_values("date")
+    sess = pd.Timestamp(session).normalize()
+    hist = d[d["date"].dt.normalize() < sess]
+    if hist.empty:
+        return None, None, None, None
+    prev = hist.iloc[-1]
+    prev2 = hist.iloc[-2] if len(hist) >= 2 else None
+    return (
+        float(prev["open"]),
+        float(prev["close"]),
+        float(prev2["open"]) if prev2 is not None else None,
+        float(prev2["close"]) if prev2 is not None else None,
+    )
+
+
+def _apply_trigger_date_fields(
+    row: dict[str, Any],
+    *,
+    sig: dict[str, Any],
+    session: str,
+    last_px: float,
+    px_digits: int,
+    buy_time: str | None,
+    qty: int,
+    replay: dict[str, Any],
+) -> None:
+    """因子触发写最近触发日(M/D)；非盘中预警时距因子对齐该次触发价。"""
+    today_md = format_trigger_md(session)
+    pos_st = str(sig.get("持仓状态") or "")
+    hit_txt = str(sig.get("因子触发") or "")
+
+    # 盘中预警：已触发/接近 + 今日日期
+    if pos_st in ("待买入", "待卖出") and hit_txt in ("已触发", "接近"):
+        if hit_txt == "已触发" and today_md:
+            row["因子触发"] = f"已触发 {today_md}"
+        else:
+            row["因子触发"] = hit_txt
+        return
+
+    # 有仓：最近买入日（持仓 buy_time 优先，否则日线重放）
+    if qty > 0:
+        md = format_trigger_md(buy_time) or format_trigger_md(replay.get("last_buy_date"))
+        if hit_txt == "未触发" and md:
+            row["因子触发"] = md
+        elif hit_txt == "不可用" and md:
+            row["因子触发"] = f"不可用 {md}"
+        return
+
+    # 空仓：最近一次买/卖因子触发日；距因子用该次触发价
+    last_d = replay.get("last_trigger_date")
+    last_px_trig = replay.get("last_trigger_px")
+    md = format_trigger_md(last_d)
+    if md:
+        row["因子触发"] = md
+        if last_px_trig is not None and float(last_px_trig) > 0:
+            fp = round(float(last_px_trig), px_digits)
+            row["因子价"] = fp
+            row["距因子价差"] = round(float(last_px) - fp, px_digits)
+            row["距因子%"] = round((float(last_px) / fp - 1.0) * 100.0, 2)
+    else:
+        row["因子触发"] = hit_txt or "未触发"
+
 
 
 def _find_meta(code: str) -> dict[str, Any]:
@@ -1019,7 +1127,16 @@ def collect_rows() -> list[dict[str, Any]]:
             vs = points_vs_open(q["open"], q["last"])
             vs_pct = pct_vs_open(q["open"], q["last"])
             day_chg = q.get("day_chg_pct")
-            hit_buy = q["high"] + 1e-12 >= lv["buy_trigger"]
+            daily = _watch_daily(w["sina"])
+            prev_o, prev_c, prev2_o, prev2_c = _prev_bars_from_daily(daily, q["session"])
+            allow_entry = entry_filters_ok(
+                prev_o, prev_c, prev2_o, prev2_c, entry_pct=entry_pct
+            )
+            replay = replay_last_factor_triggers(
+                daily, entry_pct=entry_pct, stop_pct=stop_pct, tick=tick
+            )
+            hit_buy_raw = q["high"] + 1e-12 >= lv["buy_trigger"]
+            hit_buy = bool(allow_entry) and hit_buy_raw
             hit_stop = q["low"] <= lv["stop"] + 1e-12
             pos = positions.get(code, {})
             qty = int(pos.get("qty") or 0)
@@ -1161,8 +1278,29 @@ def collect_rows() -> list[dict[str, Any]]:
                         note += f"（回抽{float(rebound):+.2f}%）"
                 if la_show is not None:
                     note += f"；最低{float(la_show):.{px_digits}f}"
-                rows.append(
-                    {
+                # 已清仓：因子侧/持仓状态按空仓规则重算（预警才标买入）
+                sig0 = strategy_signal(
+                    open_px=q["open"],
+                    high_px=q["high"],
+                    low_px=q["low"],
+                    last_px=q["last"],
+                    session=q["session"],
+                    buy_trigger=lv["buy_trigger"],
+                    stop_px=lv["stop"],
+                    qty=0,
+                    buy_time=None,
+                    vs_open_pts=vs,
+                    entry_pct=entry_pct,
+                    stop_pct=stop_pct,
+                    px_digits=px_digits,
+                    t0=t0,
+                    prev_close=q.get("prev_close"),
+                    day_bars=q.get("_day_bars"),
+                    sellable_qty=0,
+                    lot_size=LOT_SIZE,
+                    allow_entry=allow_entry,
+                )
+                row0 = {
                         "市场": w["market"],
                         "代码": code,
                         "名称": w["name"],
@@ -1185,25 +1323,21 @@ def collect_rows() -> list[dict[str, Any]]:
                         "阈值%": pct_pct,
                         "买点": lv["buy_trigger"],
                         "止损": lv["stop"],
-                        "已触买": "是" if hit_buy else "否",
+                        "已触买": "是" if (qty <= 0 and hit_buy) else "否",
                         "已触止损": "是" if hit_stop or reason == REASON_STOP else "否",
-                        "因子侧": "买入",
-                        "因子价": lv["buy_trigger"],
-                        "因子触发": "未触发",
-                        "持仓状态": "待买入",
-                        "距因子价差": round(live_last - float(lv["buy_trigger"]), px_digits),
-                        "距因子%": round(
-                            (live_last / float(lv["buy_trigger"]) - 1.0) * 100.0, 2
-                        )
-                        if float(lv["buy_trigger"]) > 0
-                        else None,
-                        "形态": bar_shape(q["open"], q["last"]),
+                        "因子侧": sig0.get("因子侧"),
+                        "因子价": sig0.get("因子价"),
+                        "因子触发": sig0.get("因子触发"),
+                        "持仓状态": sig0.get("持仓状态") or "空仓",
+                        "距因子价差": sig0.get("距因子价差"),
+                        "距因子%": sig0.get("距因子%"),
+                        "形态": sig0.get("形态") or bar_shape(q["open"], q["last"]),
                         "预警": reason,
-                        "建议挂单": None,
+                        "建议挂单": sig0.get("建议挂单"),
                         "挂单说明": note,
-                        "近买点": False,
+                        "近买点": bool(sig0.get("pending_buy")),
                         "近止损": False,
-                        "bg_class": "warn-sell",
+                        "bg_class": sig0.get("bg_class") or "status-flat",
                         "持仓": 0,
                         "卖出数量": sold_qty,
                         "成本": realized.get("cost"),
@@ -1220,8 +1354,18 @@ def collect_rows() -> list[dict[str, Any]]:
                         if len(q["last_ts"]) >= 19
                         else q["last_ts"],
                         "error": None,
-                    }
+                }
+                _apply_trigger_date_fields(
+                    row0,
+                    sig=sig0,
+                    session=q["session"],
+                    last_px=float(q["last"]),
+                    px_digits=px_digits,
+                    buy_time=None,
+                    qty=0,
+                    replay=replay,
                 )
+                rows.append(row0)
                 continue
 
             sig = strategy_signal(
@@ -1244,6 +1388,7 @@ def collect_rows() -> list[dict[str, Any]]:
                 day_bars=q.get("_day_bars"),
                 sellable_qty=sellable,
                 lot_size=LOT_SIZE,
+                allow_entry=allow_entry,
             )
             sig = _stabilize_sell_warn(
                 code=code,
@@ -1305,8 +1450,7 @@ def collect_rows() -> list[dict[str, Any]]:
                     if day_base and day_base > 0 and day_pnl is not None:
                         day_pnl_pct = round(float(day_pnl) / float(day_base) * 100.0, 2)
 
-            rows.append(
-                {
+            row = {
                     "市场": w["market"],
                     "代码": code,
                     "名称": w["name"],
@@ -1324,13 +1468,13 @@ def collect_rows() -> list[dict[str, Any]]:
                     "阈值%": pct_pct,
                     "买点": lv["buy_trigger"],
                     "止损": lv["stop"],
-                    "已触买": "是" if hit_buy else "否",
+                    "已触买": "是" if (qty <= 0 and hit_buy) else "否",
                     "已触止损": "是" if hit_stop else "否",
                     "因子侧": sig.get("因子侧"),
                     "因子价": sig.get("因子价"),
                     "因子触发": sig.get("因子触发"),
                     "持仓状态": sig.get("持仓状态") or (
-                        "持有" if qty > 0 else "待买入"
+                        "持有" if qty > 0 else "空仓"
                     ),
                     "距因子价差": sig.get("距因子价差"),
                     "距因子%": sig.get("距因子%"),
@@ -1359,8 +1503,18 @@ def collect_rows() -> list[dict[str, Any]]:
                     if len(q["last_ts"]) >= 19
                     else q["last_ts"],
                     "error": None,
-                }
+            }
+            _apply_trigger_date_fields(
+                row,
+                sig=sig,
+                session=q["session"],
+                last_px=float(q["last"]),
+                px_digits=px_digits,
+                buy_time=buy_time,
+                qty=qty,
+                replay=replay,
             )
+            rows.append(row)
         except Exception as e:  # noqa: BLE001
             pos = positions.get(code, {})
             rows.append(
@@ -1643,19 +1797,33 @@ def write_html_report(
         factor_hit = str(r.get("因子触发") or "-")
         dist_px = r.get("距因子价差")
         dist_pct = r.get("距因子%")
+        hit_live = factor_hit == "已触发" or str(factor_hit).startswith("已触发 ")
+        near_live = factor_hit == "接近"
         hit_cls = (
             "tag-buy"
-            if factor_side == "买入" and factor_hit in ("已触发", "接近")
+            if factor_side == "买入" and (hit_live or near_live)
             else (
                 "tag-sell"
-                if factor_side == "卖出" and factor_hit in ("已触发", "接近")
-                else ("tag-flat" if factor_hit == "不可用" else "")
+                if factor_side == "卖出" and (hit_live or near_live)
+                else (
+                    "tag-flat"
+                    if factor_hit.startswith("不可用")
+                    else ("tag-hold" if factor_side == "持有" or factor_hit not in ("-", "未触发", "") else "")
+                )
             )
         )
         side_cls = (
             "tag-buy"
             if factor_side == "买入"
-            else ("tag-sell" if factor_side == "卖出" else "")
+            else (
+                "tag-sell"
+                if factor_side == "卖出"
+                else (
+                    "tag-hold"
+                    if factor_side == "持有"
+                    else ("tag-flat" if factor_side == "空仓" else "")
+                )
+            )
         )
         pos_cls = (
             "tag-hold"
@@ -2051,7 +2219,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> ±2.5% · {_now()}{hero_extra}</p>
+          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 945={GAP945_EXIT_MODE}全清 · {_now()}{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2099,11 +2267,13 @@ def write_html_report(
       {''.join(cards)}
     </div>
     <p class="note">
+      策略锁定 {STRATEGY_NAME}（与 strategy/open_break 回测同源；软减半/因子2·3 已禁用）。
       持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入卖出预警（止损1%带/低开945预警/阴线）；否则空仓或持有。
-      低开未翻红：盘中预警，09:45 才决策并给挂单价。建议挂单严格等于因子价。
+      因子侧：待卖出预警→卖出；待买入预警→买入；其余→持有或空仓。
+      因子触发：盘中预警写「已触发 M/D」；否则为最近一次因子触发日（无年份）。空仓距因子对齐该次触发价。
+      卖出优先全清：①低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红({GAP945_EXIT_MODE}) ②止损 ③阴线≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}。
       个股卡片：持仓状态、持股数、可卖、开盘、当日涨幅、较开盘涨幅、因子侧、因子价、因子触发、距因子。
-      因子价=买点（空仓）或止损/945/阴线决策价；|距因子%|≤1% → 将买入/将止损。
-      合计区仍显示总资产与盈亏。默认 ±2.5%（ceil/floor，同 strategy/open_break.py）。
+      因子价=买点（空仓预警）或止损/945/阴线决策价；|距因子%|≤{NEAR_FACTOR_PCT:g}% → 将买入/将止损。
       {watch_hint}
     </p>
   </div>
@@ -2158,8 +2328,14 @@ def cmd_status(args: argparse.Namespace) -> None:
     rows = collect_rows()
     indices = fetch_indices()
     print(f"\n持仓盯盘  {_now()}")
-    print(f"策略参考: kskj2 ±{DEFAULT_PCT*100:.1f}% / 有仓默认持有")
-    print(f"  卖出优先: ①低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红 ②止损 ③阴线≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}")
+    print(
+        f"策略: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% "
+        f"（软减半={ENABLE_SOFT_HALF_EXIT} 回撤仓位={ENABLE_DD_SIZING} 945={GAP945_EXIT_MODE}）"
+    )
+    print(
+        f"  卖出优先全清: ①低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红 "
+        f"②止损 ③阴线≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}"
+    )
     print(f"持仓文件: {HOLDINGS_FILE}")
     holdings_meta = load_holdings()
     account_total = _account_total(rows, holdings_meta)
@@ -2296,13 +2472,16 @@ def cmd_status(args: argparse.Namespace) -> None:
     if not getattr(args, "no_open", False):
         url = _report_url_if_watching()
         webbrowser.open(url if url else report.resolve().as_uri())
+    print(f"策略: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}%（与 open_break 回测同源）")
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
     print("     当日盈亏: 隔夜仓=(现价-昨收)×可用；今买=(现价-今买成交价)×锁定")
-    print("     低开≥09:45且9:45前未翻红=按09:45分钟K线收盘价全清")
-    print("     已触止损=视为已成交：按止损价锁定浮盈/当日盈亏并清仓，之后不再随现价变动")
-    print("     未触止损但尾盘(≥14:55)仍收阴=按现价阴线结算（对齐 kskj2）")
-    print("     有仓默认「持有」；低开·待945/将止损仅预警未成交；盘中暂阴仅预警")
-    print("     买点/止损按 ±2.5% ceil/floor（同 strategy/open_break.py）")
+    print(
+        f"     卖出全清: ①低开≥{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红"
+        f"（{GAP945_EXIT_MODE}）②止损 ③阴线≥{YIN_EXIT_HOUR:02d}:{YIN_EXIT_MINUTE:02d}"
+    )
+    print("     已触止损/945/阴线=视为成交并锁定盈亏；盘中预警未成交仅提示")
+    print("     买入过滤: 前日阴/小阳 + 禁前面双阳；T+1 当日不可卖")
+    print(f"     软减半={ENABLE_SOFT_HALF_EXIT} 回撤仓位={ENABLE_DD_SIZING}（因子1须均为 False）")
 
 
 def cmd_html(args: argparse.Namespace) -> None:
@@ -2840,6 +3019,10 @@ def cmd_watch(args: argparse.Namespace) -> None:
         ) from e
     url = f"http://{host}:{port}/{REPORT_FILE.name}"
     print(f"盯盘服务已启动: {url}")
+    print(
+        f"策略同步: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 945={GAP945_EXIT_MODE}全清 · "
+        f"软减半={ENABLE_SOFT_HALF_EXIT} · 回撤仓位={ENABLE_DD_SIZING}"
+    )
     print(f"刷新间隔: {interval}s · Ctrl+C 停止")
     print(
         f"开盘价定时: 每日 {open_h:02d}:{open_m:02d} 刷新盯盘标的 "
