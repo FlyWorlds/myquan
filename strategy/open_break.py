@@ -30,7 +30,7 @@ STRATEGY_RULES = """
   ① 低开 9:45 未翻红 → 全清
      · 前提：开盘价 < 昨收（低开）
      · 翻红（触及即算，9:45 前不含 9:45 那根 1 分钟 K）：
-         9:45 前最高价 >= 昨收 → 视为已翻红，不卖，继续按 ②③④ 处理
+         9:45 前最高价 >= 昨收 → 视为已翻红，不卖，继续按 ②③ 处理
      · 未翻红：到了 09:45 仍满足 9:45 前最高 < 昨收 → 全部可卖仓位清仓
      · 成交价（二选一，由 GAP945_EXIT_MODE 配置）：
          - "1m"：09:45 那根 1 分钟 K 线的收盘价
@@ -40,24 +40,20 @@ STRATEGY_RULES = """
   ② 止损
      · 当日最低价 <= floor(开盘价 × (1 - 阈值)) → 按止损触发价全清
 
-  ③ 因子2 · 当日迄今最高价回落 2.5% → 减半仓（**仅有持仓时**；开关 ENABLE_FACTOR2，**当前关闭**）
-     · 前提：当前有持仓且可卖（空仓不触发；买入当日 T+1 不可卖则不触发）
-     · 基准：开盘至今的最高价（实时滚动），不是收盘后的全日最高
-     · 触发：现价/最低价 <= floor(迄今最高 × (1 - 2.5%))
-     · 动作：可卖仓位减半（向下取整到 100 股）；**同一段持仓只减一次**（清仓后重置）
-     · 剩余半仓继续按 ①②④ 处理；不足 200 股无法减半则跳过
-
-  ④ 阴线收盘
-     · 未触 ①②③，且收盘 < 开盘 → 按收盘价全清
+  ③ 阴线收盘
+     · 未触 ①②，且收盘 < 开盘 → 按收盘价全清
      · 盯盘：≥14:55 仍收阴则按现价结算
 
-  ⑤ 阳线 / 十字
+  ④ 阳线 / 十字
      · 继续持有
+
+【失败实验 · 不可用】
+  · 软减半（945/阴线减半、止损全清）：回测劣于原因子1，ENABLE_SOFT_HALF_EXIT 必须保持 False
+  · 因子2/因子3：已从代码删除，规格见 strategy/README.md 归档
 
 【术语】
   · 翻红：低开日后，9:45 前价格曾触及或超过昨收（>= 昨收）
   · 全清：可用仓位 100% 卖出
-  · 减半仓：卖出约 50% 可卖仓位（整手），不是全清
 
 【费用假设（回测默认）】
   · 佣金万 0.854；卖出印花税 0.1%；滑点 0.1%
@@ -70,11 +66,13 @@ ENTRY_PCT = DEFAULT_PCT
 STOP_PCT = DEFAULT_PCT
 PREV_SMALL_YANG_PCT = 0.025
 TICK_SIZE = 0.01
-# 因子2：相对「开盘迄今最高价」回落阈值 → 减半仓
-PULLBACK_PCT = 0.025
 LOT_SIZE = 100
-# 总开关：暂时关闭（回测/盯盘默认都关；要启用改为 True 或传 enable_factor2=True）
-ENABLE_FACTOR2 = False
+# 回撤仓位管理：权益回撤≥半仓阈值 → 半仓；回撤<恢复阈值 → 才恢复全仓开仓
+ENABLE_DD_SIZING = False
+DD_HALF_PCT = 0.20
+DD_FULL_PCT = 0.15
+# 软减半实验失败不可用：必须保持 False（见 strategy/README.md）
+ENABLE_SOFT_HALF_EXIT = False
 # 盯盘：|现价/因子价−1|×100 ≤ 此值 →「将买入/将止损」
 NEAR_POINTS = 1.0
 NEAR_FACTOR_PCT = NEAR_POINTS
@@ -89,7 +87,6 @@ YIN_EXIT_MINUTE = 55
 REASON_STOP = "止损成交"
 REASON_YIN = "阴线收盘卖"
 REASON_GAP945 = "低开945未翻红"
-REASON_PULLBACK_HALF = "高点回落减半仓"
 EXIT_REASONS = (REASON_STOP, REASON_YIN, REASON_GAP945)
 
 
@@ -125,102 +122,11 @@ def stop_trigger_price(
     return floor_to_tick(float(open_px) * (1.0 - stop_pct), tick)
 
 
-def pullback_trigger_price(
-    high_so_far: float,
-    *,
-    pullback_pct: float = PULLBACK_PCT,
-    tick: float = TICK_SIZE,
-) -> float:
-    """因子2：相对开盘迄今最高价回落 pullback_pct 的触发价。"""
-    return floor_to_tick(float(high_so_far) * (1.0 - pullback_pct), tick)
-
-
 def half_lot_qty(qty: float | int, *, lot_size: int = LOT_SIZE) -> int:
     """可减半仓数量：约 1/2，向下取整到整手；不足 2 手则 0。"""
     q = int(qty)
     lot = max(1, int(lot_size))
     return (q // 2 // lot) * lot
-
-
-def hit_pullback_half(
-    high_so_far: float,
-    mark_px: float,
-    *,
-    pullback_pct: float = PULLBACK_PCT,
-    tick: float = TICK_SIZE,
-) -> bool:
-    """mark_px（现价或当日最低）是否触及迄今高点回落触发价。"""
-    if float(high_so_far) <= 0:
-        return False
-    trig = pullback_trigger_price(high_so_far, pullback_pct=pullback_pct, tick=tick)
-    return float(mark_px) <= trig + 1e-12
-
-
-def build_pullback_half_map(
-    daily: pd.DataFrame,
-    minute: pd.DataFrame | None,
-    *,
-    pullback_pct: float = PULLBACK_PCT,
-    tick: float = TICK_SIZE,
-) -> dict[str, dict[str, float | str]]:
-    """回测用：用 1 分钟线模拟「开盘迄今最高 → 回落 pct」首次触发。
-
-    返回 {YYYY-MM-DD: {exit_px, high_so_far, source}}；无分钟时退回日线近似
-    （当日 low <= floor(high×(1-pct))）。
-    """
-    out: dict[str, dict[str, float | str]] = {}
-    daily = daily.copy()
-    ts = pd.to_datetime(daily["date"])
-    if ts.dt.tz is None:
-        ts = ts.dt.tz_localize("Asia/Shanghai")
-    else:
-        ts = ts.dt.tz_convert("Asia/Shanghai")
-    daily["day"] = ts.dt.strftime("%Y-%m-%d")
-    daily["high"] = pd.to_numeric(daily["high"], errors="coerce")
-    daily["low"] = pd.to_numeric(daily["low"], errors="coerce")
-
-    by_day: dict[str, pd.DataFrame] = {}
-    if minute is not None and not minute.empty:
-        m = minute.copy()
-        m["day"] = m["ts"].dt.strftime("%Y-%m-%d")
-        for d, grp in m.groupby("day"):
-            by_day[str(d)] = grp.sort_values("ts")
-
-    for _, row in daily.iterrows():
-        day = str(row["day"])
-        day_min = by_day.get(day)
-        if day_min is not None and not day_min.empty:
-            run_high = 0.0
-            for _, bar in day_min.iterrows():
-                bh = float(bar["high"])
-                bl = float(bar["low"])
-                if bh > run_high:
-                    run_high = bh
-                if run_high <= 0:
-                    continue
-                trig = pullback_trigger_price(
-                    run_high, pullback_pct=pullback_pct, tick=tick
-                )
-                if bl <= trig + 1e-12:
-                    out[day] = {
-                        "exit_px": float(trig),
-                        "high_so_far": float(run_high),
-                        "source": "1m",
-                    }
-                    break
-            continue
-        # 日线近似（偏松，可能多触发）
-        hi = float(row["high"])
-        lo = float(row["low"])
-        if hi > 0 and hit_pullback_half(hi, lo, pullback_pct=pullback_pct, tick=tick):
-            out[day] = {
-                "exit_px": float(
-                    pullback_trigger_price(hi, pullback_pct=pullback_pct, tick=tick)
-                ),
-                "high_so_far": hi,
-                "source": "daily",
-            }
-    return out
 
 
 def strategy_levels(
@@ -229,18 +135,11 @@ def strategy_levels(
     entry_pct: float = DEFAULT_PCT,
     stop_pct: float = DEFAULT_PCT,
     tick: float = TICK_SIZE,
-    high_so_far: float | None = None,
-    pullback_pct: float = PULLBACK_PCT,
 ) -> dict[str, float]:
-    out: dict[str, float] = {
+    return {
         "buy_trigger": entry_trigger_price(open_px, entry_pct=entry_pct, tick=tick),
         "stop": stop_trigger_price(open_px, stop_pct=stop_pct, tick=tick),
     }
-    if high_so_far is not None and float(high_so_far) > 0:
-        out["pullback"] = pullback_trigger_price(
-            float(high_so_far), pullback_pct=pullback_pct, tick=tick
-        )
-    return out
 
 
 def is_yin(open_px: float, close_px: float) -> bool:
@@ -583,9 +482,6 @@ def strategy_signal(
     prev_close: float | None = None,
     day_bars: pd.DataFrame | None = None,
     near_points: float = NEAR_FACTOR_PCT,
-    enable_factor2: bool = ENABLE_FACTOR2,
-    pullback_pct: float = PULLBACK_PCT,
-    pullback_done: bool = False,
     sellable_qty: int | None = None,
     lot_size: int = LOT_SIZE,
 ) -> dict[str, Any]:
@@ -593,7 +489,6 @@ def strategy_signal(
 
     · 接近预警：|现价/因子价 − 1|×100 ≤ near_points（默认 1%）
     · 统一字段：因子侧 / 因子价 / 因子触发 / 距因子价差 / 距因子%
-    · 因子2：开盘迄今最高(high_px)回落 pullback_pct → 减半仓
     """
     holding = qty > 0
     hit_buy = high_px + 1e-12 >= buy_trigger
@@ -611,30 +506,11 @@ def strategy_signal(
     pf = f"{{:.{px_digits}f}}"
     tick = 10 ** (-px_digits) if px_digits >= 0 else TICK_SIZE
 
-    pullback_px = pullback_trigger_price(
-        high_px, pullback_pct=pullback_pct, tick=tick
-    )
     avail = int(sellable_qty) if sellable_qty is not None else int(qty)
     half_q = half_lot_qty(avail, lot_size=lot_size)
-    # 仅有持仓（且可卖整手半仓）才允许因子2
-    can_pullback = (
-        bool(enable_factor2)
-        and holding
-        and int(qty) > 0
-        and (not pullback_done)
-        and half_q > 0
-        and (not t1_lock)
-    )
-    hit_pullback = can_pullback and hit_pullback_half(
-        high_px,
-        min(float(low_px), float(last_px)),
-        pullback_pct=pullback_pct,
-        tick=tick,
-    )
 
     dist_buy_px = round(float(last_px) - float(buy_trigger), px_digits)
     dist_stop_px = round(float(last_px) - float(stop_px), px_digits)
-    dist_pullback_px = round(float(last_px) - float(pullback_px), px_digits)
     dist_buy_pct = (
         round((float(last_px) / float(buy_trigger) - 1.0) * 100.0, 2)
         if float(buy_trigger) > 0
@@ -645,27 +521,16 @@ def strategy_signal(
         if float(stop_px) > 0
         else None
     )
-    dist_pullback_pct = (
-        round((float(last_px) / float(pullback_px) - 1.0) * 100.0, 2)
-        if float(pullback_px) > 0
-        else None
-    )
     near_buy_band = (
         dist_buy_pct is not None and abs(float(dist_buy_pct)) <= near_points + 1e-12
     )
     near_stop_band = (
         dist_stop_pct is not None and abs(float(dist_stop_pct)) <= near_points + 1e-12
     )
-    near_pullback_band = (
-        can_pullback
-        and dist_pullback_pct is not None
-        and abs(float(dist_pullback_pct)) <= near_points + 1e-12
-    )
 
     base: dict[str, Any] = {
         "near_buy": False,
         "near_stop": False,
-        "near_pullback": False,
         "pending_buy": False,
         "pending_sell": False,
         "alert": "",
@@ -680,10 +545,6 @@ def strategy_signal(
         "距买点%": dist_buy_pct,
         "距止损价差": dist_stop_px,
         "距止损%": dist_stop_pct,
-        "距回落价差": dist_pullback_px,
-        "距回落%": dist_pullback_pct,
-        "回落触发价": round(float(pullback_px), px_digits),
-        "回落减仓量": half_q if can_pullback else 0,
         "side": "sell" if holding else "buy",
         "因子侧": "卖出" if holding else "买入",
         "因子价": None,
@@ -691,10 +552,8 @@ def strategy_signal(
         "持仓状态": "待买入",
         "hit_buy": hit_buy,
         "hit_stop": hit_stop,
-        "hit_pullback": bool(hit_pullback),
         "actionable": False,
         "near_pct": near_points,
-        "factor2": "高点回落减半仓",
     }
 
     def _finish(out: dict[str, Any]) -> dict[str, Any]:
@@ -727,10 +586,6 @@ def strategy_signal(
                 elif "945未翻红" in alert or alert == "低开945未翻红":
                     out["因子触发"] = "已触发"
                 elif "低开" in alert or "945" in alert:
-                    out["因子触发"] = "接近"
-                elif "高点回落" in alert or out.get("hit_pullback"):
-                    out["因子触发"] = "已触发"
-                elif "将回落减仓" in alert or out.get("near_pullback"):
                     out["因子触发"] = "接近"
                 elif "阴线收盘卖" in alert:
                     out["因子触发"] = "已触发"
@@ -846,40 +701,6 @@ def strategy_signal(
                     "挂单说明": (
                         f"距止损因子价在{near_points:g}%内（现差{dist_stop_pct:+.2f}%），"
                         f"预埋条件卖@{pf.format(stop_px)}"
-                    ),
-                }
-            )
-            return _finish(base)
-        # 因子2：开盘迄今最高回落 → 减半仓（优先于阴线全清预警）
-        if hit_pullback:
-            base.update(
-                {
-                    "pending_sell": True,
-                    "hit_pullback": True,
-                    "alert": "高点回落减半仓",
-                    "bg_class": "warn-sell",
-                    "_suggest_factor_px": pullback_px,
-                    "建议挂单": pullback_px,
-                    "挂单说明": (
-                        f"相对开盘迄今最高{pf.format(float(high_px))}回落"
-                        f"{pullback_pct*100:.1f}%，减半仓{half_q}股"
-                        f"@{pf.format(pullback_px)}（非整手不足则跳过）"
-                    ),
-                }
-            )
-            return _finish(base)
-        if near_pullback_band:
-            base.update(
-                {
-                    "near_pullback": True,
-                    "pending_sell": True,
-                    "alert": "将回落减仓",
-                    "bg_class": "warn-sell",
-                    "_suggest_factor_px": pullback_px,
-                    "建议挂单": pullback_px,
-                    "挂单说明": (
-                        f"距回落减仓价在{near_points:g}%内（现差{dist_pullback_pct:+.2f}%），"
-                        f"预埋减半仓{half_q}股@{pf.format(pullback_px)}"
                     ),
                 }
             )

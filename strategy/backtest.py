@@ -13,22 +13,21 @@ from akquant import CurrentClose, Strategy
 from strategy.data import fetch_daily
 from strategy.minute import fetch_minute_1m
 from strategy.open_break import (
+    DD_FULL_PCT,
+    DD_HALF_PCT,
     ENTRY_PCT,
     GAP_DOWN_EXIT_HOUR,
     GAP_DOWN_EXIT_MINUTE,
     PREV_SMALL_YANG_PCT,
-    PULLBACK_PCT,
     STOP_PCT,
     TICK_SIZE,
     build_gap_down_945_map,
     entry_trigger_price,
     half_lot_qty,
     has_double_yang_before,
-    hit_pullback_half,
     is_yin,
     is_yang,
     prev_day_allows_entry,
-    pullback_trigger_price,
     stop_trigger_price,
 )
 
@@ -44,7 +43,6 @@ class OpenBreak3Strategy(Strategy):
     end_date: str = ""
     slippage_value: float = 0.001
     gap_down_945_map: dict[str, dict[str, float | str]] = {}
-    pullback_half_map: dict[str, dict[str, float | str]] = {}
     enable_gap945: bool = True
     entry_pct: float = ENTRY_PCT
     stop_pct: float = STOP_PCT
@@ -55,9 +53,12 @@ class OpenBreak3Strategy(Strategy):
     entry_ref: str = "today_open"
     # yin_or_small_yang | yin_only（小阳次日不买）
     prev_entry_mode: str = "yin_or_small_yang"
-    # 因子2：开盘迄今最高回落 → 减半仓
-    enable_factor2: bool = False
-    pullback_pct: float = PULLBACK_PCT
+    # 回撤仓位管理
+    enable_dd_sizing: bool = False
+    dd_half_pct: float = DD_HALF_PCT
+    dd_full_pct: float = DD_FULL_PCT
+    # 因子1 软减半：945/阴线减半，止损全清
+    enable_soft_half_exit: bool = False
 
     def on_start(self) -> None:
         self.subscribe(self.symbol)
@@ -69,7 +70,9 @@ class OpenBreak3Strategy(Strategy):
         self.prev2_open: float | None = None
         self.prev2_close: float | None = None
         self.buy_day: str | None = None
-        self.pullback_half_done: bool = False
+        self.peak_equity: float = 0.0
+        self.dd_half_mode: bool = False
+        self.dd_half_done: bool = False  # 本轮半仓模式内是否已做过回撤减半卖
         n_gap = len(self.gap_down_945_map)
         entry_txt = (
             "买点=前日小阳开盘×(1+pct)"
@@ -81,16 +84,21 @@ class OpenBreak3Strategy(Strategy):
             if self.prev_entry_mode == "yin_only"
             else f"前日须阴线或小阳(<{self.prev_small_yang_pct*100:.1f}%)"
         )
-        f2 = (
-            f"因子2=迄今高回落{self.pullback_pct*100:.1f}%减半仓"
-            if self.enable_factor2
-            else "因子2=关"
+        dd = (
+            f"回撤仓位≥{self.dd_half_pct*100:.0f}%半仓/<{self.dd_full_pct*100:.0f}%全仓"
+            if self.enable_dd_sizing
+            else "回撤仓位=关"
+        )
+        soft = (
+            "945/阴线减半·止损全清"
+            if self.enable_soft_half_exit
+            else "945/阴线全清"
         )
         self.log(
             f"{self.symbol_name}({self.symbol}) 开盘±{self.entry_pct*100:.1f}% "
-            f"(+买/-止损，低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红全清，阴线收盘出) | "
+            f"(+买/-止损，低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}，{soft}) | "
             f"{prev_txt}，禁前面双阳 | "
-            f"{entry_txt} | {f2} | "
+            f"{entry_txt} | {dd} | "
             f"低开规则日历日={n_gap} | "
             f"佣金万0.854 滑点{self.slippage_value*100:.1f}% | "
             f"{self.start_date}~{self.end_date}"
@@ -112,7 +120,6 @@ class OpenBreak3Strategy(Strategy):
             self.armed = True
             self.entry_price = None
             self.buy_day = None
-            self.pullback_half_done = False
         else:
             self.armed = False
         return pos
@@ -125,7 +132,6 @@ class OpenBreak3Strategy(Strategy):
             return False
         hold_txt = self._fmt_hold(price)
         self.sell(self.symbol, half, price=price)
-        self.pullback_half_done = True
         self.log(
             f"{day} {reason} qty={half:.0f}/{avail:.0f} 限价={price:.2f} {hold_txt}"
         )
@@ -141,7 +147,6 @@ class OpenBreak3Strategy(Strategy):
             self.armed = True
             self.entry_price = None
             self.buy_day = None
-            self.pullback_half_done = False
             return True
         if pos > 0:
             self.log(
@@ -154,6 +159,57 @@ class OpenBreak3Strategy(Strategy):
         self.prev2_close = self.prev_close
         self.prev_open = open_px
         self.prev_close = close_px
+
+    def _entry_target_pct(self) -> float:
+        if self.enable_dd_sizing and self.dd_half_mode:
+            return float(self.target_pct) * 0.5
+        return float(self.target_pct)
+
+    def _update_dd_sizing(self, *, day: str, mark_px: float) -> None:
+        """按权益回撤切换全仓/半仓；进入半仓时对持仓减半（整手）。"""
+        if not self.enable_dd_sizing:
+            return
+        try:
+            eq = float(self.equity)
+        except Exception:
+            return
+        if eq <= 0:
+            return
+        if self.peak_equity <= 0:
+            self.peak_equity = eq
+        if eq > self.peak_equity:
+            self.peak_equity = eq
+        dd = 1.0 - eq / self.peak_equity if self.peak_equity > 0 else 0.0
+
+        if (not self.dd_half_mode) and dd + 1e-12 >= float(self.dd_half_pct):
+            self.dd_half_mode = True
+            self.dd_half_done = False
+            self.log(
+                f"{day} 回撤仓位→半仓模式 dd={dd*100:.2f}% "
+                f"(≥{self.dd_half_pct*100:.0f}%) equity={eq:.2f} peak={self.peak_equity:.2f}"
+            )
+            avail = float(self.get_available_position(self.symbol))
+            pos = float(self.get_position(self.symbol))
+            if avail > 0 and (not self.dd_half_done):
+                half = float(half_lot_qty(avail, lot_size=int(self.lot_size)))
+                if half > 0:
+                    hold_txt = self._fmt_hold(mark_px)
+                    self.sell(self.symbol, half, price=float(mark_px))
+                    self.dd_half_done = True
+                    self.log(
+                        f"{day} 回撤减半仓 qty={half:.0f}/{avail:.0f} "
+                        f"限价={float(mark_px):.2f} {hold_txt}"
+                    )
+            elif pos > 0 and avail <= 0:
+                self.log(f"{day} 回撤半仓模式但T+1无可卖仓 pos={pos:.0f}")
+
+        elif self.dd_half_mode and dd + 1e-12 < float(self.dd_full_pct):
+            self.dd_half_mode = False
+            self.dd_half_done = False
+            self.log(
+                f"{day} 回撤仓位→全仓模式 dd={dd*100:.2f}% "
+                f"(<{self.dd_full_pct*100:.0f}%) equity={eq:.2f} peak={self.peak_equity:.2f}"
+            )
 
     def on_bar(self, bar) -> None:
         if bar.symbol != self.symbol:
@@ -168,6 +224,8 @@ class OpenBreak3Strategy(Strategy):
         bought_today = False
         try:
             pos = self._sync_position_state()
+            self._update_dd_sizing(day=day, mark_px=c)
+            pos = float(self.get_position(self.symbol))
             # 买点基准：默认今日开盘；优化版在前日小阳时改用前日开盘
             entry_base = o
             if (
@@ -208,17 +266,20 @@ class OpenBreak3Strategy(Strategy):
                     )
                 )
                 if can_buy:
+                    tgt = self._entry_target_pct()
                     self.order_target_percent(
                         symbol=self.symbol,
-                        target_percent=self.target_pct,
+                        target_percent=tgt,
                         price=entry_px,
                     )
                     self.armed = False
                     self.entry_price = entry_px
                     self.buy_day = day
                     bought_today = True
+                    mode = "半仓" if (self.enable_dd_sizing and self.dd_half_mode) else "全仓"
                     self.log(
-                        f"{day} 开盘+{self.entry_pct*100:.1f}%买入 限价={entry_px:.2f} "
+                        f"{day} 开盘+{self.entry_pct*100:.1f}%买入({mode}"
+                        f" target={tgt*100:.1f}%) 限价={entry_px:.2f} "
                         f"(open={o:.2f} high={h:.2f}) 持有收益=+0.00%"
                     )
                 elif self.prev_open is not None and self.prev_close is not None:
@@ -251,86 +312,86 @@ class OpenBreak3Strategy(Strategy):
                 return
 
             gap = self.gap_down_945_map.get(day) if self.enable_gap945 else None
-            if gap is not None:
-                exit_px = float(gap["exit_px"])
-                src = str(gap.get("source") or "1m")
-                prev_c = float(gap["prev_close"])
-                self._exit_all(
-                    day=day,
-                    avail=avail,
-                    pos=pos,
-                    price=exit_px,
-                    reason=(
-                        f"低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红全清"
-                        f"(open={o:.2f}<prev={prev_c:.2f} exit945={exit_px:.2f} {src})"
-                    ),
-                )
-                return
-
-            if hit_stop:
-                self._exit_all(
-                    day=day,
-                    avail=avail,
-                    pos=pos,
-                    price=stop_px,
-                    reason=f"开盘-{self.stop_pct*100:.1f}%止损(open={o:.2f} low={low:.2f})",
-                )
-                return
-
-            # 因子2：仅有持仓；优先用分钟预计算的「迄今高→回落」，否则日线近似
-            pb = (
-                self.pullback_half_map.get(day)
-                if self.enable_factor2
-                else None
-            )
-            if (
-                self.enable_factor2
-                and pos > 0
-                and avail > 0
-                and (not self.pullback_half_done)
-                and (
-                    pb is not None
-                    or hit_pullback_half(
-                        h,
-                        low,
-                        pullback_pct=self.pullback_pct,
-                        tick=self.tick,
+            if self.enable_soft_half_exit:
+                # 软减半：止损全清优先；945/阴线仅减半，可同日叠加
+                if hit_stop:
+                    self._exit_all(
+                        day=day,
+                        avail=avail,
+                        pos=pos,
+                        price=stop_px,
+                        reason=(
+                            f"开盘-{self.stop_pct*100:.1f}%止损"
+                            f"(open={o:.2f} low={low:.2f})"
+                        ),
                     )
-                )
-            ):
-                if pb is not None:
-                    pb_px = float(pb["exit_px"])
-                    src = str(pb.get("source") or "1m")
-                    hi_ref = float(pb.get("high_so_far") or h)
-                else:
-                    pb_px = pullback_trigger_price(
-                        h, pullback_pct=self.pullback_pct, tick=self.tick
-                    )
-                    src = "daily"
-                    hi_ref = h
-                if self._exit_half(
-                    day=day,
-                    avail=avail,
-                    price=pb_px,
-                    reason=(
-                        f"因子2迄今高回落{self.pullback_pct*100:.1f}%"
-                        f"(high={hi_ref:.2f} exit={pb_px:.2f} {src})"
-                    ),
-                ):
-                    # 减半后当日仍可能阴线清剩余；刷新仓位再判阴线
-                    pos = float(self.get_position(self.symbol))
-                    avail = float(self.get_available_position(self.symbol))
-                    if pos <= 0 and avail <= 0:
-                        return
+                    return
 
-            if yin and avail > 0:
-                self._exit_all(
-                    day=day,
-                    avail=avail,
-                    pos=pos,
-                    price=float(c),
-                    reason="阴线收盘卖出",
-                )
+                if gap is not None and avail > 0:
+                    exit_px = float(gap["exit_px"])
+                    src = str(gap.get("source") or "1m")
+                    prev_c = float(gap["prev_close"])
+                    if self._exit_half(
+                        day=day,
+                        avail=avail,
+                        price=exit_px,
+                        reason=(
+                            f"低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
+                            f"未翻红减半"
+                            f"(open={o:.2f}<prev={prev_c:.2f} exit945={exit_px:.2f} {src})"
+                        ),
+                    ):
+                        pos = float(self.get_position(self.symbol))
+                        avail = float(self.get_available_position(self.symbol))
+                        if pos <= 0 and avail <= 0:
+                            return
+
+                if yin and avail > 0:
+                    self._exit_half(
+                        day=day,
+                        avail=avail,
+                        price=float(c),
+                        reason="阴线收盘减半",
+                    )
+            else:
+                # 原因子1：945全清优先；止损全清；阴线全清
+                if gap is not None:
+                    exit_px = float(gap["exit_px"])
+                    src = str(gap.get("source") or "1m")
+                    prev_c = float(gap["prev_close"])
+                    self._exit_all(
+                        day=day,
+                        avail=avail,
+                        pos=pos,
+                        price=exit_px,
+                        reason=(
+                            f"低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红全清"
+                            f"(open={o:.2f}<prev={prev_c:.2f} exit945={exit_px:.2f} {src})"
+                        ),
+                    )
+                    return
+
+                if hit_stop:
+                    self._exit_all(
+                        day=day,
+                        avail=avail,
+                        pos=pos,
+                        price=stop_px,
+                        reason=(
+                            f"开盘-{self.stop_pct*100:.1f}%止损"
+                            f"(open={o:.2f} low={low:.2f})"
+                        ),
+                    )
+                    return
+
+                if yin and avail > 0:
+                    self._exit_all(
+                        day=day,
+                        avail=avail,
+                        pos=pos,
+                        price=float(c),
+                        reason="阴线收盘卖出",
+                    )
         finally:
             self._roll_prev_bars(o, c)
 
@@ -373,7 +434,8 @@ def print_summary(
     )
     print(
         f"卖出: ①低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}"
-        f"前未翻红(high<昨收)则按09:45分钟收盘价全清；②止损@触发价清仓；③阴线@收盘；阳/十字持有；买入日不卖"
+        f"前未翻红(high<昨收)则按09:45分钟收盘价全清；②止损@触发价清仓；"
+        f"③阴线@收盘；阳/十字持有；买入日不卖"
     )
     print(f"佣金: 万0.854 ({commission_rate})；印花税(卖): {stamp_tax_rate*100:.1f}%")
     print(f"滑点: {slippage_value*100:.1f}%")

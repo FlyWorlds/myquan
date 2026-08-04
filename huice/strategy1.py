@@ -14,11 +14,16 @@ from strategy import KAICHENG, STRATEGY_RULES, run_open_break
 CFG = replace(
     KAICHENG,
     min1_cache=Path(__file__).with_name(f"{KAICHENG.symbol}_1m_qfq.parquet"),
+    min5_cache=Path(__file__).with_name(f"{KAICHENG.symbol}_5m_qfq.parquet"),
     report_path=Path(__file__).with_name(f"{KAICHENG.symbol_name}_report.html"),
 )
 
 
-def main(*, show_report: bool = True, gap945_mode: str = KAICHENG.gap945_exit_mode) -> None:
+def main(
+    *,
+    show_report: bool = True,
+    gap945_mode: str = KAICHENG.gap945_exit_mode,
+) -> None:
     cfg = replace(CFG, gap945_exit_mode=gap945_mode)
     run_open_break(cfg, show_report=show_report)
 
@@ -39,4 +44,7 @@ if __name__ == "__main__":
     if args.rules:
         print(STRATEGY_RULES.strip())
         raise SystemExit(0)
-    main(show_report=not args.no_open, gap945_mode=args.gap945_mode)
+    main(
+        show_report=not args.no_open,
+        gap945_mode=args.gap945_mode,
+    )

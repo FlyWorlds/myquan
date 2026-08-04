@@ -14,10 +14,7 @@ from strategy.open_break import (
     NEAR_POINTS,
     NEAR_FACTOR_PCT,
     PREV_SMALL_YANG_PCT,
-    PULLBACK_PCT,
-    ENABLE_FACTOR2,
     REASON_GAP945,
-    REASON_PULLBACK_HALF,
     REASON_STOP,
     REASON_YIN,
     STOP_PCT,
@@ -30,7 +27,6 @@ from strategy.open_break import (
     bar_shape,
     build_gap_down_945_map,
     build_gap_down_945_proxy_map,
-    build_pullback_half_map,
     ceil_to_tick,
     entry_trigger_price,
     eval_gap_down_945,
@@ -39,7 +35,6 @@ from strategy.open_break import (
     gap_down_flipped_red,
     half_lot_qty,
     has_double_yang_before,
-    hit_pullback_half,
     is_gap_down_945_window,
     is_gap_down_exit_window,
     is_t1_buy_day,
@@ -48,12 +43,11 @@ from strategy.open_break import (
     is_yin_exit_window,
     morning_high_before_gap945,
     prev_day_allows_entry,
-    pullback_trigger_price,
     stop_trigger_price,
     strategy_levels,
     strategy_signal,
 )
-from strategy.config import KAICHENG, HANGTIANDIANZI, XIEXINNENGKE, ZZ500_ETF, BacktestConfig
+from strategy.config import KAICHENG, HANGTIANDIANZI, XIEXINNENGKE, ZZ500_ETF, HK1888, BacktestConfig
 from strategy.gap945_analysis import (
     CERTAIN_CATS,
     classify_gap_days,
@@ -67,7 +61,7 @@ from strategy.gap945_analysis import (
 from strategy.data import fetch_daily
 from strategy.base import CommonBacktestParams, run_akquant_backtest, run_backtest_pipeline
 from strategy.registry import REGISTRY, StrategyEntry, get_strategy, list_strategies
-from strategy.minute import fetch_minute_1m
+from strategy.minute import fetch_minute_1m, pull_akshare_1m, standardize_minute_1m
 from strategy.runner import build_gap_map, load_minute, run_open_break, run_open_break_backtest
 from strategy.backtest import OpenBreak3Strategy, metric, print_monthly, print_summary, print_yearly
 
@@ -77,8 +71,6 @@ __all__ = [
     "STOP_PCT",
     "TICK_SIZE",
     "PREV_SMALL_YANG_PCT",
-    "PULLBACK_PCT",
-    "ENABLE_FACTOR2",
     "LOT_SIZE",
     "NEAR_POINTS",
     "NEAR_FACTOR_PCT",
@@ -91,20 +83,18 @@ __all__ = [
     "REASON_STOP",
     "REASON_YIN",
     "REASON_GAP945",
-    "REASON_PULLBACK_HALF",
     "BacktestConfig",
     "KAICHENG",
     "HANGTIANDIANZI",
     "XIEXINNENGKE",
     "ZZ500_ETF",
+    "HK1888",
     "CERTAIN_CATS",
     "ceil_to_tick",
     "floor_to_tick",
     "entry_trigger_price",
     "stop_trigger_price",
-    "pullback_trigger_price",
     "half_lot_qty",
-    "hit_pullback_half",
     "strategy_levels",
     "is_yin",
     "is_yang",
@@ -122,7 +112,6 @@ __all__ = [
     "eval_gap_down_945",
     "build_gap_down_945_map",
     "build_gap_down_945_proxy_map",
-    "build_pullback_half_map",
     "classify_gap_days",
     "replay_holding_days",
     "exit_without_gap945",
@@ -142,6 +131,8 @@ __all__ = [
     "get_strategy",
     "list_strategies",
     "fetch_minute_1m",
+    "pull_akshare_1m",
+    "standardize_minute_1m",
     "build_gap_map",
     "load_minute",
     "run_open_break",

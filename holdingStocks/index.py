@@ -44,17 +44,15 @@ _MYQUAN_ROOT = Path(__file__).resolve().parents[1]
 if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
+from strategy.minute import pull_akshare_1m
 from strategy.open_break import (
     DEFAULT_PCT,
-    ENABLE_FACTOR2,
     EXIT_REASONS,
     GAP_DOWN_EXIT_HOUR,
     GAP_DOWN_EXIT_MINUTE,
     LOT_SIZE,
     NEAR_FACTOR_PCT,
-    PULLBACK_PCT,
     REASON_GAP945,
-    REASON_PULLBACK_HALF,
     REASON_STOP,
     REASON_YIN,
     TICK_SIZE,
@@ -62,12 +60,9 @@ from strategy.open_break import (
     YIN_EXIT_MINUTE,
     bar_shape,
     eval_gap_down_945,
-    half_lot_qty,
-    hit_pullback_half,
     is_t1_buy_day,
     is_yin,
     is_yin_exit_window,
-    pullback_trigger_price,
     strategy_levels,
     strategy_signal,
 )
@@ -590,8 +585,6 @@ def apply_exit_fill(
         pos["buy_time"] = None
         pos["available"] = None
         pos["today_cost"] = None
-        pos["pullback_half_done"] = False
-        pos.pop("pullback_half_session", None)
         pos["note"] = f"{reason}@{rec['price']} ({session})"
     else:
         raw_avail = pos.get("available")
@@ -651,52 +644,6 @@ def apply_stop_fill(
         reason=REASON_STOP,
         trade_note=f"{REASON_STOP}(自动)",
     )
-
-
-def apply_pullback_half_fill(
-    *,
-    code: str,
-    meta: dict[str, Any],
-    fill_px: float,
-    qty: int,
-    cost: float | None,
-    session: str,
-    buy_time: str | None,
-    prev_close: float | None,
-    open_px: float,
-    px_digits: int,
-) -> dict[str, Any]:
-    """因子2：高点回落减半仓视为成交；同一段持仓只减一次。"""
-    data = load_holdings()
-    pos = data["positions"].setdefault(code, _empty_position(meta))
-    if bool(pos.get("pullback_half_done")):
-        return {}
-    sell_qty = half_lot_qty(qty, lot_size=LOT_SIZE)
-    if sell_qty <= 0:
-        return {}
-    rec = apply_exit_fill(
-        code=code,
-        meta=meta,
-        fill_px=float(fill_px),
-        qty=sell_qty,
-        cost=cost,
-        session=session,
-        buy_time=buy_time,
-        prev_close=prev_close,
-        open_px=open_px,
-        px_digits=px_digits,
-        reason=REASON_PULLBACK_HALF,
-        trade_note=f"{REASON_PULLBACK_HALF}(自动)×{sell_qty}",
-    )
-    data = load_holdings()
-    pos = data["positions"].setdefault(code, _empty_position(meta))
-    if int(pos.get("qty") or 0) > 0:
-        pos["pullback_half_done"] = True
-    else:
-        pos["pullback_half_done"] = False
-    pos.pop("pullback_half_session", None)
-    save_holdings(data)
-    return rec
 
 
 def apply_yin_fill(
@@ -845,25 +792,22 @@ def _day_key_series(ts: pd.Series) -> pd.Series:
 
 
 def fetch_today_quote(sina: str) -> dict[str, Any]:
-    """用1分钟线拼当日开高低；现价优先新浪实时，避免分钟末根滞后。"""
+    """用1分钟线拼当日开高低；现价优先新浪实时，避免分钟末根滞后。
+
+    分钟线优先框架 akshare：东财 `stock_zh_a_hist_min_em` → 新浪备用。
+    """
     today = str(pd.Timestamp.now().date())
     spot = fetch_sina_spot(sina)
 
     day = pd.DataFrame()
     prev_close: float | None = None
-    try:
-        raw = ak.stock_zh_a_minute(symbol=sina, period="1", adjust="")
-    except Exception:  # noqa: BLE001
-        raw = None
+    em_code = sina[2:] if len(sina) >= 8 and sina[:2].lower() in ("sh", "sz") else sina
+    # 盯盘用未复权更贴近盘面现价；失败则 pull 内部仍会尝试新浪
+    df = pull_akshare_1m(em_symbol=em_code, sina_symbol=sina, adjust="")
 
-    if raw is not None and not raw.empty:
-        df = raw.copy()
-        df["ts"] = pd.to_datetime(df["day"])
+    if not df.empty:
         day_keys = _day_key_series(df["ts"])
         day = df[day_keys == today].copy()
-        for col in ("open", "high", "low", "close"):
-            if not day.empty:
-                day[col] = pd.to_numeric(day[col], errors="coerce")
         if not day.empty:
             day = day.dropna(subset=["open", "high", "low", "close"]).sort_values("ts")
             # 开盘初偶发 open=0 的脏分钟，丢掉无效价
@@ -873,7 +817,6 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
 
         prev = df[day_keys < today].copy()
         if not prev.empty:
-            prev["close"] = pd.to_numeric(prev["close"], errors="coerce")
             prev = prev.dropna(subset=["close"]).sort_values("ts")
             if not prev.empty:
                 prev_last = _day_key_series(prev["ts"]).iloc[-1]
@@ -1137,48 +1080,6 @@ def collect_rows() -> list[dict[str, Any]]:
                 buy_time = pos.get("buy_time")
                 sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
 
-            # 因子2：开关关闭时跳过（ENABLE_FACTOR2 / enable_factor2）
-            pullback_done = bool(pos.get("pullback_half_done"))
-            pb_px = pullback_trigger_price(
-                float(q["high"]), pullback_pct=PULLBACK_PCT, tick=tick
-            )
-            half_q = half_lot_qty(sellable, lot_size=LOT_SIZE)
-            if (
-                ENABLE_FACTOR2
-                and qty > 0
-                and sellable > 0
-                and (not hit_stop)
-                and (not pullback_done)
-                and half_q > 0
-                and hit_pullback_half(
-                    float(q["high"]),
-                    min(float(q["low"]), float(q["last"])),
-                    pullback_pct=PULLBACK_PCT,
-                    tick=tick,
-                )
-            ):
-                apply_pullback_half_fill(
-                    code=code,
-                    meta=w,
-                    fill_px=float(pb_px),
-                    qty=sellable,
-                    cost=float(cost) if cost is not None else None,
-                    session=q["session"],
-                    buy_time=buy_time,
-                    prev_close=q.get("prev_close"),
-                    open_px=float(q["open"]),
-                    px_digits=px_digits,
-                )
-                holdings = load_holdings()
-                positions = holdings.get("positions", {})
-                realized_map = holdings.get("realized_today", {})
-                pos = positions.get(code, {})
-                qty = int(pos.get("qty") or 0)
-                cost = pos.get("cost")
-                buy_time = pos.get("buy_time")
-                sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
-                pullback_done = True
-
             # 未触止损、可卖、尾盘仍收阴 → 按现价结算（只卖可用）
             if (
                 qty > 0
@@ -1340,9 +1241,6 @@ def collect_rows() -> list[dict[str, Any]]:
                 t0=t0,
                 prev_close=q.get("prev_close"),
                 day_bars=q.get("_day_bars"),
-                enable_factor2=ENABLE_FACTOR2,
-                pullback_pct=PULLBACK_PCT,
-                pullback_done=bool(pos.get("pullback_half_done")),
                 sellable_qty=sellable,
                 lot_size=LOT_SIZE,
             )
@@ -2201,7 +2099,7 @@ def write_html_report(
     </div>
     <p class="note">
       持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入卖出预警（止损1%带/低开945预警/阴线）；否则空仓或持有。
-      低开未翻红：盘中预警，09:45 才决策并给挂单价。因子2（高点回落减半）当前关闭。建议挂单严格等于因子价。
+      低开未翻红：盘中预警，09:45 才决策并给挂单价。建议挂单严格等于因子价。
       个股卡片：持仓状态、持股数、可卖、开盘、当日涨幅、较开盘涨幅、因子侧、因子价、因子触发、距因子。
       因子价=买点（空仓）或止损/945/阴线决策价；|距因子%|≤1% → 将买入/将止损。
       合计区仍显示总资产与盈亏。默认 ±2.5%（ceil/floor，同 strategy/open_break.py）。
@@ -2499,9 +2397,6 @@ def cmd_buy(args: argparse.Namespace) -> None:
     data = load_holdings()
     pos = data["positions"].setdefault(code, _empty_position(meta))
     old_qty = int(pos.get("qty") or 0)
-    if old_qty <= 0:
-        pos["pullback_half_done"] = False
-        pos.pop("pullback_half_session", None)
     old_cost = float(pos["cost"]) if pos.get("cost") is not None else None
     # 加仓前可卖股保留；新买部分 T+1 锁定
     if old_qty > 0:
@@ -2598,8 +2493,6 @@ def cmd_sell(args: argparse.Namespace) -> None:
         pos["buy_time"] = None
         pos["available"] = None
         pos["today_cost"] = None
-        pos["pullback_half_done"] = False
-        pos.pop("pullback_half_session", None)
     cash = _account_cash(data)
     if cash is not None:
         data["account_cash"] = round(cash + price * qty, 2)
