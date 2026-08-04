@@ -1,0 +1,5 @@
+# 持仓盯盘运行时数据（本地状态，勿入库）
+holdingStocks/holdings.json
+holdingStocks/holdings_report.html
+holdingStocks/holdings_watch.json
+holdingStocks/holdings_watch.pid
