@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>持仓盯盘 · 600552 / 002171 / 000859 / 600330 / 000021 / 600879 / 002015</title>
+  <title>持仓盯盘 · 600552</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -69,6 +69,12 @@
       filter: blur(7px);
       user-select: none;
       pointer-events: none;
+    }
+    body.privacy-hidden h2.sensitive,
+    body.privacy-hidden code.sensitive {
+      filter: blur(8px);
+      color: transparent;
+      text-shadow: 0 0 10px rgba(28, 35, 51, 0.55);
     }
     body.privacy-hidden .sensitive.up,
     body.privacy-hidden .sensitive.down,
@@ -252,7 +258,7 @@
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p>600552 / 002171 / 000859 / 600330 / 000021 / 600879 / 002015 ±2.5% · 2026-08-03 16:06:18 · <span class="watch-live">盯盘中</span> · 下次更新 <strong id="watch-countdown">30</strong>s</p>
+          <p><span class="sensitive">600552</span> ±2.5% · 2026-08-04 10:11:24 · <span class="watch-live">盯盘中</span> · 下次更新 <strong id="watch-countdown">30</strong>s</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -277,9 +283,9 @@
               </div>
               
               <div class="index-metrics">
-                <div><span>点数</span><b>3809.66</b></div>
-                <div><span>涨跌点数</span><b class="down">-22.60</b></div>
-                <div><span>涨跌幅</span><b class="down">-0.59%</b></div>
+                <div><span>点数</span><b>3800.92</b></div>
+                <div><span>涨跌点数</span><b class="down">-8.75</b></div>
+                <div><span>涨跌幅</span><b class="down">-0.23%</b></div>
               </div>
               
             </div>
@@ -292,34 +298,34 @@
               </div>
               
               <div class="index-metrics">
-                <div><span>点数</span><b>13448.29</b></div>
-                <div><span>涨跌点数</span><b class="down">-130.64</b></div>
-                <div><span>涨跌幅</span><b class="down">-0.96%</b></div>
+                <div><span>点数</span><b>13666.52</b></div>
+                <div><span>涨跌点数</span><b class="up">+218.23</b></div>
+                <div><span>涨跌幅</span><b class="up">+1.62%</b></div>
               </div>
               
             </div>
             
       <div class="summary">
         <div class="label">合计盈亏</div>
-        <div class="value ">
-          <span class="sensitive">-</span>
+        <div class="value down">
+          <span class="sensitive">-27.00</span>
           <span style="font-size:0.95rem;font-weight:600;margin-left:6px;">
-            <span class="sensitive">-</span>
+            <span class="sensitive">-0.19%</span>
           </span>
         </div>
         <div class="day-line">
           <span class="day-label">当日盈亏</span>
-          <span class="day-value ">
-            <span class="sensitive">-</span>
-            <span class="sensitive"> -</span>
+          <span class="day-value up">
+            <span class="sensitive">+531.00</span>
+            <span class="sensitive"> +3.98%</span>
           </span>
         </div>
         <div class="meta sensitive">
           总资产 -
           · 可用 -
           · 仓位 -
-          · 市值 -
-          · 成本 -
+          · 市值 13860.00
+          · 成本 13887.00
           · 当日开仓 -
           
           
@@ -328,221 +334,43 @@
     </div>
     <div class="cards">
       
-            <article class="card warn-buy">
+            <article class="card status-hold">
               <header>
                 <div class="title">
                   <span class="market">上证</span>
-                  <h2>凯盛科技</h2>
-                  <code>600552</code>
-                  <div class="alert-badge tag-alert">待买入 · 已触买</div>
+                  <h2 class="sensitive">凯盛科技</h2>
+                  <code class="sensitive">600552</code>
+                  <div class="alert-badge tag-hold">持有<span class="wt sensitive"> 100.0%</span></div>
                 </div>
                 <div class="price">
-                  <div class="last"><span class="sensitive">14.81</span></div>
-                  <div class="chg down">
-                    <span class="sensitive">-1.46%</span>
-                  </div>
-                </div>
-              </header>
-              
-              <div class="suggest-order sensitive">建议挂单 <strong>15.17</strong> · 限价买@15.17</div>
-              <div class="grid">
-                <div><span>持仓状态</span><b class="tag-alert">待买入</b></div>
-                <div><span>当日涨幅</span><b class="down"><span class="sensitive">-1.46%</span></b></div>
-                <div><span>开盘</span><b><span class="sensitive">14.80</span></b></div>
-                <div><span>较开盘涨幅</span><b class="up"><span class="sensitive">+0.07%</span></b></div>
-                <div><span>因子侧</span><b class="tag-buy">买入</b></div>
-                <div><span>因子价</span><b class="tag-buy"><span class="sensitive">15.17</span></b></div>
-                <div><span>因子触发</span><b class="tag-buy">已触发</b></div>
-                <div class="dist-factor"><span>距因子</span><b class="down"><span class="sensitive">-0.36 (-2.37%)</span></b></div>
-              </div>
-              <footer>更新 15:34:59</footer>
-            </article>
-            
-            <article class="card status-flat">
-              <header>
-                <div class="title">
-                  <span class="market">深证</span>
-                  <h2>楚江新材</h2>
-                  <code>002171</code>
-                  <div class="alert-badge tag-flat">空仓</div>
-                </div>
-                <div class="price">
-                  <div class="last"><span class="sensitive">9.49</span></div>
+                  <div class="last"><span class="sensitive">15.40</span></div>
                   <div class="chg up">
-                    <span class="sensitive">+2.26%</span>
+                    <span class="sensitive">+3.98%</span>
                   </div>
                 </div>
               </header>
               
               
               <div class="grid">
-                <div><span>持仓状态</span><b class="tag-flat">空仓</b></div>
-                <div><span>当日涨幅</span><b class="up"><span class="sensitive">+2.26%</span></b></div>
-                <div><span>开盘</span><b><span class="sensitive">9.39</span></b></div>
-                <div><span>较开盘涨幅</span><b class="up"><span class="sensitive">+1.06%</span></b></div>
-                <div><span>因子侧</span><b class="tag-buy">买入</b></div>
-                <div><span>因子价</span><b class="tag-buy"><span class="sensitive">9.63</span></b></div>
+                <div><span>持仓状态</span><b class="tag-hold">持有</b></div>
+                <div><span>持股数</span><b><span class="sensitive">900</span></b></div>
+                <div><span>可卖</span><b><span class="sensitive">900</span></b></div>
+                <div><span>当日涨幅</span><b class="up"><span class="sensitive">+3.98%</span></b></div>
+                <div><span>开盘</span><b><span class="sensitive">15.05</span></b></div>
+                <div><span>较开盘涨幅</span><b class="up"><span class="sensitive">+2.33%</span></b></div>
+                <div><span>因子侧</span><b class="tag-sell">卖出</b></div>
+                <div><span>因子价</span><b class="tag-sell"><span class="sensitive">14.67</span></b></div>
                 <div><span>因子触发</span><b class="">未触发</b></div>
-                <div class="dist-factor"><span>距因子</span><b class="down"><span class="sensitive">-0.14 (-1.45%)</span></b></div>
+                <div class="dist-factor"><span>距因子</span><b class="up"><span class="sensitive">+0.73 (+4.98%)</span></b></div>
               </div>
-              <footer>更新 15:35:45</footer>
-            </article>
-            
-            <article class="card status-flat">
-              <header>
-                <div class="title">
-                  <span class="market">深证</span>
-                  <h2>国风新材</h2>
-                  <code>000859</code>
-                  <div class="alert-badge tag-flat">空仓</div>
-                </div>
-                <div class="price">
-                  <div class="last"><span class="sensitive">8.27</span></div>
-                  <div class="chg down">
-                    <span class="sensitive">-0.12%</span>
-                  </div>
-                </div>
-              </header>
-              
-              
-              <div class="grid">
-                <div><span>持仓状态</span><b class="tag-flat">空仓</b></div>
-                <div><span>当日涨幅</span><b class="down"><span class="sensitive">-0.12%</span></b></div>
-                <div><span>开盘</span><b><span class="sensitive">8.21</span></b></div>
-                <div><span>较开盘涨幅</span><b class="up"><span class="sensitive">+0.73%</span></b></div>
-                <div><span>因子侧</span><b class="tag-buy">买入</b></div>
-                <div><span>因子价</span><b class="tag-buy"><span class="sensitive">8.42</span></b></div>
-                <div><span>因子触发</span><b class="">未触发</b></div>
-                <div class="dist-factor"><span>距因子</span><b class="down"><span class="sensitive">-0.15 (-1.78%)</span></b></div>
-              </div>
-              <footer>更新 15:35:15</footer>
-            </article>
-            
-            <article class="card status-flat">
-              <header>
-                <div class="title">
-                  <span class="market">上证</span>
-                  <h2>天通股份</h2>
-                  <code>600330</code>
-                  <div class="alert-badge tag-flat">空仓</div>
-                </div>
-                <div class="price">
-                  <div class="last"><span class="sensitive">16.47</span></div>
-                  <div class="chg down">
-                    <span class="sensitive">-0.84%</span>
-                  </div>
-                </div>
-              </header>
-              
-              
-              <div class="grid">
-                <div><span>持仓状态</span><b class="tag-flat">空仓</b></div>
-                <div><span>当日涨幅</span><b class="down"><span class="sensitive">-0.84%</span></b></div>
-                <div><span>开盘</span><b><span class="sensitive">16.60</span></b></div>
-                <div><span>较开盘涨幅</span><b class="down"><span class="sensitive">-0.78%</span></b></div>
-                <div><span>因子侧</span><b class="tag-buy">买入</b></div>
-                <div><span>因子价</span><b class="tag-buy"><span class="sensitive">17.02</span></b></div>
-                <div><span>因子触发</span><b class="">未触发</b></div>
-                <div class="dist-factor"><span>距因子</span><b class="down"><span class="sensitive">-0.55 (-3.23%)</span></b></div>
-              </div>
-              <footer>更新 15:34:59</footer>
-            </article>
-            
-            <article class="card status-flat">
-              <header>
-                <div class="title">
-                  <span class="market">深证</span>
-                  <h2>深科技</h2>
-                  <code>000021</code>
-                  <div class="alert-badge tag-flat">空仓</div>
-                </div>
-                <div class="price">
-                  <div class="last"><span class="sensitive">34.51</span></div>
-                  <div class="chg down">
-                    <span class="sensitive">-7.31%</span>
-                  </div>
-                </div>
-              </header>
-              
-              
-              <div class="grid">
-                <div><span>持仓状态</span><b class="tag-flat">空仓</b></div>
-                <div><span>当日涨幅</span><b class="down"><span class="sensitive">-7.31%</span></b></div>
-                <div><span>开盘</span><b><span class="sensitive">36.06</span></b></div>
-                <div><span>较开盘涨幅</span><b class="down"><span class="sensitive">-4.30%</span></b></div>
-                <div><span>因子侧</span><b class="tag-buy">买入</b></div>
-                <div><span>因子价</span><b class="tag-buy"><span class="sensitive">36.97</span></b></div>
-                <div><span>因子触发</span><b class="">未触发</b></div>
-                <div class="dist-factor"><span>距因子</span><b class="down"><span class="sensitive">-2.46 (-6.65%)</span></b></div>
-              </div>
-              <footer>更新 15:35:30</footer>
-            </article>
-            
-            <article class="card warn-buy">
-              <header>
-                <div class="title">
-                  <span class="market">上证</span>
-                  <h2>航天电子</h2>
-                  <code>600879</code>
-                  <div class="alert-badge tag-alert">待买入 · 已触买</div>
-                </div>
-                <div class="price">
-                  <div class="last"><span class="sensitive">15.06</span></div>
-                  <div class="chg up">
-                    <span class="sensitive">+3.29%</span>
-                  </div>
-                </div>
-              </header>
-              
-              <div class="suggest-order sensitive">建议挂单 <strong>14.96</strong> · 限价买@14.96</div>
-              <div class="grid">
-                <div><span>持仓状态</span><b class="tag-alert">待买入</b></div>
-                <div><span>当日涨幅</span><b class="up"><span class="sensitive">+3.29%</span></b></div>
-                <div><span>开盘</span><b><span class="sensitive">14.59</span></b></div>
-                <div><span>较开盘涨幅</span><b class="up"><span class="sensitive">+3.22%</span></b></div>
-                <div><span>因子侧</span><b class="tag-buy">买入</b></div>
-                <div><span>因子价</span><b class="tag-buy"><span class="sensitive">14.96</span></b></div>
-                <div><span>因子触发</span><b class="tag-buy">已触发</b></div>
-                <div class="dist-factor"><span>距因子</span><b class="up"><span class="sensitive">+0.10 (+0.67%)</span></b></div>
-              </div>
-              <footer>更新 15:34:59</footer>
-            </article>
-            
-            <article class="card status-flat">
-              <header>
-                <div class="title">
-                  <span class="market">深证</span>
-                  <h2>协鑫能科</h2>
-                  <code>002015</code>
-                  <div class="alert-badge tag-flat">空仓</div>
-                </div>
-                <div class="price">
-                  <div class="last"><span class="sensitive">15.66</span></div>
-                  <div class="chg up">
-                    <span class="sensitive">+3.85%</span>
-                  </div>
-                </div>
-              </header>
-              
-              
-              <div class="grid">
-                <div><span>持仓状态</span><b class="tag-flat">空仓</b></div>
-                <div><span>当日涨幅</span><b class="up"><span class="sensitive">+3.85%</span></b></div>
-                <div><span>开盘</span><b><span class="sensitive">15.49</span></b></div>
-                <div><span>较开盘涨幅</span><b class="up"><span class="sensitive">+1.10%</span></b></div>
-                <div><span>因子侧</span><b class="tag-buy">买入</b></div>
-                <div><span>因子价</span><b class="tag-buy"><span class="sensitive">15.88</span></b></div>
-                <div><span>因子触发</span><b class="">未触发</b></div>
-                <div class="dist-factor"><span>距因子</span><b class="down"><span class="sensitive">-0.22 (-1.39%)</span></b></div>
-              </div>
-              <footer>更新 15:36:00</footer>
+              <footer>更新 10:11:20</footer>
             </article>
             
     </div>
     <p class="note">
       持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入卖出预警（止损1%带/低开945预警/阴线）；否则空仓或持有。
-      低开未翻红：盘中预警，09:45 才决策并给挂单价。建议挂单严格等于因子价。
-      个股卡片：持仓状态、开盘、当日涨幅、较开盘涨幅、因子侧、因子价、因子触发、距因子。
+      低开未翻红：盘中预警，09:45 才决策并给挂单价。因子2（高点回落减半）当前关闭。建议挂单严格等于因子价。
+      个股卡片：持仓状态、持股数、可卖、开盘、当日涨幅、较开盘涨幅、因子侧、因子价、因子触发、距因子。
       因子价=买点（空仓）或止损/945/阴线决策价；|距因子%|≤1% → 将买入/将止损。
       合计区仍显示总资产与盈亏。默认 ±2.5%（ceil/floor，同 strategy/open_break.py）。
       盯盘模式：服务端每 30 秒重拉行情；有新数据后自动刷新本页。 停止请在终端 Ctrl+C。

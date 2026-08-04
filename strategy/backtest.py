@@ -17,14 +17,18 @@ from strategy.open_break import (
     GAP_DOWN_EXIT_HOUR,
     GAP_DOWN_EXIT_MINUTE,
     PREV_SMALL_YANG_PCT,
+    PULLBACK_PCT,
     STOP_PCT,
     TICK_SIZE,
     build_gap_down_945_map,
     entry_trigger_price,
+    half_lot_qty,
     has_double_yang_before,
+    hit_pullback_half,
     is_yin,
     is_yang,
     prev_day_allows_entry,
+    pullback_trigger_price,
     stop_trigger_price,
 )
 
@@ -40,6 +44,7 @@ class OpenBreak3Strategy(Strategy):
     end_date: str = ""
     slippage_value: float = 0.001
     gap_down_945_map: dict[str, dict[str, float | str]] = {}
+    pullback_half_map: dict[str, dict[str, float | str]] = {}
     enable_gap945: bool = True
     entry_pct: float = ENTRY_PCT
     stop_pct: float = STOP_PCT
@@ -50,6 +55,9 @@ class OpenBreak3Strategy(Strategy):
     entry_ref: str = "today_open"
     # yin_or_small_yang | yin_only（小阳次日不买）
     prev_entry_mode: str = "yin_or_small_yang"
+    # 因子2：开盘迄今最高回落 → 减半仓
+    enable_factor2: bool = False
+    pullback_pct: float = PULLBACK_PCT
 
     def on_start(self) -> None:
         self.subscribe(self.symbol)
@@ -61,6 +69,7 @@ class OpenBreak3Strategy(Strategy):
         self.prev2_open: float | None = None
         self.prev2_close: float | None = None
         self.buy_day: str | None = None
+        self.pullback_half_done: bool = False
         n_gap = len(self.gap_down_945_map)
         entry_txt = (
             "买点=前日小阳开盘×(1+pct)"
@@ -72,16 +81,20 @@ class OpenBreak3Strategy(Strategy):
             if self.prev_entry_mode == "yin_only"
             else f"前日须阴线或小阳(<{self.prev_small_yang_pct*100:.1f}%)"
         )
+        f2 = (
+            f"因子2=迄今高回落{self.pullback_pct*100:.1f}%减半仓"
+            if self.enable_factor2
+            else "因子2=关"
+        )
         self.log(
             f"{self.symbol_name}({self.symbol}) 开盘±{self.entry_pct*100:.1f}% "
             f"(+买/-止损，低开{GAP_DOWN_EXIT_HOUR:02d}:{GAP_DOWN_EXIT_MINUTE:02d}未翻红全清，阴线收盘出) | "
             f"{prev_txt}，禁前面双阳 | "
-            f"{entry_txt} | "
+            f"{entry_txt} | {f2} | "
             f"低开规则日历日={n_gap} | "
             f"佣金万0.854 滑点{self.slippage_value*100:.1f}% | "
             f"{self.start_date}~{self.end_date}"
         )
-
     def _hold_pnl_pct(self, mark_px: float) -> float | None:
         if self.entry_price is None or self.entry_price <= 0:
             return None
@@ -99,9 +112,24 @@ class OpenBreak3Strategy(Strategy):
             self.armed = True
             self.entry_price = None
             self.buy_day = None
+            self.pullback_half_done = False
         else:
             self.armed = False
         return pos
+
+    def _exit_half(
+        self, *, day: str, avail: float, price: float, reason: str
+    ) -> bool:
+        half = float(half_lot_qty(avail, lot_size=int(self.lot_size)))
+        if half <= 0:
+            return False
+        hold_txt = self._fmt_hold(price)
+        self.sell(self.symbol, half, price=price)
+        self.pullback_half_done = True
+        self.log(
+            f"{day} {reason} qty={half:.0f}/{avail:.0f} 限价={price:.2f} {hold_txt}"
+        )
+        return True
 
     def _exit_all(
         self, *, day: str, avail: float, pos: float, price: float, reason: str
@@ -113,6 +141,7 @@ class OpenBreak3Strategy(Strategy):
             self.armed = True
             self.entry_price = None
             self.buy_day = None
+            self.pullback_half_done = False
             return True
         if pos > 0:
             self.log(
@@ -248,7 +277,53 @@ class OpenBreak3Strategy(Strategy):
                 )
                 return
 
-            if yin:
+            # 因子2：仅有持仓；优先用分钟预计算的「迄今高→回落」，否则日线近似
+            pb = (
+                self.pullback_half_map.get(day)
+                if self.enable_factor2
+                else None
+            )
+            if (
+                self.enable_factor2
+                and pos > 0
+                and avail > 0
+                and (not self.pullback_half_done)
+                and (
+                    pb is not None
+                    or hit_pullback_half(
+                        h,
+                        low,
+                        pullback_pct=self.pullback_pct,
+                        tick=self.tick,
+                    )
+                )
+            ):
+                if pb is not None:
+                    pb_px = float(pb["exit_px"])
+                    src = str(pb.get("source") or "1m")
+                    hi_ref = float(pb.get("high_so_far") or h)
+                else:
+                    pb_px = pullback_trigger_price(
+                        h, pullback_pct=self.pullback_pct, tick=self.tick
+                    )
+                    src = "daily"
+                    hi_ref = h
+                if self._exit_half(
+                    day=day,
+                    avail=avail,
+                    price=pb_px,
+                    reason=(
+                        f"因子2迄今高回落{self.pullback_pct*100:.1f}%"
+                        f"(high={hi_ref:.2f} exit={pb_px:.2f} {src})"
+                    ),
+                ):
+                    # 减半后当日仍可能阴线清剩余；刷新仓位再判阴线
+                    pos = float(self.get_position(self.symbol))
+                    avail = float(self.get_available_position(self.symbol))
+                    if pos <= 0 and avail <= 0:
+                        return
+
+            if yin and avail > 0:
                 self._exit_all(
                     day=day,
                     avail=avail,

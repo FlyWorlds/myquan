@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-03 16:06:15",
+  "updated_at": "2026-08-04 10:11:23",
   "positions": {
     "001309": {
       "name": "德明利",
@@ -354,12 +354,13 @@
     "600552": {
       "name": "凯盛科技",
       "market": "上证",
-      "qty": 0,
-      "available": null,
-      "cost": null,
+      "qty": 900,
+      "available": 900,
+      "cost": 15.43,
       "today_cost": null,
-      "buy_time": null,
-      "note": ""
+      "buy_time": "2026-07-31 09:30:00",
+      "note": "实盘持仓@0731",
+      "pullback_half_done": false
     },
     "003022": {
       "name": "联泓新科",
@@ -671,8 +672,8 @@
       "buy_time": null
     },
     "600552": {
-      "holding": false,
-      "buy_time": null
+      "holding": true,
+      "buy_time": "2026-07-31 09:30:00"
     },
     "003022": {
       "holding": false,

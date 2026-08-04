@@ -6,7 +6,7 @@ import datetime as dt
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from strategy.open_break import GAP945_EXIT_MODE, TICK_SIZE
+from strategy.open_break import GAP945_EXIT_MODE, PULLBACK_PCT, TICK_SIZE
 
 
 @dataclass
@@ -33,6 +33,9 @@ class BacktestConfig:
     entry_ref: str = "today_open"
     # 前日过滤：yin_or_small_yang=阴线或小阳；yin_only=仅阴线（小阳次日不买）
     prev_entry_mode: str = "yin_or_small_yang"
+    # 因子2：开盘迄今最高回落 → 减半仓（总开关 ENABLE_FACTOR2，当前关）
+    enable_factor2: bool = False
+    pullback_pct: float = PULLBACK_PCT
     min1_cache: Path | None = None
     report_path: Path | None = None
 
@@ -49,8 +52,13 @@ class BacktestConfig:
             else "买点=今日开盘"
         )
         prev = "仅阴后买" if self.prev_entry_mode == "yin_only" else "阴/小阳后买"
+        f2 = (
+            f"高回落{self.pullback_pct * 100:.1f}%减半"
+            if self.enable_factor2
+            else "无因子2"
+        )
         return (
-            f"开盘±{self.threshold_pct * 100:.1f}%({mode}/阳持/阴出/{entry}/{prev}) "
+            f"开盘±{self.threshold_pct * 100:.1f}%({mode}/阳持/阴出/{entry}/{prev}/{f2}) "
             f"滑点{self.slippage_value * 100:.1f}点{t1} "
             f"({self.start_date}~{self.end_date})"
         )

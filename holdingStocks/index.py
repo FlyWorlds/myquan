@@ -12,7 +12,7 @@
 用法：
   python index.py              # 查看标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
-  python index.py watch        # 长驻：每60秒更新行情，本地页倒计时自动刷新
+  python index.py watch        # 长驻：每60秒更新行情；每日09:26强制刷新盯盘开盘价
   python index.py buy 600552 15.50 400
   python index.py sell 600552 16.20 400
   python index.py set-cost 600552 15.95 --qty 400
@@ -30,7 +30,7 @@ import os
 import sys
 import threading
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -46,11 +46,15 @@ if str(_MYQUAN_ROOT) not in sys.path:
 
 from strategy.open_break import (
     DEFAULT_PCT,
+    ENABLE_FACTOR2,
     EXIT_REASONS,
     GAP_DOWN_EXIT_HOUR,
     GAP_DOWN_EXIT_MINUTE,
+    LOT_SIZE,
     NEAR_FACTOR_PCT,
+    PULLBACK_PCT,
     REASON_GAP945,
+    REASON_PULLBACK_HALF,
     REASON_STOP,
     REASON_YIN,
     TICK_SIZE,
@@ -58,9 +62,12 @@ from strategy.open_break import (
     YIN_EXIT_MINUTE,
     bar_shape,
     eval_gap_down_945,
+    half_lot_qty,
+    hit_pullback_half,
     is_t1_buy_day,
     is_yin,
     is_yin_exit_window,
+    pullback_trigger_price,
     strategy_levels,
     strategy_signal,
 )
@@ -153,58 +160,14 @@ def _calc_day_pnl(
         return round(day_pnl, 2), None, None
     return round(day_pnl, 2), round(day_pnl / day_base * 100.0, 2), round(day_base, 2)
 
+# 盯盘测：仅凯盛；恢复全池时从 README 宇宙表或 git 历史还原
 WATCHLIST: list[dict[str, Any]] = [
-    {"code": "001309", "sina": "sz001309", "market": "深证", "name": "德明利"},
-    {"code": "001389", "sina": "sz001389", "market": "深证", "name": "广合科技"},
-    {"code": "600660", "sina": "sh600660", "market": "上证", "name": "福耀玻璃"},
-    {"code": "002335", "sina": "sz002335", "market": "深证", "name": "科华数据"},
-    {"code": "600330", "sina": "sh600330", "market": "上证", "name": "天通股份"},
-    {"code": "605117", "sina": "sh605117", "market": "上证", "name": "德业股份"},
-    {"code": "002008", "sina": "sz002008", "market": "深证", "name": "大族激光"},
-    {"code": "002837", "sina": "sz002837", "market": "深证", "name": "英维克"},
-    {"code": "600105", "sina": "sh600105", "market": "上证", "name": "永鼎股份"},
-    {"code": "002812", "sina": "sz002812", "market": "深证", "name": "恩捷股份"},
-    {"code": "000988", "sina": "sz000988", "market": "深证", "name": "华工科技"},
-    {"code": "002015", "sina": "sz002015", "market": "深证", "name": "协鑫能科"},
-    {"code": "600862", "sina": "sh600862", "market": "上证", "name": "中航高科"},
-    {"code": "600111", "sina": "sh600111", "market": "上证", "name": "北方稀土"},
-    {"code": "603119", "sina": "sh603119", "market": "上证", "name": "浙江荣泰"},
-    {"code": "600988", "sina": "sh600988", "market": "上证", "name": "赤峰黄金"},
-    {"code": "601869", "sina": "sh601869", "market": "上证", "name": "长飞光纤"},
-    {"code": "002460", "sina": "sz002460", "market": "深证", "name": "赣锋锂业"},
-    {"code": "601689", "sina": "sh601689", "market": "上证", "name": "拓普集团"},
-    {"code": "000737", "sina": "sz000737", "market": "深证", "name": "北方铜业"},
-    {"code": "002466", "sina": "sz002466", "market": "深证", "name": "天齐锂业"},
-    {"code": "002436", "sina": "sz002436", "market": "深证", "name": "兴森科技"},
-    {"code": "000591", "sina": "sz000591", "market": "深证", "name": "太阳能"},
-    {"code": "603256", "sina": "sh603256", "market": "上证", "name": "宏和科技"},
-    {"code": "603019", "sina": "sh603019", "market": "上证", "name": "中科曙光"},
-    {"code": "002261", "sina": "sz002261", "market": "深证", "name": "拓维信息"},
-    {"code": "002851", "sina": "sz002851", "market": "深证", "name": "麦格米特"},
-    {"code": "603986", "sina": "sh603986", "market": "上证", "name": "兆易创新"},
-    {"code": "000021", "sina": "sz000021", "market": "深证", "name": "深科技"},
-    {"code": "603920", "sina": "sh603920", "market": "上证", "name": "世运电路"},
-    {"code": "000733", "sina": "sz000733", "market": "深证", "name": "振华科技"},
-    {"code": "002603", "sina": "sz002603", "market": "深证", "name": "以岭药业"},
-    {"code": "002241", "sina": "sz002241", "market": "深证", "name": "歌尔股份"},
-    {"code": "002625", "sina": "sz002625", "market": "深证", "name": "光启技术"},
-    {"code": "000997", "sina": "sz000997", "market": "深证", "name": "新大陆"},
     {"code": "600552", "sina": "sh600552", "market": "上证", "name": "凯盛科技"},
-    {"code": "003022", "sina": "sz003022", "market": "深证", "name": "联泓新科"},
-    {"code": "600584", "sina": "sh600584", "market": "上证", "name": "长电科技"},
-    {"code": "002126", "sina": "sz002126", "market": "深证", "name": "银轮股份"},
-    {"code": "600132", "sina": "sh600132", "market": "上证", "name": "重庆啤酒"},
-    {"code": "600879", "sina": "sh600879", "market": "上证", "name": "航天电子"},
-    {"code": "002155", "sina": "sz002155", "market": "深证", "name": "湖南黄金"},
-    {"code": "600089", "sina": "sh600089", "market": "上证", "name": "特变电工"},
-    {"code": "601888", "sina": "sh601888", "market": "上证", "name": "中国中免"},
-    {"code": "600176", "sina": "sh600176", "market": "上证", "name": "中国巨石"},
-    {"code": "600141", "sina": "sh600141", "market": "上证", "name": "兴发集团"},
-    {"code": "001696", "sina": "sz001696", "market": "深证", "name": "宗申动力"},
-    {"code": "002432", "sina": "sz002432", "market": "深证", "name": "九安医疗"},
-    {"code": "002916", "sina": "sz002916", "market": "深证", "name": "深南电路"},
-    {"code": "002402", "sina": "sz002402", "market": "深证", "name": "和而泰"},
 ]
+
+# 竞价结束后强制刷新盯盘开盘价（写入报告/重算止损买点）；随 WATCHLIST 变化
+OPEN_PRICE_REFRESH_HOUR = 9
+OPEN_PRICE_REFRESH_MINUTE = 26
 
 # 大盘指数（新浪 spot）
 INDEX_WATCH: list[dict[str, str]] = [
@@ -627,6 +590,8 @@ def apply_exit_fill(
         pos["buy_time"] = None
         pos["available"] = None
         pos["today_cost"] = None
+        pos["pullback_half_done"] = False
+        pos.pop("pullback_half_session", None)
         pos["note"] = f"{reason}@{rec['price']} ({session})"
     else:
         raw_avail = pos.get("available")
@@ -686,6 +651,52 @@ def apply_stop_fill(
         reason=REASON_STOP,
         trade_note=f"{REASON_STOP}(自动)",
     )
+
+
+def apply_pullback_half_fill(
+    *,
+    code: str,
+    meta: dict[str, Any],
+    fill_px: float,
+    qty: int,
+    cost: float | None,
+    session: str,
+    buy_time: str | None,
+    prev_close: float | None,
+    open_px: float,
+    px_digits: int,
+) -> dict[str, Any]:
+    """因子2：高点回落减半仓视为成交；同一段持仓只减一次。"""
+    data = load_holdings()
+    pos = data["positions"].setdefault(code, _empty_position(meta))
+    if bool(pos.get("pullback_half_done")):
+        return {}
+    sell_qty = half_lot_qty(qty, lot_size=LOT_SIZE)
+    if sell_qty <= 0:
+        return {}
+    rec = apply_exit_fill(
+        code=code,
+        meta=meta,
+        fill_px=float(fill_px),
+        qty=sell_qty,
+        cost=cost,
+        session=session,
+        buy_time=buy_time,
+        prev_close=prev_close,
+        open_px=open_px,
+        px_digits=px_digits,
+        reason=REASON_PULLBACK_HALF,
+        trade_note=f"{REASON_PULLBACK_HALF}(自动)×{sell_qty}",
+    )
+    data = load_holdings()
+    pos = data["positions"].setdefault(code, _empty_position(meta))
+    if int(pos.get("qty") or 0) > 0:
+        pos["pullback_half_done"] = True
+    else:
+        pos["pullback_half_done"] = False
+    pos.pop("pullback_half_session", None)
+    save_holdings(data)
+    return rec
 
 
 def apply_yin_fill(
@@ -1126,6 +1137,48 @@ def collect_rows() -> list[dict[str, Any]]:
                 buy_time = pos.get("buy_time")
                 sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
 
+            # 因子2：开关关闭时跳过（ENABLE_FACTOR2 / enable_factor2）
+            pullback_done = bool(pos.get("pullback_half_done"))
+            pb_px = pullback_trigger_price(
+                float(q["high"]), pullback_pct=PULLBACK_PCT, tick=tick
+            )
+            half_q = half_lot_qty(sellable, lot_size=LOT_SIZE)
+            if (
+                ENABLE_FACTOR2
+                and qty > 0
+                and sellable > 0
+                and (not hit_stop)
+                and (not pullback_done)
+                and half_q > 0
+                and hit_pullback_half(
+                    float(q["high"]),
+                    min(float(q["low"]), float(q["last"])),
+                    pullback_pct=PULLBACK_PCT,
+                    tick=tick,
+                )
+            ):
+                apply_pullback_half_fill(
+                    code=code,
+                    meta=w,
+                    fill_px=float(pb_px),
+                    qty=sellable,
+                    cost=float(cost) if cost is not None else None,
+                    session=q["session"],
+                    buy_time=buy_time,
+                    prev_close=q.get("prev_close"),
+                    open_px=float(q["open"]),
+                    px_digits=px_digits,
+                )
+                holdings = load_holdings()
+                positions = holdings.get("positions", {})
+                realized_map = holdings.get("realized_today", {})
+                pos = positions.get(code, {})
+                qty = int(pos.get("qty") or 0)
+                cost = pos.get("cost")
+                buy_time = pos.get("buy_time")
+                sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
+                pullback_done = True
+
             # 未触止损、可卖、尾盘仍收阴 → 按现价结算（只卖可用）
             if (
                 qty > 0
@@ -1287,6 +1340,11 @@ def collect_rows() -> list[dict[str, Any]]:
                 t0=t0,
                 prev_close=q.get("prev_close"),
                 day_bars=q.get("_day_bars"),
+                enable_factor2=ENABLE_FACTOR2,
+                pullback_pct=PULLBACK_PCT,
+                pullback_done=bool(pos.get("pullback_half_done")),
+                sellable_qty=sellable,
+                lot_size=LOT_SIZE,
             )
             sig = _stabilize_sell_warn(
                 code=code,
@@ -1438,6 +1496,7 @@ def collect_rows() -> list[dict[str, Any]]:
                     "近止损": False,
                     "bg_class": "",
                     "持仓": int(pos.get("qty") or 0),
+                    "可用": 0,
                     "成本": pos.get("cost"),
                     "浮盈": None,
                     "浮盈%": None,
@@ -1722,8 +1781,8 @@ def write_html_report(
               <header>
                 <div class="title">
                   <span class="market">{escape(str(r['市场']))}</span>
-                  <h2>{escape(str(r['名称']))}</h2>
-                  <code>{escape(str(r['代码']))}</code>
+                  <h2 class="sensitive">{escape(str(r['名称']))}</h2>
+                  <code class="sensitive">{escape(str(r['代码']))}</code>
                   {alert_html}
                 </div>
                 <div class="price">
@@ -1737,6 +1796,8 @@ def write_html_report(
               {suggest_html}
               <div class="grid">
                 <div><span>持仓状态</span><b class="{pos_cls}">{escape(pos_status or '-')}</b></div>
+                <div><span>持股数</span><b>{_s(str(int(r.get('持仓') or 0)))}</b></div>
+                <div><span>可卖</span><b>{_s(str(int(r.get('可用') or 0)) if int(r.get('持仓') or 0) > 0 else '-')}</b></div>
                 <div><span>当日涨幅</span><b class="{_cls_chg(day_chg)}">{_s('-' if day_chg is None else f'{float(day_chg):+.2f}%')}</b></div>
                 <div><span>开盘</span><b>{_s(_fmt_num(r.get('开盘'), pdg))}</b></div>
                 <div><span>较开盘涨幅</span><b class="{_cls_chg(vs_open_pct)}">{_s('-' if vs_open_pct is None else f'{float(vs_open_pct):+.2f}%')}</b></div>
@@ -1902,6 +1963,12 @@ def write_html_report(
       filter: blur(7px);
       user-select: none;
       pointer-events: none;
+    }}
+    body.privacy-hidden h2.sensitive,
+    body.privacy-hidden code.sensitive {{
+      filter: blur(8px);
+      color: transparent;
+      text-shadow: 0 0 10px rgba(28, 35, 51, 0.55);
     }}
     body.privacy-hidden .sensitive.up,
     body.privacy-hidden .sensitive.down,
@@ -2085,7 +2152,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p>{_watchlist_codes_label()} ±2.5% · {_now()}{hero_extra}</p>
+          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> ±2.5% · {_now()}{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2134,8 +2201,8 @@ def write_html_report(
     </div>
     <p class="note">
       持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入卖出预警（止损1%带/低开945预警/阴线）；否则空仓或持有。
-      低开未翻红：盘中预警，09:45 才决策并给挂单价。建议挂单严格等于因子价。
-      个股卡片：持仓状态、开盘、当日涨幅、较开盘涨幅、因子侧、因子价、因子触发、距因子。
+      低开未翻红：盘中预警，09:45 才决策并给挂单价。因子2（高点回落减半）当前关闭。建议挂单严格等于因子价。
+      个股卡片：持仓状态、持股数、可卖、开盘、当日涨幅、较开盘涨幅、因子侧、因子价、因子触发、距因子。
       因子价=买点（空仓）或止损/945/阴线决策价；|距因子%|≤1% → 将买入/将止损。
       合计区仍显示总资产与盈亏。默认 ±2.5%（ceil/floor，同 strategy/open_break.py）。
       {watch_hint}
@@ -2432,6 +2499,9 @@ def cmd_buy(args: argparse.Namespace) -> None:
     data = load_holdings()
     pos = data["positions"].setdefault(code, _empty_position(meta))
     old_qty = int(pos.get("qty") or 0)
+    if old_qty <= 0:
+        pos["pullback_half_done"] = False
+        pos.pop("pullback_half_session", None)
     old_cost = float(pos["cost"]) if pos.get("cost") is not None else None
     # 加仓前可卖股保留；新买部分 T+1 锁定
     if old_qty > 0:
@@ -2528,6 +2598,8 @@ def cmd_sell(args: argparse.Namespace) -> None:
         pos["buy_time"] = None
         pos["available"] = None
         pos["today_cost"] = None
+        pos["pullback_half_done"] = False
+        pos.pop("pullback_half_session", None)
     cash = _account_cash(data)
     if cash is not None:
         data["account_cash"] = round(cash + price * qty, 2)
@@ -2637,6 +2709,55 @@ def _refresh_once(refresh_sec: int) -> Path:
     return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
 
 
+def _parse_hhmm(text: str) -> tuple[int, int]:
+    parts = str(text).strip().replace("：", ":").split(":")
+    if len(parts) != 2:
+        raise ValueError(f"时间格式应为 HH:MM，收到: {text!r}")
+    hour, minute = int(parts[0]), int(parts[1])
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError(f"非法时间: {text!r}")
+    return hour, minute
+
+
+def _next_open_refresh_at(
+    now: datetime | None = None,
+    *,
+    hour: int = OPEN_PRICE_REFRESH_HOUR,
+    minute: int = OPEN_PRICE_REFRESH_MINUTE,
+) -> datetime:
+    """下一档开盘价刷新时刻（默认每日 09:26）。"""
+    now = now or datetime.now()
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if now >= target:
+        target += timedelta(days=1)
+    return target
+
+
+def _log_watchlist_opens(rows: list[dict[str, Any]]) -> None:
+    by_code = {str(r.get("代码")): r for r in rows}
+    print(f"[{_now()}] 开盘价定时刷新 · 盯盘 {_watchlist_codes_label()}")
+    for w in WATCHLIST:
+        r = by_code.get(w["code"], {})
+        open_px = r.get("开盘")
+        stop_px = r.get("止损")
+        last_px = r.get("现价")
+        print(
+            f"  {w['name']}({w['code']}) "
+            f"开盘={open_px if open_px is not None else '-'} "
+            f"止损={stop_px if stop_px is not None else '-'} "
+            f"现价={last_px if last_px is not None else '-'}"
+        )
+
+
+def _refresh_open_prices(refresh_sec: int) -> Path:
+    """强制拉一次行情，用最新开盘重算买点/止损并写报告。"""
+    rows = collect_rows()
+    indices = fetch_indices()
+    path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
+    _log_watchlist_opens(rows)
+    return path
+
+
 def _pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
@@ -2744,6 +2865,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     interval = max(15, int(args.interval))
     host = str(args.host)
     port = int(args.port)
+    open_h, open_m = _parse_hhmm(getattr(args, "open_at", None) or f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}")
     _acquire_watch_lock(host=host, port=port)
     stop = threading.Event()
     refresh_lock = threading.Lock()
@@ -2751,6 +2873,10 @@ def cmd_watch(args: argparse.Namespace) -> None:
     def safe_refresh() -> Path:
         with refresh_lock:
             return _refresh_once(interval)
+
+    def safe_open_refresh() -> Path:
+        with refresh_lock:
+            return _refresh_open_prices(interval)
 
     print("首次拉取行情…")
     try:
@@ -2769,8 +2895,29 @@ def cmd_watch(args: argparse.Namespace) -> None:
             except Exception as e:
                 print(f"[{_now()}] 更新失败: {e}")
 
+    def open_price_loop() -> None:
+        """每日固定时刻刷新盯盘开盘价（默认 09:26，集合竞价结束）。"""
+        while not stop.is_set():
+            nxt = _next_open_refresh_at(hour=open_h, minute=open_m)
+            wait = (nxt - datetime.now()).total_seconds()
+            print(
+                f"[{_now()}] 下次开盘价刷新 {_watchlist_codes_label()} @ "
+                f"{nxt.strftime('%Y-%m-%d %H:%M:%S')}（约 {wait:.0f}s）"
+            )
+            if stop.wait(max(1.0, wait)):
+                break
+            try:
+                safe_open_refresh()
+                print(f"[{_now()}] 开盘价已写入 → {REPORT_FILE.name}")
+            except Exception as e:
+                print(f"[{_now()}] 开盘价刷新失败: {e}")
+
     worker = threading.Thread(target=loop, name="holdings-watch", daemon=True)
     worker.start()
+    open_worker = threading.Thread(
+        target=open_price_loop, name="holdings-open-refresh", daemon=True
+    )
+    open_worker.start()
 
     class _Handler(SimpleHTTPRequestHandler):
         def __init__(self, *a: Any, **kw: Any) -> None:
@@ -2800,6 +2947,10 @@ def cmd_watch(args: argparse.Namespace) -> None:
     url = f"http://{host}:{port}/{REPORT_FILE.name}"
     print(f"盯盘服务已启动: {url}")
     print(f"刷新间隔: {interval}s · Ctrl+C 停止")
+    print(
+        f"开盘价定时: 每日 {open_h:02d}:{open_m:02d} 刷新盯盘标的 "
+        f"({_watchlist_codes_label()})"
+    )
     print("展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）")
     if not args.no_open:
         webbrowser.open(url)
@@ -2832,6 +2983,11 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--interval", type=int, default=60, help="刷新秒数，默认60")
     w.add_argument("--host", default="127.0.0.1", help="监听地址")
     w.add_argument("--port", type=int, default=8765, help="端口，默认8765")
+    w.add_argument(
+        "--open-at",
+        default=f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}",
+        help="每日强制刷新盯盘开盘价的时刻，默认09:26",
+    )
     w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     w.set_defaults(func=cmd_watch)
 

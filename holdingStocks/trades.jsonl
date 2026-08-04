@@ -7,3 +7,4 @@
 {"time": "2026-07-30 09:55:53", "side": "sell", "code": "600552", "name": "凯盛科技", "price": 15.28, "qty": 600, "after_qty": 0, "avg_cost": 15.701, "realized_pnl": -252.6, "note": "止损成交@15.280"}
 {"time": "2026-07-31 14:55:24", "side": "sell", "code": "002171", "name": "楚江新材", "price": 9.27, "qty": 1000, "after_qty": 0, "cost": 9.171, "pnl": 99.0, "note": "阴线收盘卖(自动)"}
 {"time": "2026-07-31 14:55:59", "side": "sell", "code": "600552", "name": "凯盛科技", "price": 15.11, "qty": 600, "after_qty": 200, "cost": 15.445, "pnl": -201.0, "note": "止损成交(自动)"}
+{"time": "2026-08-04 09:10:32", "side": "buy", "code": "600552", "name": "凯盛科技", "price": 15.43, "qty": 900, "after_qty": 900, "avg_cost": 15.43, "note": "实盘同步持仓@0731 可卖900"}
