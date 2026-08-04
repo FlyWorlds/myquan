@@ -76,7 +76,6 @@ def _normalize_daily(
 
 def _fetch_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
     """从 AkShare 拉取指定区间的前复权 A 股日线。"""
-    raw: pd.DataFrame | None = None
     sym = str(symbol or "").strip().lower()
     if not sym.startswith(("sh", "sz")):
         raise ValueError(f"仅支持 A 股 sh/sz 标的: {symbol}")
@@ -85,20 +84,10 @@ def _fetch_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
         raw = ak.stock_zh_a_daily(
             symbol=symbol, start_date=start, end_date=end, adjust="qfq"
         )
-    except Exception:
-        raw = None
-    if raw is None or raw.empty:
-        code = symbol[2:]
-        try:
-            raw = ak.fund_etf_hist_em(
-                symbol=code,
-                period="daily",
-                start_date=start,
-                end_date=end,
-                adjust="qfq",
-            )
-        except Exception:
-            raw = None
+    except Exception as exc:
+        raise RuntimeError(
+            f"AkShare 个股日线拉取失败: {symbol} {start}~{end}"
+        ) from exc
 
     return _normalize_daily(raw, symbol=symbol, start=start, end=end)
 

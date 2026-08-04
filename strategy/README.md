@@ -60,6 +60,14 @@ run_open_break(cfg, force_daily_refresh=True)
 cd huice && python strategy1.py --rules
 ```
 
+## 离线规则回归测试
+
+以下命令不访问 AkShare，也不运行完整历史回测；它只验证价格取整、T+1、跌停状态和日线缓存增量逻辑：
+
+```bash
+python -m unittest -v test_strategy_rules.py
+```
+
 注册表：
 
 ```python
