@@ -24,11 +24,13 @@ class BacktestConfig:
     stamp_tax_rate: float = 0.001
     slippage_value: float = 0.001
     tick: float = TICK_SIZE
+    limit_down_pct: float = 0.10
     t0: bool = False
     # 买点基准：today_open=今日开盘；prev_open_on_small_yang=前日小阳时用前日开盘
     entry_ref: str = "today_open"
     # 前日过滤：yin_or_small_yang=阴线或小阳；yin_only=仅阴线（小阳次日不买）
     prev_entry_mode: str = "yin_or_small_yang"
+    daily_cache: Path | None = None
     report_path: Path | None = None
 
     @property
@@ -52,6 +54,7 @@ class BacktestConfig:
 
 
 # --- 常用标的预设（huice 脚本可直接引用）---
+_DAILY_CACHE_DIR = Path(__file__).resolve().parents[1] / "data_cache"
 
 KAICHENG = BacktestConfig(
     symbol="sh600552",
@@ -59,6 +62,7 @@ KAICHENG = BacktestConfig(
     em_symbol="600552",
     threshold_pct=0.025,
     start_date="20200101",
+    daily_cache=_DAILY_CACHE_DIR / "sh600552_daily_qfq.parquet",
 )
 
 HANGTIANDIANZI = BacktestConfig(
@@ -67,6 +71,7 @@ HANGTIANDIANZI = BacktestConfig(
     em_symbol="600879",
     threshold_pct=0.025,
     start_date="20200101",
+    daily_cache=_DAILY_CACHE_DIR / "sh600879_daily_qfq.parquet",
 )
 
 XIEXINNENGKE = BacktestConfig(
@@ -75,6 +80,7 @@ XIEXINNENGKE = BacktestConfig(
     em_symbol="002015",
     threshold_pct=0.025,
     start_date="20200101",
+    daily_cache=_DAILY_CACHE_DIR / "sz002015_daily_qfq.parquet",
 )
 
 ZZ500_ETF = BacktestConfig(
@@ -85,4 +91,5 @@ ZZ500_ETF = BacktestConfig(
     start_date="20250101",
     stamp_tax_rate=0.0,
     tick=0.001,
+    daily_cache=_DAILY_CACHE_DIR / "sh510580_daily_qfq.parquet",
 )

@@ -58,11 +58,13 @@ from strategy.open_break import (
     entry_filters_ok,
     format_trigger_md,
     is_t1_buy_day,
+    limit_down_state,
     replay_last_factor_triggers,
     strategy_levels,
     strategy_signal,
 )
 from strategy.data import fetch_daily
+from strategy.config import KAICHENG
 
 # 盯盘与回测共用：仅保留开盘−2.5%止损全清
 STRATEGY_NAME = "因子1"
@@ -155,12 +157,22 @@ def _calc_day_pnl(
         return round(day_pnl, 2), None, None
     return round(day_pnl, 2), round(day_pnl / day_base * 100.0, 2), round(day_base, 2)
 
-# 盯盘测：仅凯盛；恢复全池时从 README 宇宙表或 git 历史还原
+# 核心策略配置为唯一真相来源：盯盘仅跟随凯盛科技预设。
 WATCHLIST: list[dict[str, Any]] = [
-    {"code": "600552", "sina": "sh600552", "market": "上证", "name": "凯盛科技"},
-    {"code": "600330", "sina": "sh600330", "market": "上证", "name": "天通股份"},
-    {"code": "600879", "sina": "sh600879", "market": "上证", "name": "航天电子"},
+    {
+        "code": KAICHENG.em_symbol,
+        "sina": KAICHENG.symbol,
+        "market": "上证",
+        "name": KAICHENG.symbol_name,
+        "pct": KAICHENG.threshold_pct,
+        "tick": KAICHENG.tick,
+        "t0": KAICHENG.t0,
+        "limit_down_pct": KAICHENG.limit_down_pct,
+        "prev_entry_mode": KAICHENG.prev_entry_mode,
+    },
 ]
+if KAICHENG.entry_ref != "today_open":
+    raise RuntimeError("盯盘尚不支持非 today_open 买点基准，请先同步实现。")
 
 # 竞价结束后强制刷新盯盘开盘价（写入报告/重算止损买点）；随 WATCHLIST 变化
 OPEN_PRICE_REFRESH_HOUR = 9
@@ -198,6 +210,10 @@ def _watch_pct(item: dict[str, Any]) -> float:
 
 def _watch_tick(item: dict[str, Any]) -> float:
     return float(item.get("tick", TICK_SIZE))
+
+
+def _watch_limit_down_pct(item: dict[str, Any]) -> float:
+    return float(item.get("limit_down_pct", 0.10))
 
 
 def _px_digits(tick: float) -> int:
@@ -912,10 +928,9 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
         }
 
     # 非交易时段：退回最近一个交易日全日分钟线
-    if raw is None or raw.empty:
+    if df.empty:
         raise RuntimeError(f"无分钟行情: {sina}")
-    df = raw.copy()
-    df["ts"] = pd.to_datetime(df["day"])
+    df = df.copy()
     day_keys = _day_key_series(df["ts"])
     last_day = day_keys.max()
     day = df[day_keys == last_day].copy()
@@ -1036,6 +1051,8 @@ def collect_rows() -> list[dict[str, Any]]:
         entry_pct = _watch_pct(w)
         stop_pct = entry_pct
         tick = _watch_tick(w)
+        limit_down_pct = _watch_limit_down_pct(w)
+        prev_entry_mode = str(w.get("prev_entry_mode") or "yin_or_small_yang")
         px_digits = _px_digits(tick)
         pct_pct = round(entry_pct * 100.0, 2)
         try:
@@ -1050,26 +1067,54 @@ def collect_rows() -> list[dict[str, Any]]:
             daily = _watch_daily(w["sina"])
             prev_o, prev_c, prev2_o, prev2_c = _prev_bars_from_daily(daily, q["session"])
             allow_entry = entry_filters_ok(
-                prev_o, prev_c, prev2_o, prev2_c, entry_pct=entry_pct
+                prev_o,
+                prev_c,
+                prev2_o,
+                prev2_c,
+                entry_pct=entry_pct,
+                prev_entry_mode=prev_entry_mode,
             )
             replay = replay_last_factor_triggers(
-                daily, entry_pct=entry_pct, stop_pct=stop_pct, tick=tick
+                daily,
+                entry_pct=entry_pct,
+                stop_pct=stop_pct,
+                tick=tick,
+                prev_entry_mode=prev_entry_mode,
+                limit_down_pct=limit_down_pct,
             )
             hit_buy_raw = q["high"] + 1e-12 >= lv["buy_trigger"]
             hit_buy = bool(allow_entry) and hit_buy_raw
             hit_stop = q["low"] <= lv["stop"] + 1e-12
+            limit_state = limit_down_state(
+                prev_close=q.get("prev_close"),
+                open_px=float(q["open"]),
+                high_px=float(q["high"]),
+                low_px=float(q["low"]),
+                close_px=float(q["last"]),
+                limit_down_pct=limit_down_pct,
+                tick=tick,
+            )
             pos = positions.get(code, {})
             qty = int(pos.get("qty") or 0)
             buy_time = pos.get("buy_time")
             cost = pos.get("cost")
             t0 = bool(w.get("t0"))
             sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
+            # 一字跌停封单不可卖；触及跌停后开板则按跌停价成交。
+            stop_locked = bool(limit_state["locked"])
+            stop_base_px = float(
+                limit_state["limit_px"]
+                if bool(limit_state["opened"])
+                else lv["stop"]
+            )
+            # 盯盘按人工/云条件单的触发价记录，不对买卖触发价额外加滑点。
+            stop_fill_px = stop_base_px
             # 已触止损且可卖 → 视为成交，锁定收益（只卖可用）
-            if qty > 0 and hit_stop and sellable > 0:
+            if qty > 0 and hit_stop and sellable > 0 and not stop_locked:
                 apply_stop_fill(
                     code=code,
                     meta=w,
-                    stop_px=float(lv["stop"]),
+                    stop_px=stop_fill_px,
                     qty=sellable,
                     cost=float(cost) if cost is not None else None,
                     session=q["session"],
@@ -1242,6 +1287,22 @@ def collect_rows() -> list[dict[str, Any]]:
                 t0=t0,
                 allow_entry=allow_entry,
             )
+            if qty > 0 and hit_stop and stop_locked:
+                limit_px = float(limit_state["limit_px"])
+                sig = dict(sig)
+                sig.update(
+                    {
+                        "alert": "一字跌停封单·不可卖",
+                        "bg_class": "warn-sell",
+                        "pending_sell": True,
+                        "建议挂单": None,
+                        "挂单说明": (
+                            f"跌停价{limit_px:.{px_digits}f}封单，"
+                            "止损触发但不可成交；持仓延续，待开板"
+                        ),
+                        "因子触发": "不可成交",
+                    }
+                )
             sig = _stabilize_sell_warn(
                 code=code,
                 session=q["session"],

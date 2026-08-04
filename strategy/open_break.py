@@ -88,6 +88,51 @@ def stop_trigger_price(
     return floor_to_tick(float(open_px) * (1.0 - stop_pct), tick)
 
 
+def limit_down_price(
+    prev_close: float | None,
+    *,
+    limit_down_pct: float = 0.10,
+    tick: float = TICK_SIZE,
+) -> float | None:
+    """按昨收和日跌停幅度计算跌停价；缺昨收时不判断。"""
+    if prev_close is None or float(prev_close) <= 0 or not 0 < limit_down_pct < 1:
+        return None
+    return floor_to_tick(float(prev_close) * (1.0 - limit_down_pct), tick)
+
+
+def limit_down_state(
+    *,
+    prev_close: float | None,
+    open_px: float,
+    high_px: float,
+    low_px: float,
+    close_px: float,
+    limit_down_pct: float = 0.10,
+    tick: float = TICK_SIZE,
+) -> dict[str, float | bool | None]:
+    """识别日内跌停状态。
+
+    一字跌停（开高低收均锁在跌停价）不可卖；若当日曾触及跌停且最高价
+    回到跌停价之上，视为开板，按跌停价作为卖出委托基准。
+    """
+    limit_px = limit_down_price(
+        prev_close, limit_down_pct=limit_down_pct, tick=tick
+    )
+    if limit_px is None:
+        return {"limit_px": None, "touched": False, "locked": False, "opened": False}
+    tolerance = max(float(tick) * 0.51, 1e-8)
+    prices = (float(open_px), float(high_px), float(low_px), float(close_px))
+    touched = float(low_px) <= float(limit_px) + tolerance
+    locked = touched and all(abs(px - float(limit_px)) <= tolerance for px in prices)
+    opened = touched and (not locked) and float(high_px) > float(limit_px) + tolerance
+    return {
+        "limit_px": float(limit_px),
+        "touched": touched,
+        "locked": locked,
+        "opened": opened,
+    }
+
+
 def strategy_levels(
     open_px: float,
     *,
@@ -121,6 +166,7 @@ def replay_last_factor_triggers(
     stop_pct: float = DEFAULT_PCT,
     tick: float = TICK_SIZE,
     prev_entry_mode: str = "yin_or_small_yang",
+    limit_down_pct: float = 0.10,
 ) -> dict[str, Any]:
     """用日线简化重放，找最近一次买入或止损触发（含价）。"""
     out: dict[str, Any] = {
@@ -176,8 +222,23 @@ def replay_last_factor_triggers(
             if buy_day is not None and day == buy_day:
                 continue
             if l <= stop_px + 1e-12:
+                limit_state = limit_down_state(
+                    prev_close=float(prev["close"]),
+                    open_px=o,
+                    high_px=h,
+                    low_px=l,
+                    close_px=c,
+                    limit_down_pct=limit_down_pct,
+                    tick=tick,
+                )
+                if bool(limit_state["locked"]):
+                    continue
                 out["last_sell_date"] = day.date()
-                out["last_sell_px"] = float(stop_px)
+                out["last_sell_px"] = float(
+                    limit_state["limit_px"]
+                    if bool(limit_state["opened"])
+                    else stop_px
+                )
                 holding = False
                 buy_day = None
                 continue

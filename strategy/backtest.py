@@ -16,6 +16,7 @@ from strategy.open_break import (
     entry_trigger_price,
     has_double_yang_before,
     is_yang,
+    limit_down_state,
     prev_day_allows_entry,
     stop_trigger_price,
 )
@@ -35,6 +36,7 @@ class OpenBreak3Strategy(Strategy):
     stop_pct: float = STOP_PCT
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT
     tick: float = TICK_SIZE
+    limit_down_pct: float = 0.10
     t0: bool = False
     # today_open | prev_open_on_small_yang
     entry_ref: str = "today_open"
@@ -229,15 +231,41 @@ class OpenBreak3Strategy(Strategy):
                 return
 
             if hit_stop:
+                limit_state = limit_down_state(
+                    prev_close=self.prev_close,
+                    open_px=o,
+                    high_px=h,
+                    low_px=low,
+                    close_px=c,
+                    limit_down_pct=self.limit_down_pct,
+                    tick=self.tick,
+                )
+                if bool(limit_state["locked"]):
+                    self.log(
+                        f"{day} 一字跌停封单，止损不可成交 "
+                        f"(limit={float(limit_state['limit_px']):.2f}) 持仓延续"
+                    )
+                    return
+                exit_px = float(
+                    limit_state["limit_px"]
+                    if bool(limit_state["opened"])
+                    else stop_px
+                )
+                reason = (
+                    f"跌停开板按跌停价止损"
+                    f"(limit={exit_px:.2f} open={o:.2f} low={low:.2f})"
+                    if bool(limit_state["opened"])
+                    else (
+                        f"开盘-{self.stop_pct*100:.1f}%止损"
+                        f"(open={o:.2f} low={low:.2f})"
+                    )
+                )
                 self._exit_all(
                     day=day,
                     avail=avail,
                     pos=pos,
-                    price=stop_px,
-                    reason=(
-                        f"开盘-{self.stop_pct*100:.1f}%止损"
-                        f"(open={o:.2f} low={low:.2f})"
-                    ),
+                    price=exit_px,
+                    reason=reason,
                 )
                 return
         finally:

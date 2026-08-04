@@ -27,6 +27,7 @@ def apply_strategy_config(
     OpenBreak3Strategy.stop_pct = cfg.threshold_pct
     OpenBreak3Strategy.prev_small_yang_pct = cfg.threshold_pct
     OpenBreak3Strategy.tick = cfg.tick
+    OpenBreak3Strategy.limit_down_pct = cfg.limit_down_pct
     OpenBreak3Strategy.t0 = cfg.t0
     OpenBreak3Strategy.entry_ref = getattr(cfg, "entry_ref", "today_open") or "today_open"
     OpenBreak3Strategy.prev_entry_mode = (
@@ -60,13 +61,23 @@ def run_open_break(
     *,
     show_report: bool = False,
     verbose: bool = True,
+    force_daily_refresh: bool = False,
 ) -> tuple[BacktestResult, pd.DataFrame]:
-    """拉数据 → 回测 → 摘要 → 可选 HTML 报告。"""
+    """拉数据 → 回测 → 摘要 → 可选 HTML 报告。
+
+    force_daily_refresh=True 会忽略本地日线缓存，重拉完整历史区间。
+    """
     if verbose:
         print(f"akquant={getattr(aq, '__version__', '?')}")
         print(f"拉取 {cfg.symbol_name}({cfg.symbol}) 日线 {cfg.start_date} → {cfg.end_date} ...")
 
-    daily = fetch_daily(cfg.symbol, cfg.start_date, cfg.end_date)
+    daily = fetch_daily(
+        cfg.symbol,
+        cfg.start_date,
+        cfg.end_date,
+        cache_path=cfg.daily_cache,
+        force_refresh=force_daily_refresh,
+    )
     if verbose:
         print(
             f"日线数: {len(daily)}，"

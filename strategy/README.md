@@ -50,6 +50,12 @@ cfg = BacktestConfig(
 run_open_break(cfg, show_report=True)
 ```
 
+日线默认缓存至项目根目录的 `data_cache/`：首次全量拉取，后续仅向 AkShare 补齐缓存范围外的已收盘日期。前复权价格会在除权除息后重算历史，需全量同步时：
+
+```python
+run_open_break(cfg, force_daily_refresh=True)
+```
+
 ```bash
 cd huice && python strategy1.py --rules
 ```
