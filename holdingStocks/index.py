@@ -158,6 +158,7 @@ def _calc_day_pnl(
 # 盯盘测：仅凯盛；恢复全池时从 README 宇宙表或 git 历史还原
 WATCHLIST: list[dict[str, Any]] = [
     {"code": "600552", "sina": "sh600552", "market": "上证", "name": "凯盛科技"},
+    {"code": "600330", "sina": "sh600330", "market": "上证", "name": "天通股份"},
 ]
 
 # 竞价结束后强制刷新盯盘开盘价（写入报告/重算止损买点）；随 WATCHLIST 变化
