@@ -115,14 +115,21 @@ openclaw channels status
 
 ## 配置
 
-文件：`holdingStocks/wechat_notify.json`
+文件：`holdingStocks/wechat_notify.json`（本地私有，已 gitignore）。
+
+首次使用：
+
+```bash
+cp holdingStocks/wechat_notify.json.example holdingStocks/wechat_notify.json
+# 再编辑 account / target
+```
 
 | 字段 | 说明 |
 |------|------|
 | `enabled` | 是否启用自动推送 |
 | `channel` | 固定 `openclaw-weixin` |
-| `account` | 微信 bot 账号 id（如 `3bbbe6b62301-im-bot`） |
-| `target` | 接收方 openid，形如 `o9cq…@im.wechat` |
+| `account` | 微信 bot 账号 id（见本地配置，勿提交） |
+| `target` | 接收方 openid，形如 `…@im.wechat`（勿提交） |
 | `cooldown_sec` | 同一标的同一信号冷却秒数（默认 1800） |
 | `openclaw_bin` | CLI 路径，默认 `openclaw`；nvm 环境可写成绝对路径 |
 | `timeout_sec` | 发送超时 |
@@ -185,8 +192,8 @@ python index.py watch --no-wechat --no-open
 ```bash
 openclaw message send \
   --channel openclaw-weixin \
-  --account 3bbbe6b62301-im-bot \
-  --target "你的openid@im.wechat" \
+  --account YOUR_IM_BOT_ACCOUNT_ID \
+  --target "YOUR_OPENID@im.wechat" \
   --message "手工测试"
 ```
 
@@ -195,12 +202,12 @@ openclaw message send \
 ```bash
 openclaw message send \
   --channel openclaw-weixin \
-  --account 3bbbe6b62301-im-bot \
-  -t "你的openid@im.wechat" \
+  --account YOUR_IM_BOT_ACCOUNT_ID \
+  -t "YOUR_OPENID@im.wechat" \
   -m "手工测试"
 ```
 
-`account` / `target` 以 `wechat_notify.json` 为准。
+`account` / `target` 以本地 `wechat_notify.json` 为准（可从 `wechat_notify.json.example` 复制）。
 
 ### 盯盘推送
 

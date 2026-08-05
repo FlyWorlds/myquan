@@ -1,6 +1,27 @@
+# 字节码 / 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# 行情与回测本地缓存
+data_cache/
+*.parquet
+backtest/universe_abc/daily_cache/
+backtest/universe_zz500_1000/
+
+# 回测产物（报告 / 临时输出）
+backtest/*_report.html
+backtest/*_monthly.csv
+backtest/_*.txt
+backtest/*_out.txt
+
 # 持仓盯盘运行时数据（本地状态，勿入库）
 holdingStocks/holdings.json
 holdingStocks/holdings_report.html
 holdingStocks/holdings_watch.json
 holdingStocks/holdings_watch.pid
+holdingStocks/trades.jsonl
 holdingStocks/wechat_alert_state.json
+holdingStocks/wechat_notify.json

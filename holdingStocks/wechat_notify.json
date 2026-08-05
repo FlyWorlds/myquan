@@ -1,9 +1,0 @@
-{
-  "enabled": true,
-  "channel": "openclaw-weixin",
-  "account": "3bbbe6b62301-im-bot",
-  "target": "o9cq80_iIEqzbgJuahFUOOw1fbWc@im.wechat",
-  "cooldown_sec": 1800,
-  "openclaw_bin": "openclaw",
-  "timeout_sec": 45
-}

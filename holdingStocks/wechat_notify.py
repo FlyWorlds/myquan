@@ -20,8 +20,9 @@ _PUSH_ALERT_KEYS = ("已触买", "将买入", "已触止损", "将止损", "待�
 _DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
     "channel": "openclaw-weixin",
-    "account": "3bbbe6b62301-im-bot",
-    "target": "o9cq80_iIEqzbgJuahFUOOw1fbWc@im.wechat",
+    # 真实 account/target 只写本地 wechat_notify.json（已 gitignore）
+    "account": "",
+    "target": "",
     "cooldown_sec": 1800,
     "openclaw_bin": "openclaw",
     "timeout_sec": 45,
