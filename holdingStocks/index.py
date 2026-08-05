@@ -66,7 +66,6 @@ from strategy.open_break import (
     strategy_signal,
 )
 from strategy.data import fetch_daily
-from strategy.config import KAICHENG
 
 # 盯盘与回测共用：仅保留开盘−2.5%止损全清
 STRATEGY_NAME = "因子1"
@@ -83,6 +82,43 @@ _ws_hub: LocalWsHub | None = None
 _MIN_WATCH_REFRESH_SEC = 1.0
 _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
 _INDEX_CACHE_TTL_SEC = 15.0
+
+
+def _code_key(code: str) -> str:
+    return "".join(ch for ch in str(code) if ch.isdigit()).zfill(6)[-6:]
+
+
+def _sina_of(code: str) -> str:
+    c = _code_key(code)
+    return f"sh{c}" if c.startswith(("5", "6")) else f"sz{c}"
+
+
+def _market_of(code: str) -> str:
+    return "上证" if _sina_of(code).startswith("sh") else "深证"
+
+
+def _watch_item(
+    code: str,
+    name: str,
+    *,
+    pct: float = DEFAULT_PCT,
+    tick: float = TICK_SIZE,
+    t0: bool = False,
+    limit_down_pct: float = 0.10,
+    prev_entry_mode: str = "yin_or_small_yang",
+) -> dict[str, Any]:
+    c = _code_key(code)
+    return {
+        "code": c,
+        "sina": _sina_of(c),
+        "market": _market_of(c),
+        "name": name,
+        "pct": float(pct),
+        "tick": float(tick),
+        "t0": bool(t0),
+        "limit_down_pct": float(limit_down_pct),
+        "prev_entry_mode": prev_entry_mode,
+    }
 
 
 def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[str, Any]]:
@@ -177,22 +213,22 @@ def _calc_day_pnl(
         return round(day_pnl, 2), None, None
     return round(day_pnl, 2), round(day_pnl / day_base * 100.0, 2), round(day_base, 2)
 
-# 核心策略配置为唯一真相来源：盯盘仅跟随凯盛科技预设。
-WATCHLIST: list[dict[str, Any]] = [
-    {
-        "code": KAICHENG.em_symbol,
-        "sina": KAICHENG.symbol,
-        "market": "上证",
-        "name": KAICHENG.symbol_name,
-        "pct": KAICHENG.threshold_pct,
-        "tick": KAICHENG.tick,
-        "t0": KAICHENG.t0,
-        "limit_down_pct": KAICHENG.limit_down_pct,
-        "prev_entry_mode": KAICHENG.prev_entry_mode,
-    },
+# 中证500+1000 契合池（夏普≥1 且策略超额>0，按夏普降序）
+# 明细：../huice/universe_zz500_1000/fit_sharpe1_excess.csv
+_FIT_WATCH: list[tuple[str, str]] = [
+    ("001389", "广合科技"),
+    ("600552", "凯盛科技"),
+    ("603083", "剑桥科技"),
+    ("601208", "东材科技"),
+    ("603306", "华懋科技"),
+    ("002335", "科华数据"),
+    ("001339", "智微智能"),
+    ("002636", "金安国纪"),
+    ("600105", "永鼎股份"),
+    ("000880", "潍柴重机"),
+    ("600330", "天通股份"),
 ]
-if KAICHENG.entry_ref != "today_open":
-    raise RuntimeError("盯盘尚不支持非 today_open 买点基准，请先同步实现。")
+WATCHLIST: list[dict[str, Any]] = [_watch_item(c, n) for c, n in _FIT_WATCH]
 
 # 竞价结束后强制刷新盯盘开盘价（写入报告/重算止损买点）；随 WATCHLIST 变化
 OPEN_PRICE_REFRESH_HOUR = 9
@@ -218,10 +254,6 @@ def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
 
 def _watchlist_codes_label() -> str:
     return " / ".join(w["code"] for w in WATCHLIST)
-
-
-def _code_key(code: str) -> str:
-    return "".join(ch for ch in str(code) if ch.isdigit()).zfill(6)[-6:]
 
 
 def _watch_pct(item: dict[str, Any]) -> float:
@@ -1754,7 +1786,50 @@ def collect_rows(
             r["仓位%"] = round(float(mv) / pos_base * 100.0, 1)
         else:
             r["仓位%"] = 0.0 if r.get("已实现") else None
-    return rows
+    return sort_watch_rows(rows)
+
+
+def sort_watch_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """展示排序：有持仓 → 预警/当日触发 → 其余；同档保持 WATCHLIST 原序。"""
+    order = {_code_key(w["code"]): i for i, w in enumerate(WATCHLIST)}
+
+    def _is_alert(r: dict[str, Any]) -> bool:
+        pos_st = str(r.get("持仓状态") or "")
+        hit = str(r.get("因子触发") or "")
+        alert = str(r.get("预警") or "")
+        if pos_st in ("待买入", "待卖出"):
+            return True
+        if hit.startswith("已触发") or hit == "接近":
+            return True
+        return any(
+            x in alert
+            for x in ("将买入", "将止损", "已触买", "已触发", "止损")
+        )
+
+    def _urgency(r: dict[str, Any]) -> int:
+        hit = str(r.get("因子触发") or "")
+        alert = str(r.get("预警") or "")
+        pos_st = str(r.get("持仓状态") or "")
+        if pos_st == "待卖出" or "已触发" in hit or "已触" in alert:
+            return 0
+        if hit == "接近" or "将" in alert or pos_st == "待买入":
+            return 1
+        return 2
+
+    def key(r: dict[str, Any]) -> tuple[int, int, int, int]:
+        qty = int(r.get("持仓") or 0)
+        code = _code_key(str(r.get("代码") or ""))
+        idx = order.get(code, 10_000)
+        has_pos = 0 if qty > 0 else 1
+        alert = _is_alert(r)
+        if qty > 0:
+            # 持仓内：有卖出预警的更靠前
+            sub = 0 if alert else 1
+        else:
+            sub = 0 if alert else 1
+        return (has_pos, sub, _urgency(r) if alert else 9, idx)
+
+    return sorted(rows, key=key)
 
 
 def _fmt_num(v: Any, digits: int = 2) -> str:
@@ -2547,6 +2622,7 @@ def write_html_report(
     <p class="note">
       策略锁定 {STRATEGY_NAME}（与 strategy/open_break 回测同源；卖出仅保留止损）。
       持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入止损预警；否则空仓或持有。
+      卡片排序：有持仓 → 预警/当日触发 → 其余（同档按夏普序）。
       因子侧：待卖出预警→卖出；待买入预警→买入；其余→持有或空仓。
       因子触发：盘中预警写「已触发 M/D」；否则为最近一次因子触发日（无年份）。
       卖出全清：仅止损。
