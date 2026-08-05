@@ -6,7 +6,7 @@
   · 卖出：仅开盘 −2.5% 止损全清
 
 功能：
-  · 拉取当日开盘、最高、最低、现价（新浪1分钟）
+  · 拉取当日开盘、最高、最低、现价（东财 SSE + 新浪批量兜底；冷启动用分钟线）
   · 规则与回测共用 strategy/open_break.py
   · 有仓：仅止损自动结算（全清）；空仓：已触买/将买入建议限价
   · 本地 JSON 记录持仓；T+1 买入日不可卖
@@ -14,7 +14,7 @@
 用法：
   python index.py              # 查看标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
-  python index.py watch        # 长驻：每60秒更新行情；每日09:26强制刷新盯盘开盘价
+  python index.py watch        # 长驻：行情事件驱动刷新；每日09:26强制刷新盯盘开盘价
   python index.py buy 600552 15.50 400
   python index.py sell 600552 16.20 400
   python index.py set-cost 600552 15.95 --qty 400
@@ -31,12 +31,13 @@ import math
 import os
 import sys
 import threading
+import time
 import webbrowser
 from datetime import datetime, timedelta
 from html import escape
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import akshare as ak
 import pandas as pd
@@ -46,6 +47,7 @@ _MYQUAN_ROOT = Path(__file__).resolve().parents[1]
 if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
+from quote_feed import LocalWsHub, QuoteFeedManager, ws_accept_key
 from strategy.minute import pull_akshare_1m
 from strategy.open_break import (
     DEFAULT_PCT,
@@ -75,6 +77,24 @@ TRADES_FILE = ROOT / "trades.jsonl"
 REPORT_FILE = ROOT / "holdings_report.html"
 WATCH_META_FILE = ROOT / "holdings_watch.json"
 WATCH_PID_FILE = ROOT / "holdings_watch.pid"
+
+# watch 模式本地 WebSocket 广播（/ws）；非 watch 为 None
+_ws_hub: LocalWsHub | None = None
+_MIN_WATCH_REFRESH_SEC = 1.0
+_INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
+_INDEX_CACHE_TTL_SEC = 15.0
+
+
+def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[str, Any]]:
+    """盯盘高频刷新时缓存大盘指数，避免每次重拉拖慢推送。"""
+    now = time.monotonic()
+    cached = _INDEX_CACHE.get("data") or []
+    if cached and (now - float(_INDEX_CACHE.get("t") or 0.0)) < float(ttl_sec):
+        return list(cached)
+    data = fetch_indices()
+    _INDEX_CACHE["t"] = now
+    _INDEX_CACHE["data"] = data
+    return data
 
 
 def _empty_position(meta: dict[str, Any]) -> dict[str, Any]:
@@ -1228,8 +1248,14 @@ def fetch_indices() -> list[dict[str, Any]]:
     return out
 
 
-def collect_rows() -> list[dict[str, Any]]:
-    """拉取行情并合并持仓；已触止损视为成交并锁定当日收益。"""
+def collect_rows(
+    get_quote: Callable[[str], dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """拉取行情并合并持仓；已触止损视为成交并锁定当日收益。
+
+    get_quote: 可选行情供给（watch 传入 QuoteHub）；默认 fetch_today_quote。
+    """
+    quote_fn = get_quote or fetch_today_quote
     holdings = load_holdings()
     positions = holdings.get("positions", {})
     realized_map = holdings.get("realized_today", {})
@@ -1247,7 +1273,7 @@ def collect_rows() -> list[dict[str, Any]]:
         px_digits = _px_digits(tick)
         pct_pct = round(entry_pct * 100.0, 2)
         try:
-            q = fetch_today_quote(w["sina"])
+            q = quote_fn(w["sina"])
             session_today = q["session"]
             lv = strategy_levels(
                 q["open"], entry_pct=entry_pct, stop_pct=stop_pct, tick=tick
@@ -1349,6 +1375,13 @@ def collect_rows() -> list[dict[str, Any]]:
                     ha, la = extremes_after_stop_touch(
                         q.get("_day_bars"), float(lv["stop"])
                     )
+                    # 无分钟线时用 hub/快照当日 high/low 退化
+                    if ha is None:
+                        try:
+                            ha = float(q["high"]) if float(q["high"]) > 0 else None
+                            la = float(q["low"]) if float(q["low"]) > 0 else None
+                        except (TypeError, ValueError, KeyError):
+                            ha, la = None, None
                     updated = update_high_after_stop(
                         code=code,
                         stop_px=float(lv["stop"]),
@@ -2071,83 +2104,146 @@ def write_html_report(
             """
         )
 
+    clock_now = _now()
+    indices_html = "".join(index_cards)
+    cards_html = "".join(cards)
+    summary_html = f"""
+      <div class="summary">
+        <div class="label">合计盈亏</div>
+        <div class="value {_cls_chg(total_pnl if has_pos else None)}">
+          {_s('-' if not has_pos else f'{total_pnl:+.2f}')}
+          <span style="font-size:0.95rem;font-weight:600;margin-left:6px;">
+            {_s('-' if total_pnl_pct is None else f'{total_pnl_pct:+.2f}%')}
+          </span>
+        </div>
+        <div class="day-line">
+          <span class="day-label">当日盈亏</span>
+          <span class="day-value {_cls_chg(total_day_pnl if has_day else None)}">
+            {_s('-' if not has_day else f'{total_day_pnl:+.2f}')}
+            {_s(' ' + ('-' if total_day_pct is None else f'{total_day_pct:+.2f}%'))}
+          </span>
+        </div>
+        <div class="meta sensitive">
+          总资产 {_fmt_num(account_total)}
+          · 可用 {_fmt_num(available_cash)}
+          · 仓位 {('-' if position_pct is None else f'{position_pct:.1f}%')}
+          · 市值 {_fmt_num(total_mv if total_mv else None)}
+          · 成本 {_fmt_num(total_cost if total_cost else None)}
+          · 当日开仓 {_fmt_num(today_opened if today_opened > 0 else None)}
+          {f' · 未计成本市值 {_fmt_num(total_mv_no_cost)}' if total_mv_no_cost > 0 else ''}
+          {f' · 今日结算{settled_n}笔 盈亏{settled_pnl:+.2f}/当日{settled_day:+.2f}' if settled_n > 0 else ''}
+        </div>
+      </div>
+    """
+    top_html = indices_html + summary_html
+
     refresh_head = ""
     refresh_script = ""
     watch_hint = "刷新请重新运行 <code>python index.py</code> 或 <code>python index.py html</code>。"
     hero_extra = ""
+    live_payload: dict[str, Any] | None = None
     if refresh_sec is not None and int(refresh_sec) > 0:
         sec = int(refresh_sec)
         refresh_head = ""
         hero_extra = (
             f' · <span class="watch-live">盯盘中</span>'
-            f' · 下次更新 <strong id="watch-countdown">{sec}</strong>s'
+            f' · <span id="watch-status">WebSocket 连接中…</span>'
         )
         watch_hint = (
-            f"盯盘模式：服务端每 {sec} 秒重拉行情；有新数据后自动刷新本页。"
+            "盯盘模式：WebSocket 推送就地更新数据，"
+            "<strong>不会自动整页刷新</strong>（需整页时请手动 F5）。"
             " 停止请在终端 Ctrl+C。"
         )
+        live_payload = {
+            "type": "live",
+            "ts": int(datetime.now().timestamp() * 1000),
+            "updated_at": clock_now,
+            "clock": clock_now,
+            "top_html": top_html,
+            "cards_html": cards_html,
+            "refresh_sec": sec,
+        }
         refresh_script = f"""
 <script>
 (function () {{
-  const INTERVAL = {sec};
   const metaUrl = "/holdings_watch.json";
-  const cdEl = document.getElementById("watch-countdown");
-  const seenKey = "holdings_watch_seen";
-  let lastTs = sessionStorage.getItem(seenKey) || null;
-  let left = INTERVAL;
-  let reloading = false;
+  const wsPath = (location.protocol === "https:" ? "wss://" : "ws://")
+    + location.host + "/ws";
+  const statusEl = document.getElementById("watch-status");
+  const clockEl = document.getElementById("live-clock");
+  let useWs = false;
+  let ws = null;
+  let wsRetry = 0;
   let syncing = false;
+  let lastTs = null;
 
-  function renderCd() {{
-    if (cdEl) cdEl.textContent = String(Math.max(0, left));
+  function setStatus(text) {{
+    if (statusEl) statusEl.textContent = text;
   }}
 
-  function reloadSamePage() {{
-    if (reloading) return;
-    reloading = true;
-    location.replace(location.pathname + "?t=" + Date.now());
+  function applyLive(j) {{
+    if (!j || j.type !== "live") return;
+    if (j.ts != null && lastTs != null && String(j.ts) === String(lastTs)) return;
+    lastTs = j.ts != null ? String(j.ts) : lastTs;
+    const top = document.getElementById("live-top-row");
+    const cards = document.getElementById("live-cards");
+    if (top && typeof j.top_html === "string") top.innerHTML = j.top_html;
+    if (cards && typeof j.cards_html === "string") cards.innerHTML = j.cards_html;
+    if (clockEl && j.clock) clockEl.textContent = j.clock;
+    if (j.updated_at) setStatus("实时 " + j.updated_at);
   }}
 
-  async function syncFromServer() {{
-    if (reloading || syncing) return;
+  async function syncFallback() {{
+    if (useWs || syncing) return;
     syncing = true;
     try {{
       const r = await fetch(metaUrl + "?t=" + Date.now(), {{ cache: "no-store" }});
       if (!r.ok) return;
       const j = await r.json();
-      const ts = (j && typeof j.ts === "number") ? String(j.ts) : null;
-      if (!ts) return;
-
-      // 仅当服务端写出新时间戳才整页刷新（避免倒计时到 0 空刷）
-      if (lastTs && ts !== lastTs) {{
-        sessionStorage.setItem(seenKey, ts);
-        reloadSamePage();
-        return;
-      }}
-      lastTs = ts;
-      sessionStorage.setItem(seenKey, lastTs);
-
-      const interval = Number(j.refresh_sec) || INTERVAL;
-      const elapsed = Math.floor((Date.now() - Number(ts)) / 1000);
-      left = Math.max(0, interval - elapsed);
-      renderCd();
+      applyLive(j);
+      setStatus("兜底同步 " + (j.updated_at || ""));
     }} catch (e) {{
+      setStatus("推送断开，等待重连…");
     }} finally {{
       syncing = false;
     }}
   }}
 
-  renderCd();
-  syncFromServer();
-  setInterval(function () {{
-    if (reloading) return;
-    if (left > 0) {{
-      left -= 1;
-      renderCd();
+  function connectWs() {{
+    try {{
+      ws = new WebSocket(wsPath);
+    }} catch (e) {{
+      useWs = false;
+      setStatus("WebSocket 不可用，改用兜底同步");
+      return;
     }}
-    // 到点后每秒轮询 meta；平时每 3 秒校准一次倒计时
-    if (left <= 0 || left % 3 === 0) syncFromServer();
-  }}, 1000);
+    ws.onopen = function () {{
+      useWs = true;
+      wsRetry = 0;
+      setStatus("WebSocket 已连接");
+    }};
+    ws.onmessage = function (ev) {{
+      try {{
+        applyLive(JSON.parse(ev.data || "{{}}"));
+      }} catch (e) {{}}
+    }};
+    ws.onclose = function () {{
+      useWs = false;
+      ws = null;
+      setStatus("推送断开，重连中…");
+      const delay = Math.min(15000, 1000 * Math.pow(2, wsRetry++));
+      setTimeout(connectWs, delay);
+    }};
+    ws.onerror = function () {{
+      try {{ ws && ws.close(); }} catch (e) {{}}
+    }};
+  }}
+
+  connectWs();
+  // 仅在 WS 断开时用 JSON 就地补数，绝不 location.reload
+  setInterval(function () {{
+    if (!useWs) syncFallback();
+  }}, Math.max(3000, {sec} * 1000));
 }})();
 </script>
 """
@@ -2240,7 +2336,8 @@ def write_html_report(
     }}
     .hero p {{ margin: 0; color: var(--muted); font-size: 0.95rem; }}
     .watch-live {{ color: var(--accent); font-weight: 600; }}
-    #watch-countdown {{ color: var(--accent); font-variant-numeric: tabular-nums; }}
+    #watch-status {{ color: var(--accent); font-variant-numeric: tabular-nums; }}
+    #live-clock {{ font-variant-numeric: tabular-nums; }}
     .top-row {{
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2426,7 +2523,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清 · {_now()}{hero_extra}</p>
+          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清 · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2441,37 +2538,11 @@ def write_html_report(
         </button>
       </div>
     </div>
-    <div class="top-row">
-      {''.join(index_cards)}
-      <div class="summary">
-        <div class="label">合计盈亏</div>
-        <div class="value {_cls_chg(total_pnl if has_pos else None)}">
-          {_s('-' if not has_pos else f'{total_pnl:+.2f}')}
-          <span style="font-size:0.95rem;font-weight:600;margin-left:6px;">
-            {_s('-' if total_pnl_pct is None else f'{total_pnl_pct:+.2f}%')}
-          </span>
-        </div>
-        <div class="day-line">
-          <span class="day-label">当日盈亏</span>
-          <span class="day-value {_cls_chg(total_day_pnl if has_day else None)}">
-            {_s('-' if not has_day else f'{total_day_pnl:+.2f}')}
-            {_s(' ' + ('-' if total_day_pct is None else f'{total_day_pct:+.2f}%'))}
-          </span>
-        </div>
-        <div class="meta sensitive">
-          总资产 {_fmt_num(account_total)}
-          · 可用 {_fmt_num(available_cash)}
-          · 仓位 {('-' if position_pct is None else f'{position_pct:.1f}%')}
-          · 市值 {_fmt_num(total_mv if total_mv else None)}
-          · 成本 {_fmt_num(total_cost if total_cost else None)}
-          · 当日开仓 {_fmt_num(today_opened if today_opened > 0 else None)}
-          {f' · 未计成本市值 {_fmt_num(total_mv_no_cost)}' if total_mv_no_cost > 0 else ''}
-          {f' · 今日结算{settled_n}笔 盈亏{settled_pnl:+.2f}/当日{settled_day:+.2f}' if settled_n > 0 else ''}
-        </div>
-      </div>
+    <div class="top-row" id="live-top-row">
+      {top_html}
     </div>
-    <div class="cards">
-      {''.join(cards)}
+    <div class="cards" id="live-cards">
+      {cards_html}
     </div>
     <p class="note">
       策略锁定 {STRATEGY_NAME}（与 strategy/open_break 回测同源；卖出仅保留止损）。
@@ -2516,20 +2587,19 @@ def write_html_report(
 </html>
 """
     _atomic_write_text(path, html, encoding="utf-8")
-    if refresh_sec is not None and int(refresh_sec) > 0:
-        # 必须先写完 HTML，再更新时间戳，避免刷新时读到旧布局/半截文件
+    if live_payload is not None:
+        # 先写完 HTML，再推送完整 live 载荷（页面就地改 DOM，不整页刷新）
         _atomic_write_text(
             WATCH_META_FILE,
-            json.dumps(
-                {
-                    "updated_at": _now(),
-                    "refresh_sec": int(refresh_sec),
-                    "ts": int(datetime.now().timestamp() * 1000),
-                },
-                ensure_ascii=False,
-            ),
+            json.dumps(live_payload, ensure_ascii=False),
             encoding="utf-8",
         )
+        hub = _ws_hub
+        if hub is not None:
+            try:
+                hub.broadcast_json(live_payload)
+            except Exception:  # noqa: BLE001
+                pass
     return path
 
 
@@ -2982,9 +3052,13 @@ def cmd_history(_: argparse.Namespace) -> None:
     print(pd.DataFrame(rows).to_string(index=False))
 
 
-def _refresh_once(refresh_sec: int) -> Path:
-    rows = collect_rows()
-    indices = fetch_indices()
+def _refresh_once(
+    refresh_sec: int,
+    *,
+    get_quote: Callable[[str], dict[str, Any]] | None = None,
+) -> Path:
+    rows = collect_rows(get_quote=get_quote)
+    indices = fetch_indices_cached()
     return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
 
 
@@ -3028,9 +3102,13 @@ def _log_watchlist_opens(rows: list[dict[str, Any]]) -> None:
         )
 
 
-def _refresh_open_prices(refresh_sec: int) -> Path:
+def _refresh_open_prices(
+    refresh_sec: int,
+    *,
+    get_quote: Callable[[str], dict[str, Any]] | None = None,
+) -> Path:
     """强制拉一次行情，用最新开盘重算买点/止损并写报告。"""
-    rows = collect_rows()
+    rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices()
     path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
     _log_watchlist_opens(rows)
@@ -3140,34 +3218,71 @@ def _write_html_respecting_watch(
 
 
 def cmd_watch(args: argparse.Namespace) -> None:
-    """长驻进程：本地 HTTP + 定时拉行情写报告，浏览器自动刷新。"""
-    interval = max(15, int(args.interval))
+    """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。"""
+    global _ws_hub
+    interval = max(2, int(args.interval))
     host = str(args.host)
     port = int(args.port)
-    open_h, open_m = _parse_hhmm(getattr(args, "open_at", None) or f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}")
+    open_h, open_m = _parse_hhmm(
+        getattr(args, "open_at", None)
+        or f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}"
+    )
     _acquire_watch_lock(host=host, port=port)
     stop = threading.Event()
     refresh_lock = threading.Lock()
+    ws_hub = LocalWsHub()
+    _ws_hub = ws_hub
+
+    sinas = [str(w["sina"]).lower() for w in WATCHLIST]
+    feed = QuoteFeedManager(
+        sinas,
+        on_log=lambda m: print(f"[{_now()}] {m}"),
+    )
+
+    def get_quote(sina: str) -> dict[str, Any]:
+        q = feed.get_quote(sina)
+        if q is None:
+            q = fetch_today_quote(sina)
+            feed.seed(sina, q)
+        return q
+
+    def reseed_all() -> None:
+        for w in WATCHLIST:
+            q = fetch_today_quote(w["sina"])
+            feed.seed(w["sina"], q)
 
     def safe_refresh() -> Path:
         with refresh_lock:
-            return _refresh_once(interval)
+            return _refresh_once(interval, get_quote=get_quote)
 
     def safe_open_refresh() -> Path:
         with refresh_lock:
-            return _refresh_open_prices(interval)
+            reseed_all()
+            return _refresh_open_prices(interval, get_quote=get_quote)
 
-    print("首次拉取行情…")
+    print("冷启动：拉取开盘/分钟线并 seed…")
     try:
+        reseed_all()
+        feed.start()
         report = safe_refresh()
         print(f"报告已生成: {report}")
     except Exception as e:
+        feed.stop()
+        _ws_hub = None
         _release_watch_lock()
         print(f"首次更新失败: {e}")
         raise
 
     def loop() -> None:
-        while not stop.wait(interval):
+        last = 0.0
+        while not stop.is_set():
+            feed.wait_update(timeout=float(interval))
+            if stop.is_set():
+                break
+            wait_more = _MIN_WATCH_REFRESH_SEC - (time.monotonic() - last)
+            if wait_more > 0 and stop.wait(wait_more):
+                break
+            last = time.monotonic()
             try:
                 safe_refresh()
                 print(f"[{_now()}] 行情已更新 → {REPORT_FILE.name}")
@@ -3206,6 +3321,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
             path = getattr(self, "path", "") or ""
             if WATCH_META_FILE.name in path or REPORT_FILE.name in path:
                 return
+            if path.split("?", 1)[0] == "/ws":
+                return
             super().log_message(fmt, *log_args)
 
         def end_headers(self) -> None:
@@ -3215,9 +3332,39 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 self.send_header("Pragma", "no-cache")
             super().end_headers()
 
+        def do_GET(self) -> None:  # noqa: N802
+            path = self.path.split("?", 1)[0]
+            if path == "/ws":
+                self._handle_ws_upgrade()
+                return
+            super().do_GET()
+
+        def _handle_ws_upgrade(self) -> None:
+            key = self.headers.get("Sec-WebSocket-Key")
+            if not key:
+                self.send_error(400, "Missing Sec-WebSocket-Key")
+                return
+            if (self.headers.get("Upgrade") or "").lower() != "websocket":
+                self.send_error(400, "Expected Upgrade: websocket")
+                return
+            accept = ws_accept_key(key)
+            self.send_response(101, "Switching Protocols")
+            self.send_header("Upgrade", "websocket")
+            self.send_header("Connection", "Upgrade")
+            self.send_header("Sec-WebSocket-Accept", accept)
+            self.end_headers()
+            try:
+                self.wfile.flush()
+            except Exception:  # noqa: BLE001
+                pass
+            self.close_connection = True
+            ws_hub.serve_client(self.connection)
+
     try:
         server = ThreadingHTTPServer((host, port), _Handler)
     except OSError as e:
+        feed.stop()
+        _ws_hub = None
         _release_watch_lock()
         raise SystemExit(
             f"端口 {host}:{port} 无法绑定（可能已有盯盘在跑）。\n"
@@ -3225,10 +3372,14 @@ def cmd_watch(args: argparse.Namespace) -> None:
         ) from e
     url = f"http://{host}:{port}/{REPORT_FILE.name}"
     print(f"盯盘服务已启动: {url}")
+    print(f"本地 WebSocket: ws://{host}:{port}/ws")
     print(
         f"策略同步: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清"
     )
-    print(f"刷新间隔: {interval}s · Ctrl+C 停止")
+    print(
+        f"行情: 东财 SSE + 新浪批量兜底 · 刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · "
+        f"无行情保底 {interval}s · Ctrl+C 停止"
+    )
     print(
         f"开盘价定时: 每日 {open_h:02d}:{open_m:02d} 刷新盯盘标的 "
         f"({_watchlist_codes_label()})"
@@ -3242,6 +3393,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
         print("\n已停止盯盘")
     finally:
         stop.set()
+        feed.stop()
+        _ws_hub = None
         try:
             server.shutdown()
         except Exception:  # noqa: BLE001
@@ -3261,8 +3414,16 @@ def build_parser() -> argparse.ArgumentParser:
     html_p.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     html_p.set_defaults(func=cmd_html)
 
-    w = sub.add_parser("watch", help="长驻盯盘：每60秒更新行情并自动刷新页面")
-    w.add_argument("--interval", type=int, default=60, help="刷新秒数，默认60")
+    w = sub.add_parser(
+        "watch",
+        help="长驻盯盘：东财SSE/新浪兜底行情 + 本地WS推页",
+    )
+    w.add_argument(
+        "--interval",
+        type=int,
+        default=5,
+        help="无行情时的保底刷新秒数，默认5",
+    )
     w.add_argument("--host", default="127.0.0.1", help="监听地址")
     w.add_argument("--port", type=int, default=8765, help="端口，默认8765")
     w.add_argument(

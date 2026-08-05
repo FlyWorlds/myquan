@@ -109,8 +109,10 @@
 ## 依赖
 
 ```bash
-pip install akshare pandas
+pip install akshare pandas requests
 ```
+
+（本地 `/ws` 出站推送用标准库实现，无需额外 WebSocket 包。）
 
 ## 用法
 
@@ -124,12 +126,14 @@ python index.py status --no-open
 # 只生成/打开报告
 python index.py html
 
-# 长驻盯盘：本地 HTTP + 每 60 秒更新；页头有倒计时并自动刷新
+# 长驻盯盘：东财 SSE 实时推送 + 新浪批量兜底；本地 HTTP + /ws 推页
 python index.py watch
-python index.py watch --interval 30 --port 8765
+python index.py watch --interval 5 --port 8765
 # 浏览器打开：http://127.0.0.1:8765/holdings_report.html
+# WebSocket：ws://127.0.0.1:8765/ws 推送完整数据，页面就地更新（不会自动整页刷新）
+# 需要整页时请手动 F5；WS 断开时才用 holdings_watch.json 就地兜底（仍不 reload）
+# --interval：无行情时的保底推送秒数（默认 5）；有 tick 时约 1s 节流
 # 停止：终端 Ctrl+C
-Stop-Process -Id 26228 -Force
 ```
 
 ### 持仓登记
@@ -156,10 +160,11 @@ python index.py history
 | 文件 | 作用 |
 |------|------|
 | `index.py` | 主程序 |
+| `quote_feed.py` | 东财 SSE + 新浪批量兜底 + 本地 WS 广播 |
 | `holdings.json` | 持仓成本/数量、可用现金、总资产、当日已实现盈亏 |
 | `trades.jsonl` | 买卖流水（含自动止损/阴线卖） |
 | `holdings_report.html` | 盯盘报告 |
-| `holdings_watch.json` | `watch` 模式更新时间戳（供页面轮询刷新） |
+| `holdings_watch.json` | `watch` 模式更新时间戳（WS 失败时页面轮询） |
 
 ## 注意
 
@@ -167,5 +172,5 @@ python index.py history
 - 盯盘运行中再执行 `status`/`html` 会保留自动刷新脚本，并尽量打开 HTTP 地址，避免覆盖成无刷新的静态页。
 - 报告汇总显示：总资产、可用、仓位%、当日开仓成本；个股仓位%=市值/总资产。
 - 当日盈亏：隔夜可用股按昨收，今日锁定股按 `--today-cost`（成交价）。
-- 行情来源：新浪 1 分钟线拼当日 OHLC（开盘初分钟线未到时回退新浪现价）；大盘指数用新浪 spot。
+- **行情来源（watch）**：冷启动用分钟线/新浪 seed；盘中优先东财 SSE（`push2*.eastmoney.com`），SSE 不健康时约 2s 新浪批量 `hq.sinajs.cn` 兜底；页面经本地 `/ws` 推送刷新。一次性 `status`/`html` 仍走原 `fetch_today_quote`。大盘指数用新浪 spot。
 - 自动结算是盯盘侧记账，**不会下真实委托**；实盘请按报告「建议挂单」自行下单。
