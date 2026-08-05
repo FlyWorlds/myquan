@@ -364,7 +364,8 @@ def strategy_signal(
     """盯盘：按持仓输出一侧因子状态。
 
     · 接近预警：|现价/因子价 − 1|×100 ≤ near_points（默认 1%）
-    · 统一字段：因子侧 / 因子价 / 因子触发 / 距因子价差 / 距因子%
+    · 统一字段：因子侧 / 因子价 / 因子触发 / 距已触发* / 距未触发*
+    · 有仓：已触发=买入因子，未触发=卖出(止损)；空仓：已触发=卖出，未触发=买入
     · allow_entry=False 时不因触买点进入待买入（前日过滤未过）
     """
     holding = qty > 0
@@ -376,18 +377,15 @@ def strategy_signal(
     pf = f"{{:.{px_digits}f}}"
     tick = 10 ** (-px_digits) if px_digits >= 0 else TICK_SIZE
 
-    dist_buy_px = round(float(last_px) - float(buy_trigger), px_digits)
-    dist_stop_px = round(float(last_px) - float(stop_px), px_digits)
-    dist_buy_pct = (
-        round((float(last_px) / float(buy_trigger) - 1.0) * 100.0, 2)
-        if float(buy_trigger) > 0
-        else None
-    )
-    dist_stop_pct = (
-        round((float(last_px) / float(stop_px) - 1.0) * 100.0, 2)
-        if float(stop_px) > 0
-        else None
-    )
+    def _dist(ref_px: float) -> tuple[float | None, float | None]:
+        if float(ref_px) <= 0:
+            return None, None
+        dpx = round(float(last_px) - float(ref_px), px_digits)
+        dpct = round((float(last_px) / float(ref_px) - 1.0) * 100.0, 2)
+        return dpx, dpct
+
+    dist_buy_px, dist_buy_pct = _dist(buy_trigger)
+    dist_stop_px, dist_stop_pct = _dist(stop_px)
     near_buy_band = (
         dist_buy_pct is not None and abs(float(dist_buy_pct)) <= near_points + 1e-12
     )
@@ -426,16 +424,15 @@ def strategy_signal(
     def _finish(out: dict[str, Any]) -> dict[str, Any]:
         sell = out["side"] == "sell"
         if sell:
+            # 有仓一律给出卖出因子价=止损价（含 T+1 仅展示、不可下单）
+            out["因子价"] = round(float(stop_px), px_digits)
+            out["距因子价差"] = dist_stop_px
+            out["距因子%"] = dist_stop_pct
             if out.get("t1_lock"):
-                out["因子价"] = None
-                out["距因子价差"] = None
-                out["距因子%"] = None
                 out["因子触发"] = "不可用"
                 out["建议挂单"] = None
+                out["actionable"] = False
             else:
-                out["因子价"] = round(float(stop_px), px_digits)
-                out["距因子价差"] = dist_stop_px
-                out["距因子%"] = dist_stop_pct
                 out["actionable"] = True
                 alert = str(out.get("alert") or "")
                 if out.get("hit_stop") or "已触止损" in alert:
@@ -444,7 +441,7 @@ def strategy_signal(
                     out["因子触发"] = "接近"
                 else:
                     out["因子触发"] = "未触发"
-                # 建议挂单：仅已给出时强制对齐因子价
+                # 建议挂单：有仓时对齐卖出因子价（止损）
                 if out.get("建议挂单") is not None and out.get("因子价") is not None:
                     out["建议挂单"] = round(float(out["因子价"]), px_digits)
                 elif out.get("建议挂单") is not None and out.get("因子价") is None:
@@ -485,6 +482,37 @@ def strategy_signal(
             out["因子侧"] = "持有"
         else:
             out["因子侧"] = "空仓"
+
+        # 双距：上一个已触发因子 / 下一个未触发因子
+        # 卖出侧取反：现价高于止损时为负，表示还需下跌才触发卖出
+        if holding:
+            trig_side, trig_px = "买入", round(float(buy_trigger), px_digits)
+            next_side, next_px = "卖出", round(float(stop_px), px_digits)
+        else:
+            trig_side, trig_px = "卖出", round(float(stop_px), px_digits)
+            next_side, next_px = "买入", round(float(buy_trigger), px_digits)
+
+        def _signed(px: float, side: str) -> tuple[float | None, float | None]:
+            dpx, dpct = _dist(px)
+            if dpx is None or dpct is None:
+                return None, None
+            if side == "卖出":
+                return round(-dpx, px_digits), round(-dpct, 2)
+            return dpx, dpct
+
+        d_trig_px, d_trig_pct = _signed(trig_px, trig_side)
+        d_next_px, d_next_pct = _signed(next_px, next_side)
+        out["已触发因子侧"] = trig_side
+        out["已触发因子价"] = trig_px
+        out["未触发因子侧"] = next_side
+        out["未触发因子价"] = next_px
+        out["距已触发价差"] = d_trig_px
+        out["距已触发%"] = d_trig_pct
+        out["距未触发价差"] = d_next_px
+        out["距未触发%"] = d_next_pct
+        # 兼容旧字段：距因子 = 距未触发（下一个）
+        out["距因子价差"] = d_next_px
+        out["距因子%"] = d_next_pct
         return out
 
     if holding:
@@ -532,8 +560,11 @@ def strategy_signal(
             {
                 "alert": "持有",
                 "bg_class": "status-hold",
-                "挂单说明": "",
-                "建议挂单": None,
+                "建议挂单": stop_px,
+                "挂单说明": (
+                    f"持有中，卖出因子价=开盘止损@{pf.format(stop_px)}，"
+                    f"可预埋条件卖"
+                ),
                 "pending_sell": False,
             }
         )

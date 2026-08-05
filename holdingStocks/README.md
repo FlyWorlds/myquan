@@ -129,6 +129,7 @@ python index.py watch
 python index.py watch --interval 30 --port 8765
 # 浏览器打开：http://127.0.0.1:8765/holdings_report.html
 # 停止：终端 Ctrl+C
+Stop-Process -Id 26228 -Force
 ```
 
 ### 持仓登记
