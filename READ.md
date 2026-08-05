@@ -63,7 +63,7 @@ myquan/
 │   ├── base.py              # run_backtest_pipeline 骨架
 │   ├── data.py              # 日线缓存（个股 / ETF 分流）
 │   ├── minute.py            # 分钟线工具
-│   └── registry.py          # 策略注册（仅 open_break3）
+│   └── registry.py          # 策略因子注册（仅 open_break3）
 ├── backtest/                # 回测 CLI / 标的脚本 / 合格池
 │   ├── run.py               # 统一入口：python run.py kaicheng
 │   ├── strategy1.py         # 薄封装 → 预设

@@ -318,6 +318,7 @@ def _apply_trigger_date_fields(
         and str(row.get("预警") or "") in EXIT_REASONS
     )
     mem = _factor_memory(code) if code else {}
+    trig_day: str | None = None
 
     # 触发瞬间：刚触发的一侧成为「已触发」，对侧今日因子成为「未触发」
     just_sold = bool(hit_stop or sold_today or (pos_st == "待卖出" and hit_txt == "已触发"))
@@ -342,8 +343,10 @@ def _apply_trigger_date_fields(
         next_px = float(stop_lv) if stop_lv is not None else None
         if code and trig_px is not None:
             remember_factor_trigger(code, side="buy", px=trig_px, session=session)
+            trig_day = str(session)[:10]
     elif qty > 0:
-        # 持有中：已触发=持仓对应那次买入因子（绝不用今日买点冒充）
+        # 持有中：已触发=策略买入因子（日线重放优先）。
+        # buy_time 可能是实盘同步登记时间，不能当作因子触发日。
         trig_side, next_side = "买入", "卖出"
         buy_day = str(buy_time or "")[:10]
         sess_day = str(session)[:10]
@@ -351,29 +354,35 @@ def _apply_trigger_date_fields(
         mem_buy_day = str(mem.get("last_buy_factor_date") or "")[:10]
         hist_buy = replay.get("last_buy_px")
         hist_buy_day = str(replay.get("last_buy_date") or "")[:10]
+        hist_holding = bool(replay.get("holding"))
         trig_px = None
-        # 记忆必须对上持仓买入日，否则视为脏数据
-        if mem_buy is not None and buy_day and mem_buy_day == buy_day:
-            trig_px = float(mem_buy)
-        elif hist_buy is not None:
+        if hist_holding and hist_buy is not None and hist_buy_day:
             trig_px = float(hist_buy)
-        elif mem_buy is not None and (not buy_day) and mem_buy_day != sess_day:
+            trig_day = hist_buy_day
+        elif mem_buy is not None and mem_buy_day and mem_buy_day != sess_day:
             trig_px = float(mem_buy)
+            trig_day = mem_buy_day
+        elif hist_buy is not None and hist_buy_day:
+            trig_px = float(hist_buy)
+            trig_day = hist_buy_day
         elif buy_day == sess_day and buy_lv is not None:
-            # 仅当日新买可用今日买点
+            # 仅当日新买且无历史重放时，用今日买点
             trig_px = float(buy_lv)
+            trig_day = sess_day
+        elif mem_buy is not None:
+            trig_px = float(mem_buy)
+            trig_day = mem_buy_day or None
         next_px = float(stop_lv) if stop_lv is not None else None
-        # 用持仓买入日因子固化/纠正记忆
-        if code and trig_px is not None:
-            seed_sess = buy_day or hist_buy_day or sess_day
+        # 按真实因子日固化/纠正记忆（勿用 buy_time 覆盖）
+        if code and trig_px is not None and trig_day:
             need_fix = (
                 mem_buy is None
-                or (buy_day and mem_buy_day != buy_day)
+                or mem_buy_day != trig_day
                 or abs(float(mem_buy) - float(trig_px)) > 1e-9
             )
             if need_fix:
                 remember_factor_trigger(
-                    code, side="buy", px=trig_px, session=seed_sess, force=True
+                    code, side="buy", px=trig_px, session=trig_day, force=True
                 )
     else:
         # 空仓：已触发=上次卖出因子；未触发=今日买点
@@ -408,10 +417,10 @@ def _apply_trigger_date_fields(
             row["因子触发"] = hit_txt
         return
 
-    # 有仓：最近买入日（持仓 buy_time / 记忆 / 日线重放）
+    # 有仓：最近买入因子日（重放/记忆；不用 buy_time）
     if qty > 0:
         md = (
-            format_trigger_md(buy_time)
+            format_trigger_md(trig_day)
             or format_trigger_md(mem.get("last_buy_factor_date"))
             or format_trigger_md(replay.get("last_buy_date"))
         )
@@ -2467,7 +2476,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清 · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
+          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {escape(STRATEGY_NAME)} <span class="sensitive">±{DEFAULT_PCT*100:.1f}% · 仅止损全清</span> · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2489,7 +2498,7 @@ def write_html_report(
       {cards_html}
     </div>
     <p class="note">
-      策略锁定 {STRATEGY_NAME}（与 strategy/open_break 回测同源；卖出仅保留止损）。
+      策略锁定 {escape(STRATEGY_NAME)}<span class="sensitive">（与 strategy/open_break 回测同源；卖出仅保留止损）。</span>
       持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入止损预警；否则空仓或持有。
       卡片排序：有持仓 → 预警/当日触发 → 其余（同档按夏普序）。
       因子侧：待卖出预警→卖出；待买入预警→买入；其余→持有或空仓。
