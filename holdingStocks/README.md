@@ -68,10 +68,18 @@
 ## 依赖
 
 ```bash
-pip install akshare pandas requests
+pip install -r ../requirements.txt
 ```
 
 （本地 `/ws` 出站推送用标准库实现，无需额外 WebSocket 包。）
+
+## 模块
+
+| 文件 | 职责 |
+|------|------|
+| `index.py` | CLI、HTML 报告、watch 长驻 |
+| `watch_config.py` | 标的池 / 代码工具 |
+| `quote_feed.py` | 东财 SSE + 新浪兜底 + 本地 WS |
 
 ## 用法
 

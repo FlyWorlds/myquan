@@ -2,57 +2,62 @@
 
 from __future__ import annotations
 
-import akquant as aq
 import pandas as pd
-from akquant import BacktestResult, CurrentClose
+from akquant import BacktestResult, CurrentClose, Strategy
 
 from strategy.backtest import OpenBreak3Strategy, print_summary
-from strategy.data import fetch_daily
+from strategy.base import run_akquant_backtest, run_backtest_pipeline
 from strategy.config import BacktestConfig
 
 _FILL = CurrentClose()
 
 
 def apply_strategy_config(
+    strategy: Strategy,
     cfg: BacktestConfig,
-) -> None:
-    OpenBreak3Strategy.symbol = cfg.symbol
-    OpenBreak3Strategy.symbol_name = cfg.symbol_name
-    OpenBreak3Strategy.target_pct = cfg.target_pct
-    OpenBreak3Strategy.lot_size = cfg.lot_size
-    OpenBreak3Strategy.start_date = cfg.start_date
-    OpenBreak3Strategy.end_date = cfg.end_date
-    OpenBreak3Strategy.slippage_value = cfg.slippage_value
-    OpenBreak3Strategy.entry_pct = cfg.threshold_pct
-    OpenBreak3Strategy.stop_pct = cfg.threshold_pct
-    OpenBreak3Strategy.prev_small_yang_pct = cfg.threshold_pct
-    OpenBreak3Strategy.tick = cfg.tick
-    OpenBreak3Strategy.limit_down_pct = cfg.limit_down_pct
-    OpenBreak3Strategy.t0 = cfg.t0
-    OpenBreak3Strategy.entry_ref = getattr(cfg, "entry_ref", "today_open") or "today_open"
-    OpenBreak3Strategy.prev_entry_mode = (
+) -> Strategy:
+    """把配置写到**策略实例**上，避免类属性在并行回测中互相覆盖。"""
+    strategy.symbol = cfg.symbol
+    strategy.symbol_name = cfg.symbol_name
+    strategy.target_pct = cfg.target_pct
+    strategy.lot_size = cfg.lot_size
+    strategy.start_date = cfg.start_date
+    strategy.end_date = cfg.end_date
+    strategy.slippage_value = cfg.slippage_value
+    strategy.entry_pct = cfg.threshold_pct
+    strategy.stop_pct = cfg.threshold_pct
+    strategy.prev_small_yang_pct = cfg.threshold_pct
+    strategy.tick = cfg.tick
+    strategy.limit_down_pct = cfg.limit_down_pct
+    strategy.t0 = cfg.t0
+    strategy.entry_ref = getattr(cfg, "entry_ref", "today_open") or "today_open"
+    strategy.prev_entry_mode = (
         getattr(cfg, "prev_entry_mode", "yin_or_small_yang") or "yin_or_small_yang"
     )
+    return strategy
+
+
+def build_open_break_strategy(cfg: BacktestConfig) -> OpenBreak3Strategy:
+    """构造已绑定配置的策略实例。"""
+    return apply_strategy_config(OpenBreak3Strategy(), cfg)  # type: ignore[return-value]
 
 
 def run_open_break_backtest(
     cfg: BacktestConfig,
     daily: pd.DataFrame,
 ) -> BacktestResult:
-    apply_strategy_config(cfg)
-    return aq.run_backtest(
-        data=daily,
-        strategy=OpenBreak3Strategy,
-        symbols=cfg.symbol,
-        initial_cash=cfg.initial_cash,
-        commission_rate=cfg.commission_rate,
-        stamp_tax_rate=cfg.stamp_tax_rate,
-        t_plus_one=not bool(cfg.t0),
-        lot_size=cfg.lot_size,
-        fill_policy=_FILL,
-        slippage=cfg.slippage,
-        timezone="Asia/Shanghai",
-        show_progress=False,
+    return run_akquant_backtest(
+        daily=daily,
+        strategy_cls=OpenBreak3Strategy,
+        symbol=cfg.symbol,
+        params=cfg,
+        configure=apply_strategy_config,
+        extra={
+            "t_plus_one": not bool(cfg.t0),
+            "fill_policy": _FILL,
+            "timezone": "Asia/Shanghai",
+            "show_progress": False,
+        },
     )
 
 
@@ -67,55 +72,30 @@ def run_open_break(
 
     force_daily_refresh=True 会忽略本地日线缓存，重拉完整历史区间。
     """
-    if verbose:
-        print(f"akquant={getattr(aq, '__version__', '?')}")
-        print(f"拉取 {cfg.symbol_name}({cfg.symbol}) 日线 {cfg.start_date} → {cfg.end_date} ...")
-
-    daily = fetch_daily(
-        cfg.symbol,
-        cfg.start_date,
-        cfg.end_date,
-        cache_path=cfg.daily_cache,
-        force_refresh=force_daily_refresh,
+    return run_backtest_pipeline(
+        params=cfg,
+        strategy_cls=OpenBreak3Strategy,
+        configure=apply_strategy_config,
+        print_summary_fn=print_summary if verbose else None,
+        summary_kwargs={
+            "symbol_name": cfg.symbol_name,
+            "symbol": cfg.symbol,
+            "initial_cash": cfg.initial_cash,
+            "commission_rate": cfg.commission_rate,
+            "stamp_tax_rate": cfg.stamp_tax_rate,
+            "slippage_value": cfg.slippage_value,
+            "entry_pct": cfg.threshold_pct,
+            "stop_pct": cfg.threshold_pct,
+            "prev_small_yang_pct": cfg.threshold_pct,
+        },
+        report_title=f"{cfg.symbol_name} {cfg.report_title_suffix()}",
+        show_report=show_report,
+        verbose=verbose,
+        force_daily_refresh=force_daily_refresh,
+        extra={
+            "t_plus_one": not bool(cfg.t0),
+            "fill_policy": _FILL,
+            "timezone": "Asia/Shanghai",
+            "show_progress": False,
+        },
     )
-    if verbose:
-        print(
-            f"日线数: {len(daily)}，"
-            f"区间: {daily['date'].iloc[0]} → {daily['date'].iloc[-1]}"
-        )
-
-    result = run_open_break_backtest(cfg, daily)
-
-    if verbose:
-        print("\n=== Backtest Result ===")
-        print(result)
-        print_summary(
-            result,
-            daily,
-            symbol_name=cfg.symbol_name,
-            symbol=cfg.symbol,
-            initial_cash=cfg.initial_cash,
-            commission_rate=cfg.commission_rate,
-            stamp_tax_rate=cfg.stamp_tax_rate,
-            slippage_value=cfg.slippage_value,
-            entry_pct=cfg.threshold_pct,
-            stop_pct=cfg.threshold_pct,
-            prev_small_yang_pct=cfg.threshold_pct,
-        )
-
-    report_path = cfg.report_path
-    if report_path is not None:
-        if verbose:
-            print(f"\n生成 HTML: {report_path}")
-        result.viz.report(
-            title=f"{cfg.symbol_name} {cfg.report_title_suffix()}",
-            filename=str(report_path),
-            show=show_report,
-            market_data=daily,
-            plot_symbol=cfg.symbol,
-            curve_freq="D",
-        )
-        if verbose:
-            print(f"报告已生成: {report_path}")
-
-    return result, daily

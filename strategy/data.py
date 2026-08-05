@@ -9,6 +9,9 @@ import akshare as ak
 import pandas as pd
 import requests
 
+# 相邻两根日线日历间隔超过该值视为可疑缺口（含春节长假缓冲）
+_MAX_BAR_GAP_DAYS = 20
+
 
 def _latest_completed_weekday(now: dt.datetime | None = None) -> dt.date:
     """返回可安全拉取日线的最近工作日（收盘后 15:15 才包含当天）。"""
@@ -19,6 +22,15 @@ def _latest_completed_weekday(now: dt.datetime | None = None) -> dt.date:
     while day.weekday() >= 5:
         day -= dt.timedelta(days=1)
     return day
+
+
+def _is_etf_symbol(symbol: str) -> bool:
+    """识别常见场内 ETF / LOF 代码（带 sh/sz 前缀）。"""
+    sym = str(symbol or "").strip().lower()
+    if not sym.startswith(("sh", "sz")) or len(sym) < 8:
+        return False
+    code = sym[2:]
+    return code.startswith(("51", "56", "58", "15", "16", "18"))
 
 
 def _normalize_daily(
@@ -74,12 +86,26 @@ def _normalize_daily(
     )
 
 
-def _fetch_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
-    """从 AkShare 拉取指定区间的前复权 A 股日线。"""
-    sym = str(symbol or "").strip().lower()
-    if not sym.startswith(("sh", "sz")):
-        raise ValueError(f"仅支持 A 股 sh/sz 标的: {symbol}")
+def _fetch_etf_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
+    """ETF 前复权日线（东财 fund_etf_hist_em）。"""
+    code = str(symbol).strip().lower()[2:]
+    try:
+        raw = ak.fund_etf_hist_em(
+            symbol=code,
+            period="daily",
+            start_date=start,
+            end_date=end,
+            adjust="qfq",
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"AkShare ETF 日线拉取失败: {symbol} {start}~{end}"
+        ) from exc
+    return _normalize_daily(raw, symbol=symbol, start=start, end=end)
 
+
+def _fetch_stock_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
+    """A 股个股前复权日线。"""
     try:
         raw = ak.stock_zh_a_daily(
             symbol=symbol, start_date=start, end_date=end, adjust="qfq"
@@ -88,25 +114,59 @@ def _fetch_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
         raise RuntimeError(
             f"AkShare 个股日线拉取失败: {symbol} {start}~{end}"
         ) from exc
-
     return _normalize_daily(raw, symbol=symbol, start=start, end=end)
+
+
+def _fetch_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
+    """从 AkShare 拉取指定区间的前复权日线（ETF / 个股分流）。"""
+    sym = str(symbol or "").strip().lower()
+    if not sym.startswith(("sh", "sz")):
+        raise ValueError(f"仅支持 A 股 sh/sz 标的: {symbol}")
+    if _is_etf_symbol(sym):
+        return _fetch_etf_daily_remote(sym, start, end)
+    return _fetch_stock_daily_remote(sym, start, end)
+
+
+def _empty_daily() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=["date", "open", "high", "low", "close", "volume", "symbol"]
+    )
+
+
+def _cache_symbol_mismatch(df: pd.DataFrame, symbol: str) -> bool:
+    if df.empty or "symbol" not in df.columns:
+        return False
+    syms = {
+        str(s).strip().lower()
+        for s in df["symbol"].dropna().tolist()
+        if str(s).strip()
+    }
+    if not syms:
+        return False
+    return symbol.lower() not in syms or len(syms) > 1
+
+
+def _cache_has_suspicious_gaps(df: pd.DataFrame) -> bool:
+    if df is None or len(df) < 2:
+        return False
+    days = sorted(pd.to_datetime(df["date"]).dt.date.unique())
+    for prev, cur in zip(days, days[1:]):
+        if (cur - prev).days > _MAX_BAR_GAP_DAYS:
+            return True
+    return False
 
 
 def _read_daily_cache(path: Path, symbol: str) -> pd.DataFrame:
     if not path.exists():
-        return pd.DataFrame(
-            columns=["date", "open", "high", "low", "close", "volume", "symbol"]
-        )
+        return _empty_daily()
     try:
         df = pd.read_parquet(path)
     except Exception:
-        return pd.DataFrame(
-            columns=["date", "open", "high", "low", "close", "volume", "symbol"]
-        )
+        return _empty_daily()
     if df.empty or not {"date", "open", "high", "low", "close"}.issubset(df.columns):
-        return pd.DataFrame(
-            columns=["date", "open", "high", "low", "close", "volume", "symbol"]
-        )
+        return _empty_daily()
+    if _cache_symbol_mismatch(df, symbol):
+        return _empty_daily()
     df["date"] = pd.to_datetime(df["date"])
     if df["date"].dt.tz is None:
         df["date"] = df["date"].dt.tz_localize("Asia/Shanghai")
@@ -115,12 +175,18 @@ def _read_daily_cache(path: Path, symbol: str) -> pd.DataFrame:
     df["symbol"] = symbol
     if "volume" not in df.columns:
         df["volume"] = 0.0
-    return df[["date", "open", "high", "low", "close", "volume", "symbol"]]
+    out = df[["date", "open", "high", "low", "close", "volume", "symbol"]]
+    if _cache_has_suspicious_gaps(out):
+        return _empty_daily()
+    return out
 
 
 def _write_daily_cache(path: Path, daily: pd.DataFrame) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    daily.sort_values("date").to_parquet(path, index=False)
+    out = daily.sort_values("date").copy()
+    if not out.empty:
+        out["symbol"] = out["symbol"].astype(str)
+    out.to_parquet(path, index=False)
 
 
 def _default_daily_cache_path(symbol: str) -> Path:
@@ -139,6 +205,7 @@ def fetch_daily(
     """读取前复权日线缓存，只拉取缓存区间外缺失数据。
 
     `force_refresh=True` 会重拉完整区间，用于前复权数据在除权除息后的全量校正。
+    缓存标的不符或相邻 K 线日历缺口过大时，自动全量重拉。
     """
     requested_start = pd.Timestamp(start).date()
     requested_end = min(pd.Timestamp(end).date(), _latest_completed_weekday())
@@ -149,9 +216,7 @@ def fetch_daily(
     cache = (
         _read_daily_cache(cache_path, symbol)
         if cache_path is not None and not force_refresh
-        else pd.DataFrame(
-            columns=["date", "open", "high", "low", "close", "volume", "symbol"]
-        )
+        else _empty_daily()
     )
     parts: list[pd.DataFrame] = [cache] if not cache.empty else []
     if force_refresh or cache.empty:
@@ -189,6 +254,17 @@ def fetch_daily(
         .drop_duplicates(subset=["date"], keep="last")
         .reset_index(drop=True)
     )
+    merged["symbol"] = symbol
+    if _cache_has_suspicious_gaps(merged):
+        # 增量合并后仍有大缺口 → 全量重拉
+        merged = _fetch_daily_remote(
+            symbol,
+            requested_start.strftime("%Y%m%d"),
+            requested_end.strftime("%Y%m%d"),
+        )
+        if merged.empty:
+            raise RuntimeError(f"缺口修复后仍无日线: {symbol} {start}~{end}")
+        merged["symbol"] = symbol
     if cache_path is not None:
         _write_daily_cache(cache_path, merged)
 

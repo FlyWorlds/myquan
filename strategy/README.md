@@ -7,14 +7,15 @@ strategy/
 ├── open_break.py        # 规则与盯盘信号
 ├── backtest.py          # OpenBreak3Strategy + 报告摘要
 ├── config.py            # BacktestConfig、标的预设
-├── runner.py            # run_open_break 入口
-├── data.py              # 日线拉取
+├── runner.py            # run_open_break（实例传参 + pipeline）
+├── data.py              # 日线拉取（个股/ETF、缓存校验）
 ├── minute.py            # 通用分钟线工具
 ├── base.py              # akquant 回测骨架
 └── registry.py          # 策略注册（仅 open_break3）
 
 huice/
-└── strategy1.py           # 凯盛科技
+├── run.py                 # 统一 CLI：python run.py kaicheng
+└── strategy1.py           # 薄封装
 ```
 
 ## 当前生效策略（因子1 · 唯一在用）

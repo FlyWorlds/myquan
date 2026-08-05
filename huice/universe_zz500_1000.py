@@ -33,7 +33,7 @@ FIT_CSV = OUT_DIR / "fit_sharpe1_excess.csv"
 TOP50_CSV = OUT_DIR / "top50_excess.csv"
 SUMMARY_TXT = OUT_DIR / "summary.txt"
 
-# 进程池：akquant 策略用类属性，线程不安全
+# 进程池：隔离 GIL / AkShare；策略已改为实例传参，不再依赖类属性
 WORKERS = 4
 START_DATE = "20200101"
 THRESHOLD_PCT = 0.025

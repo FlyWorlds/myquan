@@ -67,10 +67,10 @@ class StrategyRuleTests(unittest.TestCase):
 class DailyCacheTests(unittest.TestCase):
     def setUp(self) -> None:
         self._remote = data._fetch_daily_remote
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, str, str]] = []
 
         def fake_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
-            self.calls.append((start, end))
+            self.calls.append((symbol, start, end))
             days = pd.date_range(start, end, freq="D")
             return pd.DataFrame(
                 {
@@ -110,8 +110,59 @@ class DailyCacheTests(unittest.TestCase):
         self.assertEqual(len(third), 3)
         self.assertEqual(
             self.calls,
-            [("20240101", "20240103"), ("20240104", "20240104")],
+            [
+                ("sh600552", "20240101", "20240103"),
+                ("sh600552", "20240104", "20240104"),
+            ],
         )
+
+    def test_wrong_symbol_in_cache_forces_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp) / "bad.parquet"
+            bad = pd.DataFrame(
+                {
+                    "date": pd.to_datetime(["2024-01-01", "2024-01-02"]).tz_localize(
+                        "Asia/Shanghai"
+                    )
+                    + pd.Timedelta(hours=15),
+                    "open": 1.0,
+                    "high": 1.0,
+                    "low": 1.0,
+                    "close": 1.0,
+                    "volume": 1.0,
+                    "symbol": "sh999999",
+                }
+            )
+            bad.to_parquet(cache, index=False)
+            data.fetch_daily(
+                "sh600552", "20240101", "20240102", cache_path=cache
+            )
+        self.assertEqual(self.calls[0][0], "sh600552")
+        self.assertEqual(self.calls[0][1:], ("20240101", "20240102"))
+
+    def test_suspicious_gap_forces_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp) / "gap.parquet"
+            gapped = pd.DataFrame(
+                {
+                    "date": pd.to_datetime(["2024-01-01", "2024-03-01"]).tz_localize(
+                        "Asia/Shanghai"
+                    )
+                    + pd.Timedelta(hours=15),
+                    "open": 1.0,
+                    "high": 1.0,
+                    "low": 1.0,
+                    "close": 1.0,
+                    "volume": 1.0,
+                    "symbol": "sh600552",
+                }
+            )
+            gapped.to_parquet(cache, index=False)
+            out = data.fetch_daily(
+                "sh600552", "20240101", "20240105", cache_path=cache
+            )
+        self.assertGreaterEqual(len(out), 1)
+        self.assertTrue(any(c[1] == "20240101" for c in self.calls))
 
     def test_stock_daily_failure_is_explicit(self) -> None:
         with mock.patch.object(
@@ -121,6 +172,40 @@ class DailyCacheTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "AkShare 个股日线拉取失败"):
                 self._remote("sh600552", "20240101", "20240103")
+
+    def test_etf_uses_fund_api(self) -> None:
+        self.assertTrue(data._is_etf_symbol("sh510580"))
+        self.assertFalse(data._is_etf_symbol("sh600552"))
+        data._fetch_daily_remote = self._remote
+        with mock.patch.object(
+            data.ak,
+            "fund_etf_hist_em",
+            side_effect=ConnectionError("etf down"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "AkShare ETF 日线拉取失败"):
+                data._fetch_daily_remote("sh510580", "20240101", "20240103")
+
+
+class StrategyInstanceTests(unittest.TestCase):
+    def test_apply_config_writes_instance_not_class(self) -> None:
+        from strategy.config import BacktestConfig, KAICHENG
+        from strategy.backtest import OpenBreak3Strategy
+        from strategy.runner import apply_strategy_config, build_open_break_strategy
+
+        class_default = OpenBreak3Strategy.symbol
+        a = build_open_break_strategy(KAICHENG)
+        other = OpenBreak3Strategy()
+        apply_strategy_config(
+            other,
+            BacktestConfig(
+                symbol="sh600879",
+                symbol_name="航天电子",
+                em_symbol="600879",
+            ),
+        )
+        self.assertEqual(a.symbol, "sh600552")
+        self.assertEqual(other.symbol, "sh600879")
+        self.assertEqual(OpenBreak3Strategy.symbol, class_default)
 
 
 if __name__ == "__main__":
