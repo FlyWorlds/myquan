@@ -15,6 +15,7 @@
   python index.py              # 查看标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
   python index.py watch        # 长驻：行情事件驱动刷新；每日09:26强制刷新盯盘开盘价
+  python index.py wechat-test  # 发送一条微信测试预警（不走大模型）
   python index.py buy 600552 15.50 400
   python index.py sell 600552 16.20 400
   python index.py set-cost 600552 15.95 --qty 400
@@ -48,6 +49,7 @@ if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
 from quote_feed import LocalWsHub, QuoteFeedManager, ws_accept_key
+from wechat_notify import notify_watch_rows, send_test_alert
 from strategy.minute import pull_akshare_1m
 from strategy.open_break import (
     DEFAULT_PCT,
@@ -2995,14 +2997,30 @@ def cmd_history(_: argparse.Namespace) -> None:
     print(pd.DataFrame(rows).to_string(index=False))
 
 
+def _maybe_wechat_notify(
+    rows: list[dict[str, Any]],
+    *,
+    enabled: bool = True,
+) -> None:
+    if not enabled:
+        return
+    try:
+        notify_watch_rows(rows)
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 微信推送异常: {e}")
+
+
 def _refresh_once(
     refresh_sec: int,
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
+    wechat: bool = True,
 ) -> Path:
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices_cached()
-    return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
+    path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
+    _maybe_wechat_notify(rows, enabled=wechat)
+    return path
 
 
 def _parse_hhmm(text: str) -> tuple[int, int]:
@@ -3049,12 +3067,14 @@ def _refresh_open_prices(
     refresh_sec: int,
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
+    wechat: bool = True,
 ) -> Path:
     """强制拉一次行情，用最新开盘重算买点/止损并写报告。"""
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices()
     path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
     _log_watchlist_opens(rows)
+    _maybe_wechat_notify(rows, enabled=wechat)
     return path
 
 
@@ -3160,12 +3180,24 @@ def _write_html_respecting_watch(
     return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
 
 
+def cmd_wechat_test(_: argparse.Namespace) -> None:
+    """发送一条测试预警到微信（不走大模型）。"""
+    ok, detail = send_test_alert()
+    if ok:
+        print("微信测试预警已发送，请查看手机。")
+        if detail and detail != "ok":
+            print(detail[:300])
+        return
+    raise SystemExit(f"微信测试推送失败: {detail}")
+
+
 def cmd_watch(args: argparse.Namespace) -> None:
     """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。"""
     global _ws_hub
     interval = max(2, int(args.interval))
     host = str(args.host)
     port = int(args.port)
+    wechat = not bool(getattr(args, "no_wechat", False))
     open_h, open_m = _parse_hhmm(
         getattr(args, "open_at", None)
         or f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}"
@@ -3196,12 +3228,14 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
     def safe_refresh() -> Path:
         with refresh_lock:
-            return _refresh_once(interval, get_quote=get_quote)
+            return _refresh_once(interval, get_quote=get_quote, wechat=wechat)
 
     def safe_open_refresh() -> Path:
         with refresh_lock:
             reseed_all()
-            return _refresh_open_prices(interval, get_quote=get_quote)
+            return _refresh_open_prices(
+                interval, get_quote=get_quote, wechat=wechat
+            )
 
     print("冷启动：拉取开盘/分钟线并 seed…")
     try:
@@ -3327,6 +3361,10 @@ def cmd_watch(args: argparse.Namespace) -> None:
         f"开盘价定时: 每日 {open_h:02d}:{open_m:02d} 刷新盯盘标的 "
         f"({_watchlist_codes_label()})"
     )
+    print(
+        "微信推送: "
+        + ("开（待买入/待卖出，同信号冷却防抖）" if wechat else "关（--no-wechat）")
+    )
     print("展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）")
     if not args.no_open:
         webbrowser.open(url)
@@ -3375,7 +3413,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="每日强制刷新盯盘开盘价的时刻，默认09:26",
     )
     w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
+    w.add_argument(
+        "--no-wechat",
+        action="store_true",
+        help="关闭微信预警推送（默认开启，见 wechat_notify.json）",
+    )
     w.set_defaults(func=cmd_watch)
+
+    wt = sub.add_parser(
+        "wechat-test",
+        help="发送一条微信测试预警（不走大模型）",
+    )
+    wt.set_defaults(func=cmd_wechat_test)
 
     b = sub.add_parser("buy", help="记录买入")
     b.add_argument("code")

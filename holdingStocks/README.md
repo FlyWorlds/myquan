@@ -80,6 +80,8 @@ pip install -r ../requirements.txt
 | `index.py` | CLI、HTML 报告、watch 长驻 |
 | `watch_config.py` | 标的池 / 代码工具 |
 | `quote_feed.py` | 东财 SSE + 新浪兜底 + 本地 WS |
+| `wechat_notify.py` | 微信预警推送（OpenClaw，不走大模型） |
+| `weChat接入.md` | 微信接入说明 |
 
 ## 用法
 
@@ -100,9 +102,14 @@ python index.py watch --interval 5 --port 8765
 # WebSocket：ws://127.0.0.1:8765/ws 推送完整数据，页面就地更新（不会自动整页刷新）
 # 需要整页时请手动 F5；WS 断开时才用 holdings_watch.json 就地兜底（仍不 reload）
 # --interval：无行情时的保底推送秒数（默认 5）；有 tick 时约 1s 节流
+# 默认开启微信预警推送（见 wechat_notify.json）；关闭：--no-wechat
 # 停止：终端 Ctrl+C
+
+# 微信推送自检（不走大模型）
+python index.py wechat-test
 ```
 
+微信接入细节见 [weChat接入.md](./weChat接入.md)。
 ### 持仓登记
 
 ```bash

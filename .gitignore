@@ -3,3 +3,4 @@ holdingStocks/holdings.json
 holdingStocks/holdings_report.html
 holdingStocks/holdings_watch.json
 holdingStocks/holdings_watch.pid
+holdingStocks/wechat_alert_state.json
