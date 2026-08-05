@@ -50,7 +50,7 @@ myquan/
 │   ├── runner.py            # run_open_break（实例传参）
 │   ├── base.py              # run_backtest_pipeline 骨架
 │   └── data.py              # 日线缓存（个股 / ETF 分流）
-├── huice/                   # 回测 CLI
+├── backtest/                # 回测 CLI
 │   ├── run.py               # 统一入口：python run.py kaicheng
 │   ├── strategy1.py         # 薄封装 → 预设
 │   └── universe_zz500_1000.py
@@ -65,9 +65,9 @@ myquan/
 运行示例：
 
 ```bash
-cd myquan/huice && python run.py --list
-cd myquan/huice && python run.py kaicheng
-cd myquan/huice && python strategy1.py --rules
+cd myquan/backtest && python run.py --list
+cd myquan/backtest && python run.py kaicheng
+cd myquan/backtest && python strategy1.py --rules
 cd myquan/holdingStocks && python index.py
 cd myquan/sectors && python index.py
 ```

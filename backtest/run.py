@@ -1,4 +1,4 @@
-"""huice 共用 CLI：统一回测入口，减少各标的脚本复制。"""
+"""backtest 共用 CLI：统一回测入口，减少各标的脚本复制。"""
 
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--monthly",
         action="store_true",
-        help="导出分月 CSV 到 huice/",
+        help="导出分月 CSV 到 backtest/",
     )
     args = parser.parse_args(argv)
 

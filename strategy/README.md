@@ -13,7 +13,7 @@ strategy/
 ├── base.py              # akquant 回测骨架
 └── registry.py          # 策略注册（仅 open_break3）
 
-huice/
+backtest/
 ├── run.py                 # 统一 CLI：python run.py kaicheng
 └── strategy1.py           # 薄封装
 ```
@@ -58,7 +58,7 @@ run_open_break(cfg, force_daily_refresh=True)
 ```
 
 ```bash
-cd huice && python strategy1.py --rules
+cd backtest && python strategy1.py --rules
 ```
 
 ## 离线规则回归测试

@@ -15,7 +15,7 @@ from strategy.open_break import DEFAULT_PCT, TICK_SIZE, is_t1_buy_day
 STRATEGY_NAME = "因子1"
 
 # 中证500+1000 契合池（夏普≥1 且策略超额>0，按夏普降序）
-# 明细：../huice/universe_zz500_1000/fit_sharpe1_excess.csv
+# 明细：../backtest/universe_zz500_1000/fit_sharpe1_excess.csv
 _FIT_WATCH: list[tuple[str, str]] = [
     ("001389", "广合科技"),
     ("600552", "凯盛科技"),

@@ -53,7 +53,7 @@ class BacktestConfig:
         )
 
 
-# --- 常用标的预设（huice 脚本可直接引用）---
+# --- 常用标的预设（backtest 脚本可直接引用）---
 _DAILY_CACHE_DIR = Path(__file__).resolve().parents[1] / "data_cache"
 
 KAICHENG = BacktestConfig(

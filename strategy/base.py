@@ -5,7 +5,7 @@
   2. backtest.py — akquant Strategy 子类
   3. config.py  — dataclass 配置 + 标的预设
   4. runner.py  — prepare + run_xxx()，内部调用 run_akquant_backtest
-  5. huice/xxx.py — 薄 CLI
+  5. backtest/xxx.py — 薄 CLI
 
 然后在 registry.py 注册即可。
 """
