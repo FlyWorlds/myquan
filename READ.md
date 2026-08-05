@@ -1,4 +1,4 @@
-# myquan — AKQuant 框架接入说明
+<!-- # myquan — AKQuant 框架接入说明 -->
 
 本目录基于 [AKQuant](https://github.com/akfamily/akquant) 做 A 股策略回测与盯盘。
 
@@ -53,7 +53,7 @@ pip install -r requirements.txt
 myquan/
 ├── READ.md                  # 本文档
 ├── TODO.MD                  # 任务优先级
-├── requirements.txt         # 运行依赖（含 akquant 版本钉死）
+├── requirements.txt         # 运行依赖
 ├── test_strategy_rules.py   # 离线规则回归（不访问网络）
 ├── strategy/                # OpenBreak3 规则 / 回测 / 配置
 │   ├── open_break.py        # 策略因子（回测与盯盘共用）
