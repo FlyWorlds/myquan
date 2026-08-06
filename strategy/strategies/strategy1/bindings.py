@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from strategy.core.protocols import bind_factor
+from strategy.dd_topup import DEFAULT_ADD_PCT, DEFAULT_LEVELS, filter_desc as factor2_filter_desc
 from strategy.open_break import (
     DEFAULT_BAN_DOUBLE_YANG,
     DEFAULT_BAN_SINGLE_YANG,
@@ -68,5 +69,14 @@ FACTOR_BINDINGS = (
         double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
         filter=strategy1_factor_filter,
         filter_desc="前日阴/小阳 + 禁双阳跨日≥5%",
+    ),
+    bind_factor(
+        "factor2",
+        label="回撤阶梯补仓",
+        role="custom",
+        add_pct=DEFAULT_ADD_PCT,
+        levels=DEFAULT_LEVELS,
+        filter_desc=factor2_filter_desc(DEFAULT_ADD_PCT, DEFAULT_LEVELS),
+        enabled=True,
     ),
 )

@@ -1,17 +1,18 @@
 # 持仓盯盘
 # 浏览器打开：http://127.0.0.1:8765/holdings_report.html
 
-本地持仓记录 + 盘中盯盘：**与 strategy「策略一 / 因子1」严格同步**（`open_break.py` 同源）。
+本地持仓记录 + 盘中盯盘：**与核心策略一（因子1 + 因子2）同步**。
 
-可插拔架构见 `../strategy/README.md`：因子层 → 策略绑定 → 决策层 → 执行层；默认仅策略一生效。
+可插拔架构见 `../strategy/README.md`。
 
-## 策略锁定 · 策略一 / 因子1
+## 策略锁定 · 策略一（因子1 + 因子2）
 
-- **买**：`high ≥ ceil(open×1.025)`；前日阴线或小阳；禁双阳跨日≥5%；T+1
-- **卖（全清）**：仅止损 −2.5%
-- **已移除**：低开定时退出、阴线退出、软减半、回撤仓位管理、同日再买
+- **因子1 买**：`high ≥ ceil(open×1.025)`；前日阴线或小阳；禁双阳跨日≥5%；T+1
+- **因子1 卖**：仅止损 −2.5% 全清（盯盘触及即结算）
+- **因子2**：按账户总资产年内回撤建议追加/提出（摘要在合计区；微信推送；**不自动改现金**）
+- 参数与 `strategy1/bindings` / `dd_topup.DEFAULT_*` 同源
 
-完整规则：`python -c "from strategy import get_strategy; print(get_strategy('strategy1').print_rules())"`
+完整规则：`cd backtest && python strategy1.py --rules`
 
 ## 合格标的池（盯盘）
 
@@ -46,10 +47,9 @@
 2. **止损**：盘中最低价 ≤ 开盘×(1−阈值)（向下取整到 tick）→ **按止损价自动结算**并清仓。
 3. **未触止损**：无论阴线、阳线或十字均继续持有。
 
-> 因子2（高点回落减半仓）、因子3（分时均价做T）已删除，归档说明见 `strategy/README.md`。
+> 旧版「高点回落减半仓」已废弃；现行因子2 为回撤阶梯补仓（见 `strategy/dd_topup.py`）。
 
-完整规则说明：`python -c "from strategy import STRATEGY_RULES; print(STRATEGY_RULES)"`  
-或：`cd myquan/backtest && python strategy1.py --rules`
+完整规则：`cd myquan/backtest && python strategy1.py --rules`
 
 **盯盘卡片（仅保留）**：
 1. **持仓状态**：

@@ -1,14 +1,15 @@
-"""持仓记录与盯盘：与 strategy「策略一 / 因子1」严格同步。
+"""持仓记录与盯盘：与核心策略一（因子1 + 因子2）同步。
 
-策略锁定 · 策略一（默认，挂载因子1）：
-  · 买：high≥ceil(open×1.025)；前日阴/小阳；禁双阳跨日≥5%；T+1
-  · 卖（全清）：仅止损−2.5%
-  · 卖出：仅开盘 −2.5% 止损全清
+策略锁定 · 策略一：
+  · 因子1 买：high≥ceil(open×1.025)；前日阴/小阳；禁双阳跨日≥5%；T+1
+  · 因子1 卖：仅止损−2.5% 全清
+  · 因子2：总资产年内回撤阶梯补仓（建议追加/提出；不自动改现金）
   · 可插拔：strategy/strategies + strategy/factors（见 strategy/README.md）
 
 功能：
   · 拉取当日开盘、最高、最低、现价（东财 SSE + 新浪批量兜底；冷启动用分钟线）
-  · 规则与回测共用 strategy/open_break.py
+  · 因子1 规则与 strategy/open_break + strategy1/bindings 同源
+  · 因子2 与 strategy/dd_topup 同源（账户级建议，不自动改现金）
   · 有仓：仅止损自动结算（全清）；空仓：已触买/将买入建议限价
   · 本地 JSON 记录持仓；T+1 买入日不可卖
 
@@ -52,7 +53,12 @@ if str(_MYQUAN_ROOT) not in sys.path:
 
 from quote_feed import LocalWsHub, QuoteFeedManager, ws_accept_key
 from strategy.minute import pull_akshare_1m
+from strategy import get_strategy_bindings
 from strategy.open_break import (
+    DEFAULT_BAN_DOUBLE_YANG,
+    DEFAULT_BAN_SINGLE_YANG,
+    DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+    DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
     EXIT_REASONS,
     LOT_SIZE,
@@ -70,10 +76,13 @@ from strategy.open_break import (
 )
 from strategy.data import fetch_daily
 
-# 盯盘与回测共用：策略一 + 因子1（开盘−2.5%止损全清）
+from factor2_watch import format_factor2_summary, sync_factor2
+
+# 盯盘与回测共用：策略一 = 因子1（买卖）+ 因子2（总资产回撤补仓）
 STRATEGY_ID = "strategy1"
 FACTOR_ID = "factor1"
-STRATEGY_NAME = "策略一·因子1"
+FACTOR2_ID = "factor2"
+STRATEGY_NAME = "策略一·因子1+因子2"
 
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
@@ -91,6 +100,25 @@ _INDEX_CACHE_TTL_SEC = 15.0
 
 def _code_key(code: str) -> str:
     return "".join(ch for ch in str(code) if ch.isdigit()).zfill(6)[-6:]
+
+
+def _strategy1_factor1_params() -> dict[str, Any]:
+    """策略一 · 因子1 绑定参数（与回测 bindings 同源）。"""
+    try:
+        for b in get_strategy_bindings(STRATEGY_ID):
+            if b.factor_id == FACTOR_ID and b.enabled:
+                return dict(b.params)
+    except Exception:
+        pass
+    return {
+        "entry_pct": DEFAULT_PCT,
+        "stop_pct": DEFAULT_PCT,
+        "prev_entry_mode": "yin_or_small_yang",
+        "ban_double_yang": DEFAULT_BAN_DOUBLE_YANG,
+        "ban_single_yang": DEFAULT_BAN_SINGLE_YANG,
+        "double_yang_combined_min_pct": DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+        "double_yang_combined_mode": DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+    }
 
 
 def _sina_of(code: str) -> str:
@@ -1320,6 +1348,7 @@ def collect_rows(
             day_chg = q.get("day_chg_pct")
             daily = _watch_daily(w["sina"])
             prev_o, prev_c, prev2_o, prev2_c = _prev_bars_from_daily(daily, q["session"])
+            f1p = _strategy1_factor1_params()
             allow_entry = entry_filters_ok(
                 prev_o,
                 prev_c,
@@ -1327,6 +1356,27 @@ def collect_rows(
                 prev2_c,
                 entry_pct=entry_pct,
                 prev_entry_mode=prev_entry_mode,
+                tick=tick,
+                ban_double_yang=bool(
+                    f1p.get("ban_double_yang", DEFAULT_BAN_DOUBLE_YANG)
+                ),
+                ban_single_yang=bool(
+                    f1p.get("ban_single_yang", DEFAULT_BAN_SINGLE_YANG)
+                ),
+                yang_min_pct=float(f1p.get("yang_min_pct") or 0.0),
+                double_yang_second_min_pct=f1p.get("double_yang_second_min_pct"),
+                double_yang_combined_min_pct=f1p.get(
+                    "double_yang_combined_min_pct",
+                    DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+                ),
+                double_yang_combined_mode=str(
+                    f1p.get(
+                        "double_yang_combined_mode",
+                        DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+                    )
+                    or DEFAULT_DOUBLE_YANG_COMBINED_MODE
+                ),
+                single_yang_min_pct=f1p.get("single_yang_min_pct"),
             )
             replay = replay_last_factor_triggers(
                 daily,
@@ -1791,6 +1841,20 @@ def collect_rows(
             r["仓位%"] = round(float(mv) / pos_base * 100.0, 1)
         else:
             r["仓位%"] = 0.0 if r.get("已实现") else None
+
+    # 因子2：按账户总资产同步（与策略一回测同源参数）
+    session_f2 = session_today or str(pd.Timestamp.now().date())
+    data_f2 = load_holdings()
+    f2_status = sync_factor2(
+        data_f2, equity=account_total, session=str(session_f2)
+    )
+    save_holdings(data_f2)
+    for r in rows:
+        r["因子2动作"] = f2_status.get("action")
+        r["因子2"] = f2_status.get("label")
+        r["因子2建议额"] = f2_status.get("suggest_amount")
+        r["因子2回撤%"] = f2_status.get("dd_pct")
+        r["因子2档位"] = f2_status.get("layers")
     return sort_watch_rows(rows)
 
 
@@ -1806,9 +1870,11 @@ def sort_watch_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             return True
         if hit.startswith("已触发") or hit == "接近":
             return True
+        if str(r.get("因子2动作") or "") in ("inject", "withdraw"):
+            return True
         return any(
             x in alert
-            for x in ("将买入", "将止损", "已触买", "已触发", "止损")
+            for x in ("将买入", "将止损", "已触买", "已触发", "止损", "因子2")
         )
 
     def _urgency(r: dict[str, Any]) -> int:
@@ -2187,6 +2253,12 @@ def write_html_report(
     clock_now = _now()
     indices_html = "".join(index_cards)
     cards_html = "".join(cards)
+    _f2_raw = (
+        holdings_meta.get("factor2")
+        if isinstance(holdings_meta.get("factor2"), dict)
+        else None
+    )
+    _f2_txt = format_factor2_summary(_f2_raw)
     summary_html = f"""
       <div class="summary">
         <div class="label">合计盈亏</div>
@@ -2213,6 +2285,7 @@ def write_html_report(
           {f' · 未计成本市值 {_fmt_num(total_mv_no_cost)}' if total_mv_no_cost > 0 else ''}
           {f' · 今日结算{settled_n}笔 盈亏{settled_pnl:+.2f}/当日{settled_day:+.2f}' if settled_n > 0 else ''}
         </div>
+        <div class="meta factor2-line">{escape(_f2_txt)}</div>
       </div>
     """
     top_html = indices_html + summary_html
@@ -2603,7 +2676,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清 · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
+          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1仅止损 · 因子2回撤补仓 · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2625,15 +2698,15 @@ def write_html_report(
       {cards_html}
     </div>
     <p class="note">
-      策略锁定 {STRATEGY_NAME}（与 strategy/open_break 回测同源；卖出仅保留止损）。
+      策略锁定 {STRATEGY_NAME}（与 strategy1 bindings 同源）。
+      因子1：买卖点/止损；卖出仅止损全清。
+      因子2：按账户总资产年内回撤建议追加/提出（摘要见合计区；不自动改现金）。
       持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入止损预警；否则空仓或持有。
       卡片排序：有持仓 → 预警/当日触发 → 其余（同档按夏普序）。
       因子侧：待卖出预警→卖出；待买入预警→买入；其余→持有或空仓。
       因子触发：盘中预警写「已触发 M/D」；否则为最近一次因子触发日（无年份）。
-      卖出全清：仅止损。
-      距已触发/未触发：因子一旦触发即自动翻转（买→已触发=买点、未触发=止损；卖→已触发=止损、未触发=买点），并写入 factor_memory。
-      卖出侧距%为负=还需下跌到止损；买入侧距%为正=相对买点已上涨/还需上涨。
-      因子价=买点（空仓预警）或止损价；持有态额外展示「卖出因子价」=开盘−阈值止损，可预埋条件卖。
+      距已触发/未触发：因子一旦触发即自动翻转，并写入 factor_memory。
+      因子价=买点（空仓预警）或止损价；持有态额外展示「卖出因子价」=开盘−阈值止损。
       |距未触发%|≤{NEAR_FACTOR_PCT:g}% → 将买入/将止损。
       {watch_hint}
     </p>
@@ -2831,14 +2904,13 @@ def cmd_status(args: argparse.Namespace) -> None:
     if not getattr(args, "no_open", False):
         url = _report_url_if_watching()
         webbrowser.open(url if url else report.resolve().as_uri())
-    print(f"策略: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}%（与 open_break 回测同源）")
+    print(f"策略: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}%（与 strategy1 同源）")
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
     print("     当日盈亏: 隔夜仓=(现价-昨收)×可用；今买=(现价-今买成交价)×锁定")
-    print(
-        f"     卖出全清: 仅止损"
-    )
-    print("     已触止损=视为成交并锁定盈亏；盘中预警未成交仅提示")
-    print("     买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
+    print("     因子1卖出: 仅止损；已触止损=视为成交并锁定盈亏")
+    print("     因子1买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
+    _f2 = load_holdings().get("factor2")
+    print(f"     {format_factor2_summary(_f2 if isinstance(_f2, dict) else None)}")
 
 
 def cmd_html(args: argparse.Namespace) -> None:
@@ -3339,7 +3411,7 @@ def cmd_review(args: argparse.Namespace) -> None:
         account_total=account_total,
         account_open=account_open,
         available_cash=available,
-        strategy=f"{STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清",
+        strategy=f"{STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1仅止损 · 因子2回撤补仓",
     )
     text = format_review_text(review)
     text_path, json_path = save_review(review, text)
@@ -3552,7 +3624,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     print(f"盯盘服务已启动: {url}")
     print(f"本地 WebSocket: ws://{host}:{port}/ws")
     print(
-        f"策略同步: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清"
+        f"策略同步: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1+因子2"
     )
     print(
         f"行情: 东财 SSE + 新浪批量兜底 · 刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · "

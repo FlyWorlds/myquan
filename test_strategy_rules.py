@@ -101,6 +101,29 @@ class StrategyRuleTests(unittest.TestCase):
             )
         )
 
+    def test_factor2_dd_topup_ladder(self) -> None:
+        from strategy import get_factor, get_strategy_bindings
+        from strategy.dd_topup import desired_layers, simulate_dd_topup
+
+        f2 = get_factor("factor2")
+        self.assertTrue(f2.implemented)
+        self.assertEqual(f2.meta.get("kind"), "dd_topup")
+        self.assertEqual(desired_layers(0.25, 3), 3)
+        self.assertEqual(desired_layers(0.15, 3), 2)
+        self.assertEqual(desired_layers(0.05, 3), 1)
+        self.assertEqual(desired_layers(0.0, 3), 0)
+
+        # 核心策略一已绑定因子1+因子2
+        ids = {b.factor_id for b in get_strategy_bindings("strategy1")}
+        self.assertEqual(ids, {"factor1", "factor2"})
+
+        # 合成权益：100 → 89（dd11%应加1档）→ 100
+        idx = pd.date_range("2024-01-02", periods=3, freq="B", tz="Asia/Shanghai")
+        eq = pd.Series([100_000.0, 89_000.0, 100_000.0], index=idx)
+        nav, events = simulate_dd_topup(eq, initial_cash=100_000.0)
+        self.assertTrue(any(e["event"] == "inject" for e in events))
+        self.assertAlmostEqual(float(nav["injected"].iloc[-1]), 0.0, places=4)
+
 
 class DailyCacheTests(unittest.TestCase):
     def setUp(self) -> None:

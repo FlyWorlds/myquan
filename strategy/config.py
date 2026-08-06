@@ -66,6 +66,10 @@ class BacktestConfig:
     skip_buy_after_consec_stops: int = 0
     # 当天买入、下一交易日即止损：跳过下一次买点，再下一次才买；循环
     skip_buy_after_overnight_stop: bool = False
+    # 因子2（策略一默认叠加）：None=用 strategy1 bindings / dd_topup 默认
+    factor2_enabled: bool | None = None
+    factor2_add_pct: float | None = None
+    factor2_levels: tuple[float, ...] | None = None
     daily_cache: Path | None = None
     report_path: Path | None = None
 

@@ -15,11 +15,11 @@ if str(_MYQUAN) not in sys.path:
 from strategy import (  # noqa: E402
     HANGTIANDIANZI,
     KAICHENG,
-    STRATEGY_RULES,
     XIEXINNENGKE,
     ZZ500_ETF,
     BacktestConfig,
-    run_open_break,
+    get_strategy,
+    run_strategy1,
 )
 from strategy.backtest import monthly_returns_df  # noqa: E402
 
@@ -85,12 +85,20 @@ def run_backtest_cli(
     monthly_csv: Path | None = None,
     argv: list[str] | None = None,
 ) -> tuple[Any, Any] | None:
-    """解析通用参数并跑 OpenBreak3。返回 (result, daily)；仅 --rules 时返回 None。"""
+    """解析通用参数并跑策略一（因子1+因子2）。返回 (result, daily)；仅 --rules 时返回 None。"""
     parser = argparse.ArgumentParser(
-        description=f"{cfg.symbol_name} 开盘±{cfg.threshold_pct * 100:.1f}% 策略回测"
+        description=(
+            f"{cfg.symbol_name} 策略一回测 "
+            f"（因子1开盘±{cfg.threshold_pct * 100:.1f}% + 因子2回撤补仓）"
+        )
     )
     parser.add_argument("--no-open", action="store_true", help="不自动打开 HTML")
-    parser.add_argument("--rules", action="store_true", help="打印策略规则")
+    parser.add_argument("--rules", action="store_true", help="打印策略一完整规则（含因子绑定）")
+    parser.add_argument(
+        "--no-factor2",
+        action="store_true",
+        help="不叠加因子2，仅跑因子1交易",
+    )
     parser.add_argument(
         "--force-refresh",
         action="store_true",
@@ -98,14 +106,15 @@ def run_backtest_cli(
     )
     args = parser.parse_args(argv)
     if args.rules:
-        print(STRATEGY_RULES.strip())
+        print(get_strategy("strategy1").print_rules())
         return None
 
     cfg = _with_report(cfg) if cfg.report_path is None else cfg
-    result, daily = run_open_break(
+    result, daily = run_strategy1(
         cfg,
         show_report=show_report and not args.no_open,
         force_daily_refresh=bool(args.force_refresh),
+        apply_factor2_overlay=not bool(args.no_factor2),
     )
     if save_monthly:
         path = monthly_csv or Path(__file__).with_name(

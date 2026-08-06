@@ -9,7 +9,7 @@ from strategy.strategies.strategy2.bindings import FACTOR_BINDINGS, STRATEGY_ID,
 
 
 class Strategy2Decision(BaseDecisionEngine):
-    """与策略一同构，但用策略二自己的 factor1 绑定（±3% / 仅阴）。factor2 占位不参与。"""
+    """与策略一同构，但用策略二自己的 factor1 绑定（±3% / 仅阴）。factor2 为权益叠加，决策不参与。"""
 
     strategy_id = STRATEGY_ID
     strategy_name = STRATEGY_NAME

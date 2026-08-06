@@ -1,4 +1,4 @@
-"""策略三 · 决策层骨架（factor2 未实现前恒 hold）。"""
+"""策略三 · 决策层骨架（仅挂因子2 叠加，不产出买卖价 → hold）。"""
 
 from __future__ import annotations
 
@@ -18,10 +18,10 @@ class Strategy3Decision(BaseDecisionEngine):
         if binding is None:
             return Decision.hold("策略三未绑定因子2")
         return Decision.hold(
-            "策略三决策骨架：factor2 尚未实现信号/价位",
-            lookback=binding.params.get("lookback"),
-            threshold=binding.params.get("threshold"),
-            tags=("stub", "factor2"),
+            "策略三：factor2 为权益补仓叠加因子，不直接产出买卖价",
+            add_pct=binding.params.get("add_pct"),
+            levels=binding.params.get("levels"),
+            tags=("overlay", "factor2"),
         )
 
 

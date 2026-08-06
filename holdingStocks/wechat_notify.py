@@ -27,6 +27,9 @@ _PUSH_ALERT_KEYS = (
     "止损成交",
     "阴线收盘卖",
     "低开945未翻红",
+    "因子2",
+    "建议追加",
+    "建议提出",
 )
 _PUSH_HIT = frozenset({"接近", "已触发"})
 
@@ -91,12 +94,13 @@ def _save_state(state: dict[str, Any]) -> None:
 
 
 def is_alert_row(row: dict[str, Any]) -> bool:
-    """触发预警 / 接近预警 / 策略结算，均推送（对齐页面预警判定）。"""
+    """触发预警 / 接近预警 / 策略结算 / 因子2，均推送（对齐页面预警判定）。"""
     pos = str(row.get("持仓状态") or "")
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
     near_buy = bool(row.get("近买点"))
     near_stop = bool(row.get("近止损"))
+    f2_act = str(row.get("因子2动作") or "")
 
     # 1) 卡片持仓状态进入预警带
     if pos in _PUSH_POS:
@@ -116,6 +120,9 @@ def is_alert_row(row: dict[str, Any]) -> bool:
     # 6) 策略自动结算锁定
     if row.get("已实现") and alert:
         return True
+    # 7) 因子2 追加/提出建议
+    if f2_act in ("inject", "withdraw"):
+        return True
     return False
 
 
@@ -125,15 +132,21 @@ def _alert_key(row: dict[str, Any]) -> str:
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
     realized = "1" if row.get("已实现") else "0"
+    f2 = f"{row.get('因子2动作')}|{row.get('因子2')}"
     # 接近→已触发、未触→已触 等变化要能再推
     touched = (
         f"{row.get('已触买')}|{row.get('已触止损')}|"
         f"{int(bool(row.get('近买点')))}|{int(bool(row.get('近止损')))}"
     )
-    return f"{code}|{pos}|{alert}|{hit}|{realized}|{touched}"
+    return f"{code}|{pos}|{alert}|{hit}|{realized}|{touched}|{f2}"
 
 
 def _message_title(row: dict[str, Any]) -> str:
+    f2_act = str(row.get("因子2动作") or "")
+    if f2_act == "inject":
+        return "【因子2追加】"
+    if f2_act == "withdraw":
+        return "【因子2提出】"
     if row.get("已实现"):
         return "【策略触发】"
     hit = str(row.get("因子触发") or "")
@@ -182,6 +195,12 @@ def format_alert_message(row: dict[str, Any]) -> str:
         f"建议挂单: {_n(suggest)}",
         f"已触买: {row.get('已触买') or '-'} · 已触止损: {row.get('已触止损') or '-'}",
     ]
+    f2_act = str(row.get("因子2动作") or "")
+    if f2_act in ("inject", "withdraw") or row.get("因子2"):
+        lines.append(
+            f"因子2: {row.get('因子2') or '-'} · 回撤{row.get('因子2回撤%')}% "
+            f"· 档{row.get('因子2档位')} · 建议额{_n(row.get('因子2建议额'))}"
+        )
     if realized:
         lines.append(
             f"成交价 {_n(row.get('成交价'))} · 当日盈亏 {_n(row.get('当日盈亏'))}"
@@ -395,7 +414,20 @@ def notify_watch_rows(
     pushed: list[str] = []
 
     for row in rows:
-        if row.get("error") or not is_alert_row(row):
+        if row.get("error"):
+            continue
+        # 个股预警：排除「仅因子2」重复刷屏（账户级单独推）
+        f2_only = str(row.get("因子2动作") or "") in ("inject", "withdraw") and not (
+            str(row.get("持仓状态") or "") in _PUSH_POS
+            or str(row.get("因子触发") or "").startswith(("已触发", "接近"))
+            or any(k in str(row.get("预警") or "") for k in _PUSH_ALERT_KEYS if k != "因子2")
+            or str(row.get("已触买")) == "是"
+            or str(row.get("已触止损")) == "是"
+            or row.get("近买点")
+            or row.get("近止损")
+            or row.get("已实现")
+        )
+        if f2_only or not is_alert_row(row):
             continue
         key = _alert_key(row)
         active_keys.add(key)
@@ -413,7 +445,60 @@ def notify_watch_rows(
         else:
             print(f"[{_now()}] 微信推送失败 {name}({code}): {detail[:200]}")
 
-    # 清理已不在预警带的旧 key
+    # 账户级因子2：单独推一次
+    f2_row = next(
+        (
+            r
+            for r in rows
+            if str(r.get("因子2动作") or "") in ("inject", "withdraw")
+        ),
+        None,
+    )
+    if f2_row is not None:
+        f2_act = str(f2_row.get("因子2动作"))
+        f2_key = f"factor2|{f2_row.get('因子2')}|{f2_act}"
+        active_keys.add(f2_key)
+        prev_ts = float(sent.get(f2_key) or 0)
+        if force or (now_ts - prev_ts) >= cooldown:
+            try:
+                from factor2_watch import format_factor2_push
+
+                f2_status = {
+                    "action": f2_act,
+                    "label": f2_row.get("因子2"),
+                    "dd_pct": f2_row.get("因子2回撤%"),
+                    "layers": f2_row.get("因子2档位"),
+                    "suggest_amount": f2_row.get("因子2建议额"),
+                    "equity": None,
+                    "peak": None,
+                    "levels_label": "",
+                    "add_pct": 0.1,
+                }
+                hp = ROOT / "holdings.json"
+                if hp.exists():
+                    raw = json.loads(hp.read_text(encoding="utf-8"))
+                    saved = raw.get("factor2") if isinstance(raw, dict) else None
+                    if isinstance(saved, dict):
+                        f2_status = {
+                            **saved,
+                            "action": f2_act,
+                            "label": f2_row.get("因子2") or saved.get("last_label"),
+                            "levels_label": "/".join(
+                                f"{float(x)*100:.0f}"
+                                for x in (saved.get("levels") or [])
+                            ),
+                        }
+                msg = format_factor2_push(f2_status)
+            except Exception:
+                msg = format_alert_message(f2_row)
+            ok, detail = send_text(msg, config=cfg)
+            if ok:
+                sent[f2_key] = now_ts
+                pushed.append("因子2(账户)")
+                print(f"[{_now()}] 微信已推送: 因子2(账户)")
+            else:
+                print(f"[{_now()}] 微信推送失败 因子2: {detail[:200]}")
+
     for k in list(sent.keys()):
         if k not in active_keys:
             del sent[k]

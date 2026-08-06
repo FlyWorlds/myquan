@@ -1,8 +1,9 @@
-"""策略二 · 因子绑定（同因子1不同参数/过滤 + 占位因子2）。"""
+"""策略二 · 因子绑定（同因子不同参数，演示开闭扩展）。"""
 
 from __future__ import annotations
 
 from strategy.core.protocols import bind_factor
+from strategy.dd_topup import DEFAULT_ADD_PCT, DEFAULT_LEVELS, filter_desc as factor2_filter_desc
 from strategy.open_break import prev_day_allows_entry
 
 STRATEGY_ID = "strategy2"
@@ -42,9 +43,11 @@ FACTOR_BINDINGS = (
     ),
     bind_factor(
         "factor2",
-        label="预留因子2",
+        label="回撤阶梯补仓",
         role="custom",
-        filter_desc="占位，待实现",
+        add_pct=DEFAULT_ADD_PCT,
+        levels=DEFAULT_LEVELS,
+        filter_desc=factor2_filter_desc(DEFAULT_ADD_PCT, DEFAULT_LEVELS),
         enabled=True,
     ),
 )

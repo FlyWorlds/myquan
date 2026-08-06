@@ -7,8 +7,8 @@
   · core/                           — 协议 / MarketContext / Decision / 注册表
   · backtest.py / runner.py         — 执行层（下单与回测）
 
-默认生效：策略一 = 因子1 = 开盘±2.5%（OpenBreak3）。
-兼容旧 API：run_open_break / open_break3 / STRATEGY_RULES 等保持可用。
+默认生效：策略一 = 因子1（开盘±2.5%）+ 因子2（回撤阶梯补仓）。
+兼容旧 API：run_open_break（仅因子1交易）/ open_break3 / STRATEGY_RULES 等保持可用。
 """
 
 from strategy.open_break import (
@@ -81,9 +81,9 @@ from strategy.core import (  # noqa: E402
     list_strategy_specs,
 )
 
-# 语义别名
+# 语义别名：run_strategy1 = 因子1交易 + 因子2权益叠加；run_open_break = 仅因子1
 Strategy1 = OpenBreak3Strategy
-run_strategy1 = run_open_break
+from strategy.strategies.strategy1 import run_strategy1  # noqa: E402
 
 __all__ = [
     "DEFAULT_PCT",

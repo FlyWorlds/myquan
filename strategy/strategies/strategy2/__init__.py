@@ -22,7 +22,7 @@ register_strategy(
     StrategySpec(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
-        description="骨架：factor1(±3%/仅阴)+factor2；展示同因子不同策略过滤",
+        description="骨架：factor1(±3%/仅阴)+factor2回撤补仓；决策仅用因子1",
         factor_bindings=FACTOR_BINDINGS,
         run=not_implemented_runner(STRATEGY_ID),
         default_config=None,

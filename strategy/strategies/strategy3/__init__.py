@@ -17,7 +17,7 @@ register_strategy(
     StrategySpec(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
-        description="骨架：挂 factor2（与策略二共用因子，参数/过滤不同）",
+        description="骨架：挂 factor2 回撤补仓（档位参数可与策略二不同）",
         factor_bindings=FACTOR_BINDINGS,
         run=not_implemented_runner(STRATEGY_ID),
         default_config=None,

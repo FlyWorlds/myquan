@@ -5,8 +5,8 @@
   · decision.py  — 决策层：MarketContext → Decision（buy/sell/hold）
   · __init__.py  — 注册 StrategySpec（含 decision_factory / run）
 
-  strategy1 — 默认（因子1 / 开盘±2.5%），现行唯一生效回测
-  strategy2/3/4 — 骨架（决策可测，回测 runner 待接）
+  strategy1 — 默认生效：因子1（买卖）+ 因子2（回撤补仓叠加）
+  strategy2/3/4 — 骨架（同因子不同 params；回测 runner 待接）
 """
 
 # 策略注册前先确保因子已注册（多策略共用因子）
