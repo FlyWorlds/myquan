@@ -16,7 +16,7 @@
 
 - **筛选**：中证500 + 中证1000（剔科创/创业/北交）；夏普 **≥ 1.0** 且策略收益 > 买入持有
 - **区间**：2020-01-01 → 今；±2.5%；初始资金10万
-- **合计**：**11** 只（按夏普降序）；明细见 `../huice/universe_zz500_1000/fit_sharpe1_excess.csv`
+- **合计**：**11** 只（按夏普降序）；明细见 `../backtest/universe_zz500_1000/fit_sharpe1_excess.csv`
 - **卡片排序**：有持仓 → 预警/当日触发 → 其余（同档按夏普序）
 
 | # | 代码 | 名称 | 指数 | A夏普 | 策略收益 | 持有收益 | 超额 | 策略回撤 | 持有回撤 |
@@ -46,7 +46,7 @@
 > 因子2（高点回落减半仓）、因子3（分时均价做T）已删除，归档说明见 `strategy/README.md`。
 
 完整规则说明：`python -c "from strategy import STRATEGY_RULES; print(STRATEGY_RULES)"`  
-或：`cd myquan/huice && python strategy1.py --rules`
+或：`cd myquan/backtest && python strategy1.py --rules`
 
 **盯盘卡片（仅保留）**：
 1. **持仓状态**：
@@ -68,10 +68,20 @@
 ## 依赖
 
 ```bash
-pip install akshare pandas requests
+pip install -r ../requirements.txt
 ```
 
 （本地 `/ws` 出站推送用标准库实现，无需额外 WebSocket 包。）
+
+## 模块
+
+| 文件 | 职责 |
+|------|------|
+| `index.py` | CLI、HTML 报告、watch 长驻 |
+| `watch_config.py` | 标的池 / 代码工具 |
+| `quote_feed.py` | 东财 SSE + 新浪兜底 + 本地 WS |
+| `wechat_notify.py` | 微信预警推送（OpenClaw，不走大模型） |
+| `weChat接入.md` | 微信接入说明 |
 
 ## 用法
 
@@ -92,9 +102,21 @@ python index.py watch --interval 5 --port 8765
 # WebSocket：ws://127.0.0.1:8765/ws 推送完整数据，页面就地更新（不会自动整页刷新）
 # 需要整页时请手动 F5；WS 断开时才用 holdings_watch.json 就地兜底（仍不 reload）
 # --interval：无行情时的保底推送秒数（默认 5）；有 tick 时约 1s 节流
-# 停止：终端 Ctrl+C
+# 默认开启微信预警推送（见 wechat_notify.json）；关闭：--no-wechat
+# 停止当前终端：Ctrl+C
+
+# 结束所有盯盘（任意目录可执行；若已在 holdingStocks，rm 用下一行）
+pkill -f 'python.*index.py watch'
+pgrep -lf 'index.py watch' || echo '无盯盘进程'
+rm -f holdings_watch.pid
+# 若在仓库根目录：rm -f holdingStocks/holdings_watch.pid
+lsof -nP -iTCP:8765 -sTCP:LISTEN || echo '8765 已空闲'
+
+# 微信推送自检（不走大模型）
+python index.py wechat-test
 ```
 
+微信接入细节见 [weChat接入.md](./weChat接入.md)。
 ### 持仓登记
 
 ```bash
@@ -121,7 +143,7 @@ python index.py history
 | `index.py` | 主程序 |
 | `quote_feed.py` | 东财 SSE + 新浪批量兜底 + 本地 WS 广播 |
 | `holdings.json` | 持仓成本/数量、可用现金、总资产、当日已实现盈亏 |
-| `trades.jsonl` | 买卖流水（含自动止损/阴线卖） |
+| `trades.jsonl` | 买卖流水（本地运行时文件，勿入库） |
 | `holdings_report.html` | 盯盘报告 |
 | `holdings_watch.json` | `watch` 模式更新时间戳（WS 失败时页面轮询） |
 

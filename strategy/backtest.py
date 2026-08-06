@@ -6,7 +6,7 @@ from typing import Any
 
 import akquant as aq
 import pandas as pd
-from akquant import CurrentClose, Strategy
+from akquant import Strategy
 
 from strategy.open_break import (
     ENTRY_PCT,

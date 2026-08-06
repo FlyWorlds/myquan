@@ -39,7 +39,12 @@ from strategy.minute import (
     pull_akshare_1m,
     standardize_minute_1m,
 )
-from strategy.runner import run_open_break, run_open_break_backtest
+from strategy.runner import (
+    apply_strategy_config,
+    build_open_break_strategy,
+    run_open_break,
+    run_open_break_backtest,
+)
 from strategy.backtest import OpenBreak3Strategy, metric, print_monthly, print_summary, print_yearly
 
 __all__ = [
@@ -86,6 +91,8 @@ __all__ = [
     "standardize_minute_1m",
     "run_open_break",
     "run_open_break_backtest",
+    "apply_strategy_config",
+    "build_open_break_strategy",
     "metric",
     "print_summary",
     "print_yearly",

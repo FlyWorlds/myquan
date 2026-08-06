@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "channel": "openclaw-weixin",
+  "account": "YOUR_IM_BOT_ACCOUNT_ID",
+  "target": "YOUR_OPENID@im.wechat",
+  "cooldown_sec": 1800,
+  "openclaw_bin": "openclaw",
+  "timeout_sec": 45
+}
