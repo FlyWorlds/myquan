@@ -11,7 +11,10 @@ import pandas as pd
 
 import strategy.data as data
 from strategy.open_break import (
+    entry_filters_ok,
+    has_double_yang_before,
     limit_down_state,
+    should_block_entry_by_yang,
     strategy_levels,
     strategy_signal,
 )
@@ -62,6 +65,41 @@ class StrategyRuleTests(unittest.TestCase):
         self.assertFalse(opened["locked"])
         self.assertTrue(opened["opened"])
         self.assertEqual(opened["limit_px"], 9.0)
+
+    def test_double_yang_span_threshold_is_core_default(self) -> None:
+        # 弱双阳：跨日 10→10.3 / 10.0 = 3% < 5% → 不禁
+        self.assertFalse(
+            has_double_yang_before(
+                10.0, 10.2, 10.1, 10.3, combined_min_pct=0.05, combined_mode="span"
+            )
+        )
+        self.assertFalse(
+            should_block_entry_by_yang(10.0, 10.2, 10.1, 10.3)
+        )
+        # 前日小阳 + 弱双阳 → 默认可买
+        self.assertTrue(
+            entry_filters_ok(10.1, 10.3, 10.0, 10.2, entry_pct=0.025)
+        )
+
+        # 强双阳：跨日 10→10.6 = 6% ≥ 5% → 禁
+        self.assertTrue(
+            has_double_yang_before(
+                10.0, 10.3, 10.2, 10.6, combined_min_pct=0.05, combined_mode="span"
+            )
+        )
+        self.assertTrue(
+            should_block_entry_by_yang(10.0, 10.3, 10.2, 10.6)
+        )
+        self.assertFalse(
+            entry_filters_ok(10.2, 10.6, 10.0, 10.3, entry_pct=0.025)
+        )
+
+        # 显式关闭跨日门槛 → 任意双阳都禁（旧行为）
+        self.assertTrue(
+            should_block_entry_by_yang(
+                10.0, 10.2, 10.1, 10.3, double_yang_combined_min_pct=None
+            )
+        )
 
 
 class DailyCacheTests(unittest.TestCase):

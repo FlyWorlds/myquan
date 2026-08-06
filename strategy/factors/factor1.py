@@ -27,7 +27,7 @@ def _rules() -> str:
 SPEC = FactorSpec(
     id=FACTOR_ID,
     name=FACTOR_NAME,
-    description="开盘突破：买=开盘+pct，卖=开盘-pct止损；前日阴/小阳+禁双阳；T+1",
+    description="开盘突破：买=开盘+pct，卖=开盘-pct止损；前日阴/小阳+禁双阳跨日≥5%；T+1",
     rules_text=_rules(),
     implemented=True,
     levels=strategy_levels,

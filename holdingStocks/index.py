@@ -1,7 +1,7 @@
 """持仓记录与盯盘：与 strategy「策略一 / 因子1」严格同步。
 
 策略锁定 · 策略一（默认，挂载因子1）：
-  · 买：high≥ceil(open×1.025)；前日阴/小阳；禁前面双阳；T+1
+  · 买：high≥ceil(open×1.025)；前日阴/小阳；禁双阳跨日≥5%；T+1
   · 卖（全清）：仅止损−2.5%
   · 卖出：仅开盘 −2.5% 止损全清
   · 可插拔：strategy/strategies + strategy/factors（见 strategy/README.md）
@@ -2838,7 +2838,7 @@ def cmd_status(args: argparse.Namespace) -> None:
         f"     卖出全清: 仅止损"
     )
     print("     已触止损=视为成交并锁定盈亏；盘中预警未成交仅提示")
-    print("     买入过滤: 前日阴/小阳 + 禁前面双阳；T+1 当日不可卖")
+    print("     买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
 
 
 def cmd_html(args: argparse.Namespace) -> None:

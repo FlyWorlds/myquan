@@ -63,7 +63,7 @@ print(d.action, d.reason, d.price)  # buy / hold / sell
 ```python
 from strategy import bind_factor, get_strategy_bindings
 
-# 策略一：factor1 ±2.5% + 阴/小阳
+# 策略一：factor1 ±2.5% + 阴/小阳 + 禁双阳跨日≥5%
 # 策略二：同一 factor1 ±3% + 仅阴线
 for b in get_strategy_bindings("strategy1"):
     print(b.factor_id, b.params, b.filter_desc)
@@ -75,7 +75,7 @@ bind_factor(
     entry_pct=0.025,
     stop_pct=0.025,
     filter=my_filter_fn,
-    filter_desc="前日阴/小阳",
+    filter_desc="前日阴/小阳 + 禁双阳跨日≥5%",
     role="both",  # entry / exit / both / custom
 )
 ```

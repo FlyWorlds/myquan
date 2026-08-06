@@ -34,6 +34,33 @@ def apply_strategy_config(
     strategy.prev_entry_mode = (
         getattr(cfg, "prev_entry_mode", "yin_or_small_yang") or "yin_or_small_yang"
     )
+    from strategy.open_break import (
+        DEFAULT_BAN_DOUBLE_YANG,
+        DEFAULT_BAN_SINGLE_YANG,
+        DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+        DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+    )
+
+    strategy.ban_double_yang = bool(
+        getattr(cfg, "ban_double_yang", DEFAULT_BAN_DOUBLE_YANG)
+    )
+    strategy.ban_single_yang = bool(
+        getattr(cfg, "ban_single_yang", DEFAULT_BAN_SINGLE_YANG)
+    )
+    strategy.yang_min_pct = float(getattr(cfg, "yang_min_pct", 0.0) or 0.0)
+    sec = getattr(cfg, "double_yang_second_min_pct", None)
+    strategy.double_yang_second_min_pct = float(sec) if sec is not None else None
+    comb = getattr(cfg, "double_yang_combined_min_pct", DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT)
+    strategy.double_yang_combined_min_pct = float(comb) if comb is not None else None
+    mode = str(
+        getattr(cfg, "double_yang_combined_mode", DEFAULT_DOUBLE_YANG_COMBINED_MODE)
+        or DEFAULT_DOUBLE_YANG_COMBINED_MODE
+    )
+    strategy.double_yang_combined_mode = (
+        mode if mode in ("sum_body", "span") else DEFAULT_DOUBLE_YANG_COMBINED_MODE
+    )
+    smin = getattr(cfg, "single_yang_min_pct", None)
+    strategy.single_yang_min_pct = float(smin) if smin is not None else None
     levels = getattr(cfg, "take_profit_levels", None)
     strategy.take_profit_levels = tuple(levels) if levels else ()
     strategy.take_profit_reduce = float(getattr(cfg, "take_profit_reduce", 0.20) or 0.0)
@@ -44,6 +71,12 @@ def apply_strategy_config(
     )
     lock = getattr(cfg, "take_profit_lock_pct", None)
     strategy.take_profit_lock_pct = float(lock) if lock is not None else None
+    strategy.skip_buy_after_consec_stops = int(
+        getattr(cfg, "skip_buy_after_consec_stops", 0) or 0
+    )
+    strategy.skip_buy_after_overnight_stop = bool(
+        getattr(cfg, "skip_buy_after_overnight_stop", False)
+    )
     return strategy
 
 

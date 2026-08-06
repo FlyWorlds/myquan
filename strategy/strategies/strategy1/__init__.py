@@ -1,6 +1,6 @@
 """策略一（默认）：策略层(bindings) + 决策层(decision)。
 
-默认：因子1 + ±2.5% + 阴/小阳过滤；执行层仍走 OpenBreak3Strategy / runner。
+默认：因子1 + ±2.5% + 阴/小阳 + 禁双阳跨日≥5%；执行层仍走 OpenBreak3Strategy / runner。
 """
 
 from __future__ import annotations
