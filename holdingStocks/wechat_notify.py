@@ -1,8 +1,9 @@
-"""盯盘预警 → 微信推送（OpenClaw message send，不走大模型）。"""
+"""盯盘预警 / 策略触发 → 微信推送（OpenClaw message send，不走大模型）。"""
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from datetime import datetime
@@ -15,7 +16,17 @@ STATE_FILE = ROOT / "wechat_alert_state.json"
 
 # 持仓状态 / 预警文案命中即视为可推送
 _PUSH_POS = frozenset({"待买入", "待卖出"})
-_PUSH_ALERT_KEYS = ("已触买", "将买入", "已触止损", "将止损", "待买入", "待卖出")
+_PUSH_ALERT_KEYS = (
+    "已触买",
+    "将买入",
+    "已触止损",
+    "将止损",
+    "待买入",
+    "待卖出",
+    "止损成交",
+    "阴线收盘卖",
+    "低开945未翻红",
+)
 
 _DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -26,6 +37,8 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "cooldown_sec": 1800,
     "openclaw_bin": "openclaw",
     "timeout_sec": 45,
+    # Windows nvm：可填 Node 目录，发送前拼进 PATH
+    "node_bin_dir": "",
 }
 
 
@@ -76,12 +89,16 @@ def _save_state(state: dict[str, Any]) -> None:
 
 
 def is_alert_row(row: dict[str, Any]) -> bool:
+    """预警带 或 策略已触发结算，均推送。"""
     pos = str(row.get("持仓状态") or "")
     if pos in _PUSH_POS:
         return True
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
     if any(k in alert for k in _PUSH_ALERT_KEYS):
+        return True
+    # 策略自动结算（止损成交等）
+    if row.get("已实现") and any(k in alert for k in _PUSH_ALERT_KEYS):
         return True
     if hit == "接近" or hit == "已触发" or hit.startswith("已触发"):
         return pos in _PUSH_POS or any(k in alert for k in _PUSH_ALERT_KEYS)
@@ -93,7 +110,8 @@ def _alert_key(row: dict[str, Any]) -> str:
     pos = str(row.get("持仓状态") or "")
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
-    return f"{code}|{pos}|{alert}|{hit}"
+    realized = "1" if row.get("已实现") else "0"
+    return f"{code}|{pos}|{alert}|{hit}|{realized}"
 
 
 def format_alert_message(row: dict[str, Any]) -> str:
@@ -107,6 +125,7 @@ def format_alert_message(row: dict[str, Any]) -> str:
     dist = row.get("距因子%")
     suggest = row.get("建议挂单")
     side = row.get("因子侧") or "-"
+    realized = bool(row.get("已实现"))
 
     def _n(v: Any) -> str:
         if v is None or v == "":
@@ -117,15 +136,28 @@ def format_alert_message(row: dict[str, Any]) -> str:
             return str(v)
 
     dist_txt = "-" if dist is None else f"{float(dist):+.2f}%"
+    title = "【策略触发】" if realized else "【盯盘预警】"
     lines = [
-        "【盯盘预警】",
+        title,
         f"{name}({code}) · {pos}",
         f"预警: {alert} · 因子触发: {hit} · 侧: {side}",
         f"现价 {_n(last)} · 因子价 {_n(factor)} · 距因子 {dist_txt}",
         f"建议挂单: {_n(suggest)}",
-        f"时间: {_now()}",
     ]
+    if realized:
+        lines.append(
+            f"成交价 {_n(row.get('成交价'))} · 当日盈亏 {_n(row.get('当日盈亏'))}"
+        )
+    lines.append(f"时间: {_now()}")
     return "\n".join(lines)
+
+
+def _env_with_node(cfg: dict[str, Any]) -> dict[str, str]:
+    env = dict(os.environ)
+    node_dir = str(cfg.get("node_bin_dir") or "").strip()
+    if node_dir and Path(node_dir).is_dir():
+        env["PATH"] = node_dir + os.pathsep + env.get("PATH", "")
+    return env
 
 
 def send_text(
@@ -160,8 +192,11 @@ def send_text(
             cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             check=False,
+            env=_env_with_node(cfg),
         )
     except FileNotFoundError:
         return False, "找不到 openclaw 命令，请确认已安装并在 PATH 中"
@@ -235,3 +270,20 @@ def send_test_alert(*, config: dict[str, Any] | None = None) -> tuple[bool, str]
         f"时间: {_now()}"
     )
     return send_text(msg, config=cfg)
+
+
+def send_startup_message(
+    *,
+    url: str = "",
+    config: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """盯盘 watch 启动完成后推送一条（不走大模型）。"""
+    cfg = config or load_config()
+    lines = [
+        "【盯盘启动完成】",
+        "持仓盯盘已启动，微信仅推送预警/策略触发（不走大模型）。",
+        f"时间: {_now()}",
+    ]
+    if url:
+        lines.append(f"页面: {url}")
+    return send_text("\n".join(lines), config=cfg)

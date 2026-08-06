@@ -49,7 +49,7 @@ if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
 from quote_feed import LocalWsHub, QuoteFeedManager, ws_accept_key
-from wechat_notify import notify_watch_rows, send_test_alert
+from wechat_notify import notify_watch_rows, send_startup_message, send_test_alert
 from strategy.minute import pull_akshare_1m
 from strategy.open_break import (
     DEFAULT_PCT,
@@ -3372,9 +3372,22 @@ def cmd_watch(args: argparse.Namespace) -> None:
     )
     print(
         "微信推送: "
-        + ("开（待买入/待卖出，同信号冷却防抖）" if wechat else "关（--no-wechat）")
+        + (
+            "开（预警+策略触发+启动完成，同信号冷却防抖）"
+            if wechat
+            else "关（--no-wechat）"
+        )
     )
     print("展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）")
+    if wechat:
+        try:
+            ok, detail = send_startup_message(url=url)
+            if ok:
+                print(f"[{_now()}] 微信已推送：盯盘启动完成")
+            else:
+                print(f"[{_now()}] 启动完成推送失败: {detail[:200]}")
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 启动完成推送异常: {e}")
     if not args.no_open:
         webbrowser.open(url)
     try:
