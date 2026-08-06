@@ -25,16 +25,28 @@ akshare DataFrame
     → BacktestResult
 ```
 
-**本项目当前生效策略**：**策略一 · 因子1**（开盘 ±2.5%，OpenBreak3）。  
+**本项目策略分层（开闭原则）：**
+
+```
+因子层 (factors)           → 价位 / 信号 / 通用过滤
+策略层 (bindings)          → 本策略挂哪些因子、参数、专属过滤器
+决策层 (decision)          → MarketContext → Decision(buy|sell|hold)
+执行层 (runner / backtest / 盯盘) → 下单、回测、预警推送
+```
+
+**当前生效**：**策略一 · 因子1**（开盘 ±2.5%，OpenBreak3）。  
 买：`high ≥ ceil(open×1.025)`，前日阴线或小阳，禁前面双阳，T+1。  
 卖：仅止损 −2.5% 全清。完整规则：
 
 ```bash
 python -c "from strategy import STRATEGY_RULES; print(STRATEGY_RULES)"
 # 或：cd backtest && python strategy1.py --rules
+# 决策层：python -c "from strategy import get_decision_engine, MarketContext; ..."
 ```
 
-策略包分层见 [`strategy/README.md`](strategy/README.md)（因子 → 绑定 → 决策 → 执行）。
+分层细节见 [`strategy/README.md`](strategy/README.md)。
+
+**进度（见 [`TODO.MD`](TODO.MD)）**：P0 已完成（WebSocket 实时行情 + 微信预警推送）；下一步为 P1 选股因子框架。
 
 ---
 
@@ -54,7 +66,7 @@ pip install -r requirements.txt
 ```
 myquan/
 ├── READ.md                  # 本文档
-├── TODO.MD                  # 任务优先级
+├── TODO.MD                  # 任务优先级（P0 已完成）
 ├── requirements.txt         # 运行依赖
 ├── test_strategy_rules.py   # 离线规则回归（不访问网络）
 ├── strategy/                # 可插拔策略框架（详见 strategy/README.md）
@@ -127,11 +139,25 @@ result = aq.run_backtest(
 )
 ```
 
-本项目：
+本项目回测：
 
 ```python
 from strategy import KAICHENG, run_open_break
 run_open_break(KAICHENG, show_report=True)
+# 等价：get_strategy("strategy1").run(...)
+```
+
+本项目决策层（不下单，只裁决）：
+
+```python
+from strategy import MarketContext, get_decision_engine
+
+eng = get_decision_engine("strategy1")  # 别名 open_break3 / s1
+d = eng.decide(MarketContext(
+    open=10.0, high=10.4, low=9.8, close=10.3, last=10.3,
+    prev_open=10.1, prev_close=9.9, position_qty=0,
+))
+print(d.action, d.reason, d.price)  # buy / sell / hold
 ```
 
 ---
@@ -155,7 +181,7 @@ result = aq.run_backtest(
 
 - `CurrentClose` 控制**成交时点**（当根可撮合）。限价单的 `price=` 仍按**限价 ± 滑点**成交。
 - 旧版 `fill_policy={"price_basis": "close", ...}` 已移除，勿再使用。
-- OpenBreak3 通过实例写入参数（`apply_strategy_config`），避免类属性并行串扰。
+- 策略一通过实例写入参数（`apply_strategy_config`），避免类属性并行串扰。
 
 | 资产 | 接口 | 说明 |
 |------|------|------|
@@ -168,10 +194,10 @@ result = aq.run_backtest(
 
 ## 盯盘要点
 
-- **策略同源**：`holdingStocks` 与 `strategy/open_break.py` 共用因子1，不另写一套买卖逻辑。
+- **策略同源**：`holdingStocks` 与 `strategy/open_break.py`（因子1）共用规则；架构上对应策略一绑定 + 决策意图，不另写买卖逻辑。
 - **合格池**：中证500 + 中证1000 筛选夏普 ≥ 1.0 且超额收益为正；明细见 `holdingStocks/README.md` / `backtest/universe_zz500_1000/`。
-- **行情（watch）**：东财 SSE 优先，不健康时新浪批量兜底；页面经本地 `/ws` 推送，勿只开 `file://`。
-- **微信预警**：`watch` 默认推送「待买入 / 待卖出」等；依赖本机 OpenClaw Gateway，不走大模型。
+- **行情（watch，P0-1 ✅）**：东财 SSE 优先，不健康时新浪批量兜底；页面经本地 `/ws` 推送，勿只开 `file://`。
+- **微信预警（P0-2 ✅）**：`watch` 默认推送【触发预警】/【接近预警】/【策略触发】等；依赖本机 OpenClaw Gateway，不走大模型。关闭：`--no-wechat`。
 - **自动结算**仅为盯盘记账，**不会下真实委托**。
 
 ---
@@ -182,4 +208,4 @@ result = aq.run_backtest(
 - 旁挂源码示例：`../akquant/examples/README.md`
 - 策略说明：`strategy/README.md`、`strategy/STRATEGY_AUDIT.md`
 - 盯盘 / 微信：`holdingStocks/README.md`、`holdingStocks/weChat接入.md`
-- 任务清单：`TODO.MD`
+- 任务清单：`TODO.MD`（P0 完成 → 下一档 P1 选股因子框架）
