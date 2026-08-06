@@ -198,19 +198,121 @@ def _env_with_node(cfg: dict[str, Any]) -> dict[str, str]:
     return env
 
 
+def _resolve_openclaw_node(openclaw_bin: str, env: dict[str, str]) -> tuple[str, list[str]]:
+    """把 openclaw.cmd 解析成 node + openclaw.mjs，便于 argv 保留换行。"""
+    bin_path = Path(str(openclaw_bin))
+    candidates: list[Path] = []
+    if bin_path.suffix.lower() in {".cmd", ".bat"}:
+        candidates.append(bin_path.parent / "node_modules" / "openclaw" / "openclaw.mjs")
+    # PATH 里找同目录
+    for part in str(env.get("PATH") or "").split(os.pathsep):
+        if not part:
+            continue
+        base = Path(part)
+        candidates.append(base / "node_modules" / "openclaw" / "openclaw.mjs")
+        if bin_path.name.lower().startswith("openclaw"):
+            candidates.append(base / "node_modules" / "openclaw" / "openclaw.mjs")
+
+    mjs: Path | None = None
+    for c in candidates:
+        if c.is_file():
+            mjs = c
+            break
+    if mjs is None:
+        # 退回原 bin（可能非 Windows .cmd）
+        return str(openclaw_bin), []
+
+    node_exe = "node"
+    node_dir = Path(mjs).parents[2]  # .../nvm/v24.15.0/node_modules/openclaw → v24.15.0
+    # parents: openclaw, node_modules, v24.15.0
+    if (node_dir / "node.exe").is_file():
+        node_exe = str(node_dir / "node.exe")
+    elif (node_dir / "node").is_file():
+        node_exe = str(node_dir / "node")
+    return node_exe, [str(mjs)]
+
+
+def _send_via_node_argv(
+    openclaw_bin: str,
+    args: list[str],
+    message: str,
+    *,
+    env: dict[str, str],
+    timeout: float,
+) -> subprocess.CompletedProcess[str]:
+    """经 Node spawnSync 传参，避免 Windows CreateProcess 截断 --message 内换行。"""
+    import tempfile
+
+    exe, prefix = _resolve_openclaw_node(openclaw_bin, env)
+    # 最终 argv: node openclaw.mjs message send ...  或  openclaw message send ...
+    payload = {
+        "bin": exe,
+        "args": prefix + args,
+        "message": message,
+    }
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        suffix=".json",
+        delete=False,
+    ) as tf:
+        json.dump(payload, tf, ensure_ascii=False)
+        payload_path = tf.name
+
+    # 单行 JS，勿含未转义换行（否则又会踩 Windows argv）
+    js = (
+        "const fs=require('fs');const {spawnSync}=require('child_process');"
+        f"const p=JSON.parse(fs.readFileSync({json.dumps(payload_path)},'utf8'));"
+        "const a=p.args.slice();"
+        "const i=a.indexOf('--message');"
+        "if(i>=0)a[i+1]=p.message;else a.push('--message',p.message);"
+        "const r=spawnSync(p.bin,a,{encoding:'utf8',env:process.env});"
+        "if(r.error){process.stderr.write(String(r.error));process.exit(1);}"
+        "if(r.stdout)process.stdout.write(r.stdout);"
+        "if(r.stderr)process.stderr.write(r.stderr);"
+        "try{fs.unlinkSync(" + json.dumps(payload_path) + ");}catch(e){}"
+        "process.exit(r.status==null?1:r.status);"
+    )
+    node_launcher = "node"
+    # 优先用与 openclaw 同目录的 node，避免落到别的 node
+    if exe.lower().endswith("node.exe") or Path(exe).name.lower() in {"node", "node.exe"}:
+        node_launcher = exe
+    try:
+        return subprocess.run(
+            [node_launcher, "-e", js],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            env=env,
+        )
+    except FileNotFoundError:
+        try:
+            os.unlink(payload_path)
+        except OSError:
+            pass
+        raise
+
+
 def send_text(
     message: str,
     *,
     config: dict[str, Any] | None = None,
 ) -> tuple[bool, str]:
-    """通过 openclaw message send 推送纯文本（不调用大模型）。"""
+    """通过 openclaw message send 推送纯文本（不调用大模型）。
+
+    Windows 下不可把含换行的正文直接塞进 subprocess 参数列表
+    （list2cmdline/CreateProcess 会截断到第一行），故经 Node argv 发送。
+    """
     cfg = config or load_config()
     target = str(cfg.get("target") or "").strip()
     if not target:
         return False, "wechat_notify.json 未配置 target"
 
-    cmd = [
-        str(cfg.get("openclaw_bin") or "openclaw"),
+    openclaw_bin = str(cfg.get("openclaw_bin") or "openclaw")
+    args = [
         "message",
         "send",
         "--channel",
@@ -218,26 +320,47 @@ def send_text(
         "--target",
         target,
         "--message",
-        message,
+        "",  # 占位，由 Node 写入真实正文
     ]
     account = str(cfg.get("account") or "").strip()
     if account:
-        cmd.extend(["--account", account])
+        args.extend(["--account", account])
 
     timeout = float(cfg.get("timeout_sec") or 45)
+    env = _env_with_node(cfg)
     try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+        proc = _send_via_node_argv(
+            openclaw_bin,
+            args,
+            message,
+            env=env,
             timeout=timeout,
-            check=False,
-            env=_env_with_node(cfg),
         )
     except FileNotFoundError:
-        return False, "找不到 openclaw 命令，请确认已安装并在 PATH 中"
+        # 无 node：压成单行再直调 openclaw（功能降级，无换行）
+        flat = " | ".join(
+            ln.strip() for ln in str(message).splitlines() if ln.strip()
+        )
+        cmd = [openclaw_bin] + list(args)
+        if len(cmd) >= 2 and cmd[-2] == "--message":
+            cmd[-1] = flat
+        else:
+            cmd.extend(["--message", flat])
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=False,
+                env=env,
+            )
+        except FileNotFoundError:
+            return False, "找不到 openclaw/node 命令，请确认已安装并在 PATH 中"
+        except subprocess.TimeoutExpired:
+            return False, f"openclaw message send 超时（>{timeout:.0f}s）"
     except subprocess.TimeoutExpired:
         return False, f"openclaw message send 超时（>{timeout:.0f}s）"
 
@@ -325,3 +448,12 @@ def send_startup_message(
     if url:
         lines.append(f"页面: {url}")
     return send_text("\n".join(lines), config=cfg)
+
+
+def send_review_message(
+    message: str,
+    *,
+    config: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """推送行情复盘全文（不走大模型）。"""
+    return send_text(message, config=config)

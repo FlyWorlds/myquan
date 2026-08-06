@@ -25,3 +25,6 @@ holdingStocks/holdings_watch.pid
 holdingStocks/trades.jsonl
 holdingStocks/wechat_alert_state.json
 holdingStocks/wechat_notify.json
+holdingStocks/market_review_latest.txt
+holdingStocks/market_review_latest.json
+holdingStocks/logs/

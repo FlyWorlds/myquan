@@ -15,6 +15,11 @@ holdingStocks watch 刷新
   → wechat_notify.py
   → openclaw message send --channel openclaw-weixin
   → 手机微信（机器人会话）
+
+python index.py review
+  → market_review.py 汇总大盘/账户/持仓/策略事件
+  → wechat_notify.send_text
+  → 手机微信（【行情复盘】）
 ```
 
 `openclaw message send` 只发固定文案，**不会**触发 Agent / LLM。
@@ -126,10 +131,30 @@ copy wechat_notify.json.example wechat_notify.json
 | **接近预警** | 因子触发=`接近`；或将买入/将止损；或近买点/近止损 | 【接近预警】 |
 | **盯盘预警** | 持仓状态「待买入/待卖出」等 | 【盯盘预警】 |
 | **策略触发** | 自动结算（止损成交等，`已实现`） | 【策略触发】 |
+| **行情复盘** | `python index.py review`（收盘或随时） | 【行情复盘】 |
+| **定时复盘** | 周一、周五 **15:00** 计划任务 | 【行情复盘】 |
 
 判定与页面卡片预警一致。同一信号键在 `cooldown_sec` 内只推一次（默认 1800s）；`接近→已触发` 会换键再推；信号消失后状态清理，再次进入预警带会重新推。
 
 `watch` 每次刷新行情后都会扫描；默认开启，可用 `--no-wechat` 关闭。
+
+复盘命令每次主动推送全文（不受预警 cooldown 限制），并写入 `market_review_latest.txt` / `.json`。
+
+### 定时复盘（周一 / 周五 15:00）
+
+```powershell
+cd D:\Akquan\myquan\holdingStocks
+python index.py review-schedule install   # 安装
+python index.py review-schedule status    # 查看下次运行时间
+python index.py review-schedule uninstall # 卸载
+
+# 或直接：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install_review_schedule.ps1 install
+# 到点执行的脚本（也可手工试跑）：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\review_push.ps1
+```
+
+要求：到点时本机已登录、OpenClaw Gateway 在跑、`wechat_notify.json` 已配置。日志在 `holdingStocks/logs/`。
 
 ---
 
@@ -140,6 +165,11 @@ cd D:\Akquan\myquan\holdingStocks
 
 # 微信自检
 python index.py wechat-test
+
+# 行情复盘并推送微信
+python index.py review
+# 只生成本地、不推送
+python index.py review --no-wechat
 
 # 长驻盯盘（默认开微信推送）
 python index.py watch --interval 5 --port 8765 --no-open
@@ -189,6 +219,7 @@ python index.py watch --interval 5 --port 8765 --no-open
 | `找不到 openclaw` | 加载 Node24 PATH，或在 `wechat_notify.json` 写绝对 `openclaw_bin` + `node_bin_dir` |
 | Gateway not reachable | `openclaw gateway restart`；仍失败 `openclaw doctor` |
 | 推送失败 / 收不到 | 重新扫码登录后 `gateway restart`；检查 `account`/`target` |
+| 只收到标题一行、正文没有 | 已修复：Windows 下多行 `--message` 会被截断；`wechat_notify.send_text` 经 Node 传完整正文。请再跑 `python index.py review` |
 | 微信里回机器人出现 401 | 入站已关；勿闲聊。若仍触发，确认 `dmPolicy=allowlist` 且 `allowFrom=[]` |
 | `nvm use` 拒绝访问 | 管理员终端执行 `nvm use 24.15.0`，保证 `C:\Program Files\nodejs` 指向 v24 |
 | 端口被占用 | 停掉旧 watch 或换 `--port` |
@@ -200,9 +231,10 @@ python index.py watch --interval 5 --port 8765 --no-open
 | 路径 | 职责 |
 |------|------|
 | `wechat_notify.py` | 发送、格式化、防抖、启动完成 |
+| `market_review.py` | 行情复盘汇总与微信文案 |
 | `wechat_notify.json` | 本地推送配置（私有） |
 | `wechat_notify.json.example` | 配置模板 |
-| `index.py` | `watch` 刷新后调用；`wechat-test`；启动完成推送 |
+| `index.py` | `watch` 刷新后调用；`review`；`wechat-test`；启动完成推送 |
 | `~/.openclaw/` | OpenClaw 状态与微信凭证（系统目录） |
 | `~/.openclaw/use-node24.ps1` | Windows Node24 环境脚本 |
 | `~/.openclaw/weixin-notify.ps1` | 快捷手工推送 |

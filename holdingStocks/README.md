@@ -84,6 +84,7 @@ pip install -r ../requirements.txt
 | `watch_config.py` | 标的池 / 代码工具 |
 | `quote_feed.py` | 东财 SSE + 新浪兜底 + 本地 WS |
 | `wechat_notify.py` | 微信预警推送（OpenClaw，不走大模型） |
+| `market_review.py` | 行情复盘汇总 + 微信推送文案 |
 | `weChat接入.md` | 微信接入说明 |
 
 ## 用法
@@ -117,6 +118,16 @@ lsof -nP -iTCP:8765 -sTCP:LISTEN || echo '8765 已空闲'
 
 # 微信推送自检（不走大模型）
 python index.py wechat-test
+
+# 行情复盘（默认推送微信机器人；本地另存 market_review_latest.txt）
+python index.py review
+python index.py review --no-wechat
+
+# 周一/周五 15:00 定时推送（Windows 计划任务）
+python index.py review-schedule install
+python index.py review-schedule status
+# 卸载：python index.py review-schedule uninstall
+# 手工试跑推送脚本：powershell -File .\review_push.ps1
 ```
 
 微信接入（仅推送、不走大模型）见 [weChat接入.md](./weChat接入.md)：  

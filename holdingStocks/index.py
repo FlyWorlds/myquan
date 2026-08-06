@@ -20,7 +20,8 @@
   python index.py sell 600552 16.20 400
   python index.py set-cost 600552 15.95 --qty 400
   python index.py set-cost 600552 15.445 --qty 800 --available 600 --today-cost 15.78
-  python index.py clear 600552
+  python index.py review       # 行情复盘并推送微信
+  python index.py review-schedule install  # 周一/周五 15:00 定时推送
   python index.py history
 """
 
@@ -30,6 +31,7 @@ import argparse
 import json
 import math
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -3135,10 +3137,19 @@ def _refresh_once(
     refresh_sec: int,
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
+    wechat: bool = False,
 ) -> Path:
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices_cached()
-    return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
+    path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
+    if wechat:
+        try:
+            from wechat_notify import notify_watch_rows
+
+            notify_watch_rows(rows)
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 微信预警推送异常: {e}")
+    return path
 
 
 def _parse_hhmm(text: str) -> tuple[int, int]:
@@ -3296,12 +3307,100 @@ def _write_html_respecting_watch(
     return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
 
 
+def cmd_review(args: argparse.Namespace) -> None:
+    """拉取行情，生成文字复盘，默认推送微信机器人。"""
+    from market_review import (
+        build_review,
+        format_review_text,
+        save_review,
+        send_review_wechat,
+    )
+
+    rows = collect_rows()
+    indices = fetch_indices()
+    holdings_meta = load_holdings()
+    account_total = _account_total(rows, holdings_meta)
+    available = _available_cash(rows, holdings_meta)
+    session_for_open = next(
+        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
+        str(pd.Timestamp.now().date()),
+    )
+    _ensure_account_open_session(
+        holdings_meta,
+        session=session_for_open,
+        account_total=account_total,
+    )
+    holdings_meta = load_holdings()
+    account_open = _account_total_open(holdings_meta)
+
+    review = build_review(
+        rows,
+        indices,
+        account_total=account_total,
+        account_open=account_open,
+        available_cash=available,
+        strategy=f"{STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清",
+    )
+    text = format_review_text(review)
+    text_path, json_path = save_review(review, text)
+    print(text)
+    print("-" * 48)
+    print(f"已保存: {text_path.name} / {json_path.name}")
+
+    if getattr(args, "no_wechat", False):
+        print("已跳过微信推送（--no-wechat）")
+        return
+
+    ok, detail = send_review_wechat(review, text=text)
+    if ok:
+        print(f"[{_now()}] 微信复盘已推送")
+    else:
+        print(f"[{_now()}] 微信复盘推送失败: {detail[:300]}")
+        raise SystemExit(1)
+
+
+def cmd_wechat_test(_: argparse.Namespace) -> None:
+    from wechat_notify import send_test_alert
+
+    ok, detail = send_test_alert()
+    if ok:
+        print(f"[{_now()}] 微信自检成功")
+        if detail and detail != "ok":
+            print(detail[:300])
+    else:
+        print(f"[{_now()}] 微信自检失败: {detail[:400]}")
+        raise SystemExit(1)
+
+
+def cmd_review_schedule(args: argparse.Namespace) -> None:
+    """安装/卸载/查看：周一、周五 15:00 复盘微信推送（Windows 计划任务）。"""
+    action = str(getattr(args, "action", "status") or "status")
+    script = ROOT / "install_review_schedule.ps1"
+    if not script.is_file():
+        raise SystemExit(f"缺少 {script.name}")
+    ps = Path(os.environ.get("SystemRoot", r"C:\Windows")) / (
+        r"System32\WindowsPowerShell\v1.0\powershell.exe"
+    )
+    cmd = [
+        str(ps),
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script),
+        action,
+    ]
+    proc = subprocess.run(cmd, check=False)
+    raise SystemExit(proc.returncode)
+
+
 def cmd_watch(args: argparse.Namespace) -> None:
     """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。"""
     global _ws_hub
     interval = max(2, int(args.interval))
     host = str(args.host)
     port = int(args.port)
+    wechat = not bool(getattr(args, "no_wechat", False))
     open_h, open_m = _parse_hhmm(
         getattr(args, "open_at", None)
         or f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}"
@@ -3332,7 +3431,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
     def safe_refresh() -> Path:
         with refresh_lock:
-            return _refresh_once(interval, get_quote=get_quote)
+            return _refresh_once(interval, get_quote=get_quote, wechat=wechat)
 
     def safe_open_refresh() -> Path:
         with refresh_lock:
@@ -3463,7 +3562,22 @@ def cmd_watch(args: argparse.Namespace) -> None:
         f"开盘价定时: 每日 {open_h:02d}:{open_m:02d} 刷新盯盘标的 "
         f"({_watchlist_codes_label()})"
     )
+    print(
+        f"微信预警: {'开' if wechat else '关（--no-wechat）'} · "
+        "复盘可另跑: python index.py review"
+    )
     print("展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）")
+    if wechat:
+        try:
+            from wechat_notify import send_startup_message
+
+            ok, detail = send_startup_message(url=url)
+            if ok:
+                print(f"[{_now()}] 微信启动通知已推送")
+            else:
+                print(f"[{_now()}] 微信启动通知失败: {detail[:200]}")
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 微信启动通知异常: {e}")
     if not args.no_open:
         webbrowser.open(url)
     try:
@@ -3493,6 +3607,33 @@ def build_parser() -> argparse.ArgumentParser:
     html_p.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     html_p.set_defaults(func=cmd_html)
 
+    rev = sub.add_parser(
+        "review",
+        help="行情复盘：大盘/账户/持仓/策略事件，默认推送微信",
+    )
+    rev.add_argument(
+        "--no-wechat",
+        action="store_true",
+        help="只生成本地复盘，不推送微信",
+    )
+    rev.set_defaults(func=cmd_review)
+
+    wt = sub.add_parser("wechat-test", help="微信通道自检（不走大模型）")
+    wt.set_defaults(func=cmd_wechat_test)
+
+    rs = sub.add_parser(
+        "review-schedule",
+        help="周一/周五 15:00 复盘推送：install / uninstall / status",
+    )
+    rs.add_argument(
+        "action",
+        nargs="?",
+        default="status",
+        choices=("install", "uninstall", "status"),
+        help="默认 status",
+    )
+    rs.set_defaults(func=cmd_review_schedule)
+
     w = sub.add_parser(
         "watch",
         help="长驻盯盘：东财SSE/新浪兜底行情 + 本地WS推页",
@@ -3511,6 +3652,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="每日强制刷新盯盘开盘价的时刻，默认09:26",
     )
     w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
+    w.add_argument(
+        "--no-wechat",
+        action="store_true",
+        help="关闭微信预警推送",
+    )
     w.set_defaults(func=cmd_watch)
 
     b = sub.add_parser("buy", help="记录买入")
