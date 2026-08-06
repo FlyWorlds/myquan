@@ -1,14 +1,17 @@
 # 持仓盯盘
+# 浏览器打开：http://127.0.0.1:8765/holdings_report.html
 
-本地持仓记录 + 盘中盯盘：**与 strategy「因子1」严格同步**（`open_break.py` 同源）。
+本地持仓记录 + 盘中盯盘：**与 strategy「策略一 / 因子1」严格同步**（`open_break.py` 同源）。
 
-## 策略锁定 · 因子1
+可插拔架构见 `../strategy/README.md`：因子层 → 策略绑定 → 决策层 → 执行层；默认仅策略一生效。
+
+## 策略锁定 · 策略一 / 因子1
 
 - **买**：`high ≥ ceil(open×1.025)`；前日阴线或小阳；禁前面双阳；T+1
 - **卖（全清）**：仅止损 −2.5%
 - **已移除**：低开定时退出、阴线退出、软减半、回撤仓位管理、同日再买
 
-完整规则：`python -c "from strategy import STRATEGY_RULES; print(STRATEGY_RULES)"`
+完整规则：`python -c "from strategy import get_strategy; print(get_strategy('strategy1').print_rules())"`
 
 ## 合格标的池（盯盘）
 
@@ -116,7 +119,8 @@ lsof -nP -iTCP:8765 -sTCP:LISTEN || echo '8765 已空闲'
 python index.py wechat-test
 ```
 
-微信接入细节见 [weChat接入.md](./weChat接入.md)。
+微信接入（仅推送、不走大模型）见 [weChat接入.md](./weChat接入.md)：  
+启动完成 / 触发预警（已触发·已触买止损）/ 接近预警 / 待买·待卖 / 策略结算 均会推送。
 ### 持仓登记
 
 ```bash

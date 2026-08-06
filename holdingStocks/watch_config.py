@@ -12,7 +12,10 @@ if str(_MYQUAN_ROOT) not in sys.path:
 
 from strategy.open_break import DEFAULT_PCT, TICK_SIZE, is_t1_buy_day
 
-STRATEGY_NAME = "因子1"
+# 默认定盘：策略一 + 因子1（开盘±2.5%）；与 strategy 注册表一致
+STRATEGY_ID = "strategy1"
+FACTOR_ID = "factor1"
+STRATEGY_NAME = "策略一·因子1"
 
 # 中证500+1000 契合池（夏普≥1 且策略超额>0，按夏普降序）
 # 明细：../backtest/universe_zz500_1000/fit_sharpe1_excess.csv

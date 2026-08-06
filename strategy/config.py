@@ -30,6 +30,17 @@ class BacktestConfig:
     entry_ref: str = "today_open"
     # 前日过滤：yin_or_small_yang=阴线或小阳；yin_only=仅阴线（小阳次日不买）
     prev_entry_mode: str = "yin_or_small_yang"
+    # 分档止盈：相对买入价涨幅触及后，按初始仓位比例减仓；None=关闭（仅止损）
+    # 例 (0.15, 0.20, 0.25) + take_profit_reduce=0.20 → +15%/20%/25% 各减初始仓 20%
+    take_profit_levels: tuple[float, ...] | None = None
+    take_profit_reduce: float = 0.20
+    # 触及判定：high=当日最高价；close=收盘价（更严）
+    take_profit_trigger: str = "high"
+    # 挂单相对档位再抬高的百分点：档15% + offset2% → 限价按+17%；
+    # 仅当行情摸到挂单价才算该档止盈成交，否则该档本轮不减仓
+    take_profit_limit_offset: float = 0.0
+    # 触及止盈档后抬止损下限到 买入价×(1+lock)；None=不抬；可与减仓并用
+    take_profit_lock_pct: float | None = None
     daily_cache: Path | None = None
     report_path: Path | None = None
 
@@ -45,9 +56,25 @@ class BacktestConfig:
             else "买点=今日开盘"
         )
         prev = "仅阴后买" if self.prev_entry_mode == "yin_only" else "阴/小阳后买"
+        if self.take_profit_levels:
+            lv = "/".join(f"{x*100:.0f}" for x in self.take_profit_levels)
+            trig = "收盘" if self.take_profit_trigger == "close" else "高点"
+            off = float(self.take_profit_limit_offset or 0.0)
+            if off > 0:
+                parts = [f"止盈{lv}挂+{off*100:.0f}@{trig}"]
+            else:
+                parts = [f"止盈{lv}@{trig}"]
+            if self.take_profit_reduce and self.take_profit_reduce > 0:
+                parts.append(f"各减{self.take_profit_reduce*100:.0f}%")
+            if self.take_profit_lock_pct is not None:
+                parts.append(f"锁盈+{self.take_profit_lock_pct*100:.0f}%")
+            parts.append("止损清余")
+            sell = "".join(parts) if len(parts) == 1 else "+".join(parts[:1]) + "(" + ",".join(parts[1:]) + ")"
+        else:
+            sell = "仅止损卖"
         return (
             f"开盘±{self.threshold_pct * 100:.1f}%"
-            f"(仅止损卖/{entry}/{prev}) "
+            f"({sell}/{entry}/{prev}) "
             f"滑点{self.slippage_value * 100:.1f}点{t1} "
             f"({self.start_date}~{self.end_date})"
         )

@@ -23,7 +23,7 @@ from strategy.open_break import (
 
 
 class OpenBreak3Strategy(Strategy):
-    """相对开盘±pct买入；仅保留止损全清。"""
+    """相对开盘±pct买入；默认仅止损全清；可选分档止盈减仓。"""
 
     symbol: str = "sh600552"
     symbol_name: str = "凯盛科技"
@@ -42,6 +42,14 @@ class OpenBreak3Strategy(Strategy):
     entry_ref: str = "today_open"
     # yin_or_small_yang | yin_only（小阳次日不买）
     prev_entry_mode: str = "yin_or_small_yang"
+    # 分档止盈：相对买入价；每档减 initial_qty × take_profit_reduce；余仓止损全清
+    take_profit_levels: tuple[float, ...] = ()
+    take_profit_reduce: float = 0.20
+    take_profit_trigger: str = "high"  # high | close
+    # 档位激活后挂单价 = 买入价×(1+档位+offset)；仅摸到挂单价才减仓
+    take_profit_limit_offset: float = 0.0
+    take_profit_lock_pct: float | None = None
+
     def on_start(self) -> None:
         self.subscribe(self.symbol)
         self.lot_size = self.lot_size
@@ -52,6 +60,9 @@ class OpenBreak3Strategy(Strategy):
         self.prev2_open: float | None = None
         self.prev2_close: float | None = None
         self.buy_day: str | None = None
+        self.initial_qty: float | None = None
+        self.tp_done: set[int] = set()
+        self.stop_floor: float | None = None
         entry_txt = (
             "买点=前日小阳开盘×(1+pct)"
             if self.entry_ref == "prev_open_on_small_yang"
@@ -62,9 +73,23 @@ class OpenBreak3Strategy(Strategy):
             if self.prev_entry_mode == "yin_only"
             else f"前日须阴线或小阳(<{self.prev_small_yang_pct*100:.1f}%)"
         )
+        if self.take_profit_levels:
+            lv = "/".join(f"{x*100:.0f}" for x in self.take_profit_levels)
+            trig = "收盘" if self.take_profit_trigger == "close" else "高点"
+            off = float(self.take_profit_limit_offset or 0.0)
+            bits = [
+                f"止盈{lv}挂+{off*100:.0f}@{trig}" if off > 0 else f"止盈{lv}@{trig}"
+            ]
+            if self.take_profit_reduce and self.take_profit_reduce > 0:
+                bits.append(f"各减{self.take_profit_reduce*100:.0f}%")
+            if self.take_profit_lock_pct is not None:
+                bits.append(f"锁{self.take_profit_lock_pct*100:.0f}%")
+            sell_txt = "+买/" + "/".join(bits) + "/余仓止损"
+        else:
+            sell_txt = "+买/-止损，仅止损全清"
         self.log(
             f"{self.symbol_name}({self.symbol}) 开盘±{self.entry_pct*100:.1f}% "
-            f"(+买/-止损，仅止损全清) | "
+            f"({sell_txt}) | "
             f"{prev_txt}，禁前面双阳 | "
             f"{entry_txt} | "
             f"佣金万0.854 滑点{self.slippage_value*100:.1f}% | "
@@ -81,14 +106,22 @@ class OpenBreak3Strategy(Strategy):
             return "持有收益=n/a"
         return f"持有收益={pct:+.2f}%"
 
+    def _reset_trade_state(self) -> None:
+        self.armed = True
+        self.entry_price = None
+        self.buy_day = None
+        self.initial_qty = None
+        self.tp_done = set()
+        self.stop_floor = None
+
     def _sync_position_state(self) -> float:
         pos = float(self.get_position(self.symbol))
         if pos <= 0:
-            self.armed = True
-            self.entry_price = None
-            self.buy_day = None
+            self._reset_trade_state()
         else:
             self.armed = False
+            if self.initial_qty is None:
+                self.initial_qty = pos
         return pos
 
     def _exit_all(
@@ -98,15 +131,86 @@ class OpenBreak3Strategy(Strategy):
         if avail > 0:
             self.sell(self.symbol, avail, price=price)
             self.log(f"{day} {reason} qty={avail:.0f} 限价={price:.2f} {hold_txt}")
-            self.armed = True
-            self.entry_price = None
-            self.buy_day = None
+            self._reset_trade_state()
             return True
         if pos > 0:
             self.log(
                 f"{day} {reason} 跳过(T+1 买入日不可卖) avail=0 pos={pos:.0f} {hold_txt}"
             )
         return False
+
+    def _tp_slice_qty(self, avail: float) -> float:
+        """按初始仓位比例取整手减仓数量。"""
+        base = float(self.initial_qty or 0)
+        if base <= 0 or avail <= 0:
+            return 0.0
+        lot = float(self.lot_size)
+        raw = base * float(self.take_profit_reduce)
+        qty = float(int(raw // lot) * lot)
+        if qty < lot and avail >= lot:
+            qty = lot
+        return min(qty, float(avail))
+
+    def _try_take_profits(
+        self,
+        *,
+        day: str,
+        high_px: float,
+        close_px: float,
+        avail: float,
+        pos: float,
+    ) -> tuple[float, float]:
+        """止盈档：可选「档位+offset」挂单，仅摸到挂单价才减仓；可选抬止损。
+
+        例：档15%、offset=2% → 限价按买入价×1.17；当日/持仓期内 high(或close)
+        未到挂单价则该档本轮不减仓（挂单未成交）。
+        """
+        if (
+            not self.take_profit_levels
+            or self.entry_price is None
+            or float(self.entry_price) <= 0
+        ):
+            return avail, pos
+        mark = close_px if self.take_profit_trigger == "close" else high_px
+        offset = float(self.take_profit_limit_offset or 0.0)
+        for i, lvl in enumerate(self.take_profit_levels):
+            if i in self.tp_done:
+                continue
+            # 挂单价 = 激活档 + offset；须摸到挂单价才成交
+            limit_lvl = float(lvl) + offset
+            tp_px = float(self.entry_price) * (1.0 + limit_lvl)
+            if mark + 1e-12 < tp_px:
+                continue
+            self.tp_done.add(i)
+            # 抬止损：锁住部分浮盈（相对买入价）
+            if self.take_profit_lock_pct is not None and self.entry_price is not None:
+                floor = float(self.entry_price) * (
+                    1.0 + float(self.take_profit_lock_pct)
+                )
+                if self.stop_floor is None or floor > float(self.stop_floor):
+                    self.stop_floor = floor
+                    self.log(
+                        f"{day} 止盈档+{float(lvl)*100:.0f}%抬止损下限@"
+                        f"{floor:.2f}(锁+{float(self.take_profit_lock_pct)*100:.0f}%)"
+                    )
+            # 减仓（reduce=0 则只抬止损）
+            if self.take_profit_reduce and self.take_profit_reduce > 0 and avail > 0:
+                qty = self._tp_slice_qty(avail)
+                if qty > 0:
+                    self.sell(self.symbol, qty, price=tp_px)
+                    avail -= qty
+                    pos -= qty
+                    self.log(
+                        f"{day} 止盈档+{float(lvl)*100:.0f}%→挂+{limit_lvl*100:.0f}%成交 "
+                        f"减仓{self.take_profit_reduce*100:.0f}% "
+                        f"qty={qty:.0f} 限价={tp_px:.2f} "
+                        f"(初始仓={float(self.initial_qty or 0):.0f}) "
+                        f"{self._fmt_hold(tp_px)}"
+                    )
+            if avail <= 0 or pos <= 0:
+                self._reset_trade_state()
+                return max(avail, 0.0), max(pos, 0.0)
+        return avail, pos
 
     def _roll_prev_bars(self, open_px: float, close_px: float) -> None:
         self.prev2_open = self.prev_open
@@ -193,8 +297,9 @@ class OpenBreak3Strategy(Strategy):
                 entry_base, entry_pct=self.entry_pct, tick=self.tick
             )
             stop_px = stop_trigger_price(o, stop_pct=self.stop_pct, tick=self.tick)
+            if self.stop_floor is not None:
+                stop_px = max(float(stop_px), float(self.stop_floor))
             hit_entry = h + 1e-12 >= entry_px
-            hit_stop = low <= stop_px + 1e-12
 
             if self.armed and pos <= 0 and hit_entry:
                 if self._try_enter(
@@ -229,6 +334,18 @@ class OpenBreak3Strategy(Strategy):
             avail = float(self.get_available_position(self.symbol))
             if pos <= 0 and avail <= 0:
                 return
+            if self.initial_qty is None and pos > 0:
+                self.initial_qty = pos
+
+            # 同日：先兑现止盈（减仓/抬止损），再对余仓判止损
+            avail, pos = self._try_take_profits(
+                day=day, high_px=h, close_px=c, avail=avail, pos=pos
+            )
+            if pos <= 0 and avail <= 0:
+                return
+            if self.stop_floor is not None:
+                stop_px = max(float(stop_px), float(self.stop_floor))
+            hit_stop = low <= stop_px + 1e-12
 
             if hit_stop:
                 limit_state = limit_down_state(
@@ -308,7 +425,7 @@ def print_summary(
     print(
         f"      前日须阴线或收盘严格<open×{1+prev_small_yang_pct:.3f}，禁前面双阳"
     )
-    print("卖出: 仅止损@触发价清仓；未触止损继续持有；买入日不卖")
+    print("卖出: 仅止损@触发价清仓；未触止损继续持有；买入日不卖（分档止盈见配置）")
     print(f"佣金: 万0.854 ({commission_rate})；印花税(卖): {stamp_tax_rate*100:.1f}%")
     print(f"滑点: {slippage_value*100:.1f}%")
     print(f"总盈亏: {_metric(m, 'total_pnl'):.2f}")

@@ -1,77 +1,114 @@
-# strategy — OpenBreak3 开盘±pct
+# strategy — 可插拔策略 / 因子 / 决策框架
 
-## 结构
+默认生效：**策略一 = 因子1 = 开盘±2.5%**（OpenBreak3）。
+
+## 分层架构
+
+```
+因子层 (factors)     → 价位 / 信号 / 通用过滤
+策略层 (bindings)    → 本策略挂哪些因子、参数、专属过滤器
+决策层 (decision)    → MarketContext → Decision(buy|sell|hold)
+执行层 (runner/backtest) → 下单、回测、盯盘对接
+```
 
 ```
 strategy/
-├── open_break.py        # 规则与盯盘信号
-├── backtest.py          # OpenBreak3Strategy + 报告摘要
-├── config.py            # BacktestConfig、标的预设
-├── runner.py            # run_open_break（实例传参 + pipeline）
-├── data.py              # 日线拉取（个股/ETF、缓存校验）
-├── minute.py            # 通用分钟线工具
-├── base.py              # akquant 回测骨架
-└── registry.py          # 策略注册（仅 open_break3）
-
-backtest/
-├── run.py                 # 统一 CLI：python run.py kaicheng
-└── strategy1.py           # 薄封装
+├── core/
+│   ├── protocols.py      # FactorSpec / FactorBinding / StrategySpec
+│   ├── context.py        # MarketContext / Decision
+│   ├── decision.py       # DecisionEngine / get_decision_engine
+│   └── *_registry.py
+├── factors/
+│   ├── factor1.py        # 生效：开盘突破 ±pct
+│   ├── factor2.py        # 占位
+│   └── factor3.py        # 占位
+├── strategies/
+│   ├── strategy1/        # 默认
+│   │   ├── bindings.py   # 策略层
+│   │   ├── decision.py   # 决策层
+│   │   └── __init__.py   # 注册 + 挂 runner
+│   ├── strategy2/ … strategy4/
+│   └── _common.py
+├── open_break.py         # 因子1 规则真源
+├── backtest.py / runner.py / config.py
+└── registry.py           # 兼容旧 get_strategy API
 ```
 
-## 当前生效策略（因子1 · 唯一在用）
+| 层 | 职责 | 不做什么 |
+|----|------|----------|
+| 因子 | 可复用规则（levels/signal） | 不知「哪个策略」、不下单 |
+| 策略绑定 | 选因子 + params + filter | 不做买卖裁决 |
+| 决策 | 根据仓位/行情产出 Decision | 不直接调 broker |
+| 执行 | 回测 Strategy / 盯盘下单 | 不写业务规则 |
 
-默认阈值 **±2.5%**。买卖均相对当日开盘（买入另有前日过滤）。
-
-**买**
-
-- 触发：`high ≥ ceil(open × 1.025)`，按触发价限价，仓位约 95%
-- 过滤：前一日为阴线，或小阳（收盘涨幅严格 &lt; 2.5%）；且前面不能连续两根阳线
-- T+1：买入当日不可卖（ETF 可设 `t0=True`）
-
-**卖（优先级从高到低）**
-
-1. 开盘 −2.5% 止损 → **全清**
-2. 未触止损 → 无论阴线、阳线或十字均继续持有
-
-低开定时退出、阴线收盘退出、减半、回撤仓位和同日再买代码均已从生效路径移除。
-
-## 用法
+## 决策层用法
 
 ```python
-from dataclasses import replace
-from pathlib import Path
-from strategy import BacktestConfig, run_open_break
+from strategy import MarketContext, get_decision_engine
 
-cfg = BacktestConfig(
-    symbol="sh600552",
-    symbol_name="凯盛科技",
-    em_symbol="600552",
-    report_path=Path("凯盛科技_report.html"),
+eng = get_decision_engine("strategy1")  # 别名 open_break3 / s1
+ctx = MarketContext(
+    open=10.0, high=10.4, low=9.8, close=10.3, last=10.3,
+    prev_open=10.1, prev_close=9.9,   # 阴线 → 过滤通过
+    position_qty=0,
 )
-run_open_break(cfg, show_report=True)
+d = eng.decide(ctx)
+print(d.action, d.reason, d.price)  # buy / hold / sell
 ```
 
-日线默认缓存至项目根目录的 `data_cache/`：首次全量拉取，后续仅向 AkShare 补齐缓存范围外的已收盘日期。前复权价格会在除权除息后重算历史，需全量同步时：
+策略一逻辑摘要：空仓+过滤通过+触买点→buy；有仓+非T+1+触止损→sell；否则 hold。
+
+## 因子绑定（策略专属条件）
 
 ```python
-run_open_break(cfg, force_daily_refresh=True)
+from strategy import bind_factor, get_strategy_bindings
+
+# 策略一：factor1 ±2.5% + 阴/小阳
+# 策略二：同一 factor1 ±3% + 仅阴线
+for b in get_strategy_bindings("strategy1"):
+    print(b.factor_id, b.params, b.filter_desc)
 ```
+
+```python
+bind_factor(
+    "factor1",
+    entry_pct=0.025,
+    stop_pct=0.025,
+    filter=my_filter_fn,
+    filter_desc="前日阴/小阳",
+    role="both",  # entry / exit / both / custom
+)
+```
+
+## 注册表 API
+
+```python
+from strategy import get_strategy, get_factor, get_decision_engine, list_strategies
+
+s1 = get_strategy("strategy1")
+print(s1.name, s1.factor_ids)          # 策略一 ('factor1',)
+eng = get_decision_engine("strategy1") # 决策引擎
+f1 = get_factor("factor1")
+```
+
+回测 CLI（行为不变）：
 
 ```bash
 cd backtest && python strategy1.py --rules
+cd backtest && python run.py kaicheng --no-open
 ```
 
-## 离线规则回归测试
+## 如何扩展
 
-以下命令不访问 AkShare，也不运行完整历史回测；它只验证价格取整、T+1、跌停状态和日线缓存增量逻辑：
+1. **新因子**：`factors/factorN.py`，实现 `levels/filters_ok/signal`，`register_factor`
+2. **新策略包**：`strategies/strategyN/{bindings,decision,__init__}.py`，设置 `decision_factory` +（可选）`run`
+3. **改组合/过滤**：只改该策略的 `bindings.py`，不动因子与其它策略决策
 
-```bash
-python -m unittest -v test_strategy_rules.py
-```
+## 兼容
 
-注册表：
-
-```python
-from strategy.registry import get_strategy
-get_strategy("open_break3").run(get_strategy("open_break3").default_config)
-```
+| 旧 API | 新等价 |
+|--------|--------|
+| `get_strategy("open_break3")` | `get_strategy("strategy1")` |
+| `run_open_break` | `run_strategy1` / `get_strategy("strategy1").run` |
+| `OpenBreak3Strategy` | `Strategy1` |
+| `from strategy.open_break import strategy_signal` | 仍可用；或 `get_factor("factor1").signal` |

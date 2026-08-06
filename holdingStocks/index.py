@@ -1,9 +1,10 @@
-"""持仓记录与盯盘：与 strategy OpenBreak3「因子1」严格同步。
+"""持仓记录与盯盘：与 strategy「策略一 / 因子1」严格同步。
 
-策略锁定 · 因子1（唯一在用）：
+策略锁定 · 策略一（默认，挂载因子1）：
   · 买：high≥ceil(open×1.025)；前日阴/小阳；禁前面双阳；T+1
   · 卖（全清）：仅止损−2.5%
   · 卖出：仅开盘 −2.5% 止损全清
+  · 可插拔：strategy/strategies + strategy/factors（见 strategy/README.md）
 
 功能：
   · 拉取当日开盘、最高、最低、现价（东财 SSE + 新浪批量兜底；冷启动用分钟线）
@@ -15,7 +16,6 @@
   python index.py              # 查看标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
   python index.py watch        # 长驻：行情事件驱动刷新；每日09:26强制刷新盯盘开盘价
-  python index.py wechat-test  # 发送一条微信测试预警（不走大模型）
   python index.py buy 600552 15.50 400
   python index.py sell 600552 16.20 400
   python index.py set-cost 600552 15.95 --qty 400
@@ -49,7 +49,6 @@ if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
 from quote_feed import LocalWsHub, QuoteFeedManager, ws_accept_key
-from wechat_notify import notify_watch_rows, send_startup_message, send_test_alert
 from strategy.minute import pull_akshare_1m
 from strategy.open_break import (
     DEFAULT_PCT,
@@ -68,34 +67,11 @@ from strategy.open_break import (
     strategy_signal,
 )
 from strategy.data import fetch_daily
-from watch_config import (
-    INDEX_WATCH,
-    OPEN_PRICE_REFRESH_HOUR,
-    OPEN_PRICE_REFRESH_MINUTE,
-    STRATEGY_NAME,
-    WATCHLIST,
-    _FIT_WATCH,
-    calc_day_pnl,
-    code_key,
-    empty_position,
-    find_meta,
-    market_of,
-    sellable_qty,
-    sina_of,
-    watch_item,
-    watchlist_codes_label,
-)
 
-# 兼容旧内部命名
-_code_key = code_key
-_sina_of = sina_of
-_market_of = market_of
-_watch_item = watch_item
-_empty_position = empty_position
-_sellable_qty = sellable_qty
-_calc_day_pnl = calc_day_pnl
-_find_meta = find_meta
-_watchlist_codes_label = watchlist_codes_label
+# 盯盘与回测共用：策略一 + 因子1（开盘−2.5%止损全清）
+STRATEGY_ID = "strategy1"
+FACTOR_ID = "factor1"
+STRATEGY_NAME = "策略一·因子1"
 
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
@@ -111,6 +87,43 @@ _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
 _INDEX_CACHE_TTL_SEC = 15.0
 
 
+def _code_key(code: str) -> str:
+    return "".join(ch for ch in str(code) if ch.isdigit()).zfill(6)[-6:]
+
+
+def _sina_of(code: str) -> str:
+    c = _code_key(code)
+    return f"sh{c}" if c.startswith(("5", "6")) else f"sz{c}"
+
+
+def _market_of(code: str) -> str:
+    return "上证" if _sina_of(code).startswith("sh") else "深证"
+
+
+def _watch_item(
+    code: str,
+    name: str,
+    *,
+    pct: float = DEFAULT_PCT,
+    tick: float = TICK_SIZE,
+    t0: bool = False,
+    limit_down_pct: float = 0.10,
+    prev_entry_mode: str = "yin_or_small_yang",
+) -> dict[str, Any]:
+    c = _code_key(code)
+    return {
+        "code": c,
+        "sina": _sina_of(c),
+        "market": _market_of(c),
+        "name": name,
+        "pct": float(pct),
+        "tick": float(tick),
+        "t0": bool(t0),
+        "limit_down_pct": float(limit_down_pct),
+        "prev_entry_mode": prev_entry_mode,
+    }
+
+
 def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[str, Any]]:
     """盯盘高频刷新时缓存大盘指数，避免每次重拉拖慢推送。"""
     now = time.monotonic()
@@ -123,6 +136,114 @@ def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[
     return data
 
 
+def _empty_position(meta: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": meta["name"],
+        "market": meta["market"],
+        "qty": 0,
+        "available": None,
+        "cost": None,
+        "today_cost": None,
+        "buy_time": None,
+        "note": "",
+    }
+
+
+def _sellable_qty(
+    pos: dict[str, Any],
+    qty: int,
+    buy_time: str | None,
+    session: str,
+    *,
+    t0: bool = False,
+) -> int:
+    """可卖数量：优先用持仓里的 available；否则买入日整仓不可卖。"""
+    if qty <= 0:
+        return 0
+    if t0:
+        return int(qty)
+    raw = pos.get("available")
+    if raw is not None:
+        try:
+            return max(0, min(int(raw), int(qty)))
+        except (TypeError, ValueError):
+            pass
+    if is_t1_buy_day(buy_time, session):
+        return 0
+    return int(qty)
+
+
+def _calc_day_pnl(
+    *,
+    last: float,
+    qty: int,
+    available: int,
+    cost: float | None,
+    prev_close: float | None,
+    open_px: float,
+    today_cost: float | None = None,
+) -> tuple[float | None, float | None, float | None]:
+    """分段当日盈亏：可用(=隔夜)按昨收，锁定(=今买)按今日买入价(非均价)。
+
+    返回 (day_pnl, day_pnl_pct, day_base)。
+    """
+    if qty <= 0:
+        return None, None, None
+    avail = max(0, min(int(available), int(qty)))
+    locked = int(qty) - avail
+    last = float(last)
+    open_px = float(open_px)
+    cost_f = float(cost) if cost is not None else None
+    today_f = float(today_cost) if today_cost is not None else None
+    prev = float(prev_close) if prev_close is not None and float(prev_close) > 0 else None
+
+    day_pnl = 0.0
+    day_base = 0.0
+    if avail > 0:
+        base_ov = prev if prev is not None else (cost_f if cost_f is not None else open_px)
+        day_pnl += (last - base_ov) * avail
+        day_base += base_ov * avail
+    if locked > 0:
+        # 今买部分必须用成交价，不能用持仓均价
+        base_td = (
+            today_f
+            if today_f is not None
+            else (cost_f if cost_f is not None else open_px)
+        )
+        day_pnl += (last - base_td) * locked
+        day_base += base_td * locked
+    if day_base <= 0:
+        return round(day_pnl, 2), None, None
+    return round(day_pnl, 2), round(day_pnl / day_base * 100.0, 2), round(day_base, 2)
+
+# 中证500+1000 契合池（夏普≥1 且策略超额>0，按夏普降序）
+# 明细：../huice/universe_zz500_1000/fit_sharpe1_excess.csv
+_FIT_WATCH: list[tuple[str, str]] = [
+    ("001389", "广合科技"),
+    ("600552", "凯盛科技"),
+    ("603083", "剑桥科技"),
+    ("601208", "东材科技"),
+    ("603306", "华懋科技"),
+    ("002335", "科华数据"),
+    ("001339", "智微智能"),
+    ("002636", "金安国纪"),
+    ("600105", "永鼎股份"),
+    ("000880", "潍柴重机"),
+    ("600330", "天通股份"),
+]
+WATCHLIST: list[dict[str, Any]] = [_watch_item(c, n) for c, n in _FIT_WATCH]
+
+# 竞价结束后强制刷新盯盘开盘价（写入报告/重算止损买点）；随 WATCHLIST 变化
+OPEN_PRICE_REFRESH_HOUR = 9
+OPEN_PRICE_REFRESH_MINUTE = 26
+
+# 大盘指数（新浪 spot）
+INDEX_WATCH: list[dict[str, str]] = [
+    {"code": "sh000001", "name": "上证指数", "market": "上证"},
+    {"code": "sz399001", "name": "深证成指", "market": "深证"},
+]
+
+
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -132,6 +253,10 @@ def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding=encoding)
     os.replace(tmp, path)
+
+
+def _watchlist_codes_label() -> str:
+    return " / ".join(w["code"] for w in WATCHLIST)
 
 
 def _watch_pct(item: dict[str, Any]) -> float:
@@ -318,7 +443,6 @@ def _apply_trigger_date_fields(
         and str(row.get("预警") or "") in EXIT_REASONS
     )
     mem = _factor_memory(code) if code else {}
-    trig_day: str | None = None
 
     # 触发瞬间：刚触发的一侧成为「已触发」，对侧今日因子成为「未触发」
     just_sold = bool(hit_stop or sold_today or (pos_st == "待卖出" and hit_txt == "已触发"))
@@ -343,10 +467,8 @@ def _apply_trigger_date_fields(
         next_px = float(stop_lv) if stop_lv is not None else None
         if code and trig_px is not None:
             remember_factor_trigger(code, side="buy", px=trig_px, session=session)
-            trig_day = str(session)[:10]
     elif qty > 0:
-        # 持有中：已触发=策略买入因子（日线重放优先）。
-        # buy_time 可能是实盘同步登记时间，不能当作因子触发日。
+        # 持有中：已触发=持仓对应那次买入因子（绝不用今日买点冒充）
         trig_side, next_side = "买入", "卖出"
         buy_day = str(buy_time or "")[:10]
         sess_day = str(session)[:10]
@@ -354,35 +476,29 @@ def _apply_trigger_date_fields(
         mem_buy_day = str(mem.get("last_buy_factor_date") or "")[:10]
         hist_buy = replay.get("last_buy_px")
         hist_buy_day = str(replay.get("last_buy_date") or "")[:10]
-        hist_holding = bool(replay.get("holding"))
         trig_px = None
-        if hist_holding and hist_buy is not None and hist_buy_day:
-            trig_px = float(hist_buy)
-            trig_day = hist_buy_day
-        elif mem_buy is not None and mem_buy_day and mem_buy_day != sess_day:
+        # 记忆必须对上持仓买入日，否则视为脏数据
+        if mem_buy is not None and buy_day and mem_buy_day == buy_day:
             trig_px = float(mem_buy)
-            trig_day = mem_buy_day
-        elif hist_buy is not None and hist_buy_day:
+        elif hist_buy is not None:
             trig_px = float(hist_buy)
-            trig_day = hist_buy_day
+        elif mem_buy is not None and (not buy_day) and mem_buy_day != sess_day:
+            trig_px = float(mem_buy)
         elif buy_day == sess_day and buy_lv is not None:
-            # 仅当日新买且无历史重放时，用今日买点
+            # 仅当日新买可用今日买点
             trig_px = float(buy_lv)
-            trig_day = sess_day
-        elif mem_buy is not None:
-            trig_px = float(mem_buy)
-            trig_day = mem_buy_day or None
         next_px = float(stop_lv) if stop_lv is not None else None
-        # 按真实因子日固化/纠正记忆（勿用 buy_time 覆盖）
-        if code and trig_px is not None and trig_day:
+        # 用持仓买入日因子固化/纠正记忆
+        if code and trig_px is not None:
+            seed_sess = buy_day or hist_buy_day or sess_day
             need_fix = (
                 mem_buy is None
-                or mem_buy_day != trig_day
+                or (buy_day and mem_buy_day != buy_day)
                 or abs(float(mem_buy) - float(trig_px)) > 1e-9
             )
             if need_fix:
                 remember_factor_trigger(
-                    code, side="buy", px=trig_px, session=trig_day, force=True
+                    code, side="buy", px=trig_px, session=seed_sess, force=True
                 )
     else:
         # 空仓：已触发=上次卖出因子；未触发=今日买点
@@ -417,10 +533,10 @@ def _apply_trigger_date_fields(
             row["因子触发"] = hit_txt
         return
 
-    # 有仓：最近买入因子日（重放/记忆；不用 buy_time）
+    # 有仓：最近买入日（持仓 buy_time / 记忆 / 日线重放）
     if qty > 0:
         md = (
-            format_trigger_md(trig_day)
+            format_trigger_md(buy_time)
             or format_trigger_md(mem.get("last_buy_factor_date"))
             or format_trigger_md(replay.get("last_buy_date"))
         )
@@ -442,6 +558,15 @@ def _apply_trigger_date_fields(
     else:
         row["因子触发"] = hit_txt or "未触发"
 
+
+
+def _find_meta(code: str) -> dict[str, Any]:
+    key = _code_key(code)
+    for item in WATCHLIST:
+        if item["code"] == key:
+            return item
+    codes = "/".join(w["code"] for w in WATCHLIST)
+    raise KeyError(f"不在监控列表: {code}（仅支持 {codes}）")
 
 
 def load_holdings() -> dict[str, Any]:
@@ -2476,7 +2601,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {escape(STRATEGY_NAME)} <span class="sensitive">±{DEFAULT_PCT*100:.1f}% · 仅止损全清</span> · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
+          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 仅止损全清 · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2498,7 +2623,7 @@ def write_html_report(
       {cards_html}
     </div>
     <p class="note">
-      策略锁定 {escape(STRATEGY_NAME)}<span class="sensitive">（与 strategy/open_break 回测同源；卖出仅保留止损）。</span>
+      策略锁定 {STRATEGY_NAME}（与 strategy/open_break 回测同源；卖出仅保留止损）。
       持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入止损预警；否则空仓或持有。
       卡片排序：有持仓 → 预警/当日触发 → 其余（同档按夏普序）。
       因子侧：待卖出预警→卖出；待买入预警→买入；其余→持有或空仓。
@@ -3006,30 +3131,14 @@ def cmd_history(_: argparse.Namespace) -> None:
     print(pd.DataFrame(rows).to_string(index=False))
 
 
-def _maybe_wechat_notify(
-    rows: list[dict[str, Any]],
-    *,
-    enabled: bool = True,
-) -> None:
-    if not enabled:
-        return
-    try:
-        notify_watch_rows(rows)
-    except Exception as e:  # noqa: BLE001
-        print(f"[{_now()}] 微信推送异常: {e}")
-
-
 def _refresh_once(
     refresh_sec: int,
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
-    wechat: bool = True,
 ) -> Path:
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices_cached()
-    path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
-    _maybe_wechat_notify(rows, enabled=wechat)
-    return path
+    return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
 
 
 def _parse_hhmm(text: str) -> tuple[int, int]:
@@ -3076,14 +3185,12 @@ def _refresh_open_prices(
     refresh_sec: int,
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
-    wechat: bool = True,
 ) -> Path:
     """强制拉一次行情，用最新开盘重算买点/止损并写报告。"""
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices()
     path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
     _log_watchlist_opens(rows)
-    _maybe_wechat_notify(rows, enabled=wechat)
     return path
 
 
@@ -3189,24 +3296,12 @@ def _write_html_respecting_watch(
     return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
 
 
-def cmd_wechat_test(_: argparse.Namespace) -> None:
-    """发送一条测试预警到微信（不走大模型）。"""
-    ok, detail = send_test_alert()
-    if ok:
-        print("微信测试预警已发送，请查看手机。")
-        if detail and detail != "ok":
-            print(detail[:300])
-        return
-    raise SystemExit(f"微信测试推送失败: {detail}")
-
-
 def cmd_watch(args: argparse.Namespace) -> None:
     """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。"""
     global _ws_hub
     interval = max(2, int(args.interval))
     host = str(args.host)
     port = int(args.port)
-    wechat = not bool(getattr(args, "no_wechat", False))
     open_h, open_m = _parse_hhmm(
         getattr(args, "open_at", None)
         or f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}"
@@ -3237,14 +3332,12 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
     def safe_refresh() -> Path:
         with refresh_lock:
-            return _refresh_once(interval, get_quote=get_quote, wechat=wechat)
+            return _refresh_once(interval, get_quote=get_quote)
 
     def safe_open_refresh() -> Path:
         with refresh_lock:
             reseed_all()
-            return _refresh_open_prices(
-                interval, get_quote=get_quote, wechat=wechat
-            )
+            return _refresh_open_prices(interval, get_quote=get_quote)
 
     print("冷启动：拉取开盘/分钟线并 seed…")
     try:
@@ -3370,24 +3463,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         f"开盘价定时: 每日 {open_h:02d}:{open_m:02d} 刷新盯盘标的 "
         f"({_watchlist_codes_label()})"
     )
-    print(
-        "微信推送: "
-        + (
-            "开（预警+策略触发+启动完成，同信号冷却防抖）"
-            if wechat
-            else "关（--no-wechat）"
-        )
-    )
     print("展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）")
-    if wechat:
-        try:
-            ok, detail = send_startup_message(url=url)
-            if ok:
-                print(f"[{_now()}] 微信已推送：盯盘启动完成")
-            else:
-                print(f"[{_now()}] 启动完成推送失败: {detail[:200]}")
-        except Exception as e:  # noqa: BLE001
-            print(f"[{_now()}] 启动完成推送异常: {e}")
     if not args.no_open:
         webbrowser.open(url)
     try:
@@ -3435,18 +3511,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="每日强制刷新盯盘开盘价的时刻，默认09:26",
     )
     w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
-    w.add_argument(
-        "--no-wechat",
-        action="store_true",
-        help="关闭微信预警推送（默认开启，见 wechat_notify.json）",
-    )
     w.set_defaults(func=cmd_watch)
-
-    wt = sub.add_parser(
-        "wechat-test",
-        help="发送一条微信测试预警（不走大模型）",
-    )
-    wt.set_defaults(func=cmd_wechat_test)
 
     b = sub.add_parser("buy", help="记录买入")
     b.add_argument("code")

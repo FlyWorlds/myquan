@@ -25,7 +25,7 @@ akshare DataFrame
     → BacktestResult
 ```
 
-**本项目当前生效策略**：OpenBreak3 **因子1**（开盘 ±2.5%）。  
+**本项目当前生效策略**：**策略一 · 因子1**（开盘 ±2.5%，OpenBreak3）。  
 买：`high ≥ ceil(open×1.025)`，前日阴线或小阳，禁前面双阳，T+1。  
 卖：仅止损 −2.5% 全清。完整规则：
 
@@ -33,6 +33,8 @@ akshare DataFrame
 python -c "from strategy import STRATEGY_RULES; print(STRATEGY_RULES)"
 # 或：cd backtest && python strategy1.py --rules
 ```
+
+策略包分层见 [`strategy/README.md`](strategy/README.md)（因子 → 绑定 → 决策 → 执行）。
 
 ---
 
@@ -55,15 +57,14 @@ myquan/
 ├── TODO.MD                  # 任务优先级
 ├── requirements.txt         # 运行依赖
 ├── test_strategy_rules.py   # 离线规则回归（不访问网络）
-├── strategy/                # OpenBreak3 规则 / 回测 / 配置
-│   ├── open_break.py        # 策略因子（回测与盯盘共用）
-│   ├── backtest.py          # akquant Strategy
-│   ├── config.py            # BacktestConfig、标的预设
-│   ├── runner.py            # run_open_break（实例传参）
-│   ├── base.py              # run_backtest_pipeline 骨架
-│   ├── data.py              # 日线缓存（个股 / ETF 分流）
-│   ├── minute.py            # 分钟线工具
-│   └── registry.py          # 策略因子注册（仅 open_break3）
+├── strategy/                # 可插拔策略框架（详见 strategy/README.md）
+│   ├── core/                # 协议 / MarketContext / Decision / 注册表
+│   ├── factors/             # 因子1(生效) · 因子2/3(占位)
+│   ├── strategies/          # strategyN/{bindings,decision} 策略层+决策层
+│   ├── open_break.py        # 因子1 规则真源（回测与盯盘共用）
+│   ├── backtest.py          # akquant Strategy（执行层）
+│   ├── config.py / runner.py / data.py / minute.py
+│   └── registry.py          # 兼容 get_strategy / get_decision_engine
 ├── backtest/                # 回测 CLI / 标的脚本 / 合格池
 │   ├── run.py               # 统一入口：python run.py kaicheng
 │   ├── strategy1.py         # 薄封装 → 预设

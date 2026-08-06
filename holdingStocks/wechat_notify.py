@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_FILE = ROOT / "wechat_notify.json"
 STATE_FILE = ROOT / "wechat_alert_state.json"
 
-# 持仓状态 / 预警文案命中即视为可推送
+# 持仓状态 / 预警文案命中即视为可推送（与页面「预警带」一致）
 _PUSH_POS = frozenset({"待买入", "待卖出"})
 _PUSH_ALERT_KEYS = (
     "已触买",
@@ -23,10 +23,12 @@ _PUSH_ALERT_KEYS = (
     "将止损",
     "待买入",
     "待卖出",
+    "将卖出",
     "止损成交",
     "阴线收盘卖",
     "低开945未翻红",
 )
+_PUSH_HIT = frozenset({"接近", "已触发"})
 
 _DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -89,19 +91,31 @@ def _save_state(state: dict[str, Any]) -> None:
 
 
 def is_alert_row(row: dict[str, Any]) -> bool:
-    """预警带 或 策略已触发结算，均推送。"""
+    """触发预警 / 接近预警 / 策略结算，均推送（对齐页面预警判定）。"""
     pos = str(row.get("持仓状态") or "")
-    if pos in _PUSH_POS:
-        return True
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
+    near_buy = bool(row.get("近买点"))
+    near_stop = bool(row.get("近止损"))
+
+    # 1) 卡片持仓状态进入预警带
+    if pos in _PUSH_POS:
+        return True
+    # 2) 因子触发：已触发（含「已触发 M/D」）或接近 → 一律推
+    if hit in _PUSH_HIT or hit.startswith("已触发") or hit.startswith("接近"):
+        return True
+    # 3) 预警文案（已触买/将买入/将止损/止损成交…）
     if any(k in alert for k in _PUSH_ALERT_KEYS):
         return True
-    # 策略自动结算（止损成交等）
-    if row.get("已实现") and any(k in alert for k in _PUSH_ALERT_KEYS):
+    # 4) 行情触及列
+    if str(row.get("已触买") or "") == "是" or str(row.get("已触止损") or "") == "是":
         return True
-    if hit == "接近" or hit == "已触发" or hit.startswith("已触发"):
-        return pos in _PUSH_POS or any(k in alert for k in _PUSH_ALERT_KEYS)
+    # 5) 页面「近买点 / 近止损」角标
+    if near_buy or near_stop:
+        return True
+    # 6) 策略自动结算锁定
+    if row.get("已实现") and alert:
+        return True
     return False
 
 
@@ -111,7 +125,31 @@ def _alert_key(row: dict[str, Any]) -> str:
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
     realized = "1" if row.get("已实现") else "0"
-    return f"{code}|{pos}|{alert}|{hit}|{realized}"
+    # 接近→已触发、未触→已触 等变化要能再推
+    touched = (
+        f"{row.get('已触买')}|{row.get('已触止损')}|"
+        f"{int(bool(row.get('近买点')))}|{int(bool(row.get('近止损')))}"
+    )
+    return f"{code}|{pos}|{alert}|{hit}|{realized}|{touched}"
+
+
+def _message_title(row: dict[str, Any]) -> str:
+    if row.get("已实现"):
+        return "【策略触发】"
+    hit = str(row.get("因子触发") or "")
+    alert = str(row.get("预警") or "")
+    if (
+        hit.startswith("已触发")
+        or "已触" in alert
+        or str(row.get("已触买")) == "是"
+        or str(row.get("已触止损")) == "是"
+    ):
+        return "【触发预警】"
+    if hit.startswith("接近") or hit == "接近" or "将" in alert or row.get("近买点") or row.get(
+        "近止损"
+    ):
+        return "【接近预警】"
+    return "【盯盘预警】"
 
 
 def format_alert_message(row: dict[str, Any]) -> str:
@@ -136,13 +174,13 @@ def format_alert_message(row: dict[str, Any]) -> str:
             return str(v)
 
     dist_txt = "-" if dist is None else f"{float(dist):+.2f}%"
-    title = "【策略触发】" if realized else "【盯盘预警】"
     lines = [
-        title,
+        _message_title(row),
         f"{name}({code}) · {pos}",
         f"预警: {alert} · 因子触发: {hit} · 侧: {side}",
         f"现价 {_n(last)} · 因子价 {_n(factor)} · 距因子 {dist_txt}",
         f"建议挂单: {_n(suggest)}",
+        f"已触买: {row.get('已触买') or '-'} · 已触止损: {row.get('已触止损') or '-'}",
     ]
     if realized:
         lines.append(

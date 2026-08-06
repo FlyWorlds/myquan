@@ -34,6 +34,16 @@ def apply_strategy_config(
     strategy.prev_entry_mode = (
         getattr(cfg, "prev_entry_mode", "yin_or_small_yang") or "yin_or_small_yang"
     )
+    levels = getattr(cfg, "take_profit_levels", None)
+    strategy.take_profit_levels = tuple(levels) if levels else ()
+    strategy.take_profit_reduce = float(getattr(cfg, "take_profit_reduce", 0.20) or 0.0)
+    trig = str(getattr(cfg, "take_profit_trigger", "high") or "high").lower()
+    strategy.take_profit_trigger = trig if trig in ("high", "close") else "high"
+    strategy.take_profit_limit_offset = float(
+        getattr(cfg, "take_profit_limit_offset", 0.0) or 0.0
+    )
+    lock = getattr(cfg, "take_profit_lock_pct", None)
+    strategy.take_profit_lock_pct = float(lock) if lock is not None else None
     return strategy
 
 

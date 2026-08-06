@@ -1,7 +1,14 @@
-"""多策略模块化框架（当前内置 OpenBreak3）。
+"""多策略 + 多因子可插拔框架。
 
-共用: data, minute, base, registry
-OpenBreak3: open_break, backtest, config, runner
+架构（开闭原则）：
+  · factors/factor1..3              — 因子层：信号/价位规则
+  · strategies/strategyN/
+      bindings.py + decision.py     — 策略层(绑定) + 决策层(买卖)
+  · core/                           — 协议 / MarketContext / Decision / 注册表
+  · backtest.py / runner.py         — 执行层（下单与回测）
+
+默认生效：策略一 = 因子1 = 开盘±2.5%（OpenBreak3）。
+兼容旧 API：run_open_break / open_break3 / STRATEGY_RULES 等保持可用。
 """
 
 from strategy.open_break import (
@@ -31,7 +38,6 @@ from strategy.open_break import (
 from strategy.config import KAICHENG, HANGTIANDIANZI, XIEXINNENGKE, ZZ500_ETF, BacktestConfig
 from strategy.data import fetch_daily
 from strategy.base import CommonBacktestParams, run_akquant_backtest, run_backtest_pipeline
-from strategy.registry import REGISTRY, StrategyEntry, get_strategy, list_strategies
 from strategy.minute import (
     fetch_minute_1m,
     fetch_minute_5m,
@@ -46,6 +52,38 @@ from strategy.runner import (
     run_open_break_backtest,
 )
 from strategy.backtest import OpenBreak3Strategy, metric, print_monthly, print_summary, print_yearly
+
+# 加载插件注册表
+import strategy.factors  # noqa: F401,E402
+import strategy.strategies  # noqa: F401,E402
+
+from strategy.registry import (  # noqa: E402
+    REGISTRY,
+    StrategyEntry,
+    get_strategy,
+    get_strategy_bindings,
+    get_strategy_factors,
+    list_strategies,
+)
+from strategy.registry import get_decision_engine  # noqa: E402
+from strategy.core import (  # noqa: E402
+    FACTOR_REGISTRY,
+    STRATEGY_REGISTRY,
+    Decision,
+    MarketContext,
+    FactorBinding,
+    FactorSpec,
+    StrategySpec,
+    bind_factor,
+    get_factor,
+    list_factors,
+    get_strategy_spec,
+    list_strategy_specs,
+)
+
+# 语义别名
+Strategy1 = OpenBreak3Strategy
+run_strategy1 = run_open_break
 
 __all__ = [
     "DEFAULT_PCT",
@@ -76,6 +114,7 @@ __all__ = [
     "is_t1_buy_day",
     "strategy_signal",
     "OpenBreak3Strategy",
+    "Strategy1",
     "fetch_daily",
     "CommonBacktestParams",
     "run_akquant_backtest",
@@ -83,7 +122,22 @@ __all__ = [
     "REGISTRY",
     "StrategyEntry",
     "get_strategy",
+    "get_strategy_factors",
+    "get_strategy_bindings",
+    "get_decision_engine",
     "list_strategies",
+    "FACTOR_REGISTRY",
+    "STRATEGY_REGISTRY",
+    "Decision",
+    "MarketContext",
+    "FactorBinding",
+    "FactorSpec",
+    "StrategySpec",
+    "bind_factor",
+    "get_factor",
+    "list_factors",
+    "get_strategy_spec",
+    "list_strategy_specs",
     "fetch_minute_1m",
     "fetch_minute_5m",
     "fetch_minute_30m",
@@ -91,6 +145,7 @@ __all__ = [
     "standardize_minute_1m",
     "run_open_break",
     "run_open_break_backtest",
+    "run_strategy1",
     "apply_strategy_config",
     "build_open_break_strategy",
     "metric",
