@@ -28,3 +28,6 @@ holdingStocks/wechat_notify.json
 holdingStocks/market_review_latest.txt
 holdingStocks/market_review_latest.json
 holdingStocks/logs/
+holdingStocks/watch_stdout.log
+holdingStocks/watch_stderr.log
+holdingStocks/_wechat_*.txt

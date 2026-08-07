@@ -10,10 +10,11 @@ from strategy.strategies.strategy1.bindings import FACTOR_BINDINGS, STRATEGY_ID,
 
 class Strategy1Decision(BaseDecisionEngine):
     """
-    决策规则（与 OpenBreak3 一致）：
-    - 空仓 + 因子允许 + 现价触买点 → buy
-    - 有仓 + 非 T+1 + 现价触止损 → sell
+    决策规则（与 open_break / OpenBreak3 一致）：
+    - 空仓 + 因子允许 + high 触买点 → buy
+    - 有仓 + 非 T+1 + low 触止损 → sell
     - 其余 → hold
+    触发用 high/low，不用现价（避免漏触发）。
     """
 
     strategy_id = STRATEGY_ID
@@ -30,6 +31,9 @@ class Strategy1Decision(BaseDecisionEngine):
         if buy_px <= 0 or stop_px <= 0:
             return Decision.hold("开盘价无效，无法计算买卖点")
 
+        high = float(ctx.high)
+        low = float(ctx.low)
+
         if ctx.has_position:
             if ctx.t_plus_one:
                 return Decision.hold(
@@ -38,7 +42,7 @@ class Strategy1Decision(BaseDecisionEngine):
                     stop_price=stop_px,
                     tags=("t1",),
                 )
-            if ctx.price <= stop_px:
+            if low <= stop_px + 1e-12:
                 return Decision.sell(
                     stop_px,
                     reason=f"触止损 {stop_px:.2f}",
@@ -60,7 +64,7 @@ class Strategy1Decision(BaseDecisionEngine):
                 stop_price=stop_px,
                 tags=("filter",),
             )
-        if ctx.price >= buy_px:
+        if high + 1e-12 >= buy_px:
             return Decision.buy(
                 buy_px,
                 reason=f"触买点 {buy_px:.2f}",

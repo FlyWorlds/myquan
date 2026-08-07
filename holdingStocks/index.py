@@ -77,8 +77,22 @@ from strategy.open_break import (
 from strategy.data import fetch_daily
 
 from factor2_watch import format_factor2_summary, sync_factor2
+from watch_config import (
+    INDEX_WATCH,
+    OPEN_PRICE_REFRESH_HOUR,
+    OPEN_PRICE_REFRESH_MINUTE,
+    WATCHLIST,
+    calc_day_pnl as _calc_day_pnl,
+    code_key as _code_key,
+    empty_position as _empty_position,
+    find_meta as _find_meta,
+    sellable_qty as _sellable_qty,
+    sina_of as _sina_of,
+    watchlist_codes_label as _watchlist_codes_label,
+)
 
 # 盯盘与回测共用：策略一 = 因子1（买卖）+ 因子2（总资产回撤补仓）
+# 标的池唯一真源：watch_config.WATCHLIST
 STRATEGY_ID = "strategy1"
 FACTOR_ID = "factor1"
 FACTOR2_ID = "factor2"
@@ -96,10 +110,6 @@ _ws_hub: LocalWsHub | None = None
 _MIN_WATCH_REFRESH_SEC = 1.0
 _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
 _INDEX_CACHE_TTL_SEC = 15.0
-
-
-def _code_key(code: str) -> str:
-    return "".join(ch for ch in str(code) if ch.isdigit()).zfill(6)[-6:]
 
 
 def _strategy1_factor1_params() -> dict[str, Any]:
@@ -121,39 +131,6 @@ def _strategy1_factor1_params() -> dict[str, Any]:
     }
 
 
-def _sina_of(code: str) -> str:
-    c = _code_key(code)
-    return f"sh{c}" if c.startswith(("5", "6")) else f"sz{c}"
-
-
-def _market_of(code: str) -> str:
-    return "上证" if _sina_of(code).startswith("sh") else "深证"
-
-
-def _watch_item(
-    code: str,
-    name: str,
-    *,
-    pct: float = DEFAULT_PCT,
-    tick: float = TICK_SIZE,
-    t0: bool = False,
-    limit_down_pct: float = 0.10,
-    prev_entry_mode: str = "yin_or_small_yang",
-) -> dict[str, Any]:
-    c = _code_key(code)
-    return {
-        "code": c,
-        "sina": _sina_of(c),
-        "market": _market_of(c),
-        "name": name,
-        "pct": float(pct),
-        "tick": float(tick),
-        "t0": bool(t0),
-        "limit_down_pct": float(limit_down_pct),
-        "prev_entry_mode": prev_entry_mode,
-    }
-
-
 def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[str, Any]]:
     """盯盘高频刷新时缓存大盘指数，避免每次重拉拖慢推送。"""
     now = time.monotonic()
@@ -166,128 +143,6 @@ def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[
     return data
 
 
-def _empty_position(meta: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": meta["name"],
-        "market": meta["market"],
-        "qty": 0,
-        "available": None,
-        "cost": None,
-        "today_cost": None,
-        "buy_time": None,
-        "note": "",
-    }
-
-
-def _sellable_qty(
-    pos: dict[str, Any],
-    qty: int,
-    buy_time: str | None,
-    session: str,
-    *,
-    t0: bool = False,
-) -> int:
-    """可卖数量。
-
-    - T+0：整仓可卖
-    - 买入当日（T+1）：以 available 为准（通常 0）；未填则整仓不可卖
-    - 非买入日（隔夜仓）：available>0 取其与 qty 较小值；
-      available 缺失或为 0 视为未维护，回退整仓可卖（避免 available=0 卡死止损结算）
-    """
-    if qty <= 0:
-        return 0
-    if t0:
-        return int(qty)
-    t1 = is_t1_buy_day(buy_time, session)
-    raw = pos.get("available")
-    avail: int | None
-    try:
-        avail = int(raw) if raw is not None else None
-    except (TypeError, ValueError):
-        avail = None
-
-    if t1:
-        if avail is None:
-            return 0
-        return max(0, min(avail, int(qty)))
-
-    # 隔夜仓
-    if avail is not None and avail > 0:
-        return max(0, min(avail, int(qty)))
-    return int(qty)
-
-
-def _calc_day_pnl(
-    *,
-    last: float,
-    qty: int,
-    available: int,
-    cost: float | None,
-    prev_close: float | None,
-    open_px: float,
-    today_cost: float | None = None,
-) -> tuple[float | None, float | None, float | None]:
-    """分段当日盈亏：可用(=隔夜)按昨收，锁定(=今买)按今日买入价(非均价)。
-
-    返回 (day_pnl, day_pnl_pct, day_base)。
-    """
-    if qty <= 0:
-        return None, None, None
-    avail = max(0, min(int(available), int(qty)))
-    locked = int(qty) - avail
-    last = float(last)
-    open_px = float(open_px)
-    cost_f = float(cost) if cost is not None else None
-    today_f = float(today_cost) if today_cost is not None else None
-    prev = float(prev_close) if prev_close is not None and float(prev_close) > 0 else None
-
-    day_pnl = 0.0
-    day_base = 0.0
-    if avail > 0:
-        base_ov = prev if prev is not None else (cost_f if cost_f is not None else open_px)
-        day_pnl += (last - base_ov) * avail
-        day_base += base_ov * avail
-    if locked > 0:
-        # 今买部分必须用成交价，不能用持仓均价
-        base_td = (
-            today_f
-            if today_f is not None
-            else (cost_f if cost_f is not None else open_px)
-        )
-        day_pnl += (last - base_td) * locked
-        day_base += base_td * locked
-    if day_base <= 0:
-        return round(day_pnl, 2), None, None
-    return round(day_pnl, 2), round(day_pnl / day_base * 100.0, 2), round(day_base, 2)
-
-# 中证500+1000 契合池（夏普≥1 且策略超额>0，按夏普降序）
-# 明细：../huice/universe_zz500_1000/fit_sharpe1_excess.csv
-_FIT_WATCH: list[tuple[str, str]] = [
-    ("001389", "广合科技"),
-    ("600552", "凯盛科技"),
-    ("603083", "剑桥科技"),
-    ("601208", "东材科技"),
-    ("603306", "华懋科技"),
-    ("002335", "科华数据"),
-    ("001339", "智微智能"),
-    ("002636", "金安国纪"),
-    ("600105", "永鼎股份"),
-    ("000880", "潍柴重机"),
-    ("600330", "天通股份"),
-]
-WATCHLIST: list[dict[str, Any]] = [_watch_item(c, n) for c, n in _FIT_WATCH]
-
-# 竞价结束后强制刷新盯盘开盘价（写入报告/重算止损买点）；随 WATCHLIST 变化
-OPEN_PRICE_REFRESH_HOUR = 9
-OPEN_PRICE_REFRESH_MINUTE = 26
-
-# 大盘指数（新浪 spot）
-INDEX_WATCH: list[dict[str, str]] = [
-    {"code": "sh000001", "name": "上证指数", "market": "上证"},
-    {"code": "sz399001", "name": "深证成指", "market": "深证"},
-]
-
-
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -297,10 +152,6 @@ def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding=encoding)
     os.replace(tmp, path)
-
-
-def _watchlist_codes_label() -> str:
-    return " / ".join(w["code"] for w in WATCHLIST)
 
 
 def _watch_pct(item: dict[str, Any]) -> float:
@@ -657,15 +508,6 @@ def _apply_trigger_date_fields(
     else:
         row["因子触发"] = hit_txt or "未触发"
 
-
-
-def _find_meta(code: str) -> dict[str, Any]:
-    key = _code_key(code)
-    for item in WATCHLIST:
-        if item["code"] == key:
-            return item
-    codes = "/".join(w["code"] for w in WATCHLIST)
-    raise KeyError(f"不在监控列表: {code}（仅支持 {codes}）")
 
 
 def load_holdings() -> dict[str, Any]:
@@ -1676,6 +1518,14 @@ def collect_rows(
                 rows.append(row0)
                 continue
 
+            # 纸面回放持有：按虚拟有仓算止损侧信号（不自动成交）；真仓仍用实际 qty
+            paper_active = bool(_paper_hold and qty <= 0 and not _sold_today_pre)
+            sig_qty = 1 if paper_active else qty
+            if paper_active:
+                sig_buy_time = str(replay.get("last_buy_date") or "")[:10] or None
+            else:
+                # 有可卖股时不当作整仓 T+1，避免「持有·T+1」误锁信号
+                sig_buy_time = None if sellable > 0 else buy_time
             sig = strategy_signal(
                 open_px=q["open"],
                 high_px=q["high"],
@@ -1684,15 +1534,15 @@ def collect_rows(
                 session=q["session"],
                 buy_trigger=lv["buy_trigger"],
                 stop_px=lv["stop"],
-                qty=qty,
-                # 有可卖股时不当作整仓 T+1，避免「持有·T+1」误锁信号
-                buy_time=None if sellable > 0 else buy_time,
+                qty=sig_qty,
+                buy_time=sig_buy_time,
                 vs_open_pts=vs,
                 entry_pct=entry_pct,
                 stop_pct=stop_pct,
                 px_digits=px_digits,
                 t0=t0,
-                allow_entry=allow_entry,
+                # 纸面仓禁止买入预警
+                allow_entry=False if paper_active else allow_entry,
             )
             if qty > 0 and hit_stop and stop_locked:
                 limit_px = float(limit_state["limit_px"])
@@ -1777,6 +1627,9 @@ def collect_rows(
                     prev_close=q.get("prev_close"),
                     open_px=float(q["open"]),
                     today_cost=float(today_cost) if today_cost is not None else None,
+                    buy_time=buy_time,
+                    session=str(q["session"]),
+                    t0=t0,
                 )
                 # 同日已部分卖出：把已实现当日盈亏并入
                 if (
@@ -3113,7 +2966,7 @@ def cmd_status(args: argparse.Namespace) -> None:
         webbrowser.open(url if url else report.resolve().as_uri())
     print(f"策略: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}%（与 strategy1 同源）")
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
-    print("     当日盈亏: 隔夜仓=(现价-昨收)×可用；今买=(现价-今买成交价)×锁定")
+    print("     当日盈亏(现价盈亏): 隔夜=(现价-昨收)×持股；今买=(现价-今买成交价)×今买股数")
     print("     因子1卖出: 仅止损；已触止损=视为成交并锁定盈亏")
     print("     因子1买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
     _f2 = load_holdings().get("factor2")

@@ -45,10 +45,19 @@ class MarketContext:
 
     @property
     def t_plus_one(self) -> bool:
+        """T+1 禁卖：优先 meta；否则按买入日；勿仅凭 available=0（隔夜仓未维护会误判）。"""
         if "t_plus_one" in self.meta:
             return bool(self.meta["t_plus_one"])
         if self.t0:
             return False
+        if self.buy_time and self.session:
+            try:
+                from strategy.open_break import is_t1_buy_day
+
+                return bool(is_t1_buy_day(self.buy_time, self.session))
+            except Exception:
+                pass
+        # 无买入日信息时才回退 available（兼容旧调用）
         return self.holding and float(self.available_qty) <= 0
 
 
