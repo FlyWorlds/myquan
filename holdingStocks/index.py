@@ -2864,7 +2864,7 @@ def write_html_report(
       因子触发：盘中预警写「已触发 M/D」；止损日写「策略止损 M/D」；否则最近因子日。
       距已触发/未触发：因子一旦触发即自动翻转，并写入 factor_memory。
       因子价：空仓/待买入=买点；持有/策略持有=止损价；当日禁买=上次买入因子价。
-      |距未触发%|≤{NEAR_FACTOR_PCT:g}% → 将买入/将止损。微信仅推可执行/止损/因子2。
+      |距未触发%|≤{NEAR_FACTOR_PCT:g}% → 将买入/将止损。微信：P0因子已触发 / P1触发预警带；有仓只推止损，空仓只推买入。
       {watch_hint}
     </p>
   </div>
@@ -3592,12 +3592,17 @@ def cmd_wechat_test(_: argparse.Namespace) -> None:
     from wechat_notify import send_test_alert
 
     ok, detail = send_test_alert()
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+
+    def _out(s: str) -> None:
+        print(s.encode(enc, "replace").decode(enc, "replace"))
+
     if ok:
-        print(f"[{_now()}] 微信自检成功")
+        _out(f"[{_now()}] 微信自检成功")
         if detail and detail != "ok":
-            print(detail[:300])
+            _out(detail[:300])
     else:
-        print(f"[{_now()}] 微信自检失败: {detail[:400]}")
+        _out(f"[{_now()}] 微信自检失败: {(detail or '')[:400]}")
         raise SystemExit(1)
 
 

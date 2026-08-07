@@ -14,8 +14,11 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_FILE = ROOT / "wechat_notify.json"
 STATE_FILE = ROOT / "wechat_alert_state.json"
 
-# 仅可执行持仓状态（空仓「已触买」无待买入、无仓噪音不推）
-_PUSH_POS = frozenset({"待买入", "待卖出"})
+# 预警优先级：P0=因子已触发；P1=触发预警带
+PRIORITY_P0 = "P0"  # 因子已触发
+PRIORITY_P1 = "P1"  # 触发预警带
+KIND_P0 = "因子已触发"
+KIND_P1 = "触发预警带"
 
 _DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -77,142 +80,172 @@ def _save_state(state: dict[str, Any]) -> None:
     )
 
 
-def is_alert_row(row: dict[str, Any]) -> bool:
-    """仅推可执行/需动作信号：待买待卖、实仓止损、策略止损、结算、因子2。"""
+def _has_holding(row: dict[str, Any]) -> bool:
+    """有仓：实仓，或策略回放仍持有（未登记也按有仓盯止损）。"""
+    qty = int(row.get("持仓") or 0)
+    pos = str(row.get("持仓状态") or "")
+    if qty > 0 or pos in ("持有", "待卖出", "策略持有"):
+        return True
+    return bool(row.get("策略回放持有")) and pos != "当日禁买"
+
+
+def _factor_px_for_push(row: dict[str, Any], *, holding: bool) -> Any:
+    """推送用因子价：有仓=止损价；空仓=买点。"""
+    if holding:
+        for k in ("止损", "未触发因子价", "因子价", "建议挂单"):
+            if row.get(k) is not None and row.get(k) != "":
+                return row.get(k)
+        return None
+    for k in ("买点", "未触发因子价", "因子价", "建议挂单"):
+        if row.get(k) is not None and row.get(k) != "":
+            return row.get(k)
+    return None
+
+
+def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
+    """股票池推送分类。
+
+    - 有持仓：仅止损侧（P0 因子已触发 / P1 触发预警带）
+    - 无持仓：仅买入侧（P0 / P1）
+    - 当日禁买空仓：不再推买入
+    返回 None 表示不推；否则含 level/kind/type/factor_px。
+    """
+    if row.get("error"):
+        return None
     pos = str(row.get("持仓状态") or "")
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
-    qty = int(row.get("持仓") or 0)
-    f2_act = str(row.get("因子2动作") or "")
+    no_buy = bool(row.get("当日禁买")) or pos == "当日禁买"
+    holding = _has_holding(row)
 
-    # 1) 待买入 / 待卖出（含接近带）
-    if pos in _PUSH_POS:
-        return True
-    if bool(row.get("可执行")):
-        return True
-    # 2) 当日禁买：止损后当日一次（防空仓反复刷「已触买」）
-    if pos == "当日禁买" and (
-        hit.startswith("策略止损")
-        or "止损" in alert
-        or bool(row.get("已实现"))
+    hit_buy = str(row.get("已触买") or "") == "是"
+    hit_stop = str(row.get("已触止损") or "") == "是"
+    near_buy = bool(row.get("近买点"))
+    near_stop = bool(row.get("近止损"))
+
+    def _pack(level: str, kind: str, typ: str, factor_px: Any) -> dict[str, Any]:
+        return {
+            "level": level,
+            "kind": kind,
+            "type": typ,
+            "factor_px": factor_px,
+        }
+
+    # 有仓刚结算：P0 止损因子一次
+    if row.get("已实现") and (
+        hit_stop or "止损" in alert or hit.startswith("策略止损")
     ):
-        return True
-    # 3) 策略持有（未登记）：接近/触及止损才推
-    if pos == "策略持有" and (
-        bool(row.get("近止损"))
-        or str(row.get("已触止损") or "") == "是"
-        or hit.startswith("策略止损")
-        or "将止损" in alert
+        return _pack(
+            PRIORITY_P0,
+            KIND_P0,
+            "已触止损",
+            row.get("成交价")
+            if row.get("成交价") is not None
+            else _factor_px_for_push(row, holding=True),
+        )
+
+    if holding:
+        if (
+            hit_stop
+            or hit.startswith("策略止损")
+            or "已触止损" in alert
+            or (pos == "待卖出" and hit.startswith("已触发"))
+        ):
+            return _pack(
+                PRIORITY_P0,
+                KIND_P0,
+                "已触止损",
+                _factor_px_for_push(row, holding=True),
+            )
+        if (
+            near_stop
+            or pos == "待卖出"
+            or "将止损" in alert
+            or hit == "接近"
+            or hit.startswith("接近")
+        ):
+            return _pack(
+                PRIORITY_P1,
+                KIND_P1,
+                "将止损",
+                _factor_px_for_push(row, holding=True),
+            )
+        return None
+
+    # 无持仓：当日已止损禁买 → 不推买入
+    if no_buy:
+        return None
+    if (
+        hit_buy
+        or (pos == "待买入" and hit.startswith("已触发"))
+        or "已触买" in alert
     ):
-        return True
-    # 4) 实仓：近止损 / 已触止损（状态尚未翻到待卖出时兜底）
-    if qty > 0 and (
-        bool(row.get("近止损"))
-        or str(row.get("已触止损") or "") == "是"
-        or "将止损" in alert
+        return _pack(
+            PRIORITY_P0,
+            KIND_P0,
+            "已触买",
+            _factor_px_for_push(row, holding=False),
+        )
+    if (
+        near_buy
+        or pos == "待买入"
+        or "将买入" in alert
+        or hit == "接近"
+        or hit.startswith("接近")
     ):
-        return True
-    # 5) 策略自动结算
-    if row.get("已实现") and alert:
-        return True
-    # 6) 因子2 追加/提出
-    if f2_act in ("inject", "withdraw"):
-        return True
-    return False
+        return _pack(
+            PRIORITY_P1,
+            KIND_P1,
+            "将买入",
+            _factor_px_for_push(row, holding=False),
+        )
+    return None
+
+
+def is_alert_row(row: dict[str, Any]) -> bool:
+    """股票池：有仓只推止损；空仓只推买入。因子2走账户级通道。"""
+    return classify_stock_alert(row) is not None
 
 
 def _alert_key(row: dict[str, Any]) -> str:
     code = str(row.get("代码") or "")
-    pos = str(row.get("持仓状态") or "")
-    alert = str(row.get("预警") or "")
-    hit = str(row.get("因子触发") or "")
-    realized = "1" if row.get("已实现") else "0"
-    f2 = f"{row.get('因子2动作')}|{row.get('因子2')}"
-    # 接近→已触发、未触→已触 等变化要能再推
-    touched = (
+    info = classify_stock_alert(row) or {}
+    return (
+        f"{code}|{info.get('level')}|{info.get('kind')}|{info.get('type')}|"
         f"{row.get('已触买')}|{row.get('已触止损')}|"
         f"{int(bool(row.get('近买点')))}|{int(bool(row.get('近止损')))}"
     )
-    return f"{code}|{pos}|{alert}|{hit}|{realized}|{touched}|{f2}"
-
-
-def _message_title(row: dict[str, Any]) -> str:
-    f2_act = str(row.get("因子2动作") or "")
-    pos = str(row.get("持仓状态") or "")
-    if f2_act == "inject":
-        return "【因子2追加】"
-    if f2_act == "withdraw":
-        return "【因子2提出】"
-    if row.get("已实现"):
-        return "【策略触发】"
-    if pos == "当日禁买" or str(row.get("因子触发") or "").startswith("策略止损"):
-        return "【策略止损】"
-    hit = str(row.get("因子触发") or "")
-    alert = str(row.get("预警") or "")
-    qty = int(row.get("持仓") or 0)
-    stop_hit = str(row.get("已触止损")) == "是" and (
-        qty > 0 or pos in ("待卖出", "策略持有", "当日禁买")
-    )
-    if (
-        hit.startswith("已触发")
-        or "已触" in alert
-        or (pos == "待买入" and str(row.get("已触买")) == "是")
-        or stop_hit
-    ):
-        return "【触发预警】"
-    if (
-        hit.startswith("接近")
-        or hit == "接近"
-        or "将" in alert
-        or (pos == "待买入" and row.get("近买点"))
-        or (pos in ("待卖出", "持有", "策略持有") and row.get("近止损"))
-    ):
-        return "【接近预警】"
-    if pos in _PUSH_POS:
-        return "【盯盘预警】"
-    return "【盯盘预警】"
 
 
 def format_alert_message(row: dict[str, Any]) -> str:
+    info = classify_stock_alert(row)
     code = row.get("代码") or "-"
     name = row.get("名称") or "-"
-    pos = row.get("持仓状态") or "-"
-    alert = row.get("预警") or "-"
-    hit = row.get("因子触发") or "-"
-    last = row.get("现价")
-    factor = row.get("因子价")
-    dist = row.get("距因子%")
-    suggest = row.get("建议挂单")
-    side = row.get("因子侧") or "-"
-    realized = bool(row.get("已实现"))
+    digits = int(row.get("价位小数") or 2)
+    qty = int(row.get("持仓") or 0)
 
     def _n(v: Any) -> str:
         if v is None or v == "":
             return "-"
         try:
-            return f"{float(v):.2f}"
+            return f"{float(v):.{digits}f}"
         except (TypeError, ValueError):
             return str(v)
 
-    dist_txt = "-" if dist is None else f"{float(dist):+.2f}%"
+    if info is None:
+        return f"【盯盘】{name}({code})\n时间: {_now()}"
+
+    level = str(info["level"])
+    kind = str(info["kind"])
+    typ = str(info["type"])
     lines = [
-        _message_title(row),
-        f"{name}({code}) · {pos}",
-        f"预警: {alert} · 因子触发: {hit} · 侧: {side}",
-        f"现价 {_n(last)} · 因子价 {_n(factor)} · 距因子 {dist_txt}",
-        f"建议挂单: {_n(suggest)}",
-        f"已触买: {row.get('已触买') or '-'} · 已触止损: {row.get('已触止损') or '-'}",
+        f"【{level}】{name}({code})",
+        f"预警类型: {level}·{kind}·{typ}",
+        f"因子价格: {_n(info.get('factor_px'))}",
+        f"现价: {_n(row.get('现价'))}",
     ]
-    f2_act = str(row.get("因子2动作") or "")
-    if f2_act in ("inject", "withdraw") or row.get("因子2"):
-        lines.append(
-            f"因子2: {row.get('因子2') or '-'} · 回撤{row.get('因子2回撤%')}% "
-            f"· 档{row.get('因子2档位')} · 建议额{_n(row.get('因子2建议额'))}"
-        )
-    if realized:
-        lines.append(
-            f"成交价 {_n(row.get('成交价'))} · 当日盈亏 {_n(row.get('当日盈亏'))}"
-        )
+    if qty > 0:
+        lines.insert(2, f"持仓: {qty}股")
     lines.append(f"时间: {_now()}")
     return "\n".join(lines)
 
@@ -424,26 +457,9 @@ def notify_watch_rows(
     for row in rows:
         if row.get("error"):
             continue
-        # 个股行：因子2仅账户级推一次，这里跳过「纯因子2」行
-        pos = str(row.get("持仓状态") or "")
-        f2_act = str(row.get("因子2动作") or "")
-        stock_signal = (
-            pos in _PUSH_POS
-            or bool(row.get("可执行"))
-            or pos in ("当日禁买", "策略持有")
-            or (
-                int(row.get("持仓") or 0) > 0
-                and (
-                    bool(row.get("近止损"))
-                    or str(row.get("已触止损") or "") == "是"
-                    or "将止损" in str(row.get("预警") or "")
-                )
-            )
-            or bool(row.get("已实现"))
-        )
-        if f2_act in ("inject", "withdraw") and not stock_signal:
-            continue
-        if not is_alert_row(row):
+        # 个股只走 classify；因子2账户级单独推
+        info = classify_stock_alert(row)
+        if info is None:
             continue
         key = _alert_key(row)
         active_keys.add(key)
@@ -457,7 +473,10 @@ def notify_watch_rows(
         if ok:
             sent[key] = now_ts
             pushed.append(f"{name}({code})")
-            print(f"[{_now()}] 微信已推送: {name}({code})")
+            print(
+                f"[{_now()}] 微信已推送: {name}({code}) "
+                f"{info.get('level')}·{info.get('kind')}·{info.get('type')}"
+            )
         else:
             print(f"[{_now()}] 微信推送失败 {name}({code}): {detail[:200]}")
 
