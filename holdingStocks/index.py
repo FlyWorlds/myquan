@@ -187,19 +187,33 @@ def _sellable_qty(
     *,
     t0: bool = False,
 ) -> int:
-    """可卖数量：优先用持仓里的 available；否则买入日整仓不可卖。"""
+    """可卖数量。
+
+    - T+0：整仓可卖
+    - 买入当日（T+1）：以 available 为准（通常 0）；未填则整仓不可卖
+    - 非买入日（隔夜仓）：available>0 取其与 qty 较小值；
+      available 缺失或为 0 视为未维护，回退整仓可卖（避免 available=0 卡死止损结算）
+    """
     if qty <= 0:
         return 0
     if t0:
         return int(qty)
+    t1 = is_t1_buy_day(buy_time, session)
     raw = pos.get("available")
-    if raw is not None:
-        try:
-            return max(0, min(int(raw), int(qty)))
-        except (TypeError, ValueError):
-            pass
-    if is_t1_buy_day(buy_time, session):
-        return 0
+    avail: int | None
+    try:
+        avail = int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        avail = None
+
+    if t1:
+        if avail is None:
+            return 0
+        return max(0, min(avail, int(qty)))
+
+    # 隔夜仓
+    if avail is not None and avail > 0:
+        return max(0, min(avail, int(qty)))
     return int(qty)
 
 
@@ -1482,6 +1496,7 @@ def collect_rows(
             # 盯盘按人工/云条件单的触发价记录，不对买卖触发价额外加滑点。
             stop_fill_px = stop_base_px
             # 已触止损且可卖 → 视为成交，锁定收益（只卖可用）
+            # 隔夜仓 available=0 已在 _sellable_qty 回退为整仓，避免卡死不结算
             if qty > 0 and hit_stop and sellable > 0 and not stop_locked:
                 apply_stop_fill(
                     code=code,
@@ -1693,6 +1708,29 @@ def collect_rows(
                             "止损触发但不可成交；持仓延续，待开板"
                         ),
                         "因子触发": "不可成交",
+                    }
+                )
+            elif qty > 0 and hit_stop and sellable <= 0 and not stop_locked:
+                # 典型：买入当日 T+1，止损已触但不可卖
+                sig = dict(sig)
+                t1_today = (not t0) and is_t1_buy_day(buy_time, q["session"])
+                sig.update(
+                    {
+                        "alert": (
+                            "已触止损·T+1暂不可卖"
+                            if t1_today
+                            else "已触止损·暂不可卖"
+                        ),
+                        "bg_class": "warn-sell",
+                        "pending_sell": True,
+                        "持仓状态": "待卖出",
+                        "建议挂单": None,
+                        "挂单说明": (
+                            "今日买入不可卖，止损触发后下一交易日可卖"
+                            if t1_today
+                            else "无可卖数量，请核对 available / 买入日"
+                        ),
+                        "因子触发": "已触发",
                     }
                 )
             sig = _stabilize_sell_warn(
@@ -1987,7 +2025,19 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
         return
 
     if qty > 0:
-        row["可执行"] = pos == "待卖出" and (not t1)
+        sellable = int(row.get("可用") or 0)
+        hit_stop = str(row.get("已触止损") or "") == "是"
+        # 可执行=待卖出且真正有可卖股；T+1 / 可卖0 / 跌停封单 均不可执行
+        row["可执行"] = (
+            pos == "待卖出"
+            and (not t1)
+            and sellable > 0
+            and "不可卖" not in alert
+        )
+        if hit_stop and sellable <= 0 and "不可卖" not in alert and not t1:
+            row["可执行"] = False
+            if alert in ("", "-", "待卖出", "已触止损"):
+                row["预警"] = "已触止损·暂不可卖"
         return
 
     # 真·空仓
