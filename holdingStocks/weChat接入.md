@@ -138,6 +138,28 @@ copy wechat_notify.json.example wechat_notify.json
 
 `watch` 每次刷新行情后都会扫描；默认开启，可用 `--no-wechat` 关闭。
 
+### 盯盘启动套件（默认一体）
+
+`python index.py watch` 启动时自动：
+
+1. 检查/启动 **OpenClaw Gateway**
+2. **微信通道自检**（推送【盯盘预警·测试】）
+3. 自检通过后再进盯盘；服务起来后推送【盯盘启动完成】
+
+```powershell
+cd D:\Akquan\myquan\holdingStocks
+python index.py watch --interval 5 --port 8765 --no-open
+# 快捷脚本（会加载 Node24）：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start_watch.ps1
+```
+
+| 参数 | 作用 |
+|------|------|
+| `--no-wechat` | 完全关闭微信（不启 Gateway、不自检、不推送） |
+| `--skip-wechat-check` | 跳过启动自检，仍推送预警 |
+| `--wechat-optional` | 自检失败仍盯盘（自动关推送） |
+| `--restart-gateway` | 强制 `openclaw gateway restart` |
+
 复盘命令每次主动推送全文（不受预警 cooldown 限制），并写入 `market_review_latest.txt` / `.json`。
 
 ### 定时复盘（周一 / 周五 15:00）

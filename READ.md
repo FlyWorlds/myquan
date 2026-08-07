@@ -199,7 +199,7 @@ result = aq.run_backtest(
 - **策略同源**：`holdingStocks` 与 `strategy/open_break.py`（因子1）共用规则；架构上对应策略一绑定 + 决策意图，不另写买卖逻辑。
 - **合格池**：中证500 + 中证1000 筛选夏普 ≥ 1.0 且超额收益为正；明细见 `holdingStocks/README.md` / `backtest/universe_zz500_1000/`。
 - **行情（watch，P0-1 ✅）**：东财 SSE 优先，不健康时新浪批量兜底；页面经本地 `/ws` 推送，勿只开 `file://`。
-- **微信预警（P0-2 ✅）**：`watch` 默认推送【触发预警】/【接近预警】/【策略触发】等；依赖本机 OpenClaw Gateway，不走大模型。关闭：`--no-wechat`。
+- **微信预警（P0-2 ✅）**：`watch` 启动套件默认 **OpenClaw → 微信自检 → 盯盘**；盘中推送【触发预警】/【接近预警】/【策略触发】等。关闭：`--no-wechat`。
 - **行情复盘**：`python index.py review` 汇总大盘/账户/持仓/策略事件并推送【行情复盘】；本地写入 `market_review_latest.txt`。仅本地：`--no-wechat`。
 - **定时复盘**：周一、周五 **15:00**（`python index.py review-schedule install`）。
 - **自动结算**仅为盯盘记账，**不会下真实委托**。

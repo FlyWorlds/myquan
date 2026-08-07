@@ -16,7 +16,7 @@
 用法：
   python index.py              # 查看标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
-  python index.py watch        # 长驻：行情事件驱动刷新；每日09:26强制刷新盯盘开盘价
+  python index.py watch        # 一套：OpenClaw→微信自检→盯盘；每日09:26刷新开盘价
   python index.py buy 600552 15.50 400
   python index.py sell 600552 16.20 400
   python index.py set-cost 600552 15.95 --qty 400
@@ -473,54 +473,78 @@ def _apply_trigger_date_fields(
         and str(row.get("预警") or "") in EXIT_REASONS
     )
     mem = _factor_memory(code) if code else {}
-
-    # 触发瞬间：刚触发的一侧成为「已触发」，对侧今日因子成为「未触发」
-    just_sold = bool(hit_stop or sold_today or (pos_st == "待卖出" and hit_txt == "已触发"))
-    just_bought = bool(
-        allow_entry
-        and (hit_buy or (pos_st == "待买入" and hit_txt == "已触发"))
+    # 日线回放仍处「买入未平」：本地未登记仓位时，双距按策略持有展示（勿用更早的卖出因子）
+    paper_holding = bool(replay.get("holding")) and qty <= 0
+    row["策略回放持有"] = bool(paper_holding)
+    # 当日已止损/卖出：禁止再算买入侧（当天卖、当天不买）
+    stop_exit_today = bool(
+        sold_today
+        or (paper_holding and hit_stop)
+        or (qty > 0 and hit_stop)
     )
+    row["当日禁买"] = bool(stop_exit_today)
 
-    if just_sold and (qty > 0 or sold_today or pos_st == "待卖出"):
-        trig_side, next_side = "卖出", "买入"
-        trig_px = (
-            float(realized_px)
-            if realized_px is not None and float(realized_px) > 0
-            else (float(stop_lv) if stop_lv is not None else None)
-        )
-        next_px = float(buy_lv) if buy_lv is not None else None
-        if code and trig_px is not None:
-            remember_factor_trigger(code, side="sell", px=trig_px, session=session)
-    elif just_bought and qty <= 0:
-        trig_side, next_side = "买入", "卖出"
-        trig_px = float(buy_lv) if buy_lv is not None else None
-        next_px = float(stop_lv) if stop_lv is not None else None
-        if code and trig_px is not None:
-            remember_factor_trigger(code, side="buy", px=trig_px, session=session)
-    elif qty > 0:
-        # 持有中：已触发=持仓对应那次买入因子（绝不用今日买点冒充）
-        trig_side, next_side = "买入", "卖出"
+    def _last_buy_px() -> tuple[float | None, str]:
         buy_day = str(buy_time or "")[:10]
         sess_day = str(session)[:10]
         mem_buy = mem.get("last_buy_factor_px")
         mem_buy_day = str(mem.get("last_buy_factor_date") or "")[:10]
         hist_buy = replay.get("last_buy_px")
         hist_buy_day = str(replay.get("last_buy_date") or "")[:10]
-        trig_px = None
-        # 记忆必须对上持仓买入日，否则视为脏数据
         if mem_buy is not None and buy_day and mem_buy_day == buy_day:
-            trig_px = float(mem_buy)
-        elif hist_buy is not None:
-            trig_px = float(hist_buy)
-        elif mem_buy is not None and (not buy_day) and mem_buy_day != sess_day:
-            trig_px = float(mem_buy)
-        elif buy_day == sess_day and buy_lv is not None:
-            # 仅当日新买可用今日买点
-            trig_px = float(buy_lv)
+            return float(mem_buy), buy_day or mem_buy_day
+        if hist_buy is not None:
+            return float(hist_buy), hist_buy_day or buy_day
+        if mem_buy is not None and (not buy_day) and mem_buy_day != sess_day:
+            return float(mem_buy), mem_buy_day
+        if buy_day == sess_day and buy_lv is not None:
+            return float(buy_lv), buy_day
+        return None, buy_day or hist_buy_day or ""
+
+    # 触发瞬间
+    just_sold = bool(
+        stop_exit_today or (pos_st == "待卖出" and hit_txt == "已触发")
+    )
+    just_bought = bool(
+        allow_entry
+        and (not stop_exit_today)
+        and (hit_buy or (pos_st == "待买入" and hit_txt == "已触发"))
+    )
+
+    if just_sold and (qty > 0 or sold_today or paper_holding or pos_st == "待卖出"):
+        # 当日止损：已触发仍保留「上次买入价」；未触发=今日止损（已打到），不挂今日买点
+        trig_side, next_side = "买入", "卖出"
+        buy_px, buy_day = _last_buy_px()
+        trig_px = buy_px
         next_px = float(stop_lv) if stop_lv is not None else None
-        # 用持仓买入日因子固化/纠正记忆
+        sell_mem_px = (
+            float(realized_px)
+            if realized_px is not None and float(realized_px) > 0
+            else (float(stop_lv) if stop_lv is not None else None)
+        )
+        if code and sell_mem_px is not None and (qty > 0 or sold_today):
+            # 实仓结算才写入卖出记忆；纸面仅展示
+            remember_factor_trigger(code, side="sell", px=sell_mem_px, session=session)
+        if qty > 0 and code and buy_px is not None:
+            remember_factor_trigger(
+                code, side="buy", px=buy_px, session=buy_day or session, force=True
+            )
+    elif just_bought and qty <= 0 and not paper_holding:
+        trig_side, next_side = "买入", "卖出"
+        trig_px = float(buy_lv) if buy_lv is not None else None
+        next_px = float(stop_lv) if stop_lv is not None else None
         if code and trig_px is not None:
-            seed_sess = buy_day or hist_buy_day or sess_day
+            remember_factor_trigger(code, side="buy", px=trig_px, session=session)
+    elif qty > 0 or paper_holding:
+        # 持有中 / 策略回放持有：已触发=买入因子；未触发=今日止损
+        trig_side, next_side = "买入", "卖出"
+        trig_px, buy_day = _last_buy_px()
+        next_px = float(stop_lv) if stop_lv is not None else None
+        if qty > 0 and code and trig_px is not None:
+            hist_buy_day = str(replay.get("last_buy_date") or "")[:10]
+            seed_sess = buy_day or hist_buy_day or str(session)[:10]
+            mem_buy = mem.get("last_buy_factor_px")
+            mem_buy_day = str(mem.get("last_buy_factor_date") or "")[:10]
             need_fix = (
                 mem_buy is None
                 or (buy_day and mem_buy_day != buy_day)
@@ -531,7 +555,8 @@ def _apply_trigger_date_fields(
                     code, side="buy", px=trig_px, session=seed_sess, force=True
                 )
     else:
-        # 空仓：已触发=上次卖出因子；未触发=今日买点
+        # 真正空仓且非当日止损：已触发=上次卖出；未触发=今日买点
+        # 若当日刚止损过（sold_today 已在上方处理）；此处仅历史空仓
         trig_side, next_side = "卖出", "买入"
         mem_sell = mem.get("last_sell_factor_px")
         hist_sell = replay.get("last_sell_px")
@@ -545,6 +570,15 @@ def _apply_trigger_date_fields(
             trig_px = None
         next_px = float(buy_lv) if buy_lv is not None else None
 
+    # 当日禁买：未触发侧若是买入则清空（不展示下一买点）
+    if stop_exit_today and next_side == "买入":
+        next_side = "卖出"
+        next_px = float(stop_lv) if stop_lv is not None else next_px
+        if trig_side != "买入" or trig_px is None:
+            buy_px, _ = _last_buy_px()
+            if buy_px is not None:
+                trig_side, trig_px = "买入", buy_px
+
     _fill_dual_factor_dist(
         row,
         last_px=last_px,
@@ -555,25 +589,46 @@ def _apply_trigger_date_fields(
         next_px=next_px,
     )
 
-    # 盘中预警：已触发/接近 + 今日日期
-    if pos_st in ("待买入", "待卖出") and hit_txt in ("已触发", "接近"):
+    # 盘中预警：已触发/接近 + 今日日期（当日禁买不再进待买入文案）
+    if (
+        pos_st in ("待买入", "待卖出")
+        and hit_txt in ("已触发", "接近")
+        and not (stop_exit_today and pos_st == "待买入")
+    ):
         if hit_txt == "已触发" and today_md:
             row["因子触发"] = f"已触发 {today_md}"
         else:
             row["因子触发"] = hit_txt
         return
 
-    # 有仓：最近买入日（持仓 buy_time / 记忆 / 日线重放）
-    if qty > 0:
+    # 有仓 / 策略回放持有 / 当日止损后：展示买入日，止损日单独标注
+    if qty > 0 or paper_holding or stop_exit_today:
         md = (
             format_trigger_md(buy_time)
             or format_trigger_md(mem.get("last_buy_factor_date"))
             or format_trigger_md(replay.get("last_buy_date"))
         )
-        if hit_txt == "未触发" and md:
+        if stop_exit_today and today_md:
+            row["因子触发"] = f"策略止损 {today_md}"
+            if str(row.get("预警") or "") in ("", "-", "空仓", "待买入"):
+                row["预警"] = (
+                    "今日已止损·当日不买"
+                    if sold_today
+                    else "策略持有·今日触止损·当日不买"
+                )
+            # 强制不挂买单
+            row["建议挂单"] = None
+            row["近买点"] = False
+            if str(row.get("持仓状态") or "") == "待买入":
+                row["持仓状态"] = "空仓"
+            if str(row.get("因子侧") or "") == "买入":
+                row["因子侧"] = "空仓"
+        elif hit_txt == "未触发" and md:
             row["因子触发"] = md
         elif hit_txt == "不可用" and md:
             row["因子触发"] = f"不可用 {md}"
+        elif md:
+            row["因子触发"] = md
         return
 
     # 空仓：最近一次卖出因子日
@@ -1389,6 +1444,19 @@ def collect_rows(
             hit_buy_raw = q["high"] + 1e-12 >= lv["buy_trigger"]
             hit_buy = bool(allow_entry) and hit_buy_raw
             hit_stop = q["low"] <= lv["stop"] + 1e-12
+            # 当日止损/已结算卖出 → 禁止再买（纸面回放持有触止损同样禁买）
+            _realized_pre = realized_map.get(code)
+            _sold_today_pre = bool(
+                _realized_pre
+                and str(_realized_pre.get("session") or "") == q["session"]
+                and _realized_pre.get("reason") in EXIT_REASONS
+            )
+            _paper_hold = bool(replay.get("holding")) and int(
+                (positions.get(code) or {}).get("qty") or 0
+            ) <= 0
+            if _sold_today_pre or (_paper_hold and hit_stop):
+                allow_entry = False
+                hit_buy = False
             limit_state = limit_down_state(
                 prev_close=q.get("prev_close"),
                 open_px=float(q["open"]),
@@ -1494,7 +1562,10 @@ def collect_rows(
                         note += f"（回抽{float(rebound):+.2f}%）"
                 if la_show is not None:
                     note += f"；最低{float(la_show):.{px_digits}f}"
-                # 已清仓：因子侧/持仓状态按空仓规则重算（预警才标买入）
+                # 当日已卖出：禁止再买
+                allow_entry = False
+                hit_buy = False
+                # 已清仓：因子侧/持仓状态按空仓规则重算（当日不进待买入）
                 sig0 = strategy_signal(
                     open_px=q["open"],
                     high_px=q["high"],
@@ -1510,7 +1581,7 @@ def collect_rows(
                     stop_pct=stop_pct,
                     px_digits=px_digits,
                     t0=t0,
-                    allow_entry=allow_entry,
+                    allow_entry=False,
                 )
                 row0 = {
                         "市场": w["market"],
@@ -1535,12 +1606,12 @@ def collect_rows(
                         "阈值%": pct_pct,
                         "买点": lv["buy_trigger"],
                         "止损": lv["stop"],
-                        "已触买": "是" if (qty <= 0 and hit_buy) else "否",
+                        "已触买": "否",
                         "已触止损": "是" if hit_stop or reason == REASON_STOP else "否",
-                        "因子侧": sig0.get("因子侧"),
+                        "因子侧": "空仓",
                         "因子价": sig0.get("因子价"),
                         "因子触发": sig0.get("因子触发"),
-                        "持仓状态": sig0.get("持仓状态") or "空仓",
+                        "持仓状态": "空仓",
                         "已触发因子侧": sig0.get("已触发因子侧"),
                         "已触发因子价": sig0.get("已触发因子价"),
                         "未触发因子侧": sig0.get("未触发因子侧"),
@@ -1553,9 +1624,9 @@ def collect_rows(
                         "距因子%": sig0.get("距因子%"),
                         "形态": sig0.get("形态") or bar_shape(q["open"], q["last"]),
                         "预警": reason,
-                        "建议挂单": sig0.get("建议挂单"),
-                        "挂单说明": note,
-                        "近买点": bool(sig0.get("pending_buy")),
+                        "建议挂单": None,
+                        "挂单说明": note + "；当日已卖出不再买",
+                        "近买点": False,
                         "近止损": False,
                         "bg_class": sig0.get("bg_class") or "status-flat",
                         "持仓": 0,
@@ -1585,7 +1656,7 @@ def collect_rows(
                     qty=0,
                     replay=replay,
                     code=code,
-                    allow_entry=allow_entry,
+                    allow_entry=False,
                 )
                 rows.append(row0)
                 continue
@@ -1825,6 +1896,9 @@ def collect_rows(
             save_holdings(data)
         _save_alert_sticky(session_today, sticky)
 
+    for r in rows:
+        _finalize_position_row(r)
+
     total_mv = sum(
         float(r["市值"])
         for r in rows
@@ -1858,47 +1932,100 @@ def collect_rows(
     return sort_watch_rows(rows)
 
 
+def _finalize_position_row(row: dict[str, Any]) -> None:
+    """按策略一收敛持仓状态：T+1 / 当日禁买 / 策略回放持有 / 可执行。"""
+    if row.get("error"):
+        row["可执行"] = False
+        return
+    qty = int(row.get("持仓") or 0)
+    paper = bool(row.get("策略回放持有"))
+    no_buy = bool(row.get("当日禁买"))
+    alert = str(row.get("预警") or "")
+    pos = str(row.get("持仓状态") or "")
+    t1 = "T+1" in alert
+
+    if no_buy and qty <= 0:
+        row["持仓状态"] = "当日禁买"
+        row["因子侧"] = "空仓"
+        row["建议挂单"] = None
+        row["近买点"] = False
+        row["可执行"] = False
+        row["bg_class"] = "status-flat"
+        if alert in ("", "-", "空仓", "待买入"):
+            row["预警"] = "今日已止损·当日不买"
+        # 主展示价：保留上次买入触发价
+        if row.get("已触发因子侧") == "买入" and row.get("已触发因子价") is not None:
+            row["因子价"] = row["已触发因子价"]
+        return
+
+    if paper and qty <= 0:
+        row["持仓状态"] = "策略持有"
+        row["因子侧"] = "持有"
+        row["建议挂单"] = None
+        row["近买点"] = False
+        row["可执行"] = False
+        if alert in ("", "-", "空仓"):
+            row["预警"] = "策略回放持有·未登记仓"
+        # 下一动作是止损
+        if row.get("未触发因子侧") == "卖出" and row.get("未触发因子价") is not None:
+            row["因子价"] = row["未触发因子价"]
+        # 接近止损时标近止损，便于排序/推送
+        near_stop = bool(row.get("近止损"))
+        try:
+            stop_px = float(row.get("止损") or row.get("未触发因子价") or 0)
+            last = float(row.get("现价") or 0)
+            if stop_px > 0 and last > 0:
+                dist_pct = abs(last / stop_px - 1.0) * 100.0
+                if dist_pct <= float(NEAR_FACTOR_PCT) + 1e-12 or str(
+                    row.get("已触止损") or ""
+                ) == "是":
+                    near_stop = True
+                    row["近止损"] = True
+        except (TypeError, ValueError):
+            pass
+        row["bg_class"] = "warn-sell" if near_stop else "status-hold"
+        return
+
+    if qty > 0:
+        row["可执行"] = pos == "待卖出" and (not t1)
+        return
+
+    # 真·空仓
+    row["可执行"] = pos == "待买入"
+
+
 def sort_watch_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """展示排序：有持仓 → 预警/当日触发 → 其余；同档保持 WATCHLIST 原序。"""
+    """排序：待卖出 → 待买入 → 实仓持有 → 当日禁买/策略持有 → 空仓；同档 WATCHLIST 序。"""
     order = {_code_key(w["code"]): i for i, w in enumerate(WATCHLIST)}
 
-    def _is_alert(r: dict[str, Any]) -> bool:
-        pos_st = str(r.get("持仓状态") or "")
-        hit = str(r.get("因子触发") or "")
-        alert = str(r.get("预警") or "")
-        if pos_st in ("待买入", "待卖出"):
-            return True
-        if hit.startswith("已触发") or hit == "接近":
-            return True
+    def _tier(r: dict[str, Any]) -> int:
+        pos = str(r.get("持仓状态") or "")
+        qty = int(r.get("持仓") or 0)
+        if pos == "待卖出":
+            return 0
+        if pos == "待买入":
+            return 1
+        if qty > 0:
+            return 2
+        if pos in ("当日禁买", "策略持有"):
+            return 3
         if str(r.get("因子2动作") or "") in ("inject", "withdraw"):
-            return True
-        return any(
-            x in alert
-            for x in ("将买入", "将止损", "已触买", "已触发", "止损", "因子2")
-        )
+            return 4
+        return 5
 
     def _urgency(r: dict[str, Any]) -> int:
         hit = str(r.get("因子触发") or "")
-        alert = str(r.get("预警") or "")
-        pos_st = str(r.get("持仓状态") or "")
-        if pos_st == "待卖出" or "已触发" in hit or "已触" in alert:
+        pos = str(r.get("持仓状态") or "")
+        if pos == "待卖出" or hit.startswith("已触发") or hit.startswith("策略止损"):
             return 0
-        if hit == "接近" or "将" in alert or pos_st == "待买入":
+        if pos == "待买入" or hit == "接近" or r.get("近止损") or r.get("近买点"):
             return 1
         return 2
 
-    def key(r: dict[str, Any]) -> tuple[int, int, int, int]:
-        qty = int(r.get("持仓") or 0)
+    def key(r: dict[str, Any]) -> tuple[int, int, int]:
         code = _code_key(str(r.get("代码") or ""))
         idx = order.get(code, 10_000)
-        has_pos = 0 if qty > 0 else 1
-        alert = _is_alert(r)
-        if qty > 0:
-            # 持仓内：有卖出预警的更靠前
-            sub = 0 if alert else 1
-        else:
-            sub = 0 if alert else 1
-        return (has_pos, sub, _urgency(r) if alert else 9, idx)
+        return (_tier(r), _urgency(r), idx)
 
     return sorted(rows, key=key)
 
@@ -2057,8 +2184,22 @@ def write_html_report(
         bg = r.get("bg_class") or ""
         suggest_px = r.get("建议挂单")
         suggest_note = r.get("挂单说明") or ""
-        # 角标：持仓状态为主；附带策略明细（已触买/将止损/T+1 等）
-        if alert.startswith("持有"):
+        # 角标：持仓状态为主；附带策略明细（已触买/将止损/T+1/当日禁买 等）
+        if pos_status == "当日禁买":
+            badge_txt = alert if alert and alert not in ("空仓", "-") else "当日禁买"
+            badge_cls = "tag-flat"
+        elif pos_status == "策略持有":
+            if r.get("近止损") or "将止损" in alert or "止损" in alert:
+                badge_txt = (
+                    f"策略持有 · {alert}"
+                    if alert and alert not in ("策略回放持有·未登记仓",)
+                    else "策略持有 · 近止损"
+                )
+                badge_cls = "tag-alert"
+            else:
+                badge_txt = "策略持有"
+                badge_cls = "tag-hold"
+        elif alert.startswith("持有"):
             badge_txt = alert
             badge_cls = "tag-hold"
         elif pos_status == "持有":
@@ -2088,7 +2229,7 @@ def write_html_report(
         pdg = int(r.get("价位小数") or 2)
         qty_card = int(r.get("持仓") or 0)
         suggest_html = ""
-        # 待买入/待卖出：建议挂单=因子价；持有：展示卖出因子价（策略止损）
+        # 待买入/待卖出：建议挂单=因子价；持有/策略持有：展示卖出因子价（策略止损）
         factor_px_row = r.get("因子价")
         stop_px_row = r.get("止损")
         sell_factor_px = (
@@ -2109,14 +2250,17 @@ def write_html_report(
                 f'{" · " + escape(suggest_note) if suggest_note else ""}'
                 f"</div>"
             )
-        elif qty_card > 0 and sell_factor_px is not None and pos_status == "持有":
+        elif sell_factor_px is not None and pos_status in ("持有", "策略持有"):
             thr = r.get("阈值%")
             thr_txt = (
                 f"开盘−{float(thr):g}%"
                 if thr is not None
                 else f"开盘−{DEFAULT_PCT * 100:.1f}%"
             )
-            t1_note = " · T+1暂不可卖" if "T+1" in alert else " · 可预埋条件卖"
+            if pos_status == "策略持有":
+                t1_note = " · 未登记仓·仅策略参考"
+            else:
+                t1_note = " · T+1暂不可卖" if "T+1" in alert else " · 可预埋条件卖"
             suggest_html = (
                 f'<div class="suggest-order sensitive">'
                 f'卖出因子价 <strong>{_fmt_num(sell_factor_px, pdg)}</strong>'
@@ -2126,21 +2270,30 @@ def write_html_report(
         card_cls = f"card {bg}".strip()
         factor_side = str(r.get("因子侧") or "-")
         factor_px = r.get("因子价")
-        if factor_px is None and qty_card > 0:
+        if factor_px is None and (qty_card > 0 or pos_status == "策略持有"):
             factor_px = stop_px_row
         factor_hit = str(r.get("因子触发") or "-")
-        hit_live = factor_hit == "已触发" or str(factor_hit).startswith("已触发 ")
+        hit_live = (
+            factor_hit == "已触发"
+            or str(factor_hit).startswith("已触发 ")
+            or str(factor_hit).startswith("策略止损")
+        )
         near_live = factor_hit == "接近"
         hit_cls = (
             "tag-buy"
             if factor_side == "买入" and (hit_live or near_live)
             else (
                 "tag-sell"
-                if factor_side == "卖出" and (hit_live or near_live)
+                if (factor_side == "卖出" or pos_status == "策略持有")
+                and (hit_live or near_live or r.get("近止损"))
                 else (
                     "tag-flat"
-                    if factor_hit.startswith("不可用")
-                    else ("tag-hold" if factor_side == "持有" or factor_hit not in ("-", "未触发", "") else "")
+                    if factor_hit.startswith("不可用") or pos_status == "当日禁买"
+                    else (
+                        "tag-hold"
+                        if factor_side == "持有" or factor_hit not in ("-", "未触发", "")
+                        else ""
+                    )
                 )
             )
         )
@@ -2157,28 +2310,31 @@ def write_html_report(
                 )
             )
         )
-        # 有仓：因子价即卖出止损价，价格用卖出色标示
-        factor_px_cls = (
-            "tag-sell"
-            if qty_card > 0 and factor_px is not None
-            else side_cls
-        )
-        factor_px_label = (
-            "卖出因子价"
-            if qty_card > 0
-            else ("买入因子价" if pos_status in ("待买入", "空仓") else "因子价")
-        )
+        # 有仓/策略持有：因子价即卖出止损价；当日禁买：展示上次买入因子价
+        if qty_card > 0 or pos_status == "策略持有":
+            factor_px_cls = "tag-sell"
+            factor_px_label = "卖出因子价"
+        elif pos_status == "当日禁买":
+            factor_px_cls = "tag-buy"
+            factor_px_label = "买入因子价"
+        elif pos_status in ("待买入", "空仓"):
+            factor_px_cls = side_cls
+            factor_px_label = "买入因子价"
+        else:
+            factor_px_cls = side_cls
+            factor_px_label = "因子价"
         pos_cls = (
             "tag-hold"
-            if pos_status == "持有"
+            if pos_status in ("持有", "策略持有")
             else (
                 "tag-alert"
                 if pos_status in ("待卖出", "待买入")
-                else ("tag-flat" if pos_status == "空仓" else "")
+                else ("tag-flat" if pos_status in ("空仓", "当日禁买") else "")
             )
         )
-        trig_side = str(r.get("已触发因子侧") or ("买入" if qty_card > 0 else "卖出"))
-        next_side = str(r.get("未触发因子侧") or ("卖出" if qty_card > 0 else "买入"))
+        paper_like = qty_card > 0 or pos_status in ("策略持有", "当日禁买")
+        trig_side = str(r.get("已触发因子侧") or ("买入" if paper_like else "卖出"))
+        next_side = str(r.get("未触发因子侧") or ("卖出" if paper_like else "买入"))
         trig_ref = r.get("已触发因子价")
         next_ref = r.get("未触发因子价")
         d_trig_px = r.get("距已触发价差")
@@ -2701,13 +2857,14 @@ def write_html_report(
       策略锁定 {STRATEGY_NAME}（与 strategy1 bindings 同源）。
       因子1：买卖点/止损；卖出仅止损全清。
       因子2：按账户总资产年内回撤建议追加/提出（摘要见合计区；不自动改现金）。
-      持仓状态：待买入=空仓且进入买入预警带；待卖出=有仓且进入止损预警；否则空仓或持有。
-      卡片排序：有持仓 → 预警/当日触发 → 其余（同档按夏普序）。
-      因子侧：待卖出预警→卖出；待买入预警→买入；其余→持有或空仓。
-      因子触发：盘中预警写「已触发 M/D」；否则为最近一次因子触发日（无年份）。
+      持仓状态：待买入 / 待卖出 / 持有 / 空仓；策略回放未登记=策略持有；当日止损后=当日禁买。
+      规则：T+1当日不卖；持有仅−2.5%止损卖；止损/卖出当日不买。
+      卡片排序：待卖出 → 待买入 → 实仓持有 → 当日禁买/策略持有 → 空仓。
+      因子侧：待卖出预警→卖出；待买入预警→买入；策略持有→持有；其余→空仓。
+      因子触发：盘中预警写「已触发 M/D」；止损日写「策略止损 M/D」；否则最近因子日。
       距已触发/未触发：因子一旦触发即自动翻转，并写入 factor_memory。
-      因子价=买点（空仓预警）或止损价；持有态额外展示「卖出因子价」=开盘−阈值止损。
-      |距未触发%|≤{NEAR_FACTOR_PCT:g}% → 将买入/将止损。
+      因子价：空仓/待买入=买点；持有/策略持有=止损价；当日禁买=上次买入因子价。
+      |距未触发%|≤{NEAR_FACTOR_PCT:g}% → 将买入/将止损。微信仅推可执行/止损/因子2。
       {watch_hint}
     </p>
   </div>
@@ -3467,12 +3624,42 @@ def cmd_review_schedule(args: argparse.Namespace) -> None:
 
 
 def cmd_watch(args: argparse.Namespace) -> None:
-    """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。"""
+    """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。
+
+    默认与微信套件一体：先启动 OpenClaw Gateway → 微信自检 → 再盯盘。
+    """
     global _ws_hub
     interval = max(2, int(args.interval))
     host = str(args.host)
     port = int(args.port)
     wechat = not bool(getattr(args, "no_wechat", False))
+    skip_wechat_check = bool(getattr(args, "skip_wechat_check", False))
+    wechat_optional = bool(getattr(args, "wechat_optional", False))
+
+    if wechat and not skip_wechat_check:
+        print("=" * 48)
+        print("盯盘启动套件：OpenClaw → 微信自检 → 盯盘")
+        print("=" * 48)
+        try:
+            from wechat_notify import prepare_wechat_for_watch
+
+            ok, detail = prepare_wechat_for_watch(
+                restart_gateway=bool(getattr(args, "restart_gateway", False)),
+            )
+        except Exception as e:  # noqa: BLE001
+            ok, detail = False, str(e)
+        if not ok:
+            print(f"[{_now()}] 微信套件失败:\n{detail[:600]}")
+            if wechat_optional:
+                print(f"[{_now()}] --wechat-optional：继续盯盘，但关闭微信推送")
+                wechat = False
+            else:
+                print(
+                    "中止盯盘。修好通道后重试；或临时："
+                    "watch --wechat-optional / --skip-wechat-check / --no-wechat"
+                )
+                raise SystemExit(1)
+
     open_h, open_m = _parse_hhmm(
         getattr(args, "open_at", None)
         or f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}"
@@ -3727,7 +3914,22 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument(
         "--no-wechat",
         action="store_true",
-        help="关闭微信预警推送",
+        help="关闭微信（不启 OpenClaw、不自检、不推送）",
+    )
+    w.add_argument(
+        "--skip-wechat-check",
+        action="store_true",
+        help="跳过启动时的 OpenClaw/微信自检（仍推送预警）",
+    )
+    w.add_argument(
+        "--wechat-optional",
+        action="store_true",
+        help="微信套件失败时仍启动盯盘（自动关推送）",
+    )
+    w.add_argument(
+        "--restart-gateway",
+        action="store_true",
+        help="启动套件里强制 restart OpenClaw Gateway",
     )
     w.set_defaults(func=cmd_watch)
 

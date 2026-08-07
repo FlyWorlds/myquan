@@ -14,24 +14,8 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_FILE = ROOT / "wechat_notify.json"
 STATE_FILE = ROOT / "wechat_alert_state.json"
 
-# 持仓状态 / 预警文案命中即视为可推送（与页面「预警带」一致）
+# 仅可执行持仓状态（空仓「已触买」无待买入、无仓噪音不推）
 _PUSH_POS = frozenset({"待买入", "待卖出"})
-_PUSH_ALERT_KEYS = (
-    "已触买",
-    "将买入",
-    "已触止损",
-    "将止损",
-    "待买入",
-    "待卖出",
-    "将卖出",
-    "止损成交",
-    "阴线收盘卖",
-    "低开945未翻红",
-    "因子2",
-    "建议追加",
-    "建议提出",
-)
-_PUSH_HIT = frozenset({"接近", "已触发"})
 
 _DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -94,33 +78,44 @@ def _save_state(state: dict[str, Any]) -> None:
 
 
 def is_alert_row(row: dict[str, Any]) -> bool:
-    """触发预警 / 接近预警 / 策略结算 / 因子2，均推送（对齐页面预警判定）。"""
+    """仅推可执行/需动作信号：待买待卖、实仓止损、策略止损、结算、因子2。"""
     pos = str(row.get("持仓状态") or "")
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
-    near_buy = bool(row.get("近买点"))
-    near_stop = bool(row.get("近止损"))
+    qty = int(row.get("持仓") or 0)
     f2_act = str(row.get("因子2动作") or "")
 
-    # 1) 卡片持仓状态进入预警带
+    # 1) 待买入 / 待卖出（含接近带）
     if pos in _PUSH_POS:
         return True
-    # 2) 因子触发：已触发（含「已触发 M/D」）或接近 → 一律推
-    if hit in _PUSH_HIT or hit.startswith("已触发") or hit.startswith("接近"):
+    if bool(row.get("可执行")):
         return True
-    # 3) 预警文案（已触买/将买入/将止损/止损成交…）
-    if any(k in alert for k in _PUSH_ALERT_KEYS):
+    # 2) 当日禁买：止损后当日一次（防空仓反复刷「已触买」）
+    if pos == "当日禁买" and (
+        hit.startswith("策略止损")
+        or "止损" in alert
+        or bool(row.get("已实现"))
+    ):
         return True
-    # 4) 行情触及列
-    if str(row.get("已触买") or "") == "是" or str(row.get("已触止损") or "") == "是":
+    # 3) 策略持有（未登记）：接近/触及止损才推
+    if pos == "策略持有" and (
+        bool(row.get("近止损"))
+        or str(row.get("已触止损") or "") == "是"
+        or hit.startswith("策略止损")
+        or "将止损" in alert
+    ):
         return True
-    # 5) 页面「近买点 / 近止损」角标
-    if near_buy or near_stop:
+    # 4) 实仓：近止损 / 已触止损（状态尚未翻到待卖出时兜底）
+    if qty > 0 and (
+        bool(row.get("近止损"))
+        or str(row.get("已触止损") or "") == "是"
+        or "将止损" in alert
+    ):
         return True
-    # 6) 策略自动结算锁定
+    # 5) 策略自动结算
     if row.get("已实现") and alert:
         return True
-    # 7) 因子2 追加/提出建议
+    # 6) 因子2 追加/提出
     if f2_act in ("inject", "withdraw"):
         return True
     return False
@@ -143,25 +138,38 @@ def _alert_key(row: dict[str, Any]) -> str:
 
 def _message_title(row: dict[str, Any]) -> str:
     f2_act = str(row.get("因子2动作") or "")
+    pos = str(row.get("持仓状态") or "")
     if f2_act == "inject":
         return "【因子2追加】"
     if f2_act == "withdraw":
         return "【因子2提出】"
     if row.get("已实现"):
         return "【策略触发】"
+    if pos == "当日禁买" or str(row.get("因子触发") or "").startswith("策略止损"):
+        return "【策略止损】"
     hit = str(row.get("因子触发") or "")
     alert = str(row.get("预警") or "")
+    qty = int(row.get("持仓") or 0)
+    stop_hit = str(row.get("已触止损")) == "是" and (
+        qty > 0 or pos in ("待卖出", "策略持有", "当日禁买")
+    )
     if (
         hit.startswith("已触发")
         or "已触" in alert
-        or str(row.get("已触买")) == "是"
-        or str(row.get("已触止损")) == "是"
+        or (pos == "待买入" and str(row.get("已触买")) == "是")
+        or stop_hit
     ):
         return "【触发预警】"
-    if hit.startswith("接近") or hit == "接近" or "将" in alert or row.get("近买点") or row.get(
-        "近止损"
+    if (
+        hit.startswith("接近")
+        or hit == "接近"
+        or "将" in alert
+        or (pos == "待买入" and row.get("近买点"))
+        or (pos in ("待卖出", "持有", "策略持有") and row.get("近止损"))
     ):
         return "【接近预警】"
+    if pos in _PUSH_POS:
+        return "【盯盘预警】"
     return "【盯盘预警】"
 
 
@@ -416,18 +424,26 @@ def notify_watch_rows(
     for row in rows:
         if row.get("error"):
             continue
-        # 个股预警：排除「仅因子2」重复刷屏（账户级单独推）
-        f2_only = str(row.get("因子2动作") or "") in ("inject", "withdraw") and not (
-            str(row.get("持仓状态") or "") in _PUSH_POS
-            or str(row.get("因子触发") or "").startswith(("已触发", "接近"))
-            or any(k in str(row.get("预警") or "") for k in _PUSH_ALERT_KEYS if k != "因子2")
-            or str(row.get("已触买")) == "是"
-            or str(row.get("已触止损")) == "是"
-            or row.get("近买点")
-            or row.get("近止损")
-            or row.get("已实现")
+        # 个股行：因子2仅账户级推一次，这里跳过「纯因子2」行
+        pos = str(row.get("持仓状态") or "")
+        f2_act = str(row.get("因子2动作") or "")
+        stock_signal = (
+            pos in _PUSH_POS
+            or bool(row.get("可执行"))
+            or pos in ("当日禁买", "策略持有")
+            or (
+                int(row.get("持仓") or 0) > 0
+                and (
+                    bool(row.get("近止损"))
+                    or str(row.get("已触止损") or "") == "是"
+                    or "将止损" in str(row.get("预警") or "")
+                )
+            )
+            or bool(row.get("已实现"))
         )
-        if f2_only or not is_alert_row(row):
+        if f2_act in ("inject", "withdraw") and not stock_signal:
+            continue
+        if not is_alert_row(row):
             continue
         key = _alert_key(row)
         active_keys.add(key)
@@ -516,6 +532,126 @@ def send_test_alert(*, config: dict[str, Any] | None = None) -> tuple[bool, str]
         f"时间: {_now()}"
     )
     return send_text(msg, config=cfg)
+
+
+def _run_openclaw_cli(
+    cli_args: list[str],
+    *,
+    config: dict[str, Any] | None = None,
+    timeout: float = 90,
+) -> tuple[int, str]:
+    """跑 openclaw 子命令（经 node+mjs，兼容 Windows .cmd）。"""
+    cfg = config or load_config()
+    openclaw_bin = str(cfg.get("openclaw_bin") or "openclaw")
+    env = _env_with_node(cfg)
+    exe, prefix = _resolve_openclaw_node(openclaw_bin, env)
+    # prefix 非空：node + openclaw.mjs + cli；否则直接 openclaw.cmd/bin
+    cmd = [exe, *prefix, *cli_args] if prefix else [openclaw_bin, *cli_args]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            env=env,
+        )
+    except FileNotFoundError:
+        return 127, "找不到 openclaw/node"
+    except subprocess.TimeoutExpired:
+        return 124, f"openclaw {' '.join(cli_args)} 超时"
+    out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+    return int(proc.returncode), out
+
+
+def gateway_reachable(*, config: dict[str, Any] | None = None) -> tuple[bool, str]:
+    """探测 Gateway 是否可连（gateway status）。"""
+    code, out = _run_openclaw_cli(
+        ["gateway", "status"], config=config, timeout=60
+    )
+    text = out or ""
+    ok = (
+        code == 0
+        and (
+            "Connectivity probe: ok" in text
+            or "Runtime: running" in text
+            or "listening" in text.lower()
+        )
+    )
+    return ok, text
+
+
+def ensure_openclaw_gateway(
+    *,
+    config: dict[str, Any] | None = None,
+    restart: bool = False,
+) -> tuple[bool, str]:
+    """确保 OpenClaw Gateway 在跑；必要时 start / restart。"""
+    cfg = config or load_config()
+    if not restart:
+        ok, detail = gateway_reachable(config=cfg)
+        if ok:
+            return True, "Gateway 已在运行"
+
+    action = "restart" if restart else "start"
+    print(f"[{_now()}] OpenClaw Gateway {action}…")
+    code, out = _run_openclaw_cli(
+        ["gateway", action], config=cfg, timeout=120
+    )
+    # start/restart 后稍等再探测
+    deadline = time.time() + 45
+    last = out
+    while time.time() < deadline:
+        time.sleep(2.0)
+        ok, last = gateway_reachable(config=cfg)
+        if ok:
+            return True, f"Gateway {action} 成功"
+    # 再试一次 restart
+    if action == "start":
+        print(f"[{_now()}] Gateway 未就绪，尝试 restart…")
+        _run_openclaw_cli(["gateway", "restart"], config=cfg, timeout=120)
+        time.sleep(4.0)
+        ok, last = gateway_reachable(config=cfg)
+        if ok:
+            return True, "Gateway restart 成功"
+    return False, last or out or f"gateway {action} 失败 (exit={code})"
+
+
+def prepare_wechat_for_watch(
+    *,
+    config: dict[str, Any] | None = None,
+    send_test: bool = True,
+    restart_gateway: bool = False,
+) -> tuple[bool, str]:
+    """盯盘启动套件：OpenClaw Gateway → 微信通道自检。
+
+    返回 (ok, detail)。失败时 detail 含原因，供调用方决定是否中止。
+    """
+    cfg = config or load_config()
+    if not bool(cfg.get("enabled", True)):
+        return False, "wechat_notify.json enabled=false"
+
+    print(f"[{_now()}] [1/2] 检查/启动 OpenClaw Gateway…")
+    ok, detail = ensure_openclaw_gateway(config=cfg, restart=restart_gateway)
+    if not ok:
+        return False, f"OpenClaw Gateway 不可用: {detail[:400]}"
+    print(f"[{_now()}] OpenClaw Gateway OK")
+
+    if not send_test:
+        return True, detail
+
+    print(f"[{_now()}] [2/2] 微信通道自检…")
+    ok2, detail2 = send_test_alert(config=cfg)
+    if not ok2:
+        tip = (
+            "微信自检失败。若 prepare failed：请先给机器人发一条消息建立会话，"
+            "或重新 openclaw channels login --channel openclaw-weixin"
+        )
+        return False, f"{detail2[:350]}\n{tip}"
+    print(f"[{_now()}] 微信通道自检成功")
+    return True, detail2
 
 
 def send_startup_message(
