@@ -1,77 +1,95 @@
-# strategy — OpenBreak3 开盘±pct
+# strategy — 可插拔策略 / 因子 / 决策框架
 
-## 结构
+默认生效：**策略一 = 因子1（开盘±2.5% 买卖）+ 因子2（回撤阶梯补仓）**。
+
+- 决策/盯盘买卖只看因子1；因子2 在 `run_strategy1` 里叠权益。
+- 仅因子1交易：`run_open_break` 或 `python strategy1.py --no-factor2`。
+- **开闭调参**：改 `bindings.py` / `BacktestConfig` / `DEFAULT_*`，不必改算法。
+
+## 分层架构
+
+```
+因子层 (factors)     → 价位 / 信号 / 通用过滤（可复用）
+策略层 (bindings)    → 本策略挂哪些因子、参数、专属过滤器
+决策层 (decision)    → MarketContext → Decision(buy|sell|hold)
+执行层 (runner/backtest) → 下单、回测、盯盘对接
+```
 
 ```
 strategy/
-├── open_break.py        # 规则与盯盘信号
-├── backtest.py          # OpenBreak3Strategy + 报告摘要
-├── config.py            # BacktestConfig、标的预设
-├── runner.py            # run_open_break（实例传参 + pipeline）
-├── data.py              # 日线拉取（个股/ETF、缓存校验）
-├── minute.py            # 通用分钟线工具
-├── base.py              # akquant 回测骨架
-└── registry.py          # 策略注册（仅 open_break3）
-
-backtest/
-├── run.py                 # 统一 CLI：python run.py kaicheng
-└── strategy1.py           # 薄封装
+├── core/                 # 协议 / MarketContext / Decision / 注册表
+├── factors/
+│   ├── factor1.py        # 开盘突破 ±pct（买卖真源 open_break.py）
+│   ├── factor2.py        # 回撤阶梯补仓（真源 dd_topup.py）
+│   └── factor3.py        # 占位
+├── strategies/
+│   ├── strategy1/        # 默认：factor1 + factor2
+│   └── strategy2…4/      # 骨架（同因子不同 params）
+├── open_break.py         # 因子1 默认百分比 / 规则
+├── dd_topup.py           # 因子2 默认档位·加仓比例 / 规则
+├── backtest.py / runner.py / config.py
+└── registry.py
 ```
 
-## 当前生效策略（因子1 · 唯一在用）
+## 默认参数在哪改（开闭）
 
-默认阈值 **±2.5%**。买卖均相对当日开盘（买入另有前日过滤）。
-
-**买**
-
-- 触发：`high ≥ ceil(open × 1.025)`，按触发价限价，仓位约 95%
-- 过滤：前一日为阴线，或小阳（收盘涨幅严格 &lt; 2.5%）；且前面不能连续两根阳线
-- T+1：买入当日不可卖（ETF 可设 `t0=True`）
-
-**卖（优先级从高到低）**
-
-1. 开盘 −2.5% 止损 → **全清**
-2. 未触止损 → 无论阴线、阳线或十字均继续持有
-
-低开定时退出、阴线收盘退出、减半、回撤仓位和同日再买代码均已从生效路径移除。
-
-## 用法
+| 项 | 默认源 | 策略覆盖 |
+|----|--------|----------|
+| 因子1 ±pct、双阳跨日 | `open_break.DEFAULT_*` | `strategy1/bindings` / `BacktestConfig.threshold_pct` 等 |
+| 因子2 档位、每档加仓% | `dd_topup.DEFAULT_LEVELS` / `DEFAULT_ADD_PCT` | bindings 或 `BacktestConfig.factor2_*` |
 
 ```python
 from dataclasses import replace
-from pathlib import Path
-from strategy import BacktestConfig, run_open_break
+from strategy import KAICHENG, run_strategy1
 
-cfg = BacktestConfig(
-    symbol="sh600552",
-    symbol_name="凯盛科技",
-    em_symbol="600552",
-    report_path=Path("凯盛科技_report.html"),
-)
-run_open_break(cfg, show_report=True)
+# 只改因子2加仓比例，不动算法
+run_strategy1(replace(KAICHENG, factor2_add_pct=0.12), show_report=False)
 ```
 
-日线默认缓存至项目根目录的 `data_cache/`：首次全量拉取，后续仅向 AkShare 补齐缓存范围外的已收盘日期。前复权价格会在除权除息后重算历史，需全量同步时：
+## 决策层用法
 
 ```python
-run_open_break(cfg, force_daily_refresh=True)
+from strategy import MarketContext, get_decision_engine
+
+eng = get_decision_engine("strategy1")
+ctx = MarketContext(
+    open=10.0, high=10.4, low=9.8, close=10.3, last=10.3,
+    prev_open=10.1, prev_close=9.9,
+    position_qty=0,
+)
+print(eng.decide(ctx).action)
 ```
+
+## 因子绑定
+
+```python
+from strategy import get_strategy_bindings
+
+for b in get_strategy_bindings("strategy1"):
+    print(b.factor_id, b.params, b.filter_desc)
+# factor1 …  | factor2 add_pct/levels …
+```
+
+## 回测 CLI
 
 ```bash
 cd backtest && python strategy1.py --rules
+cd backtest && python strategy1.py --no-open
+cd backtest && python strategy1.py --no-factor2 --no-open   # 仅因子1
+cd backtest && python run.py kaicheng --no-open
 ```
 
-## 离线规则回归测试
+## 如何扩展（开闭）
 
-以下命令不访问 AkShare，也不运行完整历史回测；它只验证价格取整、T+1、跌停状态和日线缓存增量逻辑：
+1. **新因子**：`factors/factorN.py` + `register_factor`，策略 bindings 挂上即可  
+2. **改百分比**：只改 `DEFAULT_*` 或该策略 `bindings` / `BacktestConfig`  
+3. **新策略组合**：新 `strategies/strategyN`，复用已有因子、换 params  
 
-```bash
-python -m unittest -v test_strategy_rules.py
-```
+## 兼容
 
-注册表：
-
-```python
-from strategy.registry import get_strategy
-get_strategy("open_break3").run(get_strategy("open_break3").default_config)
-```
+| 旧 API | 说明 |
+|--------|------|
+| `get_strategy("open_break3")` | → strategy1 |
+| `run_open_break` | **仅因子1交易**（不含因子2叠加） |
+| `run_strategy1` | 因子1 + 因子2（默认） |
+| `OpenBreak3Strategy` | = Strategy1 执行类 |

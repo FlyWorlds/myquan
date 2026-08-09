@@ -1,0 +1,103 @@
+冷启动：拉取开盘/分钟线并 seed…
+[2026-08-06 09:28:16] SSE 不健康，启用新浪批量兜底
+[2026-08-06 09:28:16] 行情源已启动: SSE×11 + 新浪批量兜底 (sz001389, sh600552, sh603083, sh601208, sh603306, sz002335, sz001339, sz002636, sh600105, sz000880, sh600330)
+[2026-08-06 09:28:16] SSE sh603306 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603306&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:16] SSE sz002335 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002335&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:16] SSE sh600330 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600330&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:16] SSE sh600105 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600105&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:16] SSE sz000880 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.000880&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:16] SSE sz002636 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002636&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:16] SSE sz001339 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.001339&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:16] SSE sh600552 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600552&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:16] SSE sz001389 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.001389&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:17] SSE sh603083 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603083&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:17] SSE sh601208 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:18] SSE sh600552 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600552&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:18] SSE sh600330 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600330&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:18] SSE sh600105 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600105&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:18] SSE sz000880 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.000880&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:18] SSE sz001389 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.001389&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:18] SSE sz001339 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.001339&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:18] SSE sh603306 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603306&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:18] SSE sz002335 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002335&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:18] SSE sh601208 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))[2026-08-06 09:28:18] SSE sz002636 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002636&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+
+[2026-08-06 09:28:18] SSE sh603083 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603083&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-08-06 09:28:20] SSE 已连接 sh600552 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sh600330 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sz001389 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sz000880 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sh600105 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sz001339 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sh601208 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sz002335 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sz002636 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sh603083 via push2delay.eastmoney.com
+[2026-08-06 09:28:20] SSE 已连接 sh603306 via push2delay.eastmoney.com
+报告已生成: D:\Akquan\myquan\holdingStocks\holdings_report.html
+[2026-08-06 09:28:20] 下次开盘价刷新 001389 / 600552 / 603083 / 601208 / 603306 / 002335 / 001339 / 002636 / 600105 / 000880 / 600330 @ 2026-08-07 09:26:00（约 86260s）
+盯盘服务已启动: http://127.0.0.1:8765/holdings_report.html
+本地 WebSocket: ws://127.0.0.1:8765/ws
+策略同步: 因子1 ±2.5% · 仅止损全清
+行情: 东财 SSE + 新浪批量兜底 · 刷新节流≥1s · 无行情保底 5s · Ctrl+C 停止
+开盘价定时: 每日 09:26 刷新盯盘标的 (001389 / 600552 / 603083 / 601208 / 603306 / 002335 / 001339 / 002636 / 600105 / 000880 / 600330)
+展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）
+[2026-08-06 09:28:21] 行情已更新 → holdings_report.html
+[2026-08-06 09:28:21] SSE 恢复，暂停新浪批量兜底
+[2026-08-06 09:28:27] 行情已更新 → holdings_report.html
+[2026-08-06 09:28:33] 行情已更新 → holdings_report.html
+[2026-08-06 09:28:37] SSE 不健康，启用新浪批量兜底
+[2026-08-06 09:28:40] 行情已更新 → holdings_report.html
+[2026-08-06 09:28:46] 行情已更新 → holdings_report.html
+[2026-08-06 09:28:51] 行情已更新 → holdings_report.html
+[2026-08-06 09:28:57] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:03] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:09] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:17] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:22] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:27] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:33] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:39] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:44] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:51] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:56] 行情已更新 → holdings_report.html
+[2026-08-06 09:29:59] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:00] SSE 恢复，暂停新浪批量兜底
+[2026-08-06 09:30:00] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:01] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:02] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:09] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:09] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:10] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:12] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:13] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:14] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:15] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:16] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:17] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:20] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:21] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:24] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:24] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:26] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:27] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:28] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:29] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:30] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:31] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:32] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:34] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:35] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:36] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:39] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:39] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:41] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:42] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:43] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:44] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:45] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:47] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:48] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:49] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:50] 行情已更新 → holdings_report.html
+[2026-08-06 09:30:51] 行情已更新 → holdings_report.html

@@ -22,7 +22,10 @@ STRATEGY_RULES = """
   触发：当日最高价 >= ceil(开盘价 × (1 + 阈值))，按触发价限价买入，仓位约 95%。
   过滤（须同时满足）：
     · 前一日为阴线，或「小阳」：收盘涨幅严格 < 阈值（收盘 < 开盘×(1+阈值)）
-    · 前一日之前不能连续两根阳线（禁「前面双阳」）
+    · 禁「前面双阳且跨日≥5%」：
+        前前日、前日均为阳线，且 前日收盘/前前日开盘 - 1 ≥ 5% → 今日不买
+        （弱双阳跨日不足 5% 不禁；不另设单阳禁买，大阳已由「阴/小阳」过滤）
+    · 阳线定义：收盘至少比开盘高 1 个最小价位；十字（开≈收）不算阳、也不算阴
   T+1：A 股买入当日不可卖（ETF 可设 t0=True 当日可卖）。
 
 【有仓 · 卖出】优先级从高到低（买入当日不卖，除非 t0）：
@@ -38,6 +41,10 @@ STRATEGY_RULES = """
 
 【费用假设（回测默认）】
   · 佣金万 0.854；卖出印花税 0.1%；滑点 0.1%
+
+【说明】
+  · 以上为因子1（开盘突破）规则。策略一默认另叠因子2（回撤阶梯补仓），
+    完整组合规则：get_strategy("strategy1").print_rules()
 ================================================================================
 """
 
@@ -47,6 +54,11 @@ ENTRY_PCT = DEFAULT_PCT
 STOP_PCT = DEFAULT_PCT
 PREV_SMALL_YANG_PCT = 0.025
 TICK_SIZE = 0.01
+# 核心双阳过滤：第一根阳开盘 → 第二根阳收盘，涨幅≥该阈值才禁买
+DEFAULT_BAN_DOUBLE_YANG = True
+DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT = 0.05
+DEFAULT_DOUBLE_YANG_COMBINED_MODE = "span"  # span | sum_body
+DEFAULT_BAN_SINGLE_YANG = False
 LOT_SIZE = 100
 # 盯盘：|现价/因子价−1|×100 ≤ 此值 →「将买入/将止损」
 NEAR_POINTS = 1.0
@@ -208,13 +220,18 @@ def replay_last_factor_triggers(
             prev_small_yang_pct=entry_pct,
             prev_entry_mode=prev_entry_mode,
         )
-        double = False
+        blocked = False
         if prev2 is not None:
-            double = has_double_yang_before(
+            blocked = should_block_entry_by_yang(
                 float(prev2["open"]),
                 float(prev2["close"]),
                 float(prev["open"]),
                 float(prev["close"]),
+                tick=tick,
+                ban_double_yang=DEFAULT_BAN_DOUBLE_YANG,
+                ban_single_yang=DEFAULT_BAN_SINGLE_YANG,
+                double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+                double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
             )
 
         if holding:
@@ -244,7 +261,7 @@ def replay_last_factor_triggers(
                 continue
             continue
 
-        if allows and (not double) and (h + 1e-12 >= buy_px):
+        if allows and (not blocked) and (h + 1e-12 >= buy_px):
             out["last_buy_date"] = day.date()
             out["last_buy_px"] = float(buy_px)
             holding = True
@@ -272,35 +289,65 @@ def entry_filters_ok(
     *,
     entry_pct: float = DEFAULT_PCT,
     prev_entry_mode: str = "yin_or_small_yang",
+    tick: float = TICK_SIZE,
+    ban_double_yang: bool = DEFAULT_BAN_DOUBLE_YANG,
+    ban_single_yang: bool = DEFAULT_BAN_SINGLE_YANG,
+    yang_min_pct: float = 0.0,
+    double_yang_second_min_pct: float | None = None,
+    double_yang_combined_min_pct: float | None = DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+    double_yang_combined_mode: str = DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+    single_yang_min_pct: float | None = None,
 ) -> bool:
-    """今日是否允许开仓（前日阴/小阳 + 禁前面双阳）。"""
-    if prev_open is None or prev_close is None:
-        return False
-    if not prev_day_allows_entry(
-        float(prev_open),
-        float(prev_close),
-        prev_small_yang_pct=entry_pct,
-        prev_entry_mode=prev_entry_mode,
+    """今日是否允许开仓（前日阴/小阳 + 双阳跨日过滤；十字不算阳）。"""
+    if prev_entry_mode != "any":
+        if prev_open is None or prev_close is None:
+            return False
+        if not prev_day_allows_entry(
+            float(prev_open),
+            float(prev_close),
+            prev_small_yang_pct=entry_pct,
+            prev_entry_mode=prev_entry_mode,
+            tick=tick,
+        ):
+            return False
+    if should_block_entry_by_yang(
+        prev2_open,
+        prev2_close,
+        prev_open,
+        prev_close,
+        tick=tick,
+        ban_double_yang=ban_double_yang,
+        ban_single_yang=ban_single_yang,
+        yang_min_pct=yang_min_pct,
+        double_yang_second_min_pct=double_yang_second_min_pct,
+        double_yang_combined_min_pct=double_yang_combined_min_pct,
+        double_yang_combined_mode=double_yang_combined_mode,
+        single_yang_min_pct=single_yang_min_pct,
     ):
-        return False
-    if has_double_yang_before(prev2_open, prev2_close, prev_open, prev_close):
         return False
     return True
 
 
 
-def is_yin(open_px: float, close_px: float) -> bool:
-    return float(close_px) < float(open_px)
+def is_yin(open_px: float, close_px: float, *, tick: float = TICK_SIZE) -> bool:
+    """阴线：收盘至少低于开盘 1 跳；十字不算阴。"""
+    return float(close_px) <= float(open_px) - float(tick) + 1e-12
 
 
-def is_yang(open_px: float, close_px: float) -> bool:
-    return float(close_px) > float(open_px)
+def is_yang(open_px: float, close_px: float, *, tick: float = TICK_SIZE) -> bool:
+    """阳线：收盘至少高于开盘 1 跳；十字（开≈收）不算阳。"""
+    return float(close_px) >= float(open_px) + float(tick) - 1e-12
 
 
-def bar_shape(open_px: float, last_px: float) -> str:
-    if is_yang(open_px, last_px):
+def is_doji(open_px: float, close_px: float, *, tick: float = TICK_SIZE) -> bool:
+    """十字：实体小于 1 个最小价位。"""
+    return abs(float(close_px) - float(open_px)) < float(tick) - 1e-12
+
+
+def bar_shape(open_px: float, last_px: float, *, tick: float = TICK_SIZE) -> str:
+    if is_yang(open_px, last_px, tick=tick):
         return "阳"
-    if is_yin(open_px, last_px):
+    if is_yin(open_px, last_px, tick=tick):
         return "阴"
     return "十字"
 
@@ -312,10 +359,14 @@ def prev_day_allows_entry(
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT,
     # yin_or_small_yang=阴线或小阳可买；yin_only=仅阴线，小阳次日不买
     prev_entry_mode: str = "yin_or_small_yang",
+    tick: float = TICK_SIZE,
 ) -> bool:
     if prev_open <= 0:
         return False
-    if prev_close <= prev_open:
+    if prev_entry_mode == "any":
+        return True
+    # 阴线或十字：允许（十字不算阳，视同可开仓的弱势日）
+    if not is_yang(prev_open, prev_close, tick=tick):
         return True
     if prev_entry_mode == "yin_only":
         return False
@@ -323,17 +374,113 @@ def prev_day_allows_entry(
     return float(prev_close) < limit_px - 1e-8
 
 
+def yang_ret_pct(open_px: float, close_px: float) -> float:
+    """相对开盘涨幅（小数）。开盘无效时返回 nan。"""
+    o = float(open_px)
+    if o <= 0:
+        return float("nan")
+    return float(close_px) / o - 1.0
+
+
+def counts_as_yang(
+    open_px: float,
+    close_px: float,
+    *,
+    tick: float = TICK_SIZE,
+    min_pct: float = 0.0,
+) -> bool:
+    """是否计为阳线：至少 1 跳实体，且涨幅 >= min_pct。"""
+    if not is_yang(open_px, close_px, tick=tick):
+        return False
+    if float(min_pct) > 0 and yang_ret_pct(open_px, close_px) + 1e-12 < float(min_pct):
+        return False
+    return True
+
+
 def has_double_yang_before(
     prev2_open: float | None,
     prev2_close: float | None,
     prev_open: float | None,
     prev_close: float | None,
+    *,
+    tick: float = TICK_SIZE,
+    yang_min_pct: float = 0.0,
+    second_min_pct: float | None = None,
+    combined_min_pct: float | None = None,
+    # sum_body=两根实体涨幅相加；span=第一根开盘→第二根收盘
+    combined_mode: str = DEFAULT_DOUBLE_YANG_COMBINED_MODE,
 ) -> bool:
+    """前面双阳是否触发禁买。
+
+    - yang_min_pct: 两根都要达到的最小阳线涨幅（0=仅需≥1跳）
+    - second_min_pct: 第二根（前日）阳线涨幅下限；更弱则「排除」不禁买
+    - combined_min_pct: 合计/跨日涨幅下限；不足则不禁买
+    - combined_mode: sum_body | span（默认 span）
+    """
     if None in (prev2_open, prev2_close, prev_open, prev_close):
         return False
     if prev2_open <= 0 or prev_open <= 0:
         return False
-    return is_yang(prev2_open, prev2_close) and is_yang(prev_open, prev_close)
+    if not counts_as_yang(
+        prev2_open, prev2_close, tick=tick, min_pct=yang_min_pct
+    ) or not counts_as_yang(prev_open, prev_close, tick=tick, min_pct=yang_min_pct):
+        return False
+    r2 = yang_ret_pct(prev2_open, prev2_close)
+    r1 = yang_ret_pct(prev_open, prev_close)
+    if second_min_pct is not None and r1 + 1e-12 < float(second_min_pct):
+        return False
+    if combined_min_pct is not None:
+        mode = (combined_mode or DEFAULT_DOUBLE_YANG_COMBINED_MODE).lower()
+        if mode == "span":
+            # 第一根阳开盘 → 第二根阳收盘
+            o0 = float(prev2_open)
+            if o0 <= 0:
+                return False
+            combined = float(prev_close) / o0 - 1.0
+        else:
+            combined = r1 + r2
+        if combined + 1e-12 < float(combined_min_pct):
+            return False
+    return True
+
+
+def should_block_entry_by_yang(
+    prev2_open: float | None,
+    prev2_close: float | None,
+    prev_open: float | None,
+    prev_close: float | None,
+    *,
+    tick: float = TICK_SIZE,
+    ban_double_yang: bool = DEFAULT_BAN_DOUBLE_YANG,
+    ban_single_yang: bool = DEFAULT_BAN_SINGLE_YANG,
+    yang_min_pct: float = 0.0,
+    double_yang_second_min_pct: float | None = None,
+    double_yang_combined_min_pct: float | None = DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+    double_yang_combined_mode: str = DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+    single_yang_min_pct: float | None = None,
+) -> bool:
+    """按单阳/双阳规则判断是否禁买。"""
+    if ban_single_yang and prev_open is not None and prev_close is not None:
+        thr = (
+            float(single_yang_min_pct)
+            if single_yang_min_pct is not None
+            else float(yang_min_pct)
+        )
+        if counts_as_yang(prev_open, prev_close, tick=tick, min_pct=thr):
+            return True
+    if ban_double_yang:
+        return has_double_yang_before(
+            prev2_open,
+            prev2_close,
+            prev_open,
+            prev_close,
+            tick=tick,
+            yang_min_pct=yang_min_pct,
+            second_min_pct=double_yang_second_min_pct,
+            combined_min_pct=double_yang_combined_min_pct,
+            combined_mode=double_yang_combined_mode,
+        )
+    return False
 
 
 def is_t1_buy_day(buy_time: str | None, session: str) -> bool:
