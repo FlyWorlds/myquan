@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>天通+凯盛 半仓组合净值曲线</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#0f1419; --card:#1a2332; --text:#e7ecf3; --muted:#8b9bb4; --accent:#3d9cf0; --good:#3ecf8e; --bad:#f07178; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: "IBM Plex Sans", "Noto Sans SC", system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:1100px; margin:0 auto; padding:28px 20px 48px; }
+  h1 { font-size:1.45rem; font-weight:650; margin:0 0 6px; }
+  .sub { color:var(--muted); font-size:0.9rem; margin-bottom:22px; }
+  .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:22px; }
+  @media (max-width:800px) { .grid { grid-template-columns:repeat(2,1fr); } }
+  .stat { background:var(--card); border-radius:10px; padding:14px 16px; }
+  .stat .l { color:var(--muted); font-size:0.75rem; }
+  .stat .v { font-size:1.25rem; font-weight:700; margin-top:4px; }
+  .good { color:var(--good); } .bad { color:var(--bad); }
+  .card { background:var(--card); border-radius:12px; padding:16px 18px 8px; margin-bottom:18px; }
+  .card h2 { font-size:1rem; margin:0 0 10px; font-weight:600; }
+  canvas { width:100% !important; max-height:360px; }
+  .note { color:var(--muted); font-size:0.8rem; margin-top:8px; line-height:1.5; }
+  .pill { display:inline-block; background:#243247; color:var(--accent); padding:2px 10px; border-radius:999px; font-size:0.78rem; margin-left:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>天通 + 凯盛 · 半仓组合净值曲线<span class="pill">策略一 · 独立半仓等权</span></h1>
+  <p class="sub">区间 2020-01-02 → 2026-08-07 · 名义本金 10 万 · 组合=0.5×归一凯盛+0.5×归一天通</p>
+
+  <div class="grid">
+    <div class="stat"><div class="l">全程累计收益</div><div class="v good">+1016.09%</div></div>
+    <div class="stat"><div class="l">全程最大回撤</div><div class="v bad">25.55%</div></div>
+    <div class="stat"><div class="l">2026 YTD 收益</div><div class="v good">+108.03%</div></div>
+    <div class="stat"><div class="l">当前回撤（年内）</div><div class="v">2.44%</div></div>
+    <div class="stat"><div class="l">等权持有累计</div><div class="v">+205.47%</div></div>
+    <div class="stat"><div class="l">2026 最高 YTD</div><div class="v good">+113.22%</div></div>
+    <div class="stat"><div class="l">2026 最大回撤</div><div class="v bad">19.56%</div></div>
+    <div class="stat"><div class="l">期末权益</div><div class="v">1,116,087</div></div>
+  </div>
+
+  <div class="card">
+    <h2>全程净值（月末）· 策略 vs 等权持有</h2>
+    <canvas id="cAll"></canvas>
+    <p class="note">起点名义 100,000。策略全程仍为正收益（约 +1016%）；今年 YTD 约 +108%，当前回撤约 2.4%。</p>
+  </div>
+
+  <div class="card">
+    <h2>2026 年净值（周频）</h2>
+    <canvas id="c26"></canvas>
+    <p class="note">今年最高约 +113.2%（6 月底附近），年内最大回撤约 19.6%（8 月初），目前已收窄。</p>
+  </div>
+</div>
+<script>
+const all = {"dates": ["2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30", "2020-05-31", "2020-06-30", "2020-07-31", "2020-08-31", "2020-09-30", "2020-10-31", "2020-11-30", "2020-12-31", "2021-01-31", "2021-02-28", "2021-03-31", "2021-04-30", "2021-05-31", "2021-06-30", "2021-07-31", "2021-08-31", "2021-09-30", "2021-10-31", "2021-11-30", "2021-12-31", "2022-01-31", "2022-02-28", "2022-03-31", "2022-04-30", "2022-05-31", "2022-06-30", "2022-07-31", "2022-08-31", "2022-09-30", "2022-10-31", "2022-11-30", "2022-12-31", "2023-01-31", "2023-02-28", "2023-03-31", "2023-04-30", "2023-05-31", "2023-06-30", "2023-07-31", "2023-08-31", "2023-09-30", "2023-10-31", "2023-11-30", "2023-12-31", "2024-01-31", "2024-02-29", "2024-03-31", "2024-04-30", "2024-05-31", "2024-06-30", "2024-07-31", "2024-08-31", "2024-09-30", "2024-10-31", "2024-11-30", "2024-12-31", "2025-01-31", "2025-02-28", "2025-03-31", "2025-04-30", "2025-05-31", "2025-06-30", "2025-07-31", "2025-08-31", "2025-09-30", "2025-10-31", "2025-11-30", "2025-12-31", "2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31", "2026-06-30", "2026-07-31", "2026-08-31"], "strategy": [97338.17, 108432.24, 106326.14, 111037.9, 114502.13, 129596.27, 139160.79, 135560.48, 128758.56, 128554.78, 132542.65, 155957.51, 144736.6, 149914.26, 151552.45, 134330.68, 133993.85, 139556.67, 163595.99, 184490.05, 164529.96, 170646.11, 205184.31, 210043.87, 191797.08, 203423.86, 186452.59, 196842.06, 230859.84, 270001.79, 277374.29, 259148.56, 254358.21, 266832.64, 247977.36, 241064.62, 273708.13, 286783.42, 274717.67, 263166.15, 249912.42, 269217.21, 254262.94, 249658.79, 257971.14, 263405.83, 270793.07, 268739.88, 242248.65, 281860.97, 329520.42, 310075.08, 291553.43, 272634.82, 271365.77, 309029.78, 366698.85, 426117.53, 442276.32, 429347.15, 422883.2, 428862.92, 427512.87, 421070.94, 433609.83, 447614.18, 478652.04, 529913.2, 527759.15, 496414.94, 463951.38, 536502.48, 645242.47, 623290.9, 592507.05, 811115.11, 882000.82, 1143781.15, 928318.99, 1116087.05], "hold": [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN]};
+const y26 = {"dates": ["2026-01-11", "2026-01-18", "2026-01-25", "2026-02-01", "2026-02-08", "2026-02-15", "2026-03-01", "2026-03-08", "2026-03-15", "2026-03-22", "2026-03-29", "2026-04-05", "2026-04-12", "2026-04-19", "2026-04-26", "2026-05-03", "2026-05-10", "2026-05-17", "2026-05-24", "2026-05-31", "2026-06-07", "2026-06-14", "2026-06-21", "2026-06-28", "2026-07-05", "2026-07-12", "2026-07-19", "2026-07-26", "2026-08-02", "2026-08-09"], "strategy": [569801.66, 581453.44, 637114.47, 645242.47, 665787.59, 632165.1, 623290.9, 614731.33, 627374.56, 617783.33, 613836.37, 599569.5, 659151.98, 731179.76, 789321.61, 811115.11, 814100.74, 837160.29, 844582.6, 882000.82, 955323.05, 906944.32, 1034892.4, 1131456.36, 1034103.9, 940423.23, 927359.11, 961552.99, 928318.99, 1116087.05], "hold": [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN]};
+const common = {
+  responsive: true,
+  interaction: { mode: 'index', intersect: false },
+  plugins: { legend: { labels: { color: '#c5d0e0' } } },
+  scales: {
+    x: { ticks: { color: '#8b9bb4', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+    y: { ticks: { color: '#8b9bb4' }, grid: { color: 'rgba(255,255,255,0.06)' } }
+  }
+};
+new Chart(document.getElementById('cAll'), {
+  type: 'line',
+  data: {
+    labels: all.dates,
+    datasets: [
+      { label: '策略半仓组合', data: all.strategy, borderColor: '#3d9cf0', backgroundColor: 'rgba(61,156,240,0.12)', fill: true, tension: 0.15, pointRadius: 0, borderWidth: 2 },
+      { label: '等权买入持有', data: all.hold, borderColor: '#8b9bb4', borderDash: [5,4], tension: 0.15, pointRadius: 0, borderWidth: 1.5 }
+    ]
+  },
+  options: common
+});
+new Chart(document.getElementById('c26'), {
+  type: 'line',
+  data: {
+    labels: y26.dates,
+    datasets: [
+      { label: '策略半仓组合', data: y26.strategy, borderColor: '#3ecf8e', backgroundColor: 'rgba(62,207,142,0.10)', fill: true, tension: 0.15, pointRadius: 0, borderWidth: 2 },
+      { label: '等权买入持有', data: y26.hold, borderColor: '#8b9bb4', borderDash: [5,4], tension: 0.15, pointRadius: 0, borderWidth: 1.5 }
+    ]
+  },
+  options: common
+});
+</script>
+</body>
+</html>
