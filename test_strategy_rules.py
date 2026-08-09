@@ -103,26 +103,48 @@ class StrategyRuleTests(unittest.TestCase):
 
     def test_factor2_dd_topup_ladder(self) -> None:
         from strategy import get_factor, get_strategy_bindings
-        from strategy.dd_topup import desired_layers, simulate_dd_topup
+        from strategy.dd_topup import (
+            DEFAULT_ADD_PCTS,
+            DEFAULT_LEVELS,
+            add_target,
+            desired_layers,
+            simulate_dd_topup,
+        )
 
         f2 = get_factor("factor2")
         self.assertTrue(f2.implemented)
         self.assertEqual(f2.meta.get("kind"), "dd_topup")
-        self.assertEqual(desired_layers(0.25, 3), 3)
-        self.assertEqual(desired_layers(0.15, 3), 2)
-        self.assertEqual(desired_layers(0.05, 3), 1)
-        self.assertEqual(desired_layers(0.0, 3), 0)
+        self.assertEqual(tuple(f2.meta.get("levels")), DEFAULT_LEVELS)
+        self.assertEqual(tuple(f2.meta.get("add_pcts")), DEFAULT_ADD_PCTS)
+        # 五档 10/15/20/25/30：按当前回撤深度对齐
+        self.assertEqual(add_target(0.10), 1)
+        self.assertEqual(add_target(0.22), 3)
+        self.assertEqual(add_target(0.30), 5)
+        self.assertEqual(add_target(0.35), 5)  # 超过30%不再加档
+        self.assertEqual(desired_layers(0.25, 5), 4)
+        self.assertEqual(desired_layers(0.15, 5), 2)
+        self.assertEqual(desired_layers(0.05, 5), 0)
+        self.assertEqual(desired_layers(0.0, 5), 0)
 
         # 核心策略一已绑定因子1+因子2
         ids = {b.factor_id for b in get_strategy_bindings("strategy1")}
         self.assertEqual(ids, {"factor1", "factor2"})
 
-        # 合成权益：100 → 89（dd11%应加1档）→ 100
+        # 合成权益：100 → 89（dd11%应加1档=总本金20%）→ 恢复后结清
         idx = pd.date_range("2024-01-02", periods=3, freq="B", tz="Asia/Shanghai")
         eq = pd.Series([100_000.0, 89_000.0, 100_000.0], index=idx)
         nav, events = simulate_dd_topup(eq, initial_cash=100_000.0)
-        self.assertTrue(any(e["event"] == "inject" for e in events))
+        injects = [e for e in events if e["event"] == "inject"]
+        self.assertTrue(injects)
+        self.assertAlmostEqual(float(injects[0]["amount"]), 5_000.0, places=2)  # 首档 5%
         self.assertAlmostEqual(float(nav["injected"].iloc[-1]), 0.0, places=4)
+
+        # 深回撤一次性穿越多档：累计不超过总本金60%
+        idx2 = pd.date_range("2024-01-02", periods=2, freq="B", tz="Asia/Shanghai")
+        eq2 = pd.Series([100_000.0, 65_000.0], index=idx2)  # dd=35%
+        nav2, ev2 = simulate_dd_topup(eq2, initial_cash=100_000.0)
+        self.assertLessEqual(float(nav2["injected"].iloc[-1]), 60_000.0 + 1e-6)
+        self.assertEqual(int(nav2["layers"].iloc[-1]), 5)
 
 
 class DailyCacheTests(unittest.TestCase):

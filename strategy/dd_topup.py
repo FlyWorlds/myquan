@@ -1,11 +1,11 @@
 """回撤阶梯补仓（因子2 真源）：在策略权益曲线上追加/提出资金。
 
-默认三档（相对年内权益高点）：
-  · 回撤 ≥10%/20%/30% → 各追加「当前权益 × add_pct」（默认 10%）
-  · 回落到 ≤20% → LIFO 减去 1 次追加
-  · 再落到 ≤10% → 再减 1 次
-  · 回撤到 0 → 剩余全部结清
+默认五档（相对年内权益高点，每 5% 一档；前浅后深）：
+  · 回撤 ≥10%/15%/20%/25%/30% → 追加总本金 × 5%/10%/15%/15%/15%
+  · 累计追加上限 = 总本金 × 60%；回撤超过 30% 不再加档
+  · 回撤收窄按档 LIFO 提出；回到 0 全部结清
 
+「总本金」= 回测 initial_cash（盯盘用登记的资金基数）。
 数据口径与策略一相同：前复权日线回测权益，本模块不改复权方式。
 """
 
@@ -17,8 +17,13 @@ from typing import Any, Sequence
 import pandas as pd
 
 # --- 默认参数（开闭：改默认只动此处；策略侧用 bindings / BacktestConfig 覆盖）---
-DEFAULT_LEVELS: tuple[float, ...] = (0.10, 0.20, 0.30)
+DEFAULT_LEVELS: tuple[float, ...] = (0.10, 0.15, 0.20, 0.25, 0.30)
+# 各档相对「总本金」追加比例（前浅后深：浅回撤少加，深回撤多加）
+DEFAULT_ADD_PCTS: tuple[float, ...] = (0.05, 0.10, 0.15, 0.15, 0.15)
+# 兼容旧接口：均匀每档比例；None 表示用 DEFAULT_ADD_PCTS
 DEFAULT_ADD_PCT = 0.10
+# 累计追加上限（相对总本金）；None=各档之和
+DEFAULT_MAX_INJECT_PCT = 0.60
 
 
 def normalize_levels(levels: Sequence[float] | None = None) -> tuple[float, ...]:
@@ -28,40 +33,91 @@ def normalize_levels(levels: Sequence[float] | None = None) -> tuple[float, ...]
     return tuple(sorted(raw))
 
 
+def normalize_add_pcts(
+    *,
+    add_pct: float | None = None,
+    add_pcts: Sequence[float] | None = None,
+    levels: Sequence[float] | None = None,
+) -> tuple[float, ...]:
+    lv = normalize_levels(levels)
+    if add_pcts is not None:
+        pcts = tuple(float(x) for x in add_pcts)
+        if len(pcts) == 1:
+            pcts = pcts * len(lv)
+        if len(pcts) != len(lv):
+            raise ValueError(
+                f"add_pcts 长度须与 levels 一致: {len(pcts)} vs {len(lv)}"
+            )
+        if any(p <= 0 for p in pcts):
+            raise ValueError(f"add_pcts 各项须 >0: {pcts}")
+        return pcts
+    if add_pct is not None:
+        pct = float(add_pct)
+        if pct <= 0 or pct >= 1:
+            raise ValueError(f"add_pct 应在 (0,1): {pct}")
+        return tuple(pct for _ in lv)
+    # 默认五档表；若 levels 被覆盖且长度不同，则均匀 DEFAULT_ADD_PCT
+    if len(lv) == len(DEFAULT_ADD_PCTS) and lv == normalize_levels(DEFAULT_LEVELS):
+        return DEFAULT_ADD_PCTS
+    if len(lv) == len(DEFAULT_ADD_PCTS):
+        return DEFAULT_ADD_PCTS
+    return tuple(float(DEFAULT_ADD_PCT) for _ in lv)
+
+
 def resolve_topup_params(
     *,
     add_pct: float | None = None,
+    add_pcts: Sequence[float] | None = None,
     levels: Sequence[float] | None = None,
-) -> tuple[float, tuple[float, ...]]:
-    """解析补仓参数；None → 模块默认。后续调参不必改算法。"""
-    pct = float(DEFAULT_ADD_PCT if add_pct is None else add_pct)
-    if pct <= 0 or pct >= 1:
-        raise ValueError(f"add_pct 应在 (0,1): {pct}")
+    max_inject_pct: float | None = None,
+) -> tuple[tuple[float, ...], tuple[float, ...], float]:
+    """解析补仓参数 → (add_pcts, levels, max_inject_pct)。"""
     lv = normalize_levels(levels)
-    return pct, lv
+    pcts = normalize_add_pcts(add_pct=add_pct, add_pcts=add_pcts, levels=lv)
+    if max_inject_pct is None:
+        cap = float(DEFAULT_MAX_INJECT_PCT)
+    else:
+        cap = float(max_inject_pct)
+    if cap <= 0:
+        raise ValueError(f"max_inject_pct 须 >0: {cap}")
+    return pcts, lv, cap
 
 
 def levels_label(levels: Sequence[float] = DEFAULT_LEVELS) -> str:
     return "/".join(f"{float(x)*100:.0f}" for x in normalize_levels(levels))
 
 
+def add_pcts_label(add_pcts: Sequence[float] = DEFAULT_ADD_PCTS) -> str:
+    return "/".join(f"{float(x)*100:.0f}" for x in add_pcts)
+
+
 def filter_desc(
-    add_pct: float = DEFAULT_ADD_PCT,
+    add_pct: float | None = None,
     levels: Sequence[float] = DEFAULT_LEVELS,
+    *,
+    add_pcts: Sequence[float] | None = None,
+    max_inject_pct: float | None = None,
 ) -> str:
-    pct, lv = resolve_topup_params(add_pct=add_pct, levels=levels)
+    pcts, lv, cap = resolve_topup_params(
+        add_pct=add_pct, add_pcts=add_pcts, levels=levels, max_inject_pct=max_inject_pct
+    )
     return (
-        f"叠在策略权益上：回撤{levels_label(lv)}各+当前×{pct*100:.0f}%；"
-        f"回落减档，到0结清"
+        f"叠在策略权益上：回撤{levels_label(lv)}各+总本金×"
+        f"{add_pcts_label(pcts)}%；累计上限{cap*100:.0f}%；回落减档，到0结清"
     )
 
 
 def format_rules(
-    add_pct: float = DEFAULT_ADD_PCT,
+    add_pct: float | None = None,
     levels: Sequence[float] = DEFAULT_LEVELS,
+    *,
+    add_pcts: Sequence[float] | None = None,
+    max_inject_pct: float | None = None,
 ) -> str:
     """按当前参数生成规则文案（避免百分比写死在多处）。"""
-    pct, lv = resolve_topup_params(add_pct=add_pct, levels=levels)
+    pcts, lv, cap = resolve_topup_params(
+        add_pct=add_pct, add_pcts=add_pcts, levels=levels, max_inject_pct=max_inject_pct
+    )
     lines = [
         "================================================================================",
         "  因子2 — 回撤阶梯补仓（权益曲线资金管理）",
@@ -73,23 +129,22 @@ def format_rules(
         "",
         "【分档（参数可配，以下为当前值）】",
     ]
-    for i, level in enumerate(lv, 1):
+    cum = 0.0
+    for i, (level, pct) in enumerate(zip(lv, pcts), 1):
+        cum += pct
         lines.append(
-            f"  · 回撤 ≥{level*100:.0f}% → 追加当前权益 ×{pct*100:.0f}%（第{i}档）"
+            f"  · 回撤 ≥{level*100:.0f}% → 追加总本金 ×{pct*100:.0f}%"
+            f"（第{i}档，累计约{min(cum, cap)*100:.0f}%）"
         )
+    lines.append(f"  · 累计追加上限 = 总本金 ×{cap*100:.0f}%；更深回撤不再加档")
     if len(lv) >= 2:
-        lines.append(
-            f"  · 回落到 ≤{lv[-2]*100:.0f}% → LIFO 减去 1 次追加"
-        )
-    lines.append(
-        f"  · 再落到 ≤{lv[0]*100:.0f}% → 再减 1 次"
-    )
+        lines.append("  · 回撤收窄 → 按当前回撤对应档位 LIFO 减档")
     lines.extend(
         [
             "  · 回撤到 0 → 剩余全部结清",
             "",
             "【说明】",
-            "  · 「当前权益」= 仿真账户总权益（含在途追加）",
+            "  · 「总本金」= 回测 initial_cash；追加后资金继续随策略权益波动",
             "  · 调参：改 dd_topup.DEFAULT_*，或策略 bindings / BacktestConfig 覆盖",
             "  · 年内高点按日历年重置；在途追加可跨年",
             "================================================================================",
@@ -120,25 +175,12 @@ def desired_layers(
     reached: int,
     levels: Sequence[float] = DEFAULT_LEVELS,
 ) -> int:
-    """回落目标档数：深档保持；穿过次高档减 1；再到更低档再减；到 0 清零。"""
+    """回落目标档数：与当前回撤深度对齐（不超过已达档）；到 0 清零。"""
     if reached <= 0:
         return 0
     if dd <= 1e-12:
         return 0
-    lv = sorted(float(x) for x in levels)
-    if len(lv) < 2:
-        return min(1, reached) if dd > 1e-12 else 0
-    # 默认 10/20/30：>20 满档；>10 最多2；否则最多1
-    hi, mid = lv[-1], lv[-2] if len(lv) >= 2 else lv[-1]
-    lo = lv[-3] if len(lv) >= 3 else mid
-    # 用 20/10 两道回落线（对应 levels 的中、低档）
-    down_hi = mid  # ≤20% → 目标 ≤2
-    down_lo = lo if len(lv) >= 3 else lv[0]  # ≤10% → 目标 ≤1
-    if dd > down_hi + 1e-12:
-        return min(len(lv), reached)
-    if dd > down_lo + 1e-12:
-        return min(max(len(lv) - 1, 1), reached)
-    return min(1, reached)
+    return min(int(reached), add_target(dd, levels))
 
 
 @dataclass
@@ -148,6 +190,8 @@ class DdTopupState:
     stack: list[float] = field(default_factory=list)
     max_reached: int = 0
     year: int | None = None
+    # 总本金：各档追加金额的基数
+    capital_base: float = 0.0
 
     @property
     def injected(self) -> float:
@@ -163,10 +207,27 @@ def step_dd_topup(
     *,
     ret: float,
     date_year: int,
-    add_pct: float = DEFAULT_ADD_PCT,
+    add_pct: float | None = None,
+    add_pcts: Sequence[float] | None = None,
     levels: Sequence[float] = DEFAULT_LEVELS,
+    max_inject_pct: float | None = None,
+    capital_base: float | None = None,
 ) -> list[dict[str, Any]]:
     """推进一日：先乘收益，再按档追加/提出。返回当日事件列表。"""
+    pcts, lv, cap = resolve_topup_params(
+        add_pct=add_pct,
+        add_pcts=add_pcts,
+        levels=levels,
+        max_inject_pct=max_inject_pct,
+    )
+    base = float(
+        capital_base
+        if capital_base is not None and capital_base > 0
+        else (state.capital_base if state.capital_base > 0 else state.working)
+    )
+    state.capital_base = base
+    max_inject = cap * base
+
     events: list[dict[str, Any]] = []
     if state.year is None or date_year != state.year:
         state.year = date_year
@@ -177,32 +238,44 @@ def step_dd_topup(
     if state.working > state.peak + 1e-9:
         state.peak = state.working
 
-    dd = drawdown(state.working, state.peak)
-    at = add_target(dd, levels)
+    # 用「追加前」回撤决定加减档，避免大额注资瞬间把 DD 打到 0 误触发结清
+    dd_signal = drawdown(state.working, state.peak)
+    at = add_target(dd_signal, lv)
     if at > state.max_reached:
         state.max_reached = at
 
     while len(state.stack) < at:
-        amt = float(add_pct) * state.working
+        idx = len(state.stack)
+        room = max_inject - state.injected
+        if room <= 1e-6:
+            break
+        raw = float(pcts[idx]) * base
+        amt = min(raw, room)
+        if amt <= 1e-6:
+            break
         state.working += amt
         state.stack.append(amt)
-        lv = levels[len(state.stack) - 1] if len(state.stack) <= len(levels) else levels[-1]
+        # 注资抬升权益时同步抬高点，避免出现负回撤口径
+        if state.working > state.peak + 1e-9:
+            state.peak = state.working
+        level = lv[idx] if idx < len(lv) else lv[-1]
         events.append(
             {
                 "event": "inject",
-                "label": f"回撤≥{float(lv)*100:.0f}%追加当前×{float(add_pct)*100:.0f}%",
+                "label": (
+                    f"回撤≥{float(level)*100:.0f}%追加总本金×{float(pcts[idx])*100:.0f}%"
+                ),
                 "amount": amt,
-                "dd": dd,
+                "dd": dd_signal,
                 "equity": state.working,
                 "injected": state.injected,
                 "layers": state.layers,
             }
         )
-        dd = drawdown(state.working, state.peak)
 
-    want = desired_layers(dd, state.max_reached, levels)
+    want = desired_layers(dd_signal, state.max_reached, lv)
     while len(state.stack) > want:
-        if want == 0 and len(state.stack) > 1 and dd <= 1e-12:
+        if want == 0 and len(state.stack) > 1 and dd_signal <= 1e-12:
             amt = state.injected
             state.working -= amt
             state.stack.clear()
@@ -223,30 +296,26 @@ def step_dd_topup(
 
         amt = state.stack.pop()
         state.working -= amt
-        if dd <= 1e-12:
+        if dd_signal <= 1e-12:
             label = "回撤归0结清一档"
             ev = "withdraw_all" if not state.stack else "withdraw"
-        elif len(levels) >= 2 and dd <= float(sorted(levels)[-2]) + 1e-12 and dd > float(sorted(levels)[0]) + 1e-12:
-            label = f"回撤≤{sorted(levels)[-2]*100:.0f}%减1档"
-            ev = "withdraw"
         else:
-            label = f"回撤≤{sorted(levels)[0]*100:.0f}%减1档"
+            label = f"回撤收窄至{dd_signal*100:.1f}%减档→{len(state.stack)}"
             ev = "withdraw"
         events.append(
             {
                 "event": ev,
                 "label": label,
                 "amount": -amt,
-                "dd": dd,
+                "dd": dd_signal,
                 "equity": state.working,
                 "injected": state.injected,
                 "layers": state.layers,
             }
         )
-        dd = drawdown(state.working, state.peak)
         if not state.stack:
             state.max_reached = 0
-            if dd <= 1e-12:
+            if dd_signal <= 1e-12:
                 state.peak = state.working
 
     return events
@@ -257,14 +326,21 @@ def simulate_dd_topup(
     *,
     initial_cash: float = 100_000.0,
     add_pct: float | None = None,
+    add_pcts: Sequence[float] | None = None,
     levels: Sequence[float] | None = None,
+    max_inject_pct: float | None = None,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """对策略日权益序列做阶梯补仓仿真。
 
     equity: 策略账户权益（与 initial_cash 同量纲），index 为交易日。
     返回 (日净值表, 事件列表)。
     """
-    pct, lv = resolve_topup_params(add_pct=add_pct, levels=levels)
+    pcts, lv, cap = resolve_topup_params(
+        add_pct=add_pct,
+        add_pcts=add_pcts,
+        levels=levels,
+        max_inject_pct=max_inject_pct,
+    )
     eq = equity.copy().sort_index()
     if eq.empty:
         return pd.DataFrame(), []
@@ -274,7 +350,11 @@ def simulate_dd_topup(
     rets = eq.pct_change()
     rets.iloc[0] = float(eq.iloc[0]) / float(initial_cash) - 1.0
 
-    state = DdTopupState(working=float(initial_cash), peak=float(initial_cash))
+    state = DdTopupState(
+        working=float(initial_cash),
+        peak=float(initial_cash),
+        capital_base=float(initial_cash),
+    )
     rows: list[dict[str, Any]] = []
     all_events: list[dict[str, Any]] = []
 
@@ -284,8 +364,10 @@ def simulate_dd_topup(
             state,
             ret=float(ret),
             date_year=y,
-            add_pct=pct,
+            add_pcts=pcts,
             levels=lv,
+            max_inject_pct=cap,
+            capital_base=float(initial_cash),
         )
         for e in day_events:
             all_events.append({"date": pd.Timestamp(dt).strftime("%Y-%m-%d"), **e})

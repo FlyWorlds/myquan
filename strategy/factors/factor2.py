@@ -14,16 +14,20 @@ from strategy.core.factor_registry import register_factor
 from strategy.core.protocols import FactorSpec
 from strategy.dd_topup import (
     DEFAULT_ADD_PCT,
+    DEFAULT_ADD_PCTS,
     DEFAULT_LEVELS,
+    DEFAULT_MAX_INJECT_PCT,
+    add_pcts_label,
+    add_target,
+    desired_layers,
+    drawdown,
     filter_desc,
     format_rules,
+    levels_label,
     resolve_topup_params,
     simulate_dd_topup,
     step_dd_topup,
     summarize_overlay,
-    add_target,
-    desired_layers,
-    drawdown,
 )
 
 FACTOR_ID = "factor2"
@@ -31,10 +35,18 @@ FACTOR_NAME = "因子2"
 
 
 def factor2_rules(
-    add_pct: float = DEFAULT_ADD_PCT,
+    add_pct: float | None = None,
     levels: Sequence[float] = DEFAULT_LEVELS,
+    *,
+    add_pcts: Sequence[float] | None = None,
+    max_inject_pct: float | None = None,
 ) -> str:
-    return format_rules(add_pct=add_pct, levels=levels)
+    return format_rules(
+        add_pct=add_pct,
+        levels=levels,
+        add_pcts=add_pcts,
+        max_inject_pct=max_inject_pct,
+    )
 
 
 def factor2_signal(
@@ -45,11 +57,19 @@ def factor2_signal(
     max_reached: int | None = None,
     stack: list[float] | None = None,
     add_pct: float | None = None,
+    add_pcts: Sequence[float] | None = None,
     levels: Sequence[float] | None = None,
+    max_inject_pct: float | None = None,
+    capital_base: float | None = None,
     **_: Any,
 ) -> dict[str, Any]:
     """根据当前权益回撤给出建议档位（不下单，仅信号）。"""
-    pct, lv = resolve_topup_params(add_pct=add_pct, levels=levels)
+    pcts, lv, cap = resolve_topup_params(
+        add_pct=add_pct,
+        add_pcts=add_pcts,
+        levels=levels,
+        max_inject_pct=max_inject_pct,
+    )
     dd = drawdown(float(equity), float(year_peak))
     reached = int(max_reached if max_reached is not None else max(layers, 0))
     want_up = add_target(dd, lv)
@@ -64,7 +84,11 @@ def factor2_signal(
     else:
         action = "hold"
         note = f"维持{cur}档"
-    add_amt = pct * float(equity) if action == "inject" else 0.0
+    base = float(capital_base) if capital_base and capital_base > 0 else float(equity)
+    inj = float(sum(stack)) if stack else 0.0
+    room = max(0.0, cap * base - inj)
+    next_pct = float(pcts[cur]) if cur < len(pcts) else 0.0
+    add_amt = min(next_pct * base, room) if action == "inject" else 0.0
     return {
         "action": action,
         "dd": dd,
@@ -73,8 +97,9 @@ def factor2_signal(
         "target_layers": want_up if action == "inject" else want_down,
         "suggest_add": add_amt,
         "alert": note,
-        "add_pct": pct,
+        "add_pcts": pcts,
         "levels": lv,
+        "max_inject_pct": cap,
     }
 
 
@@ -83,15 +108,23 @@ def run_factor2_on_equity(
     *,
     initial_cash: float = 100_000.0,
     add_pct: float | None = None,
+    add_pcts: Sequence[float] | None = None,
     levels: Sequence[float] | None = None,
+    max_inject_pct: float | None = None,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]], dict[str, float]]:
     """对权益曲线跑因子2，返回净值表、事件、摘要。"""
-    pct, lv = resolve_topup_params(add_pct=add_pct, levels=levels)
+    pcts, lv, cap = resolve_topup_params(
+        add_pct=add_pct,
+        add_pcts=add_pcts,
+        levels=levels,
+        max_inject_pct=max_inject_pct,
+    )
     nav, events = simulate_dd_topup(
         equity,
         initial_cash=initial_cash,
-        add_pct=pct,
+        add_pcts=pcts,
         levels=lv,
+        max_inject_pct=cap,
     )
     base_final = float(equity.sort_index().iloc[-1]) if len(equity) else None
     summary = summarize_overlay(nav, initial_cash=initial_cash, base_final=base_final)
@@ -99,12 +132,10 @@ def run_factor2_on_equity(
 
 
 def _default_description() -> str:
-    pct, lv = resolve_topup_params()
-    from strategy.dd_topup import levels_label
-
+    pcts, lv, cap = resolve_topup_params()
     return (
-        f"回撤阶梯补仓：权益回撤≥{levels_label(lv)}各加当前×{pct*100:.0f}%；"
-        f"回落减档，到0结清（叠在策略权益上）"
+        f"回撤阶梯补仓：权益回撤≥{levels_label(lv)}各加总本金×"
+        f"{add_pcts_label(pcts)}%；上限{cap*100:.0f}%；回落减档，到0结清"
     )
 
 
@@ -118,7 +149,9 @@ SPEC = FactorSpec(
     meta={
         "kind": "dd_topup",
         "add_pct": DEFAULT_ADD_PCT,
+        "add_pcts": DEFAULT_ADD_PCTS,
         "levels": DEFAULT_LEVELS,
+        "max_inject_pct": DEFAULT_MAX_INJECT_PCT,
         "simulate": simulate_dd_topup,
         "run_on_equity": run_factor2_on_equity,
         "step": step_dd_topup,
@@ -127,7 +160,7 @@ SPEC = FactorSpec(
         "overlay": True,
         "requires": "strategy_equity_curve",
         "adjust": "qfq",
-        "tunable": ("add_pct", "levels"),
+        "tunable": ("add_pct", "add_pcts", "levels", "max_inject_pct"),
     },
 )
 

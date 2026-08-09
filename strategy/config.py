@@ -68,8 +68,10 @@ class BacktestConfig:
     skip_buy_after_overnight_stop: bool = False
     # 因子2（策略一默认叠加）：None=用 strategy1 bindings / dd_topup 默认
     factor2_enabled: bool | None = None
-    factor2_add_pct: float | None = None
+    factor2_add_pct: float | None = None  # 均匀每档；与 factor2_add_pcts 二选一
+    factor2_add_pcts: tuple[float, ...] | None = None  # 各档相对总本金比例
     factor2_levels: tuple[float, ...] | None = None
+    factor2_max_inject_pct: float | None = None  # 累计追加上限（相对总本金）
     daily_cache: Path | None = None
     report_path: Path | None = None
 

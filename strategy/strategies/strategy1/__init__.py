@@ -36,8 +36,8 @@ def _resolve_factor2_from_cfg(
     cfg: Any,
     *,
     apply_factor2_overlay: bool = True,
-) -> tuple[bool, float, tuple[float, ...]] | None:
-    """返回 (enabled, add_pct, levels)；disabled 时返回 None。"""
+) -> tuple[bool, tuple[float, ...], tuple[float, ...], float] | None:
+    """返回 (enabled, add_pcts, levels, max_inject_pct)；disabled 时返回 None。"""
     from strategy.dd_topup import resolve_topup_params
 
     binding = _factor2_binding()
@@ -56,22 +56,31 @@ def _resolve_factor2_from_cfg(
     add = getattr(cfg, "factor2_add_pct", None)
     if add is None:
         add = binding.params.get("add_pct")
+    add_pcts = getattr(cfg, "factor2_add_pcts", None)
+    if add_pcts is None:
+        add_pcts = binding.params.get("add_pcts")
     levels = getattr(cfg, "factor2_levels", None)
     if levels is None:
         levels = binding.params.get("levels")
-    pct, lv = resolve_topup_params(
+    max_inj = getattr(cfg, "factor2_max_inject_pct", None)
+    if max_inj is None:
+        max_inj = binding.params.get("max_inject_pct")
+    pcts, lv, cap = resolve_topup_params(
         add_pct=float(add) if add is not None else None,
+        add_pcts=add_pcts if add_pcts is not None else None,
         levels=levels if levels is not None else None,
+        max_inject_pct=float(max_inj) if max_inj is not None else None,
     )
-    return True, pct, lv
+    return True, pcts, lv, cap
 
 
 def _apply_factor2_overlay(
     result: Any,
     *,
     initial_cash: float,
-    add_pct: float,
+    add_pcts: Sequence[float],
     levels: Sequence[float],
+    max_inject_pct: float,
     verbose: bool = True,
 ) -> dict[str, Any] | None:
     """对策略一回测权益叠加因子2；结果挂到 result.factor2_overlay。"""
@@ -79,22 +88,24 @@ def _apply_factor2_overlay(
     if eq is None or getattr(eq, "empty", True):
         return None
 
-    from strategy.dd_topup import levels_label
+    from strategy.dd_topup import add_pcts_label, levels_label
     from strategy.factors.factor2 import run_factor2_on_equity
 
     nav, events, summary = run_factor2_on_equity(
         eq,
         initial_cash=float(initial_cash),
-        add_pct=add_pct,
+        add_pcts=add_pcts,
         levels=levels,
+        max_inject_pct=max_inject_pct,
     )
     overlay = {
         "binding": _factor2_binding(),
         "nav": nav,
         "events": events,
         "summary": summary,
-        "add_pct": float(add_pct),
+        "add_pcts": tuple(float(x) for x in add_pcts),
         "levels": tuple(levels),
+        "max_inject_pct": float(max_inject_pct),
     }
     try:
         result.factor2_overlay = overlay
@@ -115,7 +126,8 @@ def _apply_factor2_overlay(
         print(f"因子2最大回撤%: {summary.get('max_drawdown_pct', 0):.2f}")
         print(
             f"档位 {levels_label(levels)}  "
-            f"每档+{float(add_pct)*100:.0f}%当前权益  事件{len(events)}次"
+            f"+总本金×{add_pcts_label(add_pcts)}%  "
+            f"上限{float(max_inject_pct)*100:.0f}%  事件{len(events)}次"
         )
     return overlay
 
@@ -128,14 +140,15 @@ def run_strategy1(
     force_daily_refresh: bool = False,
     apply_factor2_overlay: bool = True,
     factor2_add_pct: float | None = None,
+    factor2_add_pcts: Sequence[float] | None = None,
     factor2_levels: Sequence[float] | None = None,
+    factor2_max_inject_pct: float | None = None,
 ) -> tuple[Any, Any]:
     """策略一回测：因子1 交易 +（默认）因子2 权益补仓叠加。
 
     覆盖因子2 参数（不必改代码）：
-      · 调用参数 factor2_add_pct / factor2_levels
-      · 或 BacktestConfig.factor2_add_pct / factor2_levels / factor2_enabled
-      · 或改 strategy1/bindings.py / dd_topup.DEFAULT_*
+      · 调用参数 factor2_add_pcts / factor2_levels / factor2_max_inject_pct
+      · 或 BacktestConfig.factor2_* / strategy1 bindings / dd_topup.DEFAULT_*
     """
     from dataclasses import replace
 
@@ -144,12 +157,16 @@ def run_strategy1(
 
     if cfg is None:
         cfg = KAICHENG
-    if factor2_add_pct is not None or factor2_levels is not None:
-        kw: dict[str, Any] = {}
-        if factor2_add_pct is not None:
-            kw["factor2_add_pct"] = factor2_add_pct
-        if factor2_levels is not None:
-            kw["factor2_levels"] = tuple(float(x) for x in factor2_levels)
+    kw: dict[str, Any] = {}
+    if factor2_add_pct is not None:
+        kw["factor2_add_pct"] = factor2_add_pct
+    if factor2_add_pcts is not None:
+        kw["factor2_add_pcts"] = tuple(float(x) for x in factor2_add_pcts)
+    if factor2_levels is not None:
+        kw["factor2_levels"] = tuple(float(x) for x in factor2_levels)
+    if factor2_max_inject_pct is not None:
+        kw["factor2_max_inject_pct"] = float(factor2_max_inject_pct)
+    if kw:
         cfg = replace(cfg, **kw)
 
     result, daily = run_open_break(
@@ -162,12 +179,13 @@ def run_strategy1(
         cfg, apply_factor2_overlay=apply_factor2_overlay
     )
     if resolved is not None:
-        _, pct, lv = resolved
+        _, pcts, lv, cap = resolved
         _apply_factor2_overlay(
             result,
             initial_cash=float(getattr(cfg, "initial_cash", 100_000.0)),
-            add_pct=pct,
+            add_pcts=pcts,
             levels=lv,
+            max_inject_pct=cap,
             verbose=verbose,
         )
     return result, daily

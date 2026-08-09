@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from strategy.core.protocols import bind_factor
-from strategy.dd_topup import DEFAULT_ADD_PCT, DEFAULT_LEVELS, filter_desc as factor2_filter_desc
+from strategy.dd_topup import (
+    DEFAULT_ADD_PCTS,
+    DEFAULT_LEVELS,
+    DEFAULT_MAX_INJECT_PCT,
+    filter_desc as factor2_filter_desc,
+)
 from strategy.open_break import (
     DEFAULT_BAN_DOUBLE_YANG,
     DEFAULT_BAN_SINGLE_YANG,
@@ -74,9 +79,14 @@ FACTOR_BINDINGS = (
         "factor2",
         label="回撤阶梯补仓",
         role="custom",
-        add_pct=DEFAULT_ADD_PCT,
+        add_pcts=DEFAULT_ADD_PCTS,
         levels=DEFAULT_LEVELS,
-        filter_desc=factor2_filter_desc(DEFAULT_ADD_PCT, DEFAULT_LEVELS),
+        max_inject_pct=DEFAULT_MAX_INJECT_PCT,
+        filter_desc=factor2_filter_desc(
+            levels=DEFAULT_LEVELS,
+            add_pcts=DEFAULT_ADD_PCTS,
+            max_inject_pct=DEFAULT_MAX_INJECT_PCT,
+        ),
         enabled=True,
     ),
 )

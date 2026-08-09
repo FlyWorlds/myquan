@@ -36,7 +36,7 @@ strategy/
 | 项 | 默认源 | 策略覆盖 |
 |----|--------|----------|
 | 因子1 ±pct、双阳跨日 | `open_break.DEFAULT_*` | `strategy1/bindings` / `BacktestConfig.threshold_pct` 等 |
-| 因子2 档位、每档加仓% | `dd_topup.DEFAULT_LEVELS` / `DEFAULT_ADD_PCT` | bindings 或 `BacktestConfig.factor2_*` |
+| 因子2 档位、各档加仓%、上限 | `dd_topup.DEFAULT_LEVELS` / `DEFAULT_ADD_PCTS` / `DEFAULT_MAX_INJECT_PCT` | bindings 或 `BacktestConfig.factor2_*` |
 
 ```python
 from dataclasses import replace
