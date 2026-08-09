@@ -1,8 +1,9 @@
-"""策略一（默认）：因子1（买卖）+ 因子2（回撤补仓叠加）。
+"""策略一（默认）：因子1（买卖）+ 因子2（回撤加减仓预警）。
 
 调参（开闭，勿改算法本体）：
   · 因子1 阈值/过滤 → open_break.DEFAULT_* 或 bindings / BacktestConfig
-  · 因子2 档位/加仓比例 → dd_topup.DEFAULT_* 或 bindings / BacktestConfig.factor2_*
+  · 因子2 预警阈值 → dd_alert.DEFAULT_* / derive_thresholds(equity)
+  · 旧版权益注资叠加已默认关闭；若需可用 apply_factor2_overlay=True 临时启用 dd_topup
 """
 
 from __future__ import annotations
@@ -35,22 +36,23 @@ def _factor2_binding():
 def _resolve_factor2_from_cfg(
     cfg: Any,
     *,
-    apply_factor2_overlay: bool = True,
+    apply_factor2_overlay: bool = False,
 ) -> tuple[bool, tuple[float, ...], tuple[float, ...], float] | None:
-    """返回 (enabled, add_pcts, levels, max_inject_pct)；disabled 时返回 None。"""
+    """仅当显式要求权益叠加时解析 dd_topup 参数；默认预警模式不叠加。"""
     from strategy.dd_topup import resolve_topup_params
 
     binding = _factor2_binding()
     if binding is None:
         return None
 
-    enabled = bool(binding.enabled)
+    # 绑定声明 overlay=False → 默认不叠加
+    binding_overlay = bool(binding.params.get("overlay", False))
     cfg_en = getattr(cfg, "factor2_enabled", None)
-    if cfg_en is not None:
-        enabled = bool(cfg_en)
-    if not apply_factor2_overlay:
-        enabled = False
-    if not enabled:
+    if cfg_en is False:
+        return None
+    if not apply_factor2_overlay and not binding_overlay:
+        return None
+    if apply_factor2_overlay is False and cfg_en is not True and not binding_overlay:
         return None
 
     add = getattr(cfg, "factor2_add_pct", None)
@@ -83,21 +85,23 @@ def _apply_factor2_overlay(
     max_inject_pct: float,
     verbose: bool = True,
 ) -> dict[str, Any] | None:
-    """对策略一回测权益叠加因子2；结果挂到 result.factor2_overlay。"""
+    """可选：旧版权益注资叠加（默认不启用）。"""
     eq = getattr(result, "equity_curve", None)
     if eq is None or getattr(eq, "empty", True):
         return None
 
     from strategy.dd_topup import add_pcts_label, levels_label
-    from strategy.factors.factor2 import run_factor2_on_equity
+    from strategy.dd_topup import simulate_dd_topup, summarize_overlay
 
-    nav, events, summary = run_factor2_on_equity(
+    nav, events = simulate_dd_topup(
         eq,
         initial_cash=float(initial_cash),
         add_pcts=add_pcts,
         levels=levels,
         max_inject_pct=max_inject_pct,
     )
+    base_final = float(eq.sort_index().iloc[-1]) if len(eq) else None
+    summary = summarize_overlay(nav, initial_cash=initial_cash, base_final=base_final)
     overlay = {
         "binding": _factor2_binding(),
         "nav": nav,
@@ -106,6 +110,7 @@ def _apply_factor2_overlay(
         "add_pcts": tuple(float(x) for x in add_pcts),
         "levels": tuple(levels),
         "max_inject_pct": float(max_inject_pct),
+        "legacy_overlay": True,
     }
     try:
         result.factor2_overlay = overlay
@@ -113,7 +118,7 @@ def _apply_factor2_overlay(
         pass
 
     if verbose and summary:
-        print("\n========== 策略一 · 因子2（回撤补仓叠加）==========")
+        print("\n========== 策略一 · 因子2（旧版权益叠加，可选）==========")
         print(
             f"策略一期末:  {summary.get('base_final', 0):,.2f}  "
             f"(+{summary.get('base_return_pct', 0):.2f}%)"
@@ -122,8 +127,6 @@ def _apply_factor2_overlay(
             f"叠加因子2后: {summary.get('own_equity', 0):,.2f}  "
             f"(+{summary.get('own_return_pct', 0):.2f}%)"
         )
-        print(f"相对多赚:    {summary.get('extra_vs_base', 0):+,.2f}")
-        print(f"因子2最大回撤%: {summary.get('max_drawdown_pct', 0):.2f}")
         print(
             f"档位 {levels_label(levels)}  "
             f"+总本金×{add_pcts_label(add_pcts)}%  "
@@ -132,23 +135,59 @@ def _apply_factor2_overlay(
     return overlay
 
 
+def _attach_factor2_alert_meta(result: Any, verbose: bool = True) -> None:
+    """把预警阈值挂到回测结果，便于报告/盯盘读取；不改权益。"""
+    binding = _factor2_binding()
+    if binding is None:
+        return
+    from strategy.dd_alert import derive_thresholds, format_rules
+
+    th = derive_thresholds(
+        hist_max_dd=binding.params.get("hist_max_dd"),
+        avg_yearly_max_dd=binding.params.get("avg_yearly_max_dd"),
+    )
+    # 若有权益曲线，可按本回测重标定
+    eq = getattr(result, "equity_curve", None)
+    if eq is not None and not getattr(eq, "empty", True):
+        try:
+            th = derive_thresholds(eq)
+        except Exception:
+            pass
+    meta = {
+        "mode": "alert_only",
+        "thresholds": th.as_dict(),
+        "label": th.label(),
+        "rules": format_rules(th),
+    }
+    try:
+        result.factor2_alert = meta
+    except Exception:
+        pass
+    if verbose:
+        print("\n========== 策略一 · 因子2（回撤预警，不介入）==========")
+        print(th.label())
+        print(
+            f"加仓预警 ≥{th.add_alert_dd*100:.0f}%  |  "
+            f"减仓预警 ≤{th.reduce_alert_dd*100:.0f}%（须曾进加仓区）  |  "
+            f"接近历史最大 {th.hist_max_dd*100:.1f}% 停止加仓"
+        )
+
+
 def run_strategy1(
     cfg: Any = None,
     *,
     show_report: bool = False,
     verbose: bool = True,
     force_daily_refresh: bool = False,
-    apply_factor2_overlay: bool = True,
+    apply_factor2_overlay: bool = False,
     factor2_add_pct: float | None = None,
     factor2_add_pcts: Sequence[float] | None = None,
     factor2_levels: Sequence[float] | None = None,
     factor2_max_inject_pct: float | None = None,
 ) -> tuple[Any, Any]:
-    """策略一回测：因子1 交易 +（默认）因子2 权益补仓叠加。
+    """策略一回测：因子1 交易；因子2 默认只挂预警阈值（不注资）。
 
-    覆盖因子2 参数（不必改代码）：
-      · 调用参数 factor2_add_pcts / factor2_levels / factor2_max_inject_pct
-      · 或 BacktestConfig.factor2_* / strategy1 bindings / dd_topup.DEFAULT_*
+    apply_factor2_overlay=True 时可启用旧版 dd_topup 权益叠加。
     """
     from dataclasses import replace
 
@@ -175,6 +214,8 @@ def run_strategy1(
         verbose=verbose,
         force_daily_refresh=force_daily_refresh,
     )
+    _attach_factor2_alert_meta(result, verbose=verbose)
+
     resolved = _resolve_factor2_from_cfg(
         cfg, apply_factor2_overlay=apply_factor2_overlay
     )
@@ -200,7 +241,7 @@ def _bind() -> StrategySpec:
         name=STRATEGY_NAME,
         description=(
             "默认策略：因子1 开盘±2.5%/阴小阳/禁双阳跨日≥5%/仅止损"
-            " + 因子2 回撤阶梯补仓（叠权益；档位/比例可配）"
+            " + 因子2 回撤加减仓预警（回测不注资）"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy1,
@@ -214,7 +255,8 @@ def _bind() -> StrategySpec:
             "default": True,
             "legacy_id": "open_break3",
             "factors": ("factor1", "factor2"),
-            "factor2_overlay": True,
+            "factor2_overlay": False,
+            "factor2_alert_only": True,
         },
     )
 

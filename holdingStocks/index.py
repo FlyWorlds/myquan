@@ -3,13 +3,13 @@
 策略锁定 · 策略一：
   · 因子1 买：high≥ceil(open×1.025)；前日阴/小阳；禁双阳跨日≥5%；T+1
   · 因子1 卖：仅止损−2.5% 全清
-  · 因子2：总资产年内回撤阶梯补仓（建议追加/提出；不自动改现金）
+  · 因子2：回撤加减仓预警（历史最大/年均值/当前回撤；不自动改现金）
   · 可插拔：strategy/strategies + strategy/factors（见 strategy/README.md）
 
 功能：
   · 拉取当日开盘、最高、最低、现价（东财 SSE + 新浪批量兜底；冷启动用分钟线）
   · 因子1 规则与 strategy/open_break + strategy1/bindings 同源
-  · 因子2 与 strategy/dd_topup 同源（账户级建议，不自动改现金）
+  · 因子2 与 strategy/dd_alert 同源（账户级预警，不自动改现金）
   · 有仓：仅止损自动结算（全清）；空仓：已触买/将买入建议限价
   · 本地 JSON 记录持仓；T+1 买入日不可卖
 
@@ -1912,7 +1912,13 @@ def sort_watch_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             return 2
         if pos in ("当日禁买", "策略持有"):
             return 3
-        if str(r.get("因子2动作") or "") in ("inject", "withdraw"):
+        if str(r.get("因子2动作") or "") in (
+            "inject",
+            "withdraw",
+            "add_alert",
+            "reduce_alert",
+            "near_max",
+        ):
             return 4
         return 5
 
@@ -2580,6 +2586,13 @@ def write_html_report(
     .summary .day-line .day-label {{ color: var(--muted); font-size: 0.85rem; }}
     .summary .day-line .day-value {{ font-size: 1.05rem; font-weight: 700; }}
     .summary .meta {{ color: var(--muted); font-size: 0.78rem; margin-top: 8px; line-height: 1.4; }}
+    .summary .factor2-line {{
+      color: #1f2937;
+      font-size: 0.86rem;
+      font-weight: 600;
+      margin-top: 10px;
+      line-height: 1.45;
+    }}
     .index-card {{
       border: 1px solid var(--line);
       border-radius: 14px;
@@ -2735,7 +2748,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1仅止损 · 因子2回撤补仓 · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
+          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1仅止损 · 因子2回撤预警 · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2759,7 +2772,7 @@ def write_html_report(
     <p class="note">
       策略锁定 {STRATEGY_NAME}（与 strategy1 bindings 同源）。
       因子1：买卖点/止损；卖出仅止损全清。
-      因子2：按账户总资产年内回撤建议追加/提出（摘要见合计区；不自动改现金）。
+      因子2：策略一历史最大回撤 / 年最大回撤均值 / 当前回撤（摘要见合计区；只预警不改现金）。
       持仓状态：待买入 / 待卖出 / 持有 / 空仓；策略回放未登记=策略持有；当日止损后=当日禁买。
       规则：T+1当日不卖；持有仅−2.5%止损卖；止损/卖出当日不买。
       卡片排序：待卖出 → 待买入 → 实仓持有 → 当日禁买/策略持有 → 空仓。
@@ -3471,7 +3484,7 @@ def cmd_review(args: argparse.Namespace) -> None:
         account_total=account_total,
         account_open=account_open,
         available_cash=available,
-        strategy=f"{STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1仅止损 · 因子2回撤补仓",
+        strategy=f"{STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1仅止损 · 因子2回撤预警",
     )
     text = format_review_text(review)
     text_path, json_path = save_review(review, text)

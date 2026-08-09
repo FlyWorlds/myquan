@@ -1,7 +1,9 @@
 """回撤阶梯补仓（因子2 真源）：在策略权益曲线上追加/提出资金。
 
-默认五档（相对年内权益高点，每 5% 一档；前浅后深）：
-  · 回撤 ≥10%/15%/20%/25%/30% → 追加总本金 × 5%/10%/15%/15%/15%
+默认三档（相对年内权益高点，每 10% 一档；前浅后深）：
+  · 回撤 ≥10% → 第1档，追加总本金 × 10%
+  · 回撤 ≥20% → 第2档，再追加总本金 × 20%
+  · 回撤 ≥30% → 第3档，再追加总本金 × 30%
   · 累计追加上限 = 总本金 × 60%；回撤超过 30% 不再加档
   · 回撤收窄按档 LIFO 提出；回到 0 全部结清
 
@@ -17,9 +19,9 @@ from typing import Any, Sequence
 import pandas as pd
 
 # --- 默认参数（开闭：改默认只动此处；策略侧用 bindings / BacktestConfig 覆盖）---
-DEFAULT_LEVELS: tuple[float, ...] = (0.10, 0.15, 0.20, 0.25, 0.30)
-# 各档相对「总本金」追加比例（前浅后深：浅回撤少加，深回撤多加）
-DEFAULT_ADD_PCTS: tuple[float, ...] = (0.05, 0.10, 0.15, 0.15, 0.15)
+DEFAULT_LEVELS: tuple[float, ...] = (0.10, 0.20, 0.30)
+# 各档相对「总本金」追加比例（前浅后深：浅少加深）
+DEFAULT_ADD_PCTS: tuple[float, ...] = (0.10, 0.20, 0.30)
 # 兼容旧接口：均匀每档比例；None 表示用 DEFAULT_ADD_PCTS
 DEFAULT_ADD_PCT = 0.10
 # 累计追加上限（相对总本金）；None=各档之和
@@ -56,8 +58,8 @@ def normalize_add_pcts(
         if pct <= 0 or pct >= 1:
             raise ValueError(f"add_pct 应在 (0,1): {pct}")
         return tuple(pct for _ in lv)
-    # 默认五档表；若 levels 被覆盖且长度不同，则均匀 DEFAULT_ADD_PCT
-    if len(lv) == len(DEFAULT_ADD_PCTS) and lv == normalize_levels(DEFAULT_LEVELS):
+    # 默认档位表；若 levels 被覆盖且长度不同，则均匀 DEFAULT_ADD_PCT
+    if lv == normalize_levels(DEFAULT_LEVELS):
         return DEFAULT_ADD_PCTS
     if len(lv) == len(DEFAULT_ADD_PCTS):
         return DEFAULT_ADD_PCTS

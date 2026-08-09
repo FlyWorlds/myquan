@@ -36,7 +36,7 @@ akshare DataFrame
 
 **当前生效**：**策略一 = 因子1 + 因子2**。  
 - **因子1**：开盘 ±2.5%；买 `high ≥ ceil(open×1.025)`，前日阴/小阳，禁双阳跨日≥5%，T+1；卖仅止损 −2.5%。  
-- **因子2**：回撤阶梯补仓（叠在策略权益上；五档 10/15/20/25/30，追加总本金×5%/10%/15%/15%/15%，累计上限 60%；回落减档，到 0 结清）。  
+- **因子2**：回撤加减仓**预警**（由历史最大回撤取整 + 年最大回撤均值标定；默认加仓≥20% / 减仓≤10%；**回测不注资**，盯盘只报警）。  
 完整规则（策略一 = 因子1+2）：
 
 ```bash
@@ -71,17 +71,18 @@ myquan/
 ├── test_strategy_rules.py   # 离线规则回归（不访问网络）
 ├── strategy/                # 可插拔策略框架（详见 strategy/README.md）
 │   ├── core/                # 协议 / MarketContext / Decision / 注册表
-│   ├── factors/             # 因子1买卖 · 因子2回撤补仓 · 因子3占位
+│   ├── factors/             # 因子1买卖 · 因子2回撤预警 · 因子3占位
 │   ├── strategies/          # strategyN/{bindings,decision} 策略层+决策层
 │   ├── open_break.py        # 因子1 规则/默认百分比
-│   ├── dd_topup.py          # 因子2 规则/默认档位·加仓比例
+│   ├── dd_alert.py          # 因子2 回撤加减仓预警阈值（默认）
+│   ├── dd_topup.py          # 旧版权益注资叠加（可选，默认关闭）
 │   ├── backtest.py          # akquant Strategy（执行层）
 │   ├── config.py / runner.py / data.py / minute.py
 │   └── registry.py          # 兼容 get_strategy / get_decision_engine
 ├── backtest/                # 回测 CLI / 标的脚本 / 合格池
 │   ├── run.py               # 统一入口：python run.py kaicheng（策略一）
-│   ├── strategy1.py         # 策略一：因子1+2
-│   ├── factor2.py           # 因子2叠加演示（同策略一）
+│   ├── strategy1.py         # 策略一：因子1+2（因子2默认只预警）
+│   ├── factor2.py           # 因子2旧版叠加演示（需显式开启）
 │   ├── universe_zz500_1000.py
 │   └── read.md              # 合格标的池说明
 ├── holdingStocks/           # 持仓盯盘 + 微信预警

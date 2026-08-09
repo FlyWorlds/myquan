@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from strategy.core.protocols import bind_factor
-from strategy.dd_topup import (
-    DEFAULT_ADD_PCTS,
-    DEFAULT_LEVELS,
-    DEFAULT_MAX_INJECT_PCT,
-    filter_desc as factor2_filter_desc,
+from strategy.dd_alert import (
+    DEFAULT_AVG_YEARLY_MAX_DD,
+    DEFAULT_HIST_MAX_DD,
+    default_thresholds,
 )
 from strategy.open_break import (
     DEFAULT_BAN_DOUBLE_YANG,
@@ -20,6 +19,8 @@ from strategy.open_break import (
 
 STRATEGY_ID = "strategy1"
 STRATEGY_NAME = "策略一"
+
+_TH = default_thresholds()
 
 
 def strategy1_factor_filter(
@@ -77,15 +78,17 @@ FACTOR_BINDINGS = (
     ),
     bind_factor(
         "factor2",
-        label="回撤阶梯补仓",
+        label="回撤加减仓预警",
         role="custom",
-        add_pcts=DEFAULT_ADD_PCTS,
-        levels=DEFAULT_LEVELS,
-        max_inject_pct=DEFAULT_MAX_INJECT_PCT,
-        filter_desc=factor2_filter_desc(
-            levels=DEFAULT_LEVELS,
-            add_pcts=DEFAULT_ADD_PCTS,
-            max_inject_pct=DEFAULT_MAX_INJECT_PCT,
+        hist_max_dd=DEFAULT_HIST_MAX_DD,
+        avg_yearly_max_dd=DEFAULT_AVG_YEARLY_MAX_DD,
+        add_alert_dd=_TH.add_alert_dd,
+        reduce_alert_dd=_TH.reduce_alert_dd,
+        overlay=False,
+        filter_desc=(
+            f"加仓≥{_TH.add_alert_dd*100:.0f}% / 减仓≤{_TH.reduce_alert_dd*100:.0f}% "
+            f"(年均值{_TH.avg_yearly_max_dd*100:.0f}% / 历史最大{_TH.hist_max_dd*100:.0f}%)；"
+            "回测不注资"
         ),
         enabled=True,
     ),

@@ -485,7 +485,13 @@ def notify_watch_rows(
         (
             r
             for r in rows
-            if str(r.get("因子2动作") or "") in ("inject", "withdraw")
+            if str(r.get("因子2动作") or "") in (
+                "inject",
+                "withdraw",
+                "add_alert",
+                "reduce_alert",
+                "near_max",
+            )
         ),
         None,
     )
