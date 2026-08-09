@@ -1,15 +1,21 @@
-"""OpenBreak3 统一回测入口。"""
+"""OpenBreak3 / 动量 统一回测入口。"""
 
 from __future__ import annotations
 
 import pandas as pd
-from akquant import BacktestResult, CurrentClose, Strategy
+from akquant import BacktestResult, CurrentClose, NextOpen, Strategy
 
 from strategy.backtest import OpenBreak3Strategy, print_summary
 from strategy.base import run_akquant_backtest, run_backtest_pipeline
 from strategy.config import BacktestConfig
+from strategy.momentum_strategy import (
+    MomentumStrategy,
+    apply_momentum_config,
+    prepare_momentum_signals,
+)
 
 _FILL = CurrentClose()
+_FILL_NEXT_OPEN = NextOpen()
 
 
 def apply_strategy_config(
@@ -142,3 +148,91 @@ def run_open_break(
             "show_progress": False,
         },
     )
+
+
+def run_momentum(
+    cfg: BacktestConfig,
+    *,
+    show_report: bool = False,
+    verbose: bool = True,
+    force_daily_refresh: bool = False,
+) -> tuple[BacktestResult, pd.DataFrame]:
+    """因子4·动量：收盘确认信号 → 次日开盘成交。
+
+    先用更长历史预热因子（避免 dig 窗口起点丢状态），再截到 cfg.start_date 回测。
+    """
+    from strategy.data import fetch_daily
+
+    kind = getattr(cfg, "mom_kind", "dist_hl") or "dist_hl"
+    params = getattr(cfg, "mom_params", None) or {}
+    warm_start = "20200101"
+    if verbose:
+        print(f"akquant 动量回测 kind={kind} params={params}")
+        print(
+            f"拉取 {cfg.symbol_name}({cfg.symbol}) "
+            f"日线预热 {warm_start} → {cfg.end_date}，回测自 {cfg.start_date} ..."
+        )
+    full = fetch_daily(
+        cfg.symbol,
+        warm_start,
+        cfg.end_date,
+        cache_path=getattr(cfg, "daily_cache", None),
+        force_refresh=force_daily_refresh,
+    )
+    prepare_momentum_signals(cfg, full)
+    start_ts = pd.Timestamp(cfg.start_date)
+    if start_ts.tzinfo is None:
+        start_ts = start_ts.tz_localize("Asia/Shanghai")
+    daily = full[full["date"] >= start_ts].reset_index(drop=True)
+    if verbose:
+        print(
+            f"预热后回测日线: {len(daily)}，"
+            f"{daily['date'].iloc[0]} → {daily['date'].iloc[-1]}"
+        )
+
+    from strategy.base import run_akquant_backtest
+
+    result = run_akquant_backtest(
+        daily=daily,
+        strategy_cls=MomentumStrategy,
+        symbol=cfg.symbol,
+        params=cfg,
+        configure=apply_momentum_config,
+        extra={
+            "t_plus_one": not bool(cfg.t0),
+            "fill_policy": _FILL_NEXT_OPEN,
+            "timezone": "Asia/Shanghai",
+            "show_progress": False,
+        },
+    )
+    if verbose:
+        print("\n=== Backtest Result ===")
+        print(result)
+        print_summary(
+            result,
+            daily,
+            symbol_name=cfg.symbol_name,
+            symbol=cfg.symbol,
+            initial_cash=cfg.initial_cash,
+            commission_rate=cfg.commission_rate,
+            stamp_tax_rate=cfg.stamp_tax_rate,
+            slippage_value=cfg.slippage_value,
+            entry_pct=0.0,
+            stop_pct=0.0,
+            prev_small_yang_pct=0.0,
+        )
+    if cfg.report_path is not None:
+        title = f"{cfg.symbol_name} 因子4·动量 kind={kind} params={params}"
+        if verbose:
+            print(f"\n生成 HTML: {cfg.report_path}")
+        result.viz.report(
+            title=title,
+            filename=str(cfg.report_path),
+            show=show_report,
+            market_data=daily,
+            plot_symbol=cfg.symbol,
+            curve_freq="D",
+        )
+        if verbose:
+            print(f"报告已生成: {cfg.report_path}")
+    return result, daily

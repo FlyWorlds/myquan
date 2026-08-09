@@ -48,6 +48,7 @@ from strategy.minute import (
 from strategy.runner import (
     apply_strategy_config,
     build_open_break_strategy,
+    run_momentum,
     run_open_break,
     run_open_break_backtest,
 )
@@ -145,6 +146,7 @@ __all__ = [
     "standardize_minute_1m",
     "run_open_break",
     "run_open_break_backtest",
+    "run_momentum",
     "run_strategy1",
     "apply_strategy_config",
     "build_open_break_strategy",

@@ -1,0 +1,12 @@
+start: 2026-01-05
+end: 2026-08-07
+n_days: 144
+total_return_pct: 42.31050059555219
+max_drawdown_pct: 12.682447494945553
+sharpe: 1.9007045940216143
+end_equity: 1423105.005955522
+n_trades: 564
+n_buys: 288
+top_k: 2
+hold_days: 6
+factor: rev{n=60, hold=6, min_score=None, ma=None}

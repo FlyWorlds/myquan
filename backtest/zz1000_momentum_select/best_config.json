@@ -1,0 +1,13 @@
+{
+  "kind": "rev",
+  "n": 60,
+  "kind_raw": "rev",
+  "top_k": 2,
+  "hold_days": 6,
+  "min_score": null,
+  "ma_filter": null,
+  "sharpe": 1.9007045940216143,
+  "ret": 0.4231050059555217,
+  "dd": 0.12682447494945576,
+  "n_buys": 288
+}
