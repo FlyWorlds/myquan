@@ -1,0 +1,3 @@
+﻿rank,trade_date,signal_date,symbol,code,name,score,signal_close,kind,n,hold_days
+1,2026-08-10,2026-08-07,sh600158,600158,中体产业,0.49425287356321834,7.04,rev,60,6
+2,2026-08-10,2026-08-07,sz002081,002081,金螳螂,0.4909793814432989,3.95,rev,60,6
