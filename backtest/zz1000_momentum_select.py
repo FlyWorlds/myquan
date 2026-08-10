@@ -32,6 +32,7 @@ from strategy.data import fetch_daily  # noqa: E402
 CACHE_DIR = Path(__file__).resolve().parent / "universe_zz500_1000" / "daily_cache"
 OUT_DIR = Path(__file__).resolve().parent / "zz1000_momentum_select"
 PANEL_PATH = OUT_DIR / "panel_ohlc.parquet"
+PANEL_PATH_ZZ500_1000 = OUT_DIR / "panel_ohlc_zz500_1000.parquet"
 BEST_PATH = OUT_DIR / "best_config.json"
 CSINDEX_CONS_URL = (
     "https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/"
@@ -59,8 +60,8 @@ def _to_symbol(code: str) -> str:
     return f"sh{c}" if c.startswith(("5", "6")) else f"sz{c}"
 
 
-def load_zz1000_mainboard() -> pd.DataFrame:
-    url = CSINDEX_CONS_URL.format(code="000852")
+def _load_csindex_mainboard(index_code: str, *, label: str) -> pd.DataFrame:
+    url = CSINDEX_CONS_URL.format(code=index_code)
     r = requests.get(url, timeout=60)
     r.raise_for_status()
     df = pd.read_excel(io.BytesIO(r.content))
@@ -81,7 +82,24 @@ def load_zz1000_mainboard() -> pd.DataFrame:
             {"code": c, "name": str(row[name_col]).strip(), "symbol": _to_symbol(c)}
         )
     out = pd.DataFrame(rows).drop_duplicates("code")
-    print(f"中证1000主板成分: {len(out)}")
+    print(f"{label}主板成分: {len(out)}")
+    return out
+
+
+def load_zz1000_mainboard() -> pd.DataFrame:
+    return _load_csindex_mainboard("000852", label="中证1000")
+
+
+def load_zz500_mainboard() -> pd.DataFrame:
+    return _load_csindex_mainboard("000905", label="中证500")
+
+
+def load_zz500_1000_mainboard() -> pd.DataFrame:
+    """中证500 + 中证1000 主板并集（去重）。"""
+    a = load_zz500_mainboard()
+    b = load_zz1000_mainboard()
+    out = pd.concat([a, b], ignore_index=True).drop_duplicates("code")
+    print(f"中证500+1000主板并集: {len(out)}")
     return out
 
 
@@ -104,10 +122,12 @@ def load_panel_matrices(
     warm_start: str,
     end: str,
     refresh: bool = False,
+    panel_path: Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    if PANEL_PATH.exists() and not refresh:
-        wide = pd.read_parquet(PANEL_PATH)
-        print(f"载入面板缓存 {PANEL_PATH} {wide['close'].shape}")
+    path = Path(panel_path) if panel_path is not None else PANEL_PATH
+    if path.exists() and not refresh:
+        wide = pd.read_parquet(path)
+        print(f"载入面板缓存 {path} {wide['close'].shape}")
         return wide["open"], wide["high"], wide["low"], wide["close"]
 
     opens: dict[str, pd.Series] = {}
@@ -138,9 +158,9 @@ def load_panel_matrices(
     cl = pd.DataFrame(closes).sort_index()
     cols = sorted(set(op.columns) & set(hi.columns) & set(lo.columns) & set(cl.columns))
     op, hi, lo, cl = op[cols], hi[cols], lo[cols], cl[cols]
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    pd.concat({"open": op, "high": hi, "low": lo, "close": cl}, axis=1).to_parquet(PANEL_PATH)
-    print(f"写入面板 {PANEL_PATH} {cl.shape}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.concat({"open": op, "high": hi, "low": lo, "close": cl}, axis=1).to_parquet(path)
+    print(f"写入面板 {path} {cl.shape}")
     return op, hi, lo, cl
 
 

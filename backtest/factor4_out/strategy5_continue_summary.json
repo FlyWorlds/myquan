@@ -1,0 +1,27 @@
+{
+  "conclusion": "在无未来函数、测试段不选参约束下，Top3 最优仍是 plain rev(n=90)/持有14日；结构增强与波动门控未在训验稳定性上击败基线。",
+  "baseline": {
+    "mode": "plain",
+    "kind": "rev",
+    "n": 90,
+    "top_k": 3,
+    "hold_days": 14,
+    "full_sharpe": 0.722,
+    "full_ret": 2.941,
+    "full_dd": 0.388,
+    "test_sharpe": 0.451
+  },
+  "tried": [
+    "vol_mask / dual_rev / dual_vol / persist 结构搜索",
+    "逐年 Walk-Forward 滚动选参",
+    "市场波动门控、滚动分位门控、截面离散度门控"
+  ],
+  "walk_forward": {
+    "sharpe": 0.716,
+    "ret": 2.065,
+    "dd": 0.416,
+    "note": "与固定基线接近，未显著提升夏普"
+  },
+  "gate_best_by_stability": "always",
+  "note_disp_ma": "disp>ma 测试夏普0.84但验证仅0.13，属样本外幻觉，正确拒绝"
+}

@@ -1,0 +1,109 @@
+{
+  "choose": "baseline",
+  "reason": "keep baseline",
+  "selected": {
+    "kind": "rev",
+    "n": 90,
+    "hold_days": 14,
+    "ma_filter": null,
+    "mode": "plain"
+  },
+  "structure_tag": "structure_stab",
+  "structure_best": {
+    "mode": "plain",
+    "n": 90,
+    "hold_days": 14,
+    "ma_filter": null,
+    "top_k": 3
+  },
+  "baseline": {
+    "kind": "rev",
+    "n": 90,
+    "hold_days": 14,
+    "ma_filter": null,
+    "mode": "plain"
+  },
+  "metrics": {
+    "enhanced_test": {
+      "sharpe": 0.4511935413305526,
+      "ret": 0.30085276755670876,
+      "dd": 0.398380726095751,
+      "n_buys": 1875,
+      "end": 1300852.7675567088
+    },
+    "enhanced_full": {
+      "sharpe": 0.722272746782097,
+      "ret": 2.941434147059782,
+      "dd": 0.3877381036049603,
+      "n_buys": 4765
+    },
+    "baseline_test": {
+      "sharpe": 0.4511935413305526,
+      "ret": 0.30085276755670876,
+      "dd": 0.398380726095751,
+      "n_buys": 1875,
+      "end": 1300852.7675567088
+    },
+    "baseline_full": {
+      "sharpe": 0.722272746782097,
+      "ret": 2.941434147059782,
+      "dd": 0.3877381036049603,
+      "n_buys": 4765
+    },
+    "walk_forward": {
+      "sharpe": 0.7157292907803116,
+      "ret": 2.0651787700763875,
+      "dd": 0.41625166666539287,
+      "years": [
+        {
+          "year": 2021,
+          "cfg": "{\"mode\": \"persist\", \"n\": 90, \"hold_days\": 16, \"ma_filter\": null, \"persist\": 2, \"pool\": 8}",
+          "sel_score": 0.46446690353245923,
+          "year_ret": 0.5708603164017652,
+          "year_sharpe": 1.7147421061295722,
+          "year_dd": 0.19329089018060058
+        },
+        {
+          "year": 2022,
+          "cfg": "{\"mode\": \"persist\", \"n\": 90, \"hold_days\": 14, \"ma_filter\": null, \"persist\": 2, \"pool\": 12}",
+          "sel_score": 0.6773437444609858,
+          "year_ret": 0.29600896302040614,
+          "year_sharpe": 0.9794024150426902,
+          "year_dd": 0.29490671816847625
+        },
+        {
+          "year": 2023,
+          "cfg": "{\"mode\": \"plain\", \"n\": 90, \"hold_days\": 16, \"ma_filter\": null}",
+          "sel_score": 1.2238609439997512,
+          "year_ret": 0.23677803209660198,
+          "year_sharpe": 0.8983270977774637,
+          "year_dd": 0.19485115522728189
+        },
+        {
+          "year": 2024,
+          "cfg": "{\"mode\": \"plain\", \"n\": 90, \"hold_days\": 12, \"ma_filter\": null}",
+          "sel_score": 0.966160016489896,
+          "year_ret": 0.03803554867628467,
+          "year_sharpe": 0.3852871516297885,
+          "year_dd": 0.41625166666539287
+        },
+        {
+          "year": 2025,
+          "cfg": "{\"mode\": \"persist\", \"n\": 90, \"hold_days\": 16, \"ma_filter\": null, \"persist\": 2, \"pool\": 8}",
+          "sel_score": 0.18352435677610507,
+          "year_ret": 0.22253500925584757,
+          "year_sharpe": 1.0233203490125107,
+          "year_dd": 0.17577218880407605
+        },
+        {
+          "year": 2026,
+          "cfg": "{\"mode\": \"persist\", \"n\": 90, \"hold_days\": 16, \"ma_filter\": null, \"persist\": 2, \"pool\": 8}",
+          "sel_score": 0.18369110510737394,
+          "year_ret": -0.0407209909982057,
+          "year_sharpe": -0.10727608140097344,
+          "year_dd": 0.27083979013436477
+        }
+      ]
+    }
+  }
+}

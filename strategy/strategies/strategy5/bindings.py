@@ -1,20 +1,31 @@
-"""策略五 · 因子绑定：仅因子4·动量。"""
+"""策略五 · 因子绑定：动量因子组合（中证1000截面）。"""
 
 from __future__ import annotations
 
 from strategy.core.protocols import bind_factor
-from strategy.momentum import DEFAULT_KIND, DEFAULT_PARAMS
+from strategy.strategies.strategy5.portfolio import PORTFOLIO_DEFAULTS
 
 STRATEGY_ID = "strategy5"
-STRATEGY_NAME = "策略五·动量"
+STRATEGY_NAME = "动量因子组合"
+
+_p = PORTFOLIO_DEFAULTS
 
 FACTOR_BINDINGS = (
     bind_factor(
         "factor4",
         role="both",
-        label="因子4·动量",
-        kind=DEFAULT_KIND,
-        **DEFAULT_PARAMS,
-        filter_desc="独立动量：收盘确认、次日开盘调仓；不叠因子1",
+        label="因子4·动量组合",
+        kind=_p["kind"],
+        n=_p["n"],
+        top_k=_p["top_k"],
+        hold_days=_p["hold_days"],
+        min_score=_p["min_score"],
+        ma_filter=_p["ma_filter"],
+        filter_desc=(
+            f"截面组合：中证500+1000主板 mode={_p.get('mode')} "
+            f"rev(n={_p['n']}"
+            + (f"+{_p['n2']}" if _p.get("n2") else "")
+            + f") 日选Top{_p['top_k']}，持有{_p['hold_days']}日；收盘信号次日开盘"
+        ),
     ),
 )

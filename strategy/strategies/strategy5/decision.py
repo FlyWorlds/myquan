@@ -1,4 +1,4 @@
-"""策略五 · 决策层：因子4 动量。"""
+"""策略五 · 决策层：动量因子组合（截面选股说明）。"""
 
 from __future__ import annotations
 
@@ -16,11 +16,15 @@ class Strategy5Decision(BaseDecisionEngine):
         del ctx
         binding = self.binding("factor4")
         if binding is None:
-            return Decision.hold("策略五未绑定因子4")
+            return Decision.hold("动量因子组合未绑定因子4")
+        p = binding.params
         return Decision.hold(
-            "动量仓位由收盘因子确认、次日开盘执行（见 MomentumStrategy）",
-            kind=binding.params.get("kind"),
-            tags=("momentum", "factor4"),
+            (
+                f"组合调仓由截面因子确认：{p.get('kind')}(n={p.get('n')}) "
+                f"Top{p.get('top_k')} / 持有{p.get('hold_days')}日"
+            ),
+            kind=p.get("kind"),
+            tags=("momentum_portfolio", "factor4"),
         )
 
 

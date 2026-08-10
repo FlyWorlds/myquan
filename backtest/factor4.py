@@ -1,16 +1,11 @@
-"""中证1000 主板截面选股回测（2020→今）。
+"""策略五 · 动量因子组合回测（中证500+1000主板，2020→今）。
 
-说明：
-  · 单票策略五/因子4（dist_hl）不适合直接做截面 TopK（无超额 + 换手成本过大）。
-  · 截面默认改用 dig 最优：短期反转 rev(n=60) + Top2 + 持有6日袖套轮动。
-  · 股票池：中证1000 主板（剔科创/创业/北交）
-  · 每天收盘按因子截面选 TopK → 次日开盘买 → 持有 hold_days 日开盘卖
+默认读取 strategy5.PORTFOLIO_DEFAULTS（挖参后多为短期反转）。
 
 用法:
   python factor4.py --no-open
-  python factor4.py --no-open --kind rev --n 60 --top-k 2 --hold-days 6
-  python factor4.py --no-open --legacy-dist-hl   # 旧口径对照（不推荐）
-  python factor4.py --symbol-only                # 凯盛单票·策略五 dist_hl
+  python factor4.py --no-open --universe zz1000_mainboard
+  python factor4.py --no-open --kind rev --n 90 --top-k 3 --hold-days 14
 """
 
 from __future__ import annotations
@@ -27,108 +22,56 @@ if str(_MYQUAN) not in sys.path:
 
 from backtest import zz1000_momentum_select as zz  # noqa: E402
 from strategy.backtest import _metric  # noqa: E402
-from strategy.dd_alert import max_drawdown_pct, yearly_max_drawdowns  # noqa: E402
-from strategy.momentum import DEFAULT_KIND, DEFAULT_PARAMS  # noqa: E402
+from strategy.dd_alert import yearly_max_drawdowns  # noqa: E402
+from strategy.strategies.strategy5.portfolio import (  # noqa: E402
+    PORTFOLIO_DEFAULTS,
+    apply_best_config,
+    run_momentum_portfolio,
+)
 
-START = "20200101"
-WARM = "20180101"
-INITIAL = zz.INITIAL_CASH
+START = str(PORTFOLIO_DEFAULTS["start"])
+WARM = str(PORTFOLIO_DEFAULTS["warm_start"])
 OUT_DIR = Path(__file__).resolve().parent / "factor4_out"
-
-# 截面 dig 默认（见 zz1000_momentum_select/best_config.json）
-CS_KIND = "rev"
-CS_N = 60
-CS_TOP_K = 2
-CS_HOLD_DAYS = 6
 
 
 def _end_today() -> str:
     return pd.Timestamp.today().strftime("%Y%m%d")
 
 
-def _yearly_table(eq: pd.Series, *, initial_cash: float) -> pd.DataFrame:
-    eq = eq.dropna().sort_index()
-    if eq.empty:
-        return pd.DataFrame()
-    if getattr(eq.index, "tz", None) is not None:
-        years = eq.index.tz_convert("Asia/Shanghai").year
-    else:
-        years = eq.index.year
-    rows: list[dict] = []
-    for y, g in eq.groupby(years):
-        prev = eq[eq.index < g.index[0]]
-        base = float(prev.iloc[-1]) if len(prev) else float(initial_cash)
-        ret = float(g.iloc[-1] / base - 1.0) * 100
-        dd = max_drawdown_pct(g) * 100 if len(g) > 1 else 0.0
-        rows.append({"year": int(y), "return_pct": ret, "max_dd_pct": dd})
-    return pd.DataFrame(rows)
-
-
-def run_zz1000_cross_section(
+def run_portfolio(
     *,
     kind: str,
     n: int,
     top_k: int,
     hold_days: int,
+    min_score: float | None,
+    ma_filter: int | None,
+    universe: str,
     refresh: bool,
     no_open: bool,
 ) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    end = _end_today()
-    print(
-        f"[中证1000截面] pool=主板  kind={kind} n={n} "
-        f"top_k={top_k} hold_days={hold_days}  {START}→{end}"
-    )
-
-    univ = zz.load_zz1000_mainboard()
-    name_map = dict(zip(univ["symbol"], univ["name"]))
-    opens, highs, lows, closes = zz.load_panel_matrices(
-        univ["symbol"].tolist(),
-        warm_start=WARM,
-        end=end,
-        refresh=refresh,
-    )
-    print(f"面板 close={closes.shape}")
-
-    factor = zz.compute_factor(
-        opens,
-        highs,
-        lows,
-        closes,
+    result = run_momentum_portfolio(
         kind=kind,
         n=n,
-        min_score=None,
-        ma_filter=None,
-    )
-    label = f"{kind}{{n={n}, hold={hold_days}}}"
-    print(f"计算因子 {label} → {factor.shape}")
-
-    picks = zz.daily_topk(factor, top_k)
-    bt_start = pd.Timestamp(START)
-    idx_tz = getattr(factor.index, "tz", None)
-    if idx_tz is not None:
-        bt_start = bt_start.tz_localize(idx_tz)
-
-    eq_df, tr_df, stats = zz.simulate(
-        factor=factor,
-        opens=opens,
-        closes=closes,
-        picks=picks,
-        bt_start=bt_start,
-        hold_days=hold_days,
         top_k=top_k,
-        initial_cash=INITIAL,
-        factor_label=label,
+        hold_days=hold_days,
+        min_score=min_score,
+        ma_filter=ma_filter,
+        universe=universe,
+        start=START,
+        end=_end_today(),
+        warm_start=WARM,
+        refresh=refresh,
+        verbose=True,
     )
-    if eq_df is None or eq_df.empty:
-        print("无权益曲线，退出")
-        return
-
-    eq = eq_df.set_index("date")["equity"].astype(float).sort_index()
-    yearly = _yearly_table(eq, initial_cash=INITIAL)
+    stats = result.stats
+    yearly = result.yearly
+    eq = result.equity.set_index("date")["equity"].astype(float).sort_index()
     ydd = yearly_max_drawdowns(eq)
+    name_map = result.name_map
 
-    print("\n========== 中证1000 · 截面 TopK ==========")
+    print(f"\n========== 动量因子组合 · {universe} ==========")
     for k in (
         "start",
         "end",
@@ -154,13 +97,14 @@ def run_zz1000_cross_section(
             {int(k): round(float(v) * 100, 2) for k, v in ydd.items()},
         )
 
-    eq_df.to_csv(OUT_DIR / "zz1000_equity.csv", index=False, encoding="utf-8-sig")
+    result.equity.to_csv(OUT_DIR / "zz1000_equity.csv", index=False, encoding="utf-8-sig")
     yearly.to_csv(OUT_DIR / "zz1000_yearly.csv", index=False, encoding="utf-8-sig")
+    tr_df = result.trades
     if not tr_df.empty:
         tr_df = tr_df.copy()
         tr_df["name"] = tr_df["symbol"].map(name_map)
         tr_df.to_csv(OUT_DIR / "zz1000_trades.csv", index=False, encoding="utf-8-sig")
-    pk = stats.get("picks")
+    pk = result.picks
     if isinstance(pk, pd.DataFrame) and not pk.empty:
         pk = pk.copy()
         pk["pick_names"] = pk["picks"].map(
@@ -179,15 +123,15 @@ def run_zz1000_cross_section(
     )
 
     html = zz._write_html_report(
-        eq_df=eq_df,
+        eq_df=result.equity,
         tr_df=tr_df if not tr_df.empty else pd.DataFrame(),
         pk_df=pk if isinstance(pk, pd.DataFrame) else pd.DataFrame(),
         stats=stats,
         name_map=name_map,
-        initial_cash=INITIAL,
+        initial_cash=zz.INITIAL_CASH,
         note=(
-            f"截面修复口径：{kind}(n={n}) Top{top_k} 持有{hold_days}日；"
-            f"不再把单票 dist_hl 直接当截面动量。回测自{START}。"
+            f"动量因子组合 pool={universe} {kind}(n={n}) Top{top_k}/持有{hold_days}日；"
+            f"ma={ma_filter}；回测自{START}。"
         ),
     )
     dest = OUT_DIR / "zz1000_factor4_report.html"
@@ -205,19 +149,19 @@ def run_zz1000_cross_section(
 
 
 def run_kaicheng_akquant(*, force_refresh: bool, no_open: bool) -> None:
-    """可选对照：凯盛单票 · 策略 factor4 / strategy5（时序 dist_hl）。"""
-    from strategy import get_strategy
+    """对照：凯盛单票时序动量（原 dist_hl，非截面组合）。"""
+    from strategy.config import KAICHENG
+    from strategy.runner import run_momentum
+    from dataclasses import replace
 
-    cfg_base = get_strategy("factor4").default_config()
-    cfg = replace_cfg(
-        cfg_base,
-        start=START,
-        end=_end_today(),
-        warm_start=WARM,
+    cfg = replace(
+        KAICHENG,
+        start_date=START,
+        end_date=_end_today(),
         initial_cash=100_000.0,
     )
-    print(f"[单票对照] 凯盛 factor4/dist_hl  {cfg.start}→{cfg.end}")
-    result, daily = get_strategy("factor4").run(
+    print(f"[单票对照] 凯盛 dist_hl  {cfg.start_date}→{cfg.end_date}")
+    result, _daily = run_momentum(
         cfg,
         show_report=not no_open,
         force_daily_refresh=force_refresh,
@@ -230,28 +174,23 @@ def run_kaicheng_akquant(*, force_refresh: bool, no_open: bool) -> None:
     )
 
 
-def replace_cfg(cfg, **kwargs):
-    from dataclasses import replace
-
-    return replace(cfg, **kwargs)
-
-
 def main(argv: list[str] | None = None) -> None:
-    best = zz.load_best_config()
-    p = argparse.ArgumentParser(description="中证1000截面选股回测（修复口径）")
-    p.add_argument("--kind", default=str(best.get("kind", CS_KIND)))
-    p.add_argument("--n", type=int, default=int(best.get("n", CS_N)))
-    p.add_argument("--top-k", type=int, default=int(best.get("top_k", CS_TOP_K)))
+    d = PORTFOLIO_DEFAULTS
+    p = argparse.ArgumentParser(description="动量因子组合 · 中证500+1000截面回测")
+    p.add_argument("--kind", default=str(d["kind"]))
+    p.add_argument("--n", type=int, default=int(d["n"]))
+    p.add_argument("--top-k", type=int, default=int(d["top_k"]))
+    p.add_argument("--hold-days", type=int, default=int(d["hold_days"]))
+    p.add_argument("--ma-filter", type=int, default=None)
+    p.add_argument("--min-score", type=float, default=None)
     p.add_argument(
-        "--hold-days", type=int, default=int(best.get("hold_days", CS_HOLD_DAYS))
-    )
-    p.add_argument(
-        "--legacy-dist-hl",
-        action="store_true",
-        help="旧口径：dist_hl Top5/持有5（仅对照，已知截面失效）",
+        "--universe",
+        default=str(d.get("universe") or "zz500_1000_mainboard"),
+        help="zz500_1000_mainboard | zz1000_mainboard | zz500_mainboard",
     )
     p.add_argument("--refresh", action="store_true")
     p.add_argument("--no-open", action="store_true")
+    p.add_argument("--optimize", action="store_true", help="先挖参再回测")
     p.add_argument("--symbol-only", action="store_true", help="只跑凯盛单票对照")
     p.add_argument("--with-symbol", action="store_true", help="额外跑凯盛单票对照")
     p.add_argument("--force-refresh", action="store_true", help="单票日线强制刷新")
@@ -263,17 +202,34 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     kind, n, top_k, hold_days = args.kind, args.n, args.top_k, args.hold_days
-    if args.legacy_dist_hl:
-        kind = DEFAULT_KIND
-        n = int(DEFAULT_PARAMS["n"])
-        top_k = 5
-        hold_days = 5
+    ma_filter = args.ma_filter if args.ma_filter is not None else d.get("ma_filter")
+    min_score = args.min_score if args.min_score is not None else d.get("min_score")
+    universe = args.universe
 
-    run_zz1000_cross_section(
+    if args.optimize:
+        from backtest.optimize_strategy5_portfolio import main as mine_main
+
+        mine_main()
+        import json
+
+        best = json.loads((OUT_DIR / "strategy5_best.json").read_text(encoding="utf-8"))
+        apply_best_config(best)
+        kind = str(best["kind"])
+        n = int(best["n"])
+        top_k = int(best["top_k"])
+        hold_days = int(best["hold_days"])
+        ma_filter = best.get("ma_filter")
+        min_score = best.get("min_score")
+        print(f"采用挖参最优: {best}")
+
+    run_portfolio(
         kind=kind,
         n=n,
         top_k=top_k,
         hold_days=hold_days,
+        min_score=min_score,
+        ma_filter=ma_filter,
+        universe=universe,
         refresh=bool(args.refresh),
         no_open=bool(args.no_open),
     )

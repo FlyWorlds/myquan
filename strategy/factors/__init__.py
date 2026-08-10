@@ -4,7 +4,7 @@
   · factor1 — 开盘±pct（默认 ±2.5%），策略一买卖真源
   · factor2 — 回撤阶梯补仓（叠在权益曲线上的资金管理）
   · factor3 — 占位，待实现
-  · factor4 — 动量（独立，策略五）
+  · factor4 — 动量（策略五·动量因子组合 / 亦可单票时序）
 """
 
 from strategy.factors import factor1 as _factor1  # noqa: F401
