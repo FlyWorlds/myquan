@@ -144,6 +144,27 @@ def load_panel_matrices(
     return op, hi, lo, cl
 
 
+def _factor4_dist_hl(highs: pd.DataFrame, lows: pd.DataFrame, n: int) -> pd.DataFrame:
+    """因子4 dist_hl：dist_high - dist_low（低点更近→偏多）。"""
+    n = int(n)
+    hv = highs.to_numpy(dtype=float, copy=False)
+    lv = lows.to_numpy(dtype=float, copy=False)
+    rows, cols = hv.shape
+    out = np.full((rows, cols), np.nan, dtype=float)
+    for j in range(cols):
+        hcol = hv[:, j]
+        lcol = lv[:, j]
+        for i in range(n - 1, rows):
+            sl_h = hcol[i - n + 1 : i + 1]
+            sl_l = lcol[i - n + 1 : i + 1]
+            if not (np.isfinite(sl_h).all() and np.isfinite(sl_l).all()):
+                continue
+            dist_high = (n - 1) - int(np.argmax(sl_h))
+            dist_low = (n - 1) - int(np.argmin(sl_l))
+            out[i, j] = dist_high - dist_low
+    return pd.DataFrame(out, index=highs.index, columns=highs.columns)
+
+
 def compute_factor(
     opens: pd.DataFrame,
     highs: pd.DataFrame,
@@ -173,6 +194,10 @@ def compute_factor(
         hh = highs.shift(1).rolling(n, min_periods=n).max()
         fac = c / hh - 1.0
     elif kind == "dist_hl":
+        # 与 strategy.momentum.dist_hl / 因子4 一致：距 N 日高低点的时间距离差
+        fac = _factor4_dist_hl(highs, lows, n)
+    elif kind == "dist_hl_pos":
+        # 旧口径：价格在 N 日高低区间中的相对位置（非因子4）
         hh = highs.rolling(n, min_periods=n).max()
         ll = lows.rolling(n, min_periods=n).min()
         mid = (hh + ll) / 2.0
