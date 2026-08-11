@@ -6,5 +6,10 @@
   "cooldown_sec": 1800,
   "openclaw_bin": "openclaw",
   "node_bin_dir": "",
-  "timeout_sec": 45
+  "timeout_sec": 45,
+  "channel_settle_sec": 4,
+  "send_retries": 3,
+  "send_retry_backoff_sec": 2.0,
+  "wait_inbound_sec": 180,
+  "wait_inbound_poll_sec": 8
 }

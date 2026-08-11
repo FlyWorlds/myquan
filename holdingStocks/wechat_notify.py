@@ -5,10 +5,16 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+
+_SEND_LOCK = threading.Lock()
+_LAST_SEND_TS = 0.0
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_FILE = ROOT / "wechat_notify.json"
@@ -31,7 +37,22 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "timeout_sec": 45,
     # Windows nvm：可填 Node 目录，发送前拼进 PATH
     "node_bin_dir": "",
+    # 启动自检：Gateway 就绪后再等通道 settle；发送失败重试；prepare failed 时等人发消息预热
+    "channel_settle_sec": 4,
+    "send_retries": 3,
+    "send_retry_backoff_sec": 2.0,
+    "wait_inbound_sec": 180,
+    "wait_inbound_poll_sec": 8,
 }
+
+
+def _safe_print(msg: str) -> None:
+    """Windows GBK 控制台下避免因特殊字符抛 UnicodeEncodeError。"""
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+        print(msg.encode(enc, errors="replace").decode(enc, errors="replace"))
 
 
 def _now() -> str:
@@ -356,20 +377,48 @@ def _send_via_node_argv(
         raise
 
 
-def send_text(
+def _is_prepare_failed(detail: str) -> bool:
+    d = (detail or "").lower()
+    return (
+        "prepare failed" in d
+        or "ret=-2" in d
+        or "contexttoken missing" in d
+        or "context_token" in d and "missing" in d
+    )
+
+
+def _is_transient_send_error(detail: str) -> bool:
+    d = (detail or "").lower()
+    return any(
+        x in d
+        for x in (
+            "timeout",
+            "econnreset",
+            "tls",
+            "fetch failed",
+            "gateway not",
+            "not reachable",
+            "socket",
+            "temporar",
+        )
+    )
+
+
+def _send_text_once(
     message: str,
     *,
-    config: dict[str, Any] | None = None,
+    cfg: dict[str, Any],
 ) -> tuple[bool, str]:
-    """通过 openclaw message send 推送纯文本（不调用大模型）。
-
-    Windows 下不可把含换行的正文直接塞进 subprocess 参数列表
-    （list2cmdline/CreateProcess 会截断到第一行），故经 Node argv 发送。
-    """
-    cfg = config or load_config()
+    """单次 openclaw message send（已持锁时可直接调）。"""
+    global _LAST_SEND_TS
     target = str(cfg.get("target") or "").strip()
     if not target:
         return False, "wechat_notify.json 未配置 target"
+
+    # 避免连发撞微信侧 prepare / 限流
+    gap = max(0.0, 1.2 - (time.time() - _LAST_SEND_TS))
+    if gap > 0:
+        time.sleep(gap)
 
     openclaw_bin = str(cfg.get("openclaw_bin") or "openclaw")
     args = [
@@ -424,6 +473,7 @@ def send_text(
     except subprocess.TimeoutExpired:
         return False, f"openclaw message send 超时（>{timeout:.0f}s）"
 
+    _LAST_SEND_TS = time.time()
     out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
     ok = proc.returncode == 0 and (
         "Sent via" in out or "sent" in out.lower() or not out
@@ -434,6 +484,41 @@ def send_text(
     if not ok:
         return False, out or f"exit={proc.returncode}"
     return True, out or "ok"
+
+
+def send_text(
+    message: str,
+    *,
+    config: dict[str, Any] | None = None,
+    retries: int | None = None,
+) -> tuple[bool, str]:
+    """通过 openclaw message send 推送纯文本（不调用大模型）。
+
+    Windows 下不可把含换行的正文直接塞进 subprocess 参数列表
+    （list2cmdline/CreateProcess 会截断到第一行），故经 Node argv 发送。
+    对 prepare failed / 瞬时网络错误自动重试。
+    """
+    cfg = config or load_config()
+    n = int(cfg.get("send_retries") if retries is None else retries)
+    n = max(1, n)
+    backoff = float(cfg.get("send_retry_backoff_sec") or 2.0)
+    last = ""
+    with _SEND_LOCK:
+        for i in range(n):
+            ok, detail = _send_text_once(message, cfg=cfg)
+            if ok:
+                return True, detail
+            last = detail
+            retryable = _is_prepare_failed(detail) or _is_transient_send_error(detail)
+            if not retryable or i >= n - 1:
+                break
+            wait = backoff * (i + 1)
+            print(
+                f"[{_now()}] 微信发送失败，{wait:.0f}s 后重试 "
+                f"({i + 1}/{n}): {(detail or '')[:120]}"
+            )
+            time.sleep(wait)
+    return False, last
 
 
 def notify_watch_rows(
@@ -644,13 +729,155 @@ def ensure_openclaw_gateway(
     return False, last or out or f"gateway {action} 失败 (exit={code})"
 
 
+def weixin_channel_ready(*, config: dict[str, Any] | None = None) -> tuple[bool, str]:
+    """探测 openclaw-weixin 账号是否 configured + running。"""
+    cfg = config or load_config()
+    account = str(cfg.get("account") or "").strip()
+    code, out = _run_openclaw_cli(
+        ["channels", "status", "--probe"], config=cfg, timeout=90
+    )
+    text = out or ""
+    if code != 0 and "Gateway reachable" not in text:
+        return False, text or f"channels status exit={code}"
+
+    lines = [ln.strip() for ln in text.splitlines() if "openclaw-weixin" in ln]
+    if account:
+        hit = next((ln for ln in lines if account in ln), "")
+        if not hit:
+            return False, f"未在 probe 中找到账号 {account}\n{text[:400]}"
+        # "enabled, configured, running" 为通过
+        ok = (
+            "configured" in hit
+            and "running" in hit
+            and "not configured" not in hit
+        )
+        return ok, hit or text
+    any_ok = any(
+        "configured" in ln and "running" in ln and "not configured" not in ln
+        for ln in lines
+    )
+    return any_ok, "\n".join(lines) or text
+
+
+def wait_weixin_channel_ready(
+    *,
+    config: dict[str, Any] | None = None,
+    timeout_sec: float = 45,
+) -> tuple[bool, str]:
+    cfg = config or load_config()
+    deadline = time.time() + max(5.0, timeout_sec)
+    last = ""
+    while time.time() < deadline:
+        ok, last = weixin_channel_ready(config=cfg)
+        if ok:
+            return True, last
+        time.sleep(2.0)
+    return False, last or "微信通道未就绪"
+
+
+def context_token_status(*, config: dict[str, Any] | None = None) -> tuple[bool, str]:
+    """检查本地是否已有 target 对应的 context_token 文件（不打印 token）。"""
+    cfg = config or load_config()
+    account = str(cfg.get("account") or "").strip()
+    target = str(cfg.get("target") or "").strip()
+    if not account or not target:
+        return False, "account/target 未配置"
+    path = (
+        Path.home()
+        / ".openclaw"
+        / "openclaw-weixin"
+        / "accounts"
+        / f"{account}.context-tokens.json"
+    )
+    if not path.is_file():
+        return False, f"无会话文件（需先给机器人发一条微信）: {path.name}"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        return False, f"会话文件损坏: {e}"
+    if not isinstance(data, dict) or not data:
+        return False, "会话文件为空"
+    uid = target.split("@")[0]
+    keys = list(data.keys())
+    hit = target in keys or uid in keys or any(
+        str(k).split("@")[0] == uid for k in keys
+    )
+    age_h = (time.time() - path.stat().st_mtime) / 3600.0
+    if not hit:
+        return False, f"会话文件无本机 target（keys={len(keys)}, age={age_h:.1f}h）"
+    return True, f"本地会话 token 存在（age={age_h:.1f}h）"
+
+
+def _ensure_plugin_disk_fallback_patch() -> str:
+    """尽力给 openclaw-weixin 打磁盘回落补丁（幂等）。"""
+    script = ROOT / "tools" / "patch_openclaw_weixin_context_token.py"
+    if not script.is_file():
+        return "no-script"
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            check=False,
+            cwd=str(ROOT),
+        )
+    except Exception as e:  # noqa: BLE001
+        return f"patch-error:{e}"
+    out = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    if proc.returncode != 0:
+        return f"patch-fail:{out[:200]}"
+    # Windows 控制台常为 GBK：去掉无法编码字符，避免 print 炸毁整套启动
+    line = out.splitlines()[0] if out else "patched"
+    return line.encode("ascii", "replace").decode("ascii")[:200]
+
+
+def wait_inbound_and_retry_send(
+    message: str,
+    *,
+    config: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """prepare failed 时提示用户给机器人发消息，并轮询直到可发或超时。"""
+    cfg = config or load_config()
+    wait_sec = float(cfg.get("wait_inbound_sec") or 0)
+    if wait_sec <= 0:
+        return False, "wait_inbound_sec=0，跳过会话预热等待"
+    poll = max(3.0, float(cfg.get("wait_inbound_poll_sec") or 8))
+    print(
+        f"[{_now()}] 微信会话 token 已失效（服务端 prepare failed；本地磁盘回落已生效但仍被拒）。\n"
+        f"  → 请用微信给【盯盘机器人】发任意一条消息（如：1）刷新 context_token。\n"
+        f"  → 网关 getUpdates 收到后会自动写入会话文件；最多等待 {wait_sec:.0f}s 并重试发送。\n"
+        f"  → 若长时间无反应：openclaw channels login --channel openclaw-weixin"
+    )
+    deadline = time.time() + wait_sec
+    last = ""
+    attempt = 0
+    while time.time() < deadline:
+        time.sleep(poll)
+        attempt += 1
+        tok_ok, tok_detail = context_token_status(config=cfg)
+        print(
+            f"[{_now()}] 预热探测 #{attempt}: token={tok_detail}; 尝试发送…"
+        )
+        ok, last = send_text(message, config=cfg, retries=1)
+        if ok:
+            print(f"[{_now()}] 会话已恢复，发送成功")
+            return True, last
+        if not _is_prepare_failed(last):
+            # 非 prepare 类错误，不必空等
+            break
+    return False, last or "等待入站刷新超时"
+
+
 def prepare_wechat_for_watch(
     *,
     config: dict[str, Any] | None = None,
     send_test: bool = True,
     restart_gateway: bool = False,
 ) -> tuple[bool, str]:
-    """盯盘启动套件：OpenClaw Gateway → 微信通道自检。
+    """盯盘启动套件：补丁 → Gateway → 通道就绪 → 微信自检。
 
     返回 (ok, detail)。失败时 detail 含原因，供调用方决定是否中止。
     """
@@ -658,25 +885,78 @@ def prepare_wechat_for_watch(
     if not bool(cfg.get("enabled", True)):
         return False, "wechat_notify.json enabled=false"
 
-    print(f"[{_now()}] [1/2] 检查/启动 OpenClaw Gateway…")
+    print(f"[{_now()}] [0/3] 检查 openclaw-weixin context_token 磁盘回落补丁…")
+    patch_info = _ensure_plugin_disk_fallback_patch()
+    _safe_print(f"[{_now()}] 补丁: {patch_info[:200]}")
+
+    print(f"[{_now()}] [1/3] 检查/启动 OpenClaw Gateway…")
     ok, detail = ensure_openclaw_gateway(config=cfg, restart=restart_gateway)
     if not ok:
         return False, f"OpenClaw Gateway 不可用: {detail[:400]}"
     print(f"[{_now()}] OpenClaw Gateway OK")
 
+    settle = float(cfg.get("channel_settle_sec") or 4)
+    print(f"[{_now()}] [2/3] 等待微信通道就绪（settle {settle:.0f}s）…")
+    if settle > 0:
+        time.sleep(settle)
+    ch_ok, ch_detail = wait_weixin_channel_ready(config=cfg, timeout_sec=40)
+    if not ch_ok:
+        # 再强制 restart 一次常能恢复 TLS/长轮询挂死
+        print(f"[{_now()}] 通道未就绪，自动 gateway restart…")
+        ok2, detail2 = ensure_openclaw_gateway(config=cfg, restart=True)
+        if not ok2:
+            return False, f"微信通道未就绪且 Gateway 重启失败: {detail2[:300]}"
+        time.sleep(max(settle, 3.0))
+        ch_ok, ch_detail = wait_weixin_channel_ready(config=cfg, timeout_sec=40)
+        if not ch_ok:
+            return False, f"微信通道未就绪: {ch_detail[:400]}"
+    print(f"[{_now()}] 微信通道 OK: {ch_detail[:160]}")
+
+    tok_ok, tok_detail = context_token_status(config=cfg)
+    print(f"[{_now()}] 会话 token: {tok_detail}")
+
     if not send_test:
         return True, detail
 
-    print(f"[{_now()}] [2/2] 微信通道自检…")
+    print(f"[{_now()}] [3/3] 微信通道自检…")
     ok2, detail2 = send_test_alert(config=cfg)
-    if not ok2:
-        tip = (
-            "微信自检失败。若 prepare failed：请先给机器人发一条消息建立会话，"
-            "或重新 openclaw channels login --channel openclaw-weixin"
+    if ok2:
+        print(f"[{_now()}] 微信通道自检成功")
+        return True, detail2
+
+    if _is_prepare_failed(detail2):
+        # 磁盘 token 过期：等人发消息；同时再 restart 一次加载补丁/清 TLS
+        if "disk-fallback" not in patch_info and "patched" not in patch_info.lower():
+            print(f"[{_now()}] 补丁可能未生效，gateway restart 后再试…")
+        else:
+            print(f"[{_now()}] prepare failed：gateway restart 后重试一次…")
+        ensure_openclaw_gateway(config=cfg, restart=True)
+        time.sleep(max(settle, 3.0))
+        wait_weixin_channel_ready(config=cfg, timeout_sec=30)
+        ok3, detail3 = send_test_alert(config=cfg)
+        if ok3:
+            print(f"[{_now()}] 微信通道自检成功（重启后）")
+            return True, detail3
+        detail2 = detail3
+        ok4, detail4 = wait_inbound_and_retry_send(
+            (
+                "【盯盘预警·测试】\n"
+                "通道自检成功：OpenClaw 微信推送可用（不走大模型）。\n"
+                f"时间: {_now()}"
+            ),
+            config=cfg,
         )
-        return False, f"{detail2[:350]}\n{tip}"
-    print(f"[{_now()}] 微信通道自检成功")
-    return True, detail2
+        if ok4:
+            return True, detail4
+        detail2 = detail4
+
+    tip = (
+        "微信自检失败。\n"
+        "若 prepare failed：用微信给机器人发任意一条消息刷新会话，然后重跑；\n"
+        "或: openclaw channels login --channel openclaw-weixin\n"
+        "也可临时: watch --wechat-optional / --skip-wechat-check"
+    )
+    return False, f"{detail2[:350]}\n{tip}"
 
 
 def send_startup_message(

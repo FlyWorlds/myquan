@@ -240,7 +240,8 @@ python index.py watch --interval 5 --port 8765 --no-open
 |------|------|
 | `找不到 openclaw` | 加载 Node24 PATH，或在 `wechat_notify.json` 写绝对 `openclaw_bin` + `node_bin_dir` |
 | Gateway not reachable | `openclaw gateway restart`；仍失败 `openclaw doctor` |
-| 推送失败 / 收不到 | 重新扫码登录后 `gateway restart`；检查 `account`/`target` |
+| **`prepare failed` / 自检失败** | 根因：微信 `context_token` 只在你给机器人发消息时下发；`openclaw message send` 若未从磁盘加载会报此错。已内置磁盘回落补丁（`tools/patch_openclaw_weixin_context_token.py`，启动自检会自动打）。若仍失败：微信里给机器人发一条「1」，等启动脚本自动重试；或 `openclaw channels login --channel openclaw-weixin` |
+| 推送失败 / 收不到 | 先确认自检通过；再查 `account`/`target`；长期不用需重新给机器人发消息刷新会话 |
 | 只收到标题一行、正文没有 | 已修复：Windows 下多行 `--message` 会被截断；`wechat_notify.send_text` 经 Node 传完整正文。请再跑 `python index.py review` |
 | 微信里回机器人出现 401 | 入站已关；勿闲聊。若仍触发，确认 `dmPolicy=allowlist` 且 `allowFrom=[]` |
 | `nvm use` 拒绝访问 | 管理员终端执行 `nvm use 24.15.0`，保证 `C:\Program Files\nodejs` 指向 v24 |

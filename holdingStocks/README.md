@@ -109,6 +109,8 @@ python index.py watch --interval 5 --port 8765 --no-open
 # 或：powershell -File .\start_watch.ps1
 # 浏览器：http://127.0.0.1:8765/holdings_report.html
 # 启动失败（微信不通）会中止；临时绕过：--wechat-optional / --skip-wechat-check / --no-wechat
+# 若自检 prepare failed：微信给机器人发一条「1」，启动会自动等待重试；
+# 根因补丁 tools/patch_openclaw_weixin_context_token.py（启动自动打，修复 CLI 不读磁盘 token）
 # 强制重启 Gateway：--restart-gateway
 # 停止：Ctrl+C
 
