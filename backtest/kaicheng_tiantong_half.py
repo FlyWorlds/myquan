@@ -22,17 +22,7 @@ if str(_MYQUAN) not in sys.path:
 
 import pandas as pd  # noqa: E402
 
-from strategy import KAICHENG, run_strategy1  # noqa: E402
-from strategy.config import _DAILY_CACHE_DIR  # noqa: E402
-
-TIANTONG = replace(
-    KAICHENG,
-    symbol="sh600330",
-    symbol_name="天通股份",
-    em_symbol="600330",
-    daily_cache=_DAILY_CACHE_DIR / "sh600330_daily_qfq.parquet",
-)
-
+from strategy import KAICHENG, TIANTONG, run_strategy1  # noqa: E402
 
 def _ak_metric(result: Any, key: str) -> float:
     return float(result.metrics_df.iloc[:, 0][key])

@@ -35,7 +35,14 @@ from strategy.open_break import (
     strategy_levels,
     strategy_signal,
 )
-from strategy.config import KAICHENG, HANGTIANDIANZI, XIEXINNENGKE, ZZ500_ETF, BacktestConfig
+from strategy.config import (
+    KAICHENG,
+    TIANTONG,
+    HANGTIANDIANZI,
+    XIEXINNENGKE,
+    ZZ500_ETF,
+    BacktestConfig,
+)
 from strategy.data import fetch_daily
 from strategy.base import CommonBacktestParams, run_akquant_backtest, run_backtest_pipeline
 from strategy.minute import (
@@ -99,6 +106,7 @@ __all__ = [
     "REASON_STOP",
     "BacktestConfig",
     "KAICHENG",
+    "TIANTONG",
     "HANGTIANDIANZI",
     "XIEXINNENGKE",
     "ZZ500_ETF",

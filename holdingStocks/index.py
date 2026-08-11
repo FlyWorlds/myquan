@@ -16,7 +16,7 @@
 用法：
   python index.py              # 查看标的行情 + 持仓，并生成 HTML
   python index.py html         # 仅生成/打开 HTML 报告
-  python index.py watch        # 一套：OpenClaw→微信自检→盯盘；每日09:26刷新开盘价
+  python index.py watch        # 一套：OpenClaw→微信自检→盯盘；09:30后才触发信号；每日09:30刷新开盘价
   python index.py buy 600552 15.50 400
   python index.py sell 600552 16.20 400
   python index.py set-cost 600552 15.95 --qty 400
@@ -86,6 +86,8 @@ from watch_config import (
     code_key as _code_key,
     empty_position as _empty_position,
     find_meta as _find_meta,
+    is_auction_window,
+    is_signal_window,
     sellable_qty as _sellable_qty,
     sina_of as _sina_of,
     watchlist_codes_label as _watchlist_codes_label,
@@ -1300,6 +1302,11 @@ def collect_rows(
             hit_buy_raw = q["high"] + 1e-12 >= lv["buy_trigger"]
             hit_buy = bool(allow_entry) and hit_buy_raw
             hit_stop = q["low"] <= lv["stop"] + 1e-12
+            # 竞价/开盘前：盘面价无连续交易意义，不触发买卖判定与止损结算
+            signal_ok = is_signal_window()
+            if not signal_ok:
+                hit_buy = False
+                hit_stop = False
             # 当日止损/已结算卖出 → 禁止再买（纸面回放持有触止损同样禁买）
             _realized_pre = realized_map.get(code)
             _sold_today_pre = bool(
@@ -3278,22 +3285,31 @@ def cmd_history(_: argparse.Namespace) -> None:
     print(pd.DataFrame(rows).to_string(index=False))
 
 
+_last_auction_skip_log: float = 0.0
+
+
 def _refresh_once(
     refresh_sec: int,
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
     wechat: bool = False,
 ) -> Path:
+    global _last_auction_skip_log
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices_cached()
     path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
-    if wechat:
+    if wechat and is_signal_window():
         try:
             from wechat_notify import notify_watch_rows
 
             notify_watch_rows(rows)
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 微信预警推送异常: {e}")
+    elif wechat and is_auction_window():
+        now_m = time.monotonic()
+        if now_m - _last_auction_skip_log >= 60.0:
+            _last_auction_skip_log = now_m
+            print(f"[{_now()}] 集合竞价中（09:15–09:30），跳过因子预警推送")
     return path
 
 
@@ -3313,7 +3329,7 @@ def _next_open_refresh_at(
     hour: int = OPEN_PRICE_REFRESH_HOUR,
     minute: int = OPEN_PRICE_REFRESH_MINUTE,
 ) -> datetime:
-    """下一档开盘价刷新时刻（默认每日 09:26）。"""
+    """下一档开盘价刷新时刻（默认每日 09:30，连续竞价开始）。"""
     now = now or datetime.now()
     target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if now >= target:
@@ -3648,7 +3664,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 print(f"[{_now()}] 更新失败: {e}")
 
     def open_price_loop() -> None:
-        """每日固定时刻刷新盯盘开盘价（默认 09:26，集合竞价结束）。"""
+        """每日固定时刻刷新盯盘开盘价（默认 09:30，连续竞价开始）。"""
         while not stop.is_set():
             nxt = _next_open_refresh_at(hour=open_h, minute=open_m)
             wait = (nxt - datetime.now()).total_seconds()
@@ -3743,6 +3759,17 @@ def cmd_watch(args: argparse.Namespace) -> None:
         f"({_watchlist_codes_label()})"
     )
     print(
+        "信号窗口: 09:30 起触发买卖/止损结算/微信预警；"
+        "09:15–09:30 集合竞价仅刷新行情不触发"
+    )
+    pct_note = " / ".join(
+        f"{w['code']}±{float(w['pct'])*100:.1f}%"
+        for w in WATCHLIST
+        if abs(float(w["pct"]) - float(DEFAULT_PCT)) > 1e-12
+        or w["code"] in ("600552", "600330")
+    )
+    print(f"个股阈值: 默认±{DEFAULT_PCT*100:.1f}% · 焦点 {pct_note}")
+    print(
         f"微信预警: {'开' if wechat else '关（--no-wechat）'} · "
         "复盘可另跑: python index.py review"
     )
@@ -3829,7 +3856,7 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument(
         "--open-at",
         default=f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}",
-        help="每日强制刷新盯盘开盘价的时刻，默认09:26",
+        help="每日强制刷新盯盘开盘价的时刻，默认09:30",
     )
     w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     w.add_argument(

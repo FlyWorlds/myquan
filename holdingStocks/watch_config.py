@@ -20,28 +20,66 @@ STRATEGY_NAME = "策略一·因子1"
 # 中证500+1000 契合池（夏普≥1 且策略超额>0，按夏普降序）
 # 明细：../backtest/universe_zz500_1000/fit_sharpe1_excess.csv
 # 改盯盘池：只改这里（勿在 index.py 再维护一份）
+# 标的专属阈值：天通 ±3%；其余默认 DEFAULT_PCT（±2.5%，含凯盛）
 _FIT_WATCH: list[tuple[str, str]] = [
     ("001389", "广合科技"),
     ("600552", "凯盛科技"),
-    ("603083", "剑桥科技"),
     ("601208", "东材科技"),
+    ("001339", "智微智能"),
+    ("600330", "天通股份"),
+    ("002636", "金安国纪"),
+    ("603083", "剑桥科技"),
+    ("600105", "永鼎股份"),
     ("603306", "华懋科技"),
     ("002335", "科华数据"),
-    ("001339", "智微智能"),
-    ("002636", "金安国纪"),
-    ("600105", "永鼎股份"),
     ("000880", "潍柴重机"),
-    ("600330", "天通股份"),
 ]
 
-# 竞价结束后强制刷新盯盘开盘价
+# 个股覆盖默认开盘±pct（未列出的用 DEFAULT_PCT）
+_WATCH_PCT: dict[str, float] = {
+    "600330": 0.03,  # 天通：拟合优于 ±2.5%
+    "600552": 0.025,  # 凯盛：维持默认
+}
+
+# 集合竞价 09:15–09:30：盘面价无连续交易意义，此间不触发买卖/止损结算/微信预警
+AUCTION_START_HOUR = 9
+AUCTION_START_MINUTE = 15
+# 连续竞价开始后方可触发因子信号
+SIGNAL_ACTIVE_HOUR = 9
+SIGNAL_ACTIVE_MINUTE = 30
+
+# 开盘价强制刷新（连续竞价开始，避开竞价脏价）
 OPEN_PRICE_REFRESH_HOUR = 9
-OPEN_PRICE_REFRESH_MINUTE = 26
+OPEN_PRICE_REFRESH_MINUTE = 30
 
 INDEX_WATCH: list[dict[str, str]] = [
     {"code": "sh000001", "name": "上证指数", "market": "上证"},
     {"code": "sz399001", "name": "深证成指", "market": "深证"},
 ]
+
+
+def is_signal_window(now: Any | None = None) -> bool:
+    """连续竞价开始后才允许因子触发/止损结算/微信预警。
+
+    09:15–09:30 集合竞价盘面价无连续交易意义，此间返回 False。
+    """
+    from datetime import datetime as _dt
+
+    ts = now if isinstance(now, _dt) else _dt.now()
+    return (int(ts.hour) * 60 + int(ts.minute)) >= (
+        SIGNAL_ACTIVE_HOUR * 60 + SIGNAL_ACTIVE_MINUTE
+    )
+
+
+def is_auction_window(now: Any | None = None) -> bool:
+    """是否处于集合竞价时段 09:15–09:30（不含 09:30）。"""
+    from datetime import datetime as _dt
+
+    ts = now if isinstance(now, _dt) else _dt.now()
+    t = int(ts.hour) * 60 + int(ts.minute)
+    start = AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
+    end = SIGNAL_ACTIVE_HOUR * 60 + SIGNAL_ACTIVE_MINUTE
+    return start <= t < end
 
 
 def code_key(code: str) -> str:
@@ -81,7 +119,10 @@ def watch_item(
     }
 
 
-WATCHLIST: list[dict[str, Any]] = [watch_item(c, n) for c, n in _FIT_WATCH]
+WATCHLIST: list[dict[str, Any]] = [
+    watch_item(c, n, pct=_WATCH_PCT.get(code_key(c), DEFAULT_PCT))
+    for c, n in _FIT_WATCH
+]
 
 
 def empty_position(meta: dict[str, Any]) -> dict[str, Any]:

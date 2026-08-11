@@ -15,6 +15,7 @@ if str(_MYQUAN) not in sys.path:
 from strategy import (  # noqa: E402
     HANGTIANDIANZI,
     KAICHENG,
+    TIANTONG,
     XIEXINNENGKE,
     ZZ500_ETF,
     BacktestConfig,
@@ -59,13 +60,7 @@ PRESETS: dict[str, BacktestConfig] = {
         threshold_pct=0.025,
         start_date="20200101",
     ),
-    "tiantong": BacktestConfig(
-        symbol="sh600330",
-        symbol_name="天通股份",
-        em_symbol="600330",
-        threshold_pct=0.025,
-        start_date="20200101",
-    ),
+    "tiantong": TIANTONG,
 }
 
 

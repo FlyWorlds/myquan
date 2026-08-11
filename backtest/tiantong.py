@@ -10,12 +10,12 @@ from run import PRESETS
 from strategy import STRATEGY_RULES, run_open_break
 from strategy.backtest import monthly_returns_df
 
-DEFAULT_THRESHOLD = 2.5
+DEFAULT_THRESHOLD = 3.0
 BASE = PRESETS["tiantong"]
 
 
 def _artifact_paths(threshold: float) -> tuple[Path, Path]:
-    stem = "天通股份" if threshold == DEFAULT_THRESHOLD else f"天通股份_{threshold:g}pct"
+    stem = "天通股份" if abs(threshold - DEFAULT_THRESHOLD) < 1e-12 else f"天通股份_{threshold:g}pct"
     d = Path(__file__).parent
     return d / f"{stem}_report.html", d / f"{stem}_monthly.csv"
 

@@ -6,11 +6,12 @@
 ## 策略锁定（与策略一一致）
 
 - **策略**：策略一 · 因子1（+ 可选因子2 权益叠加）
-- **买**：`high ≥ ceil(open×1.025)`；前日阴线或小阳；禁双阳跨日≥5%；T+1
-- **卖**：仅止损 `low ≤ floor(open×0.975)` 全清；无止盈
+- **买**：`high ≥ ceil(open×(1+pct))`；前日阴线或小阳；禁双阳跨日≥5%；T+1
+- **卖**：仅止损 `low ≤ floor(open×(1−pct))` 全清；无止盈
+- **个股阈值**：默认 ±2.5%；天通 ±3.0% / 凯盛 ±2.5%（`holdingStocks/watch_config._WATCH_PCT`）
 - **筛选（现行）**：中证500 + 中证1000（剔科创/创业/北交）；夏普 ≥ 1.0 且策略收益 > 买入持有
-- **脚本**：`universe_zz500_1000.py`（产出目录 gitignore）
-- **盯盘列表真源**：`holdingStocks/watch_config.py` 的 `_FIT_WATCH`
+- **脚本**：`universe_zz500_1000.py`（全池统一阈值）；盯盘拟合度：`fit_strategy1_watch.py`
+- **盯盘列表真源**：`holdingStocks/watch_config.py` 的 `_FIT_WATCH` / `_WATCH_PCT`
 
 ## 常用入口
 

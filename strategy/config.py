@@ -145,6 +145,15 @@ KAICHENG = BacktestConfig(
     daily_cache=_DAILY_CACHE_DIR / "sh600552_daily_qfq.parquet",
 )
 
+TIANTONG = BacktestConfig(
+    symbol="sh600330",
+    symbol_name="天通股份",
+    em_symbol="600330",
+    threshold_pct=0.03,
+    start_date="20200101",
+    daily_cache=_DAILY_CACHE_DIR / "sh600330_daily_qfq.parquet",
+)
+
 HANGTIANDIANZI = BacktestConfig(
     symbol="sh600879",
     symbol_name="航天电子",
