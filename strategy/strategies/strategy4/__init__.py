@@ -1,4 +1,4 @@
-"""策略四：策略层(bindings) + 决策层(decision)；回测入口骨架。"""
+"""策略四：暂不挂因子。"""
 
 from __future__ import annotations
 
@@ -10,14 +10,17 @@ from strategy.strategies.strategy4.decision import Strategy4Decision, create_dec
 
 
 def _print_rules() -> str:
-    return compose_rules(STRATEGY_NAME, bindings=FACTOR_BINDINGS)
+    return (
+        compose_rules(STRATEGY_NAME, bindings=FACTOR_BINDINGS)
+        + "\n【策略四】当前不挂因子，仅占位。\n"
+    )
 
 
 register_strategy(
     StrategySpec(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
-        description="骨架：挂 factor4 + 策略侧参数/过滤器",
+        description="占位：当前不挂因子",
         factor_bindings=FACTOR_BINDINGS,
         run=not_implemented_runner(STRATEGY_ID),
         default_config=None,
@@ -27,7 +30,8 @@ register_strategy(
         aliases=("s4",),
         implemented=False,
         meta={"default": False},
-    )
+    ),
+    replace=True,
 )
 
 __all__ = [

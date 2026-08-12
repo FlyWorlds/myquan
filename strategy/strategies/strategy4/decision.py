@@ -1,4 +1,4 @@
-"""策略四 · 决策层骨架（factor4 未实现前恒 hold）。"""
+"""策略四 · 决策层（未挂因子 → hold）。"""
 
 from __future__ import annotations
 
@@ -14,14 +14,9 @@ class Strategy4Decision(BaseDecisionEngine):
 
     def decide(self, ctx: MarketContext) -> Decision:
         del ctx
-        binding = self.binding("factor4")
-        if binding is None:
-            return Decision.hold("策略四未绑定因子4")
-        return Decision.hold(
-            "策略四决策骨架：因子4 尚未实现信号/价位",
-            window=binding.params.get("window"),
-            tags=("stub", "factor4"),
-        )
+        if not self.bindings:
+            return Decision.hold("策略四未挂因子")
+        return Decision.hold("策略四未挂可用交易因子")
 
 
 def create_decision_engine(spec: StrategySpec | None = None) -> Strategy4Decision:
