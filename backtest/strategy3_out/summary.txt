@@ -1,0 +1,12 @@
+start: 2020-01-02
+end: 2026-08-11
+n_days: 1601
+total_return_pct: 192.46988182879807
+max_drawdown_pct: 46.15418887359998
+sharpe: 0.6391073210886963
+end_equity: 2924698.8182879807
+n_trades: 9142
+n_buys: 4601
+top_k: 3
+hold_days: 20
+factor: portfolio/zz500_1000_mainboard/dual{n=90+40,top=3,hold=20}

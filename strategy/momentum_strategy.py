@@ -1,4 +1,4 @@
-"""因子4 · 动量：akquant Strategy（收盘信号 → NextOpen 成交）。"""
+"""因子3 · 动量：akquant Strategy（收盘信号 → NextOpen 成交）。"""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class MomentumStrategy(Strategy):
         kind = self.mom_kind or DEFAULT_KIND
         params = self.mom_params or DEFAULT_PARAMS
         self.log(
-            f"因子4·动量 kind={kind} params={params} "
+            f"因子3·动量 kind={kind} params={params} "
             f"target={self.target_pct*100:.1f}% T+{'0' if self.t0 else '1'} "
             f"成交=NextOpen 滑点{self.slippage_value*100:.1f}%"
         )

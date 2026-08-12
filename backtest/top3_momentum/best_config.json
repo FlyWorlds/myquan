@@ -1,0 +1,80 @@
+{
+  "best": {
+    "score_mode": "roll12",
+    "mode": "pool",
+    "kind": "rev",
+    "n": 20,
+    "top_k": 1,
+    "hold_days": 5,
+    "w_f1": 0.0,
+    "w_mom": 1.0,
+    "sharpe": 0.4983349710813235,
+    "ret_pct": 116.1410397147486,
+    "dd_pct": 48.765690993665174,
+    "n_buys": 1542
+  },
+  "by_score_mode": {
+    "month": {
+      "score_mode": "month",
+      "mode": "pool",
+      "kind": "rev",
+      "n": 20,
+      "top_k": 1,
+      "hold_days": 5,
+      "w_f1": 0.0,
+      "w_mom": 1.0,
+      "sharpe": 0.4523619990596813,
+      "ret_pct": 91.33287617646768,
+      "dd_pct": 49.55334089727219,
+      "n_buys": 1534,
+      "summary_ret": 91.33287617646768,
+      "summary_dd": 49.55334089727219,
+      "summary_sharpe": 0.4523619990596813
+    },
+    "roll12": {
+      "score_mode": "roll12",
+      "mode": "pool",
+      "kind": "rev",
+      "n": 20,
+      "top_k": 1,
+      "hold_days": 10,
+      "w_f1": 0.0,
+      "w_mom": 1.0,
+      "sharpe": 0.6237076716488075,
+      "ret_pct": 238.60938528214302,
+      "dd_pct": 53.150335674384884,
+      "n_buys": 1557,
+      "summary_ret": 238.60938528214302,
+      "summary_dd": 53.150335674384884,
+      "summary_sharpe": 0.6237076716488075
+    }
+  },
+  "compare_mean": {
+    "sharpe": {
+      "month": 0.1698,
+      "roll12": 0.2649
+    },
+    "ret_pct": {
+      "month": -26.196,
+      "roll12": 14.7931
+    },
+    "dd_pct": {
+      "month": 73.0838,
+      "roll12": 63.3347
+    }
+  },
+  "summary": {
+    "start": "2020-02-03",
+    "end": "2026-08-11",
+    "n_days": 1585,
+    "total_return_pct": 116.1410397147486,
+    "max_drawdown_pct": 48.765690993665174,
+    "sharpe": 0.4983349710813235,
+    "end_equity": 2161410.397147486,
+    "n_trades": 3079,
+    "n_buys": 1542,
+    "top_k": 1,
+    "hold_days": 5,
+    "factor": "best"
+  }
+}

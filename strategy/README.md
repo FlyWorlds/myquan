@@ -22,10 +22,13 @@ strategy/
 ├── factors/
 │   ├── factor1.py        # 开盘突破 ±pct（买卖真源 open_break.py）
 │   ├── factor2.py        # 回撤加减仓预警（真源 dd_alert.py）
-│   └── factor3.py        # 占位
+│   ├── factor3.py        # 动量（策略五组合 / 单票时序）
+│   └── factor4.py        # 占位
 ├── strategies/
 │   ├── strategy1/        # 默认：factor1 + factor2（预警）
-│   └── strategy2…4/      # 骨架（同因子不同 params）
+│   ├── strategy3/        # 动量因子组合（factor3）
+│   ├── strategy5/        # 动量因子组合（factor3）
+│   └── strategy2 / 4/    # 骨架（同因子不同 params）
 ├── open_break.py         # 因子1 默认百分比 / 规则
 ├── dd_alert.py           # 因子2 历史/年均回撤 → 加减仓预警线
 ├── dd_topup.py           # 旧版权益注资叠加（可选）

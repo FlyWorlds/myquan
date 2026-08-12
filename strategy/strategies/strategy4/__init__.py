@@ -17,7 +17,7 @@ register_strategy(
     StrategySpec(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
-        description="骨架：挂 factor3 + 策略侧参数/过滤器",
+        description="骨架：挂 factor4 + 策略侧参数/过滤器",
         factor_bindings=FACTOR_BINDINGS,
         run=not_implemented_runner(STRATEGY_ID),
         default_config=None,

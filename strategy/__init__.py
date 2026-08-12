@@ -1,13 +1,14 @@
 """多策略 + 多因子可插拔框架。
 
 架构（开闭原则）：
-  · factors/factor1..3              — 因子层：信号/价位规则
+  · factors/factor1..4              — 因子层：信号/价位规则
   · strategies/strategyN/
       bindings.py + decision.py     — 策略层(绑定) + 决策层(买卖)
   · core/                           — 协议 / MarketContext / Decision / 注册表
   · backtest.py / runner.py         — 执行层（下单与回测）
 
 默认生效：策略一 = 因子1（开盘±2.5%）+ 因子2（回撤阶梯补仓）。
+动量：因子3（策略五截面组合 / 单票时序）。因子4 占位。
 兼容旧 API：run_open_break（仅因子1交易）/ open_break3 / STRATEGY_RULES 等保持可用。
 """
 

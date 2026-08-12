@@ -1,11 +1,12 @@
-"""策略五 · 动量因子组合回测（中证500+1000主板，2020→今）。
+"""策略五 · 动量因子组合回测（中证500+1000主板，2020→今）· 因子3。
 
 默认读取 strategy5.PORTFOLIO_DEFAULTS（挖参后多为短期反转）。
 
 用法:
-  python factor4.py --no-open
-  python factor4.py --no-open --universe zz1000_mainboard
-  python factor4.py --no-open --kind rev --n 90 --top-k 3 --hold-days 14
+  python factor3.py --no-open
+  python factor4.py --no-open          # 兼容旧入口，同 factor3
+  python factor3.py --no-open --universe zz1000_mainboard
+  python factor3.py --no-open --kind rev --n 90 --top-k 3 --hold-days 14
 """
 
 from __future__ import annotations

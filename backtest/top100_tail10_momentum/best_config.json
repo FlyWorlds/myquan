@@ -1,0 +1,86 @@
+{
+  "by_slice": {
+    "tip_1_10:best": {
+      "slice": "tip_1_10",
+      "mode": "pool",
+      "kind": "rev",
+      "n": 40,
+      "top_k": 2,
+      "hold_days": 10,
+      "w_f1": 0.0,
+      "w_mom": 1.0,
+      "sharpe": 0.6817890453282611,
+      "ret_pct": 198.43561065290683,
+      "dd_pct": 41.69310584371358,
+      "n_buys": 3168,
+      "summary_ret": 198.43561065290683,
+      "summary_dd": 41.69310584371358,
+      "summary_sharpe": 0.6817890453282611
+    },
+    "tip_1_10:best_dd45": {
+      "slice": "tip_1_10",
+      "mode": "pool",
+      "kind": "rev",
+      "n": 40,
+      "top_k": 2,
+      "hold_days": 10,
+      "w_f1": 0.0,
+      "w_mom": 1.0,
+      "sharpe": 0.6817890453282611,
+      "ret_pct": 198.43561065290683,
+      "dd_pct": 41.69310584371358,
+      "n_buys": 3168,
+      "summary_ret": 198.43561065290683,
+      "summary_dd": 41.69310584371358,
+      "summary_sharpe": 0.6817890453282611
+    },
+    "tail_91_100:best": {
+      "slice": "tail_91_100",
+      "mode": "pool",
+      "kind": "rev",
+      "n": 60,
+      "top_k": 5,
+      "hold_days": 10,
+      "w_f1": 0.0,
+      "w_mom": 1.0,
+      "sharpe": 0.5100790655910911,
+      "ret_pct": 83.02502998457415,
+      "dd_pct": 39.627320966556546,
+      "n_buys": 7920,
+      "summary_ret": 83.02502998457415,
+      "summary_dd": 39.627320966556546,
+      "summary_sharpe": 0.5100790655910911
+    },
+    "tail_91_100:best_dd45": {
+      "slice": "tail_91_100",
+      "mode": "pool",
+      "kind": "rev",
+      "n": 60,
+      "top_k": 5,
+      "hold_days": 10,
+      "w_f1": 0.0,
+      "w_mom": 1.0,
+      "sharpe": 0.5100790655910911,
+      "ret_pct": 83.02502998457415,
+      "dd_pct": 39.627320966556546,
+      "n_buys": 7920,
+      "summary_ret": 83.02502998457415,
+      "summary_dd": 39.627320966556546,
+      "summary_sharpe": 0.5100790655910911
+    }
+  },
+  "compare_mean": {
+    "sharpe": {
+      "tail_91_100": 0.077,
+      "tip_1_10": 0.3162
+    },
+    "ret_pct": {
+      "tail_91_100": -10.9747,
+      "tip_1_10": 37.3161
+    },
+    "dd_pct": {
+      "tail_91_100": 53.6964,
+      "tip_1_10": 54.4418
+    }
+  }
+}

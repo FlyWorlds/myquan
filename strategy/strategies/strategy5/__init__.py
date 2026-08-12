@@ -52,11 +52,11 @@ register_strategy(
         strategy_cls=None,
         print_rules=_print_rules,
         decision_factory=create_decision_engine,
-        aliases=("s5", "momentum", "factor4", "动量因子组合"),
+        aliases=("s5", "momentum", "factor3", "动量因子组合"),
         implemented=True,
         meta={
             "default": False,
-            "standalone_factor": "factor4",
+            "standalone_factor": "factor3",
             "mode": "portfolio",
             "portfolio": dict(PORTFOLIO_DEFAULTS),
         },

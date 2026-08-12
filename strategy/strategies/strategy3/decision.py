@@ -1,4 +1,4 @@
-"""策略三 · 决策层骨架（仅挂因子2 叠加，不产出买卖价 → hold）。"""
+"""策略三 · 决策层：动量因子组合（截面选股说明）· 因子3。"""
 
 from __future__ import annotations
 
@@ -14,14 +14,17 @@ class Strategy3Decision(BaseDecisionEngine):
 
     def decide(self, ctx: MarketContext) -> Decision:
         del ctx
-        binding = self.binding("factor2")
+        binding = self.binding("factor3")
         if binding is None:
-            return Decision.hold("策略三未绑定因子2")
+            return Decision.hold("策略三未绑定因子3")
+        p = binding.params
         return Decision.hold(
-            "策略三：factor2 为权益补仓叠加因子，不直接产出买卖价",
-            add_pct=binding.params.get("add_pct"),
-            levels=binding.params.get("levels"),
-            tags=("overlay", "factor2"),
+            (
+                f"组合调仓由截面因子确认：{p.get('kind')}(n={p.get('n')}) "
+                f"Top{p.get('top_k')} / 持有{p.get('hold_days')}日"
+            ),
+            kind=p.get("kind"),
+            tags=("momentum_portfolio", "factor3"),
         )
 
 

@@ -1,4 +1,4 @@
-"""策略五 · 因子绑定：动量因子组合（中证1000截面）。"""
+"""策略五 · 因子绑定：动量因子组合（中证1000截面）· 因子3。"""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ _p = PORTFOLIO_DEFAULTS
 
 FACTOR_BINDINGS = (
     bind_factor(
-        "factor4",
+        "factor3",
         role="both",
-        label="因子4·动量组合",
+        label="因子3·动量组合",
         kind=_p["kind"],
         n=_p["n"],
         top_k=_p["top_k"],

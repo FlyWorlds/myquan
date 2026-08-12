@@ -74,7 +74,7 @@ class BacktestConfig:
     factor2_max_inject_pct: float | None = None  # 累计追加上限（相对总本金）
     daily_cache: Path | None = None
     report_path: Path | None = None
-    # 因子4·动量（单因子策略用；默认=高低点时间距离）
+    # 因子3·动量（单因子策略用；默认=高低点时间距离）
     mom_kind: str = "dist_hl"
     mom_params: dict | None = None
 

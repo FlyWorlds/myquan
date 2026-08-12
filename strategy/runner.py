@@ -157,7 +157,7 @@ def run_momentum(
     verbose: bool = True,
     force_daily_refresh: bool = False,
 ) -> tuple[BacktestResult, pd.DataFrame]:
-    """因子4·动量：收盘确认信号 → 次日开盘成交。
+    """因子3·动量：收盘确认信号 → 次日开盘成交。
 
     先用更长历史预热因子（避免 dig 窗口起点丢状态），再截到 cfg.start_date 回测。
     """
@@ -222,7 +222,7 @@ def run_momentum(
             prev_small_yang_pct=0.0,
         )
     if cfg.report_path is not None:
-        title = f"{cfg.symbol_name} 因子4·动量 kind={kind} params={params}"
+        title = f"{cfg.symbol_name} 因子3·动量 kind={kind} params={params}"
         if verbose:
             print(f"\n生成 HTML: {cfg.report_path}")
         result.viz.report(

@@ -1,31 +1,31 @@
-"""策略三 · 挂因子2，阈值与策略一不同（演示只改 params）。"""
+"""策略三 · 因子绑定：动量因子组合 · 因子3。"""
 
 from __future__ import annotations
 
 from strategy.core.protocols import bind_factor
-from strategy.dd_alert import derive_thresholds
+from strategy.strategies.strategy5.portfolio import PORTFOLIO_DEFAULTS
 
 STRATEGY_ID = "strategy3"
 STRATEGY_NAME = "策略三"
 
-# 更高历史最大回撤假设 → 加仓线仍取整，但减仓线更保守（演示只改统计输入）
-_TH = derive_thresholds(hist_max_dd=0.35, avg_yearly_max_dd=0.22)
+_p = PORTFOLIO_DEFAULTS
 
 FACTOR_BINDINGS = (
     bind_factor(
-        "factor2",
-        label="回撤加减仓预警(策略三)",
-        role="custom",
-        hist_max_dd=_TH.hist_max_dd,
-        avg_yearly_max_dd=_TH.avg_yearly_max_dd,
-        add_alert_dd=_TH.add_alert_dd,
-        reduce_alert_dd=_TH.reduce_alert_dd,
-        overlay=False,
+        "factor3",
+        role="both",
+        label="因子3·动量组合",
+        kind=_p["kind"],
+        n=_p["n"],
+        top_k=_p["top_k"],
+        hold_days=_p["hold_days"],
+        min_score=_p["min_score"],
+        ma_filter=_p["ma_filter"],
         filter_desc=(
-            f"加仓≥{_TH.add_alert_dd*100:.0f}% / 减仓≤{_TH.reduce_alert_dd*100:.0f}% "
-            f"(年均值{_TH.avg_yearly_max_dd*100:.0f}% / 历史最大{_TH.hist_max_dd*100:.0f}%)；"
-            "回测不注资"
+            f"截面组合：中证500+1000主板 mode={_p.get('mode')} "
+            f"rev(n={_p['n']}"
+            + (f"+{_p['n2']}" if _p.get("n2") else "")
+            + f") 日选Top{_p['top_k']}，持有{_p['hold_days']}日；收盘信号次日开盘"
         ),
-        enabled=True,
     ),
 )

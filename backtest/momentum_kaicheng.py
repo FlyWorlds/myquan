@@ -1,4 +1,4 @@
-"""凯盛科技 · 策略五 / 因子4 动量 单因子回测。"""
+"""凯盛科技 · 策略五 / 因子3 动量 单因子回测。"""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _load_best() -> tuple[str, dict, str]:
     p = Path(__file__).with_name("_momentum_mine_best.txt")
     kind = DEFAULT_KIND
     params = dict(DEFAULT_PARAMS)
-    window = "2023+"
+    window = "2022+"
     if not p.exists():
         return kind, params, window
     for line in p.read_text(encoding="utf-8").splitlines():
@@ -42,7 +42,7 @@ def _load_best() -> tuple[str, dict, str]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="凯盛 因子4·动量（策略五）")
+    parser = argparse.ArgumentParser(description="凯盛 因子3·动量（策略五）")
     parser.add_argument("--no-open", action="store_true")
     parser.add_argument("--rules", action="store_true")
     parser.add_argument("--force-refresh", action="store_true")
@@ -72,13 +72,16 @@ def main(argv: list[str] | None = None) -> None:
         start_date=start,
         mom_kind=kind,
         mom_params=params,
-        report_path=Path(__file__).resolve().parent / "凯盛科技_因子4动量_report.html",
+        report_path=Path(__file__).resolve().parent / "凯盛科技_因子3动量_report.html",
     )
     print(
-        f"运行 因子4·动量 kind={kind} params={params} "
+        f"运行 因子3·动量 kind={kind} params={params} "
         f"start={start} (mine_window={window})"
     )
-    get_strategy("strategy5").run(
+    # 单票动量走 run_momentum；策略五默认是截面组合
+    from strategy.runner import run_momentum
+
+    run_momentum(
         cfg,
         show_report=not args.no_open,
         force_daily_refresh=bool(args.force_refresh),

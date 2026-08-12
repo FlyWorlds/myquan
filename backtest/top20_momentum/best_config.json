@@ -1,0 +1,29 @@
+{
+  "best": {
+    "mode": "pool",
+    "kind": "rev",
+    "n": 20,
+    "top_k": 5,
+    "hold_days": 10,
+    "w_f1": 0.0,
+    "w_mom": 1.0,
+    "sharpe": 0.7788788964811872,
+    "ret_pct": 240.31555635781507,
+    "dd_pct": 40.732637314706835,
+    "n_buys": 7902
+  },
+  "summary": {
+    "start": "2020-02-03",
+    "end": "2026-08-11",
+    "n_days": 1585,
+    "total_return_pct": 240.31555635781507,
+    "max_drawdown_pct": 40.732637314706835,
+    "sharpe": 0.7788788964811872,
+    "end_equity": 3403155.5635781507,
+    "n_trades": 15754,
+    "n_buys": 7902,
+    "top_k": 5,
+    "hold_days": 10,
+    "factor": "best"
+  }
+}

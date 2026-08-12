@@ -71,7 +71,7 @@ myquan/
 ├── test_strategy_rules.py   # 离线规则回归（不访问网络）
 ├── strategy/                # 可插拔策略框架（详见 strategy/README.md）
 │   ├── core/                # 协议 / MarketContext / Decision / 注册表
-│   ├── factors/             # 因子1买卖 · 因子2回撤预警 · 因子3占位
+│   ├── factors/             # 因子1开盘突破 · 因子2回撤预警 · 因子3动量 · 因子4占位
 │   ├── strategies/          # strategyN/{bindings,decision} 策略层+决策层
 │   ├── open_break.py        # 因子1 规则/默认百分比
 │   ├── dd_alert.py          # 因子2 回撤加减仓预警阈值（默认）
