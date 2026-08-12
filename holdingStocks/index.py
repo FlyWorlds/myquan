@@ -1904,21 +1904,59 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
     row["可执行"] = pos == "待买入"
 
 
+def _ever_held_codes() -> set[str]:
+    """曾经实盘持仓过的代码：成交流水 / 止损备注 / 卖出因子记忆 / 当日已实现。"""
+    codes: set[str] = set()
+    data = load_holdings()
+    for code, pos in (data.get("positions") or {}).items():
+        if not isinstance(pos, dict):
+            continue
+        note = str(pos.get("note") or "")
+        if any(k in note for k in ("止损", "卖出", "成交", "清仓")):
+            codes.add(_code_key(code))
+    for code, mem in (data.get("factor_memory") or {}).items():
+        if isinstance(mem, dict) and mem.get("last_sell_factor_px") is not None:
+            codes.add(_code_key(code))
+    for code in data.get("realized_today") or {}:
+        codes.add(_code_key(code))
+    if TRADES_FILE.exists():
+        try:
+            for line in TRADES_FILE.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                c = rec.get("code")
+                if c:
+                    codes.add(_code_key(str(c)))
+        except OSError:
+            pass
+    return codes
+
+
 def sort_watch_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """排序：待卖出 → 待买入 → 实仓持有 → 当日禁买/策略持有 → 空仓；同档 WATCHLIST 序。"""
+    """排序：实仓 → 曾经持仓 → 待买入 → 策略持有 → 空仓；同档 WATCHLIST 序。"""
     order = {_code_key(w["code"]): i for i, w in enumerate(WATCHLIST)}
+    former = _ever_held_codes()
 
     def _tier(r: dict[str, Any]) -> int:
         pos = str(r.get("持仓状态") or "")
         qty = int(r.get("持仓") or 0)
-        if pos == "待卖出":
+        code = _code_key(str(r.get("代码") or ""))
+        if qty > 0 and pos == "待卖出":
             return 0
-        if pos == "待买入":
-            return 1
         if qty > 0:
+            return 1
+        # 曾经持仓（含当日禁买）排实仓之后
+        if pos == "当日禁买" or code in former:
             return 2
-        if pos in ("当日禁买", "策略持有"):
+        if pos == "待买入":
             return 3
+        if pos == "策略持有":
+            return 4
         if str(r.get("因子2动作") or "") in (
             "inject",
             "withdraw",
@@ -1926,17 +1964,19 @@ def sort_watch_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "reduce_alert",
             "near_max",
         ):
-            return 4
-        return 5
+            return 5
+        return 6
 
     def _urgency(r: dict[str, Any]) -> int:
         hit = str(r.get("因子触发") or "")
         pos = str(r.get("持仓状态") or "")
         if pos == "待卖出" or hit.startswith("已触发") or hit.startswith("策略止损"):
             return 0
-        if pos == "待买入" or hit == "接近" or r.get("近止损") or r.get("近买点"):
+        if pos == "当日禁买":
             return 1
-        return 2
+        if pos == "待买入" or hit == "接近" or r.get("近止损") or r.get("近买点"):
+            return 2
+        return 3
 
     def key(r: dict[str, Any]) -> tuple[int, int, int]:
         code = _code_key(str(r.get("代码") or ""))
@@ -2782,7 +2822,7 @@ def write_html_report(
       因子2：策略一历史最大回撤 / 年最大回撤均值 / 当前回撤（摘要见合计区；只预警不改现金）。
       持仓状态：待买入 / 待卖出 / 持有 / 空仓；策略回放未登记=策略持有；当日止损后=当日禁买。
       规则：T+1当日不卖；持有仅−2.5%止损卖；止损/卖出当日不买。
-      卡片排序：待卖出 → 待买入 → 实仓持有 → 当日禁买/策略持有 → 空仓。
+      卡片排序：实仓待卖出 → 实仓持有 → 曾经持仓 → 待买入 → 策略持有 → 空仓。
       因子侧：待卖出预警→卖出；待买入预警→买入；策略持有→持有；其余→空仓。
       因子触发：盘中预警写「已触发 M/D」；止损日写「策略止损 M/D」；否则最近因子日。
       距已触发/未触发：因子一旦触发即自动翻转，并写入 factor_memory。
