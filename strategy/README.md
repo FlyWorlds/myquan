@@ -27,7 +27,7 @@ strategy/
 ├── strategies/
 │   ├── strategy1/        # 默认：factor1 + factor2（预警）
 │   ├── strategy3/        # 动量因子组合（factor3）
-│   ├── strategy4/        # 占位（当前不挂因子）
+│   ├── strategy4/        # 因子1·roll12 Top3 池 × 池内反转
 │   ├── strategy5/        # 动量因子组合（factor3）
 │   └── strategy2/        # 骨架（同因子不同 params）
 ├── open_break.py         # 因子1 默认百分比 / 规则

@@ -1,4 +1,4 @@
-"""策略四 · 决策层（未挂因子 → hold）。"""
+"""策略四 · 决策层：roll12 Top3 池内反转说明。"""
 
 from __future__ import annotations
 
@@ -14,9 +14,19 @@ class Strategy4Decision(BaseDecisionEngine):
 
     def decide(self, ctx: MarketContext) -> Decision:
         del ctx
-        if not self.bindings:
-            return Decision.hold("策略四未挂因子")
-        return Decision.hold("策略四未挂可用交易因子")
+        f1 = self.binding("factor1")
+        f3 = self.binding("factor3")
+        if f1 is None or f3 is None:
+            return Decision.hold("策略四未完整绑定因子1+池内因子3")
+        p1, p3 = f1.params, f3.params
+        return Decision.hold(
+            (
+                f"池：因子1 {p1.get('score_mode')} Top{p1.get('pool_n')}；"
+                f"交易：池内 {p3.get('kind')}(n={p3.get('n')}) "
+                f"Top{p3.get('top_k')} / 持有{p3.get('hold_days')}日"
+            ),
+            tags=("strategy4", "roll12_pool", "rev"),
+        )
 
 
 def create_decision_engine(spec: StrategySpec | None = None) -> Strategy4Decision:
