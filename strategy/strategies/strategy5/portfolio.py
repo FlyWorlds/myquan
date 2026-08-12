@@ -10,13 +10,13 @@ import pandas as pd
 # 挖参后写入；未挖参前用诊断验证过的反转默认（同口径优于 dist_hl Top5）
 PORTFOLIO_DEFAULTS = {
     "kind": "rev",
-    "n": 100,
+    "n": 90,
     "top_k": 3,
-    "hold_days": 18,
+    "hold_days": 20,
     "min_score": None,
     "ma_filter": None,
-    "mode": "plain",
-    "n2": None,
+    "mode": "dual",
+    "n2": 40,
     "w": 1.0,
     "vol_max_pct": None,
     "persist": None,
