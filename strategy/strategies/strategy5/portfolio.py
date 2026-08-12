@@ -10,13 +10,14 @@ import pandas as pd
 # 挖参后写入；未挖参前用诊断验证过的反转默认（同口径优于 dist_hl Top5）
 PORTFOLIO_DEFAULTS = {
     "kind": "rev",
-    "n": 90,
+    "n": 100,
     "top_k": 3,
-    "hold_days": 20,
+    "hold_days": 18,
     "min_score": None,
     "ma_filter": None,
-    "mode": "dual",
-    "n2": 40,
+    "mode": "plain",
+    "n2": None,
+    "w": 1.0,
     "vol_max_pct": None,
     "persist": None,
     "pool": None,
@@ -116,7 +117,7 @@ def run_momentum_portfolio(
         print(f"面板 close={closes.shape}")
 
     mode = str(cfg.get("mode") or "plain")
-    if mode == "dual" and cfg.get("n2"):
+    if mode in ("dual", "dual_w") and cfg.get("n2"):
         from backtest.mine_zz1000_momentum import factor_matrix
         import numpy as np
 
@@ -128,10 +129,23 @@ def run_momentum_portfolio(
             sd = df.std(axis=1).replace(0, np.nan)
             return df.sub(mu, axis=0).div(sd, axis=0)
 
-        factor = _cs_z(r1) + _cs_z(r2)
+        w = float(cfg.get("w") or 1.0)
+        factor = _cs_z(r1) + w * _cs_z(r2)
         label = (
-            f"portfolio/{univ_key}/dual{{n={cfg['n']}+{cfg['n2']},top={cfg['top_k']},"
-            f"hold={cfg['hold_days']}}}"
+            f"portfolio/{univ_key}/dual{{n={cfg['n']}+{cfg['n2']}*w{w:g},"
+            f"top={cfg['top_k']},hold={cfg['hold_days']}}}"
+        )
+    elif mode == "vol_mask":
+        from backtest.mine_zz1000_momentum import factor_matrix
+
+        rev = factor_matrix(opens, highs, lows, closes, kind="rev", n=int(cfg["n"]))
+        vol = closes.pct_change().rolling(20, min_periods=10).std()
+        rnk = vol.rank(axis=1, pct=True, method="average")
+        vmax = float(cfg.get("vol_max_pct") or 0.75)
+        factor = rev.where(rnk <= vmax)
+        label = (
+            f"portfolio/{univ_key}/vol_mask{{n={cfg['n']},vmax={vmax},"
+            f"top={cfg['top_k']},hold={cfg['hold_days']}}}"
         )
     else:
         factor = zz.compute_factor(

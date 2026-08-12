@@ -373,13 +373,47 @@ def main() -> None:
     fwd = opens.shift(-HOLD) / opens.shift(-1) - 1.0
     mode = str(PORTFOLIO_DEFAULTS.get("mode") or "plain")
     n2 = PORTFOLIO_DEFAULTS.get("n2")
-    if mode == "dual" and n2:
-        main_fac = _cs_z(raw[N_MAIN]) + _cs_z(raw[int(n2)])
-        main_label = f"dual(rev{N_MAIN}+rev{int(n2)})"
+    w = float(PORTFOLIO_DEFAULTS.get("w") or 1.0)
+    vmax = PORTFOLIO_DEFAULTS.get("vol_max_pct")
+
+    def _rev(n: int) -> pd.DataFrame:
+        if n in raw:
+            return raw[n]
+        r = factor_matrix(opens, highs, lows, closes, kind="rev", n=n)
+        raw[n] = r
+        return r
+
+    if mode in ("dual", "dual_w") and n2:
+        main_fac = _cs_z(_rev(N_MAIN)) + w * _cs_z(_rev(int(n2)))
+        main_label = f"dual(rev{N_MAIN}+rev{int(n2)}*w{w:g})"
+    elif mode == "vol_mask":
+        rev = _rev(N_MAIN)
+        vol = closes.pct_change().rolling(20, min_periods=10).std()
+        rnk = vol.rank(axis=1, pct=True, method="average")
+        vv = float(vmax or 0.75)
+        main_fac = rev.where(rnk <= vv)
+        main_label = f"vol_mask(rev{N_MAIN},vmax={vv:g})"
     else:
-        main_fac = raw[N_MAIN]
+        main_fac = _rev(N_MAIN)
         main_label = f"rev(n={N_MAIN})"
     print(f"predictive factor = {main_label}, hold={HOLD}, top_k={TOP_K}")
+
+    # 等权买入持有基准（收盘链），用于超额
+    def _ew_bh(start: str, end: str | None) -> float:
+        a = _tz(start, closes.index)
+        cl = closes.loc[closes.index >= a]
+        if end is not None:
+            b = _tz(end, closes.index)
+            cl = cl.loc[cl.index <= b]
+        daily = cl.pct_change().mean(axis=1).dropna()
+        if daily.empty:
+            return float("nan")
+        return float((1.0 + daily).prod() - 1.0)
+
+    bh = {lab: _ew_bh(a, b) for lab, (a, b) in {
+        "train": TRAIN, "valid": VALID, "test": TEST, "full": FULL
+    }.items()}
+    print("EW-BH", {k: round(v, 4) for k, v in bh.items()})
     ic_all = {}
     for label, (a, b) in {
         "train": TRAIN,
@@ -405,9 +439,12 @@ def main() -> None:
             "ret": m["ret"],
             "dd": m["dd"],
             "n_buys": m["n_buys"],
+            "bh": bh[label],
+            "excess": float(m["ret"] - bh[label]),
         }
         print(
-            f"STRAT {label}: sharpe={m['sharpe']:.3f} ret={m['ret']*100:.1f}% dd={m['dd']*100:.1f}%"
+            f"STRAT {label}: sharpe={m['sharpe']:.3f} ret={m['ret']*100:.1f}% "
+            f"excess={strat[label]['excess']*100:.1f}% dd={m['dd']*100:.1f}%"
         )
 
     # 过拟合指标
@@ -507,7 +544,11 @@ def main() -> None:
             {"metric": "Sharpe_valid", "value": strat["valid"]["sharpe"]},
             {"metric": "Sharpe_test", "value": strat["test"]["sharpe"]},
             {"metric": "Sharpe_decay", "value": decay},
+            {"metric": "Excess_full", "value": strat["full"]["excess"]},
+            {"metric": "Excess_test", "value": strat["test"]["excess"]},
+            {"metric": "BH_full", "value": bh["full"]},
             {"metric": "main_factor", "value": main_label},
+            {"metric": "hold_days", "value": HOLD},
         ]
     ).to_csv(OUT / "factor_validity_summary.csv", index=False, encoding="utf-8-sig")
     print(f"wrote {path}")
