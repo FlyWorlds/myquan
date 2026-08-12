@@ -65,7 +65,7 @@ class StrategyEntry:
 
 
 def _ensure_plugins_loaded() -> None:
-    """导入即注册因子1/2/3 与策略1/2/3/4。"""
+    """导入即注册因子1/2/3/4 与策略1..6。"""
     import strategy.factors  # noqa: F401
     import strategy.strategies  # noqa: F401
 

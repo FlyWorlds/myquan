@@ -5,6 +5,7 @@
 - 决策/盯盘买卖只看因子1；因子2 默认只挂预警阈值（**回测不注资**）。
 - 仅因子1交易：`run_open_break` 或 `python strategy1.py --no-factor2`。
 - 旧版权益注资叠加：`run_strategy1(..., apply_factor2_overlay=True)`（`dd_topup`）。
+- **策略六**：因子3截面选股买入 + 因子1开盘止损（未触则持满 hold_days 到期卖）。
 - **开闭调参**：改 `bindings.py` / `BacktestConfig` / `DEFAULT_*`，不必改算法。
 
 ## 分层架构
@@ -29,6 +30,7 @@ strategy/
 │   ├── strategy3/        # 动量因子组合（factor3）
 │   ├── strategy4/        # 占位（当前不挂因子）
 │   ├── strategy5/        # 动量因子组合（factor3）
+│   ├── strategy6/        # 因子3选股 + 因子1止损
 │   └── strategy2/        # 骨架（同因子不同 params）
 ├── open_break.py         # 因子1 默认百分比 / 规则
 ├── dd_alert.py           # 因子2 历史/年均回撤 → 加减仓预警线
@@ -83,6 +85,8 @@ cd backtest && python strategy1.py --rules
 cd backtest && python strategy1.py --no-open
 cd backtest && python strategy1.py --no-factor2 --no-open   # 仅因子1
 cd backtest && python run.py kaicheng --no-open
+# 策略五纯袖套 vs 策略六（因子3选股+因子1止损）
+cd backtest && python compare_f3_select_f1_stop.py
 ```
 
 ## 如何扩展（开闭）
