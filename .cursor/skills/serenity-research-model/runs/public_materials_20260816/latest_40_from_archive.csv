@@ -1,0 +1,366 @@
+id,created_at,author,text,url,likes,retweets,replies,quotes,views,retrieved_at,source
+2087447527595692180,2026-08-12T07:54:08+00:00,aleabitoreddit,"So this is just what I'm seeing with $SIVE and the CW DFB laser chokepoint right now.
+
+From optical earnings:
+
+1. $LITE: unexpected demand and imbalance for UHP CW lasers.
+
+- Had ability to price up ASP for lasers.
+- Scale up CPO on track for H2 2027 shipments, called out any CPO scale up delay rumors as noise.
+
+Lumentum confirmed timelines (that CPO players like Sivers sold off of misleading reports from), high margins, and extreme demand for qualified CW lasers.
+
+2. $AAOI: doesn’t have enough CW laser capacity because of too much optical transceiver demand.
+
+-  Not meaningfully participating in first-gen CPO deployments, with $MTSI not looking like they're in it either but focusing on NPO. Haven't seen much with $SMTC after their HieFo acqusition.
+- Called lasers as the bottleneck within a 20-40% demand imbalance for transceivers.
+- Says customers approaching them every week asking them for supply + to move faster.
+
+AOI confirmed demand imbalances  + bottlenecks for lasers. And we got an even smaller pool for first-gen CPO players.
+
+3. Both $AAOI and $LITE claimed Chinese players were years behind for CPO lasers and far behind stated claims in qualified capacity.
+
+- $AAOI said 2-3 years+ behind with CPO lasers.
+- $LITE said they haven't seen anything like Chinese claims in terms of outputs (and no recourse if it's false).
+
+Reaffirms moat for CPO related lasers, and no flooding from some shortseller claims on the optical sector.
+
+4. $MTSI said that many customers are approaching them with urgency due to the general supply shortage of indium phosphide DFB lasers.
+
+Again, puts Sivers in the that bottleneck, giving them likely more customer demand .
+
+Among $COHR ($72.54B), $LITE ($66.57B), $AVGO ($2.13T):
+
+It's very special you get one of the public 4 Western CPO leaders at a ~$1.5B MC with $SIVE.
+
+Feels like my thesis with both:
+
+- The CW bottleneck that I predicted
+- CW laser chokepoint (where there's only a few CPO players, at least for gen-1)
+
+Got validated from earnings, now it's just waiting for the inflection points of next optical architecture shifts.",https://x.com/aleabitoreddit/status/2087447527595692180,1301,92,90,14,271853,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087450836616298968,2026-08-12T08:07:17+00:00,aleabitoreddit,"@Berlinergy I said $LITE went from $3b to $60B+ over a 2-3 year timeframe, especially due from Cloud Light acquisition in late 2023, that multiplied TAM by 5x+.
+
+Since they started off in the EML laser / optical component chokepoint originally before M&A.
+
+$SIVE has the potential to do the same starting off in the CW laser chokepoint.
+
+But it does require something like a successful M&A down pluggables or optical engines/ELS.
+
+To capture more revenue off things like completed transceivers $AAOI, if they want to get to a similar scale. And my take was NASDAQ listing is necessary to unlock more funding to do so.",https://x.com/aleabitoreddit/status/2087450836616298968,208,6,17,4,27547,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087452367902159041,2026-08-12T08:13:22+00:00,aleabitoreddit,"@Malinrec - Because newer 1.6T optical transceivers and CPO volumes haven't ramped yet. $SIVE is targeting all the next generation optical shifts.
+
+This comes from a misunderstanding of architectural shifts, you won't get 9 figure revenue in 2024 if customer CPO scale up deployments start in 2028.
+
+- $SIVE has 130+ employees and if I remember correctly, 1/4th to 1/3d were PHDs.
+
+Lot of what they do is IP and they use Win Semi, external foundries for volume ramp. If they did assembly like $FN or $COHR, you would see employee count balloon.
+
+Not quite sure why you say a customer supplying to $JBL, $GFS, Ayar, $POET, and many other hyperscaler suppliers is a hopeless case.
+
+Probably one of the most unique ones I've seen.",https://x.com/aleabitoreddit/status/2087452367902159041,227,3,7,2,18296,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087453528692600936,2026-08-12T08:17:58+00:00,aleabitoreddit,"@x4tsr No, because $AAOI said that their scarce capacity is dedicated internally toward making their own 800G/1.6T optical transceivers.
+
+Which they said would be a 20-40% demand imbalance even if all their capacity come online.
+
+It's not a bad thing to have too much demand, that you can't expand to new product lines.",https://x.com/aleabitoreddit/status/2087453528692600936,84,0,8,0,13394,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087454919729308015,2026-08-12T08:23:30+00:00,aleabitoreddit,"@Mathieuber61726 Not really, I'm pretty sure Win Semi procures their own material/substrate supply.
+
+Given it's position in Taiwan, Win is probably well connected to epi foundries like Landmark for additional sourcing options.",https://x.com/aleabitoreddit/status/2087454919729308015,94,1,7,0,13796,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087457633175507424,2026-08-12T08:34:17+00:00,aleabitoreddit,"@tontonborland @Sofigoodboy Pretty sure $SIVE had Lightmatter, Celestial, Lightelligence, and Ayar as customers way early on before.
+
+And they all ended up ~4B+ companies after starting off small. So I'm sure they know what to do with promising private company acquisitions.
+
+There's not really much distressed public companies that offer optical transceiver designs other than maybe OE Solutions I think around ~$200m, but not sure how their progress is going with 800g/1.6T pluggables.",https://x.com/aleabitoreddit/status/2087457633175507424,141,4,7,0,14819,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087505570941239683,2026-08-12T11:44:46+00:00,aleabitoreddit,"$AEHR receives another $22M follow on order for AI processor wafer level burn in systems.
+
+By their lead AI processor company.
+
+It’s cool to see this tiny company grow up so fast across so many verticals (memory, silicon photonics, etc).
+
+Up +5.39% premarket off the news. https://t.co/YkOtELzkmo",https://x.com/aleabitoreddit/status/2087505570941239683,674,35,72,12,230804,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087515371750490383,2026-08-12T12:23:43+00:00,aleabitoreddit,"$NBIS outlook is pretty insane yet again.
+
+$582.3M revenue (+454% Y/Y, +46% Q/Q) off ~50% adjusted EBITDA margin (AI Cloud). $8.04B cash on hand.
+
+Reiterates financial guide (2026 revenue: $3.0–$3.4B
+2026 EoY ARR: $7–$9B), I was hoping for a raise, but it's already massive growth.
+
+Not really about this quarter financials, but these signals:
+
+- ""We could sell our entire 2027 capacity on these terms today."" massive visibility on demand
+- ""4 customer agreements averaging over $1B+ each in contract value""
+- Around 70% of Q2 deals included customer prepayments
+- Contracted power guidance was raised again, from more ~4+ GW to 5 GW. (this used to be a concern vs. $IREN debate, but Nebius power guidance keeps going through the roof).
+- Expects $9B+ of prepayments in 2026 and says it has $40B+ of commitments.
+- annual contract value per MW keeps going brrr (>$40M/mw for Q3 short term capacity deals)
+
+Same bear story will always be there (eg. large $5.66B of capex with current GAAP net loss), but demand is extreme with massive visibility, with increasing AI Cloud adjusted EBITDA margins ( 24% -> 45% -> 50% progression)
+
+We kinda got this read through from all your hyperscaler cloud earnings and $CRWV backlog yesterday, but glad it's showing up in Weebius's earnings.",https://x.com/aleabitoreddit/status/2087515371750490383,2191,172,119,17,273944,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087519803124969916,2026-08-12T12:41:19+00:00,aleabitoreddit,"@R42t0r I've been pretty vocally bearish on $CRWV since last year compared to $NBIS and other neoclouds.
+
+Demand isn't really much of a problem with their $100B+ backlog, their revenue + 59% adjusted EBITDA margin looks good.
+
+But underlying financing methods is really bad...
+
+Coreweave's debt interest (eg. Q2 interest expense reached $640m), which eats into FCF way too much...
+That figure is like 42% of Coreweaves $1.51B adjusted EBITDA for reference.",https://x.com/aleabitoreddit/status/2087519803124969916,104,1,7,0,19451,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087655011253981410,2026-08-12T21:38:36+00:00,aleabitoreddit,@mikealfred Bears are going back into hibernation after seeing all these AI earning reports from $NBIS to $LITE.,https://x.com/aleabitoreddit/status/2087655011253981410,121,0,9,0,11586,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087655812831519075,2026-08-12T21:41:47+00:00,aleabitoreddit,"@LightLogix Yeah looking at $COHR earnings now, pretty excited about the implications, will post soon",https://x.com/aleabitoreddit/status/2087655812831519075,55,0,4,0,7171,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087675367595380783,2026-08-12T22:59:29+00:00,aleabitoreddit,"My main takeaway was that your merchant CW laser suppliers seem to be EXTREMELY IMPORTANT now.
+
+But TLDR of $COHR earnings:
+
+""given the demand that we see in our DC business with transceivers, I don’t see any time in the near future where we would be selling indium phosphide lasers externally""
+
+- Ton more value placed on companies that sell InP lasers externally if $AAOI can't doesn't enough capacity for first gen-CPO deployments, $COHR not selling externally...
+
+I guess that's why $MTSI said a ton of customers are approaching them with urgency for InP CW DFB lasers (and they dont even have meaningful capacity coming online until EOY 2027)
+
+$AAOI -> Internal
+$COHR -> Internal
+Buyers -> fewer places to look for capacity.
+
+ ""Our backlog now extends out, fiscal 2027 is basically completely booked out. We are booked really through the end of calendar 2027"" [ Massive massive demand visibility]
+
+- Coherent also mentioned LTAs spanning end of decade. So this kinda reinforces what $POET CEO said at their AGM that the ""big 3"" are fully sold out next 2 years.
+
+""we’re not constrained in the assembly and test capacity right now. We’re really just constrained by the ramp of the indium phosphide production""
+
+- Just for the bottleneck bros in terms of assembly/test not a bottleneck.
+
+""absolutely no push-out of CPO demand. In fact, it has been the opposite. We have seen demand increase and request from customers’ demand getting pulled in""
+
+""we continue to expect revenue from CPO for scale-up applications to start to flow in the second half of calendar 2027""
+
+- Big read through on other CPO players for scale up if $LITE, $COHR reaffirm revenue from CPO scale up coming h2027.
+
+- ""quarterly revenue exceeding $3 billion by the end of fiscal 2027""
+
+- $COHR revenue go brrr
+
+So for regular numbers it's:
+
+- $2.046B revenue (+13.3% Q/Q, +33.8% Y/Y), main revenue ramp looks to be happening entering Q4 into 2027
+- Non-GAAP gross margins: 40.2%
+
+Next quarter guide is:
+- Revenue: $2.2–$2.4B revenue
+- Non-GAAP gross margins: 39.5-41.5%
+
+Basically:
+$1.69B -> $1.81B -> $2.05B -> ~$2.30B -> $3.0B (end of FY 2027)
+~39% -> 39.6% -> 40.2% -> ~40.5% (gross margins)
+
+For operating margins:
+18.0% -> 19.5% -> 19.9% -> 20.3% -> 21.8%
+
+Little less impressed compared to $LITE margin growth in terms of profitability, but revenue scale for $COHR growing rapidly.",https://x.com/aleabitoreddit/status/2087675367595380783,432,29,49,6,134097,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087677744280977660,2026-08-12T23:08:56+00:00,aleabitoreddit,"@stockprodigyman My takeaway was that $SIVE / Win, Sumitomo, Furukawa, and other qualified CW merchant laser suppliers...
+
+Are going to become a lot more important in the near future.",https://x.com/aleabitoreddit/status/2087677744280977660,100,2,6,0,7625,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087733927930929435,2026-08-13T02:52:11+00:00,aleabitoreddit,"Is it just me, or is the list of 3 letter optical jargon never ending?
+
+We have LPO, LRO, NPO, XPO, CPO, OBO, and others for approaches.
+
+Then InP, EML, ELS, OCS, SOI, and others to add to the random terms.
+
+Even the industry events with OCP or OFC get their three letter names.
+
+People who have followed me on my optical bottleneck scavenger hunt with $SOI or $IQE might know a lot by now.
+
+But wouldn’t new followers might be super confused…",https://x.com/aleabitoreddit/status/2087733927930929435,738,19,88,4,227675,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087734641994448935,2026-08-13T02:55:01+00:00,aleabitoreddit,"@sfproof I’m advocating for longer 4 letter words instead of 3, like TFLN.
+
+Rather than adding to the list with BTO or MTP.",https://x.com/aleabitoreddit/status/2087734641994448935,56,0,13,0,16343,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087807614172488131,2026-08-13T07:44:59+00:00,aleabitoreddit,"$SIVE announces a $3.4M development program with SemiNex!
+
+For CPO, DFB laser arrays, and optical amplifiers.
+
+Early production is targeted H2 2027 (in line with early scale up CPO timelines)
+
+Seemed weird to me at first given product overlap, since SemiNex is a much smaller Series B company...
+
+But then I got reminded of a less explicit version of $SPCX + Cursor relationship (derisking by working together first).
+
+There's probably something interesting Sivers found in this company.",https://x.com/aleabitoreddit/status/2087807614172488131,1067,57,88,12,193312,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087809348596814191,2026-08-13T07:51:52+00:00,aleabitoreddit,"@JoelLikesTurtle That's literally the earliest timeframe possible for CPO scale up early volumes if you look at $LITE and $COHR earnings.
+
+And giving that specific timeframe is actually extremely bullish.",https://x.com/aleabitoreddit/status/2087809348596814191,115,2,8,0,15029,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087817506711011688,2026-08-13T08:24:18+00:00,aleabitoreddit,"@dankdrankkz Sivers found a small Series B company that raised $3m last year that achieved 200-250mw per emitter apparently.
+
+$SIVE can maybe combine that with their high wavelength DFB array, and maybe make something extremely high power like eg. 8/16 × 200-250mw for high aggregate output.
+
+Program was focused on ""need for higher power, more wavelengths"" for CPO, so that's my guess.",https://x.com/aleabitoreddit/status/2087817506711011688,144,2,11,0,14998,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087838176677376186,2026-08-13T09:46:26+00:00,aleabitoreddit,"Feels like my $IQE thesis Feb this year got validated alongside $AXTI and others. (I still long on both)
+
+So I stopped covering them as much. But TLDR on  updates:
+
+Early this year, IQE was a distressed but critical chokepoint in the optical supply chain with links to $LITE and others when I published my thesis on it.
+
+Since then:
+
+- $MTSI signed long term epiwafer supply agreements, took a stake in the company, now IQE is bank debt free (Macom has convertibles, but that's positive)
+- $TSEM signed agreements for InP epiwafers.
+- Management explicitly said its IQE agreement was signed to secure the ""strategic III-V epiwafer supply required for that roadmap""
+- IQE signed another ~$14M mysterious AI DC contract.
+
+The only part that's still playing out with my earlier thesis is IQE converting their latent/underutilized capacity toward AI DC segment, to match peers like Landmark in the space (which takes time, like slightly over a year if I remember correctly).
+
+There's some national security implications that I'll avoid talking about that makes them more important.
+
+But basically:
+FY2025 revenue: £97.3m
+FY2026 guidance: over £126.5m
+
+They're rapidly growing again in the optical sector, out of bank debt/distressed liquidation state, and remains a critical chokepoint in Western optical supply chains.
+
+Now... with new agreements with your leading photonics companies for revenue growth, and players like Macom serving as a soft backstop.
+
+After a thesis gets validated, typically I just sit back and enjoy growth of a business.",https://x.com/aleabitoreddit/status/2087838176677376186,475,22,53,2,209304,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087846074027295020,2026-08-13T10:17:49+00:00,aleabitoreddit,"Okay here's my take on $POET, since apparently people are celebrating on the subreddit that I took small positions.
+
+- I have 0 idea. ZERO. How they convinced shareholders to allow them dilute SO MUCH to the point:
+
+They have an absurd ~$830m cash on hand now.
+
+And my guess is that they're close to done, since I would be in disbelief if they needed more.
+
+So now... they have ~$830m to grow their business like M&A, and EV actually dropped really low recently (eg. $1.25B MC vs. $830m cash on hand), that I thought it was compelling to take a risk.
+
+- Annualized production capacity target is 12M optical engines/year for 2027, which is pretty absurd ramp.
+
+Need to do more research into ASP for Poet's products, but maybe $125-$200? So at ~$150 ASP, $1.8B revenue ceiling.
+
+But they're like inverse AAOI right now: no visible demand to fill all that capacity. Aside from Lumilens, which is now a highly valued hyperscaler supplier (probably Amazon or Microsoft), with billions in customer agreements.
+
+The interesting thing is if Poet signed prepayment EML agreements with players like Mitsubishi, or CW agreements with Sivers behind the scenes with that balance sheet.
+
+And given the current bottleneck, players might use Poet as a workaround for supply procurement.
+
+But basically, you have a super cash-rich company with a ton of capacity coming online. And they're not really disappearing anytime soon with their financials.
+
+I don't quite think it's as technically defensible compared to upstream laser chokepoints with something like $SIVE around the same valuation in terms of technical moat for CW lasers vs. OE packaging side. As you've seen recently with Celestial and Poet.
+
+But maybe... there's a chance some hyperscaler or downstream company announces a volume agreement sometime in the future. and $POET takes off. And they do have the supply chain setup for ramp with that.
+
+That's the risk I ended up taking, but it's not exactly a clear as day long for me like $AAOI.",https://x.com/aleabitoreddit/status/2087846074027295020,611,23,54,1,288988,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087849557829046296,2026-08-13T10:31:39+00:00,aleabitoreddit,"@SammmXBT If I had to categorize it:
+
+$SIVE = Waiting for Revenue Conversion
+
+Tons of hyperscaler suppliers + demand visibility for the CW DFB. How do markets want to price in or assign a premium on the waiting game for 1.6T H1 2027 to CPO scale up for H2 2027?
+
+$AAOI = Waiting for Capacity Execution
+
+Extreme demand visibility for transceivers. Can they ramp up capacity to meet their $471m/month projections?
+
+$POET = Waiting for Customers
+
+Too much cash relative to MC + heavily funded supply chain capacity setup, little demand visbility.",https://x.com/aleabitoreddit/status/2087849557829046296,157,11,6,1,17330,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087852125334413822,2026-08-13T10:41:51+00:00,aleabitoreddit,"@dra99aso I usually just post research along the way as new news comes out (eg. Lumilens $5.5B valuation announcement + hyperscaler contracts).
+
+But I'll drop it in disclosures if I have a position on something like $POET or $SMCI earlier. Maybe I'll do a roundup TLDR later.",https://x.com/aleabitoreddit/status/2087852125334413822,60,0,5,0,10953,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087857563354476920,2026-08-13T11:03:28+00:00,aleabitoreddit,"@blkslymn I'm not sure if it's just me, but I'm just seeing enormous CW demand imbalance right now (thank you $NVDA).
+
+And this is before scale up and other 1.6T ramps even arrive. Then you have $AAOI and $SIVE appear with scarce, independent CW laser or transceiver capacity...
+
+That usually leads forces your other major players like $AMD and hyperscalers to look at them. $MTSI said their capacity only starts to come online H2 2027 and customers are already approaching them with urgency...
+
+CW lasers is one of my favorite bottlenecks right now.",https://x.com/aleabitoreddit/status/2087857563354476920,132,4,5,1,22045,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087867722784805170,2026-08-13T11:43:50+00:00,aleabitoreddit,"In IPO news… Vantage Data Centers is exploring going public at an enormous $100B valuation.
+
+If you’re not familiar, $ORCL is their anchor tenant for Stargate (OpenAI end user), and Vantage develops/operates hyperscaler DCs.
+
+Anthropic IPO is also expected, with investors expecting $2T valuation, eclipsing $SPCX per FT.
+
+Yeah… idk about Anthropic valuations. Jim Cramer defending that valuation is never a good sign.
+
+On a side note, Opus 5 is probably the worst consumer LLM I’ve used to date, it’s like a 5 IQ LLM operating off terrible data retrieval. With a Fable-like God complex on top.
+
+Enterprise is probably having a better time though.
+
+Unitree IPO is also expected this month and priced it at a $9B valuation. Which is a positive tailwind for Unitree for the humanoid sectors.
+
+Not really an AI name but SHEIN is going public as soon as the 19th this month.
+
+Go ask any girl you know and they’re probably familiar with this platform.",https://x.com/aleabitoreddit/status/2087867722784805170,552,31,90,6,169342,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087870374751187320,2026-08-13T11:54:22+00:00,aleabitoreddit,"@Papsytwinz Uhh nothing really too interesting aside from a new $2.3M purchase order for $POET
+
+Will need to wait for earnings call.",https://x.com/aleabitoreddit/status/2087870374751187320,41,1,8,0,14667,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2087908137831698627,2026-08-13T14:24:26+00:00,aleabitoreddit,"@Highonstocks_ Yeah I personally bought $SMCI on earnings day after I saw the guidance.
+
+At a certain point, hairdryers should only weigh down a stock so much right?",https://x.com/aleabitoreddit/status/2087908137831698627,70,0,8,0,12911,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088115008827715971,2026-08-14T04:06:28+00:00,aleabitoreddit,"Feels like glass substrate timelines got pushed back at least another quarter.
+
+- ""Samsung Electro-Mechanics Delays Semiconductor Glass Substrate Investment"" due to a bottleneck in customer reliability evaluations of prototypes.
+
+At its recent second-quarter earnings presentation, less than a month later, the company revised the start of operations to 2028.
+
+- ""SKC Reportedly Pushes Glass Substrate Mass Production to 2027, Targets Final Validation by Year-end"" (Trendforce), earlier last month.
+
+TLDR:
+- SKC Absolics H2 2026 -> H1 2027
+- Samsung H2 2027 -> H1 2028
+
+Not everything is always good news with timeline shifts, but glass core substrate shifts do feel imminent.
+
+Volume ramp for some players eg. $LPK / Philoptics (161580) / E&R (8027) likely track these  mass production timelines.",https://x.com/aleabitoreddit/status/2088115008827715971,623,38,63,9,207386,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088122989871333836,2026-08-14T04:38:10+00:00,aleabitoreddit,@demarscrypto $RDDT S&amp;P 500 inclusion go brrr,https://x.com/aleabitoreddit/status/2088122989871333836,76,1,7,0,15162,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088181416148562017,2026-08-14T08:30:20+00:00,aleabitoreddit,"Donald Trump signs a proclamation to strengthen US supply chains for drones.
+
+Benefiting U.S. drone component suppliers like $UMAC to UAS manufacturers like $ONDS + $RCAT.
+
+ TLDR, 100% tariffs on:
+- UAS docking stations + certain critical components
+- certain parts for >25 kg drones
+- Drones >25 kg
+
+25% tariffs on:
+- broader components
+
+UAS = Unmanned Aircraft System (don't have any positions in any above)",https://x.com/aleabitoreddit/status/2088181416148562017,1181,109,108,30,259480,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088226398708338889,2026-08-14T11:29:05+00:00,aleabitoreddit,"The $SHKY, Samsung, $SNDK, $MU memory bottleneck never changed anon https://t.co/6Xyih3pM9D",https://x.com/aleabitoreddit/status/2088226398708338889,1896,120,103,21,422202,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088254454839820631,2026-08-14T13:20:34+00:00,aleabitoreddit,"@sellihca_espn My memory bags are decently heavy, thank you for asking.
+
+Just out of curiosity, you think 16+ long term agreements with $MU.
+
+And $SNDK 80% gross margin projections through fiscal 2030 is a cyclical commodity? (their LTAs already cover majority of 2028 output).
+
+This is quite a long cycle if you ask me...",https://x.com/aleabitoreddit/status/2088254454839820631,119,1,11,0,13301,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088264541675352316,2026-08-14T14:00:39+00:00,aleabitoreddit,"@XIAOTU_Li I mean this was like 2 weeks ago for $RDDT, I talk about a lot of equities https://t.co/HwEuKKOiS1",https://x.com/aleabitoreddit/status/2088264541675352316,43,0,4,0,11225,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088302095997030514,2026-08-14T16:29:53+00:00,aleabitoreddit,"@BakshJahed I don't want people to copytrade so I don't really actively share a breakdown.
+
+Rather just post ideas along the way so people can make their own choices.
+
+But I'll share some updates in a bit",https://x.com/aleabitoreddit/status/2088302095997030514,63,0,4,0,9348,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088457278928412812,2026-08-15T02:46:31+00:00,aleabitoreddit,"US Government urges $AAPL not to buy Chinese memory chips.
+
+$MU, $SKHY, and Samsung are happy to hear this...
+
+Hilariously enough, CXMT/YMTC is price hiking too, so it's not exactly ""cheap Chinese memory that floods the market"".
+
+Apple once upon a time actually had extreme supplier leverage before the AI boom.",https://x.com/aleabitoreddit/status/2088457278928412812,1920,161,122,35,315966,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088501133543407959,2026-08-15T05:40:47+00:00,aleabitoreddit,"说我归零的传闻未免也太夸张了吧 哈哈
+
+经历了7月份AI板块的崩盘后，我的YTD收益依然还有 +2,411.84% https://t.co/m49XcPRgC3",https://x.com/aleabitoreddit/status/2088501133543407959,4970,117,474,77,1374057,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088505825912631604,2026-08-15T05:59:26+00:00,aleabitoreddit,"@halldj00 Some fun statistics:
+
+- Round 69.2% is unrealized. ~2% of the unrealized options, 98% just pure shares.
+- Drawndown from peak was ~77.8%, not really any risk if liqudiation at the lows, but recovery was a lot slower
+- $EWY longs were up about 450% at the peak, those made up the largest portion of my earlier realized gains, but I still have a sizeable position in that.",https://x.com/aleabitoreddit/status/2088505825912631604,155,3,16,2,54834,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088509060060741932,2026-08-15T06:12:17+00:00,aleabitoreddit,"@alexgoumas I don’t share USD amounts because % is what matters when validating if a thesis is correct.
+
+If someone made $1M off $AAOI going up 1% because they’re wealthy and had a $100M position, that doesn’t mean their long idea is correct.
+
+But I will say it’s bigger than people think.",https://x.com/aleabitoreddit/status/2088509060060741932,482,5,35,2,55708,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088514723969159216,2026-08-15T06:34:47+00:00,aleabitoreddit,"@Jimbo_Jones_Jr You can look at the YTDs for:
+
+- $SIVE, $IQE, $AXTI, $ARM, $MRVL, $INTC, $SOI, solana:NBiSF3UaVUFtRzHwAfxyHsBCAZWGEKnMpewAE4oh7BG, $AAOI, $LITE, $EWY, $TSEM, $AEHR, $RPI, $MU that I did took positions on earlier in the year or last year.
+
+Then let me know if you still think that way.",https://x.com/aleabitoreddit/status/2088514723969159216,297,7,31,0,37750,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088575798664110367,2026-08-15T10:37:28+00:00,aleabitoreddit,"@logeonli16 It’s fully up to you. But I’m expecting $AAOI to get close or maybe a 20% chance to surpass $LITE in revenue early H1 2028 if AOI fully executes on capacity projections.
+
+Which is pretty interesting when you look at the $12B vs ~$80B valuations (lot of it is better margins for Lumentum)",https://x.com/aleabitoreddit/status/2088575798664110367,125,2,9,2,29100,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive
+2088610457104109828,2026-08-15T12:55:12+00:00,aleabitoreddit,@LcubedInvest @logeonli16 $AAOI blended gross margins goes up when they sell ELSFP and 1.6T optical transceivers.,https://x.com/aleabitoreddit/status/2088610457104109828,55,0,4,0,10442,2026-08-16T10:54:31Z,yan-labs/serenity-aleabitoreddit archive

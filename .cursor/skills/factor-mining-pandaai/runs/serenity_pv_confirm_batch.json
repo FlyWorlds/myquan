@@ -1,0 +1,31 @@
+{
+  "mode": "serenity-derived-factor",
+  "contract": {
+    "sample": {
+      "start": "20250101",
+      "end": "20260815",
+      "cycle": 5
+    },
+    "universe": "PandaAI default A-share",
+    "note": "Serenity is US AI/semiconductor public-post model; this is a portable OHLCV abstraction for platform backtest only."
+  },
+  "population": [
+    {
+      "candidate_id": "1213bea6921c",
+      "stage": 1,
+      "generation": 1,
+      "family": "serenity-pv-confirm",
+      "formula": "MAX(RETURNS(CLOSE,20),0)*MAX(VOLUME/REF(MA(VOLUME,20),1)-1,0)",
+      "factor_direction": 1,
+      "hypothesis": "Serenity evidence map ranks price-volume confirmation first; factor keeps only jointly positive 20d return and volume expansion vs prior 20d MA as demand-confirmation proxy (A-share OHLCV abstraction, not Serenity private PnL).",
+      "parameters": {
+        "return_lookback": 20,
+        "volume_lookback": 20,
+        "source_skill": "serenity-research-model",
+        "axis": "price-volume confirmation"
+      },
+      "status": "proposed",
+      "decision": "pending"
+    }
+  ]
+}

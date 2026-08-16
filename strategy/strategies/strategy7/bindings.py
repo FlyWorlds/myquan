@@ -1,41 +1,37 @@
-"""策略七 · 因子绑定：因子1 + 因子4 牛市持股修复。"""
+"""策略七 · 因子5事件候选池 + 因子1止损覆盖层。"""
 
 from __future__ import annotations
 
-from strategy.config import FACTOR4_REPAIR_UNIFIED
 from strategy.core.protocols import bind_factor
-from strategy.strategies.strategy1.bindings import strategy1_factor_filter
 
 STRATEGY_ID = "strategy7"
 STRATEGY_NAME = "策略七"
 
-_F4 = FACTOR4_REPAIR_UNIFIED
-
 FACTOR_BINDINGS = (
     bind_factor(
-        "factor1",
-        label="开盘突破主因子",
-        role="both",
-        entry_pct=0.025,
-        stop_pct=0.025,
-        prev_small_yang_pct=0.025,
-        prev_entry_mode="yin_or_small_yang",
-        filter=strategy1_factor_filter,
-        filter_desc="前日阴/小阳 + 禁双阳跨日≥5%",
+        "factor5",
+        label="Serenity前瞻主题候选池",
+        role="universe",
+        lookback_days=0,
+        post_limit=0,
+        max_themes=3,
+        max_positions=5,
+        max_candidates=5,
+        max_per_theme=2,
+        filter_desc=(
+            "复核上一A股收盘后至当前时点的全部 Serenity 公开帖，再通过 Serenity "
+            "Research Model Skill 语义筛选并映射前三主题的 A 股代理池；"
+            "总数最多5只、单主题最多2只；"
+            "空槽每日补仓；没有候选则保持现金"
+        ),
+        enabled=True,
     ),
     bind_factor(
-        "factor4",
-        label="牛市持股修复",
-        role="custom",
-        kind=str(_F4["factor4_kind"]),
-        n=60,
-        ma_n=60,
-        suppress_stop_in_bull=True,
-        stop_widen_mult=float(_F4.get("factor4_stop_widen_mult") or 0.0),
-        bull_entry=False,
-        filter_desc=(
-            "牛市=roc_ma(N)且收盘>MA(N)；牛市内止损放宽2倍或暂停止损"
-        ),
+        "factor1",
+        label="因子1止损覆盖层",
+        role="exit",
+        stop_pct=0.025,
+        filter_desc="仅对已持仓股票执行 T+1 后的开盘-2.5%盘中止损；不用于开仓",
         enabled=True,
     ),
 )

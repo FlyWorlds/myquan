@@ -1,0 +1,186 @@
+{
+  "retrieved_at": "2026-08-16T10:54:31Z",
+  "source_url": "https://instalker.org/aleabitoreddit",
+  "official_x": "https://x.com/aleabitoreddit",
+  "note": "Public mirror of recent posts; not X official API. Relative timestamps as shown on mirror page. Unverified performance claims excluded as P&L.",
+  "posts": [
+    {
+      "approx_time": "~15m ago (2026-08-16)",
+      "text": "I’d like to give a special thank you to Bloomberg’s piece on $META compute. As well as the 2 back to back bear posts on CPO delays. But I believe thematically photonics, memory, energy, and physical AI will outperform in the long run.",
+      "tickers": [
+        "META"
+      ],
+      "themes": [
+        "photonics",
+        "memory",
+        "energy",
+        "physical AI",
+        "CPO"
+      ]
+    },
+    {
+      "approx_time": "~2h ago (2026-08-16)",
+      "text": "Wow, $WULF signs a $19B DC lease with Anthropic today. Probably a very positive tailwind for the Neocloud/Colo sector.",
+      "tickers": [
+        "WULF"
+      ],
+      "themes": [
+        "Neocloud",
+        "Colo",
+        "Anthropic"
+      ]
+    },
+    {
+      "approx_time": "~3h ago (2026-08-16)",
+      "text": "Retail: buys memory, optical, upstream semi names. Media: “retail bubble...”. Institutions that do the exact same thing... Media: “Institutions make record profits by betting on what goes inside AI Server Racks”.",
+      "tickers": [],
+      "themes": [
+        "memory",
+        "optical",
+        "narrative"
+      ]
+    },
+    {
+      "approx_time": "~4h ago (2026-08-16)",
+      "text": "Yep, we finally have the brain with OpenAi/Anthropic breakthroughs. Now it’s time for robots ... Boston Dynamics / $CCXI to come to life.",
+      "tickers": [
+        "CCXI"
+      ],
+      "themes": [
+        "robotics",
+        "physical AI"
+      ]
+    },
+    {
+      "approx_time": "~6h ago (2026-08-16)",
+      "text": "Kelper upgrades $XFAB to Buy citing Melexis demand, AI SiC/GaN/photonics; scarce Western specialty foundries like $SILEX. Personally looking at XFAB photonics/photonixfab with $NVDA as potential driver.",
+      "tickers": [
+        "XFAB",
+        "SILEX",
+        "NVDA"
+      ],
+      "themes": [
+        "specialty foundry",
+        "photonics"
+      ]
+    },
+    {
+      "approx_time": "~7h ago (2026-08-16)",
+      "text": "Long $SIVE conviction thesis: partnerships O-Net/JBL/GFS/Ayar/$NVDA NVLink; volume ramp; NASDAQ listing H2 2026/Q1 2027; bridge pluggable→CPO; inflection H2 2027. Thinks $SIVE can be next $LITE.",
+      "tickers": [
+        "SIVE",
+        "LITE",
+        "JBL",
+        "GFS",
+        "NVDA",
+        "AMD",
+        "AEVA",
+        "POET",
+        "MRVL",
+        "AAOI",
+        "FN"
+      ],
+      "themes": [
+        "photonics",
+        "CPO",
+        "CW laser",
+        "bottleneck"
+      ]
+    },
+    {
+      "approx_time": "~9h ago (2026-08-16)",
+      "text": "Nomura cites $AXTI and $IQE leading InP; substrate/epiwafer ASP hikes 40-78%. Hyperscaler bottlenecking upstream photonics confirmation.",
+      "tickers": [
+        "AXTI",
+        "IQE",
+        "SNDK"
+      ],
+      "themes": [
+        "InP",
+        "ASP hike",
+        "photonics bottleneck"
+      ]
+    },
+    {
+      "approx_time": "~18h ago",
+      "text": "$AMZN clear winner in physical AI shift; Amazon ecosystem catalyst for robotics vs Google/Meta; parallels to GOOGL TPU→$LITE suppliers.",
+      "tickers": [
+        "AMZN",
+        "CCXI",
+        "GOOGL",
+        "LITE",
+        "TSLA"
+      ],
+      "themes": [
+        "robotics",
+        "physical AI"
+      ]
+    },
+    {
+      "approx_time": "~19h ago",
+      "text": "SVRC State of Robotics 2026: US national champions list incl Figure/Agility $CCXI/Apptronik/$TSLA/BD/$AMZN; rare earths & actuators as vulnerabilities; expects consolidation 2027.",
+      "tickers": [
+        "CCXI",
+        "TSLA",
+        "AMZN",
+        "FDX",
+        "GM",
+        "FORD"
+      ],
+      "themes": [
+        "robotics",
+        "rare earths",
+        "actuators"
+      ]
+    },
+    {
+      "approx_time": "~23h ago",
+      "text": "Memory update: $MU Hiroshima capex; MS NAND tight into 2027 ($SNDK/Kioxia/$SIMO); UBS DDR/NAND price hikes; Samsung DRAM +20% Q3. Compounding hike narrative.",
+      "tickers": [
+        "MU",
+        "SNDK",
+        "SIMO"
+      ],
+      "themes": [
+        "memory",
+        "DRAM",
+        "NAND"
+      ]
+    },
+    {
+      "approx_time": "~1d ago",
+      "text": "High-power cylindrical/BBU cell shortage: Samsung SDI/Panasonic winners; Murata/LG Energy; US adjacent $VRT/$ETN/$BWA/$ENS.",
+      "tickers": [
+        "VRT",
+        "ETN",
+        "BWA",
+        "ENS"
+      ],
+      "themes": [
+        "power",
+        "BBU",
+        "bottleneck"
+      ]
+    },
+    {
+      "approx_time": "2026-08-10 (FortuneTrace/Twiscan)",
+      "text": "Near-term events: OCP APAC CPO updates; earnings $ASTS/$RKLB/$LITE/$NBIS; Unitree IPO catalyst for humanoid/robotics eg $CCXI. Also photonics recovery narrative $SIVE/$LITE/$AAOI.",
+      "tickers": [
+        "AMD",
+        "NVDA",
+        "ASTS",
+        "RKLB",
+        "LITE",
+        "NBIS",
+        "CCXI",
+        "SIVE",
+        "AAOI"
+      ],
+      "themes": [
+        "CPO",
+        "earnings",
+        "robotics"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-08-16T14:11:31.149450+00:00",
+  "asof": "2026-08-16T22:11:31.149433+08:00",
+  "lookback_days": 0,
+  "post_limit": 0,
+  "max_candidates": 5,
+  "max_per_theme": 2,
+  "signal_window_start": "2026-08-14T15:00:00+08:00",
+  "signal_window_end": "2026-08-16T22:11:31.149433+08:00",
+  "posts_path": "/Users/wangxiangyu/Documents/akquan回测/myquan/.cursor/skills/serenity-research-model/runs/public_materials_20260816/aleabitoreddit_tweets.csv",
+  "candidate_count": 5,
+  "source_skill": "serenity-research-model",
+  "research_only": true
+}

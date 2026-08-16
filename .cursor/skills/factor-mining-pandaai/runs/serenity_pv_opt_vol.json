@@ -1,0 +1,56 @@
+{
+  "mode": "serenity-param-opt",
+  "population": [
+    {
+      "candidate_id": "723118390d54",
+      "stage": 2,
+      "generation": 2,
+      "family": "serenity-pv-confirm",
+      "formula": "MAX(RETURNS(CLOSE,40),0)*MAX(VOLUME/REF(MA(VOLUME,10),1)-1,0)",
+      "factor_direction": 1,
+      "hypothesis": "Serenity PV; fix return=40, optimize volume lookback",
+      "parameters": {
+        "return_lookback": 40,
+        "volume_lookback": 10,
+        "optimize": "volume_lookback",
+        "source_skill": "serenity-research-model"
+      },
+      "status": "proposed",
+      "parent_candidate_id": "ec25968bee42"
+    },
+    {
+      "candidate_id": "1ca41ea3478a",
+      "stage": 2,
+      "generation": 2,
+      "family": "serenity-pv-confirm",
+      "formula": "MAX(RETURNS(CLOSE,40),0)*MAX(VOLUME/REF(MA(VOLUME,30),1)-1,0)",
+      "factor_direction": 1,
+      "hypothesis": "Serenity PV; fix return=40, optimize volume lookback",
+      "parameters": {
+        "return_lookback": 40,
+        "volume_lookback": 30,
+        "optimize": "volume_lookback",
+        "source_skill": "serenity-research-model"
+      },
+      "status": "proposed",
+      "parent_candidate_id": "ec25968bee42"
+    },
+    {
+      "candidate_id": "96f815466967",
+      "stage": 2,
+      "generation": 2,
+      "family": "serenity-pv-confirm",
+      "formula": "MAX(RETURNS(CLOSE,40),0)*MAX(VOLUME/REF(MA(VOLUME,60),1)-1,0)",
+      "factor_direction": 1,
+      "hypothesis": "Serenity PV; fix return=40, optimize volume lookback",
+      "parameters": {
+        "return_lookback": 40,
+        "volume_lookback": 60,
+        "optimize": "volume_lookback",
+        "source_skill": "serenity-research-model"
+      },
+      "status": "proposed",
+      "parent_candidate_id": "ec25968bee42"
+    }
+  ]
+}

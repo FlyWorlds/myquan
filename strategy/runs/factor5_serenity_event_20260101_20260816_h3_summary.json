@@ -1,0 +1,21 @@
+{
+  "start": "2026-01-05",
+  "end": "2026-08-14",
+  "n_days": 149,
+  "total_return_pct": 17.25211129388189,
+  "max_drawdown_pct": 17.53224163578687,
+  "sharpe": 1.0218520241210456,
+  "end_equity": 1172521.112938819,
+  "n_trades": 1513,
+  "n_buys": 769,
+  "top_k": 15,
+  "hold_days": 3,
+  "factor": "factor5_serenity_event_theme",
+  "signal_event_count": 115,
+  "no_signal_days_do_not_open_positions": true,
+  "execution": "post date -> next trading-day open; fixed holding period",
+  "max_themes_per_event": 3,
+  "posts_path": "/Users/wangxiangyu/Documents/akquan回测/myquan/.cursor/skills/serenity-research-model/runs/public_materials_20260816/aleabitoreddit_tweets.csv",
+  "mapping_warning": "A-share theme proxy map is static and may contain look-ahead bias.",
+  "output_stem": "factor5_serenity_event_20260101_20260816_h3"
+}

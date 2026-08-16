@@ -1,0 +1,39 @@
+{
+  "mode": "serenity-param-opt",
+  "population": [
+    {
+      "candidate_id": "462360ba7cf6",
+      "stage": 2,
+      "generation": 2,
+      "family": "serenity-pv-confirm",
+      "formula": "MAX(RETURNS(CLOSE,30),0)*MAX(VOLUME/REF(MA(VOLUME,20),1)-1,0)",
+      "factor_direction": 1,
+      "hypothesis": "Serenity PV confirmation; optimize return lookback with volume window fixed at 20",
+      "parameters": {
+        "return_lookback": 30,
+        "volume_lookback": 20,
+        "optimize": "return_lookback",
+        "source_skill": "serenity-research-model"
+      },
+      "status": "proposed",
+      "parent_candidate_id": "1213bea6921c"
+    },
+    {
+      "candidate_id": "ec25968bee42",
+      "stage": 2,
+      "generation": 2,
+      "family": "serenity-pv-confirm",
+      "formula": "MAX(RETURNS(CLOSE,40),0)*MAX(VOLUME/REF(MA(VOLUME,20),1)-1,0)",
+      "factor_direction": 1,
+      "hypothesis": "Serenity PV confirmation; optimize return lookback with volume window fixed at 20",
+      "parameters": {
+        "return_lookback": 40,
+        "volume_lookback": 20,
+        "optimize": "return_lookback",
+        "source_skill": "serenity-research-model"
+      },
+      "status": "proposed",
+      "parent_candidate_id": "1213bea6921c"
+    }
+  ]
+}

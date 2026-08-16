@@ -23,7 +23,9 @@ strategy/
 │   ├── factor1.py        # 开盘突破 ±pct
 │   ├── factor2.py        # 回撤加减仓预警
 │   ├── factor3.py        # 动量（截面 / 单票时序）
-│   └── factor4.py        # 牛市持股 regime
+│   ├── factor4.py        # 牛市持股 regime
+│   └── factor5.py        # Serenity 公开前瞻主题 → A 股研究候选池
+
 ├── strategies/
 │   ├── strategy1/ … strategy7/
 ├── open_break.py         # 因子1 默认百分比 / 规则
@@ -31,6 +33,7 @@ strategy/
 ├── dd_topup.py           # 旧版权益注资叠加（可选）
 ├── bull_regime.py        # 因子4 牛市判定
 ├── momentum.py           # 因子3 动量族
+├── serenity_factor5.py   # 因子5：公开帖解析 / 主题映射 / 动态候选快照
 ├── backtest.py / runner.py / config.py
 └── registry.py
 ```
@@ -45,6 +48,7 @@ strategy/
 | **factor2** | 因子2 | 回撤加减仓**预警** | `dd_alert.py`：默认加仓≥20% / 减仓≤10%；**回测不注资**。旧注资见 `dd_topup.py` |
 | **factor3** | 因子3·动量 | 截面选股 / 单票择时 | `momentum.py`：组合默认截面反转打分；单票可用 `dist_hl` 等（收盘确认→次日开盘） |
 | **factor4** | 因子4 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1止损；可选空仓开盘建仓。叠在因子1上用 |
+| **factor5** | 因子5·Serenity前瞻主题 | 动态 A 股**研究候选池** | `serenity_factor5.py`：Serenity 公开帖 → 前瞻看多主题 → A 股概念代理；不复制美股代码、不直接交易 |
 
 ```python
 from strategy import list_factors
@@ -65,7 +69,7 @@ for f in list_factors():
 | **strategy4** | 策略四 | factor1 + factor3 | ✅ | 因子1 roll12 Top3 建池 × 池内反转选股 |
 | **strategy5** | 动量因子组合 | factor3 | ✅ | 中证主板截面 TopK 袖套；别名 `s5` / `momentum` |
 | **strategy6** | 因子3选股+因子1止损 | factor3 + factor1 | ✅ | 因子3选票买入，因子1开盘止损卖；最长持有 N 日 |
-| **strategy7** | 策略七 | factor1 + factor4 | ✅ | 因子1 + 牛市持股；默认宇宙凯盛/天通/科创综指ETF 动态等权 |
+| **strategy7** | 策略七 | factor5 + factor1 | ✅ | 因子5事件候选填充最多5个槽位，因子1仅执行 T+1 后止损；每日补空槽，候选不足时保留现金 |
 
 ```python
 from strategy import list_strategies, get_strategy_bindings
@@ -77,23 +81,22 @@ for b in get_strategy_bindings("strategy7"):
     print(b.factor_id, b.role, b.filter_desc)
 ```
 
-### 策略七默认宇宙
+```python
+from strategy import run_strategy7
 
-| 标的 | 因子1 | 因子4（per_symbol） |
-|------|-------|---------------------|
-| 凯盛 600552 | ±2.5% | roc60 · 止损放宽 1.5x |
-| 天通 600330 | ±3.0% | roc_ma40/60 · 放宽 1.3x（≈3.9%） |
-| 科创综指ETF 589680 | 买 2.5% / 止 3.5% · T+1 | roc_ma60 · 放宽 2x |
+# 策略七：5 个槽位，因子1止损、每日补仓
+run_strategy7(start="20260101", max_positions=5, stop_pct=0.025)
+```
+
+因子5候选池刷新（处理上一 A 股交易日收盘后至当前时点的全部 Serenity 公开帖）：
 
 ```python
-from strategy import run_strategy7, run_strategy7_universe, default_s7_universe, KCZZ_ETF
+from strategy.strategies.strategy7 import refresh_strategy7_factor5
 
-# 单票
-run_strategy7(KCZZ_ETF, mode="per_symbol", verbose=False)
-
-# 三票
-run_strategy7_universe(mode="per_symbol")
+refresh_strategy7_factor5()
 ```
+
+策略七使用因子5作为唯一开仓来源，并使用因子1作为持仓止损覆盖层；不再使用因子4或凯盛/天通/科创综指ETF的旧默认池。
 
 ---
 
@@ -135,8 +138,8 @@ cd backtest && python strategy1.py --no-factor2 --no-open   # 仅因子1
 cd backtest && python run.py kaicheng --no-open
 # 策略五 vs 策略六
 cd backtest && python compare_f3_select_f1_stop.py
-# 策略七三票等权
-cd backtest && python kczz_kaicheng_tiantong_s7/build_s7_portfolio.py
+# 策略七：五槽位、因子1止损、每日补仓
+python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 --stop-pct 0.025
 ```
 
 ## 如何扩展（开闭）
@@ -145,6 +148,18 @@ cd backtest && python kczz_kaicheng_tiantong_s7/build_s7_portfolio.py
 2. **改百分比**：只改 `DEFAULT_*` 或该策略 `bindings` / `BacktestConfig`  
 3. **新策略组合**：新 `strategies/strategyN`，复用已有因子、换 params  
 
+### 因子5更新
+
+因子5依赖 `.cursor/skills/serenity-research-model` 的公开材料与语义规则。每日在公开归档更新后运行：
+
+```bash
+python -m strategy.run_factor5_serenity --refresh
+# 事件驱动回测：发帖次交易日开盘入槽，因子1止损后每日补空槽
+python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 --stop-pct 0.025
+```
+
+它会更新 `strategy/runs/factor5_serenity_thesis_picks_latest.csv`：默认分析**上一 A 股交易日 15:00（Asia/Shanghai）之后至当前时点**发布的全部 Serenity 公开帖，再通过 Serenity Research Model Skill 做主题提取、引用污染清洗和语义复核，最后映射为 A 股研究池。候选总数最多 5 只、单主题最多 2 只，并按主题信号强度轮询分配席位。周末会自然覆盖周五收盘后的帖子。没有合格新帖时，候选池为空，不延续旧主题。回测中信号按下一交易日开盘进入、每笔持有期由策略参数指定。映射是概念代理，不代表 Serenity 点名、持有或推荐相应 A 股公司；候选池不能直接当成买卖指令。
+
 ## 兼容
 
 | 旧 API | 说明 |
@@ -152,6 +167,6 @@ cd backtest && python kczz_kaicheng_tiantong_s7/build_s7_portfolio.py
 | `get_strategy("open_break3")` | → strategy1 |
 | `run_open_break` | **仅因子1交易**（不含因子2） |
 | `run_strategy1` | 因子1 + 因子2预警（默认不注资） |
-| `run_strategy7` | 因子1 + 因子4；`mode=per_symbol\|unified\|binding` |
+| `run_strategy7` | 因子5事件开仓 + 因子1止损；`start` / `end` / `max_positions` / `stop_pct` / `max_themes` |
 | `OpenBreak3Strategy` | = Strategy1 执行类 |
 | `KCZZ_ETF` | 科创综指 589680 预设（买2.5%/止3.5%、T+1） |

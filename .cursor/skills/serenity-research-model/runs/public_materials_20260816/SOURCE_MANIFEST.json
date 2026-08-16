@@ -1,0 +1,33 @@
+{
+  "retrieved_at": "2026-08-16T10:54:31Z",
+  "account": "@aleabitoreddit",
+  "sources": [
+    {
+      "name": "yan-labs archive",
+      "url": "https://github.com/yan-labs/serenity-aleabitoreddit",
+      "coverage": "2025-07-02 → 2026-08-15",
+      "tweets": 6334,
+      "last_update_time": "2026-08-16T01:02:34Z"
+    },
+    {
+      "name": "Instalker public mirror",
+      "url": "https://instalker.org/aleabitoreddit",
+      "coverage": "live page as of retrieval",
+      "note": "includes posts newer than archive cutoff"
+    },
+    {
+      "name": "official X",
+      "url": "https://x.com/aleabitoreddit"
+    }
+  ],
+  "local_files": [
+    "aleabitoreddit_tweets.csv",
+    "sync_state.json",
+    "ticker_stats.txt",
+    "latest_40_from_archive.csv",
+    "latest_live_mirror_instalker.json",
+    "latest_live_mirror_posts.csv"
+  ],
+  "tweetclaw": "not installed on this machine",
+  "boundary": "Public posts only; private P&L unverified; no credentials/DMs."
+}

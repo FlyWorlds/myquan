@@ -1,0 +1,22 @@
+{
+  "mode": "serenity-param-opt",
+  "population": [
+    {
+      "candidate_id": "845089faf63e",
+      "stage": 2,
+      "generation": 2,
+      "family": "serenity-pv-confirm",
+      "formula": "MAX(RETURNS(CLOSE,40),0)*MAX(VOLUME/REF(MA(VOLUME,10),1)-1,0)",
+      "factor_direction": 1,
+      "hypothesis": "Serenity PV best lookbacks; neighbor adjustment cycle",
+      "parameters": {
+        "return_lookback": 40,
+        "volume_lookback": 10,
+        "cycle": 7,
+        "optimize": "adjustment_cycle",
+        "source_skill": "serenity-research-model"
+      },
+      "status": "proposed"
+    }
+  ]
+}
