@@ -1,0 +1,22 @@
+{
+  "format_version": "V1.0",
+  "name": "litegraph_only_chinese_code",
+  "description": "",
+  "litegraph": {
+    "nodes": [
+      {
+        "id": 1,
+        "type": "CodeControl",
+        "flags": {
+          "uuid": "lg-code-1"
+        },
+        "title": "Python代码输入",
+        "properties": {
+          "title": "Python代码输入",
+          "策略代码": "def handle_data(context, data):\n    future_close = data.close.shift(-1)\n    return future_close\n"
+        }
+      }
+    ],
+    "links": []
+  }
+}

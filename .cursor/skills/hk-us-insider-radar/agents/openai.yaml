@@ -1,0 +1,4 @@
+interface:
+  display_name: "HK/US Insider Radar"
+  short_description: "基于Pandadata get_stock_insider_trade(港股)/get_stock_insider_transaction(美股)的内部人交易信号雷达：方向与类型分解·身份加权·公开市场净额·聚集买卖·持股变化"
+  default_prompt: "Use $hk-us-insider-radar 为给定港股/美股或自选清单生成带数据来源的内部人交易信号报告。"

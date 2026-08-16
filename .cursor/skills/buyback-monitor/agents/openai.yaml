@@ -1,0 +1,4 @@
+interface:
+  display_name: "Buyback Monitor"
+  short_description: "基于Pandadata get_repurchase 的A股回购监控：进程漏斗·目的分类·回购强度"
+  default_prompt: "Use $buyback-monitor 为给定窗口或个股生成带数据来源的A股回购监控报告。"

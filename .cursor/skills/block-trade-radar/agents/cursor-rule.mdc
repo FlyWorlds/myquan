@@ -1,0 +1,24 @@
+---
+description: Use the Block Trade Radar skill for A-share block-trade (大宗交易) scans, discount/premium math, institutional-direction reads, and amount/discount ranking.
+alwaysApply: false
+---
+
+# Block Trade Radar Skill
+
+When the user asks for A-share block-trade monitoring, 大宗交易 scans, 折溢价率 (discount/premium) analysis, 机构专用接盘/出货 reads, block-trade amount or discount rankings, or a block-trade radar report, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/block-trade-radar
+```
+
+Workflow:
+
+1. Read `.cursor/skills/block-trade-radar/SKILL.md`.
+2. For routing, the discount/premium formula and edge cases, direction/wash-print rules, aggregation rules, report format, empty-data handling, or QA, also read `.cursor/skills/block-trade-radar/references/block-trade-playbook.md`.
+3. Validate generated reports with `.cursor/skills/block-trade-radar/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for the exact `get_block_trade` and `get_stock_daily` contracts before any real API call.
+5. Compute 折溢价率 = `price / 同日收盘价 − 1`, always naming the `get_stock_daily` close basis; mark missing-close prints 待补.
+6. Read direction from `buyer`/`seller` verbatim; treat `机构专用` as an anonymous seat (never name it); flag `buyer==seller` prints as 对倒 and exclude them from the directional net.
+7. Aggregate prints per symbol+date before ranking; preserve source method names, query windows, trade dates, and missing-data notes. Do not invent prices, amounts, discounts, directions, credentials, or investment advice.

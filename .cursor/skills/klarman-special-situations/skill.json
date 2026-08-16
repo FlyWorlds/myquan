@@ -1,0 +1,15 @@
+{
+  "name": "skill-klarman-special-situations",
+  "version": "7.4.0",
+  "license": "GPL-3.0-only",
+  "organization": "QuantSkills",
+  "organization_url": "https://github.com/quantskills",
+  "repository": "skill-klarman-special-situations",
+  "repository_url": "https://github.com/quantskills/skill-klarman-special-situations",
+  "project_type": "skill",
+  "maintainer": "dijia702",
+  "build_type": "hybrid",
+  "entrypoint": "scripts.build:run",
+  "data_source": "panda_data",
+  "production_output": "生产产物/数据库.parquet"
+}

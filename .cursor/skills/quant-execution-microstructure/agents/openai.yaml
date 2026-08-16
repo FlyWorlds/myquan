@@ -1,0 +1,11 @@
+interface:
+  display_name: "Quant Execution Microstructure"
+  short_description: "Professional execution, microstructure, and TCA workflow"
+  default_prompt: "Use $quant-execution-microstructure to design, simulate, audit, or monitor a cost-aware quantitative execution workflow."
+license: GPL-3.0-only
+metadata:
+  organization: QuantSkills
+  organization_url: https://github.com/quantskills
+  repository: skill-quant-execution-microstructure
+  repository_url: https://github.com/quantskills/skill-quant-execution-microstructure
+  project_type: skill

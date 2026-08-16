@@ -1,0 +1,23 @@
+---
+description: Use the Earnings Season Tracker skill for A-share earnings-season full-market scans and scheduled scan specifications.
+alwaysApply: false
+---
+
+# Earnings Season Tracker Skill
+
+When the user asks for A-share earnings-season scans, performance forecast statistics, forecast-type distribution, beat or miss watchlists, audit-opinion watchlists, industry earnings prosperity, full-market earnings cross-sections, or scheduled earnings-season scans, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/earnings-season-tracker
+```
+
+Workflow:
+
+1. Read `.cursor/skills/earnings-season-tracker/SKILL.md`.
+2. For scan routing, forecast-type definitions, beat or miss rules, industry aggregation, report format, empty-data handling, or QA, also read `.cursor/skills/earnings-season-tracker/references/earnings-season-guide.md`.
+3. Validate generated reports with `.cursor/skills/earnings-season-tracker/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for exact method contracts before any real API call.
+5. Preserve source method names, query parameters, reporting periods, scan windows, data dates, and missing-data notes.
+6. Do not invent data interfaces, credentials, fields, reporting periods, disclosure dates, or investment advice.

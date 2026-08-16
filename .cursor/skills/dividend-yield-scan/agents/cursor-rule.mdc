@@ -1,0 +1,24 @@
+---
+description: Use the Dividend Yield Scan skill for A-share high-dividend cross-sections, dividend-yield ranking, payout continuity, and cash-vs-送转 analysis.
+alwaysApply: false
+---
+
+# Dividend Yield Scan Skill
+
+When the user asks for A-share high-dividend / dividend-yield scans, 红利策略, dividend-quality analysis, payout continuity, cash-dividend vs 送转, ex-dividend calendars, or a dividend yield ranking, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/dividend-yield-scan
+```
+
+Workflow:
+
+1. Read `.cursor/skills/dividend-yield-scan/SKILL.md`.
+2. For routing, yield/continuity/cash-vs-送转 definitions, the round_lot pitfall, report format, empty-data handling, or QA, also read `.cursor/skills/dividend-yield-scan/references/dividend-playbook.md`.
+3. Validate generated reports with `.cursor/skills/dividend-yield-scan/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for the exact `get_stock_cash_dividend` / `get_stock_dividend` / `get_stock_dividend_amount` / `get_stock_split` contract before any real API call.
+5. Compute per-share cash as `div_cash_gross` / `round_lot` (never forget round_lot — it causes a 10× error); dividend yield = trailing DPS / latest close, always stating window + price date + "cash only, 送转 excluded".
+6. Separate cash dividends from 送转 (transferred/bonus shares are not cash return); label `get_stock_dividend_amount` stages (预案 vs 实施); frame yield as backward-looking, not a forecast.
+7. Preserve source method names, query windows, dividend dates, and missing-data notes. Do not invent dividends, yields, continuity, payout, credentials, or investment advice.

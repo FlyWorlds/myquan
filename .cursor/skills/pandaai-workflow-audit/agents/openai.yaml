@@ -1,0 +1,5 @@
+interface:
+  display_name: "PandaAI 工作流文件审计"
+  short_description: "审计工作流缺陷、过拟合风险与优化方案"
+  default_prompt: "Use $pandaai-workflow-audit to review this PandaAI workflow JSON and report severity-ranked defects, evidence, impact, and concrete improvements."
+

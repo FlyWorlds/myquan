@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "source_profile": "profile.json",
+  "candidate_factor_pools": [
+    "skill-quant-factor-risk-pattern-alpha"
+  ],
+  "factor_family_tags": [
+    "low_volatility",
+    "quality_stable"
+  ],
+  "universe_filters": {
+    "preferred_sectors": [],
+    "excluded_sectors": [
+      "real_estate"
+    ],
+    "exclude_st_and_risk_flags": true
+  },
+  "position_constraints": {
+    "max_position_pct": 8,
+    "stop_loss_discipline": "hard_stop_wide"
+  },
+  "rebalance_frequency": "monthly",
+  "target_holding_period_days": 60,
+  "recommended_next_skills": [
+    "skill-factor-evaluate",
+    "skill-backtest",
+    "skill-backtest-overfit"
+  ]
+}

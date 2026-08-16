@@ -1,0 +1,140 @@
+{
+  "format_version": "V1.0",
+  "name": "frontend_futures_numpy",
+  "description": "",
+  "litegraph": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "revision": 0,
+    "last_node_id": 3,
+    "last_link_id": 2,
+    "nodes": [
+      {
+        "id": 1,
+        "type": "CodeControl",
+        "flags": {
+          "uuid": "frontend_futures_numpy-code",
+          "plugin_source": "official",
+          "type": ""
+        },
+        "title": "Python代码输入",
+        "properties": {
+          "title": "Python代码输入",
+          "策略代码": "from panda_backtest.api.api import *\nimport panda_data\nimport numpy as np\n\nUNDERLYING_LIST = [\"AU\", \"AG\", \"CU\", \"RB\", \"M\", \"TA\"]\n\n\ndef initialize(context):\n    context.trade_account = \"0000\"\n    context.channel_n = 20\n    context.close_hist = {}\n\n\ndef before_trading(context):\n    today = str(context.now)\n    df = panda_data.get_future_dominant(\n        underlying_symbol=UNDERLYING_LIST,\n        start_date=today,\n        end_date=today,\n    )\n    if df is None or df.empty:\n        return\n    for _, row in df.iterrows():\n        context.close_hist.setdefault(row[\"symbol\"], [])\n\n\ndef handle_data(context, data):\n    for symbol, hist in context.close_hist.items():\n        try:\n            bar = data[symbol]\n        except Exception:\n            continue\n        hist.append(float(bar.close))\n        if len(hist) < context.channel_n + 1:\n            continue\n        highest = max(hist[-(context.channel_n + 1):-1])\n        lowest = min(hist[-(context.channel_n + 1):-1])\n        if bar.close > highest:\n            buy_open(context.trade_account, symbol, 1, style=MarketOrderStyle)\n        elif bar.close < lowest:\n            sell_open(context.trade_account, symbol, 1, style=MarketOrderStyle)\n"
+        }
+      },
+      {
+        "id": 2,
+        "type": "FutureBacktestControl",
+        "flags": {
+          "uuid": "frontend_futures_numpy-backtest",
+          "plugin_source": "official",
+          "type": ""
+        },
+        "title": "回测",
+        "properties": {
+          "title": "回测"
+        }
+      },
+      {
+        "id": 3,
+        "type": "BackTestResultControl",
+        "flags": {
+          "uuid": "frontend_futures_numpy-result",
+          "plugin_source": "official",
+          "type": ""
+        },
+        "title": "策略回测结果",
+        "properties": {
+          "title": "策略回测结果",
+          "回测任务": "error"
+        }
+      }
+    ],
+    "links": [
+      [
+        1,
+        1,
+        0,
+        2,
+        0,
+        "string"
+      ],
+      [
+        2,
+        2,
+        0,
+        3,
+        0,
+        "string"
+      ]
+    ],
+    "groups": [],
+    "config": {},
+    "version": 0.4
+  },
+  "nodes": [
+    {
+      "uuid": "frontend_futures_numpy-code",
+      "title": "Python代码输入",
+      "name": "CodeControl",
+      "type": "CodeControl",
+      "litegraph_id": 1,
+      "static_input_data": {
+        "code": "from panda_backtest.api.api import *\nimport panda_data\nimport numpy as np\n\nUNDERLYING_LIST = [\"AU\", \"AG\", \"CU\", \"RB\", \"M\", \"TA\"]\n\n\ndef initialize(context):\n    context.trade_account = \"0000\"\n    context.channel_n = 20\n    context.close_hist = {}\n\n\ndef before_trading(context):\n    today = str(context.now)\n    df = panda_data.get_future_dominant(\n        underlying_symbol=UNDERLYING_LIST,\n        start_date=today,\n        end_date=today,\n    )\n    if df is None or df.empty:\n        return\n    for _, row in df.iterrows():\n        context.close_hist.setdefault(row[\"symbol\"], [])\n\n\ndef handle_data(context, data):\n    for symbol, hist in context.close_hist.items():\n        try:\n            bar = data[symbol]\n        except Exception:\n            continue\n        hist.append(float(bar.close))\n        if len(hist) < context.channel_n + 1:\n            continue\n        highest = max(hist[-(context.channel_n + 1):-1])\n        lowest = min(hist[-(context.channel_n + 1):-1])\n        if bar.close > highest:\n            buy_open(context.trade_account, symbol, 1, style=MarketOrderStyle)\n        elif bar.close < lowest:\n            sell_open(context.trade_account, symbol, 1, style=MarketOrderStyle)\n"
+      },
+      "model_path": "",
+      "output_db_id": null
+    },
+    {
+      "uuid": "frontend_futures_numpy-backtest",
+      "title": "回测",
+      "name": "FutureBacktestControl",
+      "type": "FutureBacktestControl",
+      "litegraph_id": 2,
+      "static_input_data": {
+        "start_future_capital": 10000000,
+        "commission_rate": 1,
+        "margin_rate": 1,
+        "frequency": "1d",
+        "start_date": "20230101",
+        "end_date": "20251231",
+        "code": ""
+      },
+      "model_path": "",
+      "output_db_id": null
+    },
+    {
+      "uuid": "frontend_futures_numpy-result",
+      "title": "策略回测结果",
+      "name": "BackTestResultControl",
+      "type": "BackTestResultControl",
+      "litegraph_id": 3,
+      "static_input_data": {
+        "task_id": "error"
+      },
+      "model_path": "",
+      "output_db_id": null
+    }
+  ],
+  "links": [
+    {
+      "uuid": "frontend_futures_numpy-link-1",
+      "litegraph_id": 1,
+      "status": 1,
+      "previous_node_uuid": "frontend_futures_numpy-code",
+      "next_node_uuid": "frontend_futures_numpy-backtest",
+      "output_field_name": "code",
+      "input_field_name": "code"
+    },
+    {
+      "uuid": "frontend_futures_numpy-link-2",
+      "litegraph_id": 2,
+      "status": 1,
+      "previous_node_uuid": "frontend_futures_numpy-backtest",
+      "next_node_uuid": "frontend_futures_numpy-result",
+      "output_field_name": "backtest_id",
+      "input_field_name": "task_id"
+    }
+  ],
+  "id": "fixture-frontend_futures_numpy"
+}

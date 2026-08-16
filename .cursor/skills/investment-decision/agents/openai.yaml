@@ -1,0 +1,4 @@
+interface:
+  display_name: "Investment Decision (Long-Term)"
+  short_description: "Generate long-term BUY/NEUTRAL/SELL investment decision reports with confidence probability from company name or ticker, using public financial data and web research."
+  default_prompt: "Use $skill-investment-decision to analyze {ticker} and generate a long-term investment decision report with BUY/NEUTRAL/SELL recommendation."

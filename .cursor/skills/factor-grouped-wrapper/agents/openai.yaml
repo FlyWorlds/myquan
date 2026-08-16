@@ -1,0 +1,4 @@
+interface:
+  display_name: "Factor Grouped Wrapper"
+  short_description: "Select factor groups by validation IC or hedged Sharpe"
+  default_prompt: "Use $factor-grouped-wrapper to search grouped factors by validation Pearson IC or hedged Sharpe, freeze stage snapshots, and compare their OOS backtests."

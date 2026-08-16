@@ -1,0 +1,4 @@
+interface:
+  display_name: "Macro Alt-Data Nowcast"
+  short_description: "Pandadata另类高频行业景气解析、趋势与跨行业Nowcast"
+  default_prompt: "Use $macro-altdata-nowcast 为给定行业或跨行业生成带指标字典与来源的另类高频景气 nowcast 报告。"

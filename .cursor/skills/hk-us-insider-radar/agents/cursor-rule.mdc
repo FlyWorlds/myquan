@@ -1,0 +1,24 @@
+---
+description: Use the HK/US Insider Radar skill for HK/US insider (董监高/内部人) trading scans — direction/type classification, role weighting, net open-market direction, cluster detection, and ranking.
+alwaysApply: false
+---
+
+# HK/US Insider Radar Skill
+
+When the user asks for HK/US insider trading, 港股美股内部人交易, 董监高增减持, insider buying/selling, 内部人净买入, 内部人聚集买入, or an insider-trade radar report, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/hk-us-insider-radar
+```
+
+Workflow:
+
+1. Read `.cursor/skills/hk-us-insider-radar/SKILL.md`.
+2. For routing, the direction/type taxonomy, role weighting, netting rules, cluster detection, report format, empty-data handling, or QA, also read `.cursor/skills/hk-us-insider-radar/references/insider-playbook.md`.
+3. Validate generated reports with `.cursor/skills/hk-us-insider-radar/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for the exact `get_stock_insider_trade` (HK) and `get_stock_insider_transaction` (US) contracts before any real API call.
+5. Route by market: `.HK` → `get_stock_insider_trade`, US tickers → `get_stock_insider_transaction`; both share the same field schema.
+6. Bucket every transaction (open-market buy/sale vs option/gift/plan); the headline net is **open-market only**. Read direction from the **signed** `adjusted_trade_shares` and `transaction_type` together — never from price or holdings alone.
+7. State the filing lag (`info_date` filing ≠ `transaction_date` trade), report value per `currency` (no cross-currency sums), weight principals via `insider_role`/`is_main_role`, and never invent transactions, roles, prices, credentials, or investment advice.

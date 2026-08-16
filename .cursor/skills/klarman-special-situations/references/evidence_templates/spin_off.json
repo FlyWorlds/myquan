@@ -1,0 +1,69 @@
+{
+  "event_family_id": "spinoff-600001SH-20250401",
+  "revision_id": "rev-20250401-001",
+  "symbol": "600001.SH",
+  "situation_type": "spin_off",
+  "facts": {
+    "subsidiary_symbol": "TBD-科创板",
+    "parent_holding_ratio": 0.70,
+    "subsidiary_conservative_value_wan": 4500000,
+    "remaining_business_value_wan": 3800000,
+    "net_debt_wan": 1200000,
+    "tax_and_fees_wan": 150000,
+    "control_discount": 0.15,
+    "diluted_shares": 5000000000,
+    "market_price_as_of": 12.30,
+    "expected_completion_date": "20260930"
+  },
+  "atoms": [
+    {
+      "atom_id": "atom-spinoff-plan-600001SH",
+      "field_name": "spinoff_announced",
+      "value": "分拆子公司至科创板上市预案",
+      "unit": null,
+      "currency": null,
+      "basis": "分拆预案公告",
+      "source_type": "exchange_disclosure",
+      "source_ref": "上市公司分拆预案摘要",
+      "source_record_id": "SSE-SPIN-2025-XXX",
+      "available_date": "20250401",
+      "content_hash": "PLACEHOLDER_SHA256_HEX",
+      "extraction_method": "provider",
+      "evidence_kind": "structured_fact",
+      "core": true
+    },
+    {
+      "atom_id": "atom-subsidiary-value-600001SH",
+      "field_name": "subsidiary_conservative_value",
+      "value": 4500000,
+      "unit": "万元",
+      "currency": "CNY",
+      "basis": "子公司账面净资产 + 保守 P/B 折算，非合同金额",
+      "source_type": "audit_report",
+      "source_ref": "子公司审计报告或母公司年报分部披露",
+      "source_record_id": "AUDIT-SUB-2024-XXX",
+      "available_date": "20250330",
+      "content_hash": "PLACEHOLDER_SHA256_HEX",
+      "extraction_method": "provider",
+      "evidence_kind": "structured_fact",
+      "core": true
+    },
+    {
+      "atom_id": "atom-parent-holding-600001SH",
+      "field_name": "parent_holding_ratio",
+      "value": 0.70,
+      "unit": "比例",
+      "currency": null,
+      "basis": "股权结构披露",
+      "source_type": "exchange_disclosure",
+      "source_ref": "上市公司年报持股比例披露",
+      "source_record_id": "ANN-2024-600001SH-STRUCT",
+      "available_date": "20250428",
+      "content_hash": "PLACEHOLDER_SHA256_HEX",
+      "extraction_method": "provider",
+      "evidence_kind": "structured_fact",
+      "core": true
+    }
+  ],
+  "notes": "SOTP: 0.70 × 4500000 × (1 - 0.15) + 3800000 - 1200000 - 150000 = 5127500 万元；每股保守价 = 5127500 / 500000 = 10.26 CNY。市价 12.30 高于保守值，安全边际 -20%，不通过 Klarman 门。**警示：合同金额不得替代子公司价值**。"
+}

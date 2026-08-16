@@ -1,0 +1,13 @@
+{
+  "markets": ["hk", "us"],
+  "horizon": "1month",
+  "min_analysts": 5,
+  "min_recommendations": 5,
+  "revision_threshold": 0.01,
+  "ranking_limit": 20,
+  "include_events": true,
+  "event_past_days": 30,
+  "event_future_days": 30,
+  "event_discovery_days": 730,
+  "output_dir": "output"
+}

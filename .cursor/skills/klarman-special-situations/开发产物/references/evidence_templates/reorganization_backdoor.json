@@ -1,0 +1,82 @@
+{
+  "event_family_id": "reorg-600000SH-20250615",
+  "revision_id": "rev-20250615-001",
+  "symbol": "600000.SH",
+  "situation_type": "reorganization",
+  "facts": {
+    "deal_type": "发行股份购买资产",
+    "consideration_type": "share_swap",
+    "consideration_value_wan": 850000,
+    "share_swap_ratio": 1.25,
+    "conditions_precedent": [
+      "股东大会审议通过",
+      "证监会核准",
+      "反垄断审查"
+    ],
+    "financing_arranged": true,
+    "regulatory_approvals_status": {
+      "shareholder_meeting": "20250820",
+      "csrc": "pending"
+    },
+    "expected_completion_date": "20260331",
+    "termination_clauses": [
+      "重组失败违约金 5%",
+      "对赌未达标终止条款"
+    ],
+    "success_value_per_share": 22.50,
+    "break_value_per_share": 10.20,
+    "market_price_as_of": 15.80,
+    "transaction_costs_bps": 100
+  },
+  "atoms": [
+    {
+      "atom_id": "atom-csrc-approval-600000SH",
+      "field_name": "regulatory_catalyst",
+      "value": "证监会受理重大资产重组申请",
+      "unit": null,
+      "currency": null,
+      "basis": "证监会公告",
+      "source_type": "csrc_filing",
+      "source_ref": "证监会行政许可申请受理单",
+      "source_record_id": "CSRC-XK-2025-XXXX",
+      "available_date": "20250615",
+      "content_hash": "PLACEHOLDER_SHA256_HEX",
+      "extraction_method": "provider",
+      "evidence_kind": "structured_fact",
+      "core": true
+    },
+    {
+      "atom_id": "atom-consideration-600000SH",
+      "field_name": "consideration",
+      "value": 850000,
+      "unit": "万元",
+      "currency": "CNY",
+      "basis": "重组预案交易对价",
+      "source_type": "exchange_disclosure",
+      "source_ref": "上市公司重组预案摘要",
+      "source_record_id": "SSE-2025-YYYY",
+      "available_date": "20250520",
+      "content_hash": "PLACEHOLDER_SHA256_HEX",
+      "extraction_method": "provider",
+      "evidence_kind": "structured_fact",
+      "core": true
+    },
+    {
+      "atom_id": "atom-break-value-600000SH",
+      "field_name": "break_value_per_share",
+      "value": 10.20,
+      "unit": "CNY/股",
+      "currency": "CNY",
+      "basis": "重组失败情境下的独立估值（净资产 - 或有负债）",
+      "source_type": "audit_report",
+      "source_ref": "最新年报审计报告",
+      "source_record_id": "AUDIT-2024-600000SH",
+      "available_date": "20250428",
+      "content_hash": "PLACEHOLDER_SHA256_HEX",
+      "extraction_method": "provider",
+      "evidence_kind": "structured_fact",
+      "core": true
+    }
+  ],
+  "notes": "安全边际 = 1 - 15.80 / 22.50 = 29.8%（成功情境）。失败压力 30% × 10.20 + 70% × 22.50 - 15.80 - 0.01 = 2.98 CNY/股 EV 正值。归入 Klarman 关键坑：失败率 30%+ 须分散押注。"
+}

@@ -1,0 +1,17 @@
+---
+description: Use when working with the F8 commodity futures broker-position divergence QuantSkills skill.
+globs:
+  - "**/*"
+alwaysApply: false
+---
+
+# Cursor Runtime Entry
+
+Read `SKILL.md` first.
+
+Use `alpha-f8-family-main-divergence/SKILL.md` for development, validation and
+backtesting. Use `alpha-f8-family-main-divergence-production/SKILL.md` only for
+read-only access to `database.parquet`.
+
+Do not commit credentials. Do not present factor output as investment advice,
+return promises, or official endorsement.

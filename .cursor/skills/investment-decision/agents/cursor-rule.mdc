@@ -1,0 +1,21 @@
+---
+description: Use the Investment Decision (Long-Term) skill to generate a long-term BUY/NEUTRAL/SELL investment decision report for any company given its name or ticker, using public financial data and web research.
+alwaysApply: false
+---
+
+# Investment Decision Skill (Long-Term)
+
+When the user asks to analyze a company for long-term investment, generate a
+stock recommendation, evaluate a ticker, or produce a buy/sell decision:
+
+1. Read `.cursor/skills/skill-investment-decision/SKILL.md`.
+2. Read `.cursor/skills/skill-investment-decision/references/decision-contract.md`.
+3. Run data fetcher:
+   `python .cursor/skills/skill-investment-decision/scripts/fetch_data.py --ticker <TICKER> --output report.json`
+   This populates ALL financial fields — no N/A values.
+4. Web search for: recent news, analyst ratings, industry trends, key risks.
+5. Score across 6 weighted dimensions. Fill risks, scores, thesis, disclaimer.
+6. Validate: `python .cursor/skills/skill-investment-decision/scripts/validate_report.py --report report.json`
+   Retry up to 5 times if needed.
+7. Generate .docx: `python .cursor/skills/skill-investment-decision/scripts/generate_report.py --report report.json --output <TICKER>_decision.docx`
+8. Present long-term recommendation, confidence, key reasons. Attach .docx.

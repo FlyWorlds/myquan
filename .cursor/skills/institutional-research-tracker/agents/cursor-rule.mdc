@@ -1,0 +1,24 @@
+---
+description: Use the Institutional Research Tracker skill for A-share investor-relations activity scans, research-heat ranking, institution breadth, and type-mix analysis.
+alwaysApply: false
+---
+
+# Institutional Research Tracker Skill
+
+When the user asks for A-share institutional-research (investor-relations) monitoring, research-heat ranking, most-visited companies, distinct-institution breadth, institution-type mix, or a "who is researching which company" report, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/institutional-research-tracker
+```
+
+Workflow:
+
+1. Read `.cursor/skills/institutional-research-tracker/SKILL.md`.
+2. For routing, counting/breadth/type definitions, report format, empty-data and field-sparsity handling, or QA, also read `.cursor/skills/institutional-research-tracker/references/research-playbook.md`.
+3. Validate generated reports with `.cursor/skills/institutional-research-tracker/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for the exact `get_investor_activity` contract before any real API call.
+5. Separate research frequency (event count) from breadth (distinct institutions); report both. Classify institution type from verbatim source text only; ambiguous or None → 未披露.
+6. Surface field sparsity (None institute/participant) with a rate; never fabricate attendee or institution names. Frame being researched as attention, not a buy signal or endorsement.
+7. Preserve source method names, query windows, activity dates, and missing-field notes. Do not invent visits, institutions, participants, counts, credentials, or investment advice.

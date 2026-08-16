@@ -1,0 +1,15 @@
+{
+  "periods": 750,
+  "final_nav": 0.8895,
+  "CAGR": -0.0386,
+  "annual_vol": 0.1337,
+  "Sharpe": -0.2886,
+  "max_drawdown": -0.2389,
+  "avg_turnover": 0.0453,
+  "short_sample_warning": false,
+  "note": "research backtest only; illustrative history, not a prediction or advice",
+  "execution": "t+1 close",
+  "signal": "builtin_ma",
+  "sizing": "vol_target",
+  "cost_bps": 3.0
+}

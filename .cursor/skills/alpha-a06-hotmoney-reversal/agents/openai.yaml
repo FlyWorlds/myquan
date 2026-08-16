@@ -1,0 +1,23 @@
+name: skill-alpha-a06-hotmoney-reversal
+description: QuantSkills A06 hot-money seat cooling-reversal and collaborative-breakout Alpha skill.
+license: GPL-3.0-only
+maintainer: quantskills
+entrypoint: ../SKILL.md
+load:
+  - ../SKILL.md
+  - ../开发产物/SKILL.md
+  - ../生产产物/SKILL.md
+runtime_adapters:
+  - codex
+  - claude-code
+  - cursor
+  - hermes
+  - openclaw
+commands:
+  demo: python scripts/factor.py --demo
+  validate: python scripts/validate.py
+  backtest: python scripts/backtest.py
+scope:
+  data_access: pandadata_or_fixed_raw_snapshots
+  advice: research_diagnostics_only
+  production_query_recomputes: false

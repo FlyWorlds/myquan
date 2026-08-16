@@ -1,0 +1,13 @@
+---
+description: Analyze A-share stocks with the Keynesian contrarian-investment workflow.
+globs:
+alwaysApply: false
+---
+
+# Keynesian Contrarian Investment
+
+Read `../SKILL.md` before acting. Follow its PandaData-only source boundary, point-in-time rules, scoring gates, and output requirements.
+
+Use the scripts in `../scripts/` instead of reimplementing the calculations. Read only the reference files required for the current request. Credentials must come from environment variables or the documented local credential file and must never be written to code, output, or version control.
+
+Treat every result as research material rather than investment advice. Never promise returns, issue automatic trading instructions, or imply official QuantSkills certification.

@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+user.json
+panda_data.log
+output/
+*.tmp
+.pytest_cache/
+.agents/
+.superpowers/
+/'+$fixture+'

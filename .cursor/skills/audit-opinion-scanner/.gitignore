@@ -1,0 +1,11 @@
+__pycache__/
+.pytest_cache/
+.venv/
+.idea/
+*.pyc
+.DS_Store
+data/fina_cache.parquet
+data/fina_industry.parquet
+output/*.csv
+output/*.md
+output/*.html

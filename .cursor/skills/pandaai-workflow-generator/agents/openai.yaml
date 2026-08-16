@@ -1,0 +1,19 @@
+# OpenAI / Codex adapter for skill-pandaai-workflow-generator
+# Keep in sync with SKILL.md; this file only re-declares the entry points for
+# Codex-style skill systems that do not read SKILL.md frontmatter directly.
+name: pandaai-workflow-generator
+description: >-
+  Generate complete PandaAI workflow JSON files (LiteGraph nodes, links, and embedded
+  Python strategy/factor code) from natural language trading ideas, ready for one-click
+  import into PandaAI. Research and education only — never investment advice.
+entrypoint: SKILL.md
+references:
+  - references/sandbox_restrictions.md
+  - references/sandbox_diagnostics.md
+  - references/qbti_bridge.md
+  - references/disclaimer_template.md
+scripts:
+  - scripts/generate_workflow.py
+  - scripts/from_qbti_brief.py
+  - scripts/smoke_test.py
+license: GPL-3.0

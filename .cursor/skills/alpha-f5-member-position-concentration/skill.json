@@ -1,0 +1,17 @@
+{
+  "name": "skill-alpha-f5-member-position-concentration",
+  "type": "skill",
+  "license": "GPL-3.0-only",
+  "language": ["zh-CN", "en"],
+  "recommended_repository": "skill-alpha-f5-member-position-concentration",
+  "current_repository": "alpha-f5-member-position-concentration",
+  "description": "F5 commodity futures member-position concentration factor research skill.",
+  "runtime_entries": {
+    "codex": "AGENTS.md",
+    "claude_code": "CLAUDE.md",
+    "cursor": ".cursor/rules/skill-alpha-f5-member-position-concentration.mdc",
+    "hermes": "HERMES.md",
+    "openclaw": "OPENCLAW.md"
+  },
+  "disclaimer": "Research tooling only. No investment advice, return promise, sensitive credential, or official endorsement is included."
+}

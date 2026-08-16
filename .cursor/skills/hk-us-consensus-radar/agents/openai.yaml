@@ -1,0 +1,4 @@
+interface:
+  display_name: "HK/US Consensus Radar"
+  short_description: "基于Pandadata的港美股卖方一致预期(评级/目标价/成长/修正)雷达"
+  default_prompt: "Use $hk-us-consensus-radar 为给定港股或美股标的/篮子生成带数据来源的卖方一致预期雷达报告。"

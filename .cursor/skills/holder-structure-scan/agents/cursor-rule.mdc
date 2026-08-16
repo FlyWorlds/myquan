@@ -1,0 +1,24 @@
+---
+description: Use the Holder Structure Scan skill for A-share shareholder-structure and chip-concentration reads — holder-count trend, top-holder concentration (flow vs total), and free-float share.
+alwaysApply: false
+---
+
+# Holder Structure Scan Skill
+
+When the user asks for A-share shareholder structure, 股东户数 trend, 筹码集中度 (chip concentration), 户均持股, 前十大股东占比, free-float share, or whether chips are concentrating/dispersing, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/holder-structure-scan
+```
+
+Workflow:
+
+1. Read `.cursor/skills/holder-structure-scan/SKILL.md`.
+2. For routing, the three-interface field model, concentration/trend definitions, caliber rules, report format, empty-data handling, or QA, also read `.cursor/skills/holder-structure-scan/references/holder-structure-playbook.md`.
+3. Validate generated reports with `.cursor/skills/holder-structure-scan/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for the exact `get_holder_count`, `get_top_holders`, and `get_share_float` contracts before any real API call.
+5. Always label the top-holder concentration caliber (流通口径 `hold_percent_float` vs 总股本口径 `hold_percent_total`) and never mix calibers in one comparison.
+6. Read trend across several periods keyed on `end_date`; state disclosure frequency and lag; never present one snapshot as a live position.
+7. Distinguish locked (控股/国资/限售) concentration from free-float concentration; surface top-holder pledge/freeze as a risk flag. Do not invent counts, ratios, trends, credentials, or investment advice.

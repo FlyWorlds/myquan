@@ -1,0 +1,5 @@
+name: quant-execution-microstructure
+description: Auditable execution planning, market microstructure, fill simulation, and transaction-cost analysis.
+entrypoint: ../SKILL.md
+license: GPL-3.0-only
+project_type: skill

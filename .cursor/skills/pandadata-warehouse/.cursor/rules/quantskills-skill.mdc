@@ -1,0 +1,6 @@
+---
+description: Load the canonical Pandadata Warehouse skill instructions.
+alwaysApply: true
+---
+
+Follow [SKILL.md](SKILL.md) as the canonical instruction source.

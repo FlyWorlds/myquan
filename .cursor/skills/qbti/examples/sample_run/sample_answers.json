@@ -1,0 +1,12 @@
+{
+  "cluster_a_loss_reaction": "uncomfortable_but_check_first",
+  "cluster_c_taste": "steady_and_boring",
+  "cluster_c_taste_secondary": null,
+  "cluster_c_volatility_stance": "stresses_me_out",
+  "cluster_d_universe_style": "has_exclusions",
+  "cluster_d_preferred_sectors": [],
+  "cluster_d_excluded_sectors": ["real_estate"],
+  "cluster_d_exclude_st": true,
+  "cluster_e_time_capsule": "year_end",
+  "user_confirmed": true
+}

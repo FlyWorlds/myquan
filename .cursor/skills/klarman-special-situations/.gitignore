@@ -1,0 +1,29 @@
+# Python 缓存与本地工具状态
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.playwright-cli/
+
+# 本地凭证与环境文件
+.env
+.env.*
+*.pem
+*.key
+
+# 本地扫描、运行和可视化生成物
+validation/operations/
+validation/output/
+validation/scan_*.parquet
+validation/smoke-*.parquet
+*.log
+*.err.log
+
+# 本地打包、GitHub 上传和仓库镜像临时目录
+.release_*/
+.github_publish_*/
+.remote_q51_repo/
+*.zip
+
+# 操作系统文件
+Thumbs.db
+.DS_Store

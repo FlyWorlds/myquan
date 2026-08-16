@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cross Listing Parity"
+  short_description: "Monitor A/H and China ADR cross-listing parity."
+  default_prompt: "Use $cross-listing-parity to generate an A/H premium and ADR parity snapshot."

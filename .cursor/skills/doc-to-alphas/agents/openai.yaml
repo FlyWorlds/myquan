@@ -1,0 +1,4 @@
+interface:
+  display_name: "Doc to Alphas"
+  short_description: "Generate and validate OHLCV alpha factor expressions from document text"
+  default_prompt: "Use $doc-to-alphas to generate and validate alpha factor expressions from this document."

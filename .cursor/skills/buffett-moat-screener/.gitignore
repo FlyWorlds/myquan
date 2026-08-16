@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.playwright/
+.playwright-cli/
+output/
+.cache/
+skill-buffett-moat-screener/

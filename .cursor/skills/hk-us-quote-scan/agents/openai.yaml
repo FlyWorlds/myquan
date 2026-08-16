@@ -1,0 +1,4 @@
+interface:
+  display_name: "HK/US Quote Scan"
+  short_description: "基于Pandadata的港美股行情、复权收益、流动性、估值与行业相对位快照"
+  default_prompt: "Use $hk-us-quote-scan 为给定港股或美股标的/篮子生成带数据来源的行情估值扫描报告。"

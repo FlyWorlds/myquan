@@ -1,0 +1,32 @@
+---
+description: Use this Skill for grouped greedy Backward elimination or Forward inclusion on quantitative factor banks with validation Pearson IC or hedged Sharpe and frozen OOS backtests.
+alwaysApply: false
+---
+
+# Factor Grouped Wrapper Skill
+
+Use the local Skill when the user requests grouped factor selection, wrapper selection, factor-pool elimination, factor-pool expansion, Backward removal, Forward addition, resumable factor search, or frozen factor-set OOS comparison.
+
+Preferred local path:
+
+```text
+.cursor/skills/factor-grouped-wrapper
+```
+
+Workflow:
+
+1. Read `.cursor/skills/factor-grouped-wrapper/SKILL.md`.
+2. Read only the referenced contract needed for the task.
+3. Run the bundled CLI from the Skill root.
+4. Preserve the documented Train/Validation/OOS boundary and configuration fingerprint when resuming.
+5. Do not tune on OOS results. Invoke FactorBacktest for validation candidates only when `selection.primary_metric: sharpe`.
+6. Do not invent MLP support, alternate label horizons, or undocumented outputs. Use only the documented `runtime.seed_workers` and `runtime.candidate_workers` concurrency controls.
+7. Treat all results as quantitative research evidence, not investment advice or production validation.
+
+Entrypoint:
+
+```bash
+python scripts/run_factor_grouped_wrapper.py --config <config-yaml> <command>
+```
+
+Read `references/input_schema.md` for configuration and data, `references/output_contract.md` for artifacts, and `references/factor-backtest-integration.md` before Sharpe search or OOS evaluation.

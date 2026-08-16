@@ -1,0 +1,23 @@
+---
+description: Use the Portfolio Checkup skill for A-share holdings-list portfolio health reports.
+alwaysApply: false
+---
+
+# Portfolio Checkup Skill
+
+When the user asks for A-share portfolio checkups, holdings diagnostics, portfolio concentration, HHI concentration, benchmark deviation, portfolio risk exposure, unlock or pledge or reduction aggregation, weighted valuation distribution, or portfolio-level health reports, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/portfolio-checkup
+```
+
+Workflow:
+
+1. Read `.cursor/skills/portfolio-checkup/SKILL.md`.
+2. For concentration formulas, HHI, weighted aggregation, risk exposure thresholds, benchmark deviation, score logic, report format, or QA, also read `.cursor/skills/portfolio-checkup/references/checkup-guide.md`.
+3. Use `.cursor/skills/portfolio-checkup/portfolio.json` only as an example holdings-list schema unless the user explicitly wants that sample.
+4. Use the local `pandadata-api` skill for exact method contracts before any real API call.
+5. Preserve portfolio weight basis, formulas, source method names, query parameters, data dates, coverage ratios, and missing-data notes.
+6. Do not invent holdings, weights, data interfaces, credentials, fields, risk events, or investment advice.

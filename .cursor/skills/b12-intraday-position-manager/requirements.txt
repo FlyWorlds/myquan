@@ -1,0 +1,2 @@
+# B12 使用纯 Python 标准库，零框架依赖
+# 无 pandas / numpy / requests 等三方依赖

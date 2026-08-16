@@ -1,0 +1,22 @@
+---
+description: Use the Futures Roll Auditor skill when the request matches its SKILL.md description.
+alwaysApply: false
+---
+
+# Futures Roll Auditor Skill
+
+When the user asks to audit continuous futures contracts, roll events, price gaps, adjustment factors, or roll ledgers, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/futures-roll-auditor
+```
+
+Workflow:
+
+1. Read `.cursor/skills/futures-roll-auditor/SKILL.md`.
+2. Load files under `references/` only when the workflow or task requires them.
+3. Run bundled scripts from the skill root exactly as documented.
+4. Preserve the input contract, contract-selection rules, formulas, validation limits, and evidence boundaries.
+5. Do not invent data interfaces, credentials, contracts, roll events, or audit results.

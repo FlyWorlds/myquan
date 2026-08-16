@@ -1,0 +1,24 @@
+---
+description: Use the HK/US Quote Scan skill for Hong Kong and US equity quote, adjusted return, liquidity, valuation, and industry-relative snapshots.
+alwaysApply: false
+---
+
+# HK/US Quote Scan Skill
+
+When the user asks for Hong Kong or US equity quotes, adjusted returns, liquidity, price-volume valuation, industry-relative position, HK/US baskets, cross-market comparison, or a Hong Kong / US quote-and-valuation report, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/hk-us-quote-scan
+```
+
+Workflow:
+
+1. Read `.cursor/skills/hk-us-quote-scan/SKILL.md`.
+2. For routing, metric definitions, HK/US symbol and schema notes, report format, empty-data handling, or QA, also read `.cursor/skills/hk-us-quote-scan/references/scan-playbook.md`.
+3. Validate generated reports with `.cursor/skills/hk-us-quote-scan/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for exact method contracts before any real API call; HK and US schemas differ.
+5. Preserve source method names, query parameters, markets, currencies, data dates, and missing-data notes.
+6. Never mix HK and US figures without a market/currency label, never net returns across currencies, and use adjusted prices for multi-day returns spanning ex-rights events.
+7. Do not invent data interfaces, credentials, fields, symbols, prices, or investment advice.

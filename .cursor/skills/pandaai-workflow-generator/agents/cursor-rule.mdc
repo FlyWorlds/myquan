@@ -1,0 +1,22 @@
+---
+description: Use the PandaAI Workflow Generator skill when the request matches its SKILL.md description.
+alwaysApply: false
+---
+
+# PandaAI Workflow Generator Skill
+
+When the user wants to turn a trading idea into an importable PandaAI workflow JSON file (LiteGraph nodes, links, embedded Python strategy or factor code), use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/pandaai-workflow-generator
+```
+
+Workflow:
+
+1. Read `.cursor/skills/pandaai-workflow-generator/SKILL.md` and follow its Core workflow exactly, including the QBTI hand-off (step 0) and the probe-first rule (step 2a).
+2. Read `references/sandbox_restrictions.md` before writing any CodeControl code; the platform statically rejects blacklisted imports and calls.
+3. Assemble output only through `scripts/generate_workflow.py` (or `scripts/from_qbti_brief.py` for QBTI briefs); never execute generated strategy code locally.
+4. Preserve documented API names, node parameter names, template node ids, and validation limits; do not invent `panda_data` methods.
+5. Show the disclaimer from `references/disclaimer_template.md` verbatim before ending the turn.

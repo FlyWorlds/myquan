@@ -1,0 +1,22 @@
+---
+description: Use the QBTI skill when the request matches its SKILL.md description.
+alwaysApply: false
+---
+
+# QBTI (Quant Behavior Type Indicator) Skill
+
+When a non-professional user wants a strategy that fits their personality ("我不懂量化但想试试" / "帮我做一个适合我的策略" / "来一个投资版性格测试"), or an agent needs to elicit risk tolerance, involvement level, factor taste, sector preferences, and time horizon before touching any factor skill, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/qbti
+```
+
+Workflow:
+
+1. Read `.cursor/skills/qbti/SKILL.md` and follow its workflow exactly.
+2. Honor the "包装自由，枚举固定" contract: quiz wording may adapt to the user, but every answer must land on the closed enums; confirm classifications with the user before recording them.
+3. Derive the profile only through `scripts/derive_profile.py`; never hand-craft profile.json or strategy_brief.json values.
+4. Load files under `references/` only when needed.
+5. Show the disclaimer from `references/disclaimer_template.md` verbatim; QBTI output is a translation of preferences, never investment advice.

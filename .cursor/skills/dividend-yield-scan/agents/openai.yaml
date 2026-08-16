@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dividend Yield Scan"
+  short_description: "基于Pandadata 分红接口的A股高股息横截面：股息率榜·连续分红·现金vs送转"
+  default_prompt: "Use $dividend-yield-scan 为给定范围生成带数据来源的A股高股息与分红质量报告(股息率=div_cash_gross/round_lot 的滚动口径)。"

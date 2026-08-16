@@ -1,0 +1,25 @@
+{
+  "as_of": "2026-06-29",
+  "name": "示例核心组合",
+  "benchmark": "000300.SH",
+  "weight_basis": "weight",
+  "cash_weight": 0.05,
+  "holdings": [
+    { "symbol": "600519.SH", "name": "贵州茅台", "weight": 0.18, "cost": 1680.0 },
+    { "symbol": "300750.SZ", "name": "宁德时代", "weight": 0.14, "cost": 210.0 },
+    { "symbol": "600036.SH", "name": "招商银行", "weight": 0.12 },
+    { "symbol": "000001.SZ", "name": "平安银行", "weight": 0.10 },
+    { "symbol": "601318.SH", "name": "中国平安", "weight": 0.10 },
+    { "symbol": "000333.SZ", "name": "美的集团", "weight": 0.09 },
+    { "symbol": "603501.SH", "name": "韦尔股份", "weight": 0.08 },
+    { "symbol": "300059.SZ", "name": "东方财富", "weight": 0.07 },
+    { "symbol": "002594.SZ", "name": "比亚迪", "weight": 0.07 }
+  ],
+  "_notes": {
+    "weight_basis": "weight | market_value | equal —— 缺省时按 holdings 携带的字段推断，混合或缺失时降级为 equal 并在报告中声明。",
+    "weights_sum": "equity 权重在扣除 cash_weight 后归一化为 1（此处 9 只合计 0.95，叠加 cash_weight 0.05 = 1.00）。",
+    "market_value": "若用 market_value 维护，则 weight = market_value / Σ market_value；与 weight 字段二选一即可。",
+    "cost": "可选，仅作上下文，本 skill 不计算盈亏。",
+    "benchmark": "可选基准指数，缺省 000300.SH。"
+  }
+}

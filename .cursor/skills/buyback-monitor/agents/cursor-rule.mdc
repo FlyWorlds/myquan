@@ -1,0 +1,24 @@
+---
+description: Use the Buyback Monitor skill for A-share share-buyback scans, stage tracking, purpose classification, and intensity ranking.
+alwaysApply: false
+---
+
+# Buyback Monitor Skill
+
+When the user asks for A-share share-buyback monitoring, repurchase scans, buyback progress, cancellation buybacks, buyback intensity, buyback purpose classification, buyback price bands, or a buyback watch report, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/buyback-monitor
+```
+
+Workflow:
+
+1. Read `.cursor/skills/buyback-monitor/SKILL.md`.
+2. For routing, stage/purpose/intensity definitions, dedup rules, report format, empty-data handling, or QA, also read `.cursor/skills/buyback-monitor/references/buyback-playbook.md`.
+3. Validate generated reports with `.cursor/skills/buyback-monitor/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for the exact `get_repurchase` contract before any real API call.
+5. Deduplicate events across procedure stages before counting; report the latest stage; always distinguish 预案 (planned range) from executed amounts.
+6. Classify purpose from source signals verbatim (assert 注销 only with `write_off_date` or explicit cancellation purpose); label ambiguous cases 未分类.
+7. Preserve source method names, query windows, announcement dates, stages, and missing-data notes. Do not invent amounts, ratios, stages, purposes, credentials, or investment advice.

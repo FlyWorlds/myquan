@@ -1,0 +1,147 @@
+{
+  "symbol": "M 豆粕",
+  "sample_years": 11,
+  "min_years_any_month": 10,
+  "low_sample_warning": false,
+  "seasonal_strong_up_months": [],
+  "seasonal_strong_down_months": [
+    11
+  ],
+  "current": {
+    "as_of": "2025-12-31",
+    "current_month": 12,
+    "next_month": 1,
+    "next_month_avg_return": 0.001738504312585909,
+    "next_month_win_rate": 0.6,
+    "next_month_years": 10,
+    "next_month_significant": false
+  },
+  "monthly_table": [
+    {
+      "month": 1,
+      "avg_return": 0.0017385043,
+      "median_return": 0.0089118746,
+      "std": 0.0467198281,
+      "win_rate": 0.6,
+      "years": 10,
+      "p_winrate": 0.75390625,
+      "p_mean": 0.9089115405
+    },
+    {
+      "month": 2,
+      "avg_return": 0.0149457286,
+      "median_return": -0.0090909091,
+      "std": 0.0582353033,
+      "win_rate": 0.4545454545,
+      "years": 11,
+      "p_winrate": 1.0,
+      "p_mean": 0.4145809118
+    },
+    {
+      "month": 3,
+      "avg_return": 0.0161409092,
+      "median_return": 0.0194406548,
+      "std": 0.0586273184,
+      "win_rate": 0.6363636364,
+      "years": 11,
+      "p_winrate": 0.548828125,
+      "p_mean": 0.3826703439
+    },
+    {
+      "month": 4,
+      "avg_return": 0.0165570033,
+      "median_return": 0.0068345324,
+      "std": 0.0528852786,
+      "win_rate": 0.6363636364,
+      "years": 11,
+      "p_winrate": 0.548828125,
+      "p_mean": 0.3235628143
+    },
+    {
+      "month": 5,
+      "avg_return": 0.011151748,
+      "median_return": 0.0164383562,
+      "std": 0.0700852997,
+      "win_rate": 0.5454545455,
+      "years": 11,
+      "p_winrate": 1.0,
+      "p_mean": 0.6091955483
+    },
+    {
+      "month": 6,
+      "avg_return": 0.0183976895,
+      "median_return": 0.0011750881,
+      "std": 0.0649687738,
+      "win_rate": 0.5454545455,
+      "years": 11,
+      "p_winrate": 1.0,
+      "p_mean": 0.3697626412
+    },
+    {
+      "month": 7,
+      "avg_return": 0.0136937923,
+      "median_return": 0.0280254777,
+      "std": 0.0748762241,
+      "win_rate": 0.7272727273,
+      "years": 11,
+      "p_winrate": 0.2265625,
+      "p_mean": 0.5576591887
+    },
+    {
+      "month": 8,
+      "avg_return": -0.0153536344,
+      "median_return": -0.0213385063,
+      "std": 0.032124106,
+      "win_rate": 0.2727272727,
+      "years": 11,
+      "p_winrate": 0.2265625,
+      "p_mean": 0.1440102
+    },
+    {
+      "month": 9,
+      "avg_return": 0.0136008067,
+      "median_return": 0.0048916841,
+      "std": 0.043019375,
+      "win_rate": 0.5454545455,
+      "years": 11,
+      "p_winrate": 1.0,
+      "p_mean": 0.3190579427
+    },
+    {
+      "month": 10,
+      "avg_return": -0.0062277471,
+      "median_return": 0.0029275433,
+      "std": 0.0356626539,
+      "win_rate": 0.5454545455,
+      "years": 11,
+      "p_winrate": 1.0,
+      "p_mean": 0.5752813534
+    },
+    {
+      "month": 11,
+      "avg_return": -0.0352761101,
+      "median_return": -0.0102072379,
+      "std": 0.0625548391,
+      "win_rate": 0.3636363636,
+      "years": 11,
+      "p_winrate": 0.548828125,
+      "p_mean": 0.0909599797
+    },
+    {
+      "month": 12,
+      "avg_return": -0.028369113,
+      "median_return": -0.0335051546,
+      "std": 0.0565099288,
+      "win_rate": 0.2727272727,
+      "years": 11,
+      "p_winrate": 0.2265625,
+      "p_mean": 0.1268821795
+    }
+  ],
+  "caveats": [
+    "季节性是历史概率规律，不是当年保证；当年基本面（天气、政策、供需）可覆盖季节性。",
+    "样本年数最少的月份仅 10 年，样本量小，p 值不显著的月份勿过度解读。",
+    "多重检验提示：同时检验了 12 个月，即使纯随机也预期约有 1 个月偶然显著（p<0.1）——标星月份是‘提示性’而非‘已证实’，须结合作物日历机理判断。",
+    "本结果不构成买卖指令，仅供研究与择时参考。"
+  ]
+}

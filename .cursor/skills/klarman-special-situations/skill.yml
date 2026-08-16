@@ -1,0 +1,32 @@
+name: skill-klarman-special-situations
+version: 7.4.0
+license: GPL-3.0-only
+organization: QuantSkills
+organization_url: https://github.com/quantskills
+repository: skill-klarman-special-situations
+repository_url: https://github.com/quantskills/skill-klarman-special-situations
+project_type: skill
+collection: special-situations
+creator: dijia702
+creator_url: https://github.com/dijia702
+maintainer: dijia702
+maintainer_url: https://github.com/dijia702
+category: analyst
+tags:
+  - a-share
+  - seth-klarman
+  - special-situations
+  - event-driven
+  - margin-of-safety
+  - pandadata
+platforms:
+  - codex
+  - claude-code
+  - cursor
+  - hermes
+  - openclaw
+status: stable
+validation_level: runnable
+maintainer_type: community
+summary_zh: "克拉曼特殊情况投资研究：扫描定增解禁、重组借壳、分拆上市与困境反转，输出可复核的研究候选、风险观察和严格承保结果。"
+summary_en: "Klarman-style A-share special-situations research for private-placement unlocks, restructurings, spin-offs, and distressed turnarounds with traceable screening and fail-closed underwriting."

@@ -1,0 +1,22 @@
+---
+description: Use the MA Crossover Signal skill when the request matches its SKILL.md description.
+alwaysApply: false
+---
+
+# MA Crossover Signal Skill
+
+When the user asks about 金叉 / 死叉 / 均线 / 趋势 on a single symbol (or "is X in an uptrend"), use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/ma-crossover-signal
+```
+
+Workflow:
+
+1. Read `.cursor/skills/ma-crossover-signal/SKILL.md` and follow its spec exactly.
+2. Run `scripts/ma_crossover_signal.py` with the requested ticker and fast/slow periods; never fabricate prices — the script pulls closes from `panda_data` / `tqx_data`.
+3. Load files under `references/` only when the case needs those details.
+4. Verify the reported `last_cross` and `state` against the returned series before presenting them.
+5. Reproduce the disclaimer from `README.md` (Disclaimer / 免责声明) verbatim; never promise returns and never call a crossover a buy/sell recommendation.

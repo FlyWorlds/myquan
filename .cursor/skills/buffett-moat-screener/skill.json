@@ -1,0 +1,25 @@
+{
+  "name": "build-Q44",
+  "version": "9.4.0",
+  "license": "GPL-3.0-only",
+  "build_type": "hybrid",
+  "market": "cn_us",
+  "entrypoint": "scripts.build:run",
+  "data_source": "panda_data",
+  "result_types": ["buffett_research_candidate", "qualitative_review", "portfolio_target_weight", "portfolio_state_transition", "portfolio_summary", "strategy_validation", "universe_summary"],
+  "requires": ["skill-pandadata-api"],
+  "production_output": "生产产物/数据库.parquet",
+  "default_universe": "all_a",
+  "platforms": ["claude-code", "codex", "cursor", "hermes", "openclaw"],
+  "metadata": {
+    "organization": "QuantSkills",
+    "organization_url": "https://github.com/quantskills",
+    "repository": "skill-buffett-moat-screener",
+    "repository_url": "https://github.com/quantskills/skill-buffett-moat-screener",
+    "project_type": "skill",
+    "collection": "fundamental-research",
+    "creator": "dijia702",
+    "maintainer": "dijia702",
+    "status": "community"
+  }
+}

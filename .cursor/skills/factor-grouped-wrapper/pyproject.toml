@@ -1,0 +1,30 @@
+[project]
+name = "factor-grouped-wrapper"
+version = "0.1.0"
+description = "Resumable grouped wrapper selection for quantitative factor banks"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "pyarrow>=17",
+  "PyYAML>=6",
+  "lightgbm>=4.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+factor-grouped-wrapper = "factor_grouped_wrapper.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["scripts"]
+include = ["factor_grouped_wrapper*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

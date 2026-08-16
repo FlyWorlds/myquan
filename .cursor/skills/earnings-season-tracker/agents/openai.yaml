@@ -1,0 +1,4 @@
+interface:
+  display_name: "Earnings Season Tracker"
+  short_description: "基于Pandadata的A股财报季全市场横截面扫描报告"
+  default_prompt: "Use $earnings-season-tracker 为当前财报季生成带数据来源的全市场业绩横截面扫描报告。"

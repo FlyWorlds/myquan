@@ -1,0 +1,4 @@
+interface:
+  display_name: "Buffett Moat Screener"
+  short_description: "A股与美股巴菲特式软评分、持仓复核和历史诊断"
+  default_prompt: "Use $build-Q44 基于可追溯数据生成巴菲特式研究队列、持仓复核与风险边界说明。"

@@ -1,0 +1,115 @@
+{
+  "generated_at": "2026-07-25T21:24:30.414551",
+  "data_version": "9.4.0",
+  "score_version": "soft-five-dimension-v1",
+  "periods": [
+    {
+      "period": "完整严格期",
+      "strategy": "A股软评分",
+      "total_return": 0.6872623734619296,
+      "cagr": 0.05628928782030451,
+      "max_drawdown": -0.34693646921167753,
+      "sharpe": 0.37717481302599787
+    },
+    {
+      "period": "完整严格期",
+      "strategy": "旧 hard 对照",
+      "total_return": 1.1958361885472417,
+      "cagr": 0.08582737012603037,
+      "max_drawdown": -0.35435893642196414,
+      "sharpe": 0.5226326021240766
+    },
+    {
+      "period": "完整严格期",
+      "strategy": "沪深300",
+      "total_return": 0.39104597676663055,
+      "cagr": 0.03515615573974684,
+      "max_drawdown": -0.4560262048486471,
+      "sharpe": 0.2856413461512514
+    },
+    {
+      "period": "开发期",
+      "strategy": "A股软评分",
+      "total_return": 0.8093012033545881,
+      "cagr": 0.12614416580146925,
+      "max_drawdown": -0.34693646921167753,
+      "sharpe": 0.6641288352166287
+    },
+    {
+      "period": "开发期",
+      "strategy": "旧 hard 对照",
+      "total_return": 0.6599791746822847,
+      "cagr": 0.10687609112577778,
+      "max_drawdown": -0.35435893642196414,
+      "sharpe": 0.6071419481757369
+    },
+    {
+      "period": "开发期",
+      "strategy": "沪深300",
+      "total_return": 0.478168001265743,
+      "cagr": 0.08144708715894389,
+      "max_drawdown": -0.32461968881054826,
+      "sharpe": 0.5197925255310344
+    },
+    {
+      "period": "回看诊断期",
+      "strategy": "A股软评分",
+      "total_return": -0.0672759232365564,
+      "cagr": -0.015189208595305148,
+      "max_drawdown": -0.26964017470651247,
+      "sharpe": 0.012426100015881628
+    },
+    {
+      "period": "回看诊断期",
+      "strategy": "旧 hard 对照",
+      "total_return": 0.3245479489872236,
+      "cagr": 0.06371735879459783,
+      "max_drawdown": -0.3069406884361393,
+      "sharpe": 0.42555348884738703
+    },
+    {
+      "period": "回看诊断期",
+      "strategy": "沪深300",
+      "total_return": -0.054612935676291774,
+      "cagr": -0.012266354373018373,
+      "max_drawdown": -0.3575848363483308,
+      "sharpe": 0.020332718632729074
+    }
+  ],
+  "strategies": {
+    "a_share_strict_pit": {
+      "start": "20170103",
+      "end": "20260724",
+      "performance": {
+        "total_return": 0.6872623734619296,
+        "cagr": 0.05628928782030451,
+        "max_drawdown": -0.34693646921167753,
+        "annual_volatility": 0.20843656300247154,
+        "sharpe": 0.3771748130259978
+      }
+    },
+    "a_share_fixed_roster": {
+      "start": "20100104",
+      "end": "20260724",
+      "performance": {
+        "total_return": 7.379141075562751,
+        "cagr": 0.1370548347345939,
+        "max_drawdown": -0.42143115623579497,
+        "annual_volatility": 0.224161876992036,
+        "sharpe": 0.7072182467531853
+      }
+    },
+    "us_fixed_research_roster": {
+      "start": "20150102",
+      "end": "20260724",
+      "performance": {
+        "total_return": 4.269291818444526,
+        "cagr": 0.15466073335419073,
+        "max_drawdown": -0.3018892793501974,
+        "annual_volatility": 0.17723114627442701,
+        "sharpe": 0.9023434264498097
+      }
+    }
+  },
+  "claim_boundary": "Three separate evidence tracks; fixed rosters are survivorship-prone and are not historical index universes."
+}

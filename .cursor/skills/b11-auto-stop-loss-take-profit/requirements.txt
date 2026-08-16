@@ -1,0 +1,24 @@
+# B11 自动止盈止损+仓位管理 — 依赖声明（v2）
+#
+# 核心运行时：Python 3.8+ 标准库
+# 业务层使用模块：math, numbers, re, datetime, bisect（无 pandas/numpy）
+#
+# ─────────────────────────────────────────────────
+# v2 硬依赖（首次运行 build.py / build_calendar.py 必装）：
+# ─────────────────────────────────────────────────
+#   panda_data — 交易日历唯一来源（get_trade_cal），已通过 pip 安装 pyarrow
+#   pyarrow    — 读写 production/trade.parquet 本地缓存（虽由 panda_data 传递依赖，
+#                此处显式列出以便离线安装或严格依赖检查场景）
+#
+# 直接列出（复制粘贴到 pip install）：
+panda_data
+pyarrow>=10.0.0
+#
+# ─────────────────────────────────────────────────
+# 一次性凭据配置（首次运行前设置环境变量）：
+# ─────────────────────────────────────────────────
+#   export PANDA_USERNAME=<your_username>
+#   export PANDA_PASSWORD=<your_password>
+#
+# 缺失时 build.py 会抛 RuntimeError 含引导链接，
+# 缓存已建立后再次运行不再需要 panda_data 网络调用。

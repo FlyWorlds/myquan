@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hk-stock-dossier"
+version = "0.2.0"
+description = "港股尽职调查研报生成工具 — 基于 Pandadata 数据接口，覆盖12维度深度分析"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+keywords = ["hk", "stock", "dossier", "pandadata", "due-diligence", "hong-kong"]
+
+dependencies = [
+    "pandas>=2.0.0",
+    "panda-data>=0.0.9",
+    "python-dotenv>=1.0.0",
+    "matplotlib>=3.8.0",
+]
+
+[project.urls]
+Source = "https://github.com/quantskills/skill-hk-stock-dossier"
+
+[tool.setuptools.packages.find]
+where = ["src"]

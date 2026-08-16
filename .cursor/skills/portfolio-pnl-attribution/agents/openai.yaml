@@ -1,0 +1,4 @@
+interface:
+  display_name: "Portfolio P&L attribution"
+  short_description: "Explain realized P&L by security, sector, fees, and benchmark."
+  default_prompt: "Use $skill-portfolio-pnl-attribution to produce an auditable analysis from the supplied data."

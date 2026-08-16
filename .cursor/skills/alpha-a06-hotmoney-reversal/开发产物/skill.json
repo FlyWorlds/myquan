@@ -1,0 +1,18 @@
+{
+  "name": "alpha-a06",
+  "description": "A06 游资席位冷却反转与协同突破因子，使用 PandaData 与次日开盘可成交回测。",
+  "version": "1.0.0",
+  "license": "GPL-3.0-only",
+  "maintainer": "quantskills",
+  "repository_type": "skill",
+  "metadata": {
+    "organization": "QuantSkills",
+    "organization_url": "https://github.com/quantskills",
+    "repository": "skill-alpha-a06-hotmoney-reversal",
+    "repository_url": "https://github.com/quantskills/skill-alpha-a06-hotmoney-reversal",
+    "project_type": "skill",
+    "collection": "alpha"
+  },
+  "entrypoint": "scripts/factor.py",
+  "tags": ["quant", "alpha", "development", "stock", "lhb"]
+}

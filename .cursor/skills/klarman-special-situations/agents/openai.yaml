@@ -1,0 +1,4 @@
+interface:
+  display_name: "Klarman Special Situations"
+  short_description: "克拉曼特殊情况投资：四类事件研究排序、风险观察与严格承保"
+  default_prompt: "Use $klarman-special-situations 扫描 A 股特殊情况，输出可复核的研究候选、独立风险观察、证据缺口和下一步动作。"

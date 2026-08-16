@@ -1,0 +1,21 @@
+---
+description: QuantSkills A06 hot-money reversal Alpha skill adapter for Cursor.
+globs:
+  - "**/*"
+alwaysApply: false
+---
+
+# Cursor Adapter: A06 Hot-Money Reversal Alpha
+
+Use this repository when the task is to calculate, validate, backtest, publish, or query the A06 hot-money seat cooling-reversal and collaborative-breakout Alpha factor.
+
+Start with the root `SKILL.md`, then read `开发产物/SKILL.md` for the full callable contract. The implementation lives under `开发产物/scripts/`.
+
+Important constraints:
+
+- Official calculation uses PandaData or fixed PandaData raw snapshots.
+- Do not substitute old factor panels as official raw input.
+- Do not present signals as investment advice, promised returns, or official endorsement.
+- Keep paths relative in examples and generated docs.
+- Do not commit credentials, local absolute paths, cache files, or private data.
+- Use `python scripts/factor.py --demo`, `python scripts/validate.py`, and `python scripts/backtest.py` from `开发产物/` for standard checks.

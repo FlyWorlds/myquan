@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gao Shanwen Research"
+  short_description: "Gao Shanwen-style China macro research workflow"
+  default_prompt: "Use $gao-shanwen-research-model to analyze a China macro or capital-market question."

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>农产品期货季节性分析 · M 豆粕</title>
+<style>
+  :root {
+    --ground:#f6f3ec; --surface:#fffdf8; --surface-2:#f0ebe0;
+    --ink:#23201a; --ink-2:#6b655a; --ink-3:#9a9284;
+    --hair:rgba(35,32,26,.12); --hair-strong:rgba(35,32,26,.26);
+    --up:#c0392b; --down:#147d6f; --accent:#a9791f;
+    --accent-soft:rgba(169,121,31,.12); --faded:0.30;
+    --shadow:0 1px 2px rgba(35,32,26,.06),0 6px 20px rgba(35,32,26,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#17150f; --surface:#201d16; --surface-2:#2a261d;
+      --ink:#ece7db; --ink-2:#a9a293; --ink-3:#746d5e;
+      --hair:rgba(236,231,219,.12); --hair-strong:rgba(236,231,219,.24);
+      --up:#e15b4c; --down:#2aa697; --accent:#d6a94a;
+      --accent-soft:rgba(214,169,74,.14);
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 22px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",
+      "Segoe UI","Noto Sans CJK SC",system-ui,sans-serif;
+    line-height:1.6; font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:880px; margin:0 auto; padding:40px 24px 64px; }
+  .eyebrow { font-size:12px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--accent); font-weight:600; margin:0 0 8px; }
+  h1 { font-size:clamp(24px,4vw,32px); font-weight:700; margin:0 0 6px;
+    letter-spacing:-.01em; text-wrap:balance; }
+  .meta { color:var(--ink-2); font-size:14px; margin:0; }
+  .meta b { color:var(--ink); font-weight:600; }
+  .warn { margin:16px 0 0; padding:10px 14px; border-radius:10px; font-size:13px;
+    background:rgba(192,57,43,.10); border:1px solid rgba(192,57,43,.30); color:var(--up); }
+  .callout { margin:24px 0 32px; padding:18px 20px; border-radius:12px;
+    background:var(--accent-soft); border:1px solid var(--hair);
+    display:flex; flex-wrap:wrap; gap:6px 28px; align-items:baseline; }
+  .callout .lead { font-weight:600; font-size:14px; color:var(--accent);
+    letter-spacing:.02em; width:100%; margin-bottom:2px; }
+  .callout .stat { font-size:14px; color:var(--ink-2); }
+  .callout .stat b { color:var(--ink); font-weight:700; font-size:16px; }
+  .tag { display:inline-block; font-size:12px; padding:1px 9px; border-radius:999px;
+    border:1px solid var(--hair-strong); color:var(--ink-2); font-weight:600; }
+  section { margin-top:40px; }
+  .sec-head { display:flex; align-items:baseline; justify-content:space-between;
+    gap:12px; margin-bottom:6px; flex-wrap:wrap; }
+  h2 { font-size:17px; font-weight:700; margin:0; letter-spacing:-.005em; }
+  .sec-note { font-size:13px; color:var(--ink-3); margin:0; }
+  .card { background:var(--surface); border:1px solid var(--hair); border-radius:14px;
+    box-shadow:var(--shadow); padding:20px 20px 12px; margin-top:14px; }
+  .chart-scroll { overflow-x:auto; }
+  svg { display:block; width:100%; min-width:560px; height:auto; }
+  .legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:12px;
+    padding-top:12px; border-top:1px solid var(--hair); font-size:12.5px; color:var(--ink-2); }
+  .legend .item { display:inline-flex; align-items:center; gap:7px; }
+  .sw { width:13px; height:13px; border-radius:3px; display:inline-block; }
+  .sw.up { background:var(--up); } .sw.down { background:var(--down); }
+  .sw.faded { opacity:var(--faded); }
+  #tip { position:fixed; pointer-events:none; z-index:20; opacity:0; transition:opacity .1s;
+    background:var(--surface); color:var(--ink); border:1px solid var(--hair-strong);
+    border-radius:10px; box-shadow:var(--shadow); padding:10px 12px; font-size:12.5px;
+    max-width:240px; line-height:1.5; }
+  #tip .t-m { font-weight:700; margin-bottom:4px; font-size:13px; }
+  #tip .row { display:flex; justify-content:space-between; gap:16px; color:var(--ink-2); }
+  #tip .row b { color:var(--ink); font-weight:600; }
+  #tip .t-sig { margin-top:5px; font-weight:600; }
+  .tbl-scroll { overflow-x:auto; margin-top:14px; }
+  table { border-collapse:collapse; width:100%; min-width:600px; font-size:13px; }
+  th,td { padding:8px 10px; text-align:right; white-space:nowrap; }
+  th { color:var(--ink-3); font-weight:600; font-size:12px; letter-spacing:.03em;
+    border-bottom:1px solid var(--hair-strong); }
+  td { border-bottom:1px solid var(--hair); color:var(--ink-2); }
+  th:first-child,td:first-child { text-align:left; }
+  tr.sig td { color:var(--ink); font-weight:600; }
+  tr.sig td:first-child::after { content:"★"; color:var(--accent); margin-left:6px; font-size:11px; }
+  td.up { color:var(--up); } td.down { color:var(--down); }
+  tr.dim td:not(.pos) { opacity:.78; }
+  .caveats { margin-top:16px; padding:18px 20px; border-radius:12px;
+    background:var(--surface-2); border:1px solid var(--hair); }
+  .caveats h3 { margin:0 0 10px; font-size:13px; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:700; }
+  .caveats ul { margin:0; padding-left:18px; }
+  .caveats li { font-size:13px; color:var(--ink-2); margin-bottom:6px; }
+  .caveats li:last-child { margin-bottom:0; }
+  footer { margin-top:40px; padding-top:16px; border-top:1px solid var(--hair);
+    font-size:12px; color:var(--ink-3); display:flex; justify-content:space-between;
+    flex-wrap:wrap; gap:8px; }
+  @media (max-width:560px) { .wrap { padding:28px 16px 48px; } .callout { gap:4px 18px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">农产品期货季节性分析</p>
+    <h1>M 豆粕 · 月度季节性规律</h1>
+    <p class="meta">样本 <b>11 年</b> &nbsp;·&nbsp; 数据截至 <b>2025-12-31</b> &nbsp;·&nbsp; 主力连续日线</p>
+    
+  </header>
+  <div class="callout"><span class="lead">当前位置 · 下月季节性倾向</span><span class="stat">当前 <b>12 月</b></span><span class="stat">下月（1 月）平均涨跌 <b>+0.17%</b></span><span class="stat">上涨概率 <b>60%</b></span><span class="stat">样本 <b>10 年</b></span><span class="stat"><span class="tag">不显著 · 当噪声看</span></span></div>
+  <section>
+    <div class="sec-head">
+      <h2>逐月平均涨跌</h2>
+      <p class="sec-note">实心 = 统计显著（p&lt;0.1）· 半透明 = 不显著，勿过度解读</p>
+    </div>
+    <div class="card">
+      <div class="chart-scroll">
+        <svg id="chart" viewBox="0 0 720 380" role="img" aria-label="逐月平均涨跌柱状图"></svg>
+      </div>
+      <div class="legend">
+        <span class="item"><span class="sw up"></span>上涨（红）</span>
+        <span class="item"><span class="sw down"></span>下跌（绿）</span>
+        <span class="item"><span class="sw up faded"></span>不显著（半透明）</span>
+        <span class="item">★ 通过显著性检验</span>
+      </div>
+    </div>
+  </section>
+  <section>
+    <div class="sec-head">
+      <h2>完整数据</h2>
+      <p class="sec-note">平均/中位涨跌 · 上涨概率 · 样本年数 · 检验 p 值</p>
+    </div>
+    <div class="tbl-scroll">
+      <table id="tbl">
+        <thead><tr>
+          <th>月份</th><th>平均涨跌</th><th>中位涨跌</th><th>上涨概率</th>
+          <th>样本年</th><th>p(概率)</th><th>p(均值)</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+  <div class="caveats">
+    <h3>严谨性说明</h3>
+    <ul><li>季节性是历史概率规律，不是当年保证；当年基本面（天气、政策、供需）可覆盖季节性。</li><li>样本年数最少的月份仅 10 年，样本量小，p 值不显著的月份勿过度解读。</li><li>多重检验提示：同时检验了 12 个月，即使纯随机也预期约有 1 个月偶然显著（p&lt;0.1）——标星月份是‘提示性’而非‘已证实’，须结合作物日历机理判断。</li><li>本结果不构成买卖指令，仅供研究与择时参考。</li></ul>
+  </div>
+  <footer>
+    <span>由 skill-ag-futures-seasonality 生成</span>
+    <span>事实优先 · 不输出买卖指令</span>
+  </footer>
+</div>
+<div id="tip" aria-hidden="true"></div>
+<script>
+  const DATA = [{"m": 1, "avg": 0.0017385043, "med": 0.0089118746, "win": 0.6, "yrs": 10, "pw": 0.75390625, "pm": 0.9089115405}, {"m": 2, "avg": 0.0149457286, "med": -0.0090909091, "win": 0.4545454545, "yrs": 11, "pw": 1.0, "pm": 0.4145809118}, {"m": 3, "avg": 0.0161409092, "med": 0.0194406548, "win": 0.6363636364, "yrs": 11, "pw": 0.548828125, "pm": 0.3826703439}, {"m": 4, "avg": 0.0165570033, "med": 0.0068345324, "win": 0.6363636364, "yrs": 11, "pw": 0.548828125, "pm": 0.3235628143}, {"m": 5, "avg": 0.011151748, "med": 0.0164383562, "win": 0.5454545455, "yrs": 11, "pw": 1.0, "pm": 0.6091955483}, {"m": 6, "avg": 0.0183976895, "med": 0.0011750881, "win": 0.5454545455, "yrs": 11, "pw": 1.0, "pm": 0.3697626412}, {"m": 7, "avg": 0.0136937923, "med": 0.0280254777, "win": 0.7272727273, "yrs": 11, "pw": 0.2265625, "pm": 0.5576591887}, {"m": 8, "avg": -0.0153536344, "med": -0.0213385063, "win": 0.2727272727, "yrs": 11, "pw": 0.2265625, "pm": 0.1440102}, {"m": 9, "avg": 0.0136008067, "med": 0.0048916841, "win": 0.5454545455, "yrs": 11, "pw": 1.0, "pm": 0.3190579427}, {"m": 10, "avg": -0.0062277471, "med": 0.0029275433, "win": 0.5454545455, "yrs": 11, "pw": 1.0, "pm": 0.5752813534}, {"m": 11, "avg": -0.0352761101, "med": -0.0102072379, "win": 0.3636363636, "yrs": 11, "pw": 0.548828125, "pm": 0.0909599797}, {"m": 12, "avg": -0.028369113, "med": -0.0335051546, "win": 0.2727272727, "yrs": 11, "pw": 0.2265625, "pm": 0.1268821795}];
+  const sig = d => (d.pw < 0.1) || (d.pm < 0.1);
+  const pct = (x, dp=2) => (x >= 0 ? "+" : "") + (x*100).toFixed(dp) + "%";
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const el = (n, a={}) => { const e = document.createElementNS(SVGNS, n);
+    for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  function draw() {
+    const svg = document.getElementById("chart"); svg.textContent = "";
+    const W=720,H=380,padL=52,padR=16,padT=24,padB=40;
+    const plotW=W-padL-padR, plotH=H-padT-padB;
+    const maxAbs = Math.max(...DATA.map(d => Math.abs(d.avg))) * 1.12 || 0.01;
+    const zeroY = padT + plotH/2;
+    const yOf = v => zeroY - (v/maxAbs)*(plotH/2);
+    const band = plotW/DATA.length, bw = Math.min(38, band*0.62);
+    const upC=css("--up"),downC=css("--down"),hair=css("--hair"),hairS=css("--hair-strong"),
+          ink3=css("--ink-3"),ink=css("--ink"),accent=css("--accent"),faded=css("--faded")||0.3;
+    [maxAbs/2,0,-maxAbs/2].forEach(v => {
+      const y=yOf(v);
+      svg.appendChild(el("line",{x1:padL,y1:y,x2:W-padR,y2:y,
+        stroke:v===0?hairS:hair,"stroke-width":v===0?1.3:1,"stroke-dasharray":v===0?"0":"3 4"}));
+      const t=el("text",{x:padL-8,y:y+4,"text-anchor":"end","font-size":11,fill:ink3});
+      t.textContent=pct(v,1); svg.appendChild(t);
+    });
+    DATA.forEach((d,i) => {
+      const cx=padL+band*i+band/2, x=cx-bw/2, up=d.avg>=0;
+      const y=up?yOf(d.avg):zeroY, h=Math.max(1.5,Math.abs(yOf(d.avg)-zeroY)), isSig=sig(d);
+      const r=el("rect",{x,y,width:bw,height:h,rx:4,fill:up?upC:downC,
+        opacity:isSig?1:faded,"data-i":i,class:"bar",tabindex:0});
+      r.style.cursor="pointer"; r.style.transition="opacity .12s"; svg.appendChild(r);
+      if (isSig) {
+        const ly=up?y-8:y+h+16;
+        const star=el("text",{x:cx,y:up?y-20:y+h+30,"text-anchor":"middle","font-size":13,fill:accent});
+        star.textContent="★"; svg.appendChild(star);
+        const val=el("text",{x:cx,y:ly,"text-anchor":"middle","font-size":11.5,"font-weight":700,fill:up?upC:downC});
+        val.textContent=pct(d.avg,1); svg.appendChild(val);
+      }
+      const mt=el("text",{x:cx,y:H-padB+22,"text-anchor":"middle","font-size":12,
+        fill:isSig?ink:ink3,"font-weight":isSig?700:400});
+      mt.textContent=d.m+"月"; svg.appendChild(mt);
+    });
+    const tip=document.getElementById("tip");
+    const show=(e,i)=>{ const d=DATA[i];
+      tip.innerHTML=`<div class="t-m">${d.m} 月</div>`+
+        `<div class="row"><span>平均涨跌</span><b>${pct(d.avg)}</b></div>`+
+        `<div class="row"><span>中位涨跌</span><b>${pct(d.med)}</b></div>`+
+        `<div class="row"><span>上涨概率</span><b>${(d.win*100).toFixed(0)}%</b></div>`+
+        `<div class="row"><span>样本年数</span><b>${d.yrs} 年</b></div>`+
+        `<div class="row"><span>p(概率/均值)</span><b>${d.pw.toFixed(2)} / ${d.pm.toFixed(2)}</b></div>`+
+        `<div class="t-sig" style="color:${sig(d)?accent:ink3}">${sig(d)?"★ 统计显著（p<0.1）":"未通过显著性检验"}</div>`;
+      tip.style.opacity=1; const rc=tip.getBoundingClientRect();
+      let px=(e.clientX||0)+14, py=(e.clientY||0)+14;
+      if (px+rc.width>innerWidth) px=e.clientX-rc.width-14;
+      if (py+rc.height>innerHeight) py=e.clientY-rc.height-14;
+      tip.style.left=px+"px"; tip.style.top=py+"px";
+    };
+    const hide=()=>{ tip.style.opacity=0; };
+    svg.querySelectorAll(".bar").forEach(b => {
+      const i=+b.getAttribute("data-i");
+      b.addEventListener("mousemove",e=>show(e,i));
+      b.addEventListener("mouseleave",hide);
+      b.addEventListener("focus",()=>{ const bb=b.getBoundingClientRect();
+        show({clientX:bb.left+bb.width/2,clientY:bb.top},i); });
+      b.addEventListener("blur",hide);
+    });
+  }
+  function table() {
+    const tb=document.querySelector("#tbl tbody");
+    DATA.forEach(d => {
+      const tr=document.createElement("tr"), isSig=sig(d);
+      tr.className=(isSig?"sig ":"")+(isSig?"":"dim");
+      const cls=d.avg>=0?"up":"down";
+      tr.innerHTML=`<td>${d.m} 月</td>`+
+        `<td class="pos ${cls}">${pct(d.avg)}</td>`+
+        `<td>${pct(d.med)}</td>`+
+        `<td>${(d.win*100).toFixed(0)}%</td>`+
+        `<td>${d.yrs} 年</td>`+
+        `<td>${d.pw.toFixed(2)}</td>`+
+        `<td>${d.pm.toFixed(2)}</td>`;
+      tb.appendChild(tr);
+    });
+  }
+  draw(); table();
+  new MutationObserver(draw).observe(document.documentElement,
+    {attributes:true, attributeFilter:["data-theme"]});
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+</script>
+</body>
+</html>

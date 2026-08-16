@@ -1,0 +1,12 @@
+pandas>=2.0.0
+numpy>=1.22,<2.0
+panda-data>=0.0.9
+python-dotenv>=1.0.0
+python-snappy>=0.7.3
+requests>=2.28.0
+PyYAML>=6.0
+zstandard>=0.22.0
+duckdb
+pyarrow
+yfinance>=0.1.70
+feedparser>=6.0.0

@@ -1,0 +1,18 @@
+---
+description: Use when working with the F5 commodity futures member-position concentration QuantSkills skill.
+globs:
+  - "**/*"
+alwaysApply: false
+---
+
+# Cursor Runtime Entry
+
+Read `SKILL.md` first.
+
+Use `alpha-f5-member-position-concentration/SKILL.md` for development,
+validation and backtesting. Use
+`alpha-f5-member-position-concentration-production/SKILL.md` only for read-only
+access to `database.parquet`.
+
+Do not commit credentials. Do not present factor output as investment advice,
+return promises, or official endorsement.

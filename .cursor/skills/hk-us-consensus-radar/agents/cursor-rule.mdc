@@ -1,0 +1,23 @@
+---
+description: Use the HK/US Consensus Radar skill for Hong Kong and US sell-side analyst rating, target-price upside, growth, and revision snapshots.
+alwaysApply: false
+---
+
+# HK/US Consensus Radar Skill
+
+When the user asks for Hong Kong or US analyst consensus, sell-side ratings, rating distribution, target-price upside, long-term growth expectations, consensus revisions, buy/sell recommendation counts, or a Hong Kong / US analyst-consensus report, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/hk-us-consensus-radar
+```
+
+Workflow:
+
+1. Read `.cursor/skills/hk-us-consensus-radar/SKILL.md`.
+2. For routing, metric definitions, market-split and suffix notes, report format, empty-data handling, or QA, also read `.cursor/skills/hk-us-consensus-radar/references/consensus-playbook.md`.
+3. Validate generated reports with `.cursor/skills/hk-us-consensus-radar/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for exact method contracts and which `_week`/`_month` suffixes exist before any real API call.
+5. Use the correct method family per market (HK `_consensus`, US `_estimate`); state every upside's target-price source and current-price anchor date; report coverage depth; never mix HK and US without a market/currency label.
+6. Present consensus as analyst opinion, not a price forecast or company guidance. Do not invent ratings, target prices, symbols, credentials, or investment advice.

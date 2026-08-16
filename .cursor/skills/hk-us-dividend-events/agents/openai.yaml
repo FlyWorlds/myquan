@@ -1,0 +1,4 @@
+interface:
+  display_name: "HK-US Dividend Events"
+  short_description: "Monitor HK/U.S. dividend events, yields, and DRIP scenarios."
+  default_prompt: "Use $hk-us-dividend-events to generate a 60-day HK/U.S. dividend event calendar."

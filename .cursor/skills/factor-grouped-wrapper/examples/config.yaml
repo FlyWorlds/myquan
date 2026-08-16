@@ -1,0 +1,94 @@
+data:
+  factor_bank: /path/to/alpha191.parquet
+  external_factor_bank: /path/to/alpha101_factormad.parquet
+  market_data_root: /path/to/BackTestData_pq
+  initial_factors: null
+  external_factors: null
+
+split:
+  train_start: "2010-01-04"
+  train_end: "2021-12-31"
+  valid_start: "2022-01-01"
+  valid_end: "2022-12-31"
+  oos_start: "2023-01-01"
+  oos_end: "2026-01-31"
+
+label:
+  execution_lag: 1
+  horizon: 1
+
+preprocess:
+  min_factor_coverage: 0.90
+  winsor_lower: 0.01
+  winsor_upper: 0.99
+  cross_sectional_zscore: true
+  fill_value: 0.0
+  min_assets_per_date: 500
+
+model:
+  type: lgbm
+  n_jobs: 16
+  params:
+    objective: regression
+    num_leaves: 63
+    max_depth: 6
+    learning_rate: 0.0504603597283182
+    n_estimators: 300
+    min_child_samples: 1000
+    subsample: 0.8400163011181102
+    subsample_freq: 1
+    colsample_bytree: 0.6175215063148914
+    reg_alpha: 0.003721450126752271
+    reg_lambda: 4.9203396163854345
+    min_split_gain: 0.0
+    force_col_wise: true
+    random_state: 42
+    verbose: -1
+
+grouping:
+  seeds: [42, 2026, 20260730]
+  source_prefixes: ["alpha191_", "alpha101_", "factormad_"]
+  backward_stages:
+    - name: coarse
+      target_group_count: 12
+    - name: refine
+      group_size: 10
+    - name: singleton
+      group_size: 1
+      enter_when_factor_count_at_most: 30
+  forward_group_size: 10
+
+selection:
+  primary_metric: mean_ic
+  min_delta: 0.001
+  forward_enabled: true
+
+# To optimize validation-period hedged Sharpe instead, use:
+# primary_metric: sharpe
+# min_delta: 0.05
+
+backtest:
+  skill_root: null
+  python_executable: null
+  strategy: long_only_equal_weight
+  init_cash: 100000000
+  search_savemode: 2
+  final_savemode: 3
+  reverse: false
+  overrides:
+    longx: 200
+    stock_pool: whole
+    trade_price_type: twap
+    buy_sell_shift: 1
+    transaction: 1.4
+    benchmark: benchmark
+    keep: 0.8
+    turnover_mode: flex
+
+runtime:
+  output_root: ./runs
+  cache_root: ./cache
+  candidate_workers: 1
+  seed_workers: 1
+  backtest_threads: 1
+  preload_features: false

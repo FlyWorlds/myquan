@@ -1,0 +1,16 @@
+---
+description: Use ag-futures-seasonality to calculate and interpret statistically tested monthly patterns for Chinese agricultural futures.
+alwaysApply: false
+---
+
+# Agricultural Futures Seasonality
+
+When the user asks about seasonal patterns, strong or weak months, crop-cycle
+timing, or seasonality-based research for Chinese agricultural futures, read
+`.cursor/skills/ag-futures-seasonality/SKILL.md` and follow its workflow.
+
+Read `.cursor/skills/ag-futures-seasonality/references/crop-calendar.md` for
+crop-cycle interpretation and `references/source_boundary.md` for evidence
+limits. Use `scripts/seasonality.py` for deterministic calculations. Always
+show the data window, sample years, significance, and multiple-testing caveat;
+do not turn historical seasonality into a buy/sell signal.

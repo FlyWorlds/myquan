@@ -1,0 +1,25 @@
+---
+description: Use the Klarman Special Situations skill for A-share private-placement unlocks, restructurings and backdoor listings, spin-offs, distressed turnarounds, event-driven research priority, risk watchlists, and fail-closed underwriting.
+alwaysApply: false
+---
+
+# Klarman Special Situations Skill
+
+When the user asks about 克拉曼特殊情况投资, 定增解禁, 重组借壳, 分拆上市, 困境反转, special situations, event-driven research, or margin-of-safety underwriting, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/klarman-special-situations
+```
+
+Workflow:
+
+1. Read `.cursor/skills/klarman-special-situations/SKILL.md` completely.
+2. Verify Panda Data method parameters and fields against `references/api_guide.md` before making real API calls; never guess signatures.
+3. Keep real-time decision-date evidence separate from historical event-date replay evidence.
+4. Produce research priority and independent risk observations separately; every digest card must keep `not_trade_signal=true`.
+5. Treat private-placement unlocks as supply risk, not opportunity candidates. Treat missing `get_restricted_list` coverage as `quota_or_rate_limit` plus `coverage_gap`, never as zero unlocks.
+6. Preserve fail-closed underwriting: no core gate may be skipped or offset by a research score.
+7. Return Chinese analysis by default with data dates, methods, score breakdowns, evidence gaps, risks, and next actions.
+8. Do not invent interfaces, credentials, missing observations, security mappings, valuations, trading instructions, position sizes, or return claims.

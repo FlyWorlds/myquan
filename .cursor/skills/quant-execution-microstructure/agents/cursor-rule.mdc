@@ -1,0 +1,11 @@
+---
+description: "Apply the Quant Execution Microstructure skill to realistic, auditable execution work."
+globs:
+alwaysApply: true
+---
+
+# Quant Execution Microstructure
+
+Read `SKILL.md` before making changes. Preserve event-time ordering, parent-child order lineage, realistic partial fills, queue and latency assumptions, side-correct cost signs, pre-trade controls, and post-trade reconciliation.
+
+Default to historical simulation or paper trading. Do not submit, cancel, or modify live orders, promise returns, or present output as personalized investment advice.

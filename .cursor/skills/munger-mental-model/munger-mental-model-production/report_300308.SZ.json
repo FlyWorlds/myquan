@@ -1,0 +1,77 @@
+{
+  "symbol": "300308.SZ",
+  "trade_date": "20260710",
+  "dim_scores": {
+    "fin": 100.0,
+    "comp": 71.82404034743627,
+    "incentive": 72.816,
+    "psych": 100.0,
+    "neg": 100.0
+  },
+  "dim_passed": {
+    "fin": true,
+    "comp": true,
+    "incentive": true,
+    "psych": true,
+    "neg": true
+  },
+  "sub_scores": {
+    "fin": {
+      "roe_value": 44.16141328893693,
+      "roe_median": 3.1293680202089353,
+      "gm_value": 42.03563171482985,
+      "gm_median": 28.03598228749575,
+      "ocf_value": 10896126160.03,
+      "ocf_median": 84834662.60499999,
+      "roe_vs_median": 1.0,
+      "gm_vs_median": 1.0,
+      "ocf_positive_and_vs_median": 1.0
+    },
+    "comp": {
+      "roe_value": 44.16141328893693,
+      "gm_value": 42.03563171482985,
+      "peer_count": 86,
+      "valid_roe_count": 86,
+      "valid_gm_count": 83,
+      "roe_percentile": 98.83720930232558,
+      "gm_percentile": 80.72289156626506,
+      "concentration_bonus": 0.0
+    },
+    "incentive": {
+      "mgmt_trade_score": 60.0,
+      "pledge_score": 98.448,
+      "controlling_trade_score": 60.0
+    },
+    "psych": {
+      "meeting_count": 207,
+      "institute_count": 160,
+      "meeting_score": 50.0,
+      "institute_score": 50.0
+    },
+    "neg": {
+      "veto_count": 0,
+      "audit_opinion": "unqualified_opinion",
+      "audit_agency": "普华永道中天会计师事务所(特殊普通合伙)",
+      "has_st_status": false,
+      "max_pledge_ratio": 18.8614,
+      "pledge_limit": 0.5,
+      "has_controlling_sell": false
+    }
+  },
+  "veto_flags": [],
+  "data_flags": [
+    "related_party: data_unavailable",
+    "qa_sentiment: not_available"
+  ],
+  "radar_scores": [
+    100.0,
+    71.82404034743627,
+    72.816,
+    100.0,
+    100.0
+  ],
+  "high_confidence": true,
+  "verdict": "pass",
+  "data_version": "real-v1",
+  "update_time": "2026-07-11 16:35:29"
+}

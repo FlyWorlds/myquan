@@ -1,0 +1,30 @@
+{
+  "name": "skill-audit-opinion-scanner",
+  "version": "0.2.0",
+  "description": "多维财务分析系统。涵盖审计意见规则扫描（事后）+ XGBoost ML预测（事前）、25项财务科目+15比率缓存、行业对标、5维评分、8段深度分析、综合风险检测。",
+  "type": "build",
+  "category": "fundamental",
+  "entry": "scripts/scan.py",
+  "data_sources": [
+    "get_audit_opinion",
+    "get_index_weights",
+    "get_stock_detail",
+    "get_last_trade_date",
+    "get_fina_reports",
+    "get_industry_constituents"
+  ],
+  "outputs": ["csv", "markdown", "parquet", "json"],
+  "requirements": ["pandas>=2.0", "xgboost>=2.0", "scikit-learn>=1.3"],
+  "tags": ["audit", "risk", "fundamental", "csi1000", "a-stock", "xgboost", "ml-prediction"],
+  "metrics": {
+    "tests": 120,
+    "ml_auc": 0.788,
+    "coverage_stocks": 1300,
+    "coverage_quarters": 20
+  },
+  "roadmap": {
+    "v0.1": "✅ 规则过滤 - 审计意见 → 风险等级映射",
+    "v0.2": "✅ ML预测 - XGBoost 45维特征预测非标意见概率 (AUC 0.788)",
+    "v0.3": "LLM语义 - 审计报告全文深度分析"
+  }
+}

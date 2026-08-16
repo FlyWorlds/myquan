@@ -1,0 +1,9 @@
+---
+description: Use the HK/US Consensus Revision Radar skill for PandaData-based Hong Kong or US cross-horizon consensus revision analysis, including the revision trajectory matrix, rule-based consensus state machine, and auditable offline HTML report.
+globs: []
+alwaysApply: false
+---
+
+Before handling a task covered by this skill, read and follow [../SKILL.md](../SKILL.md).
+
+Use only the root skill instructions as the source of truth. After reading it, use bundled `scripts/` and `references/` only as directed there.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "港美股一致预期修订雷达：轨迹矩阵与状态机"
+  short_description: "修订轨迹矩阵、状态机与可审计 HTML 雷达"
+  default_prompt: "使用 $skill-hk-us-consensus-revision-radar 生成港美股一个月修订雷达，展示修订轨迹矩阵与一致预期状态机，并输出可审计离线 HTML 报告。"

@@ -1,0 +1,24 @@
+---
+description: Use the Buffett Moat Screener skill for point-in-time A-share or U.S. equity quality research, soft scoring, portfolio review, and retrospective diagnostics.
+alwaysApply: false
+---
+
+# Buffett Moat Screener Skill
+
+When the user asks for 巴菲特式选股, 护城河评分, 沪深 300 质量研究, A 股或美股长期持仓复核, 年度持仓记录, or related retrospective diagnostics, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/buffett-moat-screener
+```
+
+Workflow:
+
+1. Read `.cursor/skills/buffett-moat-screener/SKILL.md` and preserve its BUILD V2 input/output contract.
+2. Use the documented Panda Data interfaces or caller-supplied structured data; never guess fields, dates, or index membership.
+3. Default to continuous soft scoring unless the user explicitly requests the legacy hard-gate comparison.
+4. Keep point-in-time CSI 300 evidence separate from fixed-roster diagnostics and state survivor, coverage, and benchmark limitations.
+5. Treat bank gross margin as `N/A`; do not invent neutral scores for missing metrics.
+6. Keep credentials in environment variables and out of prompts, source files, logs, JSON, HTML, and Parquet.
+7. Return research evidence and review states only. Do not create orders, promise returns, or provide personalized investment advice.

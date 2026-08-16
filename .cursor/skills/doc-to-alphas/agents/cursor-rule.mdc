@@ -1,0 +1,30 @@
+---
+description: Use the Doc to Alphas skill to generate and validate OHLCV alpha factor expressions from document text.
+alwaysApply: false
+---
+
+# Doc to Alphas Skill
+
+When the user asks to generate alpha factors, stock-selection signals, or OHLCV
+factor expressions from a paper, report, market commentary, or other document
+text, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/doc-to-alphas
+```
+
+Workflow:
+
+1. Read `.cursor/skills/doc-to-alphas/SKILL.md`.
+2. Read `.cursor/skills/doc-to-alphas/references/alpha_ops.md` for the allowed
+   fields and functions.
+3. Generate alpha expressions with keys `name`, `expression`, `description`,
+   and `rationale`; do not use unsupported fields or functions.
+4. Save the generated alpha array as JSON.
+5. Validate with
+   `python .cursor/skills/doc-to-alphas/scripts/generate_alphas.py --alphas <file>`.
+6. Use `--correction-context` for failed expressions and retry up to 5 times.
+7. Report pass/fail details, assumptions, limitations, and the non-investment-advice
+   boundary.

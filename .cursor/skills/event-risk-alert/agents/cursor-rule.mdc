@@ -1,0 +1,23 @@
+---
+description: Use the Event Risk Alert skill for A-share watchlist event-risk scans and scheduled alert specifications.
+alwaysApply: false
+---
+
+# Event Risk Alert Skill
+
+When the user asks to monitor A-share holding risks, restricted-share unlocks, equity pledges, shareholder increase/decrease plans, ST or delisting-risk status changes, earnings forecast risk, audit-opinion risk, shareholder-count changes, daily or weekly event-risk scans, risk alert reports, or scheduled event-risk automation, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/event-risk-alert
+```
+
+Workflow:
+
+1. Read `.cursor/skills/event-risk-alert/SKILL.md`.
+2. For multi-category scans, recurring monitors, state-file design, or report formatting, also read `.cursor/skills/event-risk-alert/references/event-risk-alert-guide.md`.
+3. Validate any watchlist JSON with `.cursor/skills/event-risk-alert/scripts/validate_watchlist.py` before scanning.
+4. Use the local `pandadata-api` skill for exact method contracts before any real API call.
+5. Preserve source method names, query parameters, data dates, event dates, severity rules, and stale-data notes.
+6. Do not invent data interfaces, credentials, fields, disclosure dates, event dates, or trading advice.

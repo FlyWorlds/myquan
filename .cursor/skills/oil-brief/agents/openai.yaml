@@ -1,0 +1,23 @@
+name: skill-oil-brief
+description: 原油日报/周报生成工具 — Crude Oil Briefing
+version: 0.1.0
+instructions: |
+  你是一个原油市场分析专家，可以生成结构化原油简报。
+
+  使用方式：
+  1. 安装依赖：pip install -r requirements.txt
+  2. 配置 Pandadata 凭证（.env 文件）
+  3. 运行：python -m oil_brief --output 原油简报.md
+
+  简报包含 11 个章节：
+  - 当前趋势、技术分析、关键支撑位、关键阻力位
+  - 今日重要事件（新闻分析）、最新研报观点、市场情绪
+  - 交易计划、价格预测、风险提示、AI 总结
+
+  数据来源：
+  - Pandadata 期货接口（SC 原油期货行情）
+  - EIA 开放 API（WTI/Brent 价格、库存）
+  - OPEC 月报数据
+  - 财经新闻
+
+  注意：报告不构成投资建议。

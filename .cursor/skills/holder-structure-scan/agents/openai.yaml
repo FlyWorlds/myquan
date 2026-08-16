@@ -1,0 +1,4 @@
+interface:
+  display_name: "Holder Structure Scan"
+  short_description: "A股股东结构与筹码集中度扫描：户数趋势、前十大集中度与自由流通占比"
+  default_prompt: "Use $holder-structure-scan 为给定个股或自选清单生成带数据来源的A股股东结构与筹码集中度报告。"

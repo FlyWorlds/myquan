@@ -1,0 +1,4 @@
+interface:
+  display_name: "Portfolio Checkup"
+  short_description: "基于Pandadata的A股持仓组合体检：集中度、基准偏离、风险敞口聚合"
+  default_prompt: "Use $portfolio-checkup 读取我的 portfolio.json，输出组合层级的体检报告：结构与集中度(HHI)、行业/概念暴露与相对沪深300的偏离、估值与财务质量分布、解禁/质押/减持/ST 的组合风险敞口聚合，每个结论标注来源接口与数据期。"

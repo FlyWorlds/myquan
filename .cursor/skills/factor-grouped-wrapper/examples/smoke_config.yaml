@@ -1,0 +1,86 @@
+data:
+  factor_bank: ./smoke_data/pool_a.parquet
+  external_factor_bank: ./smoke_data/pool_b.parquet
+  market_data_root: ./smoke_data/BackTestData_pq
+  initial_factors: null
+  external_factors: null
+
+split:
+  train_start: "2020-01-02"
+  train_end: "2020-01-17"
+  valid_start: "2020-01-20"
+  valid_end: "2020-01-29"
+  oos_start: "2020-01-30"
+  oos_end: "2020-02-05"
+
+label:
+  execution_lag: 1
+  horizon: 1
+
+preprocess:
+  min_factor_coverage: 0.90
+  winsor_lower: 0.01
+  winsor_upper: 0.99
+  cross_sectional_zscore: true
+  fill_value: 0.0
+  min_assets_per_date: 8
+
+model:
+  type: lgbm
+  n_jobs: 1
+  params:
+    objective: regression
+    num_leaves: 7
+    max_depth: 3
+    learning_rate: 0.1
+    n_estimators: 15
+    min_child_samples: 2
+    subsample: 1.0
+    colsample_bytree: 1.0
+    reg_alpha: 0.0
+    reg_lambda: 0.1
+    force_col_wise: true
+    deterministic: true
+    random_state: 42
+    verbose: -1
+
+grouping:
+  seeds: [7, 17]
+  source_prefixes: ["alpha191_", "alpha101_", "factormad_"]
+  backward_stages:
+    - name: coarse
+      target_group_count: 2
+    - name: singleton
+      group_size: 1
+      enter_when_factor_count_at_most: 4
+  forward_group_size: 2
+
+selection:
+  primary_metric: mean_ic
+  min_delta: 0.0005
+  forward_enabled: true
+
+backtest:
+  skill_root: null
+  python_executable: null
+  strategy: long_only_equal_weight
+  init_cash: 1000000
+  final_savemode: 3
+  reverse: false
+  overrides:
+    longx: 5
+    stock_pool: whole
+    trade_price_type: twap
+    buy_sell_shift: 1
+    transaction: 1.4
+    benchmark: benchmark
+    keep: 0.8
+    turnover_mode: flex
+
+runtime:
+  output_root: ../.smoke/runs
+  cache_root: ../.smoke/cache
+  candidate_workers: 1
+  seed_workers: 1
+  backtest_threads: 1
+  preload_features: false

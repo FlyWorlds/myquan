@@ -1,0 +1,33 @@
+metadata:
+  organization: QuantSkills
+  organization_url: https://github.com/quantskills
+  repository: skill-factor-grouped-wrapper
+  repository_url: https://github.com/quantskills/skill-factor-grouped-wrapper
+  project_type: skill
+  collection: factor-selection
+  category: factor
+  tags:
+    - factor-selection
+    - grouped-wrapper
+    - backward-elimination
+    - forward-selection
+    - lightgbm
+    - pearson-ic
+    - factor-backtest
+    - sharpe
+  platforms:
+    - codex
+    - claude-code
+    - cursor
+    - hermes
+    - openclaw
+  language: zh-en
+  license: GPL-3.0-only
+  status: active
+  validation_level: runnable
+  requires:
+    - skill-factor-backtest
+  maintainer: X-Tech-group
+  maintainer_type: community
+  summary_zh: 使用 LightGBM 和验证期 Pearson IC 或扣费对冲 Sharpe 对大规模量化因子池执行可恢复的分组后向剔除与前向加入，并对冻结集合进行样本外回测比较。
+  summary_en: Run resumable grouped backward elimination and forward inclusion with LightGBM validation Pearson IC or hedged Sharpe, then compare frozen OOS backtests.

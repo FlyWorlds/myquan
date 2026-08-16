@@ -1,0 +1,13 @@
+---
+description: Scan A-share market, sector, capital-flow, and stock-specific risk signals.
+globs:
+alwaysApply: false
+---
+
+# A-Share Market Risk Radar
+
+Read `../SKILL.md` before acting. Follow its PandaData-only source boundary, risk-level definitions, missing-data handling, and reporting requirements.
+
+Use the programs in `../scripts/` rather than reimplementing the scans. Credentials must come from documented environment variables and must never be written to code, output, logs, or version control.
+
+Treat every result as research material. Separate observations from inference, preserve `UNKNOWN` states, and never promise returns, provide personalized investment advice, issue automatic position instructions, or imply official QuantSkills certification.

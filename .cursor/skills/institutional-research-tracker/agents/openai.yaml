@@ -1,0 +1,4 @@
+interface:
+  display_name: "Institutional Research Tracker"
+  short_description: "基于Pandadata get_investor_activity 的A股机构调研热度监控：热度榜·参与广度·机构类型"
+  default_prompt: "Use $institutional-research-tracker 为给定窗口或个股生成带数据来源的A股机构调研热度报告。"

@@ -1,0 +1,78 @@
+{
+  "symbol": "300502.SZ",
+  "trade_date": "",
+  "dim_scores": {
+    "fin": 100.0,
+    "comp": 74.21686746987952,
+    "incentive": 60.0,
+    "psych": 100.0,
+    "neg": 100.0
+  },
+  "dim_passed": {
+    "fin": true,
+    "comp": true,
+    "incentive": true,
+    "psych": true,
+    "neg": true
+  },
+  "sub_scores": {
+    "fin": {
+      "roe_value": 72.62126582511583,
+      "roe_median": 3.1293680202089353,
+      "gm_value": 47.80562859494121,
+      "gm_median": 28.03598228749575,
+      "ocf_value": 7701234651.0,
+      "ocf_median": 84834662.60499999,
+      "roe_vs_median": 1.0,
+      "gm_vs_median": 1.0,
+      "ocf_positive_and_vs_median": 1.0
+    },
+    "comp": {
+      "roe_value": 72.62126582511583,
+      "gm_value": 47.80562859494121,
+      "peer_count": 86,
+      "valid_roe_count": 86,
+      "valid_gm_count": 83,
+      "roe_percentile": 100.0,
+      "gm_percentile": 85.54216867469879,
+      "concentration_bonus": 0.0
+    },
+    "incentive": {
+      "mgmt_trade_score": 60.0,
+      "pledge_score": 60.0,
+      "controlling_trade_score": 60.0
+    },
+    "psych": {
+      "meeting_count": 337,
+      "institute_count": 314,
+      "meeting_score": 50.0,
+      "institute_score": 50.0
+    },
+    "neg": {
+      "veto_count": 0,
+      "audit_opinion": null,
+      "audit_agency": null,
+      "has_st_status": false,
+      "max_pledge_ratio": null,
+      "pledge_limit": 0.5,
+      "has_controlling_sell": false
+    }
+  },
+  "veto_flags": [],
+  "data_flags": [
+    "pledge: data_unavailable",
+    "related_party: data_unavailable",
+    "qa_sentiment: not_available"
+  ],
+  "radar_scores": [
+    100.0,
+    74.21686746987952,
+    60.0,
+    100.0,
+    100.0
+  ],
+  "high_confidence": true,
+  "verdict": "pass",
+  "data_version": "real-v1",
+  "update_time": "2026-08-05 22:29:01"
+}

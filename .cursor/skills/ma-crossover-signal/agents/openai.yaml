@@ -1,0 +1,4 @@
+interface:
+  display_name: "均线交叉信号"
+  short_description: "单标的快慢均线金叉/死叉、趋势状态与乖离率，自动路由 A股/港股/美股"
+  default_prompt: "Use $ma_crossover_signal to compute the fast/slow moving-average crossover for this symbol: report trend state, the latest golden/death cross with its date and bars-ago, MA gap, and price bias, then reproduce the disclaimer."

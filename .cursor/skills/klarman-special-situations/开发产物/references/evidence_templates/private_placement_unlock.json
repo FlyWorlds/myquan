@@ -1,0 +1,50 @@
+{
+  "event_family_id": "placement-000001SZ-20250320",
+  "revision_id": "rev-20250320-001",
+  "symbol": "000001.SZ",
+  "situation_type": "private_placement_unlock",
+  "facts": {
+    "issue_price": 8.50,
+    "issue_shares": 200000000,
+    "listing_date": "20250320",
+    "unlock_date": "20260320",
+    "unlock_shares": 200000000,
+    "float_shares": 1500000000,
+    "market_price_as_of": 12.00
+  },
+  "atoms": [
+    {
+      "atom_id": "atom-issue-price-000001SZ",
+      "field_name": "issue_price",
+      "value": 8.50,
+      "unit": "CNY/股",
+      "currency": "CNY",
+      "basis": "定增发行结果公告表格",
+      "source_type": "exchange_disclosure",
+      "source_ref": "深交所定增结果公告 2025-XXX 号",
+      "source_record_id": "SZE-2025-XXX",
+      "available_date": "20250320",
+      "content_hash": "PLACEHOLDER_SHA256_HEX",
+      "extraction_method": "provider",
+      "evidence_kind": "structured_fact",
+      "core": true
+    },
+    {
+      "atom_id": "atom-unlock-schedule-000001SZ",
+      "field_name": "unlock_date",
+      "value": "20260320",
+      "unit": "YYYYMMDD",
+      "currency": null,
+      "basis": "限售股解禁公告",
+      "source_type": "exchange_disclosure",
+      "source_ref": "深交所限售股解禁提示性公告",
+      "source_record_id": "SZE-2026-YYY",
+      "available_date": "20260228",
+      "content_hash": "PLACEHOLDER_SHA256_HEX",
+      "extraction_method": "provider",
+      "evidence_kind": "structured_fact",
+      "core": true
+    }
+  ],
+  "notes": "定增浮盈 = (12.00 - 8.50) / 8.50 = 41.2%，超过 20% 警报阈值；解禁量占流通盘 13.3%。此为 risk_watch 类事件，不是套利机会——发行价是参与者成本，二级市场买方无此价格。"
+}

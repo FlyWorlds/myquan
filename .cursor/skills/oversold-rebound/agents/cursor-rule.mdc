@@ -1,0 +1,13 @@
+---
+description: Assess A-share oversold-rebound conditions and screen index constituents.
+globs:
+alwaysApply: false
+---
+
+# A-Share Oversold Rebound
+
+Read `../SKILL.md` before acting. Follow its PandaData-only source boundary, point-in-time constraints, evidence grading, market gates, missing-data treatment, and reporting requirements.
+
+Use the programs in `../scripts/` rather than reimplementing calculations. Load only the reference files required for the current request. Credentials must come from environment variables or the documented local credential file and must never be written to code, output, or version control.
+
+Treat every result as research material. Never promise a rebound or return, provide personalized investment advice, recommend automatic trades, or imply official QuantSkills certification.

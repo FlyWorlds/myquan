@@ -1,0 +1,50 @@
+{
+  "pandadata": {
+    "base_url": "http://pandadata.pandaaiquant.com",
+    "username": "",
+    "password": ""
+  },
+  "scan": {
+    "min_market_cap": 30,
+    "min_turnover": 5000,
+    "top_n": 20
+  },
+  "patterns": {
+    "ma_golden_cross": true,
+    "macd_golden_cross": true,
+    "bullish_alignment": true,
+    "volume_breakout": true,
+    "bollinger_breakout": true,
+    "hammer": true,
+    "morning_star": true,
+    "rsi_oversold": true
+  },
+  "flow": {
+    "main_inflow_rate_min": 0.05,
+    "super_large_positive": true
+  },
+  "llm": {
+    "model": "claude-sonnet-4-6",
+    "max_tokens": 1536
+  },
+  "output": {
+    "dir": "output"
+  },
+  "detector_weights": {
+    "ma_golden_cross": 2,
+    "macd_golden_cross": 1,
+    "bullish_alignment": 1,
+    "volume_breakout": 3,
+    "bollinger_breakout": 3,
+    "hammer": 1,
+    "morning_star": 3,
+    "rsi_oversold": 1
+  },
+  "backtest": {
+    "last_run": "2026-06-30",
+    "n_stocks": 1000,
+    "n_records": 233894,
+    "method": "Spearman rank IC (5d forward return)",
+    "note": "Weights calibrated against real cache data (2025-11-03 ~ 2026-06-29). Re-run after each quarter."
+  }
+}

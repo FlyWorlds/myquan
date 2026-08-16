@@ -1,0 +1,4 @@
+interface:
+  display_name: "Block Trade Radar"
+  short_description: "基于Pandadata get_block_trade + get_stock_daily 的A股大宗交易折溢价雷达：折溢价分布·机构专用方向·成交额/折价榜·对倒式提示"
+  default_prompt: "Use $block-trade-radar 为给定窗口或个股生成带数据来源的A股大宗交易折溢价报告。"

@@ -1,0 +1,20 @@
+# OpenAI / Codex adapter for skill-qbti
+# Keep in sync with SKILL.md; this file only re-declares the entry points for
+# Codex-style skill systems that do not read SKILL.md frontmatter directly.
+name: qbti
+description: >-
+  Turn a non-professional user's investing personality into concrete factor directions
+  and strategy parameters through a fun five-part quiz, then hand off to the QuantSkills
+  factor libraries and backtest pipeline with plain-language explanations. Translation
+  only — never investment advice.
+entrypoint: SKILL.md
+references:
+  - references/question_bank.md
+  - references/preference_mapping.yaml
+  - references/profile_schema.md
+  - references/disclaimer_template.md
+scripts:
+  - scripts/derive_profile.py
+examples:
+  - examples/sample_run
+license: GPL-3.0

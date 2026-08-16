@@ -1,0 +1,480 @@
+{
+  "factor_id": "A06",
+  "source": "PandaData fixed raw snapshot",
+  "data_version": "pandadata-lhb-hotmoney-executable-open-a06-v1",
+  "factor_date_min": "2023-06-01",
+  "factor_date_max": "2026-06-04",
+  "rows": 33056,
+  "release_pass": true,
+  "standard_cost_0_003": {
+    "evaluation_rule": "signal after t close; buy t+1 open; skip suspended/open-limit-up; sell t+2 close",
+    "round_trip_cost": 0.003,
+    "limit_buffer": 0.001,
+    "rows": 30565,
+    "days": 718,
+    "rank_ic": 0.06663613529520854,
+    "rank_icir": 0.3167349079815108,
+    "train_rank_ic": 0.09539609227479823,
+    "test_rank_ic": 0.03771550816489487,
+    "worst_year_rank_ic": -0.001314301483929591,
+    "split_date": "2024-11-25",
+    "buy_signal_count": 31,
+    "buy_executable_count": 17,
+    "buy_blocked_count": 14,
+    "buy_active_days": 17,
+    "buy_mean": 0.04015127055630777,
+    "buy_win_rate": 0.6470588235294118,
+    "buy_ir": 0.8727977908672551,
+    "buy_mdd": -0.24224800079351394,
+    "buy_turnover": 0.04602510460251046,
+    "buy_train_mean": 0.005452980954136187,
+    "buy_test_mean": 0.06444007327782787,
+    "buy_worst_year_mean": 0.0100498358878027,
+    "buy_yearly_mean": {
+      "2024": 0.01913151548064877,
+      "2025": 0.11754715414504557,
+      "2026": 0.0100498358878027
+    },
+    "signal_samples": [
+      {
+        "trade_date": "2026-03-27",
+        "ts_code": "600310.SH",
+        "factor_value": 0.976204,
+        "signal": "buy",
+        "entry_open": 6.99,
+        "exit_close": 6.34,
+        "forward_return": -0.09599,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-03-24",
+        "ts_code": "603843.SH",
+        "factor_value": 2.082286,
+        "signal": "buy",
+        "entry_open": 9.15,
+        "exit_close": 9.28,
+        "forward_return": 0.011208,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-03-16",
+        "ts_code": "600227.SH",
+        "factor_value": 1.741918,
+        "signal": "buy",
+        "entry_open": 4.6,
+        "exit_close": 5.0,
+        "forward_return": 0.083957,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-03-05",
+        "ts_code": "002498.SZ",
+        "factor_value": 2.360434,
+        "signal": "buy",
+        "entry_open": 9.54,
+        "exit_close": 9.96,
+        "forward_return": 0.041025,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-01-28",
+        "ts_code": "600916.SH",
+        "factor_value": 1.070967,
+        "signal": "buy",
+        "entry_open": 13.5,
+        "exit_close": 14.68,
+        "forward_return": 0.084407,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-11-24",
+        "ts_code": "688227.SH",
+        "factor_value": 0.868901,
+        "signal": "buy",
+        "entry_open": 70.58,
+        "exit_close": 83.98,
+        "forward_return": 0.186855,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-09-26",
+        "ts_code": "688109.SH",
+        "factor_value": 0.427501,
+        "signal": "buy",
+        "entry_open": 84.82,
+        "exit_close": 100.6,
+        "forward_return": 0.183041,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-08-22",
+        "ts_code": "600246.SH",
+        "factor_value": 1.744064,
+        "signal": "buy",
+        "entry_open": 12.77,
+        "exit_close": 13.66,
+        "forward_return": 0.066695,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-08-08",
+        "ts_code": "688108.SH",
+        "factor_value": 1.221774,
+        "signal": "buy",
+        "entry_open": 22.68,
+        "exit_close": 25.11,
+        "forward_return": 0.104143,
+        "executable": true
+      },
+      {
+        "trade_date": "2025-05-26",
+        "ts_code": "603332.SH",
+        "factor_value": 1.113415,
+        "signal": "buy",
+        "entry_open": 18.77,
+        "exit_close": 21.0,
+        "forward_return": 0.115807,
+        "executable": true
+      }
+    ],
+    "layer_mean": {
+      "L1": -0.00667474730069465,
+      "L2": -0.006972818314836225,
+      "L3": -0.0028039734987022357,
+      "L4": -0.0023473916324518707,
+      "L5": -0.0006771059376258796
+    },
+    "layer_count": {
+      "L1": 5819,
+      "L2": 6120,
+      "L3": 6098,
+      "L4": 6120,
+      "L5": 6408
+    },
+    "long_short_mean": 0.005311506123330893,
+    "long_short_ir": 1.5846342294907578,
+    "long_short_mdd": -0.6567766182491193
+  },
+  "standard_checks": {
+    "sample_days": true,
+    "rank_ic": true,
+    "test_rank_ic": true,
+    "buy_samples": true,
+    "buy_mean": true,
+    "buy_win_rate": true,
+    "buy_train": true,
+    "buy_test": true,
+    "buy_worst_year": true,
+    "buy_mdd": true
+  },
+  "stress_cost_0_005": {
+    "evaluation_rule": "signal after t close; buy t+1 open; skip suspended/open-limit-up; sell t+2 close",
+    "round_trip_cost": 0.005,
+    "limit_buffer": 0.001,
+    "rows": 30565,
+    "days": 718,
+    "rank_ic": 0.06663613529520854,
+    "rank_icir": 0.3167349079815108,
+    "train_rank_ic": 0.09539609227479823,
+    "test_rank_ic": 0.03771550816489487,
+    "worst_year_rank_ic": -0.001314301483929591,
+    "split_date": "2024-11-25",
+    "buy_signal_count": 31,
+    "buy_executable_count": 17,
+    "buy_blocked_count": 14,
+    "buy_active_days": 17,
+    "buy_mean": 0.038151270556307765,
+    "buy_win_rate": 0.6470588235294118,
+    "buy_ir": 0.8343965841421263,
+    "buy_mdd": -0.24723299422389022,
+    "buy_turnover": 0.04602510460251046,
+    "buy_train_mean": 0.003452980954136185,
+    "buy_test_mean": 0.06244007327782787,
+    "buy_worst_year_mean": 0.008049835887802698,
+    "buy_yearly_mean": {
+      "2024": 0.017131515480648767,
+      "2025": 0.11554715414504557,
+      "2026": 0.008049835887802698
+    },
+    "signal_samples": [
+      {
+        "trade_date": "2026-03-27",
+        "ts_code": "600310.SH",
+        "factor_value": 0.976204,
+        "signal": "buy",
+        "entry_open": 6.99,
+        "exit_close": 6.34,
+        "forward_return": -0.09799,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-03-24",
+        "ts_code": "603843.SH",
+        "factor_value": 2.082286,
+        "signal": "buy",
+        "entry_open": 9.15,
+        "exit_close": 9.28,
+        "forward_return": 0.009208,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-03-16",
+        "ts_code": "600227.SH",
+        "factor_value": 1.741918,
+        "signal": "buy",
+        "entry_open": 4.6,
+        "exit_close": 5.0,
+        "forward_return": 0.081957,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-03-05",
+        "ts_code": "002498.SZ",
+        "factor_value": 2.360434,
+        "signal": "buy",
+        "entry_open": 9.54,
+        "exit_close": 9.96,
+        "forward_return": 0.039025,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-01-28",
+        "ts_code": "600916.SH",
+        "factor_value": 1.070967,
+        "signal": "buy",
+        "entry_open": 13.5,
+        "exit_close": 14.68,
+        "forward_return": 0.082407,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-11-24",
+        "ts_code": "688227.SH",
+        "factor_value": 0.868901,
+        "signal": "buy",
+        "entry_open": 70.58,
+        "exit_close": 83.98,
+        "forward_return": 0.184855,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-09-26",
+        "ts_code": "688109.SH",
+        "factor_value": 0.427501,
+        "signal": "buy",
+        "entry_open": 84.82,
+        "exit_close": 100.6,
+        "forward_return": 0.181041,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-08-22",
+        "ts_code": "600246.SH",
+        "factor_value": 1.744064,
+        "signal": "buy",
+        "entry_open": 12.77,
+        "exit_close": 13.66,
+        "forward_return": 0.064695,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-08-08",
+        "ts_code": "688108.SH",
+        "factor_value": 1.221774,
+        "signal": "buy",
+        "entry_open": 22.68,
+        "exit_close": 25.11,
+        "forward_return": 0.102143,
+        "executable": true
+      },
+      {
+        "trade_date": "2025-05-26",
+        "ts_code": "603332.SH",
+        "factor_value": 1.113415,
+        "signal": "buy",
+        "entry_open": 18.77,
+        "exit_close": 21.0,
+        "forward_return": 0.113807,
+        "executable": true
+      }
+    ],
+    "layer_mean": {
+      "L1": -0.008674747300694651,
+      "L2": -0.008972818314836225,
+      "L3": -0.004803973498702235,
+      "L4": -0.00434739163245187,
+      "L5": -0.002677105937625879
+    },
+    "layer_count": {
+      "L1": 5819,
+      "L2": 6120,
+      "L3": 6098,
+      "L4": 6120,
+      "L5": 6408
+    },
+    "long_short_mean": 0.005311506123330895,
+    "long_short_ir": 1.5846342294907583,
+    "long_short_mdd": -0.6567766182491188
+  },
+  "stress_checks": {
+    "sample_days": true,
+    "rank_ic": true,
+    "test_rank_ic": true,
+    "buy_samples": true,
+    "buy_mean": true,
+    "buy_win_rate": true,
+    "buy_train": true,
+    "buy_test": true,
+    "buy_worst_year": true,
+    "buy_mdd": true
+  },
+  "extreme_cost_0_010_information_only": {
+    "evaluation_rule": "signal after t close; buy t+1 open; skip suspended/open-limit-up; sell t+2 close",
+    "round_trip_cost": 0.01,
+    "limit_buffer": 0.001,
+    "rows": 30565,
+    "days": 718,
+    "rank_ic": 0.06663613529520854,
+    "rank_icir": 0.3167349079815108,
+    "train_rank_ic": 0.09539609227479823,
+    "test_rank_ic": 0.03771550816489487,
+    "worst_year_rank_ic": -0.001314301483929591,
+    "split_date": "2024-11-25",
+    "buy_signal_count": 31,
+    "buy_executable_count": 17,
+    "buy_blocked_count": 14,
+    "buy_active_days": 17,
+    "buy_mean": 0.03315127055630777,
+    "buy_win_rate": 0.6470588235294118,
+    "buy_ir": 0.7353902445600876,
+    "buy_mdd": -0.2595998981917552,
+    "buy_turnover": 0.04602510460251046,
+    "buy_train_mean": -0.0015470190458638114,
+    "buy_test_mean": 0.057440073277827866,
+    "buy_worst_year_mean": 0.0030498358878027036,
+    "buy_yearly_mean": {
+      "2024": 0.012131515480648771,
+      "2025": 0.11054715414504558,
+      "2026": 0.0030498358878027036
+    },
+    "signal_samples": [
+      {
+        "trade_date": "2026-03-27",
+        "ts_code": "600310.SH",
+        "factor_value": 0.976204,
+        "signal": "buy",
+        "entry_open": 6.99,
+        "exit_close": 6.34,
+        "forward_return": -0.10299,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-03-24",
+        "ts_code": "603843.SH",
+        "factor_value": 2.082286,
+        "signal": "buy",
+        "entry_open": 9.15,
+        "exit_close": 9.28,
+        "forward_return": 0.004208,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-03-16",
+        "ts_code": "600227.SH",
+        "factor_value": 1.741918,
+        "signal": "buy",
+        "entry_open": 4.6,
+        "exit_close": 5.0,
+        "forward_return": 0.076957,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-03-05",
+        "ts_code": "002498.SZ",
+        "factor_value": 2.360434,
+        "signal": "buy",
+        "entry_open": 9.54,
+        "exit_close": 9.96,
+        "forward_return": 0.034025,
+        "executable": true
+      },
+      {
+        "trade_date": "2026-01-28",
+        "ts_code": "600916.SH",
+        "factor_value": 1.070967,
+        "signal": "buy",
+        "entry_open": 13.5,
+        "exit_close": 14.68,
+        "forward_return": 0.077407,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-11-24",
+        "ts_code": "688227.SH",
+        "factor_value": 0.868901,
+        "signal": "buy",
+        "entry_open": 70.58,
+        "exit_close": 83.98,
+        "forward_return": 0.179855,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-09-26",
+        "ts_code": "688109.SH",
+        "factor_value": 0.427501,
+        "signal": "buy",
+        "entry_open": 84.82,
+        "exit_close": 100.6,
+        "forward_return": 0.176041,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-08-22",
+        "ts_code": "600246.SH",
+        "factor_value": 1.744064,
+        "signal": "buy",
+        "entry_open": 12.77,
+        "exit_close": 13.66,
+        "forward_return": 0.059695,
+        "executable": false
+      },
+      {
+        "trade_date": "2025-08-08",
+        "ts_code": "688108.SH",
+        "factor_value": 1.221774,
+        "signal": "buy",
+        "entry_open": 22.68,
+        "exit_close": 25.11,
+        "forward_return": 0.097143,
+        "executable": true
+      },
+      {
+        "trade_date": "2025-05-26",
+        "ts_code": "603332.SH",
+        "factor_value": 1.113415,
+        "signal": "buy",
+        "entry_open": 18.77,
+        "exit_close": 21.0,
+        "forward_return": 0.108807,
+        "executable": true
+      }
+    ],
+    "layer_mean": {
+      "L1": -0.013674747300694649,
+      "L2": -0.013972818314836223,
+      "L3": -0.009803973498702235,
+      "L4": -0.009347391632451869,
+      "L5": -0.007677105937625878
+    },
+    "layer_count": {
+      "L1": 5819,
+      "L2": 6120,
+      "L3": 6098,
+      "L4": 6120,
+      "L5": 6408
+    },
+    "long_short_mean": 0.005311506123330894,
+    "long_short_ir": 1.5846342294907576,
+    "long_short_mdd": -0.656776618249119
+  }
+}

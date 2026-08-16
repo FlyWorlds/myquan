@@ -1,0 +1,14 @@
+.codex/
+.agents/
+
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+.env
+*.env
+*.key
+*.pem
+*.p12
+*.pfx

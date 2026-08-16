@@ -1,0 +1,17 @@
+{
+  "name": "skill-munger-mental-model",
+  "type": "skill",
+  "license": "GPL-3.0-only",
+  "language": ["zh-CN", "en"],
+  "recommended_repository": "skill-munger-mental-model",
+  "current_repository": "skill-munger-mental-model",
+  "description": "Munger multi-model cross-validation analysis skill for A-share stocks.",
+  "runtime_entries": {
+    "codex": "AGENTS.md",
+    "claude_code": "CLAUDE.md",
+    "cursor": ".cursor/rules/skill-munger-mental-model.mdc",
+    "hermes": "HERMES.md",
+    "openclaw": "OPENCLAW.md"
+  },
+  "disclaimer": "Research and educational tooling only. Not investment advice; no return promise; no credentials or official endorsement included."
+}

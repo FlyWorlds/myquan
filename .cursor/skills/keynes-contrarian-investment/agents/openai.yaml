@@ -1,0 +1,7 @@
+interface:
+  display_name: "凯恩斯反共识投资"
+  short_description: "分析长期预期、估值安全边际、预期错位与价值陷阱风险"
+  default_prompt: "Use $skill-keynes-contrarian-investment to analyze an A-share stock's fundamentals, implied expectations, margin of safety, catalysts, and falsification conditions."
+
+policy:
+  allow_implicit_invocation: true

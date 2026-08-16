@@ -1,0 +1,26 @@
+{
+  "provider": "pandadata",
+  "dataset": "bars-daily",
+  "raw_ref": "fixture://pandadata-market-bar-native.json",
+  "generated_at": "2026-08-11T00:00:00Z",
+  "metadata": {
+    "producer": "pandadata-warehouse-test",
+    "timezone": "Asia/Shanghai",
+    "calendar": "XSHG",
+    "currency": "CNY",
+    "frequency": "1d"
+  },
+  "records": [
+    {
+      "instrument": "600000.SH",
+      "source_timestamp": "2026-08-10T07:00:00Z",
+      "adjustment": "none",
+      "volume_unit": "shares",
+      "open": 10.0,
+      "high": 10.4,
+      "low": 9.9,
+      "close": 10.2,
+      "volume": 1200000
+    }
+  ]
+}

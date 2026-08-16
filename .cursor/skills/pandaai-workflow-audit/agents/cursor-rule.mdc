@@ -1,0 +1,22 @@
+---
+description: Use the PandaAI Workflow Audit skill when the request matches its SKILL.md description.
+alwaysApply: false
+---
+
+# PandaAI Workflow Audit Skill
+
+When the user provides a PandaAI exported workflow JSON (or a saved `GET /api/workflow/query` response) and asks whether it is overfit, credible, defective, or how to improve it, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/pandaai-workflow-audit
+```
+
+Workflow:
+
+1. Read `.cursor/skills/pandaai-workflow-audit/SKILL.md` and follow its Core workflow exactly.
+2. Run `scripts/audit_workflow.py` on the provided workflow file; never execute embedded workflow code.
+3. Load files under `references/` only when the skill asks for them or the case needs those details.
+4. Verify critical and high findings against the source JSON before presenting them.
+5. Reproduce the disclaimer from `references/disclaimer_template.md` verbatim; never call a workflow safe or proven profitable.

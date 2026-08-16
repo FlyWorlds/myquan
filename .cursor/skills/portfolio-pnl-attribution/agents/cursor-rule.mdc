@@ -1,0 +1,15 @@
+---
+description: Use this repository to produce auditable realized portfolio P&L attribution by security and sector.
+globs:
+alwaysApply: false
+---
+
+# Portfolio P&L Attribution
+
+Use this rule when the task asks to explain realized portfolio performance, security or sector contributions, fees, benchmark-relative return, or daily P&L reconciliation.
+
+1. Read `SKILL.md` and `references/input_contract.md` before calculating.
+2. Use `scripts/attribute_portfolio.py`; do not reimplement the accounting logic in prose or ad hoc code.
+3. Reject duplicate `(date, symbol)` keys and missing same-date returns. Never forward-fill returns across dates.
+4. Report the generated `security_attribution.csv`, `sector_attribution.csv`, `daily_attribution.csv`, and `summary.json` files, including warnings and reconciliation errors.
+5. Treat results as research accounting only. Do not provide investment recommendations or silently repair source data.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Event Risk Alert"
+  short_description: "A-share event-risk watchlist alerts"
+  default_prompt: "Use $event-risk-alert to scan my A-share watchlist for restricted unlock, pledge, shareholder, ST, earnings, audit, and holder-count risks."

@@ -1,0 +1,171 @@
+# 偏好→参数确定性映射表（mapping_version: 1.0）
+# 本文件是「QBTI 量化行为类型指标」的核心可审计产物：把 question_bank.md 定义的封闭枚举
+# 确定性地翻译为因子方向与策略参数。scripts/derive_profile.py 逐字读取本表，
+# 不做任何超出本表的推断。修改本表 = 修改产品逻辑，需走 PR 评审。
+#
+# 审查重点：任何一条映射都不得把自称保守/焦虑的用户导向更激进的参数。
+
+mapping_version: "1.1"
+quiz_version: "1.1"
+
+# ---------------------------------------------------------------
+# 维度 A：亏损反应 → 风险承受力 / 止损纪律 / 单票仓位上限
+# ---------------------------------------------------------------
+cluster_a:
+  cant_sleep_sell_now:
+    risk_tolerance: conservative
+    stop_loss_discipline: hard_stop_tight    # 建议硬止损，回撤容忍低
+    max_position_pct: 5
+  uncomfortable_but_check_first:
+    risk_tolerance: cautious
+    stop_loss_discipline: hard_stop_wide
+    max_position_pct: 8
+  stick_to_plan:
+    risk_tolerance: balanced
+    stop_loss_discipline: soft_review        # 定期复盘式，不设机械止损
+    max_position_pct: 10
+  discount_buy_more:
+    risk_tolerance: aggressive
+    stop_loss_discipline: none_ride_through
+    max_position_pct: 15
+
+# ---------------------------------------------------------------
+# 维度 B：参与度 → 关注频率 / 调仓频率
+# 注意：调仓频率上限受 skill-backtest 标准协议（T+1、双边 15bp）约束，
+# daily 参与度也只映射到 weekly 调仓，避免手续费侵蚀。
+# ---------------------------------------------------------------
+cluster_b:
+  daily_hands_on:
+    involvement_level: daily
+    rebalance_frequency: weekly
+    wants_monitor_skill: true
+  weekly_check_in:
+    involvement_level: weekly
+    rebalance_frequency: biweekly
+    wants_monitor_skill: true
+  monthly_glance:
+    involvement_level: monthly
+    rebalance_frequency: monthly
+    wants_monitor_skill: false
+  quarterly_set_forget:
+    involvement_level: quarterly
+    rebalance_frequency: quarterly
+    wants_monitor_skill: false
+
+# ---------------------------------------------------------------
+# 维度 C：策略口味 → 因子家族偏好
+# factor_affinity 取「主选映射 + 备选映射」去重后的前两项。
+# ---------------------------------------------------------------
+cluster_c:
+  ride_the_trend:
+    factor_families: [momentum]
+  hunt_the_overlooked:
+    factor_families: [mean_reversion]
+  steady_and_boring:
+    factor_families: [low_volatility, quality_stable]
+  bet_on_reversal:
+    factor_families: [reversal]
+
+# 波动态度调节：在 factor_affinity 确定后应用。
+volatility_adjustments:
+  stresses_me_out:
+    # 波动令用户焦虑：若首选是高换手/高波动家族，则把 low_volatility 提为共同首选，
+    # 并写入 consistency_flags 提示用户该取舍。
+    inject_family: low_volatility
+    applies_when_primary_in: [momentum, reversal]
+    flag: "你选了偏高波动的口味（追热点/爱反转），但又说波动让你压力大。我把低波动因子加进了你的组合方向里做对冲，两边各让一步。"
+  neutral: {}
+  energizes_me: {}
+
+# ---------------------------------------------------------------
+# 维度 D：选股范围 → 选股域过滤
+# ---------------------------------------------------------------
+cluster_d:
+  familiar_only:
+    sector_preference_mode: familiar_only     # preferred_sectors 必填
+  explorer_no_limit:
+    sector_preference_mode: explorer_no_limit
+  has_exclusions:
+    sector_preference_mode: has_exclusions    # excluded_sectors 必填
+
+# 行业枚举（申万一级行业的口语化归并；agent 把用户自由回答归类到这些值）
+sector_enum:
+  - consumer_staples      # 食品饮料、家电等日常消费
+  - consumer_discretionary # 汽车、社服、商贸零售等可选消费
+  - healthcare            # 医药生物
+  - technology            # 电子、计算机、通信
+  - financials            # 银行、非银金融
+  - industrials           # 机械、电力设备、军工
+  - materials             # 基础化工、有色、钢铁、建材
+  - energy                # 煤炭、石油石化
+  - utilities             # 公用事业、环保
+  - real_estate           # 房地产、建筑
+  - agriculture           # 农林牧渔
+  - media_entertainment   # 传媒
+
+# ---------------------------------------------------------------
+# 维度 E：时间周期 → 周期 / 持有期 / 换手容忍度
+# ---------------------------------------------------------------
+cluster_e:
+  next_month:
+    time_horizon: short
+    target_holding_period_days: 20
+    turnover_tolerance: high
+    flag: "一个月的观察期太短，任何因子策略在单月内的表现接近运气。已按最短档处理，请确认这笔钱短期内确实不着急用。"
+  year_end:
+    time_horizon: medium
+    target_holding_period_days: 60
+    turnover_tolerance: medium
+  few_years:
+    time_horizon: long
+    target_holding_period_days: 120
+    turnover_tolerance: low
+  decade_plus:
+    time_horizon: very_long
+    target_holding_period_days: 250
+    turnover_tolerance: low
+
+# ---------------------------------------------------------------
+# 因子家族 → 候选因子池（quantskills 组织内的预建因子库）
+# ---------------------------------------------------------------
+factor_family_pools:
+  momentum:
+    pool: skill-quant-factor-directional-alpha
+    pool_tags: [momentum, trend]
+  reversal:
+    pool: skill-quant-factor-directional-alpha
+    pool_tags: [reversal]
+  mean_reversion:
+    pool: skill-quant-factor-volume-stat-alpha
+    pool_tags: [mean-reversion, stat-rank]
+  low_volatility:
+    pool: skill-quant-factor-risk-pattern-alpha
+    pool_tags: [low-volatility, risk-state]
+  quality_stable:
+    pool: skill-quant-factor-risk-pattern-alpha
+    pool_tags: [stability, quality-pattern]
+
+# ---------------------------------------------------------------
+# 跨簇一致性检查（derive_profile.py 在生成 profile.json 前逐条评估）
+# ---------------------------------------------------------------
+consistency_checks:
+  - id: momentum_needs_attention
+    when:
+      factor_affinity_contains: momentum
+      involvement_level_in: [quarterly]
+    flag: "动量口味需要至少月度级别的关注——热点退潮不等人，而你选了一个季度才看一次。要么把关注频率调高一档，要么换成低波动/质量这类更耐放的口味。"
+  - id: short_horizon_low_turnover
+    when:
+      time_horizon_in: [short]
+      turnover_tolerance_in: [low]
+    flag: "观察期很短但又不想频繁换仓，这两者难以同时满足，建议放长观察期。"
+  - id: aggressive_but_stressed
+    when:
+      risk_tolerance_in: [aggressive]
+      volatility_stance_in: [stresses_me_out]
+    flag: "你说跌 8% 想加仓（胆子大），又说日常波动让你压力大（心态稳不住）——这两个回答有点打架，确认一下哪个更像真实的你？"
+  - id: conservative_high_position
+    # 防御性检查：保守用户绝不允许出现 >8% 单票仓位（映射表本身已保证，此处为双保险断言）
+    assert:
+      if_risk_tolerance_in: [conservative, cautious]
+      then_max_position_pct_lte: 8

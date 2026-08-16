@@ -1,0 +1,4 @@
+interface:
+  display_name: "期货连续合约换月审计"
+  short_description: "Audit continuous futures rolls and return distortions"
+  default_prompt: "Use $futures-roll-auditor to audit this continuous futures series and its roll assumptions."

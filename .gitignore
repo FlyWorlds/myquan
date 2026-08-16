@@ -31,3 +31,6 @@ holdingStocks/logs/
 holdingStocks/watch_stdout.log
 holdingStocks/watch_stderr.log
 holdingStocks/_wechat_*.txt
+
+# QuantSkills 安装缓存
+_quantskills_cache/

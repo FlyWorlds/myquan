@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:,">
+  <title>Q51 克拉曼特殊情况研究演示</title>
+  <style>
+    :root {
+      --paper: #f5f7f4;
+      --panel: #ffffff;
+      --ink: #18221d;
+      --muted: #5f6c65;
+      --line: #d9e1db;
+      --accent: #167266;
+      --accent-soft: #e2f0eb;
+      --warning: #a06a00;
+      --warning-soft: #fff4d7;
+      --risk: #a53634;
+      --risk-soft: #fce9e7;
+      --shadow: 0 12px 28px rgba(23, 45, 37, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--paper); }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.58 "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+    code, pre { font-family: Consolas, "Cascadia Mono", monospace; }
+    code { overflow-wrap: anywhere; }
+    .shell { width: min(1240px, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 48px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+      gap: 30px;
+      align-items: end;
+      padding: 26px 0 25px;
+      border-bottom: 2px solid var(--ink);
+    }
+    .eyebrow { color: var(--accent); font: 700 12px/1.3 Consolas, monospace; margin: 0 0 10px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 760px; margin-bottom: 12px; font-size: 38px; line-height: 1.15; font-weight: 760; }
+    .hero p { max-width: 680px; margin-bottom: 0; color: var(--muted); }
+    .hero-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .meta-block { padding: 11px 12px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; }
+    .meta-block span { display: block; color: var(--muted); font-size: 12px; }
+    .meta-block strong { display: block; margin-top: 3px; font-size: 14px; overflow-wrap: anywhere; }
+    .meta-block.boundary { grid-column: 1 / -1; border-color: var(--accent); background: var(--accent-soft); }
+    .meta-block.boundary strong { color: #0b4b43; }
+    .section { padding: 38px 0; border-bottom: 1px solid var(--line); }
+    .section-heading { max-width: 800px; margin-bottom: 18px; }
+    h2 { margin-bottom: 7px; font-size: 25px; line-height: 1.25; }
+    .section-heading p, .section > p { color: var(--muted); margin-bottom: 0; }
+    .event-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 12px; }
+    .event-card, .contract-panel, .study-card, .phase, .api-group, .recording { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+    .event-card { padding: 17px; }
+    .event-card:nth-child(1), .event-card:nth-child(4) { background: #f8fbf9; }
+    .event-card h3 { margin-bottom: 7px; font-size: 17px; }
+    .event-card p { color: var(--muted); margin-bottom: 10px; }
+    .event-card strong { display: block; color: #315047; font-size: 13px; font-weight: 650; }
+    .contract-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+    .contract-panel { min-width: 0; padding: 18px; }
+    .contract-panel h3 { margin-bottom: 8px; font-size: 17px; }
+    .contract-panel p { color: var(--muted); }
+    pre { margin: 12px 0 0; padding: 14px; border-radius: 6px; background: #edf2ef; color: #244238; font-size: 12px; line-height: 1.55; overflow: auto; }
+    .contract-list { padding-left: 20px; margin: 12px 0 0; }
+    .contract-list li { margin: 7px 0; }
+    .snapshot-strip { display: grid; grid-template-columns: 1.2fr repeat(3, 0.8fr); gap: 10px; margin-bottom: 18px; }
+    .snapshot-stat { padding: 14px; border-left: 3px solid var(--accent); background: var(--panel); }
+    .snapshot-stat p { margin: 0; color: var(--muted); font-size: 12px; }
+    .snapshot-stat strong { display: block; margin-top: 3px; font-size: 25px; font-variant-numeric: tabular-nums; }
+    .snapshot-stat:first-child strong { font-size: 17px; line-height: 1.4; }
+    .study-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .study-card { padding: 16px; box-shadow: var(--shadow); min-width: 0; }
+    .study-card.risk { border-left: 3px solid var(--risk); }
+    .study-card.opportunity { border-left: 3px solid var(--accent); }
+    .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .card-kicker { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+    .card-top h3 { margin-bottom: 4px; font-size: 18px; overflow-wrap: anywhere; }
+    .card-top h3 code { color: var(--accent); font-size: 13px; font-weight: 650; }
+    .card-meta { color: var(--muted); font-size: 12px; margin-bottom: 0; }
+    .score { flex: 0 0 52px; text-align: right; }
+    .score b { display: block; color: var(--accent); font-size: 28px; line-height: 1; font-variant-numeric: tabular-nums; }
+    .risk .score b { color: var(--risk); }
+    .score span { color: var(--muted); font-size: 11px; }
+    .thesis { margin: 15px 0 12px; font-weight: 650; }
+    .score-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .row-label { color: var(--muted); font-size: 12px; }
+    .score-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .score-piece { display: inline-flex; gap: 5px; align-items: baseline; color: #3d5148; font-size: 11px; }
+    .score-piece b { color: var(--accent); font-variant-numeric: tabular-nums; }
+    .card-facts { margin: 0; }
+    .card-facts div { padding: 7px 0; border-top: 1px solid var(--line); }
+    .card-facts dt { color: var(--muted); font-size: 11px; }
+    .card-facts dd { margin: 2px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+    .card-boundary { margin: 11px 0 0; padding: 8px 9px; border-radius: 5px; color: #315047; background: var(--accent-soft); font-size: 11px; font-weight: 650; }
+    .risk .card-boundary { color: #74312f; background: var(--risk-soft); }
+    .empty { padding: 22px; margin: 0; color: var(--muted); border: 1px dashed var(--line); }
+    .boundary-layout { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 18px; align-items: start; }
+    .boundary-card { padding: 18px; border-left: 4px solid var(--accent); background: var(--accent-soft); }
+    .boundary-card h3 { margin-bottom: 8px; font-size: 18px; }
+    .boundary-card p { margin-bottom: 0; color: #315047; }
+    .path { display: grid; gap: 7px; }
+    .path-item { position: relative; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; font-weight: 650; }
+    .path-item:last-child { border-color: var(--accent); color: #0b4b43; }
+    .path-item span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 400; }
+    .audit-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+    .phase { padding: 14px; min-width: 0; }
+    .phase > code { color: var(--accent); font-size: 12px; font-weight: 700; }
+    .phase h3 { margin: 8px 0 5px; font-size: 15px; }
+    .phase p { margin-bottom: 0; color: var(--muted); font-size: 12px; }
+    .api-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .api-group { padding: 15px; }
+    .api-group h3 { margin-bottom: 9px; font-size: 16px; }
+    .api-row { padding: 10px 0; border-top: 1px solid var(--line); }
+    .api-row code { color: var(--accent); font-size: 11px; font-weight: 700; }
+    .api-row p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .recording { padding: 18px; background: #f8fbf9; }
+    .recording h2 { margin-bottom: 8px; }
+    .recording ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 28px; padding-left: 20px; margin: 14px 0 0; }
+    .recording li { padding-left: 3px; }
+    .recording li strong { display: block; margin-bottom: 3px; }
+    .recording li span { color: var(--muted); font-size: 13px; }
+    .screenshot-section figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 10px; overflow: hidden; }
+    .screenshot-section img { display: block; width: 100%; height: auto; border-radius: 4px; }
+    footer { padding: 22px 0 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #16201b;
+        --panel: #1d2a24;
+        --ink: #edf5ef;
+        --muted: #b0c0b6;
+        --line: #34463b;
+        --accent: #6ac3aa;
+        --accent-soft: #183a30;
+        --warning: #f0c15d;
+        --warning-soft: #443517;
+        --risk: #f09a95;
+        --risk-soft: #4a2928;
+        --shadow: none;
+      }
+      .event-card:nth-child(1), .event-card:nth-child(4), .recording { background: #1a2721; }
+      pre { background: #132019; color: #d8eee1; }
+      .meta-block.boundary strong, .card-boundary, .boundary-card p, .path-item:last-child { color: #bcebdc; }
+      .score-piece { color: #cfdfd5; }
+      .risk .card-boundary { color: #ffd0cc; }
+    }
+    @media (max-width: 920px) {
+      .hero, .contract-layout, .boundary-layout { grid-template-columns: 1fr; }
+      .audit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .api-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .shell { width: min(100% - 24px, 1240px); padding-top: 16px; }
+      .hero { gap: 18px; padding-top: 8px; }
+      h1 { font-size: 29px; }
+      h2 { font-size: 22px; }
+      .hero-meta, .snapshot-strip, .study-grid, .event-grid, .recording ol, .audit-grid { grid-template-columns: 1fr; }
+      .study-card { padding: 14px; }
+      .snapshot-stat { min-height: auto; }
+      .section { padding: 28px 0; }
+      .score-row { grid-template-columns: 1fr; gap: 6px; }
+      .recording ol { gap: 12px; }
+      .contract-layout { grid-template-columns: minmax(0, 1fr); }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Q51 / 克拉曼特殊情况研究</p>
+        <h1>把事件线索变成可复核的研究队列</h1>
+        <p>这是一份离线讲解页。它从既有生产 Parquet 读取真实快照，展示研究候选、独立风险观察和承保边界，不发起 Panda Data 查询。</p>
+      </div>
+      <div class="hero-meta">
+        <div class="meta-block"><span>决策日</span><strong>2026-07-24</strong></div>
+        <div class="meta-block"><span>逻辑版本</span><strong>7.4.0</strong></div>
+        <div class="meta-block boundary"><span>研究边界</span><strong>not_trade_signal=true</strong></div>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>四类事件都是研究入口</h2>
+        <p>系统先把复杂事件整理为可比较的待研究问题，再把证据、估值和失败情景交给严格承保层。</p>
+      </div>
+      <div class="event-grid"><article class="event-card"><h3>定增解禁供给风险</h3><p>定增股份在限售期结束后可流通。系统比较解禁数量、流通盘、参与者浮盈和成交额消化天数，识别潜在供给冲击。</p><strong>边界：发行价是参与者历史成本，不是二级市场买方可取得的成本，因此只进入风险观察。</strong></article><article class="event-card"><h3>重组或借壳</h3><p>证监会批文、受理和停复牌等信息先形成催化剂线索，随后核验对价、条件、融资、终止条款和失败价值。</p><strong>边界：审批不是完成。重组失败压力必须独立测算，不能由事件热度替代。</strong></article><article class="event-card"><h3>分拆上市</h3><p>从母公司持股比例、子公司保守价值、剩余业务、净债务、税费、控股折价和稀释股数建立保守分部估值。</p><strong>边界：重大合同金额不等于子公司价值，不能替代分拆估值。</strong></article><article class="event-card"><h3>困境反转</h3><p>风险警示变化、盈利与现金流改善、审计意见和当前价格共同决定研究优先级，并保留完整的承保缺口。</p><strong>边界：摘帽或利润改善只是入口，仍须核对债务顺位、资产回收和股权稀释。</strong></article></div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>调用与输出契约</h2>
+        <p>真实扫描通过 Panda Data 获取结构化数据。演示页只消费扫描后已经落地的生产结果。</p>
+      </div>
+      <div class="contract-layout">
+        <article class="contract-panel">
+          <h3>调用 BUILD</h3>
+          <pre>from scripts.build import run
+
+result = run(
+    {"as_of_date": "20260724", "start_date": "20250724"},
+    config={"evidence_dir": "官方证据目录"},
+)</pre>
+          <p>入口会校验输入、记录数据能力和证据时间口径，再返回稳定的 BUILD envelope。</p>
+        </article>
+        <article class="contract-panel">
+          <h3>消费研究摘要</h3>
+          <ul class="contract-list">
+            <li><code>research_digest.shortlist</code>：最多 5 条、每类最多 3 条、最低 60 分。</li>
+            <li><code>research_digest.risk_watchlist</code>：独立的供给和困境风险清单。</li>
+            <li>所有研究卡固定带 <code>not_trade_signal=true</code>。</li>
+            <li>只有原始事件行的 <code>qualified_special_situation</code> 才允许 Alpha 读取。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>本次生产快照</h2>
+        <p>更新时间 2026-07-25T12:44:30.468185+00:00。实时研究使用决策日前最新公开证据，历史回放使用事件时点可见证据，两种口径分别保存。</p>
+      </div>
+      <div class="snapshot-strip">
+        <div class="snapshot-stat"><p>实时证据口径</p><strong>live_latest_public_by_as_of</strong></div>
+        <div class="snapshot-stat"><p>研究候选</p><strong>5 / 5</strong></div>
+        <div class="snapshot-stat"><p>独立风险观察</p><strong>5 / 5</strong></div>
+        <div class="snapshot-stat"><p>待映射批文</p><strong>4</strong></div>
+      </div>
+      <p class="section-note">机会输入 315 条。排除统计：类别上限 10；总榜上限 300；待映射事件 4。</p>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>今日优先研究什么</h2>
+        <p>分数用于排序，不替代交易条款、资本结构、保守价值、失败价值、法律审计与流动性的逐项核验。</p>
+      </div>
+      <div class="study-grid"><article class="study-card opportunity"><div class="card-top"><div><p class="card-kicker">研究候选 #1</p><h3>新能股份 <code>000595.SZ</code></h3><p class="card-meta">困境反转 | 事件日 2026-07-01</p></div><div class="score"><b>95</b><span>研究分</span></div></div><p class="thesis">风险警示状态与当前财务证据出现改善，进入困境反转研究队列；仍需完成回收价值和资本结构承保。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>审计质量</span><b>20</b></span><span class="score-piece"><span>可交易价格</span><b>5</b></span><span class="score-piece"><span>事件时效</span><b>10</b></span><span class="score-piece"><span>状态事件</span><b>30</b></span><span class="score-piece"><span>财务改善</span><b>30</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 6.07；20日均额 1.60 亿</dd></div><div><dt>正向信号</dt><dd>风险警示已撤销或状态改善；最新利润为正；利润同比改善；经营现金流为正</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article><article class="study-card opportunity"><div class="card-top"><div><p class="card-kicker">研究候选 #2</p><h3>联创股份 <code>300343.SZ</code></h3><p class="card-meta">困境反转 | 事件日 2026-06-13</p></div><div class="score"><b>93</b><span>研究分</span></div></div><p class="thesis">风险警示状态与当前财务证据出现改善，进入困境反转研究队列；仍需完成回收价值和资本结构承保。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>审计质量</span><b>20</b></span><span class="score-piece"><span>可交易价格</span><b>5</b></span><span class="score-piece"><span>事件时效</span><b>8</b></span><span class="score-piece"><span>状态事件</span><b>30</b></span><span class="score-piece"><span>财务改善</span><b>30</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 5.70；20日均额 2.76 亿</dd></div><div><dt>正向信号</dt><dd>风险警示已撤销或状态改善；最新利润为正；利润同比改善；经营现金流为正</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article><article class="study-card opportunity"><div class="card-top"><div><p class="card-kicker">研究候选 #3</p><h3>威尔泰 <code>002058.SZ</code></h3><p class="card-meta">困境反转 | 事件日 2026-06-12</p></div><div class="score"><b>93</b><span>研究分</span></div></div><p class="thesis">风险警示状态与当前财务证据出现改善，进入困境反转研究队列；仍需完成回收价值和资本结构承保。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>审计质量</span><b>20</b></span><span class="score-piece"><span>可交易价格</span><b>5</b></span><span class="score-piece"><span>事件时效</span><b>8</b></span><span class="score-piece"><span>状态事件</span><b>30</b></span><span class="score-piece"><span>财务改善</span><b>30</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 15.00；20日均额 4507.55 万</dd></div><div><dt>正向信号</dt><dd>风险警示已撤销或状态改善；最新利润为正；利润同比改善；经营现金流为正</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article><article class="study-card opportunity"><div class="card-top"><div><p class="card-kicker">研究候选 #4</p><h3>厦门港务 <code>000905.SZ</code></h3><p class="card-meta">重组或借壳 | 事件日 2026-02-13</p></div><div class="score"><b>85</b><span>研究分</span></div></div><p class="thesis">监管催化剂已出现，当前财务与市场证据支持进入重组/分拆研究队列；交易条款、失败价值和估值仍未替代承保。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>审计质量</span><b>20</b></span><span class="score-piece"><span>明确事件关键词</span><b>10</b></span><span class="score-piece"><span>证监会催化剂</span><b>10</b></span><span class="score-piece"><span>当前财务</span><b>25</b></span><span class="score-piece"><span>可交易价格</span><b>5</b></span><span class="score-piece"><span>事件时效</span><b>5</b></span><span class="score-piece"><span>证券映射</span><b>10</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 8.29；20日均额 9423.08 万</dd></div><div><dt>正向信号</dt><dd>证监会批文或监管催化剂已出现；证券代码已唯一映射；事件文本明确指向重组或分拆；当前财务交叉核验通过</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article><article class="study-card opportunity"><div class="card-top"><div><p class="card-kicker">研究候选 #5</p><h3>埃斯顿 <code>002747.SZ</code></h3><p class="card-meta">重组或借壳 | 事件日 2026-02-13</p></div><div class="score"><b>85</b><span>研究分</span></div></div><p class="thesis">监管催化剂已出现，当前财务与市场证据支持进入重组/分拆研究队列；交易条款、失败价值和估值仍未替代承保。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>审计质量</span><b>20</b></span><span class="score-piece"><span>明确事件关键词</span><b>10</b></span><span class="score-piece"><span>证监会催化剂</span><b>10</b></span><span class="score-piece"><span>当前财务</span><b>25</b></span><span class="score-piece"><span>可交易价格</span><b>5</b></span><span class="score-piece"><span>事件时效</span><b>5</b></span><span class="score-piece"><span>证券映射</span><b>10</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 30.04；20日均额 43.13 亿</dd></div><div><dt>正向信号</dt><dd>证监会批文或监管催化剂已出现；证券代码已唯一映射；事件文本明确指向重组或分拆；当前财务交叉核验通过</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article></div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>哪些风险需要独立观察</h2>
+        <p>定增解禁和困境风险不与机会榜混排。高风险分表示优先核验，不表示可以采取交易动作。</p>
+      </div>
+      <div class="study-grid"><article class="study-card risk"><div class="card-top"><div><p class="card-kicker">独立风险观察 #1</p><h3>ST星农 <code>603789.SH</code></h3><p class="card-meta">困境反转 | 事件日 2026-05-19</p></div><div class="score"><b>100</b><span>研究分</span></div></div><p class="thesis">困境状态、审计或财务核验出现风险信号，进入独立风险观察，不与研究机会混排。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>风险警示仍生效</span><b>35</b></span><span class="score-piece"><span>审计警示</span><b>25</b></span><span class="score-piece"><span>财务核验失败</span><b>20</b></span><span class="score-piece"><span>经营现金流为负</span><b>10</b></span><span class="score-piece"><span>股东减持</span><b>10</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 5.76；20日均额 5052.84 万</dd></div><div><dt>风险信号</dt><dd>风险警示仍生效；审计意见含警示；财务交叉核验失败；经营现金流为负</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article><article class="study-card risk"><div class="card-top"><div><p class="card-kicker">独立风险观察 #2</p><h3>*ST泉为 <code>300716.SZ</code></h3><p class="card-meta">困境反转 | 事件日 2026-04-30</p></div><div class="score"><b>100</b><span>研究分</span></div></div><p class="thesis">困境状态、审计或财务核验出现风险信号，进入独立风险观察，不与研究机会混排。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>风险警示仍生效</span><b>35</b></span><span class="score-piece"><span>审计警示</span><b>25</b></span><span class="score-piece"><span>财务核验失败</span><b>20</b></span><span class="score-piece"><span>经营现金流为负</span><b>10</b></span><span class="score-piece"><span>股东减持</span><b>10</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 15.69；20日均额 1.40 亿</dd></div><div><dt>风险信号</dt><dd>风险警示仍生效；审计意见含警示；财务交叉核验失败；经营现金流为负</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article><article class="study-card risk"><div class="card-top"><div><p class="card-kicker">独立风险观察 #3</p><h3>*ST未名 <code>002581.SZ</code></h3><p class="card-meta">困境反转 | 事件日 2026-04-29</p></div><div class="score"><b>100</b><span>研究分</span></div></div><p class="thesis">困境状态、审计或财务核验出现风险信号，进入独立风险观察，不与研究机会混排。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>风险警示仍生效</span><b>35</b></span><span class="score-piece"><span>审计警示</span><b>25</b></span><span class="score-piece"><span>财务核验失败</span><b>20</b></span><span class="score-piece"><span>经营现金流为负</span><b>10</b></span><span class="score-piece"><span>股东减持</span><b>10</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 3.22；20日均额 3203.97 万</dd></div><div><dt>风险信号</dt><dd>风险警示仍生效；审计意见含警示；财务交叉核验失败；经营现金流为负</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article><article class="study-card risk"><div class="card-top"><div><p class="card-kicker">独立风险观察 #4</p><h3>*ST利达 <code>603828.SH</code></h3><p class="card-meta">困境反转 | 事件日 2026-04-28</p></div><div class="score"><b>100</b><span>研究分</span></div></div><p class="thesis">困境状态、审计或财务核验出现风险信号，进入独立风险观察，不与研究机会混排。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>风险警示仍生效</span><b>35</b></span><span class="score-piece"><span>审计警示</span><b>25</b></span><span class="score-piece"><span>财务核验失败</span><b>20</b></span><span class="score-piece"><span>经营现金流为负</span><b>10</b></span><span class="score-piece"><span>股东减持</span><b>10</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 4.11；20日均额 1390.12 万</dd></div><div><dt>风险信号</dt><dd>风险警示仍生效；审计意见含警示；财务交叉核验失败；经营现金流为负</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article><article class="study-card risk"><div class="card-top"><div><p class="card-kicker">独立风险观察 #5</p><h3>名家汇 <code>300506.SZ</code></h3><p class="card-meta">困境反转 | 事件日 2025-09-30</p></div><div class="score"><b>100</b><span>研究分</span></div></div><p class="thesis">困境状态、审计或财务核验出现风险信号，进入独立风险观察，不与研究机会混排。</p><div class="score-row"><span class="row-label">评分拆解</span><div class="score-list"><span class="score-piece"><span>风险警示仍生效</span><b>35</b></span><span class="score-piece"><span>审计警示</span><b>25</b></span><span class="score-piece"><span>财务核验失败</span><b>20</b></span><span class="score-piece"><span>经营现金流为负</span><b>10</b></span><span class="score-piece"><span>股东减持</span><b>10</b></span></div></div><dl class="card-facts"><div><dt>当前市场证据</dt><dd>日期 2026-07-24；收盘价 5.54；20日均额 2.40 亿</dd></div><div><dt>风险信号</dt><dd>风险警示仍生效；审计意见含警示；财务交叉核验失败；经营现金流为负</dd></div><div><dt>待补核心证据</dt><dd>资本结构；保守价值；交易条款；失败价值</dd></div><div><dt>下一步研究动作</dt><dd>核对债务、优先顺位、稀释和或有负债；建立保守估值并写明关键假设；补齐交易对价、先决条件、融资和终止条款</dd></div></dl><p class="card-boundary">承保状态：承保证据不完整。not_trade_signal=true</p></article></div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>研究排序不会绕过承保</h2>
+        <p>这是这套 BUILD 最重要的边界。任何缺失核心事实的高分卡，都只能停留在研究与补证阶段。</p>
+      </div>
+      <div class="boundary-layout">
+        <article class="boundary-card">
+          <h3>Alpha 消费边界</h3>
+          <p>本次快照中原始事件行的 <code>qualified_special_situation</code> 数量为 <strong>0</strong>。研究摘要从不直接成为 Alpha 输入。</p>
+        </article>
+        <div class="path">
+          <div class="path-item">事件发现<span>定增、重组、分拆、困境反转</span></div>
+          <div class="path-item">研究优先级<span>透明评分与风险清单</span></div>
+          <div class="path-item">官方证据与承保门<span>条款、估值、失败价值、资本结构、审计、流动性</span></div>
+          <div class="path-item">合格特殊情况<span>仅原始事件行可供 Alpha 继续使用</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>生产审计链</h2>
+        <p>从接口治理到生产告警，每一步都保留可复核的结果，而不是只输出一个候选名单。</p>
+      </div>
+      <div class="audit-grid"><article class="phase"><code>P0</code><div><h3>接口治理</h3><p>记录接口能力、失败分类和有界重试。接口缺口会降级为 coverage gap，不切换非 Panda 数据源。</p></div></article><article class="phase"><code>P1</code><div><h3>可恢复运行</h3><p>全市场任务按证券批次写入检查点，并以原子运行清单结束。</p></div></article><article class="phase"><code>P2</code><div><h3>官方证据包</h3><p>核心事实必须进入 EvidenceAtom。缺交易条款、估值或资本结构时保持不完整。</p></div></article><article class="phase"><code>P3</code><div><h3>点时验证</h3><p>实时研究和历史回放分别保留证据时间口径，禁止把事件日之后数据带入回放。</p></div></article><article class="phase"><code>P4</code><div><h3>生产任务与告警</h3><p>统一生成 Parquet、健康报告和看板。只生成结构化告警，不自行发送外部消息。</p></div></article></div>
+    </section>
+
+    
+
+    <section class="section">
+      <div class="section-heading">
+        <h2>相关 Panda Data 接口</h2>
+        <p>接口函数名保留原始名称，页面用中文说明其用途和承保边界。可选接口不可用时会形成覆盖缺口，不会临时换源。</p>
+      </div>
+      <div class="api-grid"><section class="api-group"><h3>事件发现</h3><div class="api-row"><code>get_stock_private_placement</code><p>定增发行价、数量、上市日期。用于参与者浮盈和供给风险。</p></div><div class="api-row"><code>get_restricted_list</code><p>解禁日期、解禁股数和解禁原因。用于识别未来供给。</p></div><div class="api-row"><code>get_share_float</code><p>流通 A 股分母。用于计算解禁量占流通盘比例。</p></div><div class="api-row"><code>get_stock_csrc_approval</code><p>监管批文与公告。只构成重组或分拆催化剂。</p></div><div class="api-row"><code>get_stock_status_change</code><p>ST、*ST 与状态变化。用于发现困境事件。</p></div></section><section class="api-group"><h3>市场与基本面核验</h3><div class="api-row"><code>get_stock_daily</code><p>价格、成交额、成交量、停复牌和可交易性。</p></div><div class="api-row"><code>get_fina_reports</code><p>盈利、现金流、负债和资产变化。只使用决策日前披露。</p></div><div class="api-row"><code>get_audit_opinion</code><p>审计意见与持续经营风险。服务法律和会计承保门。</p></div><div class="api-row"><code>get_stock_detail</code><p>证券代码、名称和上市状态。用于身份映射与核验。</p></div></section><section class="api-group"><h3>背景与风险补充</h3><div class="api-row"><code>get_stock_material_contract</code><p>已识别事件的业务背景，不能单独创建或晋级候选。</p></div><div class="api-row"><code>get_stock_pledge</code><p>控股股东质押风险。</p></div><div class="api-row"><code>get_stock_litigation_arbitration</code><p>重大诉讼、仲裁及潜在赔偿责任。</p></div><div class="api-row"><code>get_cumu_guarantee</code><p>对外担保与或有负债。</p></div><div class="api-row"><code>get_stock_equity_illegal</code><p>股权违规、冻结和监管风险。</p></div><div class="api-row"><code>get_repurchase / get_stock_equity_placard / get_stock_shareholder_change</code><p>回购、举牌与增减持只提供资本行为背景。</p></div></section></div>
+    </section>
+
+    <section class="section">
+      <article class="recording">
+        <h2>录制时按这个顺序讲</h2>
+        <ol>
+          <li><strong>先讲边界</strong><span>研究优先级不是交易信号，所有卡都保留 not_trade_signal=true。</span></li>
+          <li><strong>再讲四类事件</strong><span>说明定增解禁是供给风险，其他三类是待承保的研究入口。</span></li>
+          <li><strong>展示真实清单</strong><span>点开研究候选和风险观察，讲分数拆解、缺失证据和下一步动作。</span></li>
+          <li><strong>最后讲承保与 Alpha</strong><span>强调只有原始合格事件行可继续被 Alpha 使用，并展示 P0-P4 审计链。</span></li>
+        </ol>
+      </article>
+    </section>
+
+    <footer>
+      生产来源：<code>C:\Users\DELL\AppData\Local\Temp\q51-github-publish-20260726\生产产物\数据库.parquet</code><br>
+      本页只读取已有生产 Parquet 和可选的本地界面截图。不会读取账户、密码、Token，也不会发起 Panda Data 查询。
+    </footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,9 @@
+---
+description: QuantSkills skill-munger-mental-model Munger 5-维模型与一票否决的多角度cross-validation分析工具，面向 A 股。
+globs: []
+alwaysApply: false
+---
+
+Use this repository as the `skill-munger-mental-model` QuantSkills skill. Read SKILL.md, then munger-mental-model/SKILL.md.
+
+Research and educational tooling only — not investment advice. Never record Panda data credentials.

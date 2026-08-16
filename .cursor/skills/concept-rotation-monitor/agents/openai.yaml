@@ -1,0 +1,4 @@
+interface:
+  display_name: "Concept Rotation Monitor"
+  short_description: "A股概念题材热度轮动：动量排名、广度对照、轮动信号与新概念雷达"
+  default_prompt: "Use $concept-rotation-monitor 为给定窗口生成带数据来源的A股概念题材热度轮动报告。"

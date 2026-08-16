@@ -1,0 +1,141 @@
+{
+  "format_version": "V1.0",
+  "name": "frontend_stock_hold",
+  "description": "",
+  "litegraph": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "revision": 0,
+    "last_node_id": 3,
+    "last_link_id": 2,
+    "nodes": [
+      {
+        "id": 1,
+        "type": "CodeControl",
+        "flags": {
+          "uuid": "frontend_stock_hold-code",
+          "plugin_source": "official",
+          "type": ""
+        },
+        "title": "Python代码输入",
+        "properties": {
+          "title": "Python代码输入",
+          "策略代码": "from panda_backtest.api.api import order_values\n\nSTOCKS = {\n    \"股票一\": \"600000.SH\",\n    \"股票二\": \"600519.SH\",\n    \"股票三\": \"000001.SZ\",\n    \"股票四\": \"000333.SZ\",\n    \"股票五\": \"300750.SZ\",\n    \"股票六\": \"002594.SZ\",\n    \"股票七\": \"688111.SH\",\n}\n\n\ndef initialize(context):\n    context.invested = False\n\n\ndef handle_data(context, data):\n    if context.invested:\n        return\n    account_id = context.run_info.stock_account\n    account = context.stock_account_dict.get(account_id)\n    if account is None or account.total_value <= 0:\n        return\n    context.invested = True\n    amount = account.total_value / len(STOCKS)\n    for name, symbol in STOCKS.items():\n        order_values(account_id, symbol, amount)\n"
+        }
+      },
+      {
+        "id": 2,
+        "type": "StockBacktestControl",
+        "flags": {
+          "uuid": "frontend_stock_hold-backtest",
+          "plugin_source": "official",
+          "type": ""
+        },
+        "title": "回测",
+        "properties": {
+          "title": "回测"
+        }
+      },
+      {
+        "id": 3,
+        "type": "BackTestResultControl",
+        "flags": {
+          "uuid": "frontend_stock_hold-result",
+          "plugin_source": "official",
+          "type": ""
+        },
+        "title": "策略回测结果",
+        "properties": {
+          "title": "策略回测结果",
+          "回测任务": "error"
+        }
+      }
+    ],
+    "links": [
+      [
+        1,
+        1,
+        0,
+        2,
+        0,
+        "string"
+      ],
+      [
+        2,
+        2,
+        0,
+        3,
+        0,
+        "string"
+      ]
+    ],
+    "groups": [],
+    "config": {},
+    "version": 0.4
+  },
+  "nodes": [
+    {
+      "uuid": "frontend_stock_hold-code",
+      "title": "Python代码输入",
+      "name": "CodeControl",
+      "type": "CodeControl",
+      "litegraph_id": 1,
+      "static_input_data": {
+        "code": "from panda_backtest.api.api import order_values\n\nSTOCKS = {\n    \"股票一\": \"600000.SH\",\n    \"股票二\": \"600519.SH\",\n    \"股票三\": \"000001.SZ\",\n    \"股票四\": \"000333.SZ\",\n    \"股票五\": \"300750.SZ\",\n    \"股票六\": \"002594.SZ\",\n    \"股票七\": \"688111.SH\",\n}\n\n\ndef initialize(context):\n    context.invested = False\n\n\ndef handle_data(context, data):\n    if context.invested:\n        return\n    account_id = context.run_info.stock_account\n    account = context.stock_account_dict.get(account_id)\n    if account is None or account.total_value <= 0:\n        return\n    context.invested = True\n    amount = account.total_value / len(STOCKS)\n    for name, symbol in STOCKS.items():\n        order_values(account_id, symbol, amount)\n"
+      },
+      "model_path": "",
+      "output_db_id": null
+    },
+    {
+      "uuid": "frontend_stock_hold-backtest",
+      "title": "回测",
+      "name": "StockBacktestControl",
+      "type": "StockBacktestControl",
+      "litegraph_id": 2,
+      "static_input_data": {
+        "start_capital": 10000000,
+        "standard_symbol": "中证1000",
+        "commission_rate": 1,
+        "slippage": 0,
+        "frequency": "日线",
+        "start_date": "20250101",
+        "end_date": "20251231",
+        "code": ""
+      },
+      "model_path": "",
+      "output_db_id": null
+    },
+    {
+      "uuid": "frontend_stock_hold-result",
+      "title": "策略回测结果",
+      "name": "BackTestResultControl",
+      "type": "BackTestResultControl",
+      "litegraph_id": 3,
+      "static_input_data": {
+        "task_id": "error"
+      },
+      "model_path": "",
+      "output_db_id": null
+    }
+  ],
+  "links": [
+    {
+      "uuid": "frontend_stock_hold-link-1",
+      "litegraph_id": 1,
+      "status": 1,
+      "previous_node_uuid": "frontend_stock_hold-code",
+      "next_node_uuid": "frontend_stock_hold-backtest",
+      "output_field_name": "code",
+      "input_field_name": "code"
+    },
+    {
+      "uuid": "frontend_stock_hold-link-2",
+      "litegraph_id": 2,
+      "status": 1,
+      "previous_node_uuid": "frontend_stock_hold-backtest",
+      "next_node_uuid": "frontend_stock_hold-result",
+      "output_field_name": "backtest_id",
+      "input_field_name": "task_id"
+    }
+  ],
+  "id": "fixture-frontend_stock_hold"
+}

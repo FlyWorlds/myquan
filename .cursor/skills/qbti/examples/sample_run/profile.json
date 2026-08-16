@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "quiz_version": "1.1",
+  "mapping_version": "1.1",
+  "generated_at": "2026-07-03T15:54:55+08:00",
+  "answers": {
+    "cluster_a_loss_reaction": "uncomfortable_but_check_first",
+    "cluster_b_involvement": "monthly_glance",
+    "cluster_c_taste": "steady_and_boring",
+    "cluster_c_volatility_stance": "stresses_me_out",
+    "cluster_d_universe_style": "has_exclusions",
+    "cluster_d_exclude_st": true,
+    "cluster_e_time_capsule": "year_end",
+    "cluster_c_taste_secondary": null,
+    "cluster_d_preferred_sectors": [],
+    "cluster_d_excluded_sectors": [
+      "real_estate"
+    ]
+  },
+  "derived": {
+    "risk_tolerance": "cautious",
+    "stop_loss_discipline": "hard_stop_wide",
+    "max_position_pct": 8,
+    "involvement_level": "monthly",
+    "rebalance_frequency": "monthly",
+    "wants_monitor_skill": false,
+    "sector_preference_mode": "has_exclusions",
+    "preferred_sectors": [],
+    "excluded_sectors": [
+      "real_estate"
+    ],
+    "exclude_st_and_risk_flags": true,
+    "time_horizon": "medium",
+    "target_holding_period_days": 60,
+    "turnover_tolerance": "medium",
+    "factor_affinity": [
+      "low_volatility",
+      "quality_stable"
+    ],
+    "volatility_stance": "stresses_me_out"
+  },
+  "defaults_used": [
+    {
+      "field": "cluster_b_involvement",
+      "default_value": "monthly_glance",
+      "reason": "answer missing; question_bank default applied"
+    }
+  ],
+  "consistency_flags": [],
+  "user_confirmed": true
+}

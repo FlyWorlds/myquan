@@ -1,0 +1,24 @@
+---
+description: Use the Concept Rotation Monitor skill for A-share concept/theme rotation — concept-level momentum and breadth from constituent returns, new-concept detection, and short-vs-long rotation reads.
+alwaysApply: false
+---
+
+# Concept Rotation Monitor Skill
+
+When the user asks for A-share concept/theme rotation, 概念轮动, 题材轮动, 概念热度, 板块轮动, 概念动量排名, 新概念, or concept constituents, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/concept-rotation-monitor
+```
+
+Workflow:
+
+1. Read `.cursor/skills/concept-rotation-monitor/SKILL.md`.
+2. For routing, the bottom-up aggregation formulas, weighting/breadth definitions, the membership-snapshot rule, report format, empty-data handling, or QA, also read `.cursor/skills/concept-rotation-monitor/references/concept-rotation-playbook.md`.
+3. Validate generated reports with `.cursor/skills/concept-rotation-monitor/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for the exact `get_concept_list`, `get_concept_constituents`, and `get_stock_daily` contracts before any real API call.
+5. Build concept momentum bottom-up from constituent returns; name the weighting (等权 median/mean) and window; there is no official concept price index.
+6. Snapshot constituent membership with an explicit `date` (no lookahead on today's membership); report breadth beside momentum; use short−long spread for the rotation read.
+7. Flag concept overlap / non-additivity and newly-formed concepts. Preserve source methods, windows, snapshot dates, constituent counts, and drop counts. Do not invent concepts, constituents, returns, credentials, or investment advice.

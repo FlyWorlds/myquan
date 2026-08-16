@@ -1,0 +1,7 @@
+interface:
+  display_name: "A股市场风险雷达"
+  short_description: "扫描A股宏观、资金、估值、轮动、个股和技术面风险信号"
+  default_prompt: "Use $skill-a-share-market-risk-radar to scan current A-share market risk and summarize the key warnings."
+
+policy:
+  allow_implicit_invocation: true

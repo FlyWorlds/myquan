@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.DS_Store
+*.parquet
+prices/
+real_runs/
+sources/
+.pytest_cache/
+.coverage
+.env
+.venv/
+*.egg-info/
+cache/
+runs/
+output/
+.smoke/
+examples/smoke_data/
