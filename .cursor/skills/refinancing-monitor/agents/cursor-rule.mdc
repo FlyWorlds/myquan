@@ -1,0 +1,24 @@
+---
+description: Use the Refinancing Monitor skill for A-share private-placement / rights-issue scans, stage tracking, dilution ranking, and discount / break-issue analysis.
+alwaysApply: false
+---
+
+# Refinancing Monitor Skill
+
+When the user asks for A-share equity-refinancing monitoring, private-placement (定增) scans, rights-issue (配股) tracking, dilution ratios, refinancing discount / break-issue (定增破发), refinancing progress, or a refinancing watch report, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/refinancing-monitor
+```
+
+Workflow:
+
+1. Read `.cursor/skills/refinancing-monitor/SKILL.md`.
+2. For routing, stage/type/dilution definitions, dedup rules, report format, empty-data handling, or QA, also read `.cursor/skills/refinancing-monitor/references/refinancing-playbook.md`.
+3. Validate generated reports with `.cursor/skills/refinancing-monitor/scripts/validate_report.py`.
+4. Use the local `pandadata-api` skill for the exact `get_stock_private_placement` / `get_stock_allotment` contract before any real API call.
+5. Keep 定增 and 配股 as separate streams; deduplicate each across stages before counting; report the latest stage; always distinguish 预案 (planned) from 实施完成 (executed).
+6. Compute dilution against a stated share base (`get_share_float`); compare issue/allotment price to market via `get_stock_daily` for discount and break-issue; state both as relative observations.
+7. Preserve source method names, query windows, announcement dates, stages, and missing-data notes. Do not invent shares, prices, ratios, stages, status, credentials, or investment advice.

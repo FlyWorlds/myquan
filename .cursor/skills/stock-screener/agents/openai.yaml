@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stock Screener"
+  short_description: "Screen A-shares from natural-language filters"
+  default_prompt: "Use $stock-screener to find A-shares that match my financial, dividend, holder, valuation, and capital-flow criteria."

@@ -1,0 +1,13 @@
+{
+  "manifest_version": "1.0.0",
+  "schema_id": "quant-experiment-manifest",
+  "schema_revision": 1,
+  "generated_at": "2026-08-05T00:00:00Z",
+  "experiment": {"variant_id": "baseline", "fingerprint": "sha256:synthetic"},
+  "configuration": {"status": "complete", "queries": [{"id": "price_panel", "method": "get_stock_daily"}]},
+  "assets": [],
+  "data_snapshots": [{"snapshot_mode": "metadata_and_fingerprint_only", "query_fingerprint": "sha256:synthetic", "content_fingerprint": "sha256:synthetic", "availability_time": null}],
+  "checks": {"data": {"status": "not_checked"}, "lookahead_risk": {"status": "not_checked"}},
+  "reproducibility": {"overall_status": "partial", "blocking_items": [], "warnings": ["external_checks_not_run"], "unresolved_items": []},
+  "extensions": {"synthetic_fixture": true}
+}

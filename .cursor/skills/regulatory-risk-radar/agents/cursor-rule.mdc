@@ -1,0 +1,8 @@
+---
+description: Load the regulatory and governance risk radar instructions.
+globs: ["**/*.py", "**/*.csv", "**/*.md"]
+alwaysApply: false
+---
+
+Read `SKILL.md` before changing or running this skill. Preserve announcement dates,
+evidence sources, severity scoring, degradation notes, and research-only wording.

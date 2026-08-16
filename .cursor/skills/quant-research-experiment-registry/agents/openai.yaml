@@ -1,0 +1,5 @@
+interface:
+  display_name: "Quant Research Experiment Registry"
+  short_description: "Register experiments and reproducibility evidence"
+  default_prompt: "Use $quant-research-experiment-registry to scan an existing quantitative research directory, confirm its assets and configuration, and produce a reproducibility manifest without executing code unless explicitly authorized."
+entrypoint: SKILL.md

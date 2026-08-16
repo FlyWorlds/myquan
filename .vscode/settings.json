@@ -1,0 +1,7 @@
+{
+  "files.exclude": {
+    "**/.cursor": false,
+    "**/.cursor/**": false
+  },
+  "explorer.excludeGitIgnore": false
+}

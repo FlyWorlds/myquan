@@ -1,0 +1,4 @@
+[
+  {"symbol": "000021.SZ", "name": "深科技", "info_date": "20251230", "first_info_date": "20251205", "progress": "实施中", "begin_date": "20251227", "end_date": "20260326", "shareholder_name": "博旭(香港)有限公司", "shareholder_type": "股东", "direction": "减持", "before_hold": 87387217.0, "change_up_limit": 10924100.0, "ratio_up_limit": 0.9, "reason": "资金需求"},
+  {"symbol": "600519.SH", "name": "贵州茅台", "info_date": "20260710", "first_info_date": "20260705", "progress": "预披露", "begin_date": "20260801", "end_date": "20261031", "shareholder_name": "某高管", "shareholder_type": "高管", "direction": "减持", "before_hold": 50000.0, "change_up_limit": 12000.0, "ratio_up_limit": 0.02, "reason": "个人资金需求"}
+]

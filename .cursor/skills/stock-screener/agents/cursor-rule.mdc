@@ -1,0 +1,24 @@
+---
+description: Use the Stock Screener skill for natural-language A-share stock screens backed by Pandadata evidence.
+alwaysApply: false
+---
+
+# Stock Screener Skill
+
+When the user asks for 选股, 筛选股票, 找出满足条件的A股, 财务/分红/股东/资金面过滤, or natural-language stock screening, use the local skill package.
+
+Preferred local project path:
+
+```text
+.cursor/skills/stock-screener
+```
+
+Workflow:
+
+1. Read `.cursor/skills/stock-screener/SKILL.md`.
+2. For multi-condition screens, also read `.cursor/skills/stock-screener/references/screener-guide.md`.
+3. Use the Pandadata API skill at `.cursor/skills/pandadata-api` to verify exact `panda_data` method parameters and fields before calling any API.
+4. Normalize natural-language criteria into atomic filters, confirm material ambiguities, and keep the screening date explicit.
+5. Execute filters layer by layer, recording method names, parameters, data dates, report periods, row counts, and missing-data policy.
+6. Report in Chinese by default with a screening funnel, evidence table, reproducibility notes, and the non-investment-advice disclaimer.
+7. Do not invent methods, fields, credentials, factor definitions, or unsupported screening rules.

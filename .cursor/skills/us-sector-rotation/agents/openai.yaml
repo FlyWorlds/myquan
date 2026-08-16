@@ -1,0 +1,4 @@
+interface:
+  display_name: "US Sector Rotation"
+  short_description: "Generate US sector rotation reports from Pandadata."
+  default_prompt: "Use $us-sector-rotation to generate a US sector rotation report for the latest completed market data date."

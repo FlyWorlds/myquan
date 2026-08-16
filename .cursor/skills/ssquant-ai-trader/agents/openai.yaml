@@ -1,0 +1,4 @@
+interface:
+  display_name: "SSQuant AI Trader"
+  short_description: "Local QuantSkills agent skill for SSQuant AI Trader"
+  default_prompt: "Use $ssquant-ai-trader to help with my QuantSkills request."

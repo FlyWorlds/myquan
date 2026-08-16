@@ -1,0 +1,13 @@
+{
+  "data_source": "panda_data",
+  "experiment_period": {"start": "2024-01-01", "end": "2025-12-31"},
+  "hypothesis": "A declared feature predicts the next-period return.",
+  "features": [{"name": "momentum_20d", "definition": "20-day return"}],
+  "label": {"name": "forward_return_5d", "definition": "next 5-day return"},
+  "time_split": {"train": ["2024-01-01", "2024-12-31"], "validation": ["2025-01-01", "2025-06-30"], "test": ["2025-07-01", "2025-12-31"]},
+  "random_seed": 7,
+  "run_command": ["python", "research.py", "--config", "config.json"],
+  "comparison_rules": {"sharpe": {"method": "absolute_tolerance", "tolerance": 0.01}, "selected_symbols": {"method": "set_equal"}},
+  "dependencies": [{"name": "skill-numerical-leak-check", "version": "synthetic-fixture", "status": "not_run"}],
+  "panda_data": {"queries": [{"id": "price_panel", "method": "get_stock_daily", "params": {"symbol": ["000001.SZ"], "start_date": "20240101", "end_date": "20251231"}, "fields": ["date", "symbol", "close"]}]}
+}

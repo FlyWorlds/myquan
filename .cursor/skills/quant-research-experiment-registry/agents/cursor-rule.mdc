@@ -1,0 +1,16 @@
+---
+description: Load the experiment registry skill for read-only-first registration, reproducibility evidence, and handoff manifests.
+alwaysApply: false
+---
+
+# Quant Research Experiment Registry
+
+When this repository is used from Cursor:
+
+1. Load `.cursor/skills/quant-research-experiment-registry/SKILL.md` as the authoritative skill contract.
+2. Read only the references needed for the request, especially `references/scan-and-confirm.md`, `references/manifest-contract.md`, `references/data-snapshot-policy.md`, and `references/lookahead-audit-boundary.md`.
+3. Use the repository scripts for deterministic scanning, normalization, fingerprinting, manifest construction, and validation. Do not replace their rules with ad hoc code.
+4. Treat source-code execution, reproduction commands, external `panda_data` access, and every write as opt-in actions requiring explicit confirmation in the user's runtime.
+5. Exclude credentials, tokens, private messages, caches, virtual environments, and unredacted sensitive data from all outputs.
+6. Record unavailable optional collaborators or transports as scoped `not_checked`; MCP is optional read-only transport and is never a runtime requirement.
+7. Do not generate or evaluate factors, run a backtest engine, optimize a strategy, or provide investment advice.

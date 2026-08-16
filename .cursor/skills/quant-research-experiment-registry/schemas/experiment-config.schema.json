@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["data_source", "experiment_period", "features", "label", "time_split", "run_command", "comparison_rules"],
+  "properties": {
+    "data_source": {"type": ["string", "object"]},
+    "experiment_period": {"type": "object"},
+    "hypothesis": {"type": ["string", "null"]},
+    "features": {},
+    "label": {},
+    "time_split": {"type": "object"},
+    "random_seed": {"type": ["integer", "null"]},
+    "run_command": {"type": ["string", "array"]},
+    "comparison_rules": {"type": "object"},
+    "dependencies": {"type": "array"},
+    "queries": {"type": "array"},
+    "extensions": {"type": "object"}
+  },
+  "additionalProperties": true
+}

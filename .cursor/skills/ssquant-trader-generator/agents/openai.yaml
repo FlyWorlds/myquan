@@ -1,0 +1,4 @@
+interface:
+  display_name: "SSQuant Trader Generator"
+  short_description: "Local QuantSkills agent skill for SSQuant Trader Generator"
+  default_prompt: "Use $ssquant-trader-generator to help with my QuantSkills request."

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["manifest_version", "schema_id", "schema_revision", "experiment", "configuration", "assets", "data_snapshots", "checks", "reproducibility", "extensions"],
+  "properties": {
+    "manifest_version": {"type": "string"},
+    "schema_id": {"const": "quant-experiment-manifest"},
+    "schema_revision": {"type": "integer", "minimum": 1},
+    "generated_at": {"type": "string"},
+    "experiment": {"type": "object"},
+    "configuration": {"type": "object"},
+    "assets": {"type": "array"},
+    "data_snapshots": {"type": "array"},
+    "checks": {"type": "object"},
+    "reproducibility": {
+      "type": "object",
+      "required": ["overall_status", "blocking_items", "warnings", "unresolved_items"],
+      "properties": {
+        "overall_status": {"enum": ["verified", "partial", "blocked", "failed"]},
+        "blocking_items": {"type": "array"},
+        "warnings": {"type": "array"},
+        "unresolved_items": {"type": "array"}
+      }
+    },
+    "extensions": {"type": "object"}
+  },
+  "additionalProperties": false
+}

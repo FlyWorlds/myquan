@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refinancing Monitor"
+  short_description: "基于Pandadata 定增/配股接口的A股再融资监控：进程漏斗·折价破发·稀释强度"
+  default_prompt: "Use $refinancing-monitor 为给定窗口或个股生成带数据来源的A股再融资(定增/配股)监控报告。"

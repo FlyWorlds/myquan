@@ -1,0 +1,4 @@
+interface:
+  display_name: "Serenity Research Model"
+  short_description: "Extract Serenity-style investment logic from public X records."
+  default_prompt: "Use $serenity-research-model to analyze Serenity public posts and reconstruct the investment research model."

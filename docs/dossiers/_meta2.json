@@ -1,0 +1,18 @@
+{
+  "top10_circ": {
+    "ok": false,
+    "error": "HTTPSConnectionPool(host='emweb.securities.eastmoney.com', port=443): Max retries exceeded with url: /PC_HSF10/ShareholderResearch/PageSDLTGD?code=SH600552&date=2025-03-31 (Caused by ProxyError('Unabl"
+  },
+  "top10_all": {
+    "ok": false,
+    "error": "HTTPSConnectionPool(host='emweb.securities.eastmoney.com', port=443): Max retries exceeded with url: /PC_HSF10/ShareholderResearch/PageSDGD?code=SH600552&date=2025-03-31 (Caused by ProxyError('Unable "
+  },
+  "gdhs_detail": {
+    "ok": false,
+    "error": "HTTPSConnectionPool(host='datacenter-web.eastmoney.com', port=443): Max retries exceeded with url: /api/data/v1/get?sortColumns=END_DATE&sortTypes=-1&pageSize=500&pageNumber=1&reportName=RPT_HOLDERNUM"
+  },
+  "main_holder": {
+    "ok": false,
+    "error": "HTTPSConnectionPool(host='vip.stock.finance.sina.com.cn', port=443): Max retries exceeded with url: /corp/go.php/vCI_StockHolder/stockid/600552.phtml (Caused by ProxyError('Unable to connect to proxy'"
+  }
+}
