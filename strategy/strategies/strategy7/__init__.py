@@ -1,4 +1,4 @@
-"""策略七：因子5事件建仓 + 因子1止损的五槽位主题策略。"""
+"""策略七：因子5事件建仓、单主题一只、固定持有五日的五槽位策略。"""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ def refresh_strategy7_factor5(
     output: str | Path | None = None,
 ) -> dict[str, Any]:
     """刷新当天因子5候选池；没有合格新帖时输出为空池。"""
+    from strategy.backtest_factor5_serenity import _zz500_1000_mainboard_codes
     from strategy.serenity_factor5 import DEFAULT_OUTPUT, write_snapshot
 
     snapshot = write_snapshot(
@@ -33,6 +34,7 @@ def refresh_strategy7_factor5(
         posts_path=posts_path,
         asof=asof,
         lookback_days=0,
+        eligible_codes=_zz500_1000_mainboard_codes(),
     )
     return {
         "strategy_id": STRATEGY_ID,
@@ -49,14 +51,16 @@ def run_strategy7(
     end: str = "20260815",
     max_themes: int = 3,
     max_positions: int = 5,
-    stop_pct: float = 0.025,
+    max_per_theme: int = 1,
+    hold_days: int = 5,
     initial_cash: float = 1_000_000.0,
     posts_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """运行因子5事件回测。
 
-    因子5事件候选在下一交易日开盘填充最多五个空槽；因子1仅负责盘中止损。
-    无候选或空槽未能补足时保留现金，不设固定持有期限。
+    因子5事件候选在下一交易日开盘填充最多五个空槽；每主题最多一只，
+    持有五个交易日后开盘退出。新事件同主题替换旧票，不同主题满仓时替换
+    最早入池持仓；无候选时保留现金。
     """
     from strategy.backtest_factor5_serenity import run_backtest
     from strategy.serenity_factor5 import DEFAULT_POSTS
@@ -66,7 +70,9 @@ def run_strategy7(
         end=end,
         max_themes=max_themes,
         max_positions=max_positions,
-        stop_pct=stop_pct,
+        max_per_theme=max_per_theme,
+        hold_days=hold_days,
+        use_factor1_stop=False,
         initial_cash=initial_cash,
         posts_path=posts_path or DEFAULT_POSTS,
     )
@@ -77,8 +83,8 @@ def _bind() -> StrategySpec:
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
         description=(
-            "因子5事件候选填充最多五个仓位，因子1仅止损卖出；"
-            "每日补足空槽，候选不足时保持现金，不设固定持有期。"
+            "因子5事件候选填充最多五个仓位；单主题最多一只、固定持有五日；"
+            "新事件可替换同主题旧票或满仓时最早入池持仓。"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy7,
@@ -86,14 +92,15 @@ def _bind() -> StrategySpec:
             "start": "20260101",
             "max_themes": 3,
             "max_positions": 5,
-            "stop_pct": 0.025,
+            "max_per_theme": 1,
+            "hold_days": 5,
         },
         print_rules=_print_rules,
         aliases=("s7", "factor5_serenity", "策略七"),
         implemented=True,
         meta={
-            "factors": ("factor5", "factor1"),
-            "execution": "event_driven_slots_factor1_stop",
+            "factors": ("factor5",),
+            "execution": "event_driven_slots_fixed_hold",
             "source_skill": "serenity-research-model",
         },
     )

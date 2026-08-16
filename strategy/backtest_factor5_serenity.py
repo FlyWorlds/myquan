@@ -22,10 +22,28 @@ def _symbol(code: str) -> str:
     return ("sh" if code.startswith(("6", "688")) else "sz") + code
 
 
+def _zz500_1000_mainboard_codes() -> set[str]:
+    """加载中证500/1000主板并集，并额外剔除名称含 ST 的成分。"""
+    from backtest.zz1000_momentum_select import load_zz500_1000_mainboard
+
+    universe = load_zz500_1000_mainboard()
+    names = universe["name"].astype(str).str.upper()
+    return set(universe.loc[~names.str.contains("ST", regex=False), "code"].astype(str).str.zfill(6))
+
+
+def _theme_by_code() -> dict[str, str]:
+    return {
+        code: theme
+        for theme, meta in THEME_MAP.items()
+        for code in meta["symbols"]
+    }
+
+
 def _load_panel(
     *,
     start: str,
     end: str,
+    eligible_codes: set[str],
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, str]]:
     """读取/补齐主题代理池行情，返回开盘、最低、收盘宽表。"""
     opens: dict[str, pd.Series] = {}
@@ -34,6 +52,8 @@ def _load_panel(
     name_map: dict[str, str] = {}
     for meta in THEME_MAP.values():
         for code, name in meta["symbols"].items():
+            if code not in eligible_codes:
+                continue
             symbol = _symbol(code)
             try:
                 daily = fetch_daily(
@@ -68,6 +88,8 @@ def _event_picks(
     start: str,
     end: str,
     max_themes: int,
+    eligible_codes: set[str],
+    max_per_theme: int,
 ) -> dict[pd.Timestamp, list[str]]:
     """将每个发帖日映射至随后一个交易日的前一根信号日。
 
@@ -83,7 +105,13 @@ def _event_picks(
         if day.date() not in date_set and day.weekday() < 5:
             # 交易日无新帖是主路径，跳过文件扫描。
             continue
-        candidates = build_candidates(posts_path, asof=day.date(), lookback_days=0)
+        candidates = build_candidates(
+            posts_path,
+            asof=day.date(),
+            lookback_days=0,
+            eligible_codes=eligible_codes,
+            max_per_theme=max_per_theme,
+        )
         if not candidates:
             continue
         theme_order: list[str] = []
@@ -110,6 +138,9 @@ def run_backtest(
     max_themes: int = 3,
     max_positions: int = 5,
     stop_pct: float = 0.025,
+    use_factor1_stop: bool = False,
+    hold_days: int | None = 5,
+    max_per_theme: int = 1,
     initial_cash: float = 1_000_000.0,
     posts_path: str | Path = DEFAULT_POSTS,
 ) -> dict[str, Any]:
@@ -120,7 +151,13 @@ def run_backtest(
     """
     from strategy.strategies.strategy7.portfolio import simulate_factor5_event_slots_f1_stop
 
-    opens, lows, closes, name_map = _load_panel(start="20251201", end=end)
+    eligible_codes = _zz500_1000_mainboard_codes()
+    warm_start = (pd.Timestamp(start) - pd.Timedelta(days=35)).strftime("%Y%m%d")
+    opens, lows, closes, name_map = _load_panel(
+        start=warm_start,
+        end=end,
+        eligible_codes=eligible_codes,
+    )
     common = opens.columns.intersection(lows.columns).intersection(closes.columns)
     opens, lows, closes = opens[common], lows[common], closes[common]
     dates = closes.index
@@ -130,6 +167,8 @@ def run_backtest(
         start=start,
         end=end,
         max_themes=max_themes,
+        eligible_codes=eligible_codes,
+        max_per_theme=max_per_theme,
     )
     equity, trades, slots, stats = simulate_factor5_event_slots_f1_stop(
         opens=opens,
@@ -139,11 +178,19 @@ def run_backtest(
         bt_start=pd.Timestamp(start),
         max_positions=int(max_positions),
         stop_pct=float(stop_pct),
+        use_factor1_stop=bool(use_factor1_stop),
+        hold_days=hold_days,
+        code_themes=_theme_by_code(),
         initial_cash=float(initial_cash),
     )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    stem = f"strategy7_factor5_slots_{start}_{end}_n{max_positions}"
+    stop_tag = "f1" if use_factor1_stop else "nof1"
+    hold_tag = f"h{hold_days}" if hold_days is not None else "hNone"
+    stem = (
+        f"strategy7_factor5_slots_{start}_{end}_n{max_positions}_"
+        f"{stop_tag}_{hold_tag}_pt{max_per_theme}"
+    )
     equity.to_csv(OUT_DIR / f"{stem}_equity.csv", index=False)
     trades.to_csv(OUT_DIR / f"{stem}_trades.csv", index=False)
     slots.to_csv(OUT_DIR / f"{stem}_slots.csv", index=False)
@@ -163,10 +210,21 @@ def run_backtest(
         **{key: value for key, value in stats.items() if key != "picks"},
         "signal_event_count": len(event_rows),
         "no_event_days_may_replenish_from_last_pool": True,
-        "execution": "post date -> next trading-day open; factor1 stop; daily empty-slot replenishment",
+        "execution": (
+            "post date -> next trading-day open; "
+            f"{'factor1 stop' if use_factor1_stop else 'no factor1 stop'}; "
+            f"{'fixed hold exit' if hold_days is not None else 'no fixed hold exit'}; "
+            "daily empty-slot replenishment"
+        ),
         "max_themes_per_event": max_themes,
         "max_positions": max_positions,
         "stop_pct": stop_pct,
+        "use_factor1_stop": use_factor1_stop,
+        "hold_days": hold_days,
+        "max_per_theme": max_per_theme,
+        "event_rebalance": "same-theme replaces prior holding; new theme replaces oldest holding when full",
+        "universe": "CSI500 + CSI1000 current mainboard constituents, excluding ST names",
+        "eligible_universe_size": len(eligible_codes),
         "posts_path": str(posts_path),
         "mapping_warning": "A-share theme proxy map is static and may contain look-ahead bias.",
         "output_stem": stem,
@@ -184,6 +242,9 @@ def main() -> None:
     parser.add_argument("--max-themes", type=int, default=3)
     parser.add_argument("--max-positions", type=int, default=5)
     parser.add_argument("--stop-pct", type=float, default=0.025)
+    parser.add_argument("--use-factor1-stop", action="store_true")
+    parser.add_argument("--hold-days", type=int, default=5)
+    parser.add_argument("--max-per-theme", type=int, default=1)
     parser.add_argument("--initial-cash", type=float, default=1_000_000.0)
     parser.add_argument("--posts", type=Path, default=DEFAULT_POSTS)
     args = parser.parse_args()
@@ -195,6 +256,9 @@ def main() -> None:
                 max_themes=args.max_themes,
                 max_positions=args.max_positions,
                 stop_pct=args.stop_pct,
+                use_factor1_stop=args.use_factor1_stop,
+                hold_days=args.hold_days,
+                max_per_theme=args.max_per_theme,
                 initial_cash=args.initial_cash,
                 posts_path=args.posts,
             ),

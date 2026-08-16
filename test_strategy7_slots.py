@@ -103,6 +103,68 @@ class Strategy7SlotTests(unittest.TestCase):
         self.assertEqual(stats["n_buys"], 0)
         self.assertTrue((equity["cash"] == 100_000).all())
 
+    def test_fixed_hold_exits_without_factor1_stop(self) -> None:
+        opens, lows, closes = _panel()
+        dates = opens.index
+        _, trades, _, stats = simulate_factor5_event_slots_f1_stop(
+            opens=opens,
+            lows=lows,
+            closes=closes,
+            picks={dates[0]: ["A"]},
+            bt_start=dates[0],
+            max_positions=1,
+            use_factor1_stop=False,
+            hold_days=2,
+            initial_cash=100_000,
+        )
+        sell = trades[trades["side"] == "sell"].iloc[0]
+        self.assertEqual(sell["reason"], "time_exit")
+        self.assertEqual(sell["date"], dates[3])
+        self.assertEqual(stats["n_factor1_stops"], 0)
+        self.assertEqual(stats["n_time_exits"], 1)
+
+    def test_new_theme_replaces_oldest_when_slots_full(self) -> None:
+        opens, lows, closes = _panel()
+        dates = opens.index
+        _, trades, _, stats = simulate_factor5_event_slots_f1_stop(
+            opens=opens,
+            lows=lows,
+            closes=closes,
+            picks={dates[0]: ["A"], dates[1]: ["B"]},
+            bt_start=dates[0],
+            max_positions=1,
+            use_factor1_stop=False,
+            hold_days=10,
+            code_themes={"A": "memory", "B": "power"},
+            initial_cash=100_000,
+        )
+        replacement = trades[(trades["symbol"] == "A") & (trades["side"] == "sell")].iloc[0]
+        b_buy = trades[(trades["symbol"] == "B") & (trades["side"] == "buy")].iloc[0]
+        self.assertEqual(replacement["reason"], "new_theme_replace")
+        self.assertEqual(replacement["date"], dates[2])
+        self.assertEqual(b_buy["date"], dates[2])
+        self.assertEqual(stats["n_replacements"], 1)
+
+    def test_same_theme_event_replaces_previous_theme_holding(self) -> None:
+        opens, lows, closes = _panel()
+        dates = opens.index
+        _, trades, _, stats = simulate_factor5_event_slots_f1_stop(
+            opens=opens,
+            lows=lows,
+            closes=closes,
+            picks={dates[0]: ["A"], dates[1]: ["B"]},
+            bt_start=dates[0],
+            max_positions=2,
+            use_factor1_stop=False,
+            hold_days=10,
+            code_themes={"A": "memory", "B": "memory"},
+            initial_cash=100_000,
+        )
+        replacement = trades[(trades["symbol"] == "A") & (trades["side"] == "sell")].iloc[0]
+        self.assertEqual(replacement["reason"], "concept_replace")
+        self.assertTrue(((trades["symbol"] == "B") & (trades["side"] == "buy")).any())
+        self.assertEqual(stats["n_replacements"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

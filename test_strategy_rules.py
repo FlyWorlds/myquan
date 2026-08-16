@@ -140,14 +140,13 @@ class StrategyRuleTests(unittest.TestCase):
         from strategy import get_strategy_bindings
 
         bindings = {binding.factor_id: binding for binding in get_strategy_bindings("strategy7")}
-        self.assertEqual(set(bindings), {"factor1", "factor5"})
+        self.assertEqual(set(bindings), {"factor5"})
         factor5 = bindings["factor5"]
         self.assertEqual(factor5.role, "universe")
         self.assertEqual(factor5.params["lookback_days"], 0)
         self.assertEqual(factor5.params["max_candidates"], 5)
-        factor1 = bindings["factor1"]
-        self.assertEqual(factor1.role, "exit")
-        self.assertEqual(factor1.params["stop_pct"], 0.025)
+        self.assertEqual(factor5.params["max_per_theme"], 1)
+        self.assertEqual(factor5.params["hold_days"], 5)
 
 
 class DailyCacheTests(unittest.TestCase):
@@ -295,20 +294,32 @@ class StrategyInstanceTests(unittest.TestCase):
 
 
 class Strategy6HybridTests(unittest.TestCase):
-    """因子3选股 + 因子1止损：注册、决策、合成面板回测。"""
+    """策略六 = 因子6 组合动量 ETF 轮动；旧混合组合模拟仍可独立调用。"""
 
-    def test_strategy6_bindings_and_decision_stop(self) -> None:
-        from strategy import MarketContext, get_decision_engine, get_strategy_bindings
+    def test_strategy6_bindings_and_decision_factor6(self) -> None:
+        from strategy import (
+            MarketContext,
+            get_decision_engine,
+            get_factor,
+            get_strategy,
+            get_strategy_bindings,
+        )
 
+        factor = get_factor("factor6")
+        self.assertTrue(factor.implemented)
+        self.assertEqual(factor.id, "factor6")
+        self.assertEqual(factor.meta.get("kind"), "etf_combo_momentum")
+
+        strategy = get_strategy("strategy6")
+        self.assertEqual(strategy.factor_ids, ("factor6",))
         ids = {b.factor_id for b in get_strategy_bindings("strategy6")}
-        self.assertEqual(ids, {"factor1", "factor3"})
+        self.assertEqual(ids, {"factor6"})
         roles = {b.factor_id: b.role for b in get_strategy_bindings("strategy6")}
-        self.assertEqual(roles["factor3"], "entry")
-        self.assertEqual(roles["factor1"], "exit")
+        self.assertEqual(roles["factor6"], "both")
+        self.assertEqual(get_strategy("s6").id, "strategy6")
 
         eng = get_decision_engine("strategy6")
-        # 有仓 + 触止损 → sell
-        sell = eng.decide(
+        hold = eng.decide(
             MarketContext(
                 open=10.0,
                 high=10.1,
@@ -321,25 +332,146 @@ class Strategy6HybridTests(unittest.TestCase):
                 session="2026-08-04",
             )
         )
-        self.assertEqual(sell.action, "sell")
-        self.assertIn("止损", sell.reason)
+        self.assertEqual(hold.action, "hold")
+        self.assertIn("因子6", hold.reason)
 
-        # T+1 当日不卖
-        hold = eng.decide(
+        buy = eng.decide(
             MarketContext(
-                open=10.0,
-                high=10.1,
-                low=9.70,
-                close=9.75,
-                last=9.75,
-                position_qty=100,
-                available_qty=0,
-                buy_time="2026-08-04 10:00:00",
-                session="2026-08-04",
+                open=1.0,
+                high=1.01,
+                low=0.99,
+                close=1.0,
+                last=1.0,
+                meta={"symbol": "sh510300", "target": ["sh510300"]},
             )
         )
-        self.assertEqual(hold.action, "hold")
-        self.assertIn("T+1", hold.reason)
+        self.assertEqual(buy.action, "buy")
+        self.assertEqual(buy.factor_id, "factor6")
+
+        sell = eng.decide(
+            MarketContext(
+                open=1.0,
+                high=1.01,
+                low=0.99,
+                close=1.0,
+                last=1.0,
+                position_qty=100,
+                available_qty=100,
+                buy_time="2026-08-01 10:00:00",
+                session="2026-08-04",
+                meta={"symbol": "sh510300", "target": []},
+            )
+        )
+        self.assertEqual(sell.action, "sell")
+
+    def test_combo_score_ranks_winner_and_cash_when_negative(self) -> None:
+        from strategy.etf_combo_momentum import combo_momentum_score, daily_targets
+
+        dates = pd.bdate_range("2024-01-02", periods=8)
+        closes = pd.DataFrame(
+            {
+                "A": [100, 101, 103, 106, 110, 115, 121, 128],
+                "B": [100, 99, 97, 94, 90, 85, 79, 72],
+            },
+            index=dates,
+        )
+        score = combo_momentum_score(closes, n=2, n2=3, w=1.0)
+        last = score.iloc[-1]
+        self.assertGreater(float(last["A"]), float(last["B"]))
+        picks = daily_targets(score, top_k=1, min_score=0.0)
+        self.assertEqual(picks[dates[-1]], ["A"])
+
+        down = pd.DataFrame(
+            {
+                "A": [100, 99, 97, 94, 90, 85, 79, 72],
+                "B": [100, 98, 95, 91, 86, 80, 73, 65],
+            },
+            index=dates,
+        )
+        empty = daily_targets(
+            combo_momentum_score(down, n=2, n2=3, w=1.0),
+            top_k=1,
+            min_score=0.0,
+        )
+        self.assertEqual(empty[dates[-1]], [])
+
+    def test_simulate_rotates_into_winner(self) -> None:
+        from strategy.etf_combo_momentum import run_etf_combo_momentum
+
+        dates = pd.bdate_range("2024-01-02", periods=12)
+        a = 100 + pd.Series(range(12), index=dates).astype(float)
+        b = 100 - pd.Series(range(12), index=dates).astype(float)
+        dailies = {
+            "A": pd.DataFrame(
+                {
+                    "date": dates,
+                    "open": a.to_numpy(),
+                    "high": a.to_numpy(),
+                    "low": a.to_numpy(),
+                    "close": a.to_numpy(),
+                    "volume": 1.0,
+                    "symbol": "A",
+                }
+            ),
+            "B": pd.DataFrame(
+                {
+                    "date": dates,
+                    "open": b.to_numpy(),
+                    "high": b.to_numpy(),
+                    "low": b.to_numpy(),
+                    "close": b.to_numpy(),
+                    "volume": 1.0,
+                    "symbol": "B",
+                }
+            ),
+        }
+        result = run_etf_combo_momentum(
+            n=2,
+            n2=3,
+            w=1.0,
+            top_k=1,
+            hold_days=3,
+            min_score=0.0,
+            start="20240105",
+            universe=(("A", "强势"), ("B", "弱势")),
+            dailies=dailies,
+            initial_cash=100_000.0,
+            verbose=False,
+        )
+        self.assertGreaterEqual(int(result.stats["n_buys"]), 1)
+        buys = result.trades[result.trades["side"] == "buy"]
+        self.assertTrue((buys["symbol"] == "A").all())
+
+    def test_simulate_stop_exits_before_hold_days(self) -> None:
+        from strategy.strategies.strategy6.portfolio import simulate_f3_select_f1_stop
+
+        dates = pd.date_range("2024-01-02", periods=6, freq="B")
+        opens = pd.DataFrame({"sA": [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]}, index=dates)
+        highs = opens.copy()
+        lows = pd.DataFrame({"sA": [9.8, 9.8, 9.70, 9.8, 9.8, 9.8]}, index=dates)
+        closes = opens.copy()
+        factor = pd.DataFrame({"sA": [1.0] * 6}, index=dates)
+        picks = {dates[0]: ["sA"]}
+
+        eq, tr, stats = simulate_f3_select_f1_stop(
+            factor=factor,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            closes=closes,
+            picks=picks,
+            bt_start=dates[0],
+            hold_days=3,
+            top_k=1,
+            stop_pct=0.025,
+            initial_cash=100_000.0,
+            factor_label="test",
+        )
+        self.assertFalse(eq.empty)
+        self.assertGreaterEqual(int(stats["n_buys"]), 1)
+        self.assertGreaterEqual(int(stats["n_stop_exits"]), 1)
+        sells = tr[tr["side"] == "sell"]
+        self.assertTrue((sells["reason"] == "stop").any())
 
     def test_simulate_stop_exits_before_hold_days(self) -> None:
         from strategy.strategies.strategy6.portfolio import simulate_f3_select_f1_stop
@@ -375,17 +507,17 @@ class Strategy6HybridTests(unittest.TestCase):
 
 
 class Strategy7SlotBindingTests(unittest.TestCase):
-    def test_strategy7_binds_event_universe_and_factor1_exit(self) -> None:
+    def test_strategy7_binds_fixed_hold_event_universe(self) -> None:
         from strategy import get_strategy, get_strategy_bindings
 
         strategy = get_strategy("strategy7")
         bindings = get_strategy_bindings("strategy7")
-        self.assertEqual(strategy.factor_ids, ("factor5", "factor1"))
+        self.assertEqual(strategy.factor_ids, ("factor5",))
         by_id = {binding.factor_id: binding for binding in bindings}
         self.assertEqual(by_id["factor5"].role, "universe")
         self.assertEqual(by_id["factor5"].params["max_positions"], 5)
-        self.assertEqual(by_id["factor1"].role, "exit")
-        self.assertEqual(by_id["factor1"].params["stop_pct"], 0.025)
+        self.assertEqual(by_id["factor5"].params["max_per_theme"], 1)
+        self.assertEqual(by_id["factor5"].params["hold_days"], 5)
 
 
 if __name__ == "__main__":

@@ -69,6 +69,11 @@ class Factor5SerenityTests(unittest.TestCase):
                 posts,
                 asof="2026-08-16",
             )
+            restricted_candidates = build_candidates(
+                posts,
+                asof="2026-08-16",
+                eligible_codes={"002281"},
+            )
             saturday_candidates = build_candidates(posts, asof="2026-08-15")
             no_new_post_candidates = build_candidates(posts, asof="2026-08-18")
         self.assertTrue(candidates)
@@ -77,6 +82,7 @@ class Factor5SerenityTests(unittest.TestCase):
         self.assertIn("300308", {row["code"] for row in candidates})
         self.assertTrue(all(row["source_post_count"] == 2 for row in candidates))
         self.assertTrue(all(row["source_post_count"] == 1 for row in saturday_candidates))
+        self.assertEqual([row["code"] for row in restricted_candidates], ["002281"])
         self.assertFalse(no_new_post_candidates)
 
     def test_snapshot_has_auditable_columns(self) -> None:

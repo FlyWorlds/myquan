@@ -274,6 +274,7 @@ def build_candidates(
     post_limit: int = 0,
     max_candidates: int = 5,
     max_per_theme: int = 2,
+    eligible_codes: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """生成按 Serenity 新近公开帖加权的 A 股研究候选池。
 
@@ -303,6 +304,8 @@ def build_candidates(
         mapping = THEME_MAP[theme]
         rows: list[dict[str, Any]] = []
         for code, name in mapping["symbols"].items():
+            if eligible_codes is not None and code not in eligible_codes:
+                continue
             rows.append(
                 {
                     "code": code,
@@ -347,6 +350,7 @@ def write_snapshot(
     post_limit: int = 0,
     max_candidates: int = 5,
     max_per_theme: int = 2,
+    eligible_codes: set[str] | None = None,
 ) -> Path:
     """写入动态候选池；每次运行都以可追溯的帖子时间窗重建。"""
     posts_path = Path(posts_path or DEFAULT_POSTS)
@@ -357,6 +361,7 @@ def write_snapshot(
         post_limit=post_limit,
         max_candidates=max_candidates,
         max_per_theme=max_per_theme,
+        eligible_codes=eligible_codes,
     )
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -378,6 +383,7 @@ def write_snapshot(
         "post_limit": post_limit,
         "max_candidates": max_candidates,
         "max_per_theme": max_per_theme,
+        "eligible_universe_size": len(eligible_codes) if eligible_codes is not None else None,
         "signal_window_start": window_start.isoformat(),
         "signal_window_end": window_end.isoformat(),
         "posts_path": str(posts_path),

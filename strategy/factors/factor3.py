@@ -18,7 +18,9 @@ _RULES = (
   · 股票池：中证1000主板；收盘截面打分 → 次日开盘 · 袖套持有
   · 默认参数见 strategy.strategies.strategy5.portfolio.PORTFOLIO_DEFAULTS
   · 说明：A股中小盘截面上短期反转通常优于趋势动量；单票择时仍可用 dist_hl
-  · 组合变体（策略六）：因子3只负责选票/买入；卖出叠因子1开盘- pct 止损
+  · 组合变体：因子3选票/买入 + 因子1开盘-pct 止损，见
+    strategy.strategies.strategy6.portfolio.run_f3_select_f1_stop_portfolio
+    （策略六本身已重新注册为因子6）
 ================================================================================
 """.strip()
 )

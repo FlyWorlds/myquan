@@ -37,6 +37,9 @@ def simulate_factor5_event_slots_f1_stop(
     bt_start: pd.Timestamp,
     max_positions: int = 5,
     stop_pct: float = DEFAULT_PCT,
+    use_factor1_stop: bool = True,
+    hold_days: int | None = None,
+    code_themes: dict[str, str] | None = None,
     initial_cash: float = 1_000_000.0,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     """模拟五固定槽位的事件建仓与因子1止损。
@@ -52,25 +55,85 @@ def simulate_factor5_event_slots_f1_stop(
     cash = float(initial_cash)
     active_pool: list[str] = []
     pool_signal_date: pd.Timestamp | None = None
-    stopped_symbols: set[str] = set()
+    blocked_symbols: set[str] = set()
     equity_rows: list[dict[str, Any]] = []
     trade_rows: list[dict[str, Any]] = []
     slot_rows: list[dict[str, Any]] = []
-    n_event_entries = n_daily_entries = n_stops = 0
+    n_event_entries = n_daily_entries = n_stops = n_replacements = 0
+    code_themes = dict(code_themes or {})
 
     for day_i, day in enumerate(all_dates):
         if day < pd.Timestamp(bt_start):
             continue
+
+        def exit_at_open(slot: int, reason: str) -> None:
+            nonlocal cash, n_replacements
+            position = positions[slot]
+            if position is None:
+                return
+            symbol = position["symbol"]
+            if symbol not in opens.columns or pd.isna(opens.at[day, symbol]):
+                return
+            open_price = float(opens.at[day, symbol])
+            if open_price <= 0:
+                return
+            fill_price = open_price * (1.0 - SLIP)
+            proceeds = int(position["shares"]) * fill_price
+            fee = proceeds * (COMMISSION + STAMP)
+            cash += proceeds - fee
+            trade_rows.append(
+                {
+                    "date": day,
+                    "symbol": symbol,
+                    "side": "sell",
+                    "shares": position["shares"],
+                    "price": fill_price,
+                    "slot": slot,
+                    "reason": reason,
+                    "signal_date": position["entry_signal_date"],
+                }
+            )
+            positions[slot] = None
+            blocked_symbols.add(symbol)
+            if reason in {"concept_replace", "new_theme_replace"}:
+                n_replacements += 1
+
+        # 到期退出在开盘处理，释放的槽位可在同一开盘按已知事件候选补入。
+        if hold_days is not None:
+            for slot, position in enumerate(positions):
+                if position is not None and day_i - int(position["entry_i"]) >= int(hold_days):
+                    exit_at_open(slot, "time_exit")
 
         prev_day = all_dates[day_i - 1] if day_i else None
         event_codes = list(dict.fromkeys(picks.get(prev_day, []))) if prev_day is not None else []
         if event_codes:
             active_pool = event_codes
             pool_signal_date = prev_day
-            # 新事件才允许重新评估曾被因子1止损的同一代码。
-            stopped_symbols.clear()
+            # 新事件才允许重新评估上一次候选池中已退出的同一代码。
+            blocked_symbols.clear()
 
-        # 开盘时只知道此前已空出的槽位；事件池优先于存量候选池。
+        # 新事件换仓：同主题替换旧票；不同主题且满仓时替换最早进入候选池的票。
+        if event_codes:
+            for symbol in event_codes:
+                if any(pos is not None and pos["symbol"] == symbol for pos in positions):
+                    continue
+                theme = code_themes.get(symbol, "")
+                same_theme = [
+                    slot
+                    for slot, pos in enumerate(positions)
+                    if pos is not None and theme and pos.get("theme") == theme
+                ]
+                if same_theme:
+                    old_slot = min(same_theme, key=lambda slot: int(positions[slot]["entry_i"]))  # type: ignore[index]
+                    exit_at_open(old_slot, "concept_replace")
+                elif all(pos is not None for pos in positions):
+                    old_slot = min(
+                        range(max_positions),
+                        key=lambda slot: int(positions[slot]["entry_i"]),  # type: ignore[index]
+                    )
+                    exit_at_open(old_slot, "new_theme_replace")
+
+        # 开盘时按新事件或存量候选池填补空槽。
         held_symbols = {pos["symbol"] for pos in positions if pos is not None}
         empty_slots = [idx for idx, pos in enumerate(positions) if pos is None]
         entry_reason = "event_entry" if event_codes else "daily_replenish"
@@ -79,7 +142,7 @@ def simulate_factor5_event_slots_f1_stop(
                 break
             if (
                 symbol in held_symbols
-                or symbol in stopped_symbols
+                or symbol in blocked_symbols
                 or symbol not in opens.columns
                 or pd.isna(opens.at[day, symbol])
             ):
@@ -104,6 +167,7 @@ def simulate_factor5_event_slots_f1_stop(
                 "shares": shares,
                 "entry_i": day_i,
                 "entry_signal_date": pool_signal_date,
+                "theme": code_themes.get(symbol, ""),
             }
             held_symbols.add(symbol)
             trade_rows.append(
@@ -123,7 +187,7 @@ def simulate_factor5_event_slots_f1_stop(
             else:
                 n_daily_entries += 1
 
-        # 因子1仅作为卖出覆盖层：T+1 后按当天开盘计算止损，盘中 low 触发。
+        # T+1 后可选执行因子1盘中止损；固定期限已在开盘先行处理。
         for slot, position in enumerate(positions):
             if position is None or day_i <= int(position["entry_i"]):
                 continue
@@ -139,10 +203,16 @@ def simulate_factor5_event_slots_f1_stop(
             low_price = float(lows.at[day, symbol])
             if open_price <= 0:
                 continue
-            stop_price = stop_trigger_price(open_price, stop_pct=stop_pct)
-            if low_price > stop_price + 1e-12:
+            held_days = day_i - int(position["entry_i"])
+            reason: str | None = None
+            raw_fill = open_price
+            if use_factor1_stop:
+                stop_price = stop_trigger_price(open_price, stop_pct=stop_pct)
+                if low_price <= stop_price + 1e-12:
+                    raw_fill = open_price if open_price <= stop_price + 1e-12 else stop_price
+                    reason = "factor1_stop"
+            if reason is None:
                 continue
-            raw_fill = open_price if open_price <= stop_price + 1e-12 else stop_price
             fill_price = raw_fill * (1.0 - SLIP)
             proceeds = int(position["shares"]) * fill_price
             fee = proceeds * (COMMISSION + STAMP)
@@ -155,13 +225,14 @@ def simulate_factor5_event_slots_f1_stop(
                     "shares": position["shares"],
                     "price": fill_price,
                     "slot": slot,
-                    "reason": "factor1_stop",
+                    "reason": reason,
                     "signal_date": position["entry_signal_date"],
                 }
             )
             positions[slot] = None
-            stopped_symbols.add(symbol)
-            n_stops += 1
+            blocked_symbols.add(symbol)
+            if reason == "factor1_stop":
+                n_stops += 1
 
         equity = _equity(cash=cash, positions=positions, closes=closes, date=day)
         occupied = sum(position is not None for position in positions)
@@ -208,10 +279,16 @@ def simulate_factor5_event_slots_f1_stop(
         "end_equity": float(equity_values[-1]),
         "n_buys": int((trades_df["side"] == "buy").sum()) if not trades_df.empty else 0,
         "n_factor1_stops": n_stops,
+        "n_replacements": n_replacements,
+        "n_time_exits": (
+            int((trades_df["reason"] == "time_exit").sum()) if not trades_df.empty else 0
+        ),
         "n_event_entries": n_event_entries,
         "n_daily_replenishments": n_daily_entries,
         "max_positions": max_positions,
         "stop_pct": stop_pct,
+        "use_factor1_stop": use_factor1_stop,
+        "hold_days": hold_days,
     }
     return equity_df, trades_df, slots_df, stats
 

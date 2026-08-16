@@ -1,4 +1,4 @@
-"""策略七 · 因子5事件候选池 + 因子1止损覆盖层。"""
+"""策略七 · 因子5事件候选池：单主题一只、固定持有五日。"""
 
 from __future__ import annotations
 
@@ -17,21 +17,16 @@ FACTOR_BINDINGS = (
         max_themes=3,
         max_positions=5,
         max_candidates=5,
-        max_per_theme=2,
+        max_per_theme=1,
+        hold_days=5,
         filter_desc=(
             "复核上一A股收盘后至当前时点的全部 Serenity 公开帖，再通过 Serenity "
             "Research Model Skill 语义筛选并映射前三主题的 A 股代理池；"
-            "总数最多5只、单主题最多2只；"
-            "空槽每日补仓；没有候选则保持现金"
+            "仅中证500/1000主板非ST成分股；"
+            "总数最多5只、单主题最多1只、固定持有5日；"
+            "新事件同主题替换旧持仓，不同主题满仓时替换最早入池持仓；"
+            "没有候选则保持现金"
         ),
-        enabled=True,
-    ),
-    bind_factor(
-        "factor1",
-        label="因子1止损覆盖层",
-        role="exit",
-        stop_pct=0.025,
-        filter_desc="仅对已持仓股票执行 T+1 后的开盘-2.5%盘中止损；不用于开仓",
         enabled=True,
     ),
 )

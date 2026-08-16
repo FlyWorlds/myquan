@@ -1,4 +1,4 @@
-"""对照：策略五纯袖套 vs 策略六（因子3选股 + 因子1止损）。
+"""对照：策略五纯袖套 vs 因子3选股+因子1止损（旧策略六组合，现已不注册）。
 
 用法：
   cd backtest
@@ -56,7 +56,7 @@ def main() -> None:
 
     print("===== A 策略五：因子3选股 + 袖套到期卖（无止损）=====")
     a = run_momentum_portfolio(**common)
-    print("===== B 策略六：因子3选股 + 因子1止损（未触则到期卖）=====")
+    print("===== B 旧组合：因子3选股 + 因子1止损（未触则到期卖，现已不注册为策略六）=====")
     b = run_f3_select_f1_stop_portfolio(**common, stop_pct=float(args.stop))
 
     sa, sb = a.stats, b.stats

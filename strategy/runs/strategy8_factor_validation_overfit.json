@@ -1,0 +1,27 @@
+{
+  "verdict": "FAIL - likely overfit / selection-biased: DSR 0.70 < 0.95; haircut Sharpe 0.00 < 0.5; MinTRL 93 > sample 28",
+  "passed": false,
+  "observed_sharpe_annual": 0.6028,
+  "skew": 0.0153,
+  "kurtosis": 4.5855,
+  "n_obs": 28,
+  "n_trials": 4,
+  "deflated_sharpe_ratio": 0.7009,
+  "deflation_benchmark_sr0_annual": 0.2472,
+  "psr_vs_zero": 0.8142,
+  "haircut": {
+    "method": "bonferroni",
+    "adjusted_sharpe_annual": 0.0,
+    "haircut_pct": 1.0,
+    "observed_pvalue": 0.3571693527057874,
+    "adjusted_pvalue": 1.0
+  },
+  "minimum_track_record_length": 92.5,
+  "pbo": {
+    "pbo": 0.4174048174048174,
+    "n_splits": 12870,
+    "n_strategies": 4,
+    "n_blocks": 16,
+    "median_logit": 0.4054651081081642
+  }
+}

@@ -8,8 +8,9 @@
   strategy1 — 默认生效：因子1（买卖）+ 因子2（回撤补仓叠加）
   strategy2/3/4 — 骨架（同因子不同 params；回测 runner 待接）
   strategy5 — 动量因子组合（因子3 · 中证1000截面）
-  strategy6 — 因子3选股 + 因子1止损
+  strategy6 — 因子6 组合动量 ETF 轮动
   strategy7 — 因子5 Serenity 公开帖驱动的主题事件策略
+  strategy8 — 因子7 行业 ETF 双动量月频 Top3
 """
 
 # 策略注册前先确保因子已注册（多策略共用因子）
@@ -22,6 +23,7 @@ from strategy.strategies import strategy4 as _s4  # noqa: F401
 from strategy.strategies import strategy5 as _s5  # noqa: F401
 from strategy.strategies import strategy6 as _s6  # noqa: F401
 from strategy.strategies import strategy7 as _s7  # noqa: F401
+from strategy.strategies import strategy8 as _s8  # noqa: F401
 from strategy.core.strategy_registry import (
     STRATEGY_REGISTRY,
     get_strategy_spec,

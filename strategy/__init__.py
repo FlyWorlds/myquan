@@ -1,7 +1,7 @@
 """多策略 + 多因子可插拔框架。
 
 架构（开闭原则）：
-  · factors/factor1..4              — 因子层：信号/价位规则
+  · factors/factor1..7              — 因子层：信号/价位规则
   · strategies/strategyN/
       bindings.py + decision.py     — 策略层(绑定) + 决策层(买卖)
   · core/                           — 协议 / MarketContext / Decision / 注册表
@@ -9,7 +9,8 @@
 
 默认生效：策略一 = 因子1（开盘±2.5%）+ 因子2（回撤阶梯补仓）。
 动量：因子3（策略五截面组合 / 单票时序）。因子4 = 牛市持股 regime。
-策略六：因子3选票 + 因子1止损。策略七：因子5事件开仓 + 因子1止损的五槽位策略。
+策略六：因子6 组合动量 ETF 轮动。策略七：因子5事件开仓、单主题一只、固定持有五日的五槽位策略。
+策略八：因子7 行业 ETF 普通动量 + 改进残差动量月频 Top3。
 兼容旧 API：run_open_break（仅因子1交易）/ open_break3 / STRATEGY_RULES 等保持可用。
 """
 
@@ -95,7 +96,9 @@ from strategy.core import (  # noqa: E402
 # 语义别名：run_strategy1 = 因子1交易 + 因子2权益叠加；run_open_break = 仅因子1
 Strategy1 = OpenBreak3Strategy
 from strategy.strategies.strategy1 import run_strategy1  # noqa: E402
+from strategy.strategies.strategy6 import run_strategy6  # noqa: E402
 from strategy.strategies.strategy7 import run_strategy7  # noqa: E402
+from strategy.strategies.strategy8 import run_strategy8  # noqa: E402
 
 __all__ = [
     "DEFAULT_PCT",
@@ -161,7 +164,9 @@ __all__ = [
     "run_open_break_backtest",
     "run_momentum",
     "run_strategy1",
+    "run_strategy6",
     "run_strategy7",
+    "run_strategy8",
     "apply_strategy_config",
     "build_open_break_strategy",
     "metric",

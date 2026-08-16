@@ -1,46 +1,34 @@
-"""策略六 · 因子绑定：因子3 选股 + 因子1 止损。"""
+"""策略六 · 因子绑定：因子6 组合动量 ETF 轮动。"""
 
 from __future__ import annotations
 
 from strategy.core.protocols import bind_factor
-from strategy.open_break import DEFAULT_PCT
-from strategy.strategies.strategy5.portfolio import PORTFOLIO_DEFAULTS
+from strategy.etf_combo_momentum import DEFAULT_PARAMS, DEFAULT_UNIVERSE
 
 STRATEGY_ID = "strategy6"
-STRATEGY_NAME = "因子3选股+因子1止损"
+STRATEGY_NAME = "组合动量ETF轮动"
 
-_p = PORTFOLIO_DEFAULTS
+_p = DEFAULT_PARAMS
+_univ = "、".join(code[2:] for code, _ in DEFAULT_UNIVERSE)
 
 FACTOR_BINDINGS = (
     bind_factor(
-        "factor3",
-        role="entry",
-        label="因子3·截面选股",
-        kind=_p["kind"],
+        "factor6",
+        role="both",
+        label="因子6·组合动量ETF轮动",
         n=_p["n"],
+        n2=_p["n2"],
+        w=_p["w"],
         top_k=_p["top_k"],
         hold_days=_p["hold_days"],
         min_score=_p["min_score"],
-        ma_filter=_p["ma_filter"],
-        mode=_p.get("mode"),
-        n2=_p.get("n2"),
-        w=_p.get("w"),
+        defensive=_p["defensive"],
         filter_desc=(
-            f"收盘截面选股：中证500+1000主板 mode={_p.get('mode')} "
-            f"rev(n={_p['n']}"
-            + (f"+{_p['n2']}" if _p.get("n2") else "")
-            + f") Top{_p['top_k']} → 次日开盘买入；"
-            f"最长持有{_p['hold_days']}日（未止损则开盘到期卖）"
-        ),
-    ),
-    bind_factor(
-        "factor1",
-        role="exit",
-        label="因子1·开盘止损",
-        stop_pct=DEFAULT_PCT,
-        filter_desc=(
-            f"持仓后按当日开盘-{DEFAULT_PCT*100:.1f}%止损全清；"
-            "T+1买入当日不卖；跌破按触发价（缺口低开按开盘价）"
+            f"宽基ETF（{_univ}）收盘组合动量 "
+            f"ROC({_p['n']})+{_p['w']:g}×ROC({_p['n2']}) "
+            f"Top{_p['top_k']} → 次日开盘轮入；"
+            f"最高分<= {_p['min_score']} 空仓；每{_p['hold_days']}日再平衡；"
+            "持仓分数跌破门槛下一开盘风控空仓"
         ),
     ),
 )

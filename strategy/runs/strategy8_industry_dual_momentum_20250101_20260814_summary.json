@@ -1,0 +1,11 @@
+{
+  "label": "strategy8/industry_etf_dual_momentum",
+  "start": "2025-01-01",
+  "end": "2026-08-14",
+  "total_return_pct": 36.32902692541282,
+  "final_equity": 1363290.2692541282,
+  "n_buys": 60,
+  "n_sells": 57,
+  "max_drawdown_pct": 25.338568363756885,
+  "annual_return_pct": 23.626516246121376
+}
