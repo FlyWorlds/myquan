@@ -8,8 +8,8 @@
   · backtest.py / runner.py         — 执行层（下单与回测）
 
 默认生效：策略一 = 因子1（开盘±2.5%）+ 因子2（回撤阶梯补仓）。
-动量：因子3（策略五截面组合 / 单票时序）。因子4 占位。
-策略六：因子3选票 + 因子1止损。
+动量：因子3（策略五截面组合 / 单票时序）。因子4 = 牛市持股 regime（策略七叠因子1）。
+策略六：因子3选票 + 因子1止损。策略七：因子1 + 因子4 弱年修复。
 兼容旧 API：run_open_break（仅因子1交易）/ open_break3 / STRATEGY_RULES 等保持可用。
 """
 
@@ -43,6 +43,7 @@ from strategy.config import (
     HANGTIANDIANZI,
     XIEXINNENGKE,
     ZZ500_ETF,
+    KCZZ_ETF,
     BacktestConfig,
 )
 from strategy.data import fetch_daily
@@ -94,6 +95,11 @@ from strategy.core import (  # noqa: E402
 # 语义别名：run_strategy1 = 因子1交易 + 因子2权益叠加；run_open_break = 仅因子1
 Strategy1 = OpenBreak3Strategy
 from strategy.strategies.strategy1 import run_strategy1  # noqa: E402
+from strategy.strategies.strategy7 import (  # noqa: E402
+    run_strategy7,
+    run_strategy7_universe,
+    default_s7_universe,
+)
 
 __all__ = [
     "DEFAULT_PCT",
@@ -112,6 +118,7 @@ __all__ = [
     "HANGTIANDIANZI",
     "XIEXINNENGKE",
     "ZZ500_ETF",
+    "KCZZ_ETF",
     "ceil_to_tick",
     "floor_to_tick",
     "entry_trigger_price",
@@ -158,6 +165,9 @@ __all__ = [
     "run_open_break_backtest",
     "run_momentum",
     "run_strategy1",
+    "run_strategy7",
+    "run_strategy7_universe",
+    "default_s7_universe",
     "apply_strategy_config",
     "build_open_break_strategy",
     "metric",

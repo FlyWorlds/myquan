@@ -30,9 +30,9 @@ def apply_strategy_config(
     strategy.start_date = cfg.start_date
     strategy.end_date = cfg.end_date
     strategy.slippage_value = cfg.slippage_value
-    strategy.entry_pct = cfg.threshold_pct
-    strategy.stop_pct = cfg.threshold_pct
-    strategy.prev_small_yang_pct = cfg.threshold_pct
+    strategy.entry_pct = cfg.resolved_entry_pct()
+    strategy.stop_pct = cfg.resolved_stop_pct()
+    strategy.prev_small_yang_pct = cfg.resolved_entry_pct()
     strategy.tick = cfg.tick
     strategy.limit_down_pct = cfg.limit_down_pct
     strategy.t0 = cfg.t0
@@ -83,7 +83,34 @@ def apply_strategy_config(
     strategy.skip_buy_after_overnight_stop = bool(
         getattr(cfg, "skip_buy_after_overnight_stop", False)
     )
+    strategy.factor4_enabled = bool(getattr(cfg, "factor4_enabled", False))
+    strategy.factor4_bull_entry = bool(getattr(cfg, "factor4_bull_entry", False))
+    strategy.factor4_skip_f1_entry_in_bull = bool(
+        getattr(cfg, "factor4_skip_f1_entry_in_bull", False)
+    )
+    strategy.factor4_stop_widen_mult = float(
+        getattr(cfg, "factor4_stop_widen_mult", 0.0) or 0.0
+    )
+    if bool(getattr(cfg, "factor4_enabled", False)):
+        strategy.bull_by_date = dict(getattr(cfg, "_bull_by_date", {}) or {})
+    else:
+        strategy.bull_by_date = {}
     return strategy
+
+
+def prepare_factor4(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
+    """预计算因子4牛市 regime 映射，挂到 cfg._bull_by_date。"""
+    if not bool(getattr(cfg, "factor4_enabled", False)):
+        cfg._bull_by_date = {}
+        return
+    from strategy.bull_regime import bull_regime_by_date
+
+    params = getattr(cfg, "factor4_params", None) or {}
+    cfg._bull_by_date = bull_regime_by_date(
+        daily,
+        kind=str(getattr(cfg, "factor4_kind", "roc_ma") or "roc_ma"),
+        params=params,
+    )
 
 
 def build_open_break_strategy(cfg: BacktestConfig) -> OpenBreak3Strategy:
@@ -125,6 +152,7 @@ def run_open_break(
         params=cfg,
         strategy_cls=OpenBreak3Strategy,
         configure=apply_strategy_config,
+        prepare=prepare_factor4 if bool(getattr(cfg, "factor4_enabled", False)) else None,
         print_summary_fn=print_summary if verbose else None,
         summary_kwargs={
             "symbol_name": cfg.symbol_name,
@@ -133,9 +161,9 @@ def run_open_break(
             "commission_rate": cfg.commission_rate,
             "stamp_tax_rate": cfg.stamp_tax_rate,
             "slippage_value": cfg.slippage_value,
-            "entry_pct": cfg.threshold_pct,
-            "stop_pct": cfg.threshold_pct,
-            "prev_small_yang_pct": cfg.threshold_pct,
+            "entry_pct": cfg.resolved_entry_pct(),
+            "stop_pct": cfg.resolved_stop_pct(),
+            "prev_small_yang_pct": cfg.resolved_entry_pct(),
         },
         report_title=f"{cfg.symbol_name} {cfg.report_title_suffix()}",
         show_report=show_report,

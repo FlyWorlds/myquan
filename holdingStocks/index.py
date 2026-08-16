@@ -1,16 +1,17 @@
 """持仓记录与盯盘：与核心策略一（因子1 + 因子2）同步。
 
 策略锁定 · 策略一：
-  · 因子1 买：high≥ceil(open×1.025)；前日阴/小阳；禁双阳跨日≥5%；T+1
-  · 因子1 卖：仅止损−2.5% 全清
-  · 因子2：回撤加减仓预警（历史最大/年均值/当前回撤；不自动改现金）
-  · 可插拔：strategy/strategies + strategy/factors（见 strategy/README.md）
+  · 因子1 买：high≥ceil(open×(1+entry))；前日阴/小阳；禁双阳跨日≥5%；T+1
+  · 因子1 卖：开盘−stop 止损全清（个股阈值见 watch_config）
+  · 因子2：账户回撤加减仓预警（不自动改现金）
+  · 默认定盘宇宙：凯盛 / 天通 / 科创综指置顶 + 拟合池其余
+  · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
 功能：
   · 拉取当日开盘、最高、最低、现价（东财 SSE + 新浪批量兜底；冷启动用分钟线）
-  · 因子1 规则与 strategy/open_break + strategy1/bindings 同源
-  · 因子2 与 strategy/dd_alert 同源（账户级预警，不自动改现金）
-  · 有仓：仅止损自动结算（全清）；空仓：已触买/将买入建议限价
+  · 因子1 与 strategy1 bindings / open_break 同源
+  · 因子2 与 strategy/dd_alert 同源
+  · 有仓：止损自动结算（全清）；空仓：已触买/将买入建议限价
   · 本地 JSON 记录持仓；T+1 买入日不可卖
 
 用法：
@@ -77,10 +78,21 @@ from strategy.open_break import (
 from strategy.data import fetch_daily
 
 from factor2_watch import format_factor2_summary, sync_factor2
+from factor4_watch import (
+    bull_exec_today,
+    effective_stop_pct,
+    format_factor4_tag,
+    resolve_factor4_spec,
+)
 from watch_config import (
+    FACTOR4_ID,
+    FACTOR_ID,
     INDEX_WATCH,
     OPEN_PRICE_REFRESH_HOUR,
     OPEN_PRICE_REFRESH_MINUTE,
+    STRATEGY_ID,
+    STRATEGY_NAME,
+    USE_FACTOR4,
     WATCHLIST,
     calc_day_pnl as _calc_day_pnl,
     code_key as _code_key,
@@ -93,12 +105,20 @@ from watch_config import (
     watchlist_codes_label as _watchlist_codes_label,
 )
 
-# 盯盘与回测共用：策略一 = 因子1（买卖）+ 因子2（总资产回撤补仓）
+# 盯盘与回测共用：默认策略一 = 因子1（买卖）+ 因子2（回撤预警）
 # 标的池唯一真源：watch_config.WATCHLIST
-STRATEGY_ID = "strategy1"
-FACTOR_ID = "factor1"
 FACTOR2_ID = "factor2"
-STRATEGY_NAME = "策略一·因子1+因子2"
+
+_STRATEGY_FACTORS_LABEL = (
+    "因子1买卖 + 因子4牛市持股"
+    if USE_FACTOR4
+    else "因子1买卖 + 因子2回撤预警"
+)
+_STRATEGY_SYNC_NOTE = (
+    "与 strategy7 bindings / bull_regime 同源"
+    if USE_FACTOR4
+    else "与 strategy1 bindings / open_break 同源"
+)
 
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
@@ -114,8 +134,8 @@ _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
 _INDEX_CACHE_TTL_SEC = 15.0
 
 
-def _strategy1_factor1_params() -> dict[str, Any]:
-    """策略一 · 因子1 绑定参数（与回测 bindings 同源）。"""
+def _factor1_binding_params() -> dict[str, Any]:
+    """策略绑定 · 因子1 参数（与回测 bindings 同源；个股阈值仍以 WATCHLIST 为准）。"""
     try:
         for b in get_strategy_bindings(STRATEGY_ID):
             if b.factor_id == FACTOR_ID and b.enabled:
@@ -131,6 +151,10 @@ def _strategy1_factor1_params() -> dict[str, Any]:
         "double_yang_combined_min_pct": DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
         "double_yang_combined_mode": DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     }
+
+
+# 兼容旧名
+_strategy1_factor1_params = _factor1_binding_params
 
 
 def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[str, Any]]:
@@ -157,7 +181,16 @@ def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
 
 
 def _watch_pct(item: dict[str, Any]) -> float:
+    """入场阈值（兼容旧 pct 字段）。"""
+    if item.get("entry_pct") is not None:
+        return float(item["entry_pct"])
     return float(item.get("pct", DEFAULT_PCT))
+
+
+def _watch_stop_pct(item: dict[str, Any]) -> float:
+    if item.get("stop_pct") is not None:
+        return float(item["stop_pct"])
+    return _watch_pct(item)
 
 
 def _watch_tick(item: dict[str, Any]) -> float:
@@ -181,12 +214,14 @@ def _px_digits(tick: float) -> int:
 _DAILY_CACHE: dict[str, tuple[str, pd.DataFrame]] = {}
 
 
-def _watch_daily(sina: str, *, lookback_days: int = 120) -> pd.DataFrame:
+def _watch_daily(sina: str, *, lookback_days: int | None = None) -> pd.DataFrame:
+    """日线缓存；因子4开启时回溯加长以覆盖 roc_ma60。"""
+    days = int(lookback_days) if lookback_days is not None else (280 if USE_FACTOR4 else 90)
     today = str(pd.Timestamp.now().date())
     cached = _DAILY_CACHE.get(sina)
     if cached and cached[0] == today and cached[1] is not None and not cached[1].empty:
         return cached[1]
-    start = (pd.Timestamp.now() - pd.Timedelta(days=lookback_days)).strftime("%Y%m%d")
+    start = (pd.Timestamp.now() - pd.Timedelta(days=days)).strftime("%Y%m%d")
     end = pd.Timestamp.now().strftime("%Y%m%d")
     try:
         df = fetch_daily(sina, start, end)
@@ -1244,24 +1279,59 @@ def collect_rows(
     for w in WATCHLIST:
         code = w["code"]
         entry_pct = _watch_pct(w)
-        stop_pct = entry_pct
+        base_stop_pct = _watch_stop_pct(w)
         tick = _watch_tick(w)
         limit_down_pct = _watch_limit_down_pct(w)
         prev_entry_mode = str(w.get("prev_entry_mode") or "yin_or_small_yang")
         px_digits = _px_digits(tick)
-        pct_pct = round(entry_pct * 100.0, 2)
+        if abs(entry_pct - base_stop_pct) < 1e-12:
+            pct_label = f"±{entry_pct * 100:.1f}"
+        else:
+            pct_label = f"+{entry_pct * 100:.1f}/-{base_stop_pct * 100:.1f}"
+        pct_pct = pct_label  # 卡片「阈值%」展示文案
         try:
             q = quote_fn(w["sina"])
             session_today = q["session"]
+            daily = _watch_daily(w["sina"])
+            if USE_FACTOR4:
+                f4_kind, f4_params, f4_widen = resolve_factor4_spec(w)
+                bull = bull_exec_today(
+                    w["sina"],
+                    str(q["session"]),
+                    daily,
+                    kind=f4_kind,
+                    params=f4_params,
+                )
+                stop_pct, f4_mode = effective_stop_pct(
+                    base_stop_pct, bull=bull, widen_mult=f4_widen
+                )
+                # 展示/成交用有效止损；暂停止损时仍展示基础止损价，但不自动结算
+                stop_pct_for_levels = (
+                    base_stop_pct if f4_mode == "suppressed" else stop_pct
+                )
+            else:
+                bull = False
+                f4_widen = 1.0
+                stop_pct = base_stop_pct
+                f4_mode = "off"
+                stop_pct_for_levels = base_stop_pct
             lv = strategy_levels(
-                q["open"], entry_pct=entry_pct, stop_pct=stop_pct, tick=tick
+                q["open"],
+                entry_pct=entry_pct,
+                stop_pct=stop_pct_for_levels,
+                tick=tick,
+            )
+            lv_base = strategy_levels(
+                q["open"],
+                entry_pct=entry_pct,
+                stop_pct=base_stop_pct,
+                tick=tick,
             )
             vs = points_vs_open(q["open"], q["last"])
             vs_pct = pct_vs_open(q["open"], q["last"])
             day_chg = q.get("day_chg_pct")
-            daily = _watch_daily(w["sina"])
             prev_o, prev_c, prev2_o, prev2_c = _prev_bars_from_daily(daily, q["session"])
-            f1p = _strategy1_factor1_params()
+            f1p = _factor1_binding_params()
             allow_entry = entry_filters_ok(
                 prev_o,
                 prev_c,
@@ -1294,14 +1364,25 @@ def collect_rows(
             replay = replay_last_factor_triggers(
                 daily,
                 entry_pct=entry_pct,
-                stop_pct=stop_pct,
+                stop_pct=base_stop_pct,
                 tick=tick,
                 prev_entry_mode=prev_entry_mode,
                 limit_down_pct=limit_down_pct,
             )
             hit_buy_raw = q["high"] + 1e-12 >= lv["buy_trigger"]
             hit_buy = bool(allow_entry) and hit_buy_raw
-            hit_stop = q["low"] <= lv["stop"] + 1e-12
+            hit_base_stop = q["low"] <= lv_base["stop"] + 1e-12
+            hit_eff_stop = q["low"] <= lv["stop"] + 1e-12
+            # 因子4（可选）：牛市暂停止损 → 不自动结算；放宽 → 仅触放宽价才结算
+            if USE_FACTOR4 and f4_mode == "suppressed":
+                hit_stop = False
+            else:
+                hit_stop = hit_eff_stop
+            f4_tag = (
+                format_factor4_tag(bull=bull, mode=f4_mode, widen_mult=f4_widen)
+                if USE_FACTOR4
+                else "-"
+            )
             # 竞价/开盘前：盘面价无连续交易意义，不触发买卖判定与止损结算
             signal_ok = is_signal_window()
             if not signal_ok:
@@ -1470,6 +1551,9 @@ def collect_rows(
                         "阈值%": pct_pct,
                         "买点": lv["buy_trigger"],
                         "止损": lv["stop"],
+                        "基础止损": lv_base["stop"],
+                        "因子4": f4_tag,
+                        "牛市": ("是" if bull else "否") if USE_FACTOR4 else "-",
                         "已触买": "否",
                         "已触止损": "是" if hit_stop or reason == REASON_STOP else "否",
                         "因子侧": "空仓",
@@ -1590,6 +1674,46 @@ def collect_rows(
                         "因子触发": "已触发",
                     }
                 )
+            elif (
+                USE_FACTOR4
+                and qty > 0
+                and f4_mode == "suppressed"
+                and hit_base_stop
+                and signal_ok
+                and not stop_locked
+            ):
+                # 因子4 牛市：基础止损已触但不结算
+                sig = dict(sig)
+                sig.update(
+                    {
+                        "alert": "持有·因子4牛市暂停止损",
+                        "bg_class": "status-hold",
+                        "pending_sell": False,
+                        "持仓状态": "持有",
+                        "建议挂单": None,
+                        "挂单说明": (
+                            f"{f4_tag}；基础止损{lv_base['stop']:.{px_digits}f}"
+                            "已触，暂不结算"
+                        ),
+                        "因子触发": "暂停",
+                    }
+                )
+            elif (
+                USE_FACTOR4
+                and qty > 0
+                and f4_mode == "widened"
+                and hit_base_stop
+                and not hit_eff_stop
+                and signal_ok
+            ):
+                sig = dict(sig)
+                alert0 = str(sig.get("alert") or "持有")
+                if alert0.startswith("持有"):
+                    sig["alert"] = f"持有·{f4_tag}"
+                sig["挂单说明"] = (
+                    f"{f4_tag}；基础止损{lv_base['stop']:.{px_digits}f}已触，"
+                    f"放宽止损{lv['stop']:.{px_digits}f}未触"
+                )
             sig = _stabilize_sell_warn(
                 code=code,
                 session=q["session"],
@@ -1671,8 +1795,15 @@ def collect_rows(
                     "阈值%": pct_pct,
                     "买点": lv["buy_trigger"],
                     "止损": lv["stop"],
+                    "基础止损": lv_base["stop"],
+                    "因子4": f4_tag,
+                    "牛市": ("是" if bull else "否") if USE_FACTOR4 else "-",
                     "已触买": "是" if (qty <= 0 and hit_buy) else "否",
-                    "已触止损": "是" if hit_stop else "否",
+                    "已触止损": "是" if hit_stop else (
+                        "触基础·暂停"
+                        if (USE_FACTOR4 and f4_mode == "suppressed" and hit_base_stop)
+                        else "否"
+                    ),
                     "因子侧": sig.get("因子侧"),
                     "因子价": sig.get("因子价"),
                     "因子触发": sig.get("因子触发"),
@@ -1746,6 +1877,9 @@ def collect_rows(
                     "阈值%": pct_pct,
                     "买点": None,
                     "止损": None,
+                    "基础止损": None,
+                    "因子4": "-",
+                    "牛市": "-",
                     "已触买": "-",
                     "已触止损": "-",
                     "因子侧": "-",
@@ -1814,7 +1948,7 @@ def collect_rows(
         else:
             r["仓位%"] = 0.0 if r.get("已实现") else None
 
-    # 因子2：按账户总资产同步（与策略一回测同源参数）
+    # 因子2：按账户总资产同步（可选预警；与 dd_alert 同源）
     session_f2 = session_today or str(pd.Timestamp.now().date())
     data_f2 = load_holdings()
     f2_status = sync_factor2(
@@ -1831,7 +1965,7 @@ def collect_rows(
 
 
 def _finalize_position_row(row: dict[str, Any]) -> None:
-    """按策略一收敛持仓状态：T+1 / 当日禁买 / 策略回放持有 / 可执行。"""
+    """收敛持仓状态：T+1 / 当日禁买 / 策略回放持有 / 可执行。"""
     if row.get("error"):
         row["可执行"] = False
         return
@@ -2208,11 +2342,15 @@ def write_html_report(
             )
         elif sell_factor_px is not None and pos_status in ("持有", "策略持有"):
             thr = r.get("阈值%")
-            thr_txt = (
-                f"开盘−{float(thr):g}%"
-                if thr is not None
-                else f"开盘−{DEFAULT_PCT * 100:.1f}%"
-            )
+            f4 = str(r.get("因子4") or "")
+            if isinstance(thr, (int, float)):
+                thr_txt = f"开盘−{float(thr):g}%"
+            elif thr:
+                thr_txt = str(thr)
+            else:
+                thr_txt = f"开盘−{DEFAULT_PCT * 100:.1f}%"
+            if f4 and f4 not in ("-", "非牛市·因子1止损"):
+                thr_txt = f"{thr_txt} · {f4}"
             if pos_status == "策略持有":
                 t1_note = " · 未登记仓·仅策略参考"
             else:
@@ -2795,7 +2933,7 @@ def write_html_report(
       <div class="hero-row">
         <div>
           <h1>持仓盯盘</h1>
-          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1仅止损 · 因子2回撤预警 · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
+          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL} · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
         </div>
         <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
           <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2817,11 +2955,12 @@ def write_html_report(
       {cards_html}
     </div>
     <p class="note">
-      策略锁定 {STRATEGY_NAME}（与 strategy1 bindings 同源）。
+      策略锁定 {STRATEGY_NAME}（{_STRATEGY_SYNC_NOTE}）。
       因子1：买卖点/止损；卖出仅止损全清。
-      因子2：策略一历史最大回撤 / 年最大回撤均值 / 当前回撤（摘要见合计区；只预警不改现金）。
+      因子2：账户回撤加减仓预警（摘要见合计区；只预警不改现金）。
+      {"因子4：牛市 regime 内止损放宽或暂停（与回测 per_symbol 对齐）。" if USE_FACTOR4 else ""}
       持仓状态：待买入 / 待卖出 / 持有 / 空仓；策略回放未登记=策略持有；当日止损后=当日禁买。
-      规则：T+1当日不卖；持有仅−2.5%止损卖；止损/卖出当日不买。
+      规则：T+1当日不卖；持有仅止损卖；止损/卖出当日不买。
       卡片排序：实仓待卖出 → 实仓持有 → 曾经持仓 → 待买入 → 策略持有 → 空仓。
       因子侧：待卖出预警→卖出；待买入预警→买入；策略持有→持有；其余→空仓。
       因子触发：盘中预警写「已触发 M/D」；止损日写「策略止损 M/D」；否则最近因子日。
@@ -2882,7 +3021,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     indices = fetch_indices()
     print(f"\n持仓盯盘  {_now()}")
     print(
-        f"策略: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% "
+        f"策略: {STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL} "
         f"（卖出仅保留止损）"
     )
     print(
@@ -2945,10 +3084,13 @@ def cmd_status(args: argparse.Namespace) -> None:
                 if r.get("较开盘涨幅") is None
                 else f"{float(r['较开盘涨幅']):+.2f}%",
                 "阈值%": r.get("阈值%"),
+                "因子4": r.get("因子4") or "-",
+                "牛市": r.get("牛市") or "-",
                 "最高": _p(r["最高"]),
                 "最低": _p(r["最低"]),
                 "买点": _p(r["买点"]),
                 "止损": _p(r["止损"]),
+                "基础止损": _p(r.get("基础止损")),
                 "已触买": r["已触买"],
                 "已触止损": r["已触止损"],
                 "形态": r.get("形态") or "-",
@@ -2977,7 +3119,7 @@ def cmd_status(args: argparse.Namespace) -> None:
         )
     cols = [
         "市场", "代码", "名称", "开盘", "现价", "当日涨幅", "较开盘点", "较开盘涨幅", "阈值%",
-        "最高", "最低", "买点", "止损", "已触买", "已触止损", "形态", "状态",
+        "因子4", "牛市", "最高", "最低", "买点", "止损", "基础止损", "已触买", "已触止损", "形态", "状态",
         "建议挂单", "挂单说明", "持仓", "成本", "浮盈", "浮盈%", "当日盈亏", "当日盈亏%",
         "止损后最高", "止损后最低", "回抽%", "踏空", "更新",
     ]
@@ -3024,7 +3166,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     if not getattr(args, "no_open", False):
         url = _report_url_if_watching()
         webbrowser.open(url if url else report.resolve().as_uri())
-    print(f"策略: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}%（与 strategy1 同源）")
+    print(f"策略: {STRATEGY_NAME}（{_STRATEGY_SYNC_NOTE}）")
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
     print("     当日盈亏(现价盈亏): 隔夜=(现价-昨收)×持股；今买=(现价-今买成交价)×今买股数")
     print("     因子1卖出: 仅止损；已触止损=视为成交并锁定盈亏")
@@ -3540,7 +3682,7 @@ def cmd_review(args: argparse.Namespace) -> None:
         account_total=account_total,
         account_open=account_open,
         available_cash=available,
-        strategy=f"{STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1仅止损 · 因子2回撤预警",
+        strategy=f"{STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL}",
     )
     text = format_review_text(review)
     text_path, json_path = save_review(review, text)
@@ -3788,7 +3930,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     print(f"盯盘服务已启动: {url}")
     print(f"本地 WebSocket: ws://{host}:{port}/ws")
     print(
-        f"策略同步: {STRATEGY_NAME} ±{DEFAULT_PCT*100:.1f}% · 因子1+因子2"
+        f"策略同步: {STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL}"
     )
     print(
         f"行情: 东财 SSE + 新浪批量兜底 · 刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · "

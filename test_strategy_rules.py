@@ -361,5 +361,100 @@ class Strategy6HybridTests(unittest.TestCase):
         self.assertTrue((sells["reason"] == "stop").any())
 
 
+class Strategy7Factor4Tests(unittest.TestCase):
+    def test_per_symbol_keeps_factor1_thresholds_and_enables_factor4(self) -> None:
+        from strategy.config import KAICHENG, KCZZ_ETF, TIANTONG, resolve_factor4_repair
+
+        kaicheng = resolve_factor4_repair(KAICHENG)
+        tiantong = resolve_factor4_repair(TIANTONG)
+        kczz = resolve_factor4_repair(KCZZ_ETF)
+        self.assertAlmostEqual(kaicheng.threshold_pct, 0.025)
+        self.assertAlmostEqual(tiantong.threshold_pct, 0.03)
+        self.assertAlmostEqual(kczz.resolved_entry_pct(), 0.025)
+        self.assertAlmostEqual(kczz.resolved_stop_pct(), 0.035)
+        self.assertTrue(kaicheng.factor4_enabled)
+        self.assertTrue(tiantong.factor4_enabled)
+        self.assertTrue(kczz.factor4_enabled)
+        self.assertFalse(kaicheng.factor4_bull_entry)
+        self.assertFalse(tiantong.factor4_bull_entry)
+        self.assertFalse(kczz.t0)
+
+    def test_s7_universe_has_three_symbols(self) -> None:
+        from strategy.strategies.strategy7 import S7_UNIVERSE_IDS, default_s7_universe
+
+        univ = default_s7_universe()
+        self.assertEqual(len(univ), 3)
+        self.assertEqual(S7_UNIVERSE_IDS, ("kaicheng", "tiantong", "kczz"))
+        codes = {c.em_symbol for c in univ}
+        self.assertEqual(codes, {"600552", "600330", "589680"})
+
+    def test_asymmetric_threshold_and_next_day_execution(self) -> None:
+        from strategy.bull_regime import build_bull_regime, raw_to_bull_target
+
+        raw = pd.Series([float("nan"), 0.02, 0.04, 0.02, -0.01])
+        target = raw_to_bull_target(
+            raw,
+            kind="roc",
+            params={"enter_raw": 0.03, "exit_raw": 0.0},
+        )
+        self.assertEqual(target.tolist(), [0.0, 0.0, 1.0, 1.0, 0.0])
+
+        daily = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=4),
+                "close": [10.0, 10.0, 11.0, 11.0],
+                "high": [10.0, 10.0, 11.0, 11.0],
+                "low": [10.0, 10.0, 11.0, 11.0],
+            }
+        )
+        enriched = build_bull_regime(
+            daily,
+            kind="roc",
+            params={"n": 1, "enter_raw": 0.05, "exit_raw": 0.0},
+        )
+        self.assertEqual(float(enriched.iloc[2]["bull_target"]), 1.0)
+        self.assertEqual(float(enriched.iloc[3]["bull_exec"]), 1.0)
+
+    def test_strategy7_decision_matches_widened_stop(self) -> None:
+        from strategy import MarketContext, get_decision_engine
+
+        eng = get_decision_engine("strategy7")
+        common = {
+            "open": 10.0,
+            "high": 10.1,
+            "close": 9.7,
+            "position_qty": 100,
+            "available_qty": 100,
+            "session": "2026-08-04",
+            "meta": {"factor4_bull": True},
+        }
+        hold = eng.decide(MarketContext(low=9.60, **common))
+        self.assertEqual(hold.action, "hold")
+        self.assertIn("放宽止损", hold.reason)
+
+        sell = eng.decide(MarketContext(low=9.40, **common))
+        self.assertEqual(sell.action, "sell")
+        self.assertIn("放宽止损", sell.reason)
+
+    def test_strategy7_non_bull_uses_factor1_stop(self) -> None:
+        from strategy import MarketContext, get_decision_engine
+
+        eng = get_decision_engine("strategy7")
+        decision = eng.decide(
+            MarketContext(
+                open=10.0,
+                high=10.1,
+                low=9.70,
+                close=9.75,
+                position_qty=100,
+                available_qty=100,
+                session="2026-08-04",
+                meta={"factor4_bull": False},
+            )
+        )
+        self.assertEqual(decision.action, "sell")
+        self.assertIn("止损", decision.reason)
+
+
 if __name__ == "__main__":
     unittest.main()

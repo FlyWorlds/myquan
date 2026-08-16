@@ -1,4 +1,9 @@
-"""盯盘标的池与代码工具（唯一真源；index 从此处导入）。"""
+"""盯盘标的池与代码工具（唯一真源；index 从此处导入）。
+
+当前锁定：**策略一 = 因子1 + 因子2（回撤预警）**。
+定案宇宙：凯盛 / 天通 / 科创综指 **置顶** + 中证拟合池其余。
+策略七三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
+"""
 
 from __future__ import annotations
 
@@ -12,63 +17,14 @@ if str(_MYQUAN_ROOT) not in sys.path:
 
 from strategy.open_break import DEFAULT_PCT, TICK_SIZE, is_t1_buy_day
 
-# 默认定盘：策略一 + 因子1（开盘±2.5%）；与 strategy 注册表一致
+# 默认定盘：策略一 + 因子1/因子2
 STRATEGY_ID = "strategy1"
 FACTOR_ID = "factor1"
-STRATEGY_NAME = "策略一·因子1"
-
-# 中证500+1000 契合池（夏普≥1.0 且超额>0，剔科创；多阈值优选，按夏普降序）
-# 明细：../backtest/universe_zz500_1000/fit_sharpe1_excess.csv / multi_pct_excess.csv
-# 改盯盘池：只改这里（勿在 index.py 再维护一份）
-# 标的专属阈值：未列出的用 DEFAULT_PCT（±2.5%）；见 multi_pct 优选结果
-_FIT_WATCH: list[tuple[str, str]] = [
-    ("301600", "慧翰股份"),
-    ("001389", "广合科技"),
-    ("002290", "禾盛新材"),
-    ("301392", "汇成真空"),
-    ("301205", "联特科技"),
-    ("600552", "凯盛科技"),
-    ("601208", "东材科技"),
-    ("301550", "斯菱智驱"),
-    ("002636", "金安国纪"),
-    ("301678", "新恒汇"),
-    ("600105", "永鼎股份"),
-    ("603083", "剑桥科技"),
-    ("001339", "智微智能"),
-    ("600330", "天通股份"),
-    ("600206", "有研新材"),
-    ("002979", "雷赛智能"),
-    ("301389", "隆扬电子"),
-    ("002378", "章源钨业"),
-    ("002738", "中矿资源"),
-    ("603119", "浙江荣泰"),
-    ("603306", "华懋科技"),
-    ("601020", "华钰矿业"),
-    ("301458", "钧崴电子"),
-    ("002335", "科华数据"),
-    ("002747", "埃斯顿"),
-]
-
-# 个股覆盖默认开盘±pct（未列出的用 DEFAULT_PCT）
-_WATCH_PCT: dict[str, float] = {
-    "002290": 0.03,  # ±3.0%
-    "002636": 0.03,  # ±3.0%
-    "002738": 0.03,  # ±3.0%
-    "002747": 0.03,  # ±3.0%
-    "002979": 0.03,  # ±3.0%
-    "301389": 0.03,  # ±3.0%
-    "301458": 0.03,  # ±3.0%
-    "301550": 0.03,  # ±3.0%
-    "301600": 0.03,  # ±3.0%
-    "600105": 0.03,  # ±3.0%
-    "600206": 0.03,  # ±3.0%
-    "600330": 0.03,  # ±3.0%
-    "601020": 0.03,  # ±3.0%
-    "603119": 0.03,  # ±3.0%
-    "002378": 0.02,  # ±2.0%
-    "301678": 0.02,  # ±2.0%
-    "603083": 0.02,  # ±2.0%
-}
+FACTOR2_ID = "factor2"
+FACTOR4_ID = "factor4"
+STRATEGY_NAME = "策略一·因子1+因子2"
+# 策略七才叠因子4；策略一关闭
+USE_FACTOR4 = False
 
 # 集合竞价 09:15–09:30：盘面价无连续交易意义，此间不触发买卖/止损结算/微信预警
 AUCTION_START_HOUR = 9
@@ -129,34 +85,135 @@ def watch_item(
     name: str,
     *,
     pct: float = DEFAULT_PCT,
+    entry_pct: float | None = None,
+    stop_pct: float | None = None,
     tick: float = TICK_SIZE,
     t0: bool = False,
     limit_down_pct: float = 0.10,
     prev_entry_mode: str = "yin_or_small_yang",
+    factor4_kind: str | None = None,
+    factor4_params: dict[str, Any] | None = None,
+    factor4_stop_widen_mult: float | None = None,
 ) -> dict[str, Any]:
     c = code_key(code)
-    return {
+    ep = float(entry_pct if entry_pct is not None else pct)
+    sp = float(stop_pct if stop_pct is not None else pct)
+    item: dict[str, Any] = {
         "code": c,
         "sina": sina_of(c),
         "market": market_of(c),
         "name": name,
-        "pct": float(pct),
+        "pct": ep,  # 兼容旧字段=入场阈值
+        "entry_pct": ep,
+        "stop_pct": sp,
         "tick": float(tick),
         "t0": bool(t0),
         "limit_down_pct": float(limit_down_pct),
         "prev_entry_mode": prev_entry_mode,
     }
+    if factor4_kind is not None:
+        item["factor4_kind"] = factor4_kind
+    if factor4_params is not None:
+        item["factor4_params"] = dict(factor4_params)
+    if factor4_stop_widen_mult is not None:
+        item["factor4_stop_widen_mult"] = float(factor4_stop_widen_mult)
+    return item
 
 
 def limit_down_pct_of(code: str) -> float:
-    """主板约10%；创业板/科创板约20%。"""
+    """主板约10%；创业板/科创板约20%；ETF 约10%。"""
     c = code_key(code)
     if c.startswith(("300", "301", "688", "689")):
         return 0.20
     return 0.10
 
 
-WATCHLIST: list[dict[str, Any]] = [
+# ---------------------------------------------------------------------------
+# 策略七默认宇宙（与 strategy.config / strategy7.default_s7_universe 对齐）
+# ---------------------------------------------------------------------------
+S7_WATCHLIST: list[dict[str, Any]] = [
+    watch_item(
+        "600552",
+        "凯盛科技",
+        pct=0.025,
+        factor4_kind="roc",
+        factor4_params={"n": 60, "enter_raw": 0.10, "exit_raw": 0.02},
+        factor4_stop_widen_mult=1.5,
+    ),
+    watch_item(
+        "600330",
+        "天通股份",
+        pct=0.03,
+        factor4_kind="roc_ma",
+        factor4_params={"n": 40, "ma_n": 60, "enter_raw": 0.0, "exit_raw": 0.0},
+        factor4_stop_widen_mult=1.3,  # 牛市止损≈3.9%，避免原2x→6%过大
+    ),
+    watch_item(
+        "589680",
+        "科创综指ETF鹏华",
+        entry_pct=0.025,
+        stop_pct=0.035,
+        tick=0.001,
+        t0=False,
+        limit_down_pct=0.10,
+        factor4_kind="roc_ma",
+        factor4_params={"n": 60, "ma_n": 60},
+        factor4_stop_widen_mult=2.0,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# 中证500+1000 契合池（策略一默认）
+# ---------------------------------------------------------------------------
+_FIT_WATCH: list[tuple[str, str]] = [
+    ("301600", "慧翰股份"),
+    ("001389", "广合科技"),
+    ("002290", "禾盛新材"),
+    ("301392", "汇成真空"),
+    ("301205", "联特科技"),
+    ("600552", "凯盛科技"),
+    ("601208", "东材科技"),
+    ("301550", "斯菱智驱"),
+    ("002636", "金安国纪"),
+    ("301678", "新恒汇"),
+    ("600105", "永鼎股份"),
+    ("603083", "剑桥科技"),
+    ("001339", "智微智能"),
+    ("600330", "天通股份"),
+    ("600206", "有研新材"),
+    ("002979", "雷赛智能"),
+    ("301389", "隆扬电子"),
+    ("002378", "章源钨业"),
+    ("002738", "中矿资源"),
+    ("603119", "浙江荣泰"),
+    ("603306", "华懋科技"),
+    ("601020", "华钰矿业"),
+    ("301458", "钧崴电子"),
+    ("002335", "科华数据"),
+    ("002747", "埃斯顿"),
+]
+
+_WATCH_PCT: dict[str, float] = {
+    "002290": 0.03,
+    "002636": 0.03,
+    "002738": 0.03,
+    "002747": 0.03,
+    "002979": 0.03,
+    "301389": 0.03,
+    "301458": 0.03,
+    "301550": 0.03,
+    "301600": 0.03,
+    "600105": 0.03,
+    "600206": 0.03,
+    "600330": 0.03,
+    "601020": 0.03,
+    "603119": 0.03,
+    "002378": 0.02,
+    "301678": 0.02,
+    "603083": 0.02,
+}
+
+FIT_WATCHLIST: list[dict[str, Any]] = [
     watch_item(
         c,
         n,
@@ -165,6 +222,30 @@ WATCHLIST: list[dict[str, Any]] = [
     )
     for c, n in _FIT_WATCH
 ]
+
+# 定案置顶三票（策略一阈值；与 S7 宇宙同码，不含因子4）
+PINNED_WATCHLIST: list[dict[str, Any]] = [
+    watch_item("600552", "凯盛科技", pct=0.025),
+    watch_item("600330", "天通股份", pct=0.03),
+    watch_item(
+        "589680",
+        "科创综指ETF鹏华",
+        entry_pct=0.025,
+        stop_pct=0.035,
+        tick=0.001,
+        t0=False,
+        limit_down_pct=0.10,
+    ),
+]
+
+_pinned_codes = {code_key(w["code"]) for w in PINNED_WATCHLIST}
+
+# 现行盯盘：置顶三票 + 拟合池其余（去重）
+WATCHLIST: list[dict[str, Any]] = list(PINNED_WATCHLIST) + [
+    w for w in FIT_WATCHLIST if code_key(w["code"]) not in _pinned_codes
+]
+
+# 切策略七：STRATEGY_ID="strategy7"; USE_FACTOR4=True; WATCHLIST=list(S7_WATCHLIST)
 
 
 def empty_position(meta: dict[str, Any]) -> dict[str, Any]:
@@ -229,11 +310,7 @@ def calc_day_pnl(
     session: str | None = None,
     t0: bool = False,
 ) -> tuple[float | None, float | None, float | None]:
-    """当日盈亏 = 现价盯市盈亏。
-
-    - 隔夜仓：全仓 (现价 − 昨收) × qty
-    - 今日买入：今买部分 (现价 − 今日成交价)；若仍有隔夜可用则按昨收
-    """
+    """当日盈亏 = 现价盯市盈亏。"""
     if qty <= 0:
         return None, None, None
     last = float(last)

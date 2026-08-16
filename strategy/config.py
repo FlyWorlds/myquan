@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from strategy.open_break import (
@@ -21,6 +21,9 @@ class BacktestConfig:
     symbol_name: str
     em_symbol: str
     threshold_pct: float = 0.025
+    # 非对称买/止损：None=沿用 threshold_pct（对称）
+    entry_pct: float | None = None
+    stop_pct: float | None = None
     start_date: str = "20200101"
     end_date: str = field(default_factory=lambda: dt.date.today().strftime("%Y%m%d"))
     initial_cash: float = 100_000.0
@@ -77,10 +80,28 @@ class BacktestConfig:
     # 因子3·动量（单因子策略用；默认=高低点时间距离）
     mom_kind: str = "dist_hl"
     mom_params: dict | None = None
+    # 因子4·牛市持股（叠因子1：趋势内暂停止损 / 可选开盘建仓）
+    factor4_enabled: bool = False
+    factor4_kind: str = "roc_ma"
+    factor4_params: dict | None = None
+    # 牛市空仓时开盘建仓持股（否则仅抑制止损）
+    factor4_bull_entry: bool = False
+    # 牛市内跳过因子1 突破买点（已有仓或 bull_entry 时）
+    factor4_skip_f1_entry_in_bull: bool = False
+    # 牛市内放宽止损倍数（>1 时替代完全暂停止损；例 2.0 = 止损放宽一倍）
+    factor4_stop_widen_mult: float = 0.0
 
     @property
     def slippage(self) -> dict[str, str | float]:
         return {"type": "percent", "value": self.slippage_value}
+
+    def resolved_entry_pct(self) -> float:
+        return float(
+            self.entry_pct if self.entry_pct is not None else self.threshold_pct
+        )
+
+    def resolved_stop_pct(self) -> float:
+        return float(self.stop_pct if self.stop_pct is not None else self.threshold_pct)
 
     def report_title_suffix(self) -> str:
         t1 = " T+1" if not self.t0 else " T+0"
@@ -125,8 +146,14 @@ class BacktestConfig:
         if self.skip_buy_after_overnight_stop:
             skip_bits.append("隔日止损跳买")
         skip = ("/" + "+".join(skip_bits)) if skip_bits else ""
+        ep = self.resolved_entry_pct()
+        sp = self.resolved_stop_pct()
+        if abs(ep - sp) < 1e-12:
+            thr = f"开盘±{ep * 100:.1f}%"
+        else:
+            thr = f"开盘+{ep * 100:.1f}%/-{sp * 100:.1f}%"
         return (
-            f"开盘±{self.threshold_pct * 100:.1f}%"
+            f"{thr}"
             f"({sell}/{entry}/{prev}{skip}) "
             f"滑点{self.slippage_value * 100:.1f}点{t1} "
             f"({self.start_date}~{self.end_date})"
@@ -182,3 +209,77 @@ ZZ500_ETF = BacktestConfig(
     tick=0.001,
     daily_cache=_DAILY_CACHE_DIR / "sh510580_daily_qfq.parquet",
 )
+
+# 科创综指ETF：因子1 优化为买2.5%/止3.5%；强制 T+1
+KCZZ_ETF = BacktestConfig(
+    symbol="sh589680",
+    symbol_name="科创综指ETF鹏华",
+    em_symbol="589680",
+    threshold_pct=0.025,
+    entry_pct=0.025,
+    stop_pct=0.035,
+    start_date="20250305",
+    stamp_tax_rate=0.0,
+    tick=0.001,
+    t0=False,
+    daily_cache=_DAILY_CACHE_DIR / "sh589680_daily_qfq.parquet",
+)
+
+# 因子4 · 弱年(2021/2023/2025)修复扫描推荐（见 backtest/.../factor4_sweep.csv）
+# 统一口径：roc_ma60 + 牛市内止损放宽 2 倍（兼顾弱年修复与累计超额）
+FACTOR4_REPAIR_UNIFIED: dict[str, object] = {
+    "factor4_enabled": True,
+    "factor4_kind": "roc_ma",
+    "factor4_params": {"n": 60, "ma_n": 60},
+    "factor4_stop_widen_mult": 2.0,
+    "factor4_bull_entry": False,
+}
+
+# 策略7逐票累计超额优先：启用F4，但仅在牛市regime内放宽止损。
+# 因子1基础：凯盛2.5%，天通3.0%，科创综指买2.5%/止3.5%。
+FACTOR4_REPAIR_KAICHENG: dict[str, object] = {
+    "factor4_enabled": True,
+    "factor4_kind": "roc",
+    "factor4_params": {
+        "n": 60,
+        "enter_raw": 0.10,
+        "exit_raw": 0.02,
+    },
+    "factor4_stop_widen_mult": 1.5,
+    "factor4_bull_entry": False,
+}
+FACTOR4_REPAIR_TIANTONG: dict[str, object] = {
+    "factor4_enabled": True,
+    "factor4_kind": "roc_ma",
+    "factor4_params": {
+        "n": 40,
+        "ma_n": 60,
+        "enter_raw": 0.0,
+        "exit_raw": 0.0,
+    },
+    # 基础止损3%；放宽不宜过大（2x→6%回撤难承受）→ 1.3x ≈ 3.9%
+    "factor4_stop_widen_mult": 1.3,
+    "factor4_bull_entry": False,
+}
+# 科创综指样本短：沿用统一 roc_ma60 + 止损放宽2x
+FACTOR4_REPAIR_KCZZ: dict[str, object] = {
+    "factor4_enabled": True,
+    "factor4_kind": "roc_ma",
+    "factor4_params": {"n": 60, "ma_n": 60},
+    "factor4_stop_widen_mult": 2.0,
+    "factor4_bull_entry": False,
+}
+
+
+def resolve_factor4_repair(cfg: BacktestConfig) -> BacktestConfig:
+    """按标的套用牛市才生效的因子4参数，保留因子1基础阈值。"""
+    sym = str(cfg.symbol or "").lower()
+    if sym == "sh600552":
+        patch = FACTOR4_REPAIR_KAICHENG
+    elif sym == "sh600330":
+        patch = FACTOR4_REPAIR_TIANTONG
+    elif sym == "sh589680":
+        patch = FACTOR4_REPAIR_KCZZ
+    else:
+        patch = FACTOR4_REPAIR_UNIFIED
+    return replace(cfg, **patch)  # type: ignore[arg-type]

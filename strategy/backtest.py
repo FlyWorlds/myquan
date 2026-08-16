@@ -64,6 +64,46 @@ class OpenBreak3Strategy(Strategy):
     skip_buy_after_consec_stops: int = 0
     # 当天买、下一交易日止损 → 跳过下一次买点，再下一次才买
     skip_buy_after_overnight_stop: bool = False
+    # 因子4：牛市持股 regime（由 runner 注入 bull_by_date）
+    factor4_enabled: bool = False
+    factor4_bull_entry: bool = False
+    factor4_skip_f1_entry_in_bull: bool = False
+    factor4_kind: str = "roc_ma"
+    bull_by_date: dict[str, bool] = {}
+    factor4_stop_widen_mult: float = 0.0
+
+    def _is_bull_today(self, day: str) -> bool:
+        if not bool(self.factor4_enabled):
+            return False
+        return bool(self.bull_by_date.get(day, False))
+
+    def _try_bull_entry(
+        self,
+        *,
+        day: str,
+        open_px: float,
+    ) -> bool:
+        """牛市 regime 内空仓 → 开盘建仓持股（修复趋势踏空）。"""
+        if not self._is_bull_today(day) or not bool(self.factor4_bull_entry):
+            return False
+        pos = float(self.get_position(self.symbol))
+        if (not self.armed) or pos > 0:
+            return False
+        tgt = float(self.target_pct)
+        self.order_target_percent(
+            symbol=self.symbol,
+            target_percent=tgt,
+            price=open_px,
+        )
+        self.armed = False
+        self.entry_price = open_px
+        self.buy_day = day
+        self.bars_held = 0
+        self.log(
+            f"{day} 因子4牛市开盘建仓(持股不动) target={tgt*100:.1f}% "
+            f"限价={open_px:.2f} 持有收益=+0.00%"
+        )
+        return True
 
     def on_start(self) -> None:
         self.subscribe(self.symbol)
@@ -137,11 +177,30 @@ class OpenBreak3Strategy(Strategy):
         if self.skip_buy_after_overnight_stop:
             skip_bits.append("隔日止损后跳过下一次买入、再下一次才买(循环)")
         skip_txt = (" | " + "；".join(skip_bits)) if skip_bits else ""
+        f4_bits: list[str] = []
+        if bool(self.factor4_enabled):
+            f4_bits.append(f"因子4={self.factor4_kind}")
+            if self.factor4_bull_entry:
+                f4_bits.append("牛市开盘建仓")
+            widen = float(self.factor4_stop_widen_mult or 0.0)
+            if widen > 1.0:
+                f4_bits.append(f"牛市止损放宽{widen:g}倍")
+            else:
+                f4_bits.append("牛市暂停止损")
+            if self.factor4_skip_f1_entry_in_bull:
+                f4_bits.append("牛市跳过F1买点")
+        f4_txt = (" | " + "；".join(f4_bits)) if f4_bits else ""
+        if abs(float(self.entry_pct) - float(self.stop_pct)) < 1e-12:
+            thr_txt = f"开盘±{self.entry_pct*100:.1f}%"
+        else:
+            thr_txt = (
+                f"开盘+{self.entry_pct*100:.1f}%/-{self.stop_pct*100:.1f}%"
+            )
         self.log(
-            f"{self.symbol_name}({self.symbol}) 开盘±{self.entry_pct*100:.1f}% "
+            f"{self.symbol_name}({self.symbol}) {thr_txt} "
             f"({sell_txt}) | "
             f"{prev_txt}，{yang_txt} | "
-            f"{entry_txt}{skip_txt} | "
+            f"{entry_txt}{skip_txt}{f4_txt} | "
             f"佣金万0.854 滑点{self.slippage_value*100:.1f}% | "
             f"{self.start_date}~{self.end_date}"
         )
@@ -465,33 +524,52 @@ class OpenBreak3Strategy(Strategy):
             stop_px = stop_trigger_price(o, stop_pct=self.stop_pct, tick=self.tick)
             if self.stop_floor is not None:
                 stop_px = max(float(stop_px), float(self.stop_floor))
+            bull_today = self._is_bull_today(day)
+            widen = float(getattr(self, "factor4_stop_widen_mult", 0.0) or 0.0)
+            if bull_today and widen > 1.0 and bool(self.factor4_enabled):
+                wide_pct = float(self.stop_pct) * widen
+                stop_px_wide = stop_trigger_price(
+                    o, stop_pct=wide_pct, tick=self.tick
+                )
+                if self.stop_floor is not None:
+                    stop_px_wide = max(float(stop_px_wide), float(self.stop_floor))
+                stop_px = min(float(stop_px), float(stop_px_wide))
             hit_entry = h + 1e-12 >= entry_px
 
-            if self.armed and pos <= 0 and hit_entry:
-                if self._try_enter(
-                    day=day, entry_px=entry_px, open_px=o, high_px=h
-                ):
+            if self.armed and pos <= 0:
+                if self._try_bull_entry(day=day, open_px=o):
                     bought_today = True
-                elif self.prev_entry_mode != "any" and (
-                    self.prev_open is not None and self.prev_close is not None
-                ):
-                    if not prev_day_allows_entry(
-                        self.prev_open,
-                        self.prev_close,
-                        prev_small_yang_pct=self.prev_small_yang_pct,
-                        prev_entry_mode=self.prev_entry_mode,
-                        tick=float(self.tick),
-                    ):
-                        need = (
-                            "须阴线(小阳次日不买)"
-                            if self.prev_entry_mode == "yin_only"
-                            else f"须阴线或小阳<{self.prev_small_yang_pct*100:.1f}%"
+                elif bull_today and bool(self.factor4_skip_f1_entry_in_bull):
+                    if hit_entry:
+                        self.log(
+                            f"{day} 因子4牛市跳过因子1买点 "
+                            f"限价={entry_px:.2f} (open={o:.2f} high={h:.2f})"
                         )
-                        self.log(f"{day} 触及买点但前日不符({need}) skip")
+                elif hit_entry:
+                    if self._try_enter(
+                        day=day, entry_px=entry_px, open_px=o, high_px=h
+                    ):
+                        bought_today = True
+                    elif self.prev_entry_mode != "any" and (
+                        self.prev_open is not None and self.prev_close is not None
+                    ):
+                        if not prev_day_allows_entry(
+                            self.prev_open,
+                            self.prev_close,
+                            prev_small_yang_pct=self.prev_small_yang_pct,
+                            prev_entry_mode=self.prev_entry_mode,
+                            tick=float(self.tick),
+                        ):
+                            need = (
+                                "须阴线(小阳次日不买)"
+                                if self.prev_entry_mode == "yin_only"
+                                else f"须阴线或小阳<{self.prev_small_yang_pct*100:.1f}%"
+                            )
+                            self.log(f"{day} 触及买点但前日不符({need}) skip")
+                        elif self._yang_blocked():
+                            self.log(f"{day} 触及买点但阳线过滤 skip")
                     elif self._yang_blocked():
                         self.log(f"{day} 触及买点但阳线过滤 skip")
-                elif self._yang_blocked():
-                    self.log(f"{day} 触及买点但阳线过滤 skip")
 
             if not self.t0 and (bought_today or self.buy_day == day):
                 return
@@ -515,6 +593,15 @@ class OpenBreak3Strategy(Strategy):
             if self.stop_floor is not None:
                 stop_px = max(float(stop_px), float(self.stop_floor))
             hit_stop = low <= stop_px + 1e-12
+
+            if hit_stop and bull_today and bool(self.factor4_enabled):
+                widen_mult = float(getattr(self, "factor4_stop_widen_mult", 0.0) or 0.0)
+                if widen_mult <= 1.0:
+                    self.log(
+                        f"{day} 因子4牛市持股：触止损 {stop_px:.2f} 暂不卖 "
+                        f"(open={o:.2f} low={low:.2f}) {self._fmt_hold(c)}"
+                    )
+                    return
 
             if hit_stop:
                 limit_state = limit_down_state(
