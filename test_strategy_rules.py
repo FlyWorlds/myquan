@@ -281,5 +281,85 @@ class StrategyInstanceTests(unittest.TestCase):
         self.assertEqual(OpenBreak3Strategy.symbol, class_default)
 
 
+class Strategy6HybridTests(unittest.TestCase):
+    """因子3选股 + 因子1止损：注册、决策、合成面板回测。"""
+
+    def test_strategy6_bindings_and_decision_stop(self) -> None:
+        from strategy import MarketContext, get_decision_engine, get_strategy_bindings
+
+        ids = {b.factor_id for b in get_strategy_bindings("strategy6")}
+        self.assertEqual(ids, {"factor1", "factor3"})
+        roles = {b.factor_id: b.role for b in get_strategy_bindings("strategy6")}
+        self.assertEqual(roles["factor3"], "entry")
+        self.assertEqual(roles["factor1"], "exit")
+
+        eng = get_decision_engine("strategy6")
+        # 有仓 + 触止损 → sell
+        sell = eng.decide(
+            MarketContext(
+                open=10.0,
+                high=10.1,
+                low=9.70,
+                close=9.75,
+                last=9.75,
+                position_qty=100,
+                available_qty=100,
+                buy_time="2026-08-01 10:00:00",
+                session="2026-08-04",
+            )
+        )
+        self.assertEqual(sell.action, "sell")
+        self.assertIn("止损", sell.reason)
+
+        # T+1 当日不卖
+        hold = eng.decide(
+            MarketContext(
+                open=10.0,
+                high=10.1,
+                low=9.70,
+                close=9.75,
+                last=9.75,
+                position_qty=100,
+                available_qty=0,
+                buy_time="2026-08-04 10:00:00",
+                session="2026-08-04",
+            )
+        )
+        self.assertEqual(hold.action, "hold")
+        self.assertIn("T+1", hold.reason)
+
+    def test_simulate_stop_exits_before_hold_days(self) -> None:
+        from strategy.strategies.strategy6.portfolio import simulate_f3_select_f1_stop
+
+        dates = pd.date_range("2024-01-02", periods=6, freq="B")
+        # 构造：D0 信号 → D1 买 @10；D2 开盘10、低点跌破止损
+        opens = pd.DataFrame({"sA": [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]}, index=dates)
+        highs = opens.copy()
+        lows = pd.DataFrame({"sA": [9.8, 9.8, 9.70, 9.8, 9.8, 9.8]}, index=dates)
+        closes = opens.copy()
+        factor = pd.DataFrame({"sA": [1.0] * 6}, index=dates)
+        picks = {dates[0]: ["sA"]}  # D0 收盘选中 → D1 开盘买
+
+        eq, tr, stats = simulate_f3_select_f1_stop(
+            factor=factor,
+            opens=opens,
+            highs=highs,
+            lows=lows,
+            closes=closes,
+            picks=picks,
+            bt_start=dates[0],
+            hold_days=3,
+            top_k=1,
+            stop_pct=0.025,
+            initial_cash=100_000.0,
+            factor_label="test",
+        )
+        self.assertFalse(eq.empty)
+        self.assertGreaterEqual(int(stats["n_buys"]), 1)
+        self.assertGreaterEqual(int(stats["n_stop_exits"]), 1)
+        sells = tr[tr["side"] == "sell"]
+        self.assertTrue((sells["reason"] == "stop").any())
+
+
 if __name__ == "__main__":
     unittest.main()
