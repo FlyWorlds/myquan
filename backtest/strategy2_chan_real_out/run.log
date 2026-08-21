@@ -1,0 +1,98 @@
+中证500主板成分: 359
+中证1000主板成分: 645
+中证500+1000主板并集: 1004
+准备缠论特征面板 symbols=80
+[1/80] sz000009 开始
+login success!
+logout success!
+[1/80] sz000009 rows=1608 ok=1 fail=0
+[2/80] sz000021 开始
+login success!
+logout success!
+[2/80] sz000021 rows=1608 ok=2 fail=0
+[3/80] sz000027 开始
+login success!
+logout success!
+[3/80] sz000027 rows=1608 ok=3 fail=0
+[4/80] sz000032 开始
+login success!
+logout success!
+[4/80] sz000032 rows=1597 ok=4 fail=0
+[5/80] sz000034 开始
+login success!
+logout success!
+[5/80] sz000034 rows=1608 ok=5 fail=0
+[6/80] sz000039 开始
+login success!
+logout success!
+[6/80] sz000039 rows=1603 ok=6 fail=0
+[7/80] sz000050 开始
+login success!
+logout success!
+[7/80] sz000050 rows=1608 ok=7 fail=0
+[8/80] sz000060 开始
+login success!
+logout success!
+[8/80] sz000060 rows=1608 ok=8 fail=0
+[9/80] sz000062 开始
+login success!
+logout success!
+[9/80] sz000062 rows=1608 ok=9 fail=0
+[10/80] sz000088 开始
+login success!
+logout success!
+[10/80] sz000088 rows=1592 ok=10 fail=0
+[11/80] sz000155 开始
+login success!
+logout success!
+[11/80] sz000155 rows=1588 ok=11 fail=0
+[12/80] sz000400 开始
+login success!
+logout success!
+[12/80] sz000400 rows=1608 ok=12 fail=0
+[13/80] sz000415 开始
+login success!
+logout success!
+[13/80] sz000415 rows=1608 ok=13 fail=0
+[14/80] sz000423 开始
+login success!
+logout success!
+[14/80] sz000423 rows=1608 ok=14 fail=0
+[15/80] sz000429 开始
+login success!
+logout success!
+[15/80] sz000429 rows=1608 ok=15 fail=0
+[16/80] sz000513 开始
+login success!
+logout success!
+[16/80] sz000513 rows=1608 ok=16 fail=0
+[17/80] sz000519 开始
+login success!
+logout success!
+[17/80] sz000519 rows=1608 ok=17 fail=0
+[18/80] sz000528 开始
+login success!
+logout success!
+[18/80] sz000528 rows=1587 ok=18 fail=0
+[19/80] sz000537 开始
+login success!
+logout success!
+[19/80] sz000537 rows=1608 ok=19 fail=0
+[20/80] sz000539 开始
+login success!
+logout success!
+[20/80] sz000539 rows=1608 ok=20 fail=0
+[21/80] sz000559 开始
+login success!
+logout success!
+[21/80] sz000559 rows=1598 ok=21 fail=0
+[22/80] sz000582 开始
+login success!
+timed out
+接收数据异常，请稍后再试。
+timed out
+接收数据异常，请稍后再试。
+[22/80] sz000582 rows=997 ok=22 fail=0
+[23/80] sz000591 开始
+login success!
+logout success!

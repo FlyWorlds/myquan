@@ -1,4 +1,4 @@
-"""策略一（默认）：因子1（买卖）+ 因子2（回撤加减仓预警）。
+"""援军战法（strategy1，默认）：因子1（买卖）+ 因子2（回撤加减仓预警）。
 
 调参（开闭，勿改算法本体）：
   · 因子1 阈值/过滤 → open_break.DEFAULT_* 或 bindings / BacktestConfig
@@ -118,9 +118,9 @@ def _apply_factor2_overlay(
         pass
 
     if verbose and summary:
-        print("\n========== 策略一 · 因子2（旧版权益叠加，可选）==========")
+        print("\n========== 援军战法 · 因子2（旧版权益叠加，可选）==========")
         print(
-            f"策略一期末:  {summary.get('base_final', 0):,.2f}  "
+            f"援军战法期末:  {summary.get('base_final', 0):,.2f}  "
             f"(+{summary.get('base_return_pct', 0):.2f}%)"
         )
         print(
@@ -164,7 +164,7 @@ def _attach_factor2_alert_meta(result: Any, verbose: bool = True) -> None:
     except Exception:
         pass
     if verbose:
-        print("\n========== 策略一 · 因子2（回撤预警，不介入）==========")
+        print("\n========== 援军战法 · 因子2（回撤预警，不介入）==========")
         print(th.label())
         print(
             f"加仓预警 ≥{th.add_alert_dd*100:.0f}%  |  "
@@ -185,7 +185,7 @@ def run_strategy1(
     factor2_levels: Sequence[float] | None = None,
     factor2_max_inject_pct: float | None = None,
 ) -> tuple[Any, Any]:
-    """策略一回测：因子1 交易；因子2 默认只挂预警阈值（不注资）。
+    """援军战法回测：因子1 阈值一次打满；因子2 默认只挂预警阈值（不注资）。
 
     apply_factor2_overlay=True 时可启用旧版 dd_topup 权益叠加。
     """
@@ -240,7 +240,7 @@ def _bind() -> StrategySpec:
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
         description=(
-            "默认策略：因子1 开盘±2.5%/阴小阳/禁双阳跨日≥5%/仅止损"
+            "援军战法：因子1 开盘±2.5%一次打满/阴小阳/禁双阳跨日≥5%/仅止损"
             " + 因子2 回撤加减仓预警（回测不注资）"
         ),
         factor_bindings=FACTOR_BINDINGS,
@@ -249,7 +249,7 @@ def _bind() -> StrategySpec:
         strategy_cls=OpenBreak3Strategy,
         print_rules=_print_rules,
         decision_factory=create_decision_engine,
-        aliases=("open_break3", "s1", "策略一"),
+        aliases=("open_break3", "s1", "策略一", "援军战法"),
         implemented=True,
         meta={
             "default": True,

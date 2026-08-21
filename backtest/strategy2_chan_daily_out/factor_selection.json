@@ -1,0 +1,26 @@
+{
+  "search_trials": 22,
+  "discovery": [
+    "20180101",
+    "20221231"
+  ],
+  "validation": [
+    "20230101",
+    "20241231"
+  ],
+  "final_test": [
+    "20250101",
+    "20260821"
+  ],
+  "final_test_touched": false,
+  "correlation_reject": 0.85,
+  "research_only": true,
+  "blend_scheme": "equal",
+  "blend_weights": {},
+  "blend_members": [],
+  "blend_validation_sharpe": NaN,
+  "meets_sharpe_target": false,
+  "target_sharpe": 0.8,
+  "accepted": [],
+  "combined_column": null
+}

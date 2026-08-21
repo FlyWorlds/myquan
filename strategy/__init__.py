@@ -7,7 +7,7 @@
   · core/                           — 协议 / MarketContext / Decision / 注册表
   · backtest.py / runner.py         — 执行层（下单与回测）
 
-默认生效：策略一 = 因子1（开盘±2.5%）+ 因子2（回撤阶梯补仓）。
+默认生效：援军战法（strategy1）= 因子1（开盘±2.5% 一次打满）+ 因子2（回撤预警）。
 动量：因子3（策略五截面组合 / 单票时序）。因子4 = 牛市持股 regime。
 策略六：因子6 组合动量 ETF 轮动。策略七：因子5事件开仓、单主题一只、固定持有五日的五槽位策略。
 策略八：因子7 行业 ETF 普通动量 + 改进残差动量月频 Top3。
@@ -96,6 +96,7 @@ from strategy.core import (  # noqa: E402
 # 语义别名：run_strategy1 = 因子1交易 + 因子2权益叠加；run_open_break = 仅因子1
 Strategy1 = OpenBreak3Strategy
 from strategy.strategies.strategy1 import run_strategy1  # noqa: E402
+from strategy.strategies.strategy2 import run_strategy2  # noqa: E402
 from strategy.strategies.strategy6 import run_strategy6  # noqa: E402
 from strategy.strategies.strategy7 import run_strategy7  # noqa: E402
 from strategy.strategies.strategy8 import run_strategy8  # noqa: E402
@@ -164,6 +165,7 @@ __all__ = [
     "run_open_break_backtest",
     "run_momentum",
     "run_strategy1",
+    "run_strategy2",
     "run_strategy6",
     "run_strategy7",
     "run_strategy8",

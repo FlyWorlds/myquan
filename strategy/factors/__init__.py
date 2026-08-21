@@ -8,6 +8,7 @@
   · factor5 — Serenity 公开前瞻主题 → A 股研究候选池
   · factor6 — 组合动量 ETF 轮动
   · factor7 — 行业 ETF 普通动量 + 改进残差动量
+  · factor8 — CZSC 缠论结构与一/二/三类买卖点
 """
 
 from strategy.factors import factor1 as _factor1  # noqa: F401
@@ -17,6 +18,7 @@ from strategy.factors import factor4 as _factor4  # noqa: F401
 from strategy.factors import factor5 as _factor5  # noqa: F401
 from strategy.factors import factor6 as _factor6  # noqa: F401
 from strategy.factors import factor7 as _factor7  # noqa: F401
+from strategy.factors import factor8 as _factor8  # noqa: F401
 from strategy.core.factor_registry import FACTOR_REGISTRY, get_factor, list_factors
 
 __all__ = ["FACTOR_REGISTRY", "get_factor", "list_factors"]

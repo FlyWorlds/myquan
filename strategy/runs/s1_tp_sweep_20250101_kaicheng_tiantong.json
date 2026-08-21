@@ -1,0 +1,74 @@
+{
+  "sh600552": {
+    "name": "凯盛科技",
+    "start": "2025-01-02",
+    "end": "2026-08-20",
+    "n_days": 396,
+    "entry_stop_pct": 2.5,
+    "baseline_no_tp": {
+      "total_return_pct": 131.61956799108418,
+      "max_drawdown_pct": 21.50750276533388,
+      "win_rate": 50.98039215686274,
+      "closed_trade_count": 51.0,
+      "sharpe_ratio": 1.6330175127010345,
+      "end_market_value": 231619.5679910842,
+      "total_pnl": 131619.5679910842
+    },
+    "best_by_return": {
+      "tp_pct": 11.0,
+      "total_return_pct": 212.32898913623893,
+      "max_drawdown_pct": 21.53099202439401,
+      "win_rate": 52.83018867924528,
+      "closed_trade_count": 53.0,
+      "sharpe_ratio": 2.23262981334743,
+      "end_market_value": 312328.98913623893,
+      "total_pnl": 212328.98913623893
+    },
+    "best_by_sharpe": {
+      "tp_pct": 11.0,
+      "total_return_pct": 212.32898913623893,
+      "max_drawdown_pct": 21.53099202439401,
+      "win_rate": 52.83018867924528,
+      "closed_trade_count": 53.0,
+      "sharpe_ratio": 2.23262981334743,
+      "end_market_value": 312328.98913623893,
+      "total_pnl": 212328.98913623893
+    }
+  },
+  "sh600330": {
+    "name": "天通股份",
+    "start": "2025-01-02",
+    "end": "2026-08-20",
+    "n_days": 396,
+    "entry_stop_pct": 3.0,
+    "baseline_no_tp": {
+      "total_return_pct": 396.4027836380996,
+      "max_drawdown_pct": 32.89778775587234,
+      "win_rate": 57.89473684210527,
+      "closed_trade_count": 57.0,
+      "sharpe_ratio": 2.3121224257047115,
+      "end_market_value": 496402.78363809973,
+      "total_pnl": 396402.78363809973
+    },
+    "best_by_return": {
+      "tp_pct": 33.0,
+      "total_return_pct": 453.0107630656006,
+      "max_drawdown_pct": 32.928861909058874,
+      "win_rate": 58.620689655172406,
+      "closed_trade_count": 58.0,
+      "sharpe_ratio": 2.4729998678347,
+      "end_market_value": 553010.7630656005,
+      "total_pnl": 453010.76306560053
+    },
+    "best_by_sharpe": {
+      "tp_pct": 26.0,
+      "total_return_pct": 441.3996511523709,
+      "max_drawdown_pct": 32.98359655134041,
+      "win_rate": 58.620689655172406,
+      "closed_trade_count": 58.0,
+      "sharpe_ratio": 2.520458385605729,
+      "end_market_value": 541399.6511523708,
+      "total_pnl": 441399.65115237085
+    }
+  }
+}

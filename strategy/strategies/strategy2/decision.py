@@ -1,7 +1,11 @@
-"""策略二 · 决策层骨架：复用因子1 买卖点逻辑（参数/过滤来自本策略绑定）。"""
+"""策略二 · 缠论状态机决策层。"""
 
 from __future__ import annotations
 
+from typing import Any
+
+from strategy.chan.signals import ChanSignalSnapshot
+from strategy.chan.state_machine import ChanStateMachine
 from strategy.core.context import Decision, MarketContext
 from strategy.core.decision import BaseDecisionEngine
 from strategy.core.protocols import StrategySpec
@@ -9,66 +13,59 @@ from strategy.strategies.strategy2.bindings import FACTOR_BINDINGS, STRATEGY_ID,
 
 
 class Strategy2Decision(BaseDecisionEngine):
-    """与策略一同构，但用策略二自己的 factor1 绑定（±3% / 仅阴）。factor2 为权益叠加，决策不参与。"""
+    """每个标的维护独立的一买→二买→二/三卖状态。"""
 
     strategy_id = STRATEGY_ID
     strategy_name = STRATEGY_NAME
 
+    def __init__(self, bindings=FACTOR_BINDINGS) -> None:
+        super().__init__(bindings=bindings)
+        self._machines: dict[str, ChanStateMachine] = {}
+
+    def _machine(self, symbol: str, timeout: int) -> ChanStateMachine:
+        if symbol not in self._machines:
+            self._machines[symbol] = ChanStateMachine(candidate_timeout_bars=timeout)
+        return self._machines[symbol]
+
     def decide(self, ctx: MarketContext) -> Decision:
-        binding = self.binding("factor1")
+        binding = self.binding("factor8")
         if binding is None:
-            return Decision.hold("策略二未绑定因子1")
-
-        levels = self.levels_for(binding, ctx)
-        buy_px = float(levels.get("buy") or 0)
-        stop_px = float(levels.get("stop") or 0)
-        if buy_px <= 0 or stop_px <= 0:
-            return Decision.hold("开盘价无效，无法计算买卖点")
-
-        if ctx.has_position:
-            if ctx.t_plus_one:
-                return Decision.hold(
-                    "T+1 禁卖",
-                    buy_price=buy_px,
-                    stop_price=stop_px,
-                    tags=("t1",),
-                )
-            if ctx.price <= stop_px:
-                return Decision.sell(
-                    stop_px,
-                    reason=f"触止损 {stop_px:.2f}",
-                    factor_id="factor1",
-                    buy_price=buy_px,
-                    stop_price=stop_px,
-                    tags=("stop", "factor1"),
-                )
-            return Decision.hold(
-                "持仓未触止损",
-                buy_price=buy_px,
-                stop_price=stop_px,
-            )
-
-        if not self.factor_allowed(binding, ctx):
-            return Decision.hold(
-                "因子过滤未通过（仅阴线）",
-                buy_price=buy_px,
-                stop_price=stop_px,
-                tags=("filter",),
-            )
-        if ctx.price >= buy_px:
-            return Decision.buy(
-                buy_px,
-                reason=f"触买点 {buy_px:.2f}",
-                factor_id="factor1",
-                buy_price=buy_px,
-                stop_price=stop_px,
-                tags=("entry", "factor1"),
-            )
-        return Decision.hold(
-            "空仓未触买点",
-            buy_price=buy_px,
-            stop_price=stop_px,
+            return Decision.hold("策略二未绑定因子8")
+        params = binding.merged_params()
+        symbol = str(ctx.meta.get("symbol") or "default")
+        when: Any = ctx.meta.get("dt") or ctx.session
+        if not when:
+            return Decision.hold("缺少信号时间")
+        snapshot = ChanSignalSnapshot.from_mapping(ctx.meta.get("chan_signals", ctx.meta))
+        transition = self._machine(
+            symbol, int(params.get("candidate_timeout_bars", 20))
+        ).update(
+            when,
+            snapshot,
+            has_position=ctx.has_position,
+            can_sell=not ctx.t_plus_one,
         )
+        common = {
+            "chan_state": transition.state.value,
+            "strengthened": transition.strengthened,
+            "execution": "next_day_open",
+        }
+        if transition.action == "buy":
+            return Decision.buy(
+                ctx.price,
+                reason=transition.reason,
+                factor_id="factor8",
+                target_pct=float(params.get("target_pct", 0.10)),
+                **common,
+            )
+        if transition.action == "sell":
+            return Decision.sell(
+                ctx.price,
+                reason=transition.reason,
+                factor_id="factor8",
+                **common,
+            )
+        return Decision.hold(transition.reason, **common)
 
 
 def create_decision_engine(spec: StrategySpec | None = None) -> Strategy2Decision:

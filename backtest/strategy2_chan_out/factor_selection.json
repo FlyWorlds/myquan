@@ -1,0 +1,20 @@
+{
+  "search_trials": 14,
+  "discovery": [
+    "20180101",
+    "20221231"
+  ],
+  "validation": [
+    "20230101",
+    "20241231"
+  ],
+  "final_test": [
+    "20250101",
+    "20260820"
+  ],
+  "final_test_touched": false,
+  "correlation_reject": 0.85,
+  "research_only": true,
+  "accepted": [],
+  "combined_column": null
+}

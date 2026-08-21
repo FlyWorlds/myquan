@@ -5,8 +5,9 @@
   · decision.py  — 决策层：MarketContext → Decision（buy/sell/hold）
   · __init__.py  — 注册 StrategySpec（含 decision_factory / run）
 
-  strategy1 — 默认生效：因子1（买卖）+ 因子2（回撤补仓叠加）
-  strategy2/3/4 — 骨架（同因子不同 params；回测 runner 待接）
+  strategy1 — 援军战法（默认）：因子1（买卖）+ 因子2（回撤预警）
+  strategy2 — 缠论选股：日线交易，30分钟小转大一买/二买，日线二/三卖退出
+  strategy3/4 — 骨架或动量/建池变体
   strategy5 — 动量因子组合（因子3 · 中证1000截面）
   strategy6 — 因子6 组合动量 ETF 轮动
   strategy7 — 因子5 Serenity 公开帖驱动的主题事件策略

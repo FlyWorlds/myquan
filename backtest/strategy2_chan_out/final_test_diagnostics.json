@@ -1,0 +1,37 @@
+{
+  "period": [
+    "20250101",
+    "20260820"
+  ],
+  "factor_column": null,
+  "final_test_touched": true,
+  "test_stats": {
+    "total_return": -0.38894710407159927,
+    "annual_return": -0.14875499215760957,
+    "annual_volatility": 0.17592186416417463,
+    "sharpe": -0.8455742148047484,
+    "max_drawdown": -0.5592830844790109,
+    "calmar": -0.26597441668771254,
+    "annual_turnover": 141.26037169976868,
+    "hit_rate": 0.4747068676716918,
+    "bars": 5970.0,
+    "gross_sharpe": 0.2983834842779156,
+    "benchmark_return": 0.04022019502989416
+  },
+  "delayed_one_bar_sharpe": -0.8455742148047484,
+  "bootstrap": {
+    "sharpe_p05": -1.9096263096402422,
+    "sharpe_median": -0.7690138167973742,
+    "sharpe_p95": 0.4228424477696776
+  },
+  "deflated_sharpe_probability": 0.0,
+  "pbo_estimate": 0.3333333333333333,
+  "search_trials": 14,
+  "decision": "reject",
+  "research_only": true,
+  "limitations": [
+    "若成分股为当前截面而非历史时点成分，结论上限为探索性",
+    "未模拟盘口冲击和集合竞价排队",
+    "历史回测不代表未来表现"
+  ]
+}

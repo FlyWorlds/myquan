@@ -1,6 +1,6 @@
 # strategy — 可插拔策略 / 因子 / 决策框架
 
-默认生效：**策略一 = 因子1（开盘±2.5% 买卖）+ 因子2（回撤加减仓预警）**。
+默认生效：**援军战法（strategy1）= 因子1（开盘±2.5% 一次打满）+ 因子2（回撤加减仓预警）**。
 
 - 决策/盯盘买卖只看因子1；因子2 默认只挂预警阈值（**回测不注资**）。
 - 仅因子1交易：`run_open_break` 或 `python strategy1.py --no-factor2`。
@@ -26,7 +26,8 @@ strategy/
 │   ├── factor4.py        # 牛市持股 regime
 │   ├── factor5.py        # Serenity 公开前瞻主题 → A 股研究候选池
 │   ├── factor6.py        # 组合动量 ETF 轮动
-│   └── factor7.py        # 行业 ETF 普通动量 + 改进残差动量
+│   ├── factor7.py        # 行业 ETF 普通动量 + 改进残差动量
+│   └── factor8.py        # CZSC 缠论结构与一/二/三类买卖点
 
 ├── strategies/
 │   ├── strategy1/ … strategy8/
@@ -38,6 +39,7 @@ strategy/
 ├── serenity_factor5.py   # 因子5：公开帖解析 / 主题映射 / 动态候选快照
 ├── etf_combo_momentum.py # 因子6：宽基 ETF 组合动量轮动
 ├── industry_residual_momentum.py # 因子7：行业 ETF 双动量月频 Top3
+├── chan/                 # 策略二 CZSC 适配 / 状态机 / 因子挖掘
 ├── backtest.py / runner.py / config.py
 └── registry.py
 ```
@@ -55,6 +57,7 @@ strategy/
 | **factor5** | 因子5·Serenity前瞻主题 | 动态 A 股**研究候选池** | `serenity_factor5.py`：Serenity 公开帖 → 前瞻看多主题 → A 股概念代理；不复制美股代码、不直接交易 |
 | **factor6** | 因子6·组合动量ETF轮动 | 宽基 ETF 轮动 | `etf_combo_momentum.py`：短窗+长窗 ROC 合成分数，收盘 TopK，动量失效空仓；次日开盘执行 |
 | **factor7** | 因子7·行业ETF双动量 | 月频行业主线轮动 | `industry_residual_momentum.py`：12月普通动量 + 100月PCA六因子改进残差动量，各50%合成；月末Top3 |
+| **factor8** | 因子8·缠论结构 | 买卖点确认与结构特征 | `strategy/chan`：日线交易；30分钟只判断小转大一买/二买；日线二卖或三卖退出；日线收盘→次日开盘 |
 
 ```python
 from strategy import list_factors
@@ -69,8 +72,8 @@ for f in list_factors():
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 策略一 | factor1 + factor2 | ✅ 默认 | 开盘±2.5% 仅止损 + 回撤预警；别名 `open_break3` / `s1` |
-| **strategy2** | 策略二 | factor1 + factor2 | ❌ 骨架 | ±3% / 仅阴线；决策仅因子1；`run` 未实现 |
+| **strategy1** | 援军战法 | factor1 + factor2 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警；别名 `open_break3` / `s1` / `策略一` |
+| **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
 | **strategy3** | 策略三 | factor3 | ✅ | 挂因子3动量组合（中证500+1000主板截面）；与策略五同族 |
 | **strategy4** | 策略四 | factor1 + factor3 | ✅ | 因子1 roll12 Top3 建池 × 池内反转选股 |
 | **strategy5** | 动量因子组合 | factor3 | ✅ | 中证主板截面 TopK 袖套；别名 `s5` / `momentum` |
@@ -99,6 +102,20 @@ run_strategy7(start="20260101", max_positions=5, max_per_theme=1, hold_days=5)
 
 # 策略八：15只行业 ETF，月末双动量 Top3
 run_strategy8(start="20240206", end="20260630")
+```
+
+策略二（缠论选股，研究回测，不构成投资建议）：
+
+```python
+from strategy import run_strategy2
+
+run_strategy2(panel_path="data_cache/strategy2_chan/feature_panel.parquet")
+```
+
+```bash
+cd backtest && python strategy2.py demo --symbols 32
+cd backtest && python strategy2.py symbol sh600552
+cd backtest && python strategy2.py all --limit 80
 ```
 
 因子5候选池刷新（处理上一 A 股交易日收盘后至当前时点的全部 Serenity 公开帖）：
@@ -136,6 +153,7 @@ refresh_strategy7_factor5()
 | 因子4 牛市参数 | `bull_regime` / `FACTOR4_REPAIR_*` | `resolve_factor4_repair(cfg)` / `BacktestConfig.factor4_*` |
 | 因子6 ETF 组合动量 | `etf_combo_momentum.DEFAULT_*` | `strategy6/bindings` / `run_strategy6(...)` |
 | 因子7 行业 ETF 双动量 | `industry_residual_momentum.DEFAULT_PARAMS` / `DEFAULT_UNIVERSE` | `strategy8/bindings` / `run_strategy8(...)` |
+| 因子8 缠论买卖点 | `strategy/chan` / `evaluation.md` | `strategy2/bindings` / `backtest/strategy2.py` |
 
 ```python
 from strategy.dd_alert import derive_thresholds
@@ -173,6 +191,9 @@ cd backtest && python compare_f3_select_f1_stop.py
 python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 --max-per-theme 1 --hold-days 5
 # 策略八（Python API；离线测试不拉行情）
 python -c "from strategy import run_strategy8; print(run_strategy8(start='20240206', end='20260630').stats)"
+# 策略二：缠论合成数据流水线 / 真实面板挖掘
+cd backtest && python strategy2.py demo --symbols 32
+cd backtest && python strategy2.py mine --panel ../data_cache/strategy2_chan/feature_panel.parquet
 ```
 
 ## 如何扩展（开闭）
@@ -203,5 +224,6 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy6` | 因子6 ETF 组合动量轮动；`start` / `n` / `n2` / `top_k` / `hold_days` / `min_score` |
 | `run_strategy7` | 因子5事件开仓 + 固定持有；`start` / `end` / `max_positions` / `max_per_theme` / `hold_days` |
 | `run_strategy8` | 因子7行业ETF双动量；`start` / `end` / `momentum_months` / `pca_window_months` / `n_components` / `top_k` |
+| `run_strategy2` | 因子8缠论选股；`panel` / `panel_path` / `factor_column` / `start` / `end` |
 | `OpenBreak3Strategy` | = Strategy1 执行类 |
 | `KCZZ_ETF` | 科创综指 589680 预设（买2.5%/止3.5%、T+1） |

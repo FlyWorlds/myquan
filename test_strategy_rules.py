@@ -102,7 +102,7 @@ class StrategyRuleTests(unittest.TestCase):
         )
 
     def test_factor2_dd_alert(self) -> None:
-        from strategy import get_factor, get_strategy_bindings
+        from strategy import get_factor, get_strategy, get_strategy_bindings
         from strategy.dd_alert import derive_thresholds, evaluate_alert
 
         f2 = get_factor("factor2")
@@ -135,6 +135,8 @@ class StrategyRuleTests(unittest.TestCase):
         self.assertEqual(ids, {"factor1", "factor2"})
         b2 = next(b for b in get_strategy_bindings("strategy1") if b.factor_id == "factor2")
         self.assertFalse(b2.params.get("overlay"))
+        self.assertEqual(get_strategy("strategy1").name, "援军战法")
+        self.assertEqual(get_strategy("援军战法").id, "strategy1")
 
     def test_strategy7_binds_factor5_as_event_universe(self) -> None:
         from strategy import get_strategy_bindings

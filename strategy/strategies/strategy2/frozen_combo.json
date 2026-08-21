@@ -1,0 +1,9 @@
+{
+  "members": [],
+  "scheme": "equal",
+  "weights": {},
+  "meets_target": false,
+  "target_sharpe": 0.8,
+  "validation_sharpe": null,
+  "research_only": true
+}

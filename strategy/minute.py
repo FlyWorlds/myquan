@@ -145,8 +145,13 @@ def pull_baostock_min(
 
     adjustflag = {"qfq": "2", "hfq": "3", "": "1"}.get(adjust, "2")
     code = _bs_symbol(sina_symbol=sina_symbol, em_symbol=em_symbol)
+    import socket
+
+    old_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(90)
     lg = bs.login()
     if getattr(lg, "error_code", "0") not in ("0", 0, None):
+        socket.setdefaulttimeout(old_timeout)
         return pd.DataFrame()
     try:
         rs = bs.query_history_k_data_plus(
@@ -163,7 +168,10 @@ def pull_baostock_min(
         if not rows:
             return pd.DataFrame()
         raw = pd.DataFrame(rows, columns=list(rs.fields))
+    except OSError:
+        return pd.DataFrame()
     finally:
+        socket.setdefaulttimeout(old_timeout)
         try:
             bs.logout()
         except Exception:
@@ -351,6 +359,7 @@ def fetch_minute_30m(
     refresh: bool = False,
     start_date: str | None = None,
     end_date: str | None = None,
+    adjust: str = "qfq",
 ) -> pd.DataFrame:
     """拉取 30 分钟线并写缓存（baostock 长历史 + 东财/新浪近期）。"""
     return fetch_minute_bars(
@@ -361,6 +370,7 @@ def fetch_minute_30m(
         refresh=refresh,
         start_date=start_date,
         end_date=end_date,
+        adjust=adjust,
     )
 
 
@@ -374,6 +384,7 @@ def fetch_minute_bars(
     lookback_days: int = 10,
     start_date: str | None = None,
     end_date: str | None = None,
+    adjust: str = "qfq",
 ) -> pd.DataFrame:
     """拉取分钟线并写缓存。
 
@@ -417,7 +428,7 @@ def fetch_minute_bars(
                 sina_symbol=sina_symbol,
                 start_date=start_date,
                 end_date=end_date,
-                adjust="qfq",
+                adjust=adjust,
             )
             if not bs_df.empty:
                 parts.append(bs_df)
@@ -431,7 +442,7 @@ def fetch_minute_bars(
             period=period,
             em_symbol=em_symbol or _em_code_from_sina(sina_symbol),
             sina_symbol=sina_symbol,
-            adjust="qfq",
+            adjust=adjust,
             start_date=start_date,
             end_date=end_date,
         )

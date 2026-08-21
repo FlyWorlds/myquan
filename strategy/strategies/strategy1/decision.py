@@ -1,4 +1,4 @@
-"""策略一 · 决策层：因子1信号 → 买 / 卖 / 持有。"""
+"""援军战法 · 决策层：因子1信号 → 买 / 卖 / 持有。"""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class Strategy1Decision(BaseDecisionEngine):
     def decide(self, ctx: MarketContext) -> Decision:
         binding = self.binding("factor1")
         if binding is None:
-            return Decision.hold("策略一未绑定因子1")
+            return Decision.hold("援军战法未绑定因子1")
 
         levels = self.levels_for(binding, ctx)
         buy_px = float(levels.get("buy") or 0)

@@ -1,4 +1,4 @@
-"""策略一 · 因子绑定与策略侧过滤器。"""
+"""援军战法（strategy1）· 因子绑定与策略侧过滤器。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from strategy.open_break import (
 )
 
 STRATEGY_ID = "strategy1"
-STRATEGY_NAME = "策略一"
+STRATEGY_NAME = "援军战法"
 
 _TH = default_thresholds()
 
