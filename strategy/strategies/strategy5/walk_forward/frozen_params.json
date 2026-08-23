@@ -1,0 +1,11 @@
+{
+  "id": "k3",
+  "mom_n": 3,
+  "high_n": 5,
+  "stage1_k": 20,
+  "stage2_k": 3,
+  "core": "orig_two_stage",
+  "logic": "收到 3 只",
+  "select_window": "2020-01-02..2023-12-31",
+  "select_metric": "n_is_sharpe"
+}

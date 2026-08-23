@@ -1,0 +1,73 @@
+{
+  "n_trials_search": 25,
+  "n_trials_program": 45,
+  "is": {
+    "verdict": "PASS - survives multiple-testing correction",
+    "passed": true,
+    "observed_sharpe_annual": 4.8037,
+    "skew": 0.0038,
+    "kurtosis": 2.6706,
+    "n_obs": 970,
+    "n_trials": 45,
+    "deflated_sharpe_ratio": 0.9933,
+    "deflation_benchmark_sr0_annual": 3.5205,
+    "psr_vs_zero": 1.0,
+    "haircut": {
+      "method": "holm",
+      "adjusted_sharpe_annual": 4.5957,
+      "haircut_pct": 0.0433,
+      "observed_pvalue": 4.316063242740613e-21,
+      "adjusted_pvalue": 1.942228459233276e-19
+    },
+    "minimum_track_record_length": 31.6,
+    "pbo": {
+      "pbo": 0.0,
+      "n_splits": 70,
+      "n_strategies": 25,
+      "n_blocks": 8,
+      "median_logit": 3.2188758248682015
+    }
+  },
+  "oos_frozen_n1": {
+    "verdict": "PASS - survives multiple-testing correction",
+    "passed": true,
+    "observed_sharpe_annual": 2.3942,
+    "skew": 0.0796,
+    "kurtosis": 2.9017,
+    "n_obs": 485,
+    "n_trials": 1,
+    "deflated_sharpe_ratio": 0.9995,
+    "deflation_benchmark_sr0_annual": 0.0,
+    "psr_vs_zero": 0.9995,
+    "haircut": {
+      "method": "holm",
+      "adjusted_sharpe_annual": 2.3942,
+      "haircut_pct": -0.0,
+      "observed_pvalue": 0.0008955227043953461,
+      "adjusted_pvalue": 0.0008955227043953461
+    },
+    "minimum_track_record_length": 119.8,
+    "pbo": null
+  },
+  "val_frozen_n1": {
+    "verdict": "PASS - survives multiple-testing correction",
+    "passed": true,
+    "observed_sharpe_annual": 3.8489,
+    "skew": -0.1398,
+    "kurtosis": 2.6578,
+    "n_obs": 146,
+    "n_trials": 1,
+    "deflated_sharpe_ratio": 0.9977,
+    "deflation_benchmark_sr0_annual": 0.0,
+    "psr_vs_zero": 0.9977,
+    "haircut": {
+      "method": "holm",
+      "adjusted_sharpe_annual": 3.8489,
+      "haircut_pct": 0.0,
+      "observed_pvalue": 0.003393618240671491,
+      "adjusted_pvalue": 0.003393618240671491
+    },
+    "minimum_track_record_length": 49.7,
+    "pbo": null
+  }
+}

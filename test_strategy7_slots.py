@@ -6,7 +6,7 @@ import unittest
 
 import pandas as pd
 
-from strategy.strategies.strategy7.portfolio import simulate_factor5_event_slots_f1_stop
+from strategy.strategies.strategy3.portfolio import simulate_factor5_event_slots_f1_stop
 
 
 def _panel(

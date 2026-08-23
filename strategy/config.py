@@ -6,6 +6,12 @@ import datetime as dt
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from strategy.costs import (
+    COMMISSION_RATE,
+    MISC_FEE_RATE,
+    SLIPPAGE_VALUE,
+    STAMP_TAX_RATE,
+)
 from strategy.open_break import (
     DEFAULT_BAN_DOUBLE_YANG,
     DEFAULT_BAN_SINGLE_YANG,
@@ -29,9 +35,10 @@ class BacktestConfig:
     initial_cash: float = 100_000.0
     target_pct: float = 0.95
     lot_size: int = 100
-    commission_rate: float = 0.0000854
-    stamp_tax_rate: float = 0.001
-    slippage_value: float = 0.001
+    commission_rate: float = COMMISSION_RATE
+    misc_fee_rate: float = MISC_FEE_RATE
+    stamp_tax_rate: float = STAMP_TAX_RATE
+    slippage_value: float = SLIPPAGE_VALUE
     tick: float = TICK_SIZE
     limit_down_pct: float = 0.10
     t0: bool = False
@@ -64,6 +71,16 @@ class BacktestConfig:
     take_profit_limit_offset: float = 0.0
     # 触及止盈档后抬止损下限到 买入价×(1+lock)；None=不抬；可与减仓并用
     take_profit_lock_pct: float | None = None
+    # 因子9：空 dict=关闭；非空则仅允许 map[date]=True 的日子买入
+    energy_allowed_by_date: dict | None = None
+    # 滚动夏普衰减门控：date -> 跳过买入
+    halt_by_date: dict | None = None
+    # 行情 regime 调整止盈（bull/sideways/bear），与因子4 独立
+    regime_tp_enabled: bool = False
+    regime_by_date: dict | None = None
+    regime_tp_bull: tuple[float, ...] = ()
+    regime_tp_sideways: tuple[float, ...] = (0.15,)
+    regime_tp_bear: tuple[float, ...] = (0.10,)
     # 连续 N 次止损后：跳过下一次策略买入，再下一次才买；0=关闭
     # 例 N=2 → 止损、止损、跳过第3次买点、第4次买点才买；循环
     skip_buy_after_consec_stops: int = 0
@@ -95,6 +112,11 @@ class BacktestConfig:
     def slippage(self) -> dict[str, str | float]:
         return {"type": "percent", "value": self.slippage_value}
 
+    @property
+    def engine_commission_rate(self) -> float:
+        """akquant 双边佣金 = 佣金 + 杂费。"""
+        return float(self.commission_rate) + float(self.misc_fee_rate or 0.0)
+
     def resolved_entry_pct(self) -> float:
         return float(
             self.entry_pct if self.entry_pct is not None else self.threshold_pct
@@ -125,7 +147,8 @@ class BacktestConfig:
             prev += "/禁任意双阳"
         if self.take_profit_levels:
             lv = "/".join(f"{x*100:.0f}" for x in self.take_profit_levels)
-            trig = "收盘" if self.take_profit_trigger == "close" else "高点"
+            trig_map = {"close": "收盘", "prev_high": "前日高点→开盘", "high": "高点"}
+            trig = trig_map.get(str(self.take_profit_trigger), "高点")
             off = float(self.take_profit_limit_offset or 0.0)
             if off > 0:
                 parts = [f"止盈{lv}挂+{off*100:.0f}@{trig}"]
@@ -283,3 +306,23 @@ def resolve_factor4_repair(cfg: BacktestConfig) -> BacktestConfig:
     else:
         patch = FACTOR4_REPAIR_UNIFIED
     return replace(cfg, **patch)  # type: ignore[arg-type]
+
+
+def apply_s1_recommended(cfg: BacktestConfig) -> BacktestConfig:
+    """策略1 凯盛+天通推荐单票规则：因子1 仅止损，不开跳买 / 止盈 / F4。
+
+    依据 9 组事先列出的变体：2020-2023 选、2024+ 确认。样本内 F4 略好，
+    样本外未通过，故保持默认。组合层用独立半仓等权
+    （``backtest/kaicheng_tiantong_half.py``）。
+    """
+    return replace(
+        cfg,
+        skip_buy_after_overnight_stop=False,
+        skip_buy_after_consec_stops=0,
+        take_profit_levels=None,
+        energy_allowed_by_date=None,
+        halt_by_date=None,
+        regime_tp_enabled=False,
+        factor4_enabled=False,
+        factor4_stop_widen_mult=0.0,
+    )

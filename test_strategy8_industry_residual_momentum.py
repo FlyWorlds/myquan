@@ -83,19 +83,13 @@ class IndustryResidualMomentumFactorTests(unittest.TestCase):
         self.assertEqual(set(trades.loc[trades["side"] == "buy", "symbol"]), {"A", "B", "C"})
 
 
-class Strategy8RegistrationTests(unittest.TestCase):
-    def test_factor_and_strategy_are_registered(self) -> None:
-        from strategy import get_factor, get_strategy, get_strategy_bindings
+class Factor7RegistrationTests(unittest.TestCase):
+    def test_factor7_is_registered(self) -> None:
+        from strategy import get_factor, list_strategies
 
         factor = get_factor("factor7")
-        strategy = get_strategy("strategy8")
         self.assertEqual(factor.meta["kind"], "industry_etf_dual_momentum")
-        self.assertEqual(strategy.factor_ids, ("factor7",))
-        self.assertEqual(get_strategy("s8").id, "strategy8")
-        self.assertEqual(
-            {binding.factor_id for binding in get_strategy_bindings("strategy8")},
-            {"factor7"},
-        )
+        self.assertNotIn("strategy8", {s.id for s in list_strategies()})
 
 
 if __name__ == "__main__":

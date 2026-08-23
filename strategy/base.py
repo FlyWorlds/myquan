@@ -20,6 +20,7 @@ import akquant as aq
 import pandas as pd
 from akquant import BacktestResult, CurrentClose, Strategy
 
+from strategy.costs import COMMISSION_RATE, MISC_FEE_RATE, SLIPPAGE_VALUE, STAMP_TAX_RATE
 from strategy.data import fetch_daily
 
 _FILL = CurrentClose()
@@ -35,14 +36,19 @@ class CommonBacktestParams:
     end_date: str
     initial_cash: float = 100_000.0
     lot_size: int = 100
-    commission_rate: float = 0.0000854
-    stamp_tax_rate: float = 0.001
-    slippage_value: float = 0.001
+    commission_rate: float = COMMISSION_RATE
+    misc_fee_rate: float = MISC_FEE_RATE
+    stamp_tax_rate: float = STAMP_TAX_RATE
+    slippage_value: float = SLIPPAGE_VALUE
     report_path: Path | None = None
 
     @property
     def slippage(self) -> dict[str, str | float]:
         return {"type": "percent", "value": self.slippage_value}
+
+    @property
+    def engine_commission_rate(self) -> float:
+        return float(self.commission_rate) + float(self.misc_fee_rate or 0.0)
 
 
 def run_akquant_backtest(
@@ -64,12 +70,17 @@ def run_akquant_backtest(
         inst = strategy_cls()
         configure(inst, params)
         strategy = inst
+    comm = getattr(params, "engine_commission_rate", None)
+    if comm is None:
+        comm = float(params.commission_rate) + float(
+            getattr(params, "misc_fee_rate", 0.0) or 0.0
+        )
     return aq.run_backtest(
         data=daily,
         strategy=strategy,
         symbols=symbol,
         initial_cash=params.initial_cash,
-        commission_rate=params.commission_rate,
+        commission_rate=float(comm),
         stamp_tax_rate=params.stamp_tax_rate,
         t_plus_one=kw.get("t_plus_one", True),
         lot_size=params.lot_size,

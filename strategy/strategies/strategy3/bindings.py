@@ -1,31 +1,32 @@
-"""策略三 · 因子绑定：动量因子组合 · 因子3。"""
+"""策略三 · 因子5事件候选池：单主题一只、固定持有五日。"""
 
 from __future__ import annotations
 
 from strategy.core.protocols import bind_factor
-from strategy.strategies.strategy5.portfolio import PORTFOLIO_DEFAULTS
 
 STRATEGY_ID = "strategy3"
-STRATEGY_NAME = "策略三"
-
-_p = PORTFOLIO_DEFAULTS
+STRATEGY_NAME = "策略三·主题事件"
 
 FACTOR_BINDINGS = (
     bind_factor(
-        "factor3",
-        role="both",
-        label="因子3·动量组合",
-        kind=_p["kind"],
-        n=_p["n"],
-        top_k=_p["top_k"],
-        hold_days=_p["hold_days"],
-        min_score=_p["min_score"],
-        ma_filter=_p["ma_filter"],
+        "factor5",
+        label="Serenity前瞻主题候选池",
+        role="universe",
+        lookback_days=0,
+        post_limit=0,
+        max_themes=3,
+        max_positions=5,
+        max_candidates=5,
+        max_per_theme=1,
+        hold_days=5,
         filter_desc=(
-            f"截面组合：中证500+1000主板 mode={_p.get('mode')} "
-            f"rev(n={_p['n']}"
-            + (f"+{_p['n2']}" if _p.get("n2") else "")
-            + f") 日选Top{_p['top_k']}，持有{_p['hold_days']}日；收盘信号次日开盘"
+            "复核上一A股收盘后至当前时点的全部 Serenity 公开帖，再通过 Serenity "
+            "Research Model Skill 语义筛选并映射前三主题的 A 股代理池；"
+            "仅中证500/1000主板非ST成分股；"
+            "总数最多5只、单主题最多1只、固定持有5日；"
+            "新事件同主题替换旧持仓，不同主题满仓时替换最早入池持仓；"
+            "没有候选则保持现金"
         ),
+        enabled=True,
     ),
 )

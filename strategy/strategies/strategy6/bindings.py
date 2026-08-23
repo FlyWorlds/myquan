@@ -1,34 +1,22 @@
-"""策略六 · 因子绑定：因子6 组合动量 ETF 轮动。"""
-
-from __future__ import annotations
+"""策略六：绑定因子12，反转池近高 Top5 等权持有（研究候选）。"""
 
 from strategy.core.protocols import bind_factor
-from strategy.etf_combo_momentum import DEFAULT_PARAMS, DEFAULT_UNIVERSE
+from strategy.factor12_combo import DEFAULT_PARAMS
 
 STRATEGY_ID = "strategy6"
-STRATEGY_NAME = "组合动量ETF轮动"
+STRATEGY_NAME = "策略六·反转池近高"
 
 _p = DEFAULT_PARAMS
-_univ = "、".join(code[2:] for code, _ in DEFAULT_UNIVERSE)
-
 FACTOR_BINDINGS = (
     bind_factor(
-        "factor6",
+        "factor12",
         role="both",
-        label="因子6·组合动量ETF轮动",
-        n=_p["n"],
-        n2=_p["n2"],
-        w=_p["w"],
-        top_k=_p["top_k"],
-        hold_days=_p["hold_days"],
-        min_score=_p["min_score"],
-        defensive=_p["defensive"],
+        label="因子12·反转池近高",
+        **_p,
         filter_desc=(
-            f"宽基ETF（{_univ}）收盘组合动量 "
-            f"ROC({_p['n']})+{_p['w']:g}×ROC({_p['n2']}) "
-            f"Top{_p['top_k']} → 次日开盘轮入；"
-            f"最高分<= {_p['min_score']} 空仓；每{_p['hold_days']}日再平衡；"
-            "持仓分数跌破门槛下一开盘风控空仓"
+            f"周频 {_p['mom_n']} 日涨幅最低 Top{_p['stage1_k']} 内，"
+            f"贴近 {_p['high_n']} 日高点 Top{_p['stage2_k']}；"
+            "本周收盘排名，下一周等权持有；研究候选，不替换策略五"
         ),
     ),
 )

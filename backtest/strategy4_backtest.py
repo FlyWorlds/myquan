@@ -21,6 +21,11 @@ _MYQUAN = Path(__file__).resolve().parents[1]
 if str(_MYQUAN) not in sys.path:
     sys.path.insert(0, str(_MYQUAN))
 
+from strategy.costs import (  # noqa: E402
+    ENGINE_COMMISSION_RATE as COMMISSION,
+    SLIPPAGE_VALUE as SLIP,
+    STAMP_TAX_RATE as STAMP,
+)
 from strategy.open_break import (  # noqa: E402
     DEFAULT_BAN_DOUBLE_YANG,
     DEFAULT_BAN_SINGLE_YANG,
@@ -33,7 +38,7 @@ from strategy.open_break import (  # noqa: E402
     should_block_entry_by_yang,
     stop_trigger_price,
 )
-from strategy.strategies.strategy4.pool import (  # noqa: E402
+from strategy.strategies._unreg_s4.pool import (  # noqa: E402
     POOL_DEFAULTS,
     score_universe,
 )
@@ -44,9 +49,6 @@ OUT = _MYQUAN / "backtest" / "strategy4_out"
 
 INITIAL_CASH = 1_000_000.0
 MAX_POS = 10
-COMMISSION = 0.0000854
-STAMP = 0.001
-SLIP = 0.001
 LOT = 100
 TARGET_PCT = 0.95
 ORIGIN = pd.Timestamp("2020-02-01")

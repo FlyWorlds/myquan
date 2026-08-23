@@ -40,7 +40,7 @@ STRATEGY_RULES = """
   · 全清：可用仓位 100% 卖出
 
 【费用假设（回测默认）】
-  · 佣金万 0.854；卖出印花税 0.1%；滑点 0.1%
+  · 佣金万 0.86；杂费万 0.10（买卖）；卖出印花税万 5；滑点 0.1%
 
 【说明】
   · 以上为因子1（开盘突破）规则。援军战法（strategy1）默认另叠因子2（回撤预警），
@@ -143,6 +143,89 @@ def limit_down_state(
         "locked": locked,
         "opened": opened,
     }
+
+
+def limit_up_price(
+    prev_close: float | None,
+    *,
+    limit_up_pct: float = 0.10,
+    tick: float = TICK_SIZE,
+) -> float | None:
+    """按昨收和日涨停幅度计算涨停价；缺昨收时不判断。"""
+    if prev_close is None or float(prev_close) <= 0 or not 0 < limit_up_pct < 1:
+        return None
+    return ceil_to_tick(float(prev_close) * (1.0 + limit_up_pct), tick)
+
+
+# 与 second_board.LU_TOL 一致：开盘涨幅达到涨停幅度−1.2pct 视为涨停开盘
+LIMIT_UP_OPEN_TOL = 0.012
+
+
+def limit_up_state(
+    *,
+    prev_close: float | None,
+    open_px: float,
+    high_px: float,
+    low_px: float,
+    close_px: float,
+    limit_up_pct: float = 0.10,
+    tick: float = TICK_SIZE,
+) -> dict[str, float | bool | None]:
+    """识别日内涨停状态。
+
+    项目默认：一字涨停开盘不可买入（开盘已在涨停价，即使随后开板也不追）。
+    locked：开高低收均锁在涨停价（全日一字）。
+    """
+    limit_px = limit_up_price(prev_close, limit_up_pct=limit_up_pct, tick=tick)
+    if limit_px is None:
+        return {
+            "limit_px": None,
+            "touched": False,
+            "locked": False,
+            "opened": False,
+            "open_at_limit": False,
+        }
+    tolerance = max(float(tick) * 0.51, 1e-8)
+    prices = (float(open_px), float(high_px), float(low_px), float(close_px))
+    touched = float(high_px) >= float(limit_px) - tolerance
+    locked = touched and all(abs(px - float(limit_px)) <= tolerance for px in prices)
+    opened = touched and (not locked) and float(low_px) < float(limit_px) - tolerance
+    open_at_limit = abs(float(open_px) - float(limit_px)) <= tolerance
+    if prev_close and float(prev_close) > 0:
+        open_ret = float(open_px) / float(prev_close) - 1.0
+        open_at_limit = open_at_limit or (
+            open_ret >= float(limit_up_pct) - LIMIT_UP_OPEN_TOL
+        )
+    return {
+        "limit_px": float(limit_px),
+        "touched": touched,
+        "locked": locked,
+        "opened": opened,
+        "open_at_limit": bool(open_at_limit),
+    }
+
+
+def cannot_buy_limit_up(
+    *,
+    prev_close: float | None,
+    open_px: float,
+    high_px: float,
+    low_px: float,
+    close_px: float,
+    limit_up_pct: float = 0.10,
+    tick: float = TICK_SIZE,
+) -> bool:
+    """一字涨停开盘：不可新开仓。"""
+    st = limit_up_state(
+        prev_close=prev_close,
+        open_px=open_px,
+        high_px=high_px,
+        low_px=low_px,
+        close_px=close_px,
+        limit_up_pct=limit_up_pct,
+        tick=tick,
+    )
+    return bool(st["open_at_limit"] or st["locked"])
 
 
 def strategy_levels(

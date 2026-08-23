@@ -1,0 +1,5 @@
+id,union,hs300_union,hs300_share_weekly
+mom_top5,174,15,0.062
+mom20_near5,272,33,0.099
+mom20_persist5,211,30,0.099
+mom20_noclimax5,251,36,0.118

@@ -6,6 +6,7 @@ from typing import Any
 
 from akquant import Strategy
 
+from strategy.costs import SLIPPAGE_VALUE
 from strategy.momentum import DEFAULT_KIND, DEFAULT_PARAMS, build_momentum_signals
 
 
@@ -18,7 +19,7 @@ class MomentumStrategy(Strategy):
     lot_size: int = 100
     start_date: str = "20200101"
     end_date: str = ""
-    slippage_value: float = 0.001
+    slippage_value: float = SLIPPAGE_VALUE
     t0: bool = False
     tick: float = 0.01
     mom_kind: str = DEFAULT_KIND

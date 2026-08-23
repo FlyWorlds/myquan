@@ -1,4 +1,4 @@
-"""策略五：动量因子组合（中证1000截面 TopK）。"""
+"""策略五：因子11 两段近高选股，Top5 等权持有。"""
 
 from __future__ import annotations
 
@@ -6,35 +6,34 @@ from typing import Any
 
 from strategy.core.protocols import StrategySpec
 from strategy.core.strategy_registry import register_strategy
+from strategy.near_high_hold import DEFAULT_PARAMS, run_near_high_hold
 from strategy.strategies._common import compose_rules
-from strategy.strategies.strategy5.bindings import FACTOR_BINDINGS, STRATEGY_ID, STRATEGY_NAME
-from strategy.strategies.strategy5.decision import Strategy5Decision, create_decision_engine
-from strategy.strategies.strategy5.portfolio import PORTFOLIO_DEFAULTS, run_momentum_portfolio
+from strategy.strategies.strategy5.bindings import (
+    FACTOR_BINDINGS,
+    STRATEGY_ID,
+    STRATEGY_NAME,
+)
+from strategy.strategies.strategy5.decision import (
+    Strategy5Decision,
+    Strategy10Decision,
+    create_decision_engine,
+)
 
 
 def _print_rules() -> str:
     return compose_rules(STRATEGY_NAME, bindings=FACTOR_BINDINGS)
 
 
-def _run(cfg: Any = None, **kwargs: Any):
-    """默认跑截面组合；cfg 可传 dict 覆盖 kind/n/top_k/hold_days 等。"""
-    overrides: dict[str, Any] = dict(PORTFOLIO_DEFAULTS)
+def run_strategy5(cfg: Any = None, **kwargs: Any):
+    """近高 Top5 等权持有。cfg 可传 dict 覆盖参数。研究回测，不构成投资建议。"""
+    overrides: dict[str, Any] = dict(DEFAULT_PARAMS)
     if isinstance(cfg, dict):
         overrides.update(cfg)
     overrides.update(kwargs)
-    return run_momentum_portfolio(
-        kind=overrides.get("kind"),
-        n=overrides.get("n"),
-        top_k=overrides.get("top_k"),
-        hold_days=overrides.get("hold_days"),
-        min_score=overrides.get("min_score"),
-        ma_filter=overrides.get("ma_filter"),
-        start=overrides.get("start"),
-        end=overrides.get("end"),
-        warm_start=overrides.get("warm_start"),
-        refresh=bool(overrides.get("refresh", False)),
-        verbose=bool(overrides.get("verbose", True)),
-    )
+    return run_near_high_hold(**overrides)
+
+
+run_strategy10 = run_strategy5
 
 
 register_strategy(
@@ -42,23 +41,30 @@ register_strategy(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
         description=(
-            "动量因子组合：中证1000主板截面选股；"
-            f"默认 {PORTFOLIO_DEFAULTS['kind']}(n={PORTFOLIO_DEFAULTS['n']}) "
-            f"Top{PORTFOLIO_DEFAULTS['top_k']}/持有{PORTFOLIO_DEFAULTS['hold_days']}日"
+            "因子11：周频3日动量 Top20 内再取贴近5日高点 Top5，"
+            "下一周等权持有；一字涨停开盘不可买入"
         ),
         factor_bindings=FACTOR_BINDINGS,
-        run=_run,
-        default_config=dict(PORTFOLIO_DEFAULTS),
-        strategy_cls=None,
+        run=run_strategy5,
+        default_config=dict(DEFAULT_PARAMS),
         print_rules=_print_rules,
         decision_factory=create_decision_engine,
-        aliases=("s5", "momentum", "factor3", "动量因子组合"),
+        aliases=(
+            "s5",
+            "s10",
+            "strategy10",
+            "factor11",
+            "near_high",
+            "近高持有",
+            "策略五",
+            "策略十",
+        ),
         implemented=True,
         meta={
             "default": False,
-            "standalone_factor": "factor3",
-            "mode": "portfolio",
-            "portfolio": dict(PORTFOLIO_DEFAULTS),
+            "standalone_factor": "factor11",
+            "mode": "weekly_equal_weight_hold",
+            "research_only": True,
         },
     ),
     replace=True,
@@ -68,8 +74,10 @@ __all__ = [
     "STRATEGY_ID",
     "STRATEGY_NAME",
     "FACTOR_BINDINGS",
-    "PORTFOLIO_DEFAULTS",
     "Strategy5Decision",
+    "Strategy10Decision",
     "create_decision_engine",
-    "run_momentum_portfolio",
+    "run_strategy5",
+    "run_strategy10",
+    "run_near_high_hold",
 ]

@@ -15,6 +15,13 @@ from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
+from strategy.costs import (
+    ENGINE_COMMISSION_RATE as COMMISSION,
+    ETF_STAMP_TAX_RATE as STAMP,
+    SLIPPAGE_VALUE as SLIP,
+    fee_rules_text,
+)
+
 DEFAULT_UNIVERSE: tuple[tuple[str, str], ...] = (
     ("sh510300", "沪深300ETF"),
     ("sh510500", "中证500ETF"),
@@ -36,9 +43,6 @@ DEFAULT_PARAMS: dict[str, Any] = {
     "warm_start": "20180101",
 }
 
-COMMISSION = 0.0000854
-STAMP = 0.0  # 场内 ETF 无印花税
-SLIP = 0.001
 LOT = 100
 INITIAL_CASH = 1_000_000.0
 
@@ -60,7 +64,7 @@ def etf_combo_momentum_rules_text(
   · 选仓：收盘截面 Top{p['top_k']}；最高分 <= {p['min_score']} → 空仓（可改 defensive={defensive}）
   · 执行：收盘信号 → 次日开盘；每 {p['hold_days']} 日再平衡
   · 风控：持仓分数跌破门槛，下一开盘空仓；T+1 买入当日不卖
-  · 成本：佣金 {COMMISSION}、滑点 {SLIP}、ETF 印花税 {STAMP}
+  · 成本：{fee_rules_text(etf=True)}
 ================================================================================
 """.strip()
 
@@ -341,7 +345,7 @@ def run_etf_combo_momentum(
 ):
     """宽基 ETF 组合动量轮动回测。dailies 传入时不拉行情（测试用）。"""
     from strategy.dd_alert import max_drawdown_pct
-    from strategy.strategies.strategy5.portfolio import PortfolioResult
+    from strategy.strategies._unreg_s5.portfolio import PortfolioResult
 
     cfg = dict(DEFAULT_PARAMS)
     if n is not None:

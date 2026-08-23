@@ -27,7 +27,7 @@ import pandas as pd  # noqa: E402
 from strategy import KAICHENG, TIANTONG, run_open_break  # noqa: E402
 from strategy.backtest import metric  # noqa: E402
 from strategy.config import resolve_factor4_repair  # noqa: E402
-from strategy.strategies.strategy7 import run_strategy7  # noqa: E402
+from strategy.strategies.strategy3 import run_strategy7  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent
 OUT_MONTHLY = OUT_DIR / "monthly_f1_vs_s7.csv"

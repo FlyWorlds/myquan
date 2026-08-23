@@ -96,3 +96,18 @@ timed out
 [23/80] sz000591 开始
 login success!
 logout success!
+[23/80] sz000591 rows=1609 ok=23 fail=0
+[24/80] sz000598 开始
+login success!
+logout success!
+[24/80] sz000598 rows=1609 ok=24 fail=0
+[25/80] sz000623 开始
+login success!
+logout success!
+[25/80] sz000623 rows=1609 ok=25 fail=0
+[26/80] sz000629 开始
+login success!
+logout success!
+[26/80] sz000629 rows=1609 ok=26 fail=0
+[27/80] sz000661 开始
+login success!

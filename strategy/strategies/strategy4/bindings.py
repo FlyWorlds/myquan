@@ -1,38 +1,61 @@
-"""策略四 · 因子绑定：因子1·roll12 Top3 池 + 池内反转（因子3截面用法）。"""
+"""策略四 · 因子1 开盘突破 + 因子4 牛市放宽止损 + 20% 昨高止盈 + 因子10 周频动量选股。"""
 
 from __future__ import annotations
 
 from strategy.core.protocols import bind_factor
-from strategy.strategies.strategy4.portfolio import PORTFOLIO_DEFAULTS
+from strategy.open_break import (
+    DEFAULT_BAN_DOUBLE_YANG,
+    DEFAULT_BAN_SINGLE_YANG,
+    DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+    DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+    DEFAULT_PCT,
+)
+from strategy.strategies.strategy1.bindings import strategy1_factor_filter
 
 STRATEGY_ID = "strategy4"
-STRATEGY_NAME = "策略四"
+STRATEGY_NAME = "策略四·F4止盈动量"
 
-_p = PORTFOLIO_DEFAULTS
+TAKE_PROFIT_LEVELS = (0.20,)
+TAKE_PROFIT_REDUCE = 1.0
+TAKE_PROFIT_TRIGGER = "prev_high"
+MOM_TOP_K = 5
+MOM_VALUE_COL = "px_mom"
 
 FACTOR_BINDINGS = (
     bind_factor(
         "factor1",
-        label="因子1·滚动12月评分建池",
-        role="custom",
-        score_mode=_p["score_mode"],
-        pool_n=_p["pool_n"],
-        filter_desc=(
-            f"月末 {_p['score_mode']} 评分 Top{_p['pool_n']} → 次月可交易池（中证1000主板）"
-        ),
+        label="开盘突破主因子",
+        role="both",
+        entry_pct=DEFAULT_PCT,
+        stop_pct=DEFAULT_PCT,
+        prev_small_yang_pct=DEFAULT_PCT,
+        prev_entry_mode="yin_or_small_yang",
+        ban_double_yang=DEFAULT_BAN_DOUBLE_YANG,
+        ban_single_yang=DEFAULT_BAN_SINGLE_YANG,
+        double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+        double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+        filter=strategy1_factor_filter,
+        filter_desc="前日阴/小阳 + 禁双阳跨日≥5%",
     ),
     bind_factor(
-        "factor3",
-        label="池内反转选股",
-        role="both",
-        kind=_p["kind"],
-        n=_p["n"],
-        top_k=_p["top_k"],
-        hold_days=_p["hold_days"],
-        select_mode=_p["select_mode"],
+        "factor4",
+        label="牛市止损放宽",
+        role="custom",
+        factor4_kind="roc_ma",
+        factor4_stop_widen_mult=2.0,
+        filter_desc="个股套用 resolve_factor4_repair；牛市内放宽止损",
+    ),
+    bind_factor(
+        "factor10",
+        label="周频20日动量选股",
+        role="entry",
+        top_k=MOM_TOP_K,
+        value_col=MOM_VALUE_COL,
+        take_profit_levels=TAKE_PROFIT_LEVELS,
+        take_profit_trigger=TAKE_PROFIT_TRIGGER,
         filter_desc=(
-            f"仅池内 {_p['kind']}(n={_p['n']}) 日选 Top{_p['top_k']}，"
-            f"持有{_p['hold_days']}日；收盘信号次日开盘"
+            f"本周最后交易日 {MOM_VALUE_COL} Top{MOM_TOP_K} → 下一周才允许开仓；"
+            f"止盈 {TAKE_PROFIT_LEVELS[0]*100:.0f}% {TAKE_PROFIT_TRIGGER} 全清"
         ),
     ),
 )

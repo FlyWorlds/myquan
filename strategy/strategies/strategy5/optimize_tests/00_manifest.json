@@ -1,0 +1,16 @@
+{
+  "factor": "factor11",
+  "strategy": "strategy10",
+  "engine": "weekly two-stage equal-weight; 一字涨停开盘买不进 / 一字跌停封单卖不出; IS cost-adjusted Sharpe",
+  "data": "HS300+ZZ500+ZZ1000 combined OHLC, current constituents",
+  "select_on": "2020-01-02..2023-12-31",
+  "confirm_on": "2024-01-02..2025-12-31",
+  "validate_on": "2026-01-02..2026-08-20",
+  "cost": "realized weekly turnover × (佣金万0.86；杂费万0.10（买卖）；印花税(卖)万5.0；滑点0.1%)",
+  "fill": "block_limit_up_buy + block_limit_down_sell",
+  "do_not_replace_default": true,
+  "original": "mom3_high5_k5",
+  "n_period": 12,
+  "n_ablation": 8,
+  "n_refine": 9
+}

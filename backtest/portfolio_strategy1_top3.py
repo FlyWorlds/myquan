@@ -44,6 +44,11 @@ from holdingStocks.watch_config import (  # noqa: E402
     limit_down_pct_of,
     sina_of,
 )
+from strategy.costs import (  # noqa: E402
+    ENGINE_COMMISSION_RATE as COMMISSION,
+    SLIPPAGE_VALUE as SLIP,
+    STAMP_TAX_RATE as STAMP,
+)
 from strategy.data import fetch_daily  # noqa: E402
 from strategy.open_break import (  # noqa: E402
     DEFAULT_BAN_DOUBLE_YANG,
@@ -65,9 +70,6 @@ START_DATE = "20200101"
 INITIAL_CASH = 300_000.0  # 3 槽位，名义每槽 10 万
 MAX_POS = 3
 LOT = 100
-COMMISSION = 0.0000854
-STAMP = 0.001
-SLIP = 0.001
 
 
 @dataclass

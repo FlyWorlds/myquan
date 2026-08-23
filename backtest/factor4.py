@@ -24,7 +24,7 @@ if str(_MYQUAN) not in sys.path:
 from backtest import zz1000_momentum_select as zz  # noqa: E402
 from strategy.backtest import _metric  # noqa: E402
 from strategy.dd_alert import yearly_max_drawdowns  # noqa: E402
-from strategy.strategies.strategy5.portfolio import (  # noqa: E402
+from strategy.strategies._unreg_s5.portfolio import (  # noqa: E402
     PORTFOLIO_DEFAULTS,
     apply_best_config,
     run_momentum_portfolio,

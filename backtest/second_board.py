@@ -33,6 +33,11 @@ _MYQUAN = Path(__file__).resolve().parents[1]
 if str(_MYQUAN) not in sys.path:
     sys.path.insert(0, str(_MYQUAN))
 
+from strategy.costs import (  # noqa: E402
+    ENGINE_COMMISSION_RATE as COMMISSION,
+    SLIPPAGE_VALUE as SLIP,
+    STAMP_TAX_RATE as STAMP,
+)
 from strategy.open_break import (  # noqa: E402
     TICK_SIZE,
     entry_trigger_price,
@@ -48,9 +53,6 @@ LOOKBACK = 120
 W_EX, W_SH, W_DD = 5.0, 3.0, 2.0
 INITIAL = 1_000_000.0
 MAX_POS = 10
-COMMISSION = 0.0000854
-STAMP = 0.001
-SLIP = 0.001
 TARGET_PCT = 0.95
 LOT = 100
 WORKERS = 8

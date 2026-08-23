@@ -30,6 +30,9 @@ def apply_strategy_config(
     strategy.start_date = cfg.start_date
     strategy.end_date = cfg.end_date
     strategy.slippage_value = cfg.slippage_value
+    strategy.commission_rate = cfg.commission_rate
+    strategy.misc_fee_rate = getattr(cfg, "misc_fee_rate", 0.0)
+    strategy.stamp_tax_rate = cfg.stamp_tax_rate
     strategy.entry_pct = cfg.resolved_entry_pct()
     strategy.stop_pct = cfg.resolved_stop_pct()
     strategy.prev_small_yang_pct = cfg.resolved_entry_pct()
@@ -71,12 +74,25 @@ def apply_strategy_config(
     strategy.take_profit_levels = tuple(levels) if levels else ()
     strategy.take_profit_reduce = float(getattr(cfg, "take_profit_reduce", 0.20) or 0.0)
     trig = str(getattr(cfg, "take_profit_trigger", "high") or "high").lower()
-    strategy.take_profit_trigger = trig if trig in ("high", "close") else "high"
+    strategy.take_profit_trigger = (
+        trig if trig in ("high", "close", "prev_high") else "high"
+    )
     strategy.take_profit_limit_offset = float(
         getattr(cfg, "take_profit_limit_offset", 0.0) or 0.0
     )
     lock = getattr(cfg, "take_profit_lock_pct", None)
     strategy.take_profit_lock_pct = float(lock) if lock is not None else None
+    strategy.energy_allowed_by_date = dict(
+        getattr(cfg, "energy_allowed_by_date", None) or {}
+    )
+    strategy.halt_by_date = dict(getattr(cfg, "halt_by_date", None) or {})
+    strategy.regime_tp_enabled = bool(getattr(cfg, "regime_tp_enabled", False))
+    strategy.regime_by_date = dict(getattr(cfg, "regime_by_date", None) or {})
+    strategy.regime_tp_bull = tuple(getattr(cfg, "regime_tp_bull", ()) or ())
+    strategy.regime_tp_sideways = tuple(
+        getattr(cfg, "regime_tp_sideways", (0.15,)) or (0.15,)
+    )
+    strategy.regime_tp_bear = tuple(getattr(cfg, "regime_tp_bear", (0.10,)) or (0.10,))
     strategy.skip_buy_after_consec_stops = int(
         getattr(cfg, "skip_buy_after_consec_stops", 0) or 0
     )
@@ -159,6 +175,7 @@ def run_open_break(
             "symbol": cfg.symbol,
             "initial_cash": cfg.initial_cash,
             "commission_rate": cfg.commission_rate,
+            "misc_fee_rate": cfg.misc_fee_rate,
             "stamp_tax_rate": cfg.stamp_tax_rate,
             "slippage_value": cfg.slippage_value,
             "entry_pct": cfg.resolved_entry_pct(),
@@ -243,6 +260,7 @@ def run_momentum(
             symbol=cfg.symbol,
             initial_cash=cfg.initial_cash,
             commission_rate=cfg.commission_rate,
+            misc_fee_rate=getattr(cfg, "misc_fee_rate", 0.0),
             stamp_tax_rate=cfg.stamp_tax_rate,
             slippage_value=cfg.slippage_value,
             entry_pct=0.0,

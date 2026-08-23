@@ -31,6 +31,11 @@ _MYQUAN = Path(__file__).resolve().parents[1]
 if str(_MYQUAN) not in sys.path:
     sys.path.insert(0, str(_MYQUAN))
 
+from strategy.costs import (  # noqa: E402
+    ENGINE_COMMISSION_RATE as COMMISSION,
+    SLIPPAGE_VALUE as SLIP,
+    STAMP_TAX_RATE as STAMP,
+)
 from strategy.open_break import (  # noqa: E402
     DEFAULT_BAN_DOUBLE_YANG,
     DEFAULT_BAN_SINGLE_YANG,
@@ -57,9 +62,6 @@ TOP_N = 3
 N_SLOTS = 3
 WORKERS = 8
 INITIAL_CASH = 300_000.0  # 三槽合计
-COMMISSION = 0.0000854
-STAMP = 0.001
-SLIP = 0.001
 TARGET_PCT = 0.95
 LOT = 100
 MIN_BARS_MONTH = 8

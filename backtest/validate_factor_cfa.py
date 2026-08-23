@@ -22,7 +22,7 @@ if str(_MYQUAN) not in sys.path:
 
 from backtest.mine_zz1000_momentum import factor_matrix, simulate_fast  # noqa: E402
 from backtest.zz1000_momentum_select import PANEL_PATH_ZZ500_1000  # noqa: E402
-from strategy.strategies.strategy5.portfolio import PORTFOLIO_DEFAULTS  # noqa: E402
+from strategy.strategies._unreg_s5.portfolio import PORTFOLIO_DEFAULTS  # noqa: E402
 
 OUT = Path(__file__).resolve().parent / "factor4_out"
 WINDOWS = (20, 40, 60, 90, 120)

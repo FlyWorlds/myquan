@@ -1,0 +1,33 @@
+{
+  "best_single": "f11_mom3_high5",
+  "selected_legs": [
+    "f9_e5_20",
+    "f10_near5",
+    "f3_rev20",
+    "f10_persist20"
+  ],
+  "best_blend": "blend_icir",
+  "best_all_is": "f11_mom3_high5",
+  "best_refine_is": "f11_mom3_high5_k5",
+  "promote_candidate": "f11_mom3_high5",
+  "corr_cap": 0.7,
+  "k": 5,
+  "n_trials": 44,
+  "is": [
+    "2020-01-02",
+    "2023-12-31"
+  ],
+  "oos": [
+    "2024-01-02",
+    "2025-12-31"
+  ],
+  "val": [
+    "2026-01-02",
+    "2026-08-20"
+  ],
+  "cost_round_trip": 0.002692,
+  "universe": "hs300_zz500_zz1000_current",
+  "fill": "block_limit_up_buy + block_limit_down_sell",
+  "overwrite_defaults": false,
+  "best_twostage": "ts_rev20_near5"
+}

@@ -27,6 +27,11 @@ _MYQUAN = Path(__file__).resolve().parents[1]
 if str(_MYQUAN) not in sys.path:
     sys.path.insert(0, str(_MYQUAN))
 
+from strategy.costs import (  # noqa: E402
+    ENGINE_COMMISSION_RATE as COMMISSION,
+    SLIPPAGE_VALUE as SLIP,
+    STAMP_TAX_RATE as STAMP,
+)
 from strategy.data import fetch_daily  # noqa: E402
 
 CACHE_DIR = Path(__file__).resolve().parent / "universe_zz500_1000" / "daily_cache"
@@ -40,9 +45,6 @@ CSINDEX_CONS_URL = (
 )
 
 INITIAL_CASH = 1_000_000.0
-COMMISSION = 0.0000854
-STAMP = 0.001
-SLIP = 0.001
 LOT = 100
 
 

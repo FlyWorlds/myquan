@@ -1,0 +1,27 @@
+{
+  "verdict": "FAIL - likely overfit / selection-biased: DSR 0.82 < 0.95",
+  "passed": false,
+  "observed_sharpe_annual": 2.5009,
+  "skew": 0.0763,
+  "kurtosis": 3.0679,
+  "n_obs": 1601,
+  "n_trials": 44,
+  "deflated_sharpe_ratio": 0.8239,
+  "deflation_benchmark_sr0_annual": 2.1315,
+  "psr_vs_zero": 1.0,
+  "haircut": {
+    "method": "holm",
+    "adjusted_sharpe_annual": 2.257,
+    "haircut_pct": 0.0975,
+    "observed_pvalue": 2.907229529934108e-10,
+    "adjusted_pvalue": 1.2791809931710075e-08
+  },
+  "minimum_track_record_length": 110.1,
+  "pbo": {
+    "pbo": 0.0009324009324009324,
+    "n_splits": 12870,
+    "n_strategies": 10,
+    "n_blocks": 16,
+    "median_logit": 2.3025850929940455
+  }
+}

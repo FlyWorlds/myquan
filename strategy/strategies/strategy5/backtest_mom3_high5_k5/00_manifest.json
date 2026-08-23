@@ -1,0 +1,37 @@
+{
+  "strategy": "strategy10",
+  "factor": "factor11",
+  "spec": "mom3_high5_k5_best_period",
+  "params": {
+    "mom_n": 3,
+    "stage1_k": 20,
+    "stage2_k": 5,
+    "stage2": "near_high",
+    "high_n": 5,
+    "start": "20200102",
+    "end": "20260820",
+    "block_limit_up_buy": true,
+    "block_limit_down_sell": true
+  },
+  "fee": "佣金万0.86；杂费万0.10（买卖）；印花税(卖)万5.0；滑点0.1%",
+  "cost_round_trip": 0.002692,
+  "fee_round_trip": 0.000692,
+  "universe": "HS300+ZZ500+ZZ1000 current constituents",
+  "n_names": 1249,
+  "start": "2020-01-02",
+  "end": "2026-08-11",
+  "execution": "week-end close rank, hold next week; 一字涨停开盘买不进, 一字跌停封单卖不出",
+  "fill_stats": {
+    "skipped_limit_up_buy": 724,
+    "filled_buy": 2052,
+    "blocked_limit_down_sell": 7,
+    "block_limit_up_buy": true,
+    "block_limit_down_sell": true
+  },
+  "week_turn": 0.9406392694063926,
+  "n_weeks": 441,
+  "do_not_replace_default": false,
+  "not_factor10": true,
+  "not_k3": true,
+  "note": "factor11 default is mom3/high5/k5; ORIGINAL_PARAMS remains 20/20/k5"
+}

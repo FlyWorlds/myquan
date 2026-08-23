@@ -19,6 +19,7 @@ from strategy.etf_combo_momentum import (
     SLIP,
     STAMP,
     _panel_from_dailies,
+    fee_rules_text,
     load_etf_dailies,
 )
 
@@ -99,7 +100,7 @@ def industry_residual_momentum_rules_text(
     {p['ordinary_weight']:.0%}/{p['residual_weight']:.0%} 加权
   · 组合：每月末选 Top{p['top_k']}，下一交易日开盘等权调仓，整月满仓
   · 时点：所有特征只使用信号月末及以前数据，不使用未来信息
-  · 成本：佣金 {COMMISSION}、滑点 {SLIP}、ETF 印花税 {STAMP}
+  · 成本：{fee_rules_text(etf=True)}
 ================================================================================
 """.strip()
 

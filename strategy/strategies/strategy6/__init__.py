@@ -1,4 +1,4 @@
-"""策略六：因子6 组合动量 ETF 轮动。"""
+"""策略六：因子12 反转池近高，Top5 等权持有（研究候选，非默认）。"""
 
 from __future__ import annotations
 
@@ -6,11 +6,17 @@ from typing import Any
 
 from strategy.core.protocols import StrategySpec
 from strategy.core.strategy_registry import register_strategy
-from strategy.etf_combo_momentum import DEFAULT_PARAMS, run_etf_combo_momentum
+from strategy.factor12_combo import DEFAULT_PARAMS, run_factor12_hold
 from strategy.strategies._common import compose_rules
-from strategy.strategies.strategy6.bindings import FACTOR_BINDINGS, STRATEGY_ID, STRATEGY_NAME
-from strategy.strategies.strategy6.decision import Strategy6Decision, create_decision_engine
-from strategy.strategies.strategy6.portfolio import run_f3_select_f1_stop_portfolio
+from strategy.strategies.strategy6.bindings import (
+    FACTOR_BINDINGS,
+    STRATEGY_ID,
+    STRATEGY_NAME,
+)
+from strategy.strategies.strategy6.decision import (
+    Strategy6Decision,
+    create_decision_engine,
+)
 
 
 def _print_rules() -> str:
@@ -18,28 +24,12 @@ def _print_rules() -> str:
 
 
 def run_strategy6(cfg: Any = None, **kwargs: Any):
-    """跑因子6 ETF 组合动量轮动；cfg 可传 dict 覆盖参数。"""
+    """反转池近高 Top5 等权持有。研究回测，不构成投资建议。"""
     overrides: dict[str, Any] = dict(DEFAULT_PARAMS)
     if isinstance(cfg, dict):
         overrides.update(cfg)
     overrides.update(kwargs)
-    return run_etf_combo_momentum(
-        n=overrides.get("n"),
-        n2=overrides.get("n2"),
-        w=overrides.get("w"),
-        top_k=overrides.get("top_k"),
-        hold_days=overrides.get("hold_days"),
-        min_score=overrides.get("min_score"),
-        defensive=overrides.get("defensive"),
-        start=overrides.get("start"),
-        end=overrides.get("end"),
-        warm_start=overrides.get("warm_start"),
-        universe=overrides.get("universe"),
-        refresh=bool(overrides.get("refresh", False)),
-        initial_cash=overrides.get("initial_cash"),
-        verbose=bool(overrides.get("verbose", True)),
-        dailies=overrides.get("dailies"),
-    )
+    return run_factor12_hold(**overrides)
 
 
 register_strategy(
@@ -47,24 +37,22 @@ register_strategy(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
         description=(
-            "因子6宽基ETF组合动量轮动："
-            f"ROC({DEFAULT_PARAMS['n']})+{DEFAULT_PARAMS['w']:g}×ROC({DEFAULT_PARAMS['n2']}) "
-            f"Top{DEFAULT_PARAMS['top_k']}/每{DEFAULT_PARAMS['hold_days']}日再平衡；"
-            "动量失效空仓"
+            "因子12：周频20日反转 Top20 内再取贴近5日高点 Top5，"
+            "下一周等权持有；研究候选，2024–2025 未确认"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy6,
         default_config=dict(DEFAULT_PARAMS),
-        strategy_cls=None,
         print_rules=_print_rules,
         decision_factory=create_decision_engine,
-        aliases=("s6", "factor6", "etf_combo_momentum", "组合动量ETF轮动"),
+        aliases=("s6", "factor12", "rev_near", "策略六"),
         implemented=True,
         meta={
             "default": False,
-            "standalone_factor": "factor6",
-            "mode": "etf_rotation",
-            "portfolio": dict(DEFAULT_PARAMS),
+            "standalone_factor": "factor12",
+            "mode": "weekly_equal_weight_hold",
+            "research_only": True,
+            "replaces_strategy5": False,
         },
     ),
     replace=True,
@@ -77,6 +65,5 @@ __all__ = [
     "Strategy6Decision",
     "create_decision_engine",
     "run_strategy6",
-    "run_etf_combo_momentum",
-    "run_f3_select_f1_stop_portfolio",
+    "run_factor12_hold",
 ]

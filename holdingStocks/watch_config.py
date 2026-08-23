@@ -2,7 +2,7 @@
 
 当前锁定：**策略一 = 因子1 + 因子2（回撤预警）**。
 定案宇宙：凯盛 / 天通 / 科创综指 **置顶** + 中证拟合池其余。
-策略七三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
+策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ FACTOR_ID = "factor1"
 FACTOR2_ID = "factor2"
 FACTOR4_ID = "factor4"
 STRATEGY_NAME = "策略一·因子1+因子2"
-# 策略七才叠因子4；策略一关闭
+# 策略三（旧号策略七）才叠因子4；策略一关闭
 USE_FACTOR4 = False
 
 # 集合竞价 09:15–09:30：盘面价无连续交易意义，此间不触发买卖/止损结算/微信预警
@@ -121,15 +121,18 @@ def watch_item(
 
 
 def limit_down_pct_of(code: str) -> float:
-    """主板约10%；创业板/科创板约20%；ETF 约10%。"""
+    """主板约10%；创业板/科创板约20%；ETF 约10%。涨停幅度相同。"""
     c = code_key(code)
     if c.startswith(("300", "301", "688", "689")):
         return 0.20
     return 0.10
 
 
+limit_up_pct_of = limit_down_pct_of
+
+
 # ---------------------------------------------------------------------------
-# 策略七默认宇宙（与 strategy.config / strategy7.default_s7_universe 对齐）
+# 策略三默认宇宙（与 strategy.config / 旧 strategy7.default_s7_universe 对齐）
 # ---------------------------------------------------------------------------
 S7_WATCHLIST: list[dict[str, Any]] = [
     watch_item(
@@ -245,7 +248,7 @@ WATCHLIST: list[dict[str, Any]] = list(PINNED_WATCHLIST) + [
     w for w in FIT_WATCHLIST if code_key(w["code"]) not in _pinned_codes
 ]
 
-# 切策略七：STRATEGY_ID="strategy7"; USE_FACTOR4=True; WATCHLIST=list(S7_WATCHLIST)
+# 切策略三：STRATEGY_ID="strategy3"; USE_FACTOR4=True; WATCHLIST=list(S7_WATCHLIST)
 
 
 def empty_position(meta: dict[str, Any]) -> dict[str, Any]:

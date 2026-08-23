@@ -1,0 +1,16 @@
+{
+  "round": 2,
+  "factor": "factor11",
+  "select_on": "2020-01-02..2023-12-31",
+  "confirm_on": "2024-01-02..2025-12-31",
+  "validate_on": "2026-01-02..2026-08-20",
+  "fill": "block_limit_up_buy + block_limit_down_sell",
+  "do_not_replace_default": true,
+  "baseline": "mom3_high5_k5",
+  "best_period": "mom1_high6_k5",
+  "core": "stage2_not_climax",
+  "best_final": "k4",
+  "n_period": 16,
+  "n_ablation": 8,
+  "n_refine": 14
+}

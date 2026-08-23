@@ -27,7 +27,7 @@ if str(_MYQUAN) not in sys.path:
 warnings.filterwarnings("ignore")
 
 from strategy.backtest import metric, monthly_returns_df  # noqa: E402
-from strategy.strategies.strategy7 import run_strategy7_universe  # noqa: E402
+from strategy.strategies.strategy3 import run_strategy7_universe  # noqa: E402
 
 DIR = Path(__file__).resolve().parent
 CASH = 100_000.0

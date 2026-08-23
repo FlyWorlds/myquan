@@ -1,0 +1,12 @@
+{
+  "factor": "factor11",
+  "strategy": "strategy10",
+  "engine": "weekly two-stage equal-weight close-to-close",
+  "data": "HS300+ZZ500+ZZ1000 combined panel, current constituents",
+  "select_on": "2020-01-02..2023-12-31",
+  "oos_backtest": "2024-01-02..2025-12-31",
+  "validate_on": "2026-01-02..2026-08-11",
+  "select_metric": "IS cost-adjusted Sharpe (strategy1 round-trip incl. stamp)",
+  "do_not_replace_default": true,
+  "prior_peek": "2024-2026 numbers were reported in earlier rounds; this split is protocol-clean for selection only"
+}

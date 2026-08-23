@@ -17,11 +17,11 @@ if str(_MYQUAN) not in sys.path:
     sys.path.insert(0, str(_MYQUAN))
 
 from strategy.open_break import DEFAULT_PCT  # noqa: E402
-from strategy.strategies.strategy5.portfolio import (  # noqa: E402
+from strategy.strategies._unreg_s5.portfolio import (  # noqa: E402
     PORTFOLIO_DEFAULTS,
     run_momentum_portfolio,
 )
-from strategy.strategies.strategy6.portfolio import (  # noqa: E402
+from strategy.strategies._unreg_s6.portfolio import (  # noqa: E402
     run_f3_select_f1_stop_portfolio,
 )
 

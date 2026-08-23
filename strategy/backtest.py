@@ -8,6 +8,7 @@ import akquant as aq
 import pandas as pd
 from akquant import Strategy
 
+from strategy.costs import COMMISSION_RATE, MISC_FEE_RATE, SLIPPAGE_VALUE, STAMP_TAX_RATE, fee_rules_text
 from strategy.open_break import (
     DEFAULT_BAN_DOUBLE_YANG,
     DEFAULT_BAN_SINGLE_YANG,
@@ -35,7 +36,10 @@ class OpenBreak3Strategy(Strategy):
     lot_size: int = 100
     start_date: str = "20250101"
     end_date: str = ""
-    slippage_value: float = 0.001
+    slippage_value: float = SLIPPAGE_VALUE
+    commission_rate: float = COMMISSION_RATE
+    misc_fee_rate: float = MISC_FEE_RATE
+    stamp_tax_rate: float = STAMP_TAX_RATE
     entry_pct: float = ENTRY_PCT
     stop_pct: float = STOP_PCT
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT
@@ -56,10 +60,19 @@ class OpenBreak3Strategy(Strategy):
     # 分档止盈：相对买入价；每档减 initial_qty × take_profit_reduce；余仓止损全清
     take_profit_levels: tuple[float, ...] = ()
     take_profit_reduce: float = 0.20
-    take_profit_trigger: str = "high"  # high | close
+    take_profit_trigger: str = "high"  # high | close | prev_high
     # 档位激活后挂单价 = 买入价×(1+档位+offset)；仅摸到挂单价才减仓
     take_profit_limit_offset: float = 0.0
     take_profit_lock_pct: float | None = None
+    # 因子9 动能门控 / 夏普衰减门控（date -> 允许买入）；空 dict=关闭
+    energy_allowed_by_date: dict[str, bool] = {}
+    halt_by_date: dict[str, bool] = {}
+    # 行情 regime 调整止盈（与因子4 止损暂停独立）
+    regime_tp_enabled: bool = False
+    regime_by_date: dict[str, str] = {}
+    regime_tp_bull: tuple[float, ...] = ()
+    regime_tp_sideways: tuple[float, ...] = (0.15,)
+    regime_tp_bear: tuple[float, ...] = (0.10,)
     # 连续 N 次止损后跳过下一次买点、再下一次才买；0=关闭
     skip_buy_after_consec_stops: int = 0
     # 当天买、下一交易日止损 → 跳过下一次买点，再下一次才买
@@ -112,6 +125,7 @@ class OpenBreak3Strategy(Strategy):
         self.entry_price: float | None = None
         self.prev_open: float | None = None
         self.prev_close: float | None = None
+        self.prev_high: float | None = None
         self.prev2_open: float | None = None
         self.prev2_close: float | None = None
         self.buy_day: str | None = None
@@ -156,15 +170,19 @@ class OpenBreak3Strategy(Strategy):
                 )
             yang_bits.append("+".join(bits) if len(bits) > 1 else bits[0])
         yang_txt = "；".join(yang_bits) if yang_bits else "不禁阳线"
-        if self.take_profit_levels:
-            lv = "/".join(f"{x*100:.0f}" for x in self.take_profit_levels)
-            trig = "收盘" if self.take_profit_trigger == "close" else "高点"
+        if self.take_profit_levels or bool(self.regime_tp_enabled):
+            lv = "/".join(f"{x*100:.0f}" for x in self.take_profit_levels) or "regime"
+            trig_map = {"close": "收盘", "prev_high": "前日高点→开盘", "high": "高点"}
+            trig = trig_map.get(str(self.take_profit_trigger), "高点")
             off = float(self.take_profit_limit_offset or 0.0)
             bits = [
                 f"止盈{lv}挂+{off*100:.0f}@{trig}" if off > 0 else f"止盈{lv}@{trig}"
             ]
-            if self.take_profit_reduce and self.take_profit_reduce > 0:
-                bits.append(f"各减{self.take_profit_reduce*100:.0f}%")
+            red = float(self.take_profit_reduce or 0.0)
+            if red >= 1.0 - 1e-12:
+                bits.append("全清")
+            elif red > 0:
+                bits.append(f"各减{red*100:.0f}%")
             if self.take_profit_lock_pct is not None:
                 bits.append(f"锁{self.take_profit_lock_pct*100:.0f}%")
             sell_txt = "+买/" + "/".join(bits) + "/余仓止损"
@@ -201,7 +219,7 @@ class OpenBreak3Strategy(Strategy):
             f"({sell_txt}) | "
             f"{prev_txt}，{yang_txt} | "
             f"{entry_txt}{skip_txt}{f4_txt} | "
-            f"佣金万0.854 滑点{self.slippage_value*100:.1f}% | "
+            f"{fee_rules_text(etf=bool(self.stamp_tax_rate == 0.0))} | "
             f"{self.start_date}~{self.end_date}"
         )
 
@@ -251,20 +269,13 @@ class OpenBreak3Strategy(Strategy):
         - skip_buy_after_overnight_stop：买后下一交易日即止损 → 跳过下次买点
         - skip_buy_after_consec_stops：连续 N 次止损 → 跳过下次买点
         """
-        if bool(self.skip_buy_after_overnight_stop):
-            # bars_held==1：买入日次日（首个可卖日）即止损
-            if int(bars_held) == 1:
-                self.entry_gate = "skip_next"
-                self.consec_stops = 0
-                self.log(
-                    f"{day} 隔日止损(买{buy_day}→止{day}) → "
-                    f"下次策略买点跳过，再下一次才买入"
-                )
-            else:
-                self.log(
-                    f"{day} 止损但非隔日(买{buy_day} bars_held={bars_held})，"
-                    f"不触发跳买 gate={getattr(self, 'entry_gate', 'normal')}"
-                )
+        if bool(self.skip_buy_after_overnight_stop) and int(bars_held) == 1:
+            self.entry_gate = "skip_next"
+            self.consec_stops = 0
+            self.log(
+                f"{day} 隔日止损(买{buy_day}→止{day}) → "
+                f"下次策略买点跳过，再下一次才买入"
+            )
             return
 
         n = int(self.skip_buy_after_consec_stops or 0)
@@ -319,6 +330,8 @@ class OpenBreak3Strategy(Strategy):
         if base <= 0 or avail <= 0:
             return 0.0
         lot = float(self.lot_size)
+        if float(self.take_profit_reduce or 0.0) >= 1.0 - 1e-12:
+            return float(avail)
         raw = base * float(self.take_profit_reduce)
         qty = float(int(raw // lot) * lot)
         if qty < lot and avail >= lot:
@@ -338,16 +351,20 @@ class OpenBreak3Strategy(Strategy):
 
         例：档15%、offset=2% → 限价按买入价×1.17；当日/持仓期内 high(或close)
         未到挂单价则该档本轮不减仓（挂单未成交）。
+        prev_high 触发在开盘已处理，这里跳过。
         """
+        if str(self.take_profit_trigger) == "prev_high":
+            return avail, pos
+        levels = self._effective_tp_levels(day)
         if (
-            not self.take_profit_levels
+            not levels
             or self.entry_price is None
             or float(self.entry_price) <= 0
         ):
             return avail, pos
         mark = close_px if self.take_profit_trigger == "close" else high_px
         offset = float(self.take_profit_limit_offset or 0.0)
-        for i, lvl in enumerate(self.take_profit_levels):
+        for i, lvl in enumerate(levels):
             if i in self.tp_done:
                 continue
             # 挂单价 = 激活档 + offset；须摸到挂单价才成交
@@ -388,11 +405,14 @@ class OpenBreak3Strategy(Strategy):
                 return max(avail, 0.0), max(pos, 0.0)
         return avail, pos
 
-    def _roll_prev_bars(self, open_px: float, close_px: float) -> None:
+    def _roll_prev_bars(
+        self, open_px: float, close_px: float, high_px: float | None = None
+    ) -> None:
         self.prev2_open = self.prev_open
         self.prev2_close = self.prev_close
         self.prev_open = open_px
         self.prev_close = close_px
+        self.prev_high = float(high_px) if high_px is not None else None
 
     def _yang_blocked(self) -> bool:
         return should_block_entry_by_yang(
@@ -416,6 +436,56 @@ class OpenBreak3Strategy(Strategy):
             ),
             single_yang_min_pct=self.single_yang_min_pct,
         )
+
+    def _effective_tp_levels(self, day: str) -> tuple[float, ...]:
+        if not bool(getattr(self, "regime_tp_enabled", False)):
+            return tuple(self.take_profit_levels or ())
+        regime = str((getattr(self, "regime_by_date", None) or {}).get(day, "sideways"))
+        if regime == "bull":
+            return tuple(getattr(self, "regime_tp_bull", ()) or ())
+        if regime == "bear":
+            return tuple(getattr(self, "regime_tp_bear", (0.10,)) or ())
+        return tuple(getattr(self, "regime_tp_sideways", (0.15,)) or ())
+
+    def _try_prev_high_take_profit(
+        self,
+        *,
+        day: str,
+        open_px: float,
+        avail: float,
+        pos: float,
+    ) -> bool:
+        """昨日最高价已触及止盈 → 今日开盘全清（无同日最高价前视）。"""
+        if str(self.take_profit_trigger) != "prev_high":
+            return False
+        levels = self._effective_tp_levels(day)
+        if (
+            not levels
+            or self.entry_price is None
+            or float(self.entry_price) <= 0
+            or self.prev_high is None
+        ):
+            return False
+        offset = float(self.take_profit_limit_offset or 0.0)
+        mark = float(self.prev_high)
+        for lvl in levels:
+            tp_px = float(self.entry_price) * (1.0 + float(lvl) + offset)
+            if mark + 1e-12 < tp_px:
+                continue
+            return bool(
+                self._exit_all(
+                    day=day,
+                    avail=avail,
+                    pos=pos,
+                    price=float(open_px),
+                    reason=(
+                        f"前日高点止盈+{float(lvl)*100:.0f}%"
+                        f"(昨高={mark:.2f} 开盘={open_px:.2f})"
+                    ),
+                    is_stop=False,
+                )
+            )
+        return False
 
     def _can_enter_by_prev_filter(self) -> bool:
         tick = float(self.tick)
@@ -451,6 +521,20 @@ class OpenBreak3Strategy(Strategy):
         if (not self.armed) or pos > 0:
             return False
         if not self._can_enter_by_prev_filter():
+            return False
+        energy_map = getattr(self, "energy_allowed_by_date", None) or {}
+        if energy_map and not bool(energy_map.get(day, False)):
+            self.log(
+                f"{day} 动能门控未入选，跳过买入 "
+                f"限价={entry_px:.2f} (open={open_px:.2f} high={high_px:.2f})"
+            )
+            return False
+        halt_map = getattr(self, "halt_by_date", None) or {}
+        if halt_map and bool(halt_map.get(day, False)):
+            self.log(
+                f"{day} 夏普衰减门控，跳过买入 "
+                f"限价={entry_px:.2f} (open={open_px:.2f} high={high_px:.2f})"
+            )
             return False
 
         gate = str(getattr(self, "entry_gate", "normal") or "normal")
@@ -584,6 +668,11 @@ class OpenBreak3Strategy(Strategy):
             if self.buy_day is not None and self.buy_day != day:
                 self.bars_held = int(getattr(self, "bars_held", 0) or 0) + 1
 
+            if self._try_prev_high_take_profit(
+                day=day, open_px=o, avail=avail, pos=pos
+            ):
+                return
+
             # 同日：先兑现止盈（减仓/抬止损），再对余仓判止损
             avail, pos = self._try_take_profits(
                 day=day, high_px=h, close_px=c, avail=avail, pos=pos
@@ -643,7 +732,7 @@ class OpenBreak3Strategy(Strategy):
                 )
                 return
         finally:
-            self._roll_prev_bars(o, c)
+            self._roll_prev_bars(o, c, h)
 
 
 def _metric(metrics_df: pd.DataFrame, name: str) -> float:
@@ -665,6 +754,7 @@ def print_summary(
     commission_rate: float,
     stamp_tax_rate: float,
     slippage_value: float,
+    misc_fee_rate: float | None = None,
     entry_pct: float = ENTRY_PCT,
     stop_pct: float = STOP_PCT,
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT,
@@ -683,9 +773,14 @@ def print_summary(
         f"      前日须阴线或收盘严格<open×{1+prev_small_yang_pct:.3f}，"
         f"禁双阳跨日≥{DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT*100:.0f}%"
     )
+    misc = MISC_FEE_RATE if misc_fee_rate is None else float(misc_fee_rate)
     print("卖出: 仅止损@触发价清仓；未触止损继续持有；买入日不卖（分档止盈见配置）")
-    print(f"佣金: 万0.854 ({commission_rate})；印花税(卖): {stamp_tax_rate*100:.1f}%")
-    print(f"滑点: {slippage_value*100:.1f}%")
+    print(
+        f"佣金: 万{commission_rate * 10000:.2f}；"
+        f"杂费: 万{misc * 10000:.2f}（买卖）；"
+        f"印花税(卖): 万{stamp_tax_rate * 10000:.1f}；"
+        f"滑点: {slippage_value * 100:.1f}%"
+    )
     print(f"总盈亏: {_metric(m, 'total_pnl'):.2f}")
     print(f"累计收益%: {_metric(m, 'total_return_pct'):.4f}")
     print(f"最大回撤%: {_metric(m, 'max_drawdown_pct'):.4f}")

@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from strategy.costs import COMMISSION_RATE, MISC_FEE_RATE, SLIPPAGE_VALUE, STAMP_TAX_RATE
 from strategy.momentum import build_momentum_signals
 
 
@@ -17,9 +18,9 @@ def simulate_momentum(
     params: dict[str, Any] | None = None,
     initial_cash: float = 100_000.0,
     target_pct: float = 0.95,
-    commission_rate: float = 0.0000854,
-    stamp_tax_rate: float = 0.001,
-    slippage_value: float = 0.001,
+    commission_rate: float = COMMISSION_RATE + MISC_FEE_RATE,
+    stamp_tax_rate: float = STAMP_TAX_RATE,
+    slippage_value: float = SLIPPAGE_VALUE,
     lot_size: int = 100,
 ) -> dict[str, float]:
     """次日开盘调仓仿真。返回收益/回撤/夏普等。"""

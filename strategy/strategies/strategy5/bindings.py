@@ -1,31 +1,22 @@
-"""策略五 · 因子绑定：动量因子组合（中证1000截面）· 因子3。"""
-
-from __future__ import annotations
+"""策略五：绑定因子11，近高 Top5 等权持有。"""
 
 from strategy.core.protocols import bind_factor
-from strategy.strategies.strategy5.portfolio import PORTFOLIO_DEFAULTS
+from strategy.near_high_hold import DEFAULT_PARAMS
 
 STRATEGY_ID = "strategy5"
-STRATEGY_NAME = "动量因子组合"
+STRATEGY_NAME = "策略五·近高Top5等权持有"
 
-_p = PORTFOLIO_DEFAULTS
-
+_p = DEFAULT_PARAMS
 FACTOR_BINDINGS = (
     bind_factor(
-        "factor3",
+        "factor11",
         role="both",
-        label="因子3·动量组合",
-        kind=_p["kind"],
-        n=_p["n"],
-        top_k=_p["top_k"],
-        hold_days=_p["hold_days"],
-        min_score=_p["min_score"],
-        ma_filter=_p["ma_filter"],
+        label="因子11·两段近高选股",
+        **_p,
         filter_desc=(
-            f"截面组合：中证500+1000主板 mode={_p.get('mode')} "
-            f"rev(n={_p['n']}"
-            + (f"+{_p['n2']}" if _p.get("n2") else "")
-            + f") 日选Top{_p['top_k']}，持有{_p['hold_days']}日；收盘信号次日开盘"
+            f"周频 {_p['mom_n']} 日动量 Top{_p['stage1_k']} 内，"
+            f"贴近 {_p['high_n']} 日高点 Top{_p['stage2_k']}；"
+            "本周收盘排名，下一周等权持有"
         ),
     ),
 )

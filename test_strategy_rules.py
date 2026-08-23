@@ -26,6 +26,29 @@ class StrategyRuleTests(unittest.TestCase):
         self.assertEqual(levels["buy_trigger"], 15.43)
         self.assertEqual(levels["stop"], 14.67)
 
+    def test_limit_up_open_cannot_buy(self) -> None:
+        from strategy.open_break import cannot_buy_limit_up, limit_up_state
+
+        locked = limit_up_state(
+            prev_close=10.0, open_px=11.0, high_px=11.0, low_px=11.0, close_px=11.0
+        )
+        self.assertTrue(locked["locked"])
+        self.assertTrue(locked["open_at_limit"])
+        self.assertTrue(
+            cannot_buy_limit_up(
+                prev_close=10.0, open_px=11.0, high_px=11.0, low_px=11.0, close_px=11.0
+            )
+        )
+        opened = limit_up_state(
+            prev_close=10.0, open_px=10.2, high_px=11.0, low_px=10.1, close_px=10.8
+        )
+        self.assertFalse(opened["open_at_limit"])
+        self.assertFalse(
+            cannot_buy_limit_up(
+                prev_close=10.0, open_px=10.2, high_px=11.0, low_px=10.1, close_px=10.8
+            )
+        )
+
     def test_t1_buy_day_never_emits_sell_signal(self) -> None:
         signal = strategy_signal(
             open_px=15.05,
@@ -139,9 +162,10 @@ class StrategyRuleTests(unittest.TestCase):
         self.assertEqual(get_strategy("援军战法").id, "strategy1")
 
     def test_strategy7_binds_factor5_as_event_universe(self) -> None:
-        from strategy import get_strategy_bindings
+        from strategy import get_strategy, get_strategy_bindings
 
-        bindings = {binding.factor_id: binding for binding in get_strategy_bindings("strategy7")}
+        self.assertEqual(get_strategy("strategy7").id, "strategy3")
+        bindings = {binding.factor_id: binding for binding in get_strategy_bindings("strategy3")}
         self.assertEqual(set(bindings), {"factor5"})
         factor5 = bindings["factor5"]
         self.assertEqual(factor5.role, "universe")
@@ -295,16 +319,13 @@ class StrategyInstanceTests(unittest.TestCase):
         self.assertEqual(OpenBreak3Strategy.symbol, class_default)
 
 
-class Strategy6HybridTests(unittest.TestCase):
-    """策略六 = 因子6 组合动量 ETF 轮动；旧混合组合模拟仍可独立调用。"""
+class Factor6HybridTests(unittest.TestCase):
+    """因子6 组合动量 ETF；旧混合组合模拟仍可独立调用。现行策略六是因子12，与此无关。"""
 
-    def test_strategy6_bindings_and_decision_factor6(self) -> None:
+    def test_factor6_decision_and_score(self) -> None:
         from strategy import (
             MarketContext,
-            get_decision_engine,
             get_factor,
-            get_strategy,
-            get_strategy_bindings,
         )
 
         factor = get_factor("factor6")
@@ -312,15 +333,9 @@ class Strategy6HybridTests(unittest.TestCase):
         self.assertEqual(factor.id, "factor6")
         self.assertEqual(factor.meta.get("kind"), "etf_combo_momentum")
 
-        strategy = get_strategy("strategy6")
-        self.assertEqual(strategy.factor_ids, ("factor6",))
-        ids = {b.factor_id for b in get_strategy_bindings("strategy6")}
-        self.assertEqual(ids, {"factor6"})
-        roles = {b.factor_id: b.role for b in get_strategy_bindings("strategy6")}
-        self.assertEqual(roles["factor6"], "both")
-        self.assertEqual(get_strategy("s6").id, "strategy6")
+        from strategy.strategies._unreg_s6.decision import create_decision_engine
 
-        eng = get_decision_engine("strategy6")
+        eng = create_decision_engine()
         hold = eng.decide(
             MarketContext(
                 open=10.0,
@@ -445,7 +460,7 @@ class Strategy6HybridTests(unittest.TestCase):
         self.assertTrue((buys["symbol"] == "A").all())
 
     def test_simulate_stop_exits_before_hold_days(self) -> None:
-        from strategy.strategies.strategy6.portfolio import simulate_f3_select_f1_stop
+        from strategy.strategies._unreg_s6.portfolio import simulate_f3_select_f1_stop
 
         dates = pd.date_range("2024-01-02", periods=6, freq="B")
         opens = pd.DataFrame({"sA": [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]}, index=dates)
@@ -476,7 +491,7 @@ class Strategy6HybridTests(unittest.TestCase):
         self.assertTrue((sells["reason"] == "stop").any())
 
     def test_simulate_stop_exits_before_hold_days(self) -> None:
-        from strategy.strategies.strategy6.portfolio import simulate_f3_select_f1_stop
+        from strategy.strategies._unreg_s6.portfolio import simulate_f3_select_f1_stop
 
         dates = pd.date_range("2024-01-02", periods=6, freq="B")
         # 构造：D0 信号 → D1 买 @10；D2 开盘10、低点跌破止损
@@ -512,8 +527,9 @@ class Strategy7SlotBindingTests(unittest.TestCase):
     def test_strategy7_binds_fixed_hold_event_universe(self) -> None:
         from strategy import get_strategy, get_strategy_bindings
 
-        strategy = get_strategy("strategy7")
-        bindings = get_strategy_bindings("strategy7")
+        strategy = get_strategy("strategy3")
+        bindings = get_strategy_bindings("strategy3")
+        self.assertEqual(get_strategy("strategy7").id, "strategy3")
         self.assertEqual(strategy.factor_ids, ("factor5",))
         by_id = {binding.factor_id: binding for binding in bindings}
         self.assertEqual(by_id["factor5"].role, "universe")

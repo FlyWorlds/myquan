@@ -17,7 +17,7 @@ logging.disable(logging.CRITICAL)
 
 from backtest import zz1000_momentum_select as zz  # noqa: E402
 from backtest.mine_zz1000_momentum import factor_matrix  # noqa: E402
-from strategy.strategies.strategy5.portfolio import PORTFOLIO_DEFAULTS as d  # noqa: E402
+from strategy.strategies._unreg_s5.portfolio import PORTFOLIO_DEFAULTS as d  # noqa: E402
 
 OUT = Path(__file__).resolve().parent
 

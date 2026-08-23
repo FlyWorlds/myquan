@@ -1,270 +1,338 @@
-"""策略四 · 因子1 滚动12月评分 Top3 池 × 池内反转选股。
-
-默认（挖参较优）:
-  score_mode=roll12, pool_n=3, pool 内 rev(20) 选 Top1, 持有 10 日
-  收盘信号 → 次日开盘；袖套轮动
-"""
+"""策略四组合回测：因子1 + 因子4 + 20%昨高止盈 + 周频动量 Top5。"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
+from holdingStocks.watch_config import WATCHLIST, limit_down_pct_of, sina_of
+from strategy.backtest import metric
+from strategy.config import BacktestConfig, resolve_factor4_repair
+from strategy.costs import stamp_tax_for_code
+from strategy.open_break import DEFAULT_PCT
+from strategy.runner import prepare_factor4, run_open_break_backtest
+from strategy.s1_price_select import panel_price_factors, weekly_topk_allowed
+from strategy.strategies.strategy4.bindings import (
+    MOM_TOP_K,
+    MOM_VALUE_COL,
+    TAKE_PROFIT_LEVELS,
+    TAKE_PROFIT_REDUCE,
+    TAKE_PROFIT_TRIGGER,
+)
+
 _MYQUAN = Path(__file__).resolve().parents[3]
-
-PORTFOLIO_DEFAULTS: dict[str, Any] = {
-    "score_mode": "roll12",
-    "pool_n": 3,
-    "kind": "rev",
-    "n": 20,
-    "top_k": 1,
-    "hold_days": 10,
-    "select_mode": "pool",  # pool | blend
-    "w_f1": 0.0,
-    "w_mom": 1.0,
-    "start": "20200201",
-    "warm_start": "20190101",
-    "universe": "zz1000_mainboard",
-    "initial_cash": 1_000_000.0,
-}
+DATA_CACHE = _MYQUAN / "data_cache"
+UNIV_CACHE = _MYQUAN / "backtest" / "universe_zz500_1000" / "daily_cache"
+ABC_CACHE = _MYQUAN / "backtest" / "universe_abc" / "daily_cache"
+WARM_START = "20200101"
+TRADE_START = "20250101"
+END = "20260820"
+CASH = 100_000.0
+PINNED = {"sh600552", "sh600330"}
 
 
-@dataclass
-class Strategy4Result:
-    stats: dict[str, Any]
-    equity: pd.DataFrame
-    trades: pd.DataFrame
-    picks: pd.DataFrame
-    pool: pd.DataFrame
-    yearly: pd.DataFrame
-    config: dict[str, Any]
-
-
-def portfolio_config(**overrides: Any) -> dict[str, Any]:
-    cfg = dict(PORTFOLIO_DEFAULTS)
-    cfg.update({k: v for k, v in overrides.items() if v is not None})
-    return cfg
-
-
-def _build_trade_pool(score_mode: str, pool_n: int, have: set[str]):
-    from backtest.top20_momentum_dig import build_monthly_top_pool
-
-    trade_pool, score_by_trade = build_monthly_top_pool(score_mode, int(pool_n))
-    trade_pool = {m: [s for s in syms if s in have] for m, syms in trade_pool.items()}
-    score_by_trade = {
-        m: {s: v for s, v in mp.items() if s in have} for m, mp in score_by_trade.items()
-    }
-    return trade_pool, score_by_trade
-
-
-def run_strategy4_portfolio(**overrides: Any) -> Strategy4Result:
-    """回测：滚动12月（可覆盖）因子1 TopN 池 × 池内动量/反转。"""
-    from backtest.top20_momentum_dig import (
-        blend_factor,
-        build_panel,
-        mask_factor_to_pool,
-    )
-    from backtest.top3_momentum_dig import mask_factor_to_pool_fast
-    from backtest.zz1000_momentum_select import (
-        INITIAL_CASH,
-        compute_factor,
-        load_zz1000_mainboard,
-        simulate,
-    )
-
-    cfg = portfolio_config(**overrides)
-    verbose = bool(overrides.get("verbose", True))
-    refresh = bool(overrides.get("refresh", False))
-
-    univ = load_zz1000_mainboard()
-    symbols = univ["symbol"].tolist()
-    name_map = dict(zip(univ["symbol"], univ["name"]))
-    opens, highs, lows, closes = build_panel(symbols, refresh=refresh)
-    have = set(closes.columns)
-
-    trade_pool, score_by_trade = _build_trade_pool(
-        str(cfg["score_mode"]), int(cfg["pool_n"]), have
-    )
-    pool_rows = []
-    for m, syms in sorted(trade_pool.items()):
-        for i, s in enumerate(syms, 1):
-            pool_rows.append(
-                {
-                    "trade_month": m,
-                    "rank": i,
-                    "symbol": s,
-                    "name": name_map.get(s, ""),
-                    "score": score_by_trade.get(m, {}).get(s),
-                }
-            )
-    pool_df = pd.DataFrame(pool_rows)
-
-    fac = compute_factor(
-        opens,
-        highs,
-        lows,
-        closes,
-        kind=str(cfg["kind"]),
-        n=int(cfg["n"]),
-        min_score=None,
-        ma_filter=None,
-    )
-    select_mode = str(cfg.get("select_mode") or "pool")
-    if select_mode == "blend":
-        use = blend_factor(
-            fac,
-            score_by_trade,
-            trade_pool,
-            float(cfg.get("w_f1") or 0.4),
-            float(cfg.get("w_mom") or 0.6),
-        )
-    else:
-        try:
-            use = mask_factor_to_pool_fast(fac, trade_pool)
-        except Exception:
-            use = mask_factor_to_pool(fac, trade_pool)
-
-    top_k = int(cfg["top_k"])
-    hold_days = int(cfg["hold_days"])
-    picks: dict[pd.Timestamp, list[str]] = {}
-    pick_rows = []
-    for dt_idx, row in use.iterrows():
-        s = row.dropna()
-        if len(s) < top_k:
+def load_daily(symbol: str) -> pd.DataFrame | None:
+    paths = [
+        UNIV_CACHE / f"{symbol}_daily_qfq.parquet",
+        ABC_CACHE / f"{symbol}_daily_qfq.parquet",
+        DATA_CACHE / f"{symbol}_daily_qfq.parquet",
+    ]
+    parts: list[pd.DataFrame] = []
+    for path in paths:
+        if not path.exists():
             continue
-        chosen = s.nlargest(top_k).index.tolist()
-        picks[pd.Timestamp(dt_idx)] = chosen
-        pick_rows.append(
+        df = pd.read_parquet(path)
+        if df.empty or "date" not in df.columns:
+            continue
+        df = df.copy()
+        df["date"] = pd.to_datetime(df["date"])
+        if df["date"].dt.tz is not None:
+            df["date"] = df["date"].dt.tz_convert("Asia/Shanghai")
+        else:
+            df["date"] = df["date"].dt.tz_localize("Asia/Shanghai")
+        for col in ("open", "high", "low", "close", "volume"):
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        df = df.dropna(subset=["open", "high", "low", "close"])
+        df["symbol"] = symbol
+        parts.append(df)
+    if not parts:
+        return None
+    merged = (
+        pd.concat(parts, ignore_index=True)
+        .sort_values("date")
+        .drop_duplicates(subset=["date"], keep="last")
+    )
+    start = pd.Timestamp(WARM_START).tz_localize("Asia/Shanghai")
+    end = pd.Timestamp(END).tz_localize("Asia/Shanghai") + pd.Timedelta(days=1)
+    merged = merged[(merged["date"] >= start) & (merged["date"] < end)]
+    if len(merged) < 80:
+        return None
+    return merged.reset_index(drop=True)
+
+
+def watch_universe() -> list[dict]:
+    rows, seen = [], set()
+    for item in list(WATCHLIST):
+        code = str(item["code"]).zfill(6)
+        if code in seen:
+            continue
+        seen.add(code)
+        rows.append(
             {
-                "signal_date": pd.Timestamp(dt_idx),
-                "picks": ",".join(chosen),
-                "pick_names": ",".join(name_map.get(x, x) for x in chosen),
-                "scores": ",".join(f"{float(s[x]):.4f}" for x in chosen),
+                "code": code,
+                "symbol": sina_of(code),
+                "name": item["name"],
+                "entry_pct": float(item.get("entry_pct") or item.get("pct") or DEFAULT_PCT),
+                "stop_pct": float(item.get("stop_pct") or item.get("pct") or DEFAULT_PCT),
+                "tick": float(item.get("tick") or 0.01),
+                "t0": bool(item.get("t0", False)),
+                "limit_down_pct": float(
+                    item.get("limit_down_pct") or limit_down_pct_of(code)
+                ),
+                "stamp_tax_rate": stamp_tax_for_code(code),
             }
         )
+    return rows
 
-    bt_start = pd.Timestamp(str(cfg["start"]))
-    if closes.index.tz is not None and bt_start.tzinfo is None:
-        bt_start = bt_start.tz_localize(closes.index.tz)
-    cash = float(cfg.get("initial_cash") or INITIAL_CASH)
+
+def apply_s9_overlay(cfg: BacktestConfig) -> BacktestConfig:
+    cfg = resolve_factor4_repair(cfg)
+    return replace(
+        cfg,
+        take_profit_levels=TAKE_PROFIT_LEVELS,
+        take_profit_reduce=TAKE_PROFIT_REDUCE,
+        take_profit_trigger=TAKE_PROFIT_TRIGGER,
+    )
+
+
+def _nav_series(result) -> pd.Series:
+    eq = getattr(result, "equity_curve", None)
+    if eq is None or getattr(eq, "empty", True):
+        return pd.Series(dtype=float)
+    if isinstance(eq, pd.DataFrame):
+        col = "equity" if "equity" in eq.columns else eq.columns[0]
+        s = eq[col]
+    else:
+        s = eq
+    idx = pd.to_datetime(s.index)
+    if getattr(idx, "tz", None) is not None:
+        idx = idx.tz_localize(None)
+    return (
+        pd.Series(pd.to_numeric(s, errors="coerce").to_numpy(), index=idx.normalize())
+        .dropna()
+        .sort_index()
+    )
+
+
+def window_metrics(eq: pd.Series, start=None, end=None) -> dict[str, float]:
+    s = eq.dropna().astype(float).sort_index()
+    if start is not None:
+        s = s[s.index >= pd.Timestamp(start)]
+    if end is not None:
+        s = s[s.index <= pd.Timestamp(end)]
+    if len(s) < 5:
+        return {
+            "ret_pct": float("nan"),
+            "ann_pct": float("nan"),
+            "sharpe": float("nan"),
+            "mdd_pct": float("nan"),
+        }
+    tot = float(s.iloc[-1] / s.iloc[0] - 1.0)
+    years = max((s.index[-1] - s.index[0]).days / 365.25, 1e-9)
+    ann = (1.0 + tot) ** (1.0 / years) - 1.0
+    rets = s.pct_change().dropna()
+    vol = float(rets.std() * (252**0.5)) if len(rets) else 0.0
+    sharpe = float(ann / vol) if vol > 1e-12 else 0.0
+    dd = 1.0 - s / s.cummax()
+    return {
+        "ret_pct": tot * 100.0,
+        "ann_pct": ann * 100.0,
+        "sharpe": sharpe,
+        "mdd_pct": float(dd.max()) * 100.0,
+        "start": str(s.index[0].date()),
+        "end": str(s.index[-1].date()),
+    }
+
+
+def active_nav(
+    navs: dict[str, pd.Series],
+    allowed: dict[str, dict[str, bool]] | None,
+    *,
+    always: set[str] | None = None,
+) -> pd.Series:
+    df = pd.concat(navs, axis=1).sort_index().ffill()
+    rets = df.pct_change()
+    always = {str(x) for x in (always or set())}
+    out = []
+    for ts, row in rets.iterrows():
+        key = pd.Timestamp(ts).strftime("%Y-%m-%d")
+        names = []
+        for c in rets.columns:
+            ok = allowed is None or c in always or bool((allowed.get(c) or {}).get(key, False))
+            if ok and pd.notna(row.get(c)):
+                names.append(c)
+        out.append(float(row[names].mean()) if names else 0.0)
+    nav = (1.0 + pd.Series(out, index=rets.index)).cumprod()
+    if len(nav):
+        nav.iloc[0] = 1.0
+    return nav
+
+
+def _bh_nav(dailies: dict[str, pd.DataFrame], symbols: set[str] | None = None) -> pd.Series:
+    series = []
+    for sym, daily in dailies.items():
+        if symbols is not None and sym not in symbols:
+            continue
+        idx = pd.to_datetime(daily["date"])
+        if getattr(idx.dt, "tz", None) is not None:
+            idx = idx.dt.tz_localize(None)
+        idx = pd.DatetimeIndex(idx).normalize()
+        c = pd.Series(pd.to_numeric(daily["close"], errors="coerce").to_numpy(), index=idx)
+        series.append(c.dropna())
+    if not series:
+        return pd.Series(dtype=float)
+    df = pd.concat(series, axis=1).sort_index().ffill()
+    norm = df.divide(df.iloc[0])
+    return norm.mean(axis=1).dropna()
+
+
+def _trade_slice(full: pd.DataFrame, slice_from: str = "2024-12-01") -> pd.DataFrame:
+    cut = pd.Timestamp(slice_from)
+    if cut.tzinfo is None:
+        cut = cut.tz_localize("Asia/Shanghai")
+    return full[full["date"] >= cut].reset_index(drop=True)
+
+
+def run_one(
+    meta: dict,
+    full: pd.DataFrame,
+    *,
+    s9: bool,
+    allowed: dict[str, bool] | None,
+    start_date: str | None = None,
+    slice_from: str | None = None,
+):
+    daily = _trade_slice(full, slice_from or "2024-12-01")
+    cfg = BacktestConfig(
+        symbol=meta["symbol"],
+        symbol_name=meta["name"],
+        em_symbol=meta["code"],
+        threshold_pct=float(meta["entry_pct"]),
+        entry_pct=float(meta["entry_pct"]),
+        stop_pct=float(meta["stop_pct"]),
+        start_date=start_date or TRADE_START,
+        end_date=END,
+        initial_cash=CASH,
+        tick=float(meta["tick"]),
+        t0=bool(meta["t0"]),
+        limit_down_pct=float(meta["limit_down_pct"]),
+        stamp_tax_rate=float(meta["stamp_tax_rate"]),
+        energy_allowed_by_date=dict(allowed or {}),
+    )
+    if s9:
+        cfg = apply_s9_overlay(cfg)
+        prepare_factor4(cfg, full)
+    result = run_open_break_backtest(cfg, daily)
+    return {
+        "nav": _nav_series(result),
+        "n_trades": float(metric(result.metrics_df, "closed_trade_count")),
+        "ret_pct": float(metric(result.metrics_df, "total_return_pct")),
+        "name": meta["name"],
+        "symbol": meta["symbol"],
+    }
+
+
+def _year_ret(nav: pd.Series, year: int) -> float:
+    s = nav[nav.index.year == year]
+    if len(s) < 2:
+        return float("nan")
+    return float(s.iloc[-1] / s.iloc[0] - 1.0) * 100.0
+
+
+def run_strategy4_portfolio(
+    *,
+    verbose: bool = True,
+) -> dict[str, Any]:
+    metas = {m["symbol"]: m for m in watch_universe()}
+    dailies: dict[str, pd.DataFrame] = {}
+    for sym in metas:
+        daily = load_daily(sym)
+        if daily is not None:
+            dailies[sym] = daily
+    metas = {k: v for k, v in metas.items() if k in dailies}
+    panel = panel_price_factors(dailies)
+    mom_gate = weekly_topk_allowed(panel, value_col=MOM_VALUE_COL, k=MOM_TOP_K)
 
     if verbose:
         print(
-            f"[策略四] score={cfg['score_mode']} pool_n={cfg['pool_n']} "
-            f"{select_mode} {cfg['kind']}(n={cfg['n']}) Top{top_k} "
-            f"持有{hold_days}日  {cfg['start']}→ 池月数={len(trade_pool)}"
+            "策略四：因子1 开盘突破 + 因子4 牛市放宽止损 + "
+            f"{TAKE_PROFIT_LEVELS[0]*100:.0f}% {TAKE_PROFIT_TRIGGER} 全清 + "
+            f"周频 {MOM_VALUE_COL} Top{MOM_TOP_K}"
         )
+        print(f"宇宙 {len(dailies)}  报告区间 {TRADE_START}~{END}")
 
-    eq, tr, summary = simulate(
-        factor=use,
-        opens=opens,
-        closes=closes,
-        picks=picks,
-        bt_start=bt_start,
-        hold_days=hold_days,
-        top_k=top_k,
-        initial_cash=cash,
-        factor_label=(
-            f"s4/{cfg['score_mode']}/top{cfg['pool_n']}/"
-            f"{cfg['kind']}{cfg['n']}_k{top_k}_h{hold_days}"
-        ),
-    )
-    if eq is None or eq.empty:
-        raise RuntimeError("策略四：无权益曲线")
+    s1_all = {}
+    s9_sel = {}
+    for sym, daily in dailies.items():
+        if verbose:
+            print(f"  {metas[sym]['name']}")
+        s1_all[sym] = run_one(metas[sym], daily, s9=False, allowed=None)
+        s9_sel[sym] = run_one(metas[sym], daily, s9=True, allowed=mom_gate.get(sym))
 
-    e = eq.set_index("date")["equity"].astype(float).sort_index()
-    yearly_rows = []
-    years = e.index.year if e.index.tz is None else e.index.tz_convert(None).year
-    for y, g in e.groupby(years):
-        prev = e[e.index < g.index[0]]
-        base = float(prev.iloc[-1]) if len(prev) else cash
-        yearly_rows.append(
-            {
-                "year": int(y),
-                "return_pct": float(g.iloc[-1] / base - 1) * 100,
-            }
-        )
-    picks_df = pd.DataFrame(pick_rows)
-    stats = dict(summary)
-    stats["score_mode"] = cfg["score_mode"]
-    stats["pool_n"] = cfg["pool_n"]
-    return Strategy4Result(
-        stats=stats,
-        equity=eq,
-        trades=tr if isinstance(tr, pd.DataFrame) else pd.DataFrame(),
-        picks=picks_df,
-        pool=pool_df,
-        yearly=pd.DataFrame(yearly_rows),
-        config=cfg,
-    )
+    nav_s9 = active_nav({s: r["nav"] for s, r in s9_sel.items()}, mom_gate)
+    nav_p2 = active_nav({s: s1_all[s]["nav"] for s in PINNED if s in s1_all}, None)
+    nav_26 = active_nav({s: r["nav"] for s, r in s1_all.items()}, None)
+    bh_p2 = _bh_nav(dailies, PINNED)
+    bh_26 = _bh_nav(dailies, None)
 
-
-def current_picks(**overrides: Any) -> pd.DataFrame:
-    """最新信号日：roll12 Top3 池内反转选股。"""
-    from backtest.top20_momentum_dig import build_panel
-    from backtest.top3_momentum_dig import mask_factor_to_pool_fast
-    from backtest.zz1000_momentum_select import compute_factor, load_zz1000_mainboard
-
-    cfg = portfolio_config(**overrides)
-    univ = load_zz1000_mainboard()
-    name_map = dict(zip(univ["symbol"], univ["name"]))
-    opens, highs, lows, closes = build_panel(univ["symbol"].tolist(), refresh=False)
-    have = set(closes.columns)
-    trade_pool, _ = _build_trade_pool(str(cfg["score_mode"]), int(cfg["pool_n"]), have)
-
-    fac = compute_factor(
-        opens, highs, lows, closes,
-        kind=str(cfg["kind"]), n=int(cfg["n"]), min_score=None, ma_filter=None,
-    )
-    use = mask_factor_to_pool_fast(fac, trade_pool)
-    dt = use.index.max()
-    month = str(pd.Timestamp(dt).tz_localize(None).to_period("M")) if getattr(dt, "tzinfo", None) else str(pd.Timestamp(dt).to_period("M"))
-    # 兼容 tz
-    try:
-        month = str(pd.Timestamp(dt).tz_convert("Asia/Shanghai").tz_localize(None).to_period("M"))
-    except Exception:
-        month = str(pd.Timestamp(str(dt)[:10]).to_period("M"))
-
-    pool = trade_pool.get(month, [])
-    row = use.loc[dt].dropna()
-    top_k = int(cfg["top_k"])
-    chosen = row.nlargest(top_k) if len(row) >= top_k else row.sort_values(ascending=False)
-
+    report_from = "2025-01-02"
+    books = {
+        "s9_f4_tp_mom": nav_s9,
+        "s1_pinned2": nav_p2,
+        "s1_watch26": nav_26,
+        "bh_pinned2": bh_p2,
+        "bh_watch26": bh_26,
+    }
     rows = []
-    for rank, (sym, score) in enumerate(chosen.items(), 1):
+    for vid, nav in books.items():
+        m = window_metrics(nav, start=report_from)
         rows.append(
             {
-                "signal_date": str(pd.Timestamp(dt).date()) if not hasattr(dt, "date") else str(pd.Timestamp(dt).date()),
-                "trade_month": month,
-                "pool": ",".join(pool),
-                "rank": rank,
-                "symbol": sym,
-                "name": name_map.get(sym, ""),
-                "score": float(score),
-                "close": float(closes.at[dt, sym]) if sym in closes.columns else np.nan,
+                "id": vid,
+                "ret_2025_now": round(m["ret_pct"], 2),
+                "ann_pct": round(m["ann_pct"], 2),
+                "sharpe": round(m["sharpe"], 3),
+                "mdd_pct": round(m["mdd_pct"], 2),
+                "y2025": round(_year_ret(nav[nav.index >= pd.Timestamp(report_from)], 2025), 2),
+                "y2026": round(_year_ret(nav[nav.index >= pd.Timestamp(report_from)], 2026), 2),
+                "start": m.get("start"),
+                "end": m.get("end"),
             }
         )
-    # also list full pool for the month
-    for i, sym in enumerate(pool, 1):
-        if any(r["symbol"] == sym for r in rows):
+    table = pd.DataFrame(rows)
+    names_2025 = []
+    for day, g in panel.groupby(pd.to_datetime(panel["date"]).dt.tz_localize(None).dt.normalize()):
+        key = pd.Timestamp(day).strftime("%Y-%m-%d")
+        if key < report_from:
             continue
-        rows.append(
-            {
-                "signal_date": str(pd.Timestamp(dt).date()),
-                "trade_month": month,
-                "pool": ",".join(pool),
-                "rank": None,
-                "symbol": sym,
-                "name": name_map.get(sym, ""),
-                "score": float(row[sym]) if sym in row.index else np.nan,
-                "close": float(closes.at[dt, sym]) if sym in closes.columns else np.nan,
-                "in_trade_pick": False,
-            }
-        )
-    for r in rows:
-        r.setdefault("in_trade_pick", r.get("rank") is not None)
-    return pd.DataFrame(rows)
+        picked = [s for s, mp in mom_gate.items() if mp.get(key)]
+        names_2025.append({"date": key, "n": len(picked), "symbols": ",".join(sorted(picked))})
+    pick_df = pd.DataFrame(names_2025)
+    return {
+        "table": table,
+        "navs": books,
+        "picks": pick_df,
+        "s9_trades": sum(r["n_trades"] for r in s9_sel.values()),
+        "s1_p2_trades": sum(s1_all[s]["n_trades"] for s in PINNED if s in s1_all),
+        "s9_per_stock": {
+            s: {"name": r["name"], "ret_pct": r["ret_pct"], "n_trades": r["n_trades"]}
+            for s, r in s9_sel.items()
+        },
+    }
+
+
+run_strategy9_portfolio = run_strategy4_portfolio

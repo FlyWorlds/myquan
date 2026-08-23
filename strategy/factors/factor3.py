@@ -1,4 +1,4 @@
-"""因子3：动量因子（策略五·动量因子组合 / 单票时序仍可用）。"""
+"""因子3：动量因子（旧动量组合脚本 / 单票时序仍可用）。"""
 
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ _RULES = (
     momentum_rules_text(DEFAULT_KIND, DEFAULT_PARAMS)
     + "\n\n"
     + """================================================================================
-  组合用法（策略五·动量因子组合）
+  组合用法（旧动量截面脚本，已归档 _unreg_s5）
 ================================================================================
   · 股票池：中证1000主板；收盘截面打分 → 次日开盘 · 袖套持有
-  · 默认参数见 strategy.strategies.strategy5.portfolio.PORTFOLIO_DEFAULTS
+  · 默认参数见 strategy.strategies._unreg_s5.portfolio.PORTFOLIO_DEFAULTS
   · 说明：A股中小盘截面上短期反转通常优于趋势动量；单票择时仍可用 dist_hl
   · 组合变体：因子3选票/买入 + 因子1开盘-pct 止损，见
-    strategy.strategies.strategy6.portfolio.run_f3_select_f1_stop_portfolio
+    strategy.strategies._unreg_s6.portfolio.run_f3_select_f1_stop_portfolio
     （策略六本身已重新注册为因子6）
 ================================================================================
 """.strip()

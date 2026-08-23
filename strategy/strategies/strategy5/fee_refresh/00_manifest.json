@@ -1,0 +1,29 @@
+{
+  "fee": "佣金万0.86；杂费万0.10（买卖）；印花税(卖)万5.0；滑点0.1%",
+  "cost_round_trip": 0.002692,
+  "fee_round_trip": 0.000692,
+  "universe": "HS300+ZZ500+ZZ1000 current constituents",
+  "n_names": 1249,
+  "start": "2020-01-02",
+  "end": "2026-08-11",
+  "note": "策略10默认仍是20/20/k5；因子10做等权持有对照，不是策略1开盘突破",
+  "do_not_replace_default": true,
+  "s10_default": {
+    "mom_n": 20,
+    "stage1_k": 20,
+    "stage2_k": 5,
+    "stage2": "near_high",
+    "high_n": 20,
+    "start": "20200102",
+    "end": "20260820"
+  },
+  "s10_optimized_candidate": {
+    "mom_n": 5,
+    "stage1_k": 20,
+    "stage2_k": 5,
+    "stage2": "near_high",
+    "high_n": 10,
+    "start": "20200102",
+    "end": "20260820"
+  }
+}
