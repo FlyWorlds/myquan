@@ -1,0 +1,41 @@
+{
+  "factor": "factor13_bear_shield",
+  "params": {
+    "rule": "qy_blend",
+    "top_k": 5,
+    "own_bear_bh": -5.0,
+    "quarter_bear_bh": -5.0,
+    "min_obear": 2,
+    "min_obear_ret": 0.0,
+    "min_obear_ex": 5.0,
+    "min_obear_ex_floor": 0.0,
+    "min_q_obear": 3,
+    "min_q_ex": 2.0,
+    "min_obear_ex_sh": 8.0,
+    "min_obear_hit": 0.5,
+    "sharpe_lo": 0.3,
+    "sharpe_hi": 1.8,
+    "thr": 0.025,
+    "mainboard_only": true
+  },
+  "oos": {
+    "ret": 68.26343142693325,
+    "mdd": 15.371783051635113,
+    "sharpe": 4.441762926910921,
+    "ex_med": 23.472161490610887,
+    "noseed_ret": 36.46560627698876,
+    "noseed_ex_med": 10.539337887079057
+  },
+  "defense": {
+    "ret": 59.561743515870404,
+    "ex_med": 23.472161490610887,
+    "mdd": 9.523553434627786
+  },
+  "picks": [
+    "sh601208",
+    "sh603328",
+    "sh600338",
+    "sh600552",
+    "sz000811"
+  ]
+}

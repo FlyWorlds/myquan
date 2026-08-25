@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>因子13 夏普波动率契合</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:960px;margin:24px auto;padding:0 16px;color:#222}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:12px 0}
+th,td{border:1px solid #ddd;padding:6px 8px;text-align:right}
+th{background:#f5f5f5} td:first-child,th:first-child{text-align:left}
+.pos{color:#0a7} .neg{color:#c33} h1{font-size:22px} h2{font-size:17px;margin-top:28px}
+.kpi{display:flex;gap:16px;flex-wrap:wrap} .kpi div{background:#f7f7f7;padding:12px 16px;border-radius:8px}
+pre{background:#f6f8fa;padding:12px;overflow:auto;font-size:12px}
+</style></head><body>
+<h1>因子13 · 夏普波动率契合</h1>
+<p>CSI500 ∪ CSI1000 mainboard (≈CSI1500 mid-small, no ChiNext/STAR/ST) · N=1004 · 官方无独立「中证1500」成分文件；本池为 500+1000 主板并集。</p>
+<div class="kpi">
+  <div><b>2026等权</b><br><span class="pos">+16.67%</span></div>
+  <div><b>回撤</b><br>13.75%</div>
+  <div><b>夏普</b><br>1.54</div>
+  <div><b>TopK</b><br>8</div>
+</div>
+<pre>================================================================================
+  因子13 · 夏普波动率契合（策略1·因子1）
+================================================================================
+拟合窗：(2020, 2021, 2022, 2023, 2024, 2025) 分年跑开盘突破 ±2.5%
+硬过滤：
+  · 有效年数 ≥ 5
+  · 年夏普均值 ∈ [0.45, 2.0]
+  · 夏普波动率(年std) ∈ [0.25, 0.95]
+  · 正收益年占比 ≥ 0.5；正超额年 ≥ 0.4
+排序 score_sv（分位加权）：
+  3·夏普均值 + 2·夏普波动率甜区(≈0.5) + 2·正超额占比
+  + 2·平均超额 + 1·回撤改善 + 1·正反馈(上年正超额→下年仍正)
+取 Top8 → 下一期等权跑因子1
+池：中证500∪1000主板，无创业板/科创板/ST
+================================================================================</pre>
+<h2>入选（2025末）</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>symbol</th>
+      <th>name</th>
+      <th>sharpe_mean</th>
+      <th>sharpe_vol</th>
+      <th>pos_yr</th>
+      <th>pos_ex</th>
+      <th>ex_mean</th>
+      <th>feedback</th>
+      <th>score_sv</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>sh600597</td>
+      <td>光明乳业</td>
+      <td>0.657</td>
+      <td>0.506</td>
+      <td>1.000</td>
+      <td>1.000</td>
+      <td>19.696</td>
+      <td>1.000</td>
+      <td>10.713</td>
+    </tr>
+    <tr>
+      <td>sz002368</td>
+      <td>太极股份</td>
+      <td>0.662</td>
+      <td>0.491</td>
+      <td>1.000</td>
+      <td>0.833</td>
+      <td>23.536</td>
+      <td>0.800</td>
+      <td>10.673</td>
+    </tr>
+    <tr>
+      <td>sh603327</td>
+      <td>福蓉科技</td>
+      <td>0.789</td>
+      <td>0.636</td>
+      <td>0.833</td>
+      <td>0.833</td>
+      <td>27.481</td>
+      <td>0.750</td>
+      <td>10.404</td>
+    </tr>
+    <tr>
+      <td>sh600184</td>
+      <td>光电股份</td>
+      <td>0.748</td>
+      <td>0.575</td>
+      <td>0.833</td>
+      <td>0.833</td>
+      <td>10.264</td>
+      <td>0.800</td>
+      <td>10.183</td>
+    </tr>
+    <tr>
+      <td>sh603328</td>
+      <td>依顿电子</td>
+      <td>0.858</td>
+      <td>0.747</td>
+      <td>0.833</td>
+      <td>0.833</td>
+      <td>16.620</td>
+      <td>0.750</td>
+      <td>10.016</td>
+    </tr>
+    <tr>
+      <td>sz002065</td>
+      <td>东华软件</td>
+      <td>0.504</td>
+      <td>0.724</td>
+      <td>0.667</td>
+      <td>1.000</td>
+      <td>13.319</td>
+      <td>1.000</td>
+      <td>9.860</td>
+    </tr>
+    <tr>
+      <td>sh600330</td>
+      <td>天通股份</td>
+      <td>0.763</td>
+      <td>0.509</td>
+      <td>0.833</td>
+      <td>0.667</td>
+      <td>8.732</td>
+      <td>0.500</td>
+      <td>9.814</td>
+    </tr>
+    <tr>
+      <td>sh600552</td>
+      <td>凯盛科技</td>
+      <td>1.114</td>
+      <td>0.572</td>
+      <td>1.000</td>
+      <td>0.667</td>
+      <td>26.053</td>
+      <td>0.333</td>
+      <td>9.710</td>
+    </tr>
+  </tbody>
+</table>
+<h2>单票 2026</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>symbol</th>
+      <th>name</th>
+      <th>ret</th>
+      <th>bh</th>
+      <th>excess</th>
+      <th>mdd</th>
+      <th>bh_dd</th>
+      <th>sharpe</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>sh600597</td>
+      <td>光明乳业</td>
+      <td>-10.60</td>
+      <td>-15.87</td>
+      <td>5.26</td>
+      <td>12.62</td>
+      <td>25.98</td>
+      <td>-1.34</td>
+    </tr>
+    <tr>
+      <td>sz002368</td>
+      <td>太极股份</td>
+      <td>-25.49</td>
+      <td>-41.88</td>
+      <td>16.39</td>
+      <td>36.01</td>
+      <td>52.11</td>
+      <td>-1.28</td>
+    </tr>
+    <tr>
+      <td>sh603327</td>
+      <td>福蓉科技</td>
+      <td>-36.70</td>
+      <td>-14.64</td>
+      <td>-22.06</td>
+      <td>43.88</td>
+      <td>33.39</td>
+      <td>-1.62</td>
+    </tr>
+    <tr>
+      <td>sh600184</td>
+      <td>光电股份</td>
+      <td>48.99</td>
+      <td>-7.55</td>
+      <td>56.54</td>
+      <td>22.53</td>
+      <td>51.64</td>
+      <td>2.19</td>
+    </tr>
+    <tr>
+      <td>sh603328</td>
+      <td>依顿电子</td>
+      <td>10.27</td>
+      <td>-0.27</td>
+      <td>10.54</td>
+      <td>25.94</td>
+      <td>43.52</td>
+      <td>0.45</td>
+    </tr>
+    <tr>
+      <td>sz002065</td>
+      <td>东华软件</td>
+      <td>-20.35</td>
+      <td>-26.41</td>
+      <td>6.06</td>
+      <td>32.17</td>
+      <td>38.67</td>
+      <td>-1.21</td>
+    </tr>
+    <tr>
+      <td>sh600330</td>
+      <td>天通股份</td>
+      <td>134.96</td>
+      <td>101.00</td>
+      <td>33.96</td>
+      <td>18.64</td>
+      <td>53.96</td>
+      <td>4.87</td>
+    </tr>
+    <tr>
+      <td>sh600552</td>
+      <td>凯盛科技</td>
+      <td>100.33</td>
+      <td>44.31</td>
+      <td>56.02</td>
+      <td>21.21</td>
+      <td>55.16</td>
+      <td>4.09</td>
+    </tr>
+  </tbody>
+</table>
+<h2>等权月收益</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>month</th>
+      <th>ret_pct</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026-02</td>
+      <td>3.37</td>
+    </tr>
+    <tr>
+      <td>2026-03</td>
+      <td>-4.35</td>
+    </tr>
+    <tr>
+      <td>2026-04</td>
+      <td>13.60</td>
+    </tr>
+    <tr>
+      <td>2026-05</td>
+      <td>0.21</td>
+    </tr>
+    <tr>
+      <td>2026-06</td>
+      <td>3.81</td>
+    </tr>
+    <tr>
+      <td>2026-07</td>
+      <td>-10.64</td>
+    </tr>
+    <tr>
+      <td>2026-08</td>
+      <td>6.97</td>
+    </tr>
+  </tbody>
+</table>
+<h2>Walk-forward</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>fit_end</th>
+      <th>oos</th>
+      <th>n</th>
+      <th>ret</th>
+      <th>med</th>
+      <th>mdd</th>
+      <th>sharpe</th>
+      <th>pos_stocks</th>
+      <th>pos_months</th>
+      <th>n_months</th>
+      <th>symbols</th>
+      <th>names</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2022</td>
+      <td>2023</td>
+      <td>8</td>
+      <td>6.95</td>
+      <td>-1.14</td>
+      <td>7.33</td>
+      <td>0.59</td>
+      <td>4</td>
+      <td>7</td>
+      <td>11</td>
+      <td>sh603328,sz002965,sh600521,sh603327,sh600597,sz002368,sh600330,sh600114</td>
+      <td>依顿电子、祥鑫科技、华海药业、福蓉科技、光明乳业、太极股份、天通股份、东睦股份</td>
+    </tr>
+    <tr>
+      <td>2023</td>
+      <td>2024</td>
+      <td>8</td>
+      <td>25.13</td>
+      <td>15.77</td>
+      <td>19.94</td>
+      <td>1.28</td>
+      <td>8</td>
+      <td>4</td>
+      <td>11</td>
+      <td>sz002368,sh600597,sz000951,sh600184,sh600801,sh603327,sh600330,sz000935</td>
+      <td>太极股份、光明乳业、中国重汽、光电股份、华新建材、福蓉科技、天通股份、四川双马</td>
+    </tr>
+    <tr>
+      <td>2024</td>
+      <td>2025</td>
+      <td>8</td>
+      <td>24.16</td>
+      <td>16.22</td>
+      <td>7.09</td>
+      <td>1.90</td>
+      <td>8</td>
+      <td>8</td>
+      <td>11</td>
+      <td>sz002368,sh600597,sh600184,sh600330,sh603327,sh600801,sh600273,sz000058</td>
+      <td>太极股份、光明乳业、光电股份、天通股份、福蓉科技、华新建材、嘉化能源、深赛格</td>
+    </tr>
+    <tr>
+      <td>2025</td>
+      <td>2026</td>
+      <td>8</td>
+      <td>16.67</td>
+      <td>-0.17</td>
+      <td>13.75</td>
+      <td>1.54</td>
+      <td>4</td>
+      <td>5</td>
+      <td>7</td>
+      <td>sh600597,sz002368,sh603327,sh600184,sh603328,sz002065,sh600330,sh600552</td>
+      <td>光明乳业、太极股份、福蓉科技、光电股份、依顿电子、东华软件、天通股份、凯盛科技</td>
+    </tr>
+  </tbody>
+</table>
+<p style="color:#888;font-size:12px">研究用途，不构成投资建议。</p>
+</body></html>

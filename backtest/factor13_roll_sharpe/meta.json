@@ -1,0 +1,79 @@
+{
+  "best": {
+    "name": "rollSh_Top5_[1.0,2.2]",
+    "train_avg_ret": 12.271778388218696,
+    "train_avg_med": 3.500090521866059,
+    "blind_ret": 35.902712907330226,
+    "blind_med": 19.465837073467227,
+    "blind_mdd": 12.835331521578286,
+    "blind_n": 5,
+    "blind_symbols": "sz001309,sz001203,sz002396,sz000880,sz000506"
+  },
+  "quarterly": {
+    "ret": 15.67529783266659,
+    "mdd": 26.950127146437087,
+    "sharpe": 1.0674128179967335
+  },
+  "summary": [
+    {
+      "name": "rollSh_Top3_[1.0,2.2]",
+      "train_avg_ret": 18.730164393702417,
+      "train_avg_med": 5.948843896848606,
+      "blind_ret": 19.053825040383465,
+      "blind_med": 12.479438810881183,
+      "blind_mdd": 16.09187349924198,
+      "blind_n": 3,
+      "blind_symbols": "sz001309,sz001203,sz002396"
+    },
+    {
+      "name": "rollSh_Top5_[0.8,2.5]",
+      "train_avg_ret": 17.759802640920448,
+      "train_avg_med": 7.7278767659430985,
+      "blind_ret": 13.726594181802799,
+      "blind_med": 22.811014395997642,
+      "blind_mdd": 25.16124562179919,
+      "blind_n": 5,
+      "blind_symbols": "sz002779,sh600105,sz002636,sh603766,sz001309"
+    },
+    {
+      "name": "rollSh_Top5_[1.0,2.2]",
+      "train_avg_ret": 12.271778388218696,
+      "train_avg_med": 3.500090521866059,
+      "blind_ret": 35.902712907330226,
+      "blind_med": 19.465837073467227,
+      "blind_mdd": 12.835331521578286,
+      "blind_n": 5,
+      "blind_symbols": "sz001309,sz001203,sz002396,sz000880,sz000506"
+    },
+    {
+      "name": "rollSh_Top5_[1.0,2.2]_mdd18_35",
+      "train_avg_ret": 1.773232540937375,
+      "train_avg_med": 1.2734761019502643,
+      "blind_ret": 4.017376655920657,
+      "blind_med": -1.3343189101158615,
+      "blind_mdd": 19.6831694303948,
+      "blind_n": 5,
+      "blind_symbols": "sz001309,sz001203,sz000880,sz002518,sz002048"
+    },
+    {
+      "name": "rollSh_Top5_[1.2,2.0]",
+      "train_avg_ret": 5.149546033917265,
+      "train_avg_med": 4.223736523839718,
+      "blind_ret": -3.9497911181784695,
+      "blind_med": -20.612223970085598,
+      "blind_mdd": 19.53438607086876,
+      "blind_n": 5,
+      "blind_symbols": "sh603698,sz002545,sh600268,sz002048,sz000960"
+    },
+    {
+      "name": "rollSh_Top8_[0.8,2.5]",
+      "train_avg_ret": 12.642884502572551,
+      "train_avg_med": 4.964215469410647,
+      "blind_ret": 14.752820953767065,
+      "blind_med": 15.972637942174206,
+      "blind_mdd": 18.548353920686587,
+      "blind_n": 8,
+      "blind_symbols": "sz002779,sh600105,sz002636,sh603766,sz001309,sz001203,sz002396,sz000880"
+    }
+  ]
+}

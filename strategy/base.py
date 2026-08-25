@@ -91,6 +91,191 @@ def run_akquant_backtest(
     )
 
 
+def _open_trades_from_executions(result: BacktestResult) -> pd.DataFrame:
+    """从未配对成交推断期末未平仓，补成 trades 行（仅有 entry，无 exit）。
+
+    akquant 原生 K 线买卖点只读 ``trades_df``（闭环），期末仍持仓的买入会漏画。
+    """
+    exec_df = getattr(result, "executions_df", None)
+    if exec_df is None or getattr(exec_df, "empty", True):
+        return pd.DataFrame()
+    if "side" not in exec_df.columns or "timestamp" not in exec_df.columns:
+        return pd.DataFrame()
+
+    df = exec_df.copy()
+    df["side"] = df["side"].astype(str).str.lower().str.strip()
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    df = df.dropna(subset=["timestamp"]).sort_values("timestamp")
+    if df.empty:
+        return pd.DataFrame()
+
+    rows: list[dict[str, Any]] = []
+    for sym, g in df.groupby(df["symbol"].astype(str), sort=False):
+        pos = 0.0
+        entry_time = None
+        entry_price = None
+        entry_qty = 0.0
+        entry_comm = 0.0
+        for _, ex in g.iterrows():
+            side = str(ex["side"])
+            qty = float(pd.to_numeric(ex.get("quantity"), errors="coerce") or 0.0)
+            px = float(pd.to_numeric(ex.get("price"), errors="coerce") or float("nan"))
+            comm = float(
+                pd.to_numeric(ex.get("commission"), errors="coerce") or 0.0
+            )
+            if qty <= 0 or px != px:
+                continue
+            if side == "buy":
+                if pos <= 1e-12:
+                    entry_time = ex["timestamp"]
+                    entry_price = px
+                    entry_qty = qty
+                    entry_comm = comm
+                else:
+                    # 加仓：按数量加权均价
+                    new_qty = entry_qty + qty
+                    entry_price = (entry_price * entry_qty + px * qty) / new_qty
+                    entry_qty = new_qty
+                    entry_comm += comm
+                pos += qty
+            elif side == "sell":
+                pos -= qty
+                if pos <= 1e-12:
+                    pos = 0.0
+                    entry_time = None
+                    entry_price = None
+                    entry_qty = 0.0
+                    entry_comm = 0.0
+        if pos > 1e-12 and entry_time is not None and entry_price is not None:
+            rows.append(
+                {
+                    "symbol": str(sym),
+                    "entry_time": entry_time,
+                    "exit_time": pd.NaT,
+                    "entry_price": float(entry_price),
+                    "exit_price": float("nan"),
+                    "quantity": float(pos),
+                    "side": "Long",
+                    "pnl": float("nan"),
+                    "net_pnl": float("nan"),
+                    "return_pct": float("nan"),
+                    "commission": float(entry_comm),
+                    "duration_bars": float("nan"),
+                    "duration": pd.NaT,
+                    "mae": float("nan"),
+                    "mfe": float("nan"),
+                    "entry_tag": "open",
+                    "exit_tag": "持仓中",
+                    "entry_portfolio_value": float("nan"),
+                    "max_drawdown_pct": float("nan"),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def _install_report_open_trade_patches() -> None:
+    """分析图只统计闭环；K 线卖点跳过无 exit 的持仓行。"""
+    try:
+        from akquant.plot import analysis as analysis_mod
+        from akquant.plot import strategy as strategy_mod
+    except ImportError:
+        return
+
+    if getattr(analysis_mod, "_myquan_closed_only_patch", False):
+        return
+
+    def _closed_only(trades_df: pd.DataFrame | None) -> pd.DataFrame | None:
+        if trades_df is None or getattr(trades_df, "empty", True):
+            return trades_df
+        if "exit_time" not in trades_df.columns:
+            return trades_df
+        return trades_df[pd.to_datetime(trades_df["exit_time"], errors="coerce").notna()]
+
+    _dist = analysis_mod.plot_trades_distribution
+    _dur = analysis_mod.plot_pnl_vs_duration
+
+    def _dist_patched(trades_df, *args, **kwargs):
+        return _dist(_closed_only(trades_df), *args, **kwargs)
+
+    def _dur_patched(trades_df, *args, **kwargs):
+        return _dur(_closed_only(trades_df), *args, **kwargs)
+
+    analysis_mod.plot_trades_distribution = _dist_patched  # type: ignore[assignment]
+    analysis_mod.plot_pnl_vs_duration = _dur_patched  # type: ignore[assignment]
+    analysis_mod._myquan_closed_only_patch = True
+
+    _plot_strategy = strategy_mod.plot_strategy
+
+    def _plot_strategy_patched(result, symbol, data, **kwargs):
+        # 让卖点 scatter 丢掉未平仓行（exit_time 为空）
+        trades = getattr(result, "trades_df", None)
+        restore = None
+        if (
+            isinstance(trades, pd.DataFrame)
+            and not trades.empty
+            and "exit_time" in trades.columns
+        ):
+            # plot_strategy 读 result.trades_df；临时换成「买点含开仓、卖点仅闭环」
+            # 买点：全部（含开仓）；卖点：仅有 exit 的行 → 通过两次绘制不好拆，
+            # 这里保持 trades_df 含开仓，并在内部对 exit 过滤靠 NaT 跳过。
+            # Plotly 对 NaT x 会丢点；再保险地预过滤：复制一份把开仓 exit 留 NaT。
+            restore = trades
+        fig = _plot_strategy(result, symbol, data, **kwargs)
+        if restore is not None and fig is not None:
+            # 去掉误画的 NaT 卖点（若有）
+            try:
+                for tr in fig.data:
+                    name = str(getattr(tr, "name", "") or "")
+                    if name.lower() == "exit" and hasattr(tr, "x"):
+                        xs = list(tr.x or [])
+                        ys = list(tr.y or [])
+                        keep_x, keep_y = [], []
+                        keep_text, keep_cd = [], []
+                        texts = list(getattr(tr, "text", None) or [None] * len(xs))
+                        cds = list(getattr(tr, "customdata", None) or [None] * len(xs))
+                        for i, x in enumerate(xs):
+                            if x is None or (isinstance(x, float) and x != x):
+                                continue
+                            if pd.isna(x):
+                                continue
+                            keep_x.append(x)
+                            keep_y.append(ys[i] if i < len(ys) else None)
+                            keep_text.append(texts[i] if i < len(texts) else None)
+                            keep_cd.append(cds[i] if i < len(cds) else None)
+                        tr.x = keep_x
+                        tr.y = keep_y
+                        if getattr(tr, "text", None) is not None:
+                            tr.text = keep_text
+                        if getattr(tr, "customdata", None) is not None:
+                            tr.customdata = keep_cd
+            except Exception:
+                pass
+        return fig
+
+    strategy_mod.plot_strategy = _plot_strategy_patched  # type: ignore[assignment]
+
+
+def attach_open_trades_for_report(result: BacktestResult) -> int:
+    """把未平仓买入并入 ``trades_df``，供报告 K 线画出最后买点。返回补入笔数。"""
+    opens = _open_trades_from_executions(result)
+    if opens.empty:
+        return 0
+    closed = getattr(result, "trades_df", pd.DataFrame())
+    if closed is None or getattr(closed, "empty", True):
+        merged = opens.copy()
+    else:
+        # 对齐列
+        for col in closed.columns:
+            if col not in opens.columns:
+                opens[col] = pd.NA
+        opens = opens.reindex(columns=list(closed.columns), fill_value=pd.NA)
+        merged = pd.concat([closed, opens], ignore_index=True)
+    # cached_property：写入 __dict__ 覆盖
+    result.__dict__["trades_df"] = merged
+    _install_report_open_trade_patches()
+    return int(len(opens))
+
+
 def run_backtest_pipeline(
     *,
     params: CommonBacktestParams | Any,
@@ -146,8 +331,11 @@ def run_backtest_pipeline(
 
     if params.report_path is not None:
         title = report_title or f"{params.symbol_name} ({params.start_date}~{params.end_date})"
+        n_open = attach_open_trades_for_report(result)
         if verbose:
             print(f"\n生成 HTML: {params.report_path}")
+            if n_open:
+                print(f"报告补画未平仓买入 {n_open} 笔")
         result.viz.report(
             title=title,
             filename=str(params.report_path),

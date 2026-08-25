@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"/>
+<title>因子13 质量带优化</title>
+<style>
+body{font-family:PingFang SC,Helvetica,sans-serif;background:#0f1115;color:#e8eaed;padding:28px}
+.wrap{max-width:1100px;margin:0 auto}.meta{color:#9aa3b2}
+.card{background:#171a21;border:1px solid #2a2f3a;border-radius:10px;padding:14px;margin:14px 0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat{background:#171a21;border:1px solid #2a2f3a;border-radius:10px;padding:12px}
+.stat .v{font-size:1.35rem;font-weight:650;color:#3dd68c}.stat .l{color:#9aa3b2;font-size:.8rem}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th,td{padding:6px 8px;border-bottom:1px solid #2a2f3a;text-align:right}
+th:first-child,td:first-child,td:nth-child(7){text-align:left} th{color:#9aa3b2}
+.callout{border-left:3px solid #3d8bfd;padding:10px 14px;background:#171a21}
+</style></head><body><div class="wrap">
+<h1>因子13 · 质量带优化（夏普适中 + 回撤带 + 半回撤）</h1>
+<p class="meta">阈值 2.5%/3%/择优 · 调参 2020→2025 · 盲测 2025→2026 · 非投资建议</p>
+<div class="callout"><b>最优：</b>±2.5% · score_quality Top8 · 夏普[1.0,2.2] · 回撤[18.0,32.0] · dd_ratio≤0.55</div>
+<div class="stats">
+<div class="stat"><div class="v">31.0%</div><div class="l">调参窗均收益</div></div>
+<div class="stat"><div class="v">20.3%</div><div class="l">调参窗均中位</div></div>
+<div class="stat"><div class="v">26.4pp</div><div class="l">相对全池</div></div>
+<div class="stat"><div class="v">3.5%</div><div class="l">盲测2026等权 / 中位 -5.0%</div></div>
+</div>
+<div class="card"><h3>网格 Top12</h3>
+<table><thead><tr><th>阈值</th><th>排序</th><th>K</th><th>夏普带</th><th>回撤带</th><th>dd比值≤</th><th>均收益</th><th>均中位</th><th>vs全池</th><th>胜年</th><th>score</th></tr></thead>
+<tbody><tr><td>best</td><td>score_fit</td><td>3</td><td>0.5-2.0</td><td>18.0-32.0</td><td>0.55</td><td>59.6</td><td>36.2</td><td>47.6</td><td>4/5</td><td>55.11</td></tr><tr><td>best</td><td>score_fit</td><td>3</td><td>0.8-2.0</td><td>18.0-32.0</td><td>0.55</td><td>59.6</td><td>36.2</td><td>47.6</td><td>4/5</td><td>55.11</td></tr><tr><td>best</td><td>excess</td><td>3</td><td>0.7-1.8</td><td>18.0-32.0</td><td>0.6</td><td>54.3</td><td>46.5</td><td>42.3</td><td>4/5</td><td>54.79</td></tr><tr><td>best</td><td>excess</td><td>3</td><td>0.7-1.8</td><td>18.0-32.0</td><td>0.55</td><td>54.2</td><td>46.5</td><td>42.2</td><td>4/5</td><td>54.68</td></tr><tr><td>best</td><td>excess</td><td>3</td><td>0.7-1.8</td><td>20.0-30.0</td><td>0.6</td><td>54.0</td><td>45.5</td><td>42.0</td><td>4/5</td><td>54.09</td></tr><tr><td>best</td><td>excess</td><td>3</td><td>0.7-1.8</td><td>20.0-30.0</td><td>0.55</td><td>52.9</td><td>45.5</td><td>40.9</td><td>3/5</td><td>52.67</td></tr><tr><td>best</td><td>score_fit</td><td>3</td><td>0.7-1.8</td><td>20.0-30.0</td><td>0.55</td><td>52.3</td><td>43.2</td><td>40.2</td><td>4/5</td><td>51.68</td></tr><tr><td>best</td><td>excess</td><td>3</td><td>1.0-2.2</td><td>18.0-32.0</td><td>0.55</td><td>53.4</td><td>38.6</td><td>41.4</td><td>3/5</td><td>50.34</td></tr><tr><td>best</td><td>excess</td><td>3</td><td>0.7-1.8</td><td>15.0-35.0</td><td>0.55</td><td>52.0</td><td>37.5</td><td>40.0</td><td>4/5</td><td>49.23</td></tr><tr><td>best</td><td>excess</td><td>3</td><td>0.7-1.8</td><td>15.0-35.0</td><td>0.6</td><td>51.0</td><td>37.5</td><td>39.0</td><td>4/5</td><td>48.38</td></tr><tr><td>best</td><td>score_fit</td><td>3</td><td>1.0-2.2</td><td>18.0-32.0</td><td>0.55</td><td>49.5</td><td>35.7</td><td>37.5</td><td>4/5</td><td>46.34</td></tr><tr><td>0.025</td><td>score_quality</td><td>3</td><td>0.5-2.0</td><td>15.0-35.0</td><td>0.5</td><td>38.7</td><td>36.1</td><td>34.0</td><td>4/5</td><td>44.64</td></tr></tbody></table></div>
+<div class="card"><h3>最优参数逐年</h3>
+<table><thead><tr><th>年</th><th>N</th><th>等权%</th><th>中位%</th><th>vs全池</th><th>均回撤</th><th>名单</th></tr></thead>
+<tbody><tr><td>2020→2021</td><td>8</td><td>13.0</td><td>13.8</td><td>8.2</td><td>31.9</td><td>sz002488,sh603888,sh603055,sh600996,sh603026,sz000828,sh603393,sh600641</td></tr><tr><td>2021→2022</td><td>8</td><td>31.4</td><td>24.7</td><td>40.3</td><td>31.6</td><td>sz000009,sz002965,sz002335,sz000672,sz000737,sh603063,sz003022,sh600338</td></tr><tr><td>2022→2023</td><td>8</td><td>3.3</td><td>-16.0</td><td>7.9</td><td>27.8</td><td>sh600338,sh600869,sz002335,sh600521,sz000628,sz002922,sz002085,sh600056</td></tr><tr><td>2023→2024</td><td>5</td><td>56.3</td><td>63.3</td><td>35.9</td><td>29.5</td><td>sz002368,sz002315,sz002881,sh603516,sz002281</td></tr><tr><td>2024→2025</td><td>8</td><td>51.1</td><td>15.7</td><td>39.6</td><td>28.4</td><td>sh603728,sz002549,sh600133,sz002335,sh601595,sz002338,sz002636,sh600641</td></tr><tr><td>2025→2026</td><td>4</td><td>3.5</td><td>-5.0</td><td>7.6</td><td>33.1</td><td>sz002065,sh603920,sz000880,sh601020</td></tr></tbody></table></div>
+</div></body></html>

@@ -1,0 +1,93 @@
+{
+  "thr_fit": "2020-2025",
+  "score_fit_end": 2025,
+  "oos_a": [
+    "2025-01-01",
+    "2026-08-25"
+  ],
+  "oos_b": [
+    "2026-01-01",
+    "2026-08-25"
+  ],
+  "params": {
+    "rule": "qy_blend",
+    "top_k": 3,
+    "fit_start_year": 2020,
+    "own_bear_bh": -5.0,
+    "own_bull_bh": 15.0,
+    "quarter_bear_bh": -5.0,
+    "min_obear": 1,
+    "min_obear_ret": -10.0,
+    "min_obear_ex": 0.0,
+    "min_obear_ex_floor": -15.0,
+    "min_q_obear": 2,
+    "min_q_ex": 0.0,
+    "min_ret_mean": 5.0,
+    "min_obull_ret": 0.0,
+    "require_obull_if_any": true,
+    "w_bull_score": 1.0,
+    "min_obear_ex_sh": 8.0,
+    "min_obear_hit": 0.5,
+    "sharpe_lo": 0.3,
+    "sharpe_hi": 1.8,
+    "thr": 0.025,
+    "use_per_stock_thr": true,
+    "thr_candidates": [
+      0.02,
+      0.025,
+      0.03
+    ],
+    "mainboard_only": true
+  },
+  "pin_thr": {
+    "sh600330": 0.03
+  },
+  "oos_a_stats": {
+    "ret": 218.42545373486067,
+    "mdd": 16.890541900983546,
+    "sharpe": 2.6808915220111333
+  },
+  "oos_b_stats": {
+    "ret": 43.43769040848835,
+    "mdd": 16.890541900983592,
+    "sharpe": 1.9613151145630716
+  },
+  "legacy_2025_2026": {
+    "ret": 176.9194866832303,
+    "mdd": 15.47063333127171,
+    "sharpe": 2.7869195071722728
+  },
+  "legacy_2026": {
+    "ret": 69.06658972251019,
+    "mdd": 15.4706333312717,
+    "sharpe": 3.11847573543826
+  },
+  "legacy_names": [
+    "东材科技",
+    "依顿电子",
+    "西藏珠峰",
+    "凯盛科技",
+    "冰轮环境"
+  ],
+  "picks": [
+    {
+      "symbol": "sh601208",
+      "name": "东材科技",
+      "thr": 0.025,
+      "score": 12.56832298136646
+    },
+    {
+      "symbol": "sh603929",
+      "name": "亚翔集成",
+      "thr": 0.025,
+      "score": 12.31055900621118
+    },
+    {
+      "symbol": "sh600338",
+      "name": "西藏珠峰",
+      "thr": 0.025,
+      "score": 11.885093167701864
+    }
+  ],
+  "note": "thr fit window includes 2025; 2025-2026 OOS partially overlaps thr fit"
+}

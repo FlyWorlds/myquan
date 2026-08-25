@@ -1,0 +1,46 @@
+{
+  "version": "quality_v3_recommended",
+  "signal": "score_quality",
+  "top_k": 10,
+  "min_sharpe": 1.0,
+  "max_sharpe": 2.2,
+  "mdd_lo": 18.0,
+  "mdd_hi": 32.0,
+  "dd_ratio_max": 0.55,
+  "thr_mode": "0.025",
+  "threshold_pct": 0.025,
+  "mainboard_only": true,
+  "timing": "year_t_quality_band_hold_year_t_plus_1",
+  "label": "±2.5% · score_quality Top10 · 夏普[1.0,2.2](+放宽补齐) · 回撤带+dd_ratio · 支持季度滚动",
+  "note": "硬过滤：夏普适中、策略回撤带、dd_ratio≤持有回撤比例；排序 score_quality；Top8。严格20-30+0.50 在部分年份候选不足。",
+  "fill_bands": [
+    {
+      "min_sharpe": 1.0,
+      "max_sharpe": 2.2,
+      "mdd_lo": 18,
+      "mdd_hi": 32,
+      "dd_ratio_max": 0.55
+    },
+    {
+      "min_sharpe": 0.8,
+      "max_sharpe": 2.5,
+      "mdd_lo": 15,
+      "mdd_hi": 35,
+      "dd_ratio_max": 0.65
+    },
+    {
+      "min_sharpe": 0.5,
+      "max_sharpe": 3.0,
+      "mdd_lo": 12,
+      "mdd_hi": 40,
+      "dd_ratio_max": 0.8
+    },
+    {
+      "min_sharpe": 0.3,
+      "max_sharpe": 3.5,
+      "mdd_lo": 10,
+      "mdd_hi": 45,
+      "dd_ratio_max": 1.0
+    }
+  ]
+}

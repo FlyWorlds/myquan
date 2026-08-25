@@ -1,0 +1,22 @@
+{
+  "cfg": {
+    "rule": "bear_abs_pos_floor",
+    "top_k": 3,
+    "fit_start": 2018,
+    "freq": "annual",
+    "weight_mode": "score",
+    "min_obear": 2,
+    "min_obear_ex": 5.0,
+    "min_q_obear": 0,
+    "min_q_ex": 0.0
+  },
+  "train_ret": 9.60894728905999,
+  "valid_ret": 13.312905108306795,
+  "blind_2025": -5.894437015196763,
+  "blind_2026": -11.679991410322632,
+  "slot": {
+    "ret": 1.636159795144465,
+    "mdd": 37.16063330204976,
+    "sharpe": 0.11580497708759178
+  }
+}

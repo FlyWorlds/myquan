@@ -1,0 +1,53 @@
+{
+  "factor": "factor13_sharpe_vol",
+  "top_k": 8,
+  "params": {
+    "top_k": 8,
+    "min_years": 5,
+    "min_sharpe_mean": 0.45,
+    "max_sharpe_mean": 2.0,
+    "sharpe_vol_lo": 0.25,
+    "sharpe_vol_hi": 0.95,
+    "vol_sweet": 0.5,
+    "vol_width": 0.35,
+    "min_pos_yr": 0.5,
+    "min_pos_ex": 0.4,
+    "mainboard_only": 1,
+    "thr": 0.025,
+    "fit_years": [
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ]
+  },
+  "universe": {
+    "universe": "CSI500 ∪ CSI1000 mainboard (≈CSI1500 mid-small, no ChiNext/STAR/ST)",
+    "n_symbols": 1004,
+    "by_index": {
+      "中证1000": 645,
+      "中证500": 359
+    },
+    "note": "官方无独立「中证1500」成分文件；本池为 500+1000 主板并集。"
+  },
+  "oos": {
+    "start": "20260101",
+    "end": "20260825",
+    "ret": 16.672937359120453,
+    "mdd": 13.747421156466878,
+    "sharpe": 1.544613230118996,
+    "n": 8
+  },
+  "picks": [
+    "sh600597",
+    "sz002368",
+    "sh603327",
+    "sh600184",
+    "sh603328",
+    "sz002065",
+    "sh600330",
+    "sh600552"
+  ]
+}

@@ -1,0 +1,177 @@
+{
+  "top_k": 10,
+  "params": {
+    "rule": "qy_blend",
+    "top_k": 10,
+    "fit_start_year": 2020,
+    "own_bear_bh": -5.0,
+    "own_bull_bh": 15.0,
+    "quarter_bear_bh": -5.0,
+    "min_obear": 2,
+    "min_obear_ret": -5.0,
+    "min_obear_ex": 2.0,
+    "min_obear_ex_floor": -10.0,
+    "min_q_obear": 2,
+    "min_q_ex": 0.0,
+    "min_ret_mean": 5.0,
+    "min_obull_ret": 0.0,
+    "require_obull_if_any": true,
+    "w_bull_score": 0.5,
+    "stability_lookback": 2,
+    "stability_pool": 25,
+    "stability_min_hits": 2,
+    "min_obear_ex_sh": 8.0,
+    "min_obear_hit": 0.5,
+    "sharpe_lo": 0.3,
+    "sharpe_hi": 1.8,
+    "thr": 0.025,
+    "use_per_stock_thr": false,
+    "thr_candidates": [
+      0.02,
+      0.025,
+      0.03
+    ],
+    "mainboard_only": true
+  },
+  "stitch": {
+    "ret": 155.05971880584295,
+    "mdd": 34.38478995852699,
+    "sharpe": 1.288087032506826
+  },
+  "yearly": [
+    {
+      "trade_year": 2023,
+      "fit_end": 2022,
+      "ret": 30.725743131833426,
+      "mdd": 28.670068822394345,
+      "sharpe": 1.0362286982655795,
+      "n": 2
+    },
+    {
+      "trade_year": 2024,
+      "fit_end": 2023,
+      "ret": 13.532478422699468,
+      "mdd": 21.504474098146808,
+      "sharpe": 0.7453793598118987,
+      "n": 10
+    },
+    {
+      "trade_year": 2025,
+      "fit_end": 2024,
+      "ret": 23.482478233814174,
+      "mdd": 11.940236491180888,
+      "sharpe": 1.6282943918310897,
+      "n": 10
+    },
+    {
+      "trade_year": 2026,
+      "fit_end": 2025,
+      "ret": 39.173100195137465,
+      "mdd": 12.296504363426298,
+      "sharpe": 2.777803046038801,
+      "n": 10
+    }
+  ],
+  "picks_2026": [
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 1,
+      "symbol": "sh601208",
+      "name": "东材科技",
+      "thr": 0.025,
+      "score": 11.617424242424244,
+      "stab_hits": 2
+    },
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 2,
+      "symbol": "sh600338",
+      "name": "西藏珠峰",
+      "thr": 0.025,
+      "score": 10.969696969696969,
+      "stab_hits": 2
+    },
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 3,
+      "symbol": "sh603328",
+      "name": "依顿电子",
+      "thr": 0.025,
+      "score": 10.799242424242422,
+      "stab_hits": 2
+    },
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 4,
+      "symbol": "sh600552",
+      "name": "凯盛科技",
+      "thr": 0.025,
+      "score": 10.231060606060606,
+      "stab_hits": 2
+    },
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 5,
+      "symbol": "sz000058",
+      "name": "深赛格",
+      "thr": 0.025,
+      "score": 10.155303030303031,
+      "stab_hits": 2
+    },
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 6,
+      "symbol": "sz000811",
+      "name": "冰轮环境",
+      "thr": 0.025,
+      "score": 10.041666666666666,
+      "stab_hits": 2
+    },
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 7,
+      "symbol": "sh603027",
+      "name": "千禾味业",
+      "thr": 0.025,
+      "score": 9.833333333333336,
+      "stab_hits": 2
+    },
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 8,
+      "symbol": "sz002636",
+      "name": "金安国纪",
+      "thr": 0.025,
+      "score": 9.647727272727273,
+      "stab_hits": 2
+    },
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 9,
+      "symbol": "sh600877",
+      "name": "电科芯片",
+      "thr": 0.025,
+      "score": 9.53030303030303,
+      "stab_hits": 2
+    },
+    {
+      "trade_year": 2026,
+      "fit_end_year": 2025,
+      "rank": 10,
+      "symbol": "sz002099",
+      "name": "海翔药业",
+      "thr": 0.025,
+      "score": 9.227272727272728,
+      "stab_hits": 2
+    }
+  ]
+}

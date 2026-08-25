@@ -1,0 +1,157 @@
+<!DOCTYPE html><html><head><meta charset=utf-8><title>换股周期</title>
+<style>
+body{font-family:-apple-system,sans-serif;max-width:980px;margin:24px auto;padding:0 16px}
+table{border-collapse:collapse;width:100%;font-size:13px} th,td{border:1px solid #ddd;padding:6px;text-align:right}
+th{background:#f5f5f5} td:first-child,th:first-child{text-align:left}
+.kpi{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0} .kpi div{background:#f7f7f7;padding:12px;border-radius:8px}
+.pos{color:#0a7} note{color:#666;font-size:13px}
+</style></head><body>
+<h1>换股周期 · 等止损再换</h1>
+<p>选股：qy_blend Top5。持仓：只按开盘突破止损卖；空仓槽再接入最新目标池。</p>
+<div class=kpi>
+<div><b>推荐刷新</b><br>年频（足够）</div>
+<div><b>槽位全段</b><br><span class=pos>+134.0%</span></div>
+<div><b>研究EW全段</b><br><span class=pos>+213.8%</span></div>
+<div><b>槽位2026</b><br><span class=pos>+53.2%</span></div>
+</div>
+<h2>关键结论</h2>
+<ul>
+<li>qy_blend 名单<strong>只在每年1月变一次</strong>（月/季刷新名单不变）→ 月频换股无额外收益。</li>
+<li>实操推荐：<strong>每年末/年初重算目标池</strong>；持仓等止损后再换到新池。</li>
+<li>槽位等止损换 全段 +134.0% / 回撤 33.9%；同名单「票内独立等权」研究口径 +213.8% / 回撤 27.8%（槽位因空窗与再分配略低）。</li>
+<li>平均持仓槽约 3.1/5；止损约 509 次。</li>
+</ul>
+<h2>执行方式对比</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>mode</th>
+      <th>ret</th>
+      <th>mdd</th>
+      <th>sharpe</th>
+      <th>ret_2026</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>年频选股+槽位等止损换</td>
+      <td>133.98</td>
+      <td>33.91</td>
+      <td>1.21</td>
+      <td>53.20</td>
+    </tr>
+    <tr>
+      <td>年频选股+票内独立等权(研究)</td>
+      <td>213.80</td>
+      <td>27.79</td>
+      <td>1.84</td>
+      <td>69.05</td>
+    </tr>
+  </tbody>
+</table>
+<h2>刷新频率（槽位结果相同）</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>freq</th>
+      <th>ret_2023_now</th>
+      <th>mdd</th>
+      <th>sharpe</th>
+      <th>ret_2026</th>
+      <th>mdd_2026</th>
+      <th>n_buys</th>
+      <th>n_stops</th>
+      <th>n_assigns</th>
+      <th>avg_held</th>
+      <th>turnover_proxy</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>month</td>
+      <td>133.98</td>
+      <td>33.91</td>
+      <td>1.21</td>
+      <td>53.2</td>
+      <td>19.09</td>
+      <td>512</td>
+      <td>509</td>
+      <td>516</td>
+      <td>3.07</td>
+      <td>509</td>
+    </tr>
+    <tr>
+      <td>quarter</td>
+      <td>133.98</td>
+      <td>33.91</td>
+      <td>1.21</td>
+      <td>53.2</td>
+      <td>19.09</td>
+      <td>512</td>
+      <td>509</td>
+      <td>516</td>
+      <td>3.07</td>
+      <td>509</td>
+    </tr>
+    <tr>
+      <td>semi</td>
+      <td>133.98</td>
+      <td>33.91</td>
+      <td>1.21</td>
+      <td>53.2</td>
+      <td>19.09</td>
+      <td>512</td>
+      <td>509</td>
+      <td>516</td>
+      <td>3.07</td>
+      <td>509</td>
+    </tr>
+    <tr>
+      <td>year</td>
+      <td>133.98</td>
+      <td>33.91</td>
+      <td>1.21</td>
+      <td>53.2</td>
+      <td>19.09</td>
+      <td>512</td>
+      <td>509</td>
+      <td>516</td>
+      <td>3.07</td>
+      <td>509</td>
+    </tr>
+  </tbody>
+</table>
+<h2>名单稳定度</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>freq</th>
+      <th>avg_jaccard</th>
+      <th>n_periods</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>month</td>
+      <td>0.962</td>
+      <td>45</td>
+    </tr>
+    <tr>
+      <td>quarter</td>
+      <td>0.882</td>
+      <td>15</td>
+    </tr>
+    <tr>
+      <td>semi</td>
+      <td>0.764</td>
+      <td>8</td>
+    </tr>
+    <tr>
+      <td>year</td>
+      <td>0.448</td>
+      <td>4</td>
+    </tr>
+  </tbody>
+</table>
+<p style=color:#888;font-size:12px>研究用途，不构成投资建议。</p>
+</body></html>

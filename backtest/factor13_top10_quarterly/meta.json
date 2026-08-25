@@ -1,0 +1,80 @@
+{
+  "top_k": 10,
+  "threshold": 0.025,
+  "bands": [
+    {
+      "min_sharpe": 1.0,
+      "max_sharpe": 2.2,
+      "mdd_lo": 18,
+      "mdd_hi": 32,
+      "dd_ratio_max": 0.55
+    },
+    {
+      "min_sharpe": 0.8,
+      "max_sharpe": 2.5,
+      "mdd_lo": 15,
+      "mdd_hi": 35,
+      "dd_ratio_max": 0.65
+    },
+    {
+      "min_sharpe": 0.5,
+      "max_sharpe": 3.0,
+      "mdd_lo": 12,
+      "mdd_hi": 40,
+      "dd_ratio_max": 0.8
+    },
+    {
+      "min_sharpe": 0.3,
+      "max_sharpe": 3.5,
+      "mdd_lo": 10,
+      "mdd_hi": 45,
+      "dd_ratio_max": 1.0
+    }
+  ],
+  "yearly_port": {
+    "ret": -0.913202503295607,
+    "mdd": 25.28548321031694,
+    "sharpe": -0.06730309433697208
+  },
+  "quarterly_port": {
+    "ret": 1.3736485949504607,
+    "mdd": 18.57262923486509,
+    "sharpe": 0.13540022183472417
+  },
+  "yearly_n": 10,
+  "quarterly_wf": [
+    {
+      "select_period": "2025Q4",
+      "hold_start": "20260101",
+      "hold_end": "20260331",
+      "n_picks": 10,
+      "symbols": "sh600353,sz002364,sh603327,sz002654,sz000048,sz002812,sh603026,sh601212,sz000620,sz001309",
+      "ret": 11.76465072802415,
+      "mdd": 7.994236117359144,
+      "sharpe": 3.4730187982069314,
+      "med_ret": 10.01614027931883
+    },
+    {
+      "select_period": "2026Q1",
+      "hold_start": "20260401",
+      "hold_end": "20260630",
+      "n_picks": 10,
+      "symbols": "sz002400,sh600961,sh600783,sh600637,sz002639,sh600435,sh601399,sz002044,sz000880,sh601611",
+      "ret": -4.321194306168364,
+      "mdd": 9.542629144370707,
+      "sharpe": -1.0231863817986715,
+      "med_ret": -6.240209308452904
+    },
+    {
+      "select_period": "2026Q2",
+      "hold_start": "20260701",
+      "hold_end": "20260825",
+      "n_picks": 10,
+      "symbols": "sh601975,sz000967,sh603220,sz000506,sh600338,sz002497,sz000600,sz002706,sz002015,sh603009",
+      "ret": -5.200757556127411,
+      "mdd": 11.517563843574298,
+      "sharpe": -2.0778372451914207,
+      "med_ret": -8.56344239880194
+    }
+  ]
+}

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>策略一·因子1 分年对照报告 | 天通 / 凯盛</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e8eaed;
+    --muted: #9aa3b2;
+    --accent: #3d8bfd;
+    --good: #3dd68c;
+    --bad: #f07178;
+    --warn: #e6c07b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    padding: 32px 24px 64px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 1.75rem; font-weight: 650; margin: 0 0 8px; }
+  h2 { font-size: 1.2rem; margin: 36px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 1rem; margin: 20px 0 8px; color: var(--muted); font-weight: 600; }
+  .meta { color: var(--muted); font-size: 0.9rem; margin-bottom: 16px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 20px; }
+  .pill {
+    font-size: 0.78rem; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--panel);
+  }
+  .pill.good { color: var(--good); border-color: #2a5a40; }
+  .pill.bad { color: var(--bad); border-color: #5a2a30; }
+  .pill.warn { color: var(--warn); border-color: #5a4a2a; }
+  .callout {
+    background: var(--panel); border: 1px solid #2a5a40; border-left: 3px solid var(--good);
+    padding: 14px 16px; border-radius: 8px; margin: 16px 0;
+  }
+  .callout.warn { border-color: #5a4a2a; border-left-color: var(--warn); }
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0;
+  }
+  @media (max-width: 800px) { .stats { grid-template-columns: 1fr 1fr; } }
+  .stat {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+  }
+  .stat .v { font-size: 1.55rem; font-weight: 650; letter-spacing: -0.02em; }
+  .stat .v.good { color: var(--good); }
+  .stat .v.info { color: var(--accent); }
+  .stat .l { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+  }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 0.86rem;
+  }
+  th, td {
+    padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: right;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 550; font-size: 0.78rem; }
+  tr.good td:nth-child(2), tr.good td:nth-child(3) { color: var(--good); }
+  tr.bad td:nth-child(2), tr.bad td:nth-child(3) { color: var(--bad); }
+  tr.warn td:nth-child(3) { color: var(--warn); }
+  ul.recs { padding-left: 1.2rem; }
+  ul.recs li { margin: 8px 0; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 0.78rem; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>策略一 · 因子1：分年对照报告</h1>
+  <p class="meta">天通 sh600330（±3%）/ 凯盛 sh600552（±2.5%） · 2020-01-01 → 2026-08-25 · akquant OpenBreak3 · 研究用途，非投资建议</p>
+  <div class="pills">
+    <span class="pill good">推荐：A 基线仅止损</span>
+    <span class="pill bad">否决：三态15/10、三态+F4</span>
+    <span class="pill warn">候选：凯盛×F4 / 三态20/15</span>
+  </div>
+
+  <div class="callout">
+    <strong>结论：</strong>两票统一默认继续用<strong>基线仅止损</strong>。天通上所有改卖点/F4 全面落后；凯盛上 F4 与宽松三态有长样本优势，但 2026 年 F4 翻车（-8pp），不作统一上线。
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="v good">+1368%</div><div class="l">天通基线累计 · 夏普1.29 · 回撤38.7%</div></div>
+    <div class="stat"><div class="v info">+1408%</div><div class="l">凯盛基线累计 · 夏普1.33 · 回撤30.5%</div></div>
+    <div class="stat"><div class="v good">+206%</div><div class="l">天通 2026（相对上年权益）</div></div>
+    <div class="stat"><div class="v info">+96%</div><div class="l">凯盛 2026（相对上年权益）</div></div>
+  </div>
+
+  <h2>1. 方案定义</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>代号</th><th style="text-align:left">方案</th><th style="text-align:left">规则要点</th></tr></thead>
+      <tbody>
+        <tr><td>A</td><td style="text-align:left">基线仅止损</td><td style="text-align:left">开盘突破买入；仅开盘−pct 止损；不止盈</td></tr>
+        <tr><td>B</td><td style="text-align:left">三态 15/10</td><td style="text-align:left">牛不止盈；震荡15% / 熊10% 全清（prev_high）</td></tr>
+        <tr><td>B2</td><td style="text-align:left">三态 20/15</td><td style="text-align:left">同上，档位放宽 20% / 15%</td></tr>
+        <tr><td>C</td><td style="text-align:left">因子4</td><td style="text-align:left">个股 roc 二态；牛市内放宽止损</td></tr>
+        <tr><td>D</td><td style="text-align:left">三态15/10+F4</td><td style="text-align:left">B 与 C 叠加</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>2. 全样本汇总（2020→2026-08-25）</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>天通</h3>
+      <table>
+        <thead><tr><th>方案</th><th>累计%</th><th>Δ基线</th><th>夏普</th><th>回撤%</th><th>胜率%</th><th>闭环</th></tr></thead>
+        <tbody>
+          <tr class="good"><td>A 基线</td><td>1368.0</td><td>—</td><td>1.29</td><td>38.7</td><td>49.7</td><td>187</td></tr>
+          <tr class="bad"><td>B 15/10</td><td>633.7</td><td>-734</td><td>1.03</td><td>42.5</td><td>50.8</td><td>195</td></tr>
+          <tr class="warn"><td>B2 20/15</td><td>1249.8</td><td>-118</td><td>1.26</td><td>38.7</td><td>50.5</td><td>190</td></tr>
+          <tr class="bad"><td>C 因子4</td><td>1020.6</td><td>-347</td><td>1.14</td><td>44.2</td><td>47.6</td><td>164</td></tr>
+          <tr class="bad"><td>D 叠加</td><td>447.7</td><td>-920</td><td>0.88</td><td>48.5</td><td>48.9</td><td>174</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>凯盛</h3>
+      <table>
+        <thead><tr><th>方案</th><th>累计%</th><th>Δ基线</th><th>夏普</th><th>回撤%</th><th>胜率%</th><th>闭环</th></tr></thead>
+        <tbody>
+          <tr><td>A 基线</td><td>1408.4</td><td>—</td><td>1.33</td><td>30.5</td><td>43.4</td><td>226</td></tr>
+          <tr class="warn"><td>B 15/10</td><td>1330.6</td><td>-78</td><td>1.31</td><td>30.5</td><td>43.1</td><td>232</td></tr>
+          <tr class="good"><td>B2 20/15</td><td>1537.1</td><td>+129</td><td>1.37</td><td>30.5</td><td>43.4</td><td>226</td></tr>
+          <tr class="good"><td>C 因子4</td><td>1659.6</td><td>+251</td><td>1.33</td><td>33.7</td><td>46.1</td><td>180</td></tr>
+          <tr class="good"><td>D 叠加</td><td>1506.8</td><td>+98</td><td>1.31</td><td>33.7</td><td>45.7</td><td>188</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2>3. 观察池三态 · 分年日数</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>年份</th><th>牛</th><th>震荡</th><th>熊</th><th>主状态</th></tr></thead>
+      <tbody>
+        <tr><td>2020</td><td>125</td><td>38</td><td>80</td><td>牛</td></tr>
+        <tr><td>2021</td><td>138</td><td>35</td><td>70</td><td>牛</td></tr>
+        <tr><td>2022</td><td>69</td><td>49</td><td>124</td><td>熊</td></tr>
+        <tr><td>2023</td><td>90</td><td>63</td><td>89</td><td>牛</td></tr>
+        <tr><td>2024</td><td>75</td><td>53</td><td>114</td><td>熊</td></tr>
+        <tr><td>2025</td><td>117</td><td>35</td><td>91</td><td>牛</td></tr>
+        <tr><td>2026*</td><td>102</td><td>19</td><td>35</td><td>牛</td></tr>
+      </tbody>
+    </table>
+    <p class="meta" style="margin-top:10px">*截至 8/25。规则：close vs MA60 + ROC20，次日生效。</p>
+  </div>
+
+  <h2>4. 分年策略收益%（相对上年年末权益）</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>天通</h3>
+      <table>
+        <thead><tr><th>年</th><th>A基线</th><th>B</th><th>B2</th><th>C</th><th>D</th></tr></thead>
+        <tbody>
+          <tr><td>2020</td><td>61.5</td><td>58.3</td><td>61.5</td><td>46.3</td><td>43.6</td></tr>
+          <tr><td>2021</td><td>44.7</td><td>44.8</td><td>44.7</td><td>51.2</td><td>48.2</td></tr>
+          <tr><td>2022</td><td>6.7</td><td>-6.3</td><td>9.4</td><td>6.0</td><td>-9.1</td></tr>
+          <tr><td>2023</td><td>-4.1</td><td>-9.9</td><td>-4.0</td><td>-10.4</td><td>-15.1</td></tr>
+          <tr><td>2024</td><td>19.5</td><td>13.6</td><td>17.3</td><td>13.4</td><td>7.9</td></tr>
+          <tr><td>2025</td><td>67.9</td><td>32.1</td><td>67.8</td><td>80.3</td><td>43.4</td></tr>
+          <tr class="good"><td>2026</td><td>205.8</td><td>152.5</td><td>179.6</td><td>160.7</td><td>115.4</td></tr>
+        </tbody>
+      </table>
+      <p class="meta">胜出年数：B 1/7 · B2 2/7 · C 2/7 · D 1/7</p>
+    </div>
+    <div class="card">
+      <h3>凯盛</h3>
+      <table>
+        <thead><tr><th>年</th><th>A基线</th><th>B</th><th>B2</th><th>C</th><th>D</th></tr></thead>
+        <tbody>
+          <tr><td>2020</td><td>57.3</td><td>53.0</td><td>57.3</td><td>59.6</td><td>55.0</td></tr>
+          <tr><td>2021</td><td>21.7</td><td>16.7</td><td>21.7</td><td>34.5</td><td>29.1</td></tr>
+          <tr><td>2022</td><td>21.0</td><td>20.7</td><td>24.0</td><td>30.1</td><td>30.0</td></tr>
+          <tr><td>2023</td><td>28.9</td><td>25.2</td><td>32.1</td><td>35.5</td><td>29.1</td></tr>
+          <tr><td>2024</td><td>109.5</td><td>106.1</td><td>106.2</td><td>111.8</td><td>108.3</td></tr>
+          <tr><td>2025</td><td>23.1</td><td>31.0</td><td>23.1</td><td>16.6</td><td>24.0</td></tr>
+          <tr><td>2026</td><td>95.9</td><td>96.4</td><td>105.7</td><td>88.4</td><td>85.2</td></tr>
+        </tbody>
+      </table>
+      <p class="meta">胜出年数：B 2/7 · B2 3/7 · C 5/7 · D 4/7</p>
+    </div>
+  </div>
+
+  <h2>5. 2026 专项（至 8/25）</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>相对基线 Δ (pp)</h3>
+      <table>
+        <thead><tr><th>方案</th><th>天通</th><th>凯盛</th></tr></thead>
+        <tbody>
+          <tr class="bad"><td>B 15/10</td><td>-53</td><td>+0.5</td></tr>
+          <tr><td>B2 20/15</td><td>-26</td><td>+10</td></tr>
+          <tr class="bad"><td>C 因子4</td><td>-45</td><td>-8</td></tr>
+          <tr class="bad"><td>D 叠加</td><td>-90</td><td>-11</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>基线分月（策略 / 持有）</h3>
+      <table>
+        <thead><tr><th>月</th><th>天通策略</th><th>天通持有</th><th>凯盛策略</th><th>凯盛持有</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>20.3</td><td>3.3</td><td>19.0</td><td>17.2</td></tr>
+          <tr><td>2</td><td>4.6</td><td>26.5</td><td>-9.6</td><td>3.5</td></tr>
+          <tr><td>3</td><td>0.9</td><td>-8.9</td><td>-10.7</td><td>-21.1</td></tr>
+          <tr><td>4</td><td>52.6</td><td>78.4</td><td>22.1</td><td>31.0</td></tr>
+          <tr><td>5</td><td>29.1</td><td>17.4</td><td>19.9</td><td>15.4</td></tr>
+          <tr><td>6</td><td>3.7</td><td>-5.8</td><td>47.0</td><td>82.2</td></tr>
+          <tr class="bad"><td>7</td><td>-21.0</td><td>-46.1</td><td>-18.6</td><td>-53.9</td></tr>
+          <tr class="good"><td>8</td><td>49.4</td><td>65.0</td><td>16.5</td><td>18.5</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="callout warn">
+    <strong>关键差异：</strong>天通 8 月基线约 +49%，三态 15/10 / 叠加掉到约 +23%（大波段被提前清仓）。
+  </div>
+
+  <h2>6. 建议</h2>
+  <ul class="recs">
+    <li><strong>正式默认（两票）：</strong>A · 基线仅止损 — 全样本夏普接近、规则简单、2026 趋势年不被提前下车。</li>
+    <li><strong>不要上线：</strong>B 三态15/10、D 三态+F4 — 天通灾难级，叠加无协同。</li>
+    <li><strong>研究候选（非默认）：</strong>凯盛 × C 因子4 / B2 三态20/15 — 仅单票实验；F4 在 2026 已翻车。</li>
+  </ul>
+
+  <footer>
+    数据目录 <code>backtest/s1_regime_f4_year_report/</code>（含 report.md / CSV） ·
+    历史规则化回测存在过拟合与流动性差异风险，不构成投资建议或收益承诺。
+  </footer>
+</div>
+</body>
+</html>

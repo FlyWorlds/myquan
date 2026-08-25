@@ -1,0 +1,25 @@
+{
+  "recommended": "qy_blend",
+  "top_k": 5,
+  "oos_2026": {
+    "ret": 68.3,
+    "ex_med": 23.5,
+    "mdd": 15.4
+  },
+  "wf_ex_avg": 18.7,
+  "defense_floor_k3": {
+    "ret": 59.6,
+    "ex_med": 23.5,
+    "mdd": 9.5
+  },
+  "month_alone": "unstable / not recommended",
+  "quarter_alone": "WF excess often negative",
+  "picks": [
+    "东材科技",
+    "依顿电子",
+    "西藏珠峰",
+    "凯盛科技",
+    "冰轮环境"
+  ],
+  "note": "默认已切到 qy_blend；月熊仅参考"
+}

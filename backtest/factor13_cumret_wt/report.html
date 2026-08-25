@@ -1,0 +1,46 @@
+<!DOCTYPE html><html><head><meta charset=utf-8><title>累计收益加权</title>
+<style>body{font-family:-apple-system,sans-serif;max-width:1000px;margin:24px auto;padding:0 16px}
+table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #ddd;padding:5px;text-align:right}
+th{background:#f5f5f5}td:first-child,th:first-child{text-align:left}
+.kpi{display:flex;gap:12px;flex-wrap:wrap}.kpi div{background:#f7f7f7;padding:12px;border-radius:8px}</style></head><body>
+<h1>累计收益选股 + 按收益加权</h1>
+<p>Top3；权重∝max(累计收益,0)，合计90%。半年无前瞻。</p>
+<div class=kpi>
+<div><b>较优</b><br>半年累计收益加权</div>
+<div><b>全段</b><br>-22.2%</div>
+<div><b>2026</b><br>+36.1%</div>
+</div>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>mode</th>
+      <th>label</th>
+      <th>ret</th>
+      <th>mdd</th>
+      <th>sharpe</th>
+      <th>ret_2026</th>
+      <th>wt_stitch</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>half</td>
+      <td>半年累计收益加权</td>
+      <td>-22.21</td>
+      <td>80.54</td>
+      <td>0.02</td>
+      <td>36.11</td>
+      <td>38.52</td>
+    </tr>
+    <tr>
+      <td>cum</td>
+      <td>2019→信号累计收益加权</td>
+      <td>-37.90</td>
+      <td>71.02</td>
+      <td>-0.15</td>
+      <td>16.67</td>
+      <td>-14.21</td>
+    </tr>
+  </tbody>
+</table>
+<p style=color:#888;font-size:12px>研究用途，不构成投资建议。</p></body></html>

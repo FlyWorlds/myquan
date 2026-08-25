@@ -1,0 +1,103 @@
+{
+  "rule": "qy_blend Top5 slots, wait stop then rotate",
+  "bt": {
+    "start": "20230101",
+    "end": "20260825"
+  },
+  "best_freq": "month",
+  "summary": [
+    {
+      "freq": "month",
+      "ret_2023_now": 133.98267295905947,
+      "mdd": 33.90926328242097,
+      "sharpe": 1.2122047854634204,
+      "ret_2026": 53.20463368817858,
+      "mdd_2026": 19.092810860079325,
+      "n_buys": 512,
+      "n_stops": 509,
+      "n_assigns": 516,
+      "avg_held": 3.0721649484536084,
+      "turnover_proxy": 509
+    },
+    {
+      "freq": "quarter",
+      "ret_2023_now": 133.98267295905947,
+      "mdd": 33.90926328242097,
+      "sharpe": 1.2122047854634204,
+      "ret_2026": 53.20463368817858,
+      "mdd_2026": 19.092810860079325,
+      "n_buys": 512,
+      "n_stops": 509,
+      "n_assigns": 516,
+      "avg_held": 3.0721649484536084,
+      "turnover_proxy": 509
+    },
+    {
+      "freq": "semi",
+      "ret_2023_now": 133.98267295905947,
+      "mdd": 33.90926328242097,
+      "sharpe": 1.2122047854634204,
+      "ret_2026": 53.20463368817858,
+      "mdd_2026": 19.092810860079325,
+      "n_buys": 512,
+      "n_stops": 509,
+      "n_assigns": 516,
+      "avg_held": 3.0721649484536084,
+      "turnover_proxy": 509
+    },
+    {
+      "freq": "year",
+      "ret_2023_now": 133.98267295905947,
+      "mdd": 33.90926328242097,
+      "sharpe": 1.2122047854634204,
+      "ret_2026": 53.20463368817858,
+      "mdd_2026": 19.092810860079325,
+      "n_buys": 512,
+      "n_stops": 509,
+      "n_assigns": 516,
+      "avg_held": 3.0721649484536084,
+      "turnover_proxy": 509
+    }
+  ],
+  "stability": [
+    {
+      "freq": "month",
+      "avg_jaccard": 0.9623917748917749,
+      "n_periods": 45
+    },
+    {
+      "freq": "quarter",
+      "avg_jaccard": 0.8818027210884354,
+      "n_periods": 15
+    },
+    {
+      "freq": "semi",
+      "avg_jaccard": 0.7636054421768707,
+      "n_periods": 8
+    },
+    {
+      "freq": "year",
+      "avg_jaccard": 0.44841269841269843,
+      "n_periods": 4
+    }
+  ],
+  "note": "月频与季频若名单不变则表现接近；qy_blend 信号主要在季末/年末变化。",
+  "recommended_refresh": "year",
+  "reason": "qy_blend targets only change at year boundaries; monthly/quarterly identical",
+  "slot_vs_fixed_ew": [
+    {
+      "mode": "年频选股+槽位等止损换",
+      "ret": 133.9827,
+      "mdd": 33.9093,
+      "sharpe": 1.2122,
+      "ret_2026": 53.2046
+    },
+    {
+      "mode": "年频选股+票内独立等权(研究)",
+      "ret": 213.80467191023052,
+      "mdd": 27.789141116975813,
+      "sharpe": 1.8439908287040034,
+      "ret_2026": 69.05346969297297
+    }
+  ]
+}

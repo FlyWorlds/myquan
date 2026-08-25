@@ -1,0 +1,79 @@
+{
+  "protocol": {
+    "valid_years": [
+      2023,
+      2024
+    ],
+    "blind_years": [
+      2025,
+      2026
+    ],
+    "select_metric": "valid_ret - 0.25*valid_mdd",
+    "n_trials": 216,
+    "note": "盲测未参与选参；仍可能存在验证集过拟合，盲测为最终裁判"
+  },
+  "best_on_valid": {
+    "min_obear_ex": 2.0,
+    "min_obear_ex_floor": -10.0,
+    "min_obear_ret": -10.0,
+    "w_bull_score": 1.0,
+    "stability_pool": 10.0,
+    "stability_min_hits": 2.0,
+    "min_ret_mean": 0.0,
+    "valid_ret": 7.921657560816332,
+    "valid_mdd": 22.836703424638657,
+    "valid_score": 2.2124817046566676,
+    "blind_2025": 42.55447392753642,
+    "blind_2026": 77.17265138608343
+  },
+  "default_rank_on_valid": 186,
+  "default_row": {
+    "min_obear_ex": 2.0,
+    "min_obear_ex_floor": -10.0,
+    "min_obear_ret": -5.0,
+    "w_bull_score": 0.5,
+    "stability_pool": 12.0,
+    "stability_min_hits": 2.0,
+    "min_ret_mean": 5.0,
+    "valid_ret": 7.640607537813633,
+    "valid_mdd": 22.668324996861806,
+    "blind_2025": 34.42273364481525,
+    "blind_2026": 77.17265138608343,
+    "y2023": -20.640004523876833,
+    "y2024": 35.9212195995041,
+    "y2025": 34.42273364481525,
+    "y2026": 77.17265138608343,
+    "valid_score": 1.9735262885981815
+  },
+  "best_2026_port": {
+    "ret": 77.17265138608343,
+    "mdd": 15.224763345255743,
+    "sharpe": 3.3789420167758433,
+    "n": 3
+  },
+  "stitch": {
+    "ret": 174.36686524227133,
+    "mdd": 37.777558547406876,
+    "sharpe": 1.3489194078941413
+  },
+  "picks_2026": [
+    {
+      "symbol": "sh601208",
+      "name": "东材科技",
+      "thr": 0.025,
+      "score": 12.685512367491166
+    },
+    {
+      "symbol": "sh600338",
+      "name": "西藏珠峰",
+      "thr": 0.025,
+      "score": 12.325088339222615
+    },
+    {
+      "symbol": "sz002979",
+      "name": "雷赛智能",
+      "thr": 0.03,
+      "score": 12.049469964664311
+    }
+  ]
+}

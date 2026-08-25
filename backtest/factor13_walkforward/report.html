@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"/>
+<title>因子13 Walk-Forward 选股</title>
+<style>
+body{font-family:PingFang SC,Helvetica,sans-serif;background:#0f1115;color:#e8eaed;padding:28px}
+.wrap{max-width:1100px;margin:0 auto} h1{margin:0 0 8px} .meta{color:#9aa3b2}
+.card{background:#171a21;border:1px solid #2a2f3a;border-radius:10px;padding:14px;margin:14px 0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat{background:#171a21;border:1px solid #2a2f3a;border-radius:10px;padding:12px}
+.stat .v{font-size:1.35rem;font-weight:650;color:#3dd68c} .stat .l{color:#9aa3b2;font-size:.8rem}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{padding:7px 8px;border-bottom:1px solid #2a2f3a;text-align:right}
+th:first-child,td:first-child{text-align:left} th{color:#9aa3b2}
+.callout{border-left:3px solid #3d8bfd;padding:10px 14px;background:#171a21;margin:12px 0}
+</style></head><body><div class="wrap">
+<h1>因子13 · 策略1契合选股（Walk-Forward）</h1>
+<p class="meta">上年打分选股 → 下年等权开盘突破 · 调参窗 2020→2025 · 盲测 2025→2026 · 非投资建议</p>
+<div class="callout"><b>最优信号：</b>excess · Top5 · min夏普≥0.5</div>
+<div class="stats">
+  <div class="stat"><div class="v">17.0%</div><div class="l">调参窗年均 OOS 策略</div></div>
+  <div class="stat"><div class="v">12.4%</div><div class="l">相对全池年均超额</div></div>
+  <div class="stat"><div class="v">31.6%</div><div class="l">盲测 2026 策略等权</div></div>
+  <div class="stat"><div class="v">35.8%</div><div class="l">盲测相对全池</div></div>
+</div>
+<div class="card"><h3>调参榜 Top15（按相对全池 alpha）</h3>
+<table><thead><tr><th>信号</th><th>K</th><th>min夏普</th><th>min成交</th><th>年均OOS%</th><th>年均超额%</th><th>vs全池</th><th>夏普</th><th>胜年</th></tr></thead>
+<tbody><tr><td>excess</td><td>5</td><td>0.5</td><td>0</td><td>17.0</td><td>-19.6</td><td>12.4</td><td>0.32</td><td>3/5</td></tr><tr><td>excess</td><td>5</td><td>0.5</td><td>8</td><td>17.0</td><td>-19.6</td><td>12.4</td><td>0.32</td><td>3/5</td></tr><tr><td>excess</td><td>8</td><td>0.5</td><td>0</td><td>15.6</td><td>-13.3</td><td>11.0</td><td>0.33</td><td>4/5</td></tr><tr><td>excess</td><td>8</td><td>0.5</td><td>8</td><td>15.6</td><td>-13.3</td><td>11.0</td><td>0.33</td><td>4/5</td></tr><tr><td>score_fit</td><td>10</td><td></td><td>8</td><td>15.3</td><td>-17.7</td><td>10.6</td><td>0.25</td><td>4/5</td></tr><tr><td>score_fit</td><td>10</td><td>0.5</td><td>8</td><td>15.3</td><td>-17.7</td><td>10.6</td><td>0.25</td><td>4/5</td></tr><tr><td>score_fit</td><td>10</td><td></td><td>0</td><td>15.2</td><td>-18.7</td><td>10.5</td><td>0.25</td><td>4/5</td></tr><tr><td>score_fit</td><td>10</td><td>0.5</td><td>0</td><td>15.2</td><td>-18.7</td><td>10.5</td><td>0.25</td><td>4/5</td></tr><tr><td>dd_improve</td><td>5</td><td>1.0</td><td>0</td><td>14.6</td><td>-11.9</td><td>9.9</td><td>0.27</td><td>4/5</td></tr><tr><td>dd_improve</td><td>5</td><td>1.0</td><td>8</td><td>14.6</td><td>-11.9</td><td>9.9</td><td>0.27</td><td>4/5</td></tr><tr><td>excess</td><td>5</td><td>1.0</td><td>0</td><td>14.2</td><td>-18.4</td><td>9.5</td><td>0.24</td><td>2/5</td></tr><tr><td>excess</td><td>10</td><td>0.5</td><td>0</td><td>14.2</td><td>-12.6</td><td>9.5</td><td>0.33</td><td>3/5</td></tr><tr><td>score_style</td><td>5</td><td>1.0</td><td>0</td><td>14.2</td><td>6.2</td><td>9.5</td><td>0.21</td><td>3/5</td></tr><tr><td>score_style</td><td>5</td><td>1.0</td><td>8</td><td>14.2</td><td>6.2</td><td>9.5</td><td>0.21</td><td>3/5</td></tr><tr><td>dd_improve</td><td>10</td><td></td><td>0</td><td>14.0</td><td>-12.2</td><td>9.4</td><td>0.24</td><td>4/5</td></tr></tbody></table></div>
+<div class="card"><h3>最优参数逐年（含 2026）</h3>
+<table><thead><tr><th>年</th><th>OOS策略%</th><th>OOS超额%</th><th>全池%</th><th>vs全池</th><th>夏普</th><th>回撤</th><th>跑赢持有</th></tr></thead>
+<tbody><tr><td>2020→2021</td><td>-2.9</td><td>-18.0</td><td>4.8</td><td>-7.7</td><td>-0.03</td><td>32.0</td><td>0/5</td></tr><tr><td>2021→2022</td><td>21.6</td><td>5.9</td><td>-8.8</td><td>30.5</td><td>0.23</td><td>31.6</td><td>3/5</td></tr><tr><td>2022→2023</td><td>1.9</td><td>-18.1</td><td>-4.6</td><td>6.5</td><td>-0.00</td><td>29.9</td><td>1/5</td></tr><tr><td>2023→2024</td><td>16.1</td><td>13.5</td><td>20.4</td><td>-4.3</td><td>0.59</td><td>27.9</td><td>4/5</td></tr><tr><td>2024→2025</td><td>48.3</td><td>-81.2</td><td>11.5</td><td>36.8</td><td>0.80</td><td>29.5</td><td>1/5</td></tr><tr><td>2025→2026</td><td>31.6</td><td>-23.6</td><td>-4.1</td><td>35.8</td><td>0.49</td><td>31.8</td><td>2/5</td></tr></tbody></table></div>
+<div class="card"><h3>各年入选名单</h3><p><b>2020→2021</b>: sh600158,sz002488,sz002747,sz002126,sh600105</p><p><b>2021→2022</b>: sh605198,sz002536,sz002965,sz000661,sh600389</p><p><b>2022→2023</b>: sz000837,sz002892,sh600862,sh600338,sz002290</p><p><b>2023→2024</b>: sz002368,sz002941,sh600246,sz002738,sh605111</p><p><b>2024→2025</b>: sh600686,sz002651,sh603306,sh600552,sh600105</p><p><b>2025→2026</b>: sh600977,sz002929,sz002249,sz002636,sz002993</p></div>
+</div></body></html>

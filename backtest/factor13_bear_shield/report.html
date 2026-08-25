@@ -1,0 +1,274 @@
+<!DOCTYPE html><html><head><meta charset=utf-8><title>熊市盾牌 qy_blend</title>
+<style>
+body{font-family:-apple-system,sans-serif;max-width:980px;margin:24px auto;padding:0 16px;color:#222}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}
+th,td{border:1px solid #ddd;padding:6px 8px;text-align:right}
+th{background:#f5f5f5} td:first-child,th:first-child{text-align:left}
+.kpi{display:flex;gap:12px;flex-wrap:wrap}.kpi div{background:#f7f7f7;padding:12px 14px;border-radius:8px}
+.pos{color:#0a7} pre{background:#f6f8fa;padding:12px;font-size:12px}
+</style></head><body>
+<h1>因子13 · 熊市盾牌 qy_blend Top5</h1>
+<p>季熊+年熊融合默认；纯月熊不稳（见 factor13_bear_multi）。</p>
+<div class="kpi">
+<div><b>2026等权</b><br><span class="pos">+68.3%</span></div>
+<div><b>超额中位</b><br><span class="pos">+23.5%</span></div>
+<div><b>回撤</b><br>15.4%</div>
+<div><b>去种子</b><br>+36.5% / ex +10.5%</div>
+<div><b>defense×3</b><br>+59.6% / mdd 9.5%</div>
+</div>
+<pre>================================================================================
+  因子13 · 熊市盾牌多尺度（qy_blend / Top5）
+================================================================================
+牛市可不超额；下跌期要超额。年熊 BH<-5.0%，季熊 BH<-5.0%
+  qy_blend(默认): 年地板 + 季熊超额，融合打分
+  bear_abs_pos_floor: 纯年地板 Top3（低回撤）
+  bear_abs_pos / bear_ex_sh: 进攻/夏普带
+纯月熊单独选股不稳，见 backtest/factor13_bear_multi/
+池：中证500∪1000主板；阈值 ±2.5%
+================================================================================</pre>
+<h2>入选</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>symbol</th>
+      <th>name</th>
+      <th>obear_ret</th>
+      <th>obear_ex</th>
+      <th>q_obear_ex</th>
+      <th>q_obear_hit</th>
+      <th>score</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>sh601208</td>
+      <td>东材科技</td>
+      <td>27.51</td>
+      <td>62.08</td>
+      <td>21.68</td>
+      <td>1.00</td>
+      <td>10.61</td>
+    </tr>
+    <tr>
+      <td>sh603328</td>
+      <td>依顿电子</td>
+      <td>19.39</td>
+      <td>43.12</td>
+      <td>17.40</td>
+      <td>1.00</td>
+      <td>10.13</td>
+    </tr>
+    <tr>
+      <td>sh600338</td>
+      <td>西藏珠峰</td>
+      <td>17.90</td>
+      <td>44.61</td>
+      <td>15.42</td>
+      <td>1.00</td>
+      <td>9.75</td>
+    </tr>
+    <tr>
+      <td>sh600552</td>
+      <td>凯盛科技</td>
+      <td>62.85</td>
+      <td>82.62</td>
+      <td>12.90</td>
+      <td>0.86</td>
+      <td>9.56</td>
+    </tr>
+    <tr>
+      <td>sz000811</td>
+      <td>冰轮环境</td>
+      <td>19.58</td>
+      <td>37.04</td>
+      <td>12.81</td>
+      <td>1.00</td>
+      <td>9.44</td>
+    </tr>
+  </tbody>
+</table>
+<h2>2026单票</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>symbol</th>
+      <th>name</th>
+      <th>ret</th>
+      <th>bh</th>
+      <th>excess</th>
+      <th>mdd</th>
+      <th>bh_dd</th>
+      <th>sharpe</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>sh601208</td>
+      <td>东材科技</td>
+      <td>97.28</td>
+      <td>73.81</td>
+      <td>23.47</td>
+      <td>19.27</td>
+      <td>59.24</td>
+      <td>3.68</td>
+    </tr>
+    <tr>
+      <td>sh603328</td>
+      <td>依顿电子</td>
+      <td>10.27</td>
+      <td>-0.27</td>
+      <td>10.54</td>
+      <td>25.94</td>
+      <td>43.52</td>
+      <td>0.45</td>
+    </tr>
+    <tr>
+      <td>sh600338</td>
+      <td>西藏珠峰</td>
+      <td>49.63</td>
+      <td>-9.66</td>
+      <td>59.30</td>
+      <td>32.24</td>
+      <td>59.45</td>
+      <td>1.97</td>
+    </tr>
+    <tr>
+      <td>sh600552</td>
+      <td>凯盛科技</td>
+      <td>100.33</td>
+      <td>44.31</td>
+      <td>56.02</td>
+      <td>21.21</td>
+      <td>55.16</td>
+      <td>4.09</td>
+    </tr>
+    <tr>
+      <td>sz000811</td>
+      <td>冰轮环境</td>
+      <td>61.45</td>
+      <td>123.39</td>
+      <td>-61.94</td>
+      <td>25.52</td>
+      <td>41.98</td>
+      <td>2.09</td>
+    </tr>
+  </tbody>
+</table>
+<h2>月收益</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>month</th>
+      <th>ret_pct</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026-02</td>
+      <td>11.24</td>
+    </tr>
+    <tr>
+      <td>2026-03</td>
+      <td>-11.72</td>
+    </tr>
+    <tr>
+      <td>2026-04</td>
+      <td>23.74</td>
+    </tr>
+    <tr>
+      <td>2026-05</td>
+      <td>4.85</td>
+    </tr>
+    <tr>
+      <td>2026-06</td>
+      <td>22.36</td>
+    </tr>
+    <tr>
+      <td>2026-07</td>
+      <td>-14.51</td>
+    </tr>
+    <tr>
+      <td>2026-08</td>
+      <td>17.59</td>
+    </tr>
+  </tbody>
+</table>
+<h2>Walk-forward</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>fit_end</th>
+      <th>oos</th>
+      <th>is_bear</th>
+      <th>market_bh_med</th>
+      <th>n</th>
+      <th>ret</th>
+      <th>mdd</th>
+      <th>ex_med</th>
+      <th>pos</th>
+      <th>pos_months</th>
+      <th>n_months</th>
+      <th>names</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2022</td>
+      <td>2023</td>
+      <td>1</td>
+      <td>-2.86</td>
+      <td>5</td>
+      <td>-14.19</td>
+      <td>21.92</td>
+      <td>9.61</td>
+      <td>0</td>
+      <td>2</td>
+      <td>11</td>
+      <td>西藏珠峰、恒顺醋业、依顿电子、中国重汽、京运通</td>
+    </tr>
+    <tr>
+      <td>2023</td>
+      <td>2024</td>
+      <td>0</td>
+      <td>5.14</td>
+      <td>5</td>
+      <td>35.84</td>
+      <td>11.90</td>
+      <td>42.18</td>
+      <td>4</td>
+      <td>8</td>
+      <td>11</td>
+      <td>依顿电子、西藏珠峰、千禾味业、科力尔、深赛格</td>
+    </tr>
+    <tr>
+      <td>2024</td>
+      <td>2025</td>
+      <td>0</td>
+      <td>17.91</td>
+      <td>5</td>
+      <td>58.99</td>
+      <td>8.60</td>
+      <td>4.17</td>
+      <td>5</td>
+      <td>8</td>
+      <td>11</td>
+      <td>东材科技、依顿电子、西藏珠峰、千禾味业、凯盛科技</td>
+    </tr>
+    <tr>
+      <td>2025</td>
+      <td>2026</td>
+      <td>1</td>
+      <td>-9.60</td>
+      <td>5</td>
+      <td>68.26</td>
+      <td>15.37</td>
+      <td>23.47</td>
+      <td>5</td>
+      <td>5</td>
+      <td>7</td>
+      <td>东材科技、依顿电子、西藏珠峰、凯盛科技、冰轮环境</td>
+    </tr>
+  </tbody>
+</table>
+<p style="color:#888;font-size:12px">研究用途，不构成投资建议。</p>
+</body></html>

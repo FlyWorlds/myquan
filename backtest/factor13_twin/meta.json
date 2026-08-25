@@ -1,0 +1,41 @@
+{
+  "fit": {
+    "start": "2020-01-01",
+    "end": "2025-12-31",
+    "top_k": 12
+  },
+  "oos": {
+    "start": "20260101",
+    "end": "20260825"
+  },
+  "params": {
+    "fit_start": "2020-01-01",
+    "fit_end": "2025-12-31",
+    "seeds": [
+      "sh600330",
+      "sh600552"
+    ],
+    "min_bars": 400,
+    "break_pct": 0.025,
+    "oc_big_pct": 0.025,
+    "big_move_pct": 0.03,
+    "top_k": 12,
+    "mainboard_only": true
+  },
+  "portfolio": {
+    "seeds_ew": {
+      "ret_pct": 156.2107075197622,
+      "mdd_pct": 20.247716152327545,
+      "sharpe": 7.1583235605383715
+    },
+    "twins_ew": {
+      "ret_pct": -1.474182593322726,
+      "mdd_pct": 19.01051270330688,
+      "sharpe": -0.13003999584361714
+    },
+    "twins_bh_med": -16.94359792485558,
+    "twins_ret_med": -8.710845934159845,
+    "twins_beat_bh": 8,
+    "twins_n": 12
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "locked": true,
+  "locked_at": "2026-08-26",
+  "note": "暂时锁定：勿再调参/改默认门槛，直至用户明确解锁。复现用 run_factor13_bear_shield_wf.py",
+  "rule": "qy_blend_thr_star_top3_wf_tuned",
+  "top_k": 3,
+  "use_per_stock_thr": true,
+  "pin_thr": {
+    "sh600330": 0.03
+  },
+  "params": {
+    "rule": "qy_blend",
+    "top_k": 3,
+    "fit_start_year": 2020,
+    "own_bear_bh": -5.0,
+    "own_bull_bh": 15.0,
+    "quarter_bear_bh": -5.0,
+    "min_obear": 2,
+    "min_obear_ret": -10.0,
+    "min_obear_ex": 2.0,
+    "min_obear_ex_floor": -10.0,
+    "min_q_obear": 2,
+    "min_q_ex": 0.0,
+    "min_ret_mean": 0.0,
+    "min_obull_ret": 0.0,
+    "require_obull_if_any": true,
+    "w_bull_score": 1.0,
+    "stability_lookback": 2,
+    "stability_pool": 10,
+    "stability_min_hits": 2,
+    "thr": 0.025,
+    "use_per_stock_thr": true,
+    "mainboard_only": true
+  },
+  "picks_2026": [
+    {"rank": 1, "symbol": "sh601208", "name": "东材科技", "thr": 0.025},
+    {"rank": 2, "symbol": "sh600338", "name": "西藏珠峰", "thr": 0.025},
+    {"rank": 3, "symbol": "sz002979", "name": "雷赛智能", "thr": 0.03}
+  ],
+  "oos": {
+    "blind_2025_pct": 42.55,
+    "blind_2026_pct": 77.17,
+    "stitch_2023_now_pct": 174.37
+  },
+  "tune": {
+    "valid_years": [2023, 2024],
+    "blind_years": [2025, 2026],
+    "n_trials": 216,
+    "report": "backtest/factor13_bear_shield_tune_pit/report.html"
+  },
+  "entry": "python strategy/run_factor13_bear_shield_wf.py"
+}

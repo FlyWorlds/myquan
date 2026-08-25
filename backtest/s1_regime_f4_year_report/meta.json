@@ -1,0 +1,14 @@
+{
+  "start": "20200101",
+  "end": "20260825",
+  "universe_regime": "凯盛+天通等权",
+  "regime_rule": "bull: close>MA60 & ROC20>0; bear: close<MA60 & ROC20<0; else sideways; shift(1)",
+  "variants": [
+    "A_基线仅止损",
+    "B_三态15_10",
+    "B2_三态20_15",
+    "C_因子4",
+    "D_三态15_10加F4"
+  ],
+  "generated_at": "2026-08-25T21:22:03"
+}

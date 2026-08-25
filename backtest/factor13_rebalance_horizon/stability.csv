@@ -1,0 +1,5 @@
+freq,avg_jaccard,n_periods
+month,0.9624,45
+quarter,0.8818,15
+semi,0.7636,8
+year,0.4484,4

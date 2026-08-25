@@ -1,0 +1,22 @@
+{
+  "thresholds": [
+    0.02,
+    0.025,
+    0.03
+  ],
+  "adapt_rule": "thr_best from fit year T-1 by sharpe among 2/2.5/3%",
+  "best_slot": {
+    "mode": "0.03",
+    "ret": 157.38028483493105,
+    "mdd": 32.64811544859344,
+    "sharpe": 1.3912379416943055,
+    "ret_2026": 53.304541769707825,
+    "mdd_2026": 19.703358880453457,
+    "n_buys": 377,
+    "n_stops": 374,
+    "avg_held": 3.108820160366552,
+    "buy_share_2.0": 0.0,
+    "buy_share_2.5": 0.0,
+    "buy_share_3.0": 1.0
+  }
+}
