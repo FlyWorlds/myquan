@@ -1,0 +1,20 @@
+{
+  "universe_key": "hs300",
+  "universe": "000300",
+  "universe_label": "沪深300",
+  "start": "20200102",
+  "end": "20260824",
+  "trading_days": 1610,
+  "total_return": -0.23439100000000002,
+  "ann_return": -0.04094264867025588,
+  "max_drawdown": -0.340946101983172,
+  "max_dd_peak_date": "20210531",
+  "max_dd_trough_date": "20250620",
+  "vol_ann": 0.06869989546370459,
+  "sharpe": -0.5736126481993854,
+  "final_equity": 765609.0,
+  "n_trades": 3198,
+  "avg_positions": 15.291304347826086,
+  "one_way_cost": 0.0,
+  "exclude_limit_board": true
+}

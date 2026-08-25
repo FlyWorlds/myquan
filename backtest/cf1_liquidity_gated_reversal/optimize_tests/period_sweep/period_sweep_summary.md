@@ -1,0 +1,4 @@
+# CF1 period sweep（发现集 2018-01-02–2022-12-31）
+
+分阶段扫描，避免全笛卡尔积。选定 `{'rev_n': 20, 'amihud_n': 60, 'adv_n': 60, 'gate_lo': 0.6, 'horizon': 10, 'vol_scale': True, 'skip_days': 0, 'gate_mode': 'soft_illiquid', 'adv_floor': 0.1}`。
+主分最高行：{'name': 'horizon=10', 'split': 'discovery', 'rev_n': 20, 'amihud_n': 60, 'gate_lo': 0.6, 'gate_mode': 'soft_illiquid', 'vol_scale': True, 'skip_days': 0, 'adv_floor': 0.1, 'horizon': 10, 'rank_ic_mean': 0.01645731496012521, 'rank_ic_ir': 3.4035094354267237, 'pearson_ic_mean': 0.004667138705507579, 'mono': 0.4080511963557748, 'ls_spread': 0.0025128948412113526, 'ann_ret': 0.1563359125565189, 'sharpe': 1.9884924489201832, 'max_dd': -0.325735150682151, 'ann_turnover': 14.291063681590105, 'coverage': 0.9753086419753086, 'n_ic_days': 1174, 'score': 1.3195567192121482}

@@ -1,0 +1,11 @@
+{
+  "rev_n": 20,
+  "amihud_n": 60,
+  "adv_n": 60,
+  "gate_lo": 0.6,
+  "horizon": 10,
+  "vol_scale": true,
+  "skip_days": 0,
+  "gate_mode": "soft_illiquid",
+  "adv_floor": 0.1
+}

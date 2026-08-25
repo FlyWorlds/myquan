@@ -1,0 +1,20 @@
+{
+  "universe_key": "zz500",
+  "universe": "000905",
+  "universe_label": "中证500",
+  "start": "20200102",
+  "end": "20260824",
+  "trading_days": 1610,
+  "total_return": -0.327484,
+  "ann_return": -0.06020806305202564,
+  "max_drawdown": -0.35785118621849354,
+  "max_dd_peak_date": "20200206",
+  "max_dd_trough_date": "20250620",
+  "vol_ann": 0.057265019907127956,
+  "sharpe": -1.0552059702155334,
+  "final_equity": 672516.0,
+  "n_trades": 2719,
+  "avg_positions": 9.111180124223603,
+  "one_way_cost": 0.0,
+  "exclude_limit_board": true
+}

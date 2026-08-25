@@ -13,6 +13,7 @@
   · factor10 — 价格选股（周频冻结近高/趋势/动量）
   · factor11 — 两段近高选股（3日动量 Top20 → 贴近5日高点 Top5）
   · factor12 — 20日反转池 → 近5日高 Top5（研究候选，不替换 factor11）
+  · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
 """
 
 from strategy.factors import factor1 as _factor1  # noqa: F401
@@ -27,6 +28,7 @@ from strategy.factors import factor9 as _factor9  # noqa: F401
 from strategy.factors import factor10 as _factor10  # noqa: F401
 from strategy.factors import factor11 as _factor11  # noqa: F401
 from strategy.factors import factor12 as _factor12  # noqa: F401
+from strategy.factors import factor_cf1 as _factor_cf1  # noqa: F401
 from strategy.core.factor_registry import FACTOR_REGISTRY, get_factor, list_factors
 
 __all__ = ["FACTOR_REGISTRY", "get_factor", "list_factors"]

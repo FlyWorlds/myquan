@@ -1,0 +1,21 @@
+{
+  "mode": "fastest_touch_top3",
+  "universe_key": "hs300",
+  "start": "20250102",
+  "end": "20260824",
+  "trading_days": 398,
+  "total_return": -0.005066424999996766,
+  "ann_return": -0.0032108750775270423,
+  "max_drawdown": -0.38445738745281577,
+  "max_dd_peak_date": "20260513",
+  "max_dd_trough_date": "20260803",
+  "vol_ann": 0.3376219613537325,
+  "sharpe": 0.1598934183471633,
+  "n_trades": 239,
+  "avg_positions": 2.992462311557789,
+  "top_k": 3,
+  "entry_pct": 0.025,
+  "t1": true,
+  "universe_label": "沪深300",
+  "universe": "000300"
+}

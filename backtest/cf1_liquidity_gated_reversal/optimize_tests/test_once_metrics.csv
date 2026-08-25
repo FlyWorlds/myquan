@@ -1,0 +1,2 @@
+name,split,rev_n,amihud_n,gate_lo,gate_mode,vol_scale,skip_days,adv_floor,horizon,rank_ic_mean,rank_ic_ir,pearson_ic_mean,mono,ls_spread,ann_ret,sharpe,max_dd,ann_turnover,coverage,n_ic_days,score
+frozen_test_once,test,20,60,0.6,soft_illiquid,True,0,0.1,10,0.02394136357505622,3.770734188895479,0.0009125973641663917,0.2253833101134991,0.003851332350236137,0.21163468517308237,3.528332490401841,-0.18310952106373823,14.25328512400313,1.0,359,1.5518475962285563

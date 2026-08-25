@@ -1,0 +1,42 @@
+{
+  "factor": "cf1",
+  "name": "流动性门控反转",
+  "universe": "zz500_1000_mainboard 当前成分（幸存者偏差）",
+  "timing": "T close signal, T+1 open trade, open[T+1+H]/open[T+1]-1",
+  "cost_one_way": 0.0015,
+  "splits": {
+    "discovery": [
+      "2018-01-02",
+      "2022-12-31"
+    ],
+    "validation": [
+      "2023-01-01",
+      "2024-12-31"
+    ],
+    "test": [
+      "2025-01-01",
+      null
+    ]
+  },
+  "embargo_bars": 20,
+  "primary_score": "evaluation.md v2",
+  "data_qa": {
+    "n_dates": 2088,
+    "n_symbols": 1003,
+    "start": "2018-01-02 00:00:00+08:00",
+    "end": "2026-08-11 00:00:00+08:00",
+    "open_nan": 0.06337453157768075,
+    "close_nan": 0.06337453157768075,
+    "volume_nan": 0.06525490578074207,
+    "volume_nonpos": 0.06525777074905553,
+    "close_nonpos": 0.06337453157768075,
+    "duplicate_index": false
+  },
+  "hypothesis": "短期过度反应在单位成交冲击大（Amihud 高）时更可能是流动性驱动，反转应被非流动性软门放大；过低成交额分位不可交易故剔除。",
+  "failure_modes": [
+    "趋势市中反转失效",
+    "门控把因子变成纯小盘/低流动性溢价",
+    "幸存者偏差抬高历史 IC",
+    "调参过拟合发现集"
+  ]
+}

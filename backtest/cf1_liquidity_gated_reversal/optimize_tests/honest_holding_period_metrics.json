@@ -1,0 +1,6 @@
+{
+  "note": "H-day overlapping returns; Sharpe = mean/std * sqrt(252/H). Not the daily-split sleeve Sharpe.",
+  "discovery": {"ann_ol": 0.176, "sharpe_ol": 0.71, "ann_no": 0.194, "sharpe_no": 0.81, "dd_no": -0.347},
+  "validation": {"ann_ol": 0.149, "sharpe_ol": 0.52, "ann_no": 0.193, "sharpe_no": 0.73, "dd_no": -0.201},
+  "test": {"ann_ol": 0.210, "sharpe_ol": 1.11, "ann_no": 0.180, "sharpe_no": 1.10, "dd_no": -0.194}
+}

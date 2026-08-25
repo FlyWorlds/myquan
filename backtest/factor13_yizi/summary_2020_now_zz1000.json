@@ -1,0 +1,20 @@
+{
+  "universe_key": "zz1000",
+  "universe": "000852",
+  "universe_label": "中证1000",
+  "start": "20200102",
+  "end": "20260824",
+  "trading_days": 1610,
+  "total_return": -0.37251900000000004,
+  "ann_return": -0.07034867892434138,
+  "max_drawdown": -0.3752623426815481,
+  "max_dd_peak_date": "20200414",
+  "max_dd_trough_date": "20260819",
+  "vol_ann": 0.046286200642245874,
+  "sharpe": -1.5522614609602259,
+  "final_equity": 627481.0,
+  "n_trades": 1891,
+  "avg_positions": 5.593788819875776,
+  "one_way_cost": 0.0,
+  "exclude_limit_board": true
+}
