@@ -3,7 +3,7 @@
 收盘确认，次日开盘生效；叠在因子1 上：
   · 买卖仍走因子1 开盘±pct
   · 阈值止损始终全清
-  · 行情默认：MA5/MA10 金叉→牛、死叉→跌、均线缠绕→震
+  · 行情默认：MA5/MA10 金叉/死叉 + 缠绕 + 力度过滤
   · 牛市：分档减仓止盈（默认 +20/30/40%，各减约 1/3）
   · 震荡：分档减仓止盈（默认 +10/15/20%，各减约 1/3）
   · 下跌：分档减仓止盈（默认 +5/10/15%，各减约 1/3）
@@ -30,7 +30,7 @@ DEFAULT_BULL_PARAMS: dict[str, Any] = {
     "buffer": 0.0,
 }
 
-# 三态行情：默认 MA5/MA10 金叉死叉+缠绕；可选旧 roc_ma
+# 三态行情：默认 MA5/MA10 金叉死叉+缠绕+力度；可选旧 roc_ma
 DEFAULT_REGIME_METHOD = "ma_cross"  # ma_cross | roc_ma
 DEFAULT_REGIME_FAST = 5
 DEFAULT_REGIME_SLOW = 10
@@ -38,6 +38,10 @@ DEFAULT_REGIME_SLOW = 10
 DEFAULT_REGIME_ENTANGLE_PCT = 0.008
 # 近 N 日内金叉+死叉次数 ≥2 → 也视为缠绕
 DEFAULT_REGIME_CROSS_LOOKBACK = 5
+# 力度：价差强度 + 斜率加权；低于此值的多/空头只算弱排列→震荡
+DEFAULT_REGIME_STRENGTH_MIN = 0.015
+DEFAULT_REGIME_SLOPE_N = 3
+DEFAULT_REGIME_SLOPE_WEIGHT = 0.5
 # 旧口径兼容
 DEFAULT_REGIME_MA_N = 60
 DEFAULT_REGIME_ROC_N = 20
@@ -86,6 +90,48 @@ def raw_to_bull_target(
     return out
 
 
+def ma_cross_strength(
+    close: pd.Series,
+    *,
+    ma_fast: int = DEFAULT_REGIME_FAST,
+    ma_slow: int = DEFAULT_REGIME_SLOW,
+    slope_n: int = DEFAULT_REGIME_SLOPE_N,
+    slope_weight: float = DEFAULT_REGIME_SLOPE_WEIGHT,
+) -> pd.DataFrame:
+    """计算 MA 快慢线价差力度与方向性斜率力度。
+
+    strength = |MA快−MA慢|/收盘 + slope_weight × max(0, 顺势斜率)
+    顺势斜率：多头用 MA快 近 slope_n 日涨幅；空头用跌幅绝对值。
+    """
+    px = close.astype(float)
+    f = max(2, int(ma_fast))
+    s = max(f + 1, int(ma_slow))
+    n = max(1, int(slope_n))
+    ma_f = px.rolling(f, min_periods=max(2, f // 2)).mean()
+    ma_s = px.rolling(s, min_periods=max(3, s // 2)).mean()
+    spread = (ma_f - ma_s).abs() / px.replace(0.0, pd.NA)
+    slope = ma_f / ma_f.shift(n) - 1.0
+    long_side = ma_f > ma_s
+    # 多头只计上斜，空头只计下斜
+    dir_slope = slope.where(long_side, -slope).clip(lower=0.0)
+    strength = spread.fillna(0.0) + float(slope_weight) * dir_slope.fillna(0.0)
+    golden = (ma_f > ma_s) & (ma_f.shift(1) <= ma_s.shift(1))
+    death = (ma_f < ma_s) & (ma_f.shift(1) >= ma_s.shift(1))
+    return pd.DataFrame(
+        {
+            "ma_fast": ma_f,
+            "ma_slow": ma_s,
+            "spread": spread,
+            "slope": slope,
+            "dir_slope": dir_slope,
+            "strength": strength,
+            "golden": golden.fillna(False),
+            "death": death.fillna(False),
+        },
+        index=px.index,
+    )
+
+
 def classify_market_regime_ma_cross(
     close: pd.Series,
     *,
@@ -93,27 +139,36 @@ def classify_market_regime_ma_cross(
     ma_slow: int = DEFAULT_REGIME_SLOW,
     entangle_pct: float = DEFAULT_REGIME_ENTANGLE_PCT,
     cross_lookback: int = DEFAULT_REGIME_CROSS_LOOKBACK,
+    strength_min: float = DEFAULT_REGIME_STRENGTH_MIN,
+    slope_n: int = DEFAULT_REGIME_SLOPE_N,
+    slope_weight: float = DEFAULT_REGIME_SLOPE_WEIGHT,
 ) -> pd.Series:
-    """MA快/慢：多头排列→牛，空头排列→跌，缠绕→震。
+    """MA快/慢 + 金叉死叉力度 → 牛/震/跌。
 
-    缠绕：|MA快−MA慢|/收盘 < entangle_pct，或近 cross_lookback 日金叉+死叉≥2 次。
+    · 缠绕：价差 < entangle_pct，或近 lookback 日交叉≥2 → 震
+    · 强金叉/强多头：MA快>MA慢 且 strength≥strength_min → 牛
+    · 强死叉/强空头：MA快<MA慢 且 strength≥strength_min → 跌
+    · 弱排列（有方向但力度不够）→ 震
     """
     px = close.astype(float)
-    f = max(2, int(ma_fast))
-    s = max(f + 1, int(ma_slow))
-    ma_f = px.rolling(f, min_periods=max(2, f // 2)).mean()
-    ma_s = px.rolling(s, min_periods=max(3, s // 2)).mean()
-    spread = (ma_f - ma_s).abs() / px.replace(0.0, pd.NA)
-    golden = (ma_f > ma_s) & (ma_f.shift(1) <= ma_s.shift(1))
-    death = (ma_f < ma_s) & (ma_f.shift(1) >= ma_s.shift(1))
+    feat = ma_cross_strength(
+        px,
+        ma_fast=ma_fast,
+        ma_slow=ma_slow,
+        slope_n=slope_n,
+        slope_weight=slope_weight,
+    )
     lb = max(2, int(cross_lookback))
     cross_n = (
-        golden.astype(float) + death.astype(float)
+        feat["golden"].astype(float) + feat["death"].astype(float)
     ).rolling(lb, min_periods=1).sum()
-    entangled = (spread < float(entangle_pct)) | (cross_n >= 2.0)
+    entangled = (feat["spread"] < float(entangle_pct)) | (cross_n >= 2.0)
+    strong = feat["strength"] >= float(strength_min)
+    # 交叉当日若力度不足，强制视为弱信号（震）
+    weak_cross = (feat["golden"] | feat["death"]) & (~strong)
     regime = pd.Series(REGIME_SIDEWAYS, index=px.index, dtype=object)
-    bull = (~entangled) & (ma_f > ma_s)
-    bear = (~entangled) & (ma_f < ma_s)
+    bull = (~entangled) & (~weak_cross) & strong & (feat["ma_fast"] > feat["ma_slow"])
+    bear = (~entangled) & (~weak_cross) & strong & (feat["ma_fast"] < feat["ma_slow"])
     return regime.mask(bull, REGIME_BULL).mask(bear, REGIME_BEAR)
 
 
@@ -143,6 +198,9 @@ def classify_market_regime(
     ma_slow: int = DEFAULT_REGIME_SLOW,
     entangle_pct: float = DEFAULT_REGIME_ENTANGLE_PCT,
     cross_lookback: int = DEFAULT_REGIME_CROSS_LOOKBACK,
+    strength_min: float = DEFAULT_REGIME_STRENGTH_MIN,
+    slope_n: int = DEFAULT_REGIME_SLOPE_N,
+    slope_weight: float = DEFAULT_REGIME_SLOPE_WEIGHT,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> pd.Series:
@@ -156,6 +214,9 @@ def classify_market_regime(
         ma_slow=ma_slow,
         entangle_pct=entangle_pct,
         cross_lookback=cross_lookback,
+        strength_min=strength_min,
+        slope_n=slope_n,
+        slope_weight=slope_weight,
     )
 
 
@@ -167,6 +228,9 @@ def build_market_regime_series(
     ma_slow: int = DEFAULT_REGIME_SLOW,
     entangle_pct: float = DEFAULT_REGIME_ENTANGLE_PCT,
     cross_lookback: int = DEFAULT_REGIME_CROSS_LOOKBACK,
+    strength_min: float = DEFAULT_REGIME_STRENGTH_MIN,
+    slope_n: int = DEFAULT_REGIME_SLOPE_N,
+    slope_weight: float = DEFAULT_REGIME_SLOPE_WEIGHT,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> pd.DataFrame:
@@ -181,6 +245,9 @@ def build_market_regime_series(
         ma_slow=ma_slow,
         entangle_pct=entangle_pct,
         cross_lookback=cross_lookback,
+        strength_min=strength_min,
+        slope_n=slope_n,
+        slope_weight=slope_weight,
         ma_n=ma_n,
         roc_n=roc_n,
     )
@@ -190,6 +257,23 @@ def build_market_regime_series(
     out["bull_raw"] = (raw == REGIME_BULL).astype(float)
     out["bull_target"] = out["bull_raw"]
     out["bull_exec"] = out["bull_raw"].shift(1)
+    # 诊断列：力度（仅 ma_cross）
+    if str(method or DEFAULT_REGIME_METHOD).lower() not in (
+        "roc_ma",
+        "ma60_roc",
+        "legacy",
+    ):
+        feat = ma_cross_strength(
+            out["close"],
+            ma_fast=ma_fast,
+            ma_slow=ma_slow,
+            slope_n=slope_n,
+            slope_weight=slope_weight,
+        )
+        out["regime_spread"] = feat["spread"]
+        out["regime_strength"] = feat["strength"]
+        out["regime_golden"] = feat["golden"]
+        out["regime_death"] = feat["death"]
     return out
 
 
@@ -243,6 +327,9 @@ def market_regime_by_date(
     ma_slow: int = DEFAULT_REGIME_SLOW,
     entangle_pct: float = DEFAULT_REGIME_ENTANGLE_PCT,
     cross_lookback: int = DEFAULT_REGIME_CROSS_LOOKBACK,
+    strength_min: float = DEFAULT_REGIME_STRENGTH_MIN,
+    slope_n: int = DEFAULT_REGIME_SLOPE_N,
+    slope_weight: float = DEFAULT_REGIME_SLOPE_WEIGHT,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> dict[str, str]:
@@ -254,6 +341,9 @@ def market_regime_by_date(
         ma_slow=ma_slow,
         entangle_pct=entangle_pct,
         cross_lookback=cross_lookback,
+        strength_min=strength_min,
+        slope_n=slope_n,
+        slope_weight=slope_weight,
         ma_n=ma_n,
         roc_n=roc_n,
     )
@@ -316,6 +406,17 @@ def resolve_factor4_tp_policy(
         "cross_lookback": int(
             p.get("regime_cross_lookback") or DEFAULT_REGIME_CROSS_LOOKBACK
         ),
+        "strength_min": float(
+            p["regime_strength_min"]
+            if p.get("regime_strength_min") is not None
+            else DEFAULT_REGIME_STRENGTH_MIN
+        ),
+        "slope_n": int(p.get("regime_slope_n") or DEFAULT_REGIME_SLOPE_N),
+        "slope_weight": float(
+            p["regime_slope_weight"]
+            if p.get("regime_slope_weight") is not None
+            else DEFAULT_REGIME_SLOPE_WEIGHT
+        ),
         # 旧口径仍可读
         "ma_n": int(p.get("regime_ma_n") or DEFAULT_REGIME_MA_N),
         "roc_n": int(p.get("regime_roc_n") or DEFAULT_REGIME_ROC_N),
@@ -344,9 +445,10 @@ def bull_rules_text(kind: str, params: dict[str, Any] | None = None) -> str:
     else:
         regime_line = (
             f"  · 行情三态（MA{tp['ma_fast']}/MA{tp['ma_slow']}："
-            f"金叉多头→牛、死叉空头→跌、"
-            f"|差|/价<{tp['entangle_pct']*100:.1f}%或近{tp['cross_lookback']}日交叉≥2→缠绕震；"
-            f"收盘确认次日生效）\n"
+            f"金叉多头+力度≥{tp['strength_min']*100:.1f}%→牛、"
+            f"死叉空头+力度≥{tp['strength_min']*100:.1f}%→跌、"
+            f"|差|/价<{tp['entangle_pct']*100:.1f}%或近{tp['cross_lookback']}日交叉≥2或弱交叉→缠绕震；"
+            f"力度=价差+{tp['slope_weight']:.1f}×顺势斜率；收盘确认次日生效）\n"
         )
     return (
         base.replace("因子3 — 动量因子", "因子4 — 行情三态 + 分档止盈")
@@ -373,6 +475,9 @@ __all__ = [
     "DEFAULT_REGIME_SLOW",
     "DEFAULT_REGIME_ENTANGLE_PCT",
     "DEFAULT_REGIME_CROSS_LOOKBACK",
+    "DEFAULT_REGIME_STRENGTH_MIN",
+    "DEFAULT_REGIME_SLOPE_N",
+    "DEFAULT_REGIME_SLOPE_WEIGHT",
     "DEFAULT_REGIME_MA_N",
     "DEFAULT_REGIME_ROC_N",
     "DEFAULT_FACTOR4_TP_TRIGGER",
@@ -392,6 +497,7 @@ __all__ = [
     "classify_market_regime",
     "classify_market_regime_ma_cross",
     "classify_market_regime_roc_ma",
+    "ma_cross_strength",
     "bull_rules_text",
     "factor4_rules_text",
     "raw_to_bull_target",

@@ -160,6 +160,9 @@ def prepare_factor4(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
         ma_slow=int(policy["ma_slow"]),
         entangle_pct=float(policy["entangle_pct"]),
         cross_lookback=int(policy["cross_lookback"]),
+        strength_min=float(policy["strength_min"]),
+        slope_n=int(policy["slope_n"]),
+        slope_weight=float(policy["slope_weight"]),
         ma_n=int(policy["ma_n"]),
         roc_n=int(policy["roc_n"]),
     )

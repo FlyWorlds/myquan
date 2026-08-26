@@ -19,15 +19,36 @@ from strategy.backtest import OpenBreak3Strategy
 
 
 class Factor4RegimeTests(unittest.TestCase):
+    def test_weak_cross_stays_sideways(self) -> None:
+        """价差很小时即便交叉也不应直接判牛/跌。"""
+        idx = pd.bdate_range("2024-01-01", periods=40)
+        # 窄幅震荡：MA5/10 贴近，力度弱
+        close = pd.Series(100 + 0.2 * np.sin(np.linspace(0, 8 * np.pi, 40)), index=idx)
+        regime = classify_market_regime(
+            close,
+            method="ma_cross",
+            ma_fast=5,
+            ma_slow=10,
+            entangle_pct=0.008,
+            strength_min=0.015,
+        )
+        # 绝大多数应为 sideways
+        share_side = float((regime.astype(str) == "sideways").mean())
+        self.assertGreaterEqual(share_side, 0.7)
+
     def test_classify_ma_cross_bull_bear(self) -> None:
         idx = pd.bdate_range("2024-01-01", periods=120)
-        # 先跌后涨：后段应出现 bull，中段 bear
         close = pd.Series(
             np.linspace(100, 70, 60).tolist() + np.linspace(70, 120, 60).tolist(),
             index=idx,
         )
         regime = classify_market_regime(
-            close, method="ma_cross", ma_fast=5, ma_slow=10, entangle_pct=0.005
+            close,
+            method="ma_cross",
+            ma_fast=5,
+            ma_slow=10,
+            entangle_pct=0.005,
+            strength_min=0.01,
         )
         self.assertIn("bear", set(regime.iloc[20:50].astype(str)))
         self.assertIn("bull", set(regime.iloc[90:].astype(str)))
@@ -48,6 +69,8 @@ class Factor4RegimeTests(unittest.TestCase):
         self.assertEqual(p["regime_method"], "ma_cross")
         self.assertEqual(p["ma_fast"], 5)
         self.assertEqual(p["ma_slow"], 10)
+        self.assertAlmostEqual(p["strength_min"], 0.015)
+        self.assertAlmostEqual(p["slope_weight"], 0.5)
         self.assertEqual(p["bull_levels"], (0.20, 0.30, 0.40))
         self.assertEqual(p["sideways_levels"], (0.10, 0.15, 0.20))
         self.assertEqual(p["bear_levels"], (0.05, 0.10, 0.15))

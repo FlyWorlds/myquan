@@ -82,6 +82,9 @@ def _ensure_cache(
         ma_slow=int(policy["ma_slow"]),
         entangle_pct=float(policy["entangle_pct"]),
         cross_lookback=int(policy["cross_lookback"]),
+        strength_min=float(policy["strength_min"]),
+        slope_n=int(policy["slope_n"]),
+        slope_weight=float(policy["slope_weight"]),
         ma_n=int(policy["ma_n"]),
         roc_n=int(policy["roc_n"]),
     )
@@ -152,7 +155,7 @@ def format_factor4_tag(
     if mode == "suppressed":
         return "牛市·暂停止损"
     if reg == "bull":
-        return "牛市·MA金叉/分档20/30/40"
+        return "牛市·强金叉/分档20/30/40"
     if reg == "bear":
-        return "下跌·MA死叉/分档5/10/15"
-    return "震荡·均线缠绕/分档10/15/20"
+        return "下跌·强死叉/分档5/10/15"
+    return "震荡·缠绕或弱交叉/分档10/15/20"
