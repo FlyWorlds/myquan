@@ -165,6 +165,86 @@ def _sticky_from_crosses(
     return pd.Series(out, index=g.index, dtype=object)
 
 
+# 开仓门控：死叉禁买；即将金叉 / 金叉后趋势才允许
+DEFAULT_ENTRY_APPROACH_GAP = 0.008  # |MA慢−MA快|/收盘 ≤ 该值视为即将金叉
+DEFAULT_ENTRY_APPROACH_SLOPE_N = 2
+
+
+def ma_cross_entry_gate_series(
+    close: pd.Series,
+    *,
+    ma_fast: int = DEFAULT_REGIME_FAST,
+    ma_slow: int = DEFAULT_REGIME_SLOW,
+    approach_gap: float = DEFAULT_ENTRY_APPROACH_GAP,
+    slope_n: int = DEFAULT_ENTRY_APPROACH_SLOPE_N,
+    require_gap_shrink: bool = True,
+) -> pd.DataFrame:
+    """MA 开仓门控特征（当日收盘确认，不含 shift）。
+
+    允许开仓：
+      · 金叉趋势：粘性金叉后（直到死叉）
+      · 即将金叉：仍处死叉侧，但价差收窄至 approach_gap 内且快线上行
+    禁止开仓：死叉粘性且不满足即将金叉。
+    """
+    px = close.astype(float)
+    feat = ma_cross_strength(px, ma_fast=ma_fast, ma_slow=ma_slow)
+    ma_f = feat["ma_fast"]
+    ma_s = feat["ma_slow"]
+    sticky = _sticky_from_crosses(feat["golden"], feat["death"])
+    in_golden_trend = sticky.eq(REGIME_BULL)
+    gap_below = (ma_s - ma_f) / px.replace(0.0, pd.NA)  # >0 表示快线仍在慢线下方
+    n = max(1, int(slope_n))
+    fast_up = ma_f > ma_f.shift(n)
+    near = (gap_below > 0) & (gap_below <= float(approach_gap)) & fast_up.fillna(False)
+    if require_gap_shrink:
+        near = near & (gap_below < gap_below.shift(1)).fillna(False)
+    approaching = near.fillna(False)
+    # 死叉侧且非即将金叉 → 明确禁买
+    in_death = sticky.eq(REGIME_BEAR) | ((ma_f < ma_s) & ~approaching & ~in_golden_trend)
+    allowed = (in_golden_trend | approaching).fillna(False)
+    return pd.DataFrame(
+        {
+            "ma_fast": ma_f,
+            "ma_slow": ma_s,
+            "gap_below": gap_below,
+            "approaching_golden": approaching,
+            "golden_trend": in_golden_trend,
+            "death_block": in_death.fillna(False) & ~allowed,
+            "entry_allowed_raw": allowed,
+            "sticky": sticky,
+        },
+        index=px.index,
+    )
+
+
+def ma_cross_entry_allowed_by_date(
+    daily: pd.DataFrame,
+    *,
+    ma_fast: int = DEFAULT_REGIME_FAST,
+    ma_slow: int = DEFAULT_REGIME_SLOW,
+    approach_gap: float = DEFAULT_ENTRY_APPROACH_GAP,
+    slope_n: int = DEFAULT_ENTRY_APPROACH_SLOPE_N,
+    require_gap_shrink: bool = True,
+) -> dict[str, bool]:
+    """date -> 当日开盘是否允许因子1 买入（收盘确认次日生效）。"""
+    if "close" not in daily.columns:
+        raise KeyError("daily 缺少 close")
+    feat = ma_cross_entry_gate_series(
+        daily["close"],
+        ma_fast=ma_fast,
+        ma_slow=ma_slow,
+        approach_gap=approach_gap,
+        slope_n=slope_n,
+        require_gap_shrink=require_gap_shrink,
+    )
+    allowed_exec = feat["entry_allowed_raw"].shift(1)
+    dates = [_date_key(v) for v in daily["date"].tolist()]
+    out: dict[str, bool] = {}
+    for d, ok in zip(dates, allowed_exec.tolist()):
+        out[d] = False if pd.isna(ok) else bool(ok)
+    return out
+
+
 def classify_market_regime_ma_cross(
     close: pd.Series,
     *,
@@ -689,6 +769,18 @@ def resolve_factor4_tp_policy(
         "macd_div_lookback": int(
             p.get("regime_macd_div_lookback") or DEFAULT_MACD_DIV_LOOKBACK
         ),
+        "ma_entry_gate": bool(p.get("ma_entry_gate", False)),
+        "entry_approach_gap": float(
+            p["entry_approach_gap"]
+            if p.get("entry_approach_gap") is not None
+            else DEFAULT_ENTRY_APPROACH_GAP
+        ),
+        "entry_approach_slope_n": int(
+            p.get("entry_approach_slope_n") or DEFAULT_ENTRY_APPROACH_SLOPE_N
+        ),
+        "entry_require_gap_shrink": bool(
+            True if p.get("entry_require_gap_shrink") is None else p.get("entry_require_gap_shrink")
+        ),
         "entangle_pct": float(
             p["regime_entangle_pct"]
             if p.get("regime_entangle_pct") is not None
@@ -811,10 +903,14 @@ __all__ = [
     "classify_market_regime_macd_pattern",
     "classify_market_regime_roc_ma",
     "ma_cross_strength",
+    "ma_cross_entry_gate_series",
+    "ma_cross_entry_allowed_by_date",
     "macd_cross_features",
     "macd_pattern_features",
     "bull_rules_text",
     "factor4_rules_text",
     "raw_to_bull_target",
     "resolve_factor4_tp_policy",
+    "DEFAULT_ENTRY_APPROACH_GAP",
+    "DEFAULT_ENTRY_APPROACH_SLOPE_N",
 ]

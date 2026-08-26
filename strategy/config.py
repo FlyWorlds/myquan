@@ -107,6 +107,8 @@ class BacktestConfig:
     factor4_params: dict | None = None
     # True=按牛/震/跌自动挂分档止盈（默认）；False=仅旧牛市止损逻辑
     factor4_regime_tp: bool = True
+    # MA5/10 开仓门控：死叉禁买；即将金叉/金叉趋势才买（可与因子4止盈并用）
+    ma_entry_gate: bool = False
     # 牛市空仓时开盘建仓持股（兼容旧行为，默认关）
     factor4_bull_entry: bool = False
     # 牛市内跳过因子1 突破买点（已有仓或 bull_entry 时）

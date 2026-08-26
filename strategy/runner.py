@@ -138,6 +138,7 @@ def prepare_factor4(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
     if not bool(getattr(cfg, "factor4_enabled", False)):
         cfg._bull_by_date = {}
         cfg._regime_by_date = {}
+        _apply_ma_entry_gate(cfg, daily)
         return
 
     from strategy.bull_regime import (
@@ -172,22 +173,68 @@ def prepare_factor4(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
     )
 
     # 默认：因子4 自动打开行情止盈；factor4_regime_tp=False 则只保留旧牛市止损逻辑
-    if not bool(getattr(cfg, "factor4_regime_tp", True)):
+    if bool(getattr(cfg, "factor4_regime_tp", True)):
+        cfg.regime_tp_enabled = True
+        if not getattr(cfg, "regime_by_date", None):
+            cfg.regime_by_date = dict(cfg._regime_by_date)
+        cfg.regime_tp_bull = tuple(policy["bull_levels"])
+        cfg.regime_tp_sideways = tuple(policy["sideways_levels"])
+        cfg.regime_tp_bear = tuple(policy["bear_levels"])
+        cfg.regime_tp_reduce_bull = float(policy["bull_reduce"])
+        cfg.regime_tp_reduce_sideways = float(policy["sideways_reduce"])
+        cfg.regime_tp_reduce_bear = float(policy["bear_reduce"])
+        # 波段默认昨高触及→今开卖；已显式设为 close 则保留
+        trig = str(getattr(cfg, "take_profit_trigger", "high") or "high").lower()
+        if trig not in ("close", "prev_high"):
+            cfg.take_profit_trigger = str(policy["trigger"])
+
+    _apply_ma_entry_gate(cfg, daily)
+
+
+def _apply_ma_entry_gate(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
+    """死叉不开仓；即将金叉 / 金叉趋势才允许买入（写入 energy_allowed_by_date）。"""
+    params = dict(getattr(cfg, "factor4_params", None) or {})
+    want = bool(getattr(cfg, "ma_entry_gate", False))
+    if params.get("ma_entry_gate") is not None:
+        want = bool(params.get("ma_entry_gate"))
+    eg = str(params.get("entry_gate") or "").strip().lower()
+    if eg in ("ma_cross", "ma", "golden", "golden_trend"):
+        want = True
+    if not want:
         return
 
-    cfg.regime_tp_enabled = True
-    if not getattr(cfg, "regime_by_date", None):
-        cfg.regime_by_date = dict(cfg._regime_by_date)
-    cfg.regime_tp_bull = tuple(policy["bull_levels"])
-    cfg.regime_tp_sideways = tuple(policy["sideways_levels"])
-    cfg.regime_tp_bear = tuple(policy["bear_levels"])
-    cfg.regime_tp_reduce_bull = float(policy["bull_reduce"])
-    cfg.regime_tp_reduce_sideways = float(policy["sideways_reduce"])
-    cfg.regime_tp_reduce_bear = float(policy["bear_reduce"])
-    # 波段默认昨高触及→今开卖；已显式设为 close 则保留
-    trig = str(getattr(cfg, "take_profit_trigger", "high") or "high").lower()
-    if trig not in ("close", "prev_high"):
-        cfg.take_profit_trigger = str(policy["trigger"])
+    from strategy.bull_regime import (
+        ma_cross_entry_allowed_by_date,
+        resolve_factor4_tp_policy,
+    )
+
+    policy = resolve_factor4_tp_policy(params)
+    cfg.energy_allowed_by_date = ma_cross_entry_allowed_by_date(
+        daily,
+        ma_fast=int(policy["ma_fast"]),
+        ma_slow=int(policy["ma_slow"]),
+        approach_gap=float(policy["entry_approach_gap"]),
+        slope_n=int(policy["entry_approach_slope_n"]),
+        require_gap_shrink=bool(policy["entry_require_gap_shrink"]),
+    )
+
+
+def _needs_prepare(cfg: BacktestConfig) -> bool:
+    if bool(getattr(cfg, "factor4_enabled", False)):
+        return True
+    if bool(getattr(cfg, "ma_entry_gate", False)):
+        return True
+    params = dict(getattr(cfg, "factor4_params", None) or {})
+    if bool(params.get("ma_entry_gate")):
+        return True
+    if str(params.get("entry_gate") or "").strip().lower() in (
+        "ma_cross",
+        "ma",
+        "golden",
+        "golden_trend",
+    ):
+        return True
+    return False
 
 
 def build_open_break_strategy(cfg: BacktestConfig) -> OpenBreak3Strategy:
@@ -229,7 +276,7 @@ def run_open_break(
         params=cfg,
         strategy_cls=OpenBreak3Strategy,
         configure=apply_strategy_config,
-        prepare=prepare_factor4 if bool(getattr(cfg, "factor4_enabled", False)) else None,
+        prepare=prepare_factor4 if _needs_prepare(cfg) else None,
         print_summary_fn=print_summary if verbose else None,
         summary_kwargs={
             "symbol_name": cfg.symbol_name,

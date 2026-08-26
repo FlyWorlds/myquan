@@ -125,6 +125,24 @@ class Factor4RegimeTests(unittest.TestCase):
         self.assertEqual(p["regime_method"], "macd_pattern")
         self.assertEqual(p["macd_div_lookback"], 30)
 
+    def test_ma_entry_gate_blocks_death(self) -> None:
+        """死叉区间不允许开仓；金叉后允许。"""
+        from strategy.bull_regime import ma_cross_entry_gate_series
+
+        idx = pd.bdate_range("2024-01-01", periods=80)
+        close = pd.Series(
+            np.linspace(100, 70, 35).tolist() + np.linspace(70, 120, 45).tolist(),
+            index=idx,
+        )
+        gate = ma_cross_entry_gate_series(close, approach_gap=0.01, require_gap_shrink=False)
+        # 前段下跌应大量 death_block / 不允许
+        early = gate.iloc[15:30]
+        self.assertGreaterEqual(float((~early["entry_allowed_raw"]).mean()), 0.7)
+        # 后段上涨金叉后应允许
+        late = gate.iloc[55:]
+        self.assertGreaterEqual(float(late["entry_allowed_raw"].mean()), 0.5)
+        self.assertTrue(bool(late["golden_trend"].any()))
+
     def test_tp_policy_defaults(self) -> None:
         p = resolve_factor4_tp_policy()
         self.assertEqual(p["trigger"], "prev_high")
