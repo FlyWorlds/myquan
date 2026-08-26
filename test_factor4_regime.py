@@ -106,6 +106,25 @@ class Factor4RegimeTests(unittest.TestCase):
                 break
             self.assertEqual(v, "bull")
 
+    def test_classify_macd_pattern_stages(self) -> None:
+        """水下金叉→震，上穿零轴/水上金叉→牛，死叉降档。"""
+        idx = pd.bdate_range("2024-01-01", periods=200)
+        # 深跌 → 反弹过零轴 → 再冲高 → 回落
+        close = pd.Series(
+            np.linspace(120, 60, 60).tolist()
+            + np.linspace(60, 100, 50).tolist()
+            + np.linspace(100, 140, 40).tolist()
+            + np.linspace(140, 90, 50).tolist(),
+            index=idx,
+        )
+        regime = classify_market_regime(close, method="macd_pattern")
+        self.assertIn("sideways", set(regime.astype(str)))
+        self.assertIn("bull", set(regime.astype(str)))
+        self.assertIn("bear", set(regime.astype(str)))
+        p = resolve_factor4_tp_policy({"regime_method": "macd_pattern"})
+        self.assertEqual(p["regime_method"], "macd_pattern")
+        self.assertEqual(p["macd_div_lookback"], 30)
+
     def test_tp_policy_defaults(self) -> None:
         p = resolve_factor4_tp_policy()
         self.assertEqual(p["trigger"], "prev_high")

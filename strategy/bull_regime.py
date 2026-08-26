@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+import numpy as np
 import pandas as pd
 
 from strategy.momentum import (
@@ -30,8 +31,8 @@ DEFAULT_BULL_PARAMS: dict[str, Any] = {
     "buffer": 0.0,
 }
 
-# 三态行情：默认 MA5/MA10 金叉死叉粘性；可选 macd_cross / roc_ma
-DEFAULT_REGIME_METHOD = "ma_cross"  # ma_cross | macd_cross | roc_ma
+# 三态行情：默认 MA5/MA10 金叉死叉粘性；可选 macd_cross / macd_pattern / roc_ma
+DEFAULT_REGIME_METHOD = "ma_cross"  # ma_cross | macd_cross | macd_pattern | roc_ma
 DEFAULT_REGIME_FAST = 5
 DEFAULT_REGIME_SLOW = 10
 DEFAULT_MACD_FAST = 12
@@ -255,6 +256,148 @@ def classify_market_regime_macd_cross(
     )
 
 
+DEFAULT_MACD_DIV_LOOKBACK = 30
+
+
+def _macd_window_divergence(
+    close: pd.Series,
+    dif: pd.Series,
+    *,
+    lookback: int = DEFAULT_MACD_DIV_LOOKBACK,
+) -> tuple[pd.Series, pd.Series]:
+    """简易窗口背离：前半/后半窗极值反向。
+
+    底背离：价创新低、DIF 低点抬高；顶背离：价创新高、DIF 高点降低。
+    """
+    n = len(close)
+    lb = max(10, int(lookback))
+    half = max(3, lb // 2)
+    bull = np.zeros(n, dtype=bool)
+    bear = np.zeros(n, dtype=bool)
+    px = close.astype(float).to_numpy()
+    df = dif.astype(float).to_numpy()
+    for i in range(lb, n):
+        a0, a1 = i - lb, i - half
+        b0, b1 = i - half, i + 1
+        p1, p2 = np.nanmin(px[a0:a1]), np.nanmin(px[b0:b1])
+        d1, d2 = np.nanmin(df[a0:a1]), np.nanmin(df[b0:b1])
+        if np.isfinite(p1) and np.isfinite(p2) and np.isfinite(d1) and np.isfinite(d2):
+            if p2 < p1 and d2 > d1:
+                bull[i] = True
+        p1h, p2h = np.nanmax(px[a0:a1]), np.nanmax(px[b0:b1])
+        d1h, d2h = np.nanmax(df[a0:a1]), np.nanmax(df[b0:b1])
+        if np.isfinite(p1h) and np.isfinite(p2h) and np.isfinite(d1h) and np.isfinite(d2h):
+            if p2h > p1h and d2h < d1h:
+                bear[i] = True
+    idx = close.index
+    return pd.Series(bull, index=idx), pd.Series(bear, index=idx)
+
+
+def macd_pattern_features(
+    close: pd.Series,
+    *,
+    fast: int = DEFAULT_MACD_FAST,
+    slow: int = DEFAULT_MACD_SLOW,
+    signal: int = DEFAULT_MACD_SIGNAL,
+    div_lookback: int = DEFAULT_MACD_DIV_LOOKBACK,
+) -> pd.DataFrame:
+    """MACD 形态特征：水下/水上交叉、零轴穿越、金叉/死叉背离。"""
+    base = macd_cross_features(close, fast=fast, slow=slow, signal=signal)
+    dif = base["dif"]
+    dea = base["dea"]
+    golden = base["golden"]
+    death = base["death"]
+    # 水下：交叉当日 DIF、DEA 均 ≤0；水上：均 ≥0；其余算近零轴
+    below = (dif <= 0) & (dea <= 0)
+    above = (dif >= 0) & (dea >= 0)
+    golden_below = golden & below
+    golden_above = golden & above
+    death_below = death & below
+    death_above = death & above
+    zero_up = (dif > 0) & (dif.shift(1) <= 0)
+    zero_down = (dif < 0) & (dif.shift(1) >= 0)
+    div_bull, div_bear = _macd_window_divergence(
+        close.astype(float), dif, lookback=div_lookback
+    )
+    # 金叉背离 / 死叉背离：交叉日叠加窗口背离
+    golden_div = golden & div_bull
+    death_div = death & div_bear
+    event = pd.Series("", index=close.index, dtype=object)
+    # 优先级：背离交叉 > 零轴 > 水上/水下交叉
+    event = event.mask(death_div, "death_div")
+    event = event.mask(golden_div & (event == ""), "golden_div")
+    event = event.mask(zero_down.fillna(False) & (event == ""), "zero_down")
+    event = event.mask(zero_up.fillna(False) & (event == ""), "zero_up")
+    event = event.mask(death_above & (event == ""), "death_above")
+    event = event.mask(death_below & (event == ""), "death_below")
+    event = event.mask(golden_above & (event == ""), "golden_above")
+    event = event.mask(golden_below & (event == ""), "golden_below")
+    return pd.DataFrame(
+        {
+            "dif": dif,
+            "dea": dea,
+            "hist": base["hist"],
+            "strength": base["strength"],
+            "golden": golden,
+            "death": death,
+            "golden_below": golden_below.fillna(False),
+            "golden_above": golden_above.fillna(False),
+            "death_below": death_below.fillna(False),
+            "death_above": death_above.fillna(False),
+            "zero_up": zero_up.fillna(False),
+            "zero_down": zero_down.fillna(False),
+            "div_bull": div_bull,
+            "div_bear": div_bear,
+            "golden_div": golden_div.fillna(False),
+            "death_div": death_div.fillna(False),
+            "pattern_event": event.fillna(""),
+        },
+        index=close.index,
+    )
+
+
+def classify_market_regime_macd_pattern(
+    close: pd.Series,
+    *,
+    macd_fast: int = DEFAULT_MACD_FAST,
+    macd_slow: int = DEFAULT_MACD_SLOW,
+    macd_signal: int = DEFAULT_MACD_SIGNAL,
+    div_lookback: int = DEFAULT_MACD_DIV_LOOKBACK,
+) -> pd.Series:
+    """MACD 形态粘性状态机 → 牛/震/跌止盈档。
+
+    映射（尾盘确认，次日开盘生效）：
+      · 水下金叉 → 震荡档（试探反弹）
+      · 金叉背离 → 牛市档（底背离金叉更积极）
+      · 金叉后上穿零轴 / 水上金叉 → 牛市档
+      · 水上死叉 → 震荡档（先降档）
+      · 下穿零轴 / 水下死叉 / 死叉顶背离 → 下跌档
+    无新事件则保持上一状态。
+    """
+    feat = macd_pattern_features(
+        close,
+        fast=macd_fast,
+        slow=macd_slow,
+        signal=macd_signal,
+        div_lookback=div_lookback,
+    )
+    out: list[str] = []
+    state = REGIME_SIDEWAYS
+    for ev in feat["pattern_event"].astype(str).tolist():
+        if ev == "golden_div":
+            state = REGIME_BULL
+        elif ev == "golden_below":
+            state = REGIME_SIDEWAYS
+        elif ev in ("zero_up", "golden_above"):
+            state = REGIME_BULL
+        elif ev == "death_above":
+            state = REGIME_SIDEWAYS
+        elif ev in ("zero_down", "death_below", "death_div"):
+            state = REGIME_BEAR
+        out.append(state)
+    return pd.Series(out, index=close.index, dtype=object)
+
+
 def classify_market_regime_roc_ma(
     close: pd.Series,
     *,
@@ -287,6 +430,7 @@ def classify_market_regime(
     macd_fast: int = DEFAULT_MACD_FAST,
     macd_slow: int = DEFAULT_MACD_SLOW,
     macd_signal: int = DEFAULT_MACD_SIGNAL,
+    macd_div_lookback: int = DEFAULT_MACD_DIV_LOOKBACK,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> pd.Series:
@@ -301,6 +445,14 @@ def classify_market_regime(
             macd_slow=macd_slow,
             macd_signal=macd_signal,
             strength_min=strength_min,
+        )
+    if m in ("macd_pattern", "macd_stage", "macd_zero"):
+        return classify_market_regime_macd_pattern(
+            close,
+            macd_fast=macd_fast,
+            macd_slow=macd_slow,
+            macd_signal=macd_signal,
+            div_lookback=macd_div_lookback,
         )
     return classify_market_regime_ma_cross(
         close,
@@ -328,6 +480,7 @@ def build_market_regime_series(
     macd_fast: int = DEFAULT_MACD_FAST,
     macd_slow: int = DEFAULT_MACD_SLOW,
     macd_signal: int = DEFAULT_MACD_SIGNAL,
+    macd_div_lookback: int = DEFAULT_MACD_DIV_LOOKBACK,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> pd.DataFrame:
@@ -349,6 +502,7 @@ def build_market_regime_series(
         macd_fast=macd_fast,
         macd_slow=macd_slow,
         macd_signal=macd_signal,
+        macd_div_lookback=macd_div_lookback,
         ma_n=ma_n,
         roc_n=roc_n,
     )
@@ -358,7 +512,25 @@ def build_market_regime_series(
     out["bull_raw"] = (raw == REGIME_BULL).astype(float)
     out["bull_target"] = out["bull_raw"]
     out["bull_exec"] = out["bull_raw"].shift(1)
-    if method_l in ("macd", "macd_cross"):
+    if method_l in ("macd_pattern", "macd_stage", "macd_zero"):
+        feat = macd_pattern_features(
+            out["close"],
+            fast=macd_fast,
+            slow=macd_slow,
+            signal=macd_signal,
+            div_lookback=macd_div_lookback,
+        )
+        out["regime_strength"] = feat["strength"]
+        out["regime_golden"] = feat["golden"]
+        out["regime_death"] = feat["death"]
+        out["regime_dif"] = feat["dif"]
+        out["regime_dea"] = feat["dea"]
+        out["regime_pattern"] = feat["pattern_event"]
+        out["regime_golden_below"] = feat["golden_below"]
+        out["regime_golden_above"] = feat["golden_above"]
+        out["regime_zero_up"] = feat["zero_up"]
+        out["regime_golden_div"] = feat["golden_div"]
+    elif method_l in ("macd", "macd_cross"):
         feat = macd_cross_features(
             out["close"], fast=macd_fast, slow=macd_slow, signal=macd_signal
         )
@@ -438,6 +610,7 @@ def market_regime_by_date(
     macd_fast: int = DEFAULT_MACD_FAST,
     macd_slow: int = DEFAULT_MACD_SLOW,
     macd_signal: int = DEFAULT_MACD_SIGNAL,
+    macd_div_lookback: int = DEFAULT_MACD_DIV_LOOKBACK,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> dict[str, str]:
@@ -455,6 +628,7 @@ def market_regime_by_date(
         macd_fast=macd_fast,
         macd_slow=macd_slow,
         macd_signal=macd_signal,
+        macd_div_lookback=macd_div_lookback,
         ma_n=ma_n,
         roc_n=roc_n,
     )
@@ -512,6 +686,9 @@ def resolve_factor4_tp_policy(
         "macd_fast": int(p.get("regime_macd_fast") or DEFAULT_MACD_FAST),
         "macd_slow": int(p.get("regime_macd_slow") or DEFAULT_MACD_SLOW),
         "macd_signal": int(p.get("regime_macd_signal") or DEFAULT_MACD_SIGNAL),
+        "macd_div_lookback": int(
+            p.get("regime_macd_div_lookback") or DEFAULT_MACD_DIV_LOOKBACK
+        ),
         "entangle_pct": float(
             p["regime_entangle_pct"]
             if p.get("regime_entangle_pct") is not None
@@ -561,6 +738,13 @@ def bull_rules_text(kind: str, params: dict[str, Any] | None = None) -> str:
             f"  · 行情三态（MACD{tp['macd_fast']}/{tp['macd_slow']}/{tp['macd_signal']} "
             f"尾盘金叉死叉粘性：金叉→牛至死叉，死叉→跌至金叉；次日开盘生效）\n"
         )
+    elif method in ("macd_pattern", "macd_stage", "macd_zero"):
+        regime_line = (
+            f"  · 行情三态（MACD{tp['macd_fast']}/{tp['macd_slow']}/{tp['macd_signal']} 形态粘性："
+            f"水下金叉→震；金叉背离/上穿零轴/水上金叉→牛；"
+            f"水上死叉→震；下穿零轴/水下死叉/顶背离→跌；"
+            f"背离窗{tp['macd_div_lookback']}日；次日开盘生效）\n"
+        )
     else:
         regime_line = (
             f"  · 行情三态（MA{tp['ma_fast']}/MA{tp['ma_slow']} 尾盘交叉粘性："
@@ -599,6 +783,7 @@ __all__ = [
     "DEFAULT_MACD_FAST",
     "DEFAULT_MACD_SLOW",
     "DEFAULT_MACD_SIGNAL",
+    "DEFAULT_MACD_DIV_LOOKBACK",
     "DEFAULT_REGIME_ENTANGLE_PCT",
     "DEFAULT_REGIME_CROSS_LOOKBACK",
     "DEFAULT_REGIME_STRENGTH_MIN",
@@ -623,9 +808,11 @@ __all__ = [
     "classify_market_regime",
     "classify_market_regime_ma_cross",
     "classify_market_regime_macd_cross",
+    "classify_market_regime_macd_pattern",
     "classify_market_regime_roc_ma",
     "ma_cross_strength",
     "macd_cross_features",
+    "macd_pattern_features",
     "bull_rules_text",
     "factor4_rules_text",
     "raw_to_bull_target",

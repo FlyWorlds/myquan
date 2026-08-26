@@ -88,6 +88,7 @@ def _ensure_cache(
         macd_fast=int(policy["macd_fast"]),
         macd_slow=int(policy["macd_slow"]),
         macd_signal=int(policy["macd_signal"]),
+        macd_div_lookback=int(policy["macd_div_lookback"]),
         ma_n=int(policy["ma_n"]),
         roc_n=int(policy["roc_n"]),
     )
