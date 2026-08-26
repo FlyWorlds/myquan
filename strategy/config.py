@@ -86,6 +86,8 @@ class BacktestConfig:
     skip_buy_after_consec_stops: int = 0
     # 当天买入、下一交易日即止损：跳过下一次买点，再下一次才买；循环
     skip_buy_after_overnight_stop: bool = False
+    # True=买入后下一交易日开盘全清（持股一日）
+    exit_next_open: bool = False
     # 因子2（策略一默认叠加）：None=用 strategy1 bindings / dd_topup 默认
     factor2_enabled: bool | None = None
     factor2_add_pct: float | None = None  # 均匀每档；与 factor2_add_pcts 二选一
@@ -188,6 +190,8 @@ class BacktestConfig:
             skip_bits.append(f"连止损{skip_n}跳买")
         if self.skip_buy_after_overnight_stop:
             skip_bits.append("隔日止损跳买")
+        if bool(getattr(self, "exit_next_open", False)):
+            skip_bits.append("次日开盘清")
         skip = ("/" + "+".join(skip_bits)) if skip_bits else ""
         ep = self.resolved_entry_pct()
         sp = self.resolved_stop_pct()

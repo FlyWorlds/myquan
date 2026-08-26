@@ -77,6 +77,8 @@ class OpenBreak3Strategy(Strategy):
     skip_buy_after_consec_stops: int = 0
     # 当天买、下一交易日止损 → 跳过下一次买点，再下一次才买
     skip_buy_after_overnight_stop: bool = False
+    # True=买入后下一交易日开盘全清（持股一日）
+    exit_next_open: bool = False
     # 因子4：牛市持股 regime（由 runner 注入 bull_by_date）
     factor4_enabled: bool = False
     factor4_bull_entry: bool = False
@@ -217,6 +219,8 @@ class OpenBreak3Strategy(Strategy):
             skip_bits.append(f"连止损{skip_n}次后跳过下一次买入、再下一次才买(循环)")
         if self.skip_buy_after_overnight_stop:
             skip_bits.append("隔日止损后跳过下一次买入、再下一次才买(循环)")
+        if bool(getattr(self, "exit_next_open", False)):
+            skip_bits.append("买入后下一交易日开盘全清(持股一日)")
         skip_txt = (" | " + "；".join(skip_bits)) if skip_bits else ""
         f4_bits: list[str] = []
         if bool(self.factor4_enabled):
@@ -797,6 +801,21 @@ class OpenBreak3Strategy(Strategy):
             # 非买入日持仓：累计持有交易日（隔日止损判定用）
             if self.buy_day is not None and self.buy_day != day:
                 self.bars_held = int(getattr(self, "bars_held", 0) or 0) + 1
+
+            # 持股一日：下一交易日开盘全清（优先于止盈/止损）
+            if (
+                bool(getattr(self, "exit_next_open", False))
+                and int(getattr(self, "bars_held", 0) or 0) >= 1
+            ):
+                if self._exit_all(
+                    day=day,
+                    avail=avail,
+                    pos=pos,
+                    price=float(o),
+                    reason="持股一日次日开盘清",
+                    is_stop=False,
+                ):
+                    return
 
             avail, pos, ma_done = self._try_ma_death_tp(
                 day=day, open_px=o, avail=avail, pos=pos

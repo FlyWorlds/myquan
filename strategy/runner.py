@@ -99,6 +99,7 @@ def apply_strategy_config(
     strategy.skip_buy_after_overnight_stop = bool(
         getattr(cfg, "skip_buy_after_overnight_stop", False)
     )
+    strategy.exit_next_open = bool(getattr(cfg, "exit_next_open", False))
     strategy.factor4_enabled = bool(getattr(cfg, "factor4_enabled", False))
     strategy.factor4_bull_entry = bool(getattr(cfg, "factor4_bull_entry", False))
     strategy.factor4_skip_f1_entry_in_bull = bool(
