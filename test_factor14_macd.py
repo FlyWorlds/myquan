@@ -19,7 +19,6 @@ class TestFactor14Macd(unittest.TestCase):
         self.assertTrue(f.implemented)
 
     def test_golden_cross_detected(self) -> None:
-        # 构造先跌后涨序列，确保出现 DIF 上穿
         n = 80
         px = pd.Series(
             [100 - i * 0.5 for i in range(40)]
@@ -38,8 +37,25 @@ class TestFactor14Macd(unittest.TestCase):
         )
         plain = macd_signals(px, mode="cross")
         zero = macd_signals(px, mode="zero_cross")
-        # 零轴过滤买入次数应 ≤ 纯金叉
         self.assertLessEqual(int(zero["buy"].sum()), int(plain["buy"].sum()))
+
+    def test_relaxed_has_extra_columns_and_more_buys(self) -> None:
+        px = pd.Series(
+            [100 - i * 0.4 for i in range(60)]
+            + [76 + i * 0.6 for i in range(60)]
+        )
+        strict = macd_signals(px, mode="cross")
+        soft = macd_signals(px, mode="relaxed")
+        for col in (
+            "near_golden",
+            "almost_golden",
+            "golden_trend",
+            "near_death",
+            "almost_death",
+            "death_trend",
+        ):
+            self.assertIn(col, soft.columns)
+        self.assertGreaterEqual(int(soft["buy"].sum()), int(strict["buy"].sum()))
 
 
 if __name__ == "__main__":

@@ -8,7 +8,8 @@
 
 模式网格（买图标准变体）：
   · cross / zero_cross / hist_flip / zero_hist
-  · MACD(12,26,9) 默认；另扫 (8,17,9)(5,34,5) 作稳健对照
+  · relaxed / relaxed_zero（即将/快要/趋势放宽）
+  · MACD(12,26,9) 与 (8,17,9) 对照
 
 研究用途，不构成投资建议。
 """
@@ -36,7 +37,11 @@ from strategy.costs import (  # noqa: E402
     SLIPPAGE_VALUE,
 )
 from strategy.data import fetch_daily  # noqa: E402
-from strategy.macd_timing import Mode, macd_rules_text, macd_signals  # noqa: E402
+from strategy.macd_timing import (  # noqa: E402
+    Mode,
+    macd_rules_text,
+    macd_signals,
+)
 
 DIR = Path(__file__).resolve().parent
 CACHE = _MYQUAN / "data_cache" / "sh589680_daily_qfq.parquet"
@@ -82,6 +87,29 @@ def _fee(notional: float, *, side: str) -> float:
     return fee
 
 
+def _signal_tag(sig: pd.DataFrame, dt: pd.Timestamp, *, side: str) -> str:
+    """用前一日收盘信号列标注成交原因（执行日对应信号日=dt 的前一交易日已 shift）。"""
+    # simulate 里 buy_exec = buy.shift(1)，故执行日 dt 的原因看 sig 在 dt 的前一行；
+    # 这里传入的是执行日前一信号日的 tag：调用方用 shift 后的行上的原始列。
+    row = sig.loc[dt]
+    if side == "buy":
+        order = (
+            ("golden", "金叉"),
+            ("near_golden", "即将金叉"),
+            ("almost_golden", "快要金叉"),
+            ("golden_trend", "金叉趋势"),
+        )
+    else:
+        order = (
+            ("death", "死叉"),
+            ("near_death", "即将死叉"),
+            ("almost_death", "快要死叉"),
+            ("death_trend", "死叉趋势"),
+        )
+    tags = [lab for col, lab in order if col in sig.columns and bool(row.get(col))]
+    return "+".join(tags) if tags else side
+
+
 def simulate(
     daily: pd.DataFrame,
     *,
@@ -96,9 +124,13 @@ def simulate(
     close = daily.set_index("date")["close"].astype(float)
     open_ = daily.set_index("date")["open"].astype(float)
     sig = macd_signals(close, fast=fast, slow=slow, signal=signal, mode=mode)
-    # 次日执行：把信号 shift(1) 对齐到执行日
-    buy_exec = sig["buy"].shift(1).fillna(False).astype(bool)
-    sell_exec = sig["sell"].shift(1).fillna(False).astype(bool)
+    # 信号日列：用于标注；执行用 shift(1)
+    buy_raw = sig["buy"].fillna(False).astype(bool)
+    sell_raw = sig["sell"].fillna(False).astype(bool)
+    buy_exec = buy_raw.shift(1).fillna(False).astype(bool)
+    sell_exec = sell_raw.shift(1).fillna(False).astype(bool)
+    # 把原始信号对齐到执行日，便于打标
+    sig_on_exec = sig.shift(1)
 
     cash = float(initial_cash)
     shares = 0
@@ -108,26 +140,31 @@ def simulate(
     open_lot: dict[str, Any] | None = None
 
     dates = list(close.index)
-    for i, dt in enumerate(dates):
+    for dt in dates:
         o = float(open_.loc[dt])
         c = float(close.loc[dt])
 
-        # 卖
         if shares > 0 and bool(sell_exec.loc[dt]):
             if t1 and buy_day is not None and dt.normalize() <= buy_day.normalize():
-                pass  # T+1 禁卖
+                pass
             else:
                 px = _exec_px(o, side="sell")
                 notional = shares * px
                 fee = _fee(notional, side="sell")
                 cash += notional - fee
                 ret = (px / float(open_lot["买入价"]) - 1.0) * 100.0 if open_lot else 0.0
+                reason = (
+                    _signal_tag(sig_on_exec, dt, side="sell")
+                    if dt in sig_on_exec.index
+                    else "死叉"
+                )
                 trades.append(
                     {
                         **(open_lot or {}),
                         "卖出日": dt.strftime("%Y-%m-%d"),
                         "卖出价": round(px, 4),
                         "收益%": round(ret, 2),
+                        "卖出原因": reason,
                         "状态": "已平仓",
                         "模式": mode,
                     }
@@ -136,10 +173,8 @@ def simulate(
                 buy_day = None
                 open_lot = None
 
-        # 买
         if shares <= 0 and bool(buy_exec.loc[dt]) and cash > 0:
             px = _exec_px(o, side="buy")
-            # 95% 仓位打满，按手数
             budget = cash * 0.95
             qty = int(budget / px / LOT) * LOT
             if qty >= LOT:
@@ -149,11 +184,17 @@ def simulate(
                     cash -= notional + fee
                     shares = qty
                     buy_day = dt
+                    reason = (
+                        _signal_tag(sig_on_exec, dt, side="buy")
+                        if dt in sig_on_exec.index
+                        else "金叉"
+                    )
                     open_lot = {
                         "序号": len(trades) + 1,
                         "买入日": dt.strftime("%Y-%m-%d"),
                         "买入价": round(px, 4),
                         "数量": qty,
+                        "买入原因": reason,
                     }
 
         mtm = cash + shares * c
@@ -169,6 +210,7 @@ def simulate(
                 "卖出日": "",
                 "卖出价": round(px, 4),
                 "收益%": round(ret, 2),
+                "卖出原因": "",
                 "状态": "持有中",
                 "模式": mode,
             }
@@ -188,7 +230,6 @@ def simulate(
     if len(rets) > 5 and rets.std() > 0:
         sharpe = float(rets.mean() / rets.std() * np.sqrt(252))
 
-    # 分月
     m_rows = []
     for period, part in eq.groupby(eq.index.to_period("M")):
         if part.empty:
@@ -244,11 +285,21 @@ def main() -> None:
     print(macd_rules_text())
 
     jobs: list[tuple[str, Mode, int, int, int]] = []
-    for mode in ("zero_cross", "cross", "hist_flip", "zero_hist"):
+    for mode in (
+        "relaxed",
+        "relaxed_zero",
+        "zero_cross",
+        "cross",
+        "hist_flip",
+        "zero_hist",
+    ):
         jobs.append((f"{mode}_12_26_9", mode, 12, 26, 9))  # type: ignore[arg-type]
-    # 稳健参数对照（仍用教科书零轴金叉）
-    for fast, slow, sig in ((8, 17, 9), (5, 34, 5), (10, 20, 8)):
+    # 8179 + 放宽 / 教科书零轴
+    for mode in ("relaxed", "relaxed_zero", "zero_cross"):
+        jobs.append((f"{mode}_8_17_9", mode, 8, 17, 9))  # type: ignore[arg-type]
+    for fast, slow, sig in ((5, 34, 5), (10, 20, 8)):
         jobs.append((f"zero_cross_{fast}_{slow}_{sig}", "zero_cross", fast, slow, sig))
+        jobs.append((f"relaxed_{fast}_{slow}_{sig}", "relaxed", fast, slow, sig))
 
     rows = []
     arts: dict[str, dict[str, Any]] = {}
@@ -280,10 +331,18 @@ def main() -> None:
 
     best_label = str(sweep.iloc[0]["方案"])
     best = arts[best_label]
-    # 默认教科书也单独存
     textbook = arts["zero_cross_12_26_9"]
+    relaxed = arts.get("relaxed_12_26_9") or best
+    relaxed8179 = arts.get("relaxed_8_17_9")
 
-    for tag, pack in (("best", best), ("textbook", textbook)):
+    save_packs = {
+        "best": best,
+        "textbook": textbook,
+        "relaxed": relaxed,
+    }
+    if relaxed8179 is not None:
+        save_packs["relaxed8179"] = relaxed8179
+    for tag, pack in save_packs.items():
         pack["monthly"].to_csv(
             DIR / f"monthly_{tag}.csv", index=False, encoding="utf-8-sig"
         )
@@ -331,9 +390,34 @@ def main() -> None:
                 "策略回撤%", "闭环", "胜率%", "当前持仓",
             )
         },
+        "放宽relaxed_12_26_9": {
+            k: relaxed[k] for k in (
+                "累计策略%", "累计持有%", "累计超额%", "夏普",
+                "策略回撤%", "闭环", "胜率%", "当前持仓",
+            )
+        },
+        "放宽relaxed_8_17_9": (
+            {
+                k: relaxed8179[k]
+                for k in (
+                    "累计策略%",
+                    "累计持有%",
+                    "累计超额%",
+                    "夏普",
+                    "策略回撤%",
+                    "闭环",
+                    "胜率%",
+                    "当前持仓",
+                )
+            }
+            if relaxed8179
+            else None
+        ),
         "2026_最优": oos_block(best),
         "2026_教科书": oos_block(textbook),
-        "口径": "收盘确认次日开盘；T+1；ETF无印花；对照买入持有",
+        "2026_放宽": oos_block(relaxed),
+        "2026_放宽8179": oos_block(relaxed8179) if relaxed8179 else None,
+        "口径": "收盘确认次日开盘；T+1；ETF无印花；放宽=即将/快要/趋势",
     }
     (DIR / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -342,23 +426,20 @@ def main() -> None:
     m2026 = best["monthly"][
         best["monthly"]["月份"].astype(str).str.startswith("2026")
     ]
+    m_rel = relaxed["monthly"]
+    m_rel26 = m_rel[m_rel["月份"].astype(str).str.startswith("2026")]
     lines = [
-        f"# {NAME}({CODE}) 因子14 · MACD 买图标准回测",
+        f"# {NAME}({CODE}) 因子14 · MACD 放宽买图回测",
         "",
         "> 研究回测，不构成投资建议。收盘确认 → 次日开盘；T+1。",
         "",
-        "## 买图规则",
+        "## 放宽规则",
         "",
         "```",
-        macd_rules_text(
-            fast=int(best["fast"]),
-            slow=int(best["slow"]),
-            signal=int(best["signal"]),
-            mode=best["mode"],
-        ),
+        macd_rules_text(mode="relaxed"),
         "```",
         "",
-        f"## 最优方案：`{best_label}`",
+        f"## 网格最优：`{best_label}`",
         "",
         f"| 累计策略 | 累计持有 | 超额 | 夏普 | 策略回撤 | 持有回撤 | 闭环 | 胜率 |",
         f"|---:|---:|---:|---:|---:|---:|---:|---:|",
@@ -369,7 +450,34 @@ def main() -> None:
             f"{best['闭环']} | {best['胜率%']:.1f}% |"
         ),
         "",
-        "## 教科书默认 zero_cross(12,26,9)",
+        "## 放宽默认 relaxed(12,26,9)",
+        "",
+        f"| 累计策略 | 累计持有 | 超额 | 夏普 | 回撤 | 闭环 | 胜率 |",
+        f"|---:|---:|---:|---:|---:|---:|---:|",
+        (
+            f"| {relaxed['累计策略%']:.2f}% | {relaxed['累计持有%']:.2f}% | "
+            f"{relaxed['累计超额%']:.2f}% | {relaxed['夏普']} | "
+            f"{relaxed['策略回撤%']:.2f}% | {relaxed['闭环']} | "
+            f"{relaxed['胜率%']:.1f}% |"
+        ),
+        "",
+        "## 放宽 8179 relaxed(8,17,9)",
+        "",
+    ]
+    if relaxed8179:
+        lines += [
+            f"| 累计策略 | 累计持有 | 超额 | 夏普 | 回撤 | 闭环 | 胜率 |",
+            f"|---:|---:|---:|---:|---:|---:|---:|",
+            (
+                f"| {relaxed8179['累计策略%']:.2f}% | {relaxed8179['累计持有%']:.2f}% | "
+                f"{relaxed8179['累计超额%']:.2f}% | {relaxed8179['夏普']} | "
+                f"{relaxed8179['策略回撤%']:.2f}% | {relaxed8179['闭环']} | "
+                f"{relaxed8179['胜率%']:.1f}% |"
+            ),
+            "",
+        ]
+    lines += [
+        "## 教科书 zero_cross(12,26,9)",
         "",
         f"| 累计策略 | 累计持有 | 超额 | 夏普 | 回撤 | 闭环 |",
         f"|---:|---:|---:|---:|---:|---:|",
@@ -379,20 +487,28 @@ def main() -> None:
             f"{textbook['策略回撤%']:.2f}% | {textbook['闭环']} |"
         ),
         "",
-        "## 2026（相对 2025 年末）",
+        "## 2026",
         "",
         f"- 最优：{json.dumps(summary['2026_最优'], ensure_ascii=False)}",
+        f"- 放宽12/26/9：{json.dumps(summary['2026_放宽'], ensure_ascii=False)}",
+        f"- 放宽8179：{json.dumps(summary['2026_放宽8179'], ensure_ascii=False)}",
         f"- 教科书：{json.dumps(summary['2026_教科书'], ensure_ascii=False)}",
         "",
-        "## 最优方案 · 分月",
+        "## 放宽(12,26,9) · 分月",
         "",
-        best["monthly"].to_markdown(index=False),
+        m_rel.to_markdown(index=False),
         "",
-        "## 最优方案 · 2026 分月",
+        "## 放宽(12,26,9) · 2026 分月",
         "",
-        m2026.to_markdown(index=False) if len(m2026) else "_无_",
+        m_rel26.to_markdown(index=False) if len(m_rel26) else "_无_",
         "",
-        "## 最优方案 · 持仓",
+        "## 放宽(12,26,9) · 持仓",
+        "",
+        relaxed["trades"].to_markdown(index=False)
+        if not relaxed["trades"].empty
+        else "_无成交_",
+        "",
+        "## 网格最优 · 持仓",
         "",
         best["trades"].to_markdown(index=False)
         if not best["trades"].empty

@@ -23,8 +23,8 @@ SPEC = FactorSpec(
     id=FACTOR_ID,
     name=FACTOR_NAME,
     description=(
-        "MACD 买图标准：默认零轴下金叉买 / 零轴上死叉卖；"
-        "收盘确认次日开盘；可选纯金叉、柱翻红等模式"
+        "MACD 买图：默认放宽（金叉|即将|快要|金叉趋势 买；"
+        "死叉|即将|快要|死叉趋势 卖）；收盘确认次日开盘"
     ),
     rules_text=macd_rules_text(),
     implemented=True,
