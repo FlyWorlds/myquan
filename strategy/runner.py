@@ -155,6 +155,11 @@ def prepare_factor4(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
     policy = resolve_factor4_tp_policy(params)
     cfg._regime_by_date = market_regime_by_date(
         daily,
+        method=str(policy["regime_method"]),
+        ma_fast=int(policy["ma_fast"]),
+        ma_slow=int(policy["ma_slow"]),
+        entangle_pct=float(policy["entangle_pct"]),
+        cross_lookback=int(policy["cross_lookback"]),
         ma_n=int(policy["ma_n"]),
         roc_n=int(policy["roc_n"]),
     )

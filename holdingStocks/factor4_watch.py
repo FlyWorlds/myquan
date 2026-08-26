@@ -76,7 +76,14 @@ def _ensure_cache(
     bull_map = bull_regime_by_date(daily, kind=kind, params=params)
     policy = resolve_factor4_tp_policy(params)
     regime_map = market_regime_by_date(
-        daily, ma_n=int(policy["ma_n"]), roc_n=int(policy["roc_n"])
+        daily,
+        method=str(policy["regime_method"]),
+        ma_fast=int(policy["ma_fast"]),
+        ma_slow=int(policy["ma_slow"]),
+        entangle_pct=float(policy["entangle_pct"]),
+        cross_lookback=int(policy["cross_lookback"]),
+        ma_n=int(policy["ma_n"]),
+        roc_n=int(policy["roc_n"]),
     )
     _BULL_CACHE[sina] = (sess, bull_map, regime_map, kind, key)
     return bull_map, regime_map
@@ -145,7 +152,7 @@ def format_factor4_tag(
     if mode == "suppressed":
         return "牛市·暂停止损"
     if reg == "bull":
-        return "牛市·分档止盈20/30/40/阈值止损全清"
+        return "牛市·MA金叉/分档20/30/40"
     if reg == "bear":
-        return "下跌·分档止盈5/10/15/阈值止损全清"
-    return "震荡·分档止盈10/15/20/阈值止损全清"
+        return "下跌·MA死叉/分档5/10/15"
+    return "震荡·均线缠绕/分档10/15/20"

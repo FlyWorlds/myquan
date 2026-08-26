@@ -3,9 +3,10 @@
 收盘确认，次日开盘生效；叠在因子1 上：
   · 买卖仍走因子1 开盘±pct
   · 阈值止损始终全清
+  · 行情默认：MA5/MA10 金叉→牛、死叉→跌、均线缠绕→震
   · 牛市：分档减仓止盈（默认 +20/30/40%，各减约 1/3）
   · 震荡：分档减仓止盈（默认 +10/15/20%，各减约 1/3）
-  · 下跌（含下跌震荡）：分档减仓止盈（默认 +5/10/15%，各减约 1/3）
+  · 下跌：分档减仓止盈（默认 +5/10/15%，各减约 1/3）
 """
 
 from __future__ import annotations
@@ -29,13 +30,20 @@ DEFAULT_BULL_PARAMS: dict[str, Any] = {
     "buffer": 0.0,
 }
 
-# 三态行情（个股自身均线+动量）；与旧 bull_hold 并存
+# 三态行情：默认 MA5/MA10 金叉死叉+缠绕；可选旧 roc_ma
+DEFAULT_REGIME_METHOD = "ma_cross"  # ma_cross | roc_ma
+DEFAULT_REGIME_FAST = 5
+DEFAULT_REGIME_SLOW = 10
+# |MA快-MA慢|/收盘 < 该阈值 → 缠绕（震荡）
+DEFAULT_REGIME_ENTANGLE_PCT = 0.008
+# 近 N 日内金叉+死叉次数 ≥2 → 也视为缠绕
+DEFAULT_REGIME_CROSS_LOOKBACK = 5
+# 旧口径兼容
 DEFAULT_REGIME_MA_N = 60
 DEFAULT_REGIME_ROC_N = 20
 
 # 因子4 默认止盈政策（相对买入价；默认昨高触及→今开卖）
 DEFAULT_FACTOR4_TP_TRIGGER = "prev_high"
-# 牛/震/跌均为分档；显式 tp_*=() 可关闭该行情止盈
 DEFAULT_FACTOR4_TP_BULL: tuple[float, ...] = (0.20, 0.30, 0.40)
 DEFAULT_FACTOR4_TP_SIDEWAYS: tuple[float, ...] = (0.10, 0.15, 0.20)
 DEFAULT_FACTOR4_TP_BEAR: tuple[float, ...] = (0.05, 0.10, 0.15)
@@ -78,18 +86,44 @@ def raw_to_bull_target(
     return out
 
 
-def classify_market_regime(
+def classify_market_regime_ma_cross(
+    close: pd.Series,
+    *,
+    ma_fast: int = DEFAULT_REGIME_FAST,
+    ma_slow: int = DEFAULT_REGIME_SLOW,
+    entangle_pct: float = DEFAULT_REGIME_ENTANGLE_PCT,
+    cross_lookback: int = DEFAULT_REGIME_CROSS_LOOKBACK,
+) -> pd.Series:
+    """MA快/慢：多头排列→牛，空头排列→跌，缠绕→震。
+
+    缠绕：|MA快−MA慢|/收盘 < entangle_pct，或近 cross_lookback 日金叉+死叉≥2 次。
+    """
+    px = close.astype(float)
+    f = max(2, int(ma_fast))
+    s = max(f + 1, int(ma_slow))
+    ma_f = px.rolling(f, min_periods=max(2, f // 2)).mean()
+    ma_s = px.rolling(s, min_periods=max(3, s // 2)).mean()
+    spread = (ma_f - ma_s).abs() / px.replace(0.0, pd.NA)
+    golden = (ma_f > ma_s) & (ma_f.shift(1) <= ma_s.shift(1))
+    death = (ma_f < ma_s) & (ma_f.shift(1) >= ma_s.shift(1))
+    lb = max(2, int(cross_lookback))
+    cross_n = (
+        golden.astype(float) + death.astype(float)
+    ).rolling(lb, min_periods=1).sum()
+    entangled = (spread < float(entangle_pct)) | (cross_n >= 2.0)
+    regime = pd.Series(REGIME_SIDEWAYS, index=px.index, dtype=object)
+    bull = (~entangled) & (ma_f > ma_s)
+    bear = (~entangled) & (ma_f < ma_s)
+    return regime.mask(bull, REGIME_BULL).mask(bear, REGIME_BEAR)
+
+
+def classify_market_regime_roc_ma(
     close: pd.Series,
     *,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> pd.Series:
-    """单票收盘价 → 牛/震/跌（当日确认，不含 shift）。
-
-    bull: 收盘站上均线且 roc>0
-    bear: 收盘跌破均线且 roc<0
-    sideways: 其余（含上涨中的震荡、下跌中的反弹震荡）
-    """
+    """旧口径：站上均线且 roc>0→牛；跌破且 roc<0→跌；其余震。"""
     px = close.astype(float)
     n = max(2, int(ma_n))
     r = max(1, int(roc_n))
@@ -101,9 +135,38 @@ def classify_market_regime(
     return regime.mask(bull, REGIME_BULL).mask(bear, REGIME_BEAR)
 
 
+def classify_market_regime(
+    close: pd.Series,
+    *,
+    method: str | None = None,
+    ma_fast: int = DEFAULT_REGIME_FAST,
+    ma_slow: int = DEFAULT_REGIME_SLOW,
+    entangle_pct: float = DEFAULT_REGIME_ENTANGLE_PCT,
+    cross_lookback: int = DEFAULT_REGIME_CROSS_LOOKBACK,
+    ma_n: int = DEFAULT_REGIME_MA_N,
+    roc_n: int = DEFAULT_REGIME_ROC_N,
+) -> pd.Series:
+    """单票收盘价 → 牛/震/跌（当日确认，不含 shift）。"""
+    m = str(method or DEFAULT_REGIME_METHOD).lower()
+    if m in ("roc_ma", "ma60_roc", "legacy"):
+        return classify_market_regime_roc_ma(close, ma_n=ma_n, roc_n=roc_n)
+    return classify_market_regime_ma_cross(
+        close,
+        ma_fast=ma_fast,
+        ma_slow=ma_slow,
+        entangle_pct=entangle_pct,
+        cross_lookback=cross_lookback,
+    )
+
+
 def build_market_regime_series(
     daily: pd.DataFrame,
     *,
+    method: str | None = None,
+    ma_fast: int = DEFAULT_REGIME_FAST,
+    ma_slow: int = DEFAULT_REGIME_SLOW,
+    entangle_pct: float = DEFAULT_REGIME_ENTANGLE_PCT,
+    cross_lookback: int = DEFAULT_REGIME_CROSS_LOOKBACK,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> pd.DataFrame:
@@ -111,7 +174,16 @@ def build_market_regime_series(
     out = daily.copy()
     if "close" not in out.columns:
         raise KeyError("daily 缺少 close")
-    raw = classify_market_regime(out["close"], ma_n=ma_n, roc_n=roc_n)
+    raw = classify_market_regime(
+        out["close"],
+        method=method,
+        ma_fast=ma_fast,
+        ma_slow=ma_slow,
+        entangle_pct=entangle_pct,
+        cross_lookback=cross_lookback,
+        ma_n=ma_n,
+        roc_n=roc_n,
+    )
     out["regime_raw"] = raw
     out["regime_target"] = raw
     out["regime_exec"] = raw.shift(1)
@@ -166,11 +238,25 @@ def bull_regime_by_date(
 def market_regime_by_date(
     daily: pd.DataFrame,
     *,
+    method: str | None = None,
+    ma_fast: int = DEFAULT_REGIME_FAST,
+    ma_slow: int = DEFAULT_REGIME_SLOW,
+    entangle_pct: float = DEFAULT_REGIME_ENTANGLE_PCT,
+    cross_lookback: int = DEFAULT_REGIME_CROSS_LOOKBACK,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> dict[str, str]:
     """date -> bull|sideways|bear（次日生效的 regime_exec）。"""
-    enriched = build_market_regime_series(daily, ma_n=ma_n, roc_n=roc_n)
+    enriched = build_market_regime_series(
+        daily,
+        method=method,
+        ma_fast=ma_fast,
+        ma_slow=ma_slow,
+        entangle_pct=entangle_pct,
+        cross_lookback=cross_lookback,
+        ma_n=ma_n,
+        roc_n=roc_n,
+    )
     out: dict[str, str] = {}
     for _, row in enriched.iterrows():
         d = _date_key(row["date"])
@@ -195,7 +281,7 @@ def _tp_levels(
 def resolve_factor4_tp_policy(
     params: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """合并因子4 默认止盈政策。"""
+    """合并因子4 默认止盈与行情判定参数。"""
     p = dict(params or {})
     return {
         "trigger": str(p.get("tp_trigger") or DEFAULT_FACTOR4_TP_TRIGGER),
@@ -217,6 +303,20 @@ def resolve_factor4_tp_policy(
             if p.get("tp_reduce_bear") is not None
             else DEFAULT_FACTOR4_TP_REDUCE_BEAR
         ),
+        "regime_method": str(
+            p.get("regime_method") or DEFAULT_REGIME_METHOD
+        ).lower(),
+        "ma_fast": int(p.get("regime_ma_fast") or DEFAULT_REGIME_FAST),
+        "ma_slow": int(p.get("regime_ma_slow") or DEFAULT_REGIME_SLOW),
+        "entangle_pct": float(
+            p["regime_entangle_pct"]
+            if p.get("regime_entangle_pct") is not None
+            else DEFAULT_REGIME_ENTANGLE_PCT
+        ),
+        "cross_lookback": int(
+            p.get("regime_cross_lookback") or DEFAULT_REGIME_CROSS_LOOKBACK
+        ),
+        # 旧口径仍可读
         "ma_n": int(p.get("regime_ma_n") or DEFAULT_REGIME_MA_N),
         "roc_n": int(p.get("regime_roc_n") or DEFAULT_REGIME_ROC_N),
     }
@@ -236,11 +336,23 @@ def bull_rules_text(kind: str, params: dict[str, Any] | None = None) -> str:
         )
     else:
         bull_line = "  · 牛市：仅按开盘阈值执行，不设止盈\n"
+    method = str(tp["regime_method"])
+    if method in ("roc_ma", "ma60_roc", "legacy"):
+        regime_line = (
+            f"  · 行情三态（旧：MA{tp['ma_n']}+ROC{tp['roc_n']}，收盘确认次日生效）\n"
+        )
+    else:
+        regime_line = (
+            f"  · 行情三态（MA{tp['ma_fast']}/MA{tp['ma_slow']}："
+            f"金叉多头→牛、死叉空头→跌、"
+            f"|差|/价<{tp['entangle_pct']*100:.1f}%或近{tp['cross_lookback']}日交叉≥2→缠绕震；"
+            f"收盘确认次日生效）\n"
+        )
     return (
         base.replace("因子3 — 动量因子", "因子4 — 行情三态 + 分档止盈")
         + "\n【叠因子1】\n"
         + "  · 买卖与阈值止损仍走因子1；触及开盘−pct 止损 → 全清\n"
-        + f"  · 行情三态（MA{tp['ma_n']}+ROC{tp['roc_n']}，收盘确认次日生效）\n"
+        + regime_line
         + bull_line
         + f"  · 震荡分档减仓：+{side_lv}% × 各减{tp['sideways_reduce']*100:.0f}%\n"
         + f"  · 下跌分档减仓：+{bear_lv}% × 各减{tp['bear_reduce']*100:.0f}%\n"
@@ -256,6 +368,11 @@ def factor4_rules_text(params: dict[str, Any] | None = None) -> str:
 __all__ = [
     "DEFAULT_BULL_KIND",
     "DEFAULT_BULL_PARAMS",
+    "DEFAULT_REGIME_METHOD",
+    "DEFAULT_REGIME_FAST",
+    "DEFAULT_REGIME_SLOW",
+    "DEFAULT_REGIME_ENTANGLE_PCT",
+    "DEFAULT_REGIME_CROSS_LOOKBACK",
     "DEFAULT_REGIME_MA_N",
     "DEFAULT_REGIME_ROC_N",
     "DEFAULT_FACTOR4_TP_TRIGGER",
@@ -273,6 +390,8 @@ __all__ = [
     "bull_regime_by_date",
     "market_regime_by_date",
     "classify_market_regime",
+    "classify_market_regime_ma_cross",
+    "classify_market_regime_roc_ma",
     "bull_rules_text",
     "factor4_rules_text",
     "raw_to_bull_target",

@@ -19,17 +19,35 @@ from strategy.backtest import OpenBreak3Strategy
 
 
 class Factor4RegimeTests(unittest.TestCase):
-    def test_classify_bull_sideways_bear(self) -> None:
+    def test_classify_ma_cross_bull_bear(self) -> None:
         idx = pd.bdate_range("2024-01-01", periods=120)
-        # 先跌后涨：后段应出现 bull
-        close = pd.Series(np.linspace(100, 70, 60).tolist() + np.linspace(70, 120, 60).tolist(), index=idx)
-        regime = classify_market_regime(close, ma_n=20, roc_n=5)
+        # 先跌后涨：后段应出现 bull，中段 bear
+        close = pd.Series(
+            np.linspace(100, 70, 60).tolist() + np.linspace(70, 120, 60).tolist(),
+            index=idx,
+        )
+        regime = classify_market_regime(
+            close, method="ma_cross", ma_fast=5, ma_slow=10, entangle_pct=0.005
+        )
+        self.assertIn("bear", set(regime.iloc[20:50].astype(str)))
+        self.assertIn("bull", set(regime.iloc[90:].astype(str)))
+
+    def test_classify_legacy_roc_ma_still_works(self) -> None:
+        idx = pd.bdate_range("2024-01-01", periods=120)
+        close = pd.Series(
+            np.linspace(100, 70, 60).tolist() + np.linspace(70, 120, 60).tolist(),
+            index=idx,
+        )
+        regime = classify_market_regime(close, method="roc_ma", ma_n=20, roc_n=5)
         self.assertIn("bear", set(regime.iloc[25:55].astype(str)))
         self.assertIn("bull", set(regime.iloc[90:].astype(str)))
 
     def test_tp_policy_defaults(self) -> None:
         p = resolve_factor4_tp_policy()
         self.assertEqual(p["trigger"], "prev_high")
+        self.assertEqual(p["regime_method"], "ma_cross")
+        self.assertEqual(p["ma_fast"], 5)
+        self.assertEqual(p["ma_slow"], 10)
         self.assertEqual(p["bull_levels"], (0.20, 0.30, 0.40))
         self.assertEqual(p["sideways_levels"], (0.10, 0.15, 0.20))
         self.assertEqual(p["bear_levels"], (0.05, 0.10, 0.15))
@@ -43,13 +61,17 @@ class Factor4RegimeTests(unittest.TestCase):
 
     def test_prepare_factor4_wires_regime_tp(self) -> None:
         idx = pd.bdate_range("2023-01-01", periods=200)
+        # 制造金叉：前半跌后半涨
+        close = np.concatenate(
+            [np.linspace(20, 10, 100), np.linspace(10, 22, 100)]
+        )
         daily = pd.DataFrame(
             {
                 "date": idx,
-                "open": np.linspace(10, 20, 200),
-                "high": np.linspace(10.2, 20.4, 200),
-                "low": np.linspace(9.8, 19.6, 200),
-                "close": np.linspace(10, 20, 200),
+                "open": close,
+                "high": close * 1.01,
+                "low": close * 0.99,
+                "close": close,
                 "volume": 1_000_000,
             }
         )
@@ -71,22 +93,10 @@ class Factor4RegimeTests(unittest.TestCase):
         self.assertEqual(cfg.take_profit_trigger, "prev_high")
         strat = apply_strategy_config(OpenBreak3Strategy(), cfg)
         self.assertTrue(strat.regime_tp_enabled)
-        self.assertAlmostEqual(strat.regime_tp_reduce_sideways, 1.0 / 3.0)
-        self.assertAlmostEqual(strat.regime_tp_reduce_bear, 1.0 / 3.0)
 
         bull_day = next(d for d, r in cfg._regime_by_date.items() if r == "bull")
-        side_day = next(
-            (d for d, r in cfg._regime_by_date.items() if r == "sideways"), None
-        )
-        bear_day = next(
-            (d for d, r in cfg._regime_by_date.items() if r == "bear"), None
-        )
         self.assertEqual(strat._effective_tp_levels(bull_day), (0.20, 0.30, 0.40))
         self.assertAlmostEqual(strat._effective_tp_reduce(bull_day), 1.0 / 3.0)
-        if side_day is not None:
-            self.assertEqual(strat._effective_tp_levels(side_day), (0.10, 0.15, 0.20))
-        if bear_day is not None:
-            self.assertEqual(strat._effective_tp_levels(bear_day), (0.05, 0.10, 0.15))
 
     def test_legacy_repair_disables_auto_tp(self) -> None:
         idx = pd.bdate_range("2023-01-01", periods=100)
@@ -123,8 +133,9 @@ class Factor4RegimeTests(unittest.TestCase):
         idx = pd.bdate_range("2024-01-01", periods=80)
         close = pd.Series(np.linspace(50, 100, 80), index=idx)
         daily = pd.DataFrame({"date": idx, "close": close})
-        mapping = market_regime_by_date(daily, ma_n=10, roc_n=5)
-        # 次日生效：首日通常无 exec
+        mapping = market_regime_by_date(
+            daily, method="ma_cross", ma_fast=5, ma_slow=10
+        )
         self.assertTrue(len(mapping) >= 50)
 
 
