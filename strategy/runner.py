@@ -93,13 +93,17 @@ def apply_strategy_config(
         (0.20, 0.30, 0.40) if _bull_lv is None else _bull_lv
     )
     _side_lv = getattr(cfg, "regime_tp_sideways", None)
-    strategy.regime_tp_sideways = tuple((0.15,) if _side_lv is None else _side_lv)
+    strategy.regime_tp_sideways = tuple(
+        (0.10, 0.15, 0.20) if _side_lv is None else _side_lv
+    )
     _bear_lv = getattr(cfg, "regime_tp_bear", None)
-    strategy.regime_tp_bear = tuple((0.10,) if _bear_lv is None else _bear_lv)
+    strategy.regime_tp_bear = tuple(
+        (0.05, 0.10, 0.15) if _bear_lv is None else _bear_lv
+    )
     _rb = getattr(cfg, "regime_tp_reduce_bull", None)
     strategy.regime_tp_reduce_bull = float(1.0 / 3.0 if _rb is None else _rb)
     _rs = getattr(cfg, "regime_tp_reduce_sideways", None)
-    strategy.regime_tp_reduce_sideways = float(1.0 if _rs is None else _rs)
+    strategy.regime_tp_reduce_sideways = float(1.0 / 3.0 if _rs is None else _rs)
     _rr = getattr(cfg, "regime_tp_reduce_bear", None)
     strategy.regime_tp_reduce_bear = float(1.0 / 3.0 if _rr is None else _rr)
     strategy.skip_buy_after_consec_stops = int(

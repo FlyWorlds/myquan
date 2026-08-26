@@ -71,8 +71,8 @@ class OpenBreak3Strategy(Strategy):
     regime_tp_enabled: bool = False
     regime_by_date: dict[str, str] = {}
     regime_tp_bull: tuple[float, ...] = (0.20, 0.30, 0.40)
-    regime_tp_sideways: tuple[float, ...] = (0.15,)
-    regime_tp_bear: tuple[float, ...] = (0.10,)
+    regime_tp_sideways: tuple[float, ...] = (0.10, 0.15, 0.20)
+    regime_tp_bear: tuple[float, ...] = (0.05, 0.10, 0.15)
     # 连续 N 次止损后跳过下一次买点、再下一次才买；0=关闭
     skip_buy_after_consec_stops: int = 0
     # 当天买、下一交易日止损 → 跳过下一次买点，再下一次才买
@@ -88,7 +88,7 @@ class OpenBreak3Strategy(Strategy):
     factor4_suppress_stop_in_bull: bool = False
     # 分行情止盈减仓比例（1=波段全清；<1=分档减仓）
     regime_tp_reduce_bull: float = 1.0 / 3.0
-    regime_tp_reduce_sideways: float = 1.0
+    regime_tp_reduce_sideways: float = 1.0 / 3.0
     regime_tp_reduce_bear: float = 1.0 / 3.0
 
     def _is_bull_today(self, day: str) -> bool:
@@ -359,8 +359,8 @@ class OpenBreak3Strategy(Strategy):
         if regime == "bull":
             return tuple(getattr(self, "regime_tp_bull", ()) or ())
         if regime == "bear":
-            return tuple(getattr(self, "regime_tp_bear", (0.10,)) or ())
-        return tuple(getattr(self, "regime_tp_sideways", (0.15,)) or ())
+            return tuple(getattr(self, "regime_tp_bear", (0.05, 0.10, 0.15)) or ())
+        return tuple(getattr(self, "regime_tp_sideways", (0.10, 0.15, 0.20)) or ())
 
     def _effective_tp_reduce(self, day: str) -> float:
         if not bool(getattr(self, "regime_tp_enabled", False)):
@@ -370,7 +370,7 @@ class OpenBreak3Strategy(Strategy):
             return float(getattr(self, "regime_tp_reduce_bull", 1.0 / 3.0) or (1.0 / 3.0))
         if regime == "bear":
             return float(getattr(self, "regime_tp_reduce_bear", 1.0 / 3.0) or (1.0 / 3.0))
-        return float(getattr(self, "regime_tp_reduce_sideways", 1.0) or 1.0)
+        return float(getattr(self, "regime_tp_reduce_sideways", 1.0 / 3.0) or (1.0 / 3.0))
 
     def _try_take_profits(
         self,

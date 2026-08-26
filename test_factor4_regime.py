@@ -31,11 +31,11 @@ class Factor4RegimeTests(unittest.TestCase):
         p = resolve_factor4_tp_policy()
         self.assertEqual(p["trigger"], "prev_high")
         self.assertEqual(p["bull_levels"], (0.20, 0.30, 0.40))
-        self.assertEqual(p["sideways_levels"], (0.15,))
-        self.assertEqual(p["bear_levels"], (0.08, 0.12, 0.18))
+        self.assertEqual(p["sideways_levels"], (0.10, 0.15, 0.20))
+        self.assertEqual(p["bear_levels"], (0.05, 0.10, 0.15))
         self.assertAlmostEqual(p["bull_reduce"], 1.0 / 3.0)
+        self.assertAlmostEqual(p["sideways_reduce"], 1.0 / 3.0)
         self.assertAlmostEqual(p["bear_reduce"], 1.0 / 3.0)
-        # 显式空档可关闭牛市止盈；单档也可覆盖
         self.assertEqual(resolve_factor4_tp_policy({"tp_bull": ()})["bull_levels"], ())
         self.assertEqual(
             resolve_factor4_tp_policy({"tp_bull": (0.20,)})["bull_levels"], (0.20,)
@@ -64,18 +64,29 @@ class Factor4RegimeTests(unittest.TestCase):
         self.assertTrue(cfg.regime_tp_enabled)
         self.assertTrue(bool(cfg._regime_by_date))
         self.assertEqual(cfg.regime_tp_bull, (0.20, 0.30, 0.40))
+        self.assertEqual(cfg.regime_tp_sideways, (0.10, 0.15, 0.20))
+        self.assertEqual(cfg.regime_tp_bear, (0.05, 0.10, 0.15))
         self.assertAlmostEqual(cfg.regime_tp_reduce_bull, 1.0 / 3.0)
+        self.assertAlmostEqual(cfg.regime_tp_reduce_sideways, 1.0 / 3.0)
         self.assertEqual(cfg.take_profit_trigger, "prev_high")
         strat = apply_strategy_config(OpenBreak3Strategy(), cfg)
         self.assertTrue(strat.regime_tp_enabled)
-        self.assertAlmostEqual(strat.regime_tp_reduce_bull, 1.0 / 3.0)
+        self.assertAlmostEqual(strat.regime_tp_reduce_sideways, 1.0 / 3.0)
         self.assertAlmostEqual(strat.regime_tp_reduce_bear, 1.0 / 3.0)
 
         bull_day = next(d for d, r in cfg._regime_by_date.items() if r == "bull")
-        other_day = next(d for d, r in cfg._regime_by_date.items() if r != "bull")
+        side_day = next(
+            (d for d, r in cfg._regime_by_date.items() if r == "sideways"), None
+        )
+        bear_day = next(
+            (d for d, r in cfg._regime_by_date.items() if r == "bear"), None
+        )
         self.assertEqual(strat._effective_tp_levels(bull_day), (0.20, 0.30, 0.40))
         self.assertAlmostEqual(strat._effective_tp_reduce(bull_day), 1.0 / 3.0)
-        self.assertTrue(len(strat._effective_tp_levels(other_day)) >= 1)
+        if side_day is not None:
+            self.assertEqual(strat._effective_tp_levels(side_day), (0.10, 0.15, 0.20))
+        if bear_day is not None:
+            self.assertEqual(strat._effective_tp_levels(bear_day), (0.05, 0.10, 0.15))
 
     def test_legacy_repair_disables_auto_tp(self) -> None:
         idx = pd.bdate_range("2023-01-01", periods=100)

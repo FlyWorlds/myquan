@@ -147,5 +147,5 @@ def format_factor4_tag(
     if reg == "bull":
         return "牛市·分档止盈20/30/40/阈值止损全清"
     if reg == "bear":
-        return "下跌·分档减仓止盈/阈值止损全清"
-    return "震荡·波段止盈/阈值止损全清"
+        return "下跌·分档止盈5/10/15/阈值止损全清"
+    return "震荡·分档止盈10/15/20/阈值止损全清"

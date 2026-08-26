@@ -4,8 +4,8 @@
   · 买卖仍走因子1 开盘±pct
   · 阈值止损始终全清
   · 牛市：分档减仓止盈（默认 +20/30/40%，各减约 1/3）
-  · 震荡：波段止盈（默认昨高触及 → 今开按档减仓/全清）
-  · 下跌（含下跌震荡）：分档减仓止盈，余仓仍走阈值止损全清
+  · 震荡：分档减仓止盈（默认 +10/15/20%，各减约 1/3）
+  · 下跌（含下跌震荡）：分档减仓止盈（默认 +5/10/15%，各减约 1/3）
 """
 
 from __future__ import annotations
@@ -33,15 +33,15 @@ DEFAULT_BULL_PARAMS: dict[str, Any] = {
 DEFAULT_REGIME_MA_N = 60
 DEFAULT_REGIME_ROC_N = 20
 
-# 因子4 默认止盈政策（相对买入价）
+# 因子4 默认止盈政策（相对买入价；默认昨高触及→今开卖）
 DEFAULT_FACTOR4_TP_TRIGGER = "prev_high"
-# 牛市分档：+20/30/40% 各减约 1/3；显式 tp_bull=() 可关闭
+# 牛/震/跌均为分档；显式 tp_*=() 可关闭该行情止盈
 DEFAULT_FACTOR4_TP_BULL: tuple[float, ...] = (0.20, 0.30, 0.40)
-DEFAULT_FACTOR4_TP_SIDEWAYS: tuple[float, ...] = (0.15,)
-DEFAULT_FACTOR4_TP_BEAR: tuple[float, ...] = (0.08, 0.12, 0.18)
-DEFAULT_FACTOR4_TP_REDUCE_BULL = 1.0 / 3.0  # 牛市分档减仓
-DEFAULT_FACTOR4_TP_REDUCE_SIDEWAYS = 1.0
-DEFAULT_FACTOR4_TP_REDUCE_BEAR = 1.0 / 3.0  # 下跌震荡分档减仓
+DEFAULT_FACTOR4_TP_SIDEWAYS: tuple[float, ...] = (0.10, 0.15, 0.20)
+DEFAULT_FACTOR4_TP_BEAR: tuple[float, ...] = (0.05, 0.10, 0.15)
+DEFAULT_FACTOR4_TP_REDUCE_BULL = 1.0 / 3.0
+DEFAULT_FACTOR4_TP_REDUCE_SIDEWAYS = 1.0 / 3.0
+DEFAULT_FACTOR4_TP_REDUCE_BEAR = 1.0 / 3.0
 
 REGIME_BULL = "bull"
 REGIME_SIDEWAYS = "sideways"
@@ -237,14 +237,14 @@ def bull_rules_text(kind: str, params: dict[str, Any] | None = None) -> str:
     else:
         bull_line = "  · 牛市：仅按开盘阈值执行，不设止盈\n"
     return (
-        base.replace("因子3 — 动量因子", "因子4 — 行情三态 + 波段/分档止盈")
+        base.replace("因子3 — 动量因子", "因子4 — 行情三态 + 分档止盈")
         + "\n【叠因子1】\n"
         + "  · 买卖与阈值止损仍走因子1；触及开盘−pct 止损 → 全清\n"
         + f"  · 行情三态（MA{tp['ma_n']}+ROC{tp['roc_n']}，收盘确认次日生效）\n"
         + bull_line
-        + f"  · 震荡波段止盈：+{side_lv}% × 减仓{tp['sideways_reduce']*100:.0f}%\n"
-        + f"  · 下跌/下跌震荡分档减仓：+{bear_lv}% × 各减{tp['bear_reduce']*100:.0f}%\n"
-        + f"  · 止盈触发：{tp['trigger']}（prev_high=昨高触及今开卖；牛市无档时不适用）\n"
+        + f"  · 震荡分档减仓：+{side_lv}% × 各减{tp['sideways_reduce']*100:.0f}%\n"
+        + f"  · 下跌分档减仓：+{bear_lv}% × 各减{tp['bear_reduce']*100:.0f}%\n"
+        + f"  · 止盈触发：{tp['trigger']}（prev_high=昨高触及今开卖；无档时不适用）\n"
         + "  · 可选兼容：旧版牛市暂停止损 / 放宽止损 / 开盘建仓\n"
     )
 
