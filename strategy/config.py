@@ -78,11 +78,11 @@ class BacktestConfig:
     # 行情 regime 调整止盈（bull/sideways/bear）；因子4 开启时可自动注入
     regime_tp_enabled: bool = False
     regime_by_date: dict | None = None
-    regime_tp_bull: tuple[float, ...] = ()
+    regime_tp_bull: tuple[float, ...] = (0.20, 0.30, 0.40)
     regime_tp_sideways: tuple[float, ...] = (0.15,)
     regime_tp_bear: tuple[float, ...] = (0.10,)
     # 分行情减仓比例：1.0=该档全清（波段）；<1=按初始仓比例分档减
-    regime_tp_reduce_bull: float = 1.0
+    regime_tp_reduce_bull: float = 1.0 / 3.0
     regime_tp_reduce_sideways: float = 1.0
     regime_tp_reduce_bear: float = 1.0 / 3.0
     # 连续 N 次止损后：跳过下一次策略买入，再下一次才买；0=关闭
@@ -105,7 +105,7 @@ class BacktestConfig:
     factor4_enabled: bool = False
     factor4_kind: str = "roc_ma"
     factor4_params: dict | None = None
-    # True=按震/跌自动挂波段与分档止盈（默认；牛市默认无止盈档）；False=仅旧牛市止损逻辑
+    # True=按牛/震/跌自动挂波段与分档止盈（默认；牛市 20/30/40 分档）；False=仅旧牛市止损逻辑
     factor4_regime_tp: bool = True
     # 牛市空仓时开盘建仓持股（兼容旧行为，默认关）
     factor4_bull_entry: bool = False

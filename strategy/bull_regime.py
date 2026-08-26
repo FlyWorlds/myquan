@@ -3,7 +3,7 @@
 收盘确认，次日开盘生效；叠在因子1 上：
   · 买卖仍走因子1 开盘±pct
   · 阈值止损始终全清
-  · 牛市：仅按开盘阈值执行，不设止盈（让利润奔跑）
+  · 牛市：分档减仓止盈（默认 +20/30/40%，各减约 1/3）
   · 震荡：波段止盈（默认昨高触及 → 今开按档减仓/全清）
   · 下跌（含下跌震荡）：分档减仓止盈，余仓仍走阈值止损全清
 """
@@ -35,11 +35,11 @@ DEFAULT_REGIME_ROC_N = 20
 
 # 因子4 默认止盈政策（相对买入价）
 DEFAULT_FACTOR4_TP_TRIGGER = "prev_high"
-# 牛市空档 = 不设止盈，只走因子1 开盘阈值止损
-DEFAULT_FACTOR4_TP_BULL: tuple[float, ...] = ()
+# 牛市分档：+20/30/40% 各减约 1/3；显式 tp_bull=() 可关闭
+DEFAULT_FACTOR4_TP_BULL: tuple[float, ...] = (0.20, 0.30, 0.40)
 DEFAULT_FACTOR4_TP_SIDEWAYS: tuple[float, ...] = (0.15,)
 DEFAULT_FACTOR4_TP_BEAR: tuple[float, ...] = (0.08, 0.12, 0.18)
-DEFAULT_FACTOR4_TP_REDUCE_BULL = 1.0  # 若显式配置牛市档位则默认全清
+DEFAULT_FACTOR4_TP_REDUCE_BULL = 1.0 / 3.0  # 牛市分档减仓
 DEFAULT_FACTOR4_TP_REDUCE_SIDEWAYS = 1.0
 DEFAULT_FACTOR4_TP_REDUCE_BEAR = 1.0 / 3.0  # 下跌震荡分档减仓
 
@@ -232,7 +232,7 @@ def bull_rules_text(kind: str, params: dict[str, Any] | None = None) -> str:
     bear_lv = "/".join(f"{x*100:.0f}" for x in tp["bear_levels"]) or "关"
     if bull_lv:
         bull_line = (
-            f"  · 牛市波段止盈：+{bull_lv}% × 减仓{tp['bull_reduce']*100:.0f}%\n"
+            f"  · 牛市分档减仓：+{bull_lv}% × 各减{tp['bull_reduce']*100:.0f}%\n"
         )
     else:
         bull_line = "  · 牛市：仅按开盘阈值执行，不设止盈\n"

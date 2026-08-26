@@ -88,20 +88,20 @@ def apply_strategy_config(
     strategy.halt_by_date = dict(getattr(cfg, "halt_by_date", None) or {})
     strategy.regime_tp_enabled = bool(getattr(cfg, "regime_tp_enabled", False))
     strategy.regime_by_date = dict(getattr(cfg, "regime_by_date", None) or {})
-    strategy.regime_tp_bull = tuple(getattr(cfg, "regime_tp_bull", ()) or ())
-    strategy.regime_tp_sideways = tuple(
-        getattr(cfg, "regime_tp_sideways", (0.15,)) or (0.15,)
+    _bull_lv = getattr(cfg, "regime_tp_bull", None)
+    strategy.regime_tp_bull = tuple(
+        (0.20, 0.30, 0.40) if _bull_lv is None else _bull_lv
     )
-    strategy.regime_tp_bear = tuple(getattr(cfg, "regime_tp_bear", (0.10,)) or (0.10,))
-    strategy.regime_tp_reduce_bull = float(
-        getattr(cfg, "regime_tp_reduce_bull", 1.0) or 1.0
-    )
-    strategy.regime_tp_reduce_sideways = float(
-        getattr(cfg, "regime_tp_reduce_sideways", 1.0) or 1.0
-    )
-    strategy.regime_tp_reduce_bear = float(
-        getattr(cfg, "regime_tp_reduce_bear", 1.0 / 3.0) or (1.0 / 3.0)
-    )
+    _side_lv = getattr(cfg, "regime_tp_sideways", None)
+    strategy.regime_tp_sideways = tuple((0.15,) if _side_lv is None else _side_lv)
+    _bear_lv = getattr(cfg, "regime_tp_bear", None)
+    strategy.regime_tp_bear = tuple((0.10,) if _bear_lv is None else _bear_lv)
+    _rb = getattr(cfg, "regime_tp_reduce_bull", None)
+    strategy.regime_tp_reduce_bull = float(1.0 / 3.0 if _rb is None else _rb)
+    _rs = getattr(cfg, "regime_tp_reduce_sideways", None)
+    strategy.regime_tp_reduce_sideways = float(1.0 if _rs is None else _rs)
+    _rr = getattr(cfg, "regime_tp_reduce_bear", None)
+    strategy.regime_tp_reduce_bear = float(1.0 / 3.0 if _rr is None else _rr)
     strategy.skip_buy_after_consec_stops = int(
         getattr(cfg, "skip_buy_after_consec_stops", 0) or 0
     )

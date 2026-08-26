@@ -70,7 +70,7 @@ class OpenBreak3Strategy(Strategy):
     # 行情 regime 调整止盈（与因子4 止损暂停独立）
     regime_tp_enabled: bool = False
     regime_by_date: dict[str, str] = {}
-    regime_tp_bull: tuple[float, ...] = ()
+    regime_tp_bull: tuple[float, ...] = (0.20, 0.30, 0.40)
     regime_tp_sideways: tuple[float, ...] = (0.15,)
     regime_tp_bear: tuple[float, ...] = (0.10,)
     # 连续 N 次止损后跳过下一次买点、再下一次才买；0=关闭
@@ -87,7 +87,7 @@ class OpenBreak3Strategy(Strategy):
     # True=牛市完全暂停止损（旧行为）；默认 False：阈值止损始终全清
     factor4_suppress_stop_in_bull: bool = False
     # 分行情止盈减仓比例（1=波段全清；<1=分档减仓）
-    regime_tp_reduce_bull: float = 1.0
+    regime_tp_reduce_bull: float = 1.0 / 3.0
     regime_tp_reduce_sideways: float = 1.0
     regime_tp_reduce_bear: float = 1.0 / 3.0
 
@@ -367,7 +367,7 @@ class OpenBreak3Strategy(Strategy):
             return float(self.take_profit_reduce or 0.0)
         regime = self._regime_today(day)
         if regime == "bull":
-            return float(getattr(self, "regime_tp_reduce_bull", 1.0) or 1.0)
+            return float(getattr(self, "regime_tp_reduce_bull", 1.0 / 3.0) or (1.0 / 3.0))
         if regime == "bear":
             return float(getattr(self, "regime_tp_reduce_bear", 1.0 / 3.0) or (1.0 / 3.0))
         return float(getattr(self, "regime_tp_reduce_sideways", 1.0) or 1.0)
