@@ -85,6 +85,9 @@ def _ensure_cache(
         strength_min=float(policy["strength_min"]),
         slope_n=int(policy["slope_n"]),
         slope_weight=float(policy["slope_weight"]),
+        macd_fast=int(policy["macd_fast"]),
+        macd_slow=int(policy["macd_slow"]),
+        macd_signal=int(policy["macd_signal"]),
         ma_n=int(policy["ma_n"]),
         roc_n=int(policy["roc_n"]),
     )

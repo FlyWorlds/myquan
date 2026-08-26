@@ -82,12 +82,39 @@ class Factor4RegimeTests(unittest.TestCase):
         self.assertIn("bear", set(regime.iloc[25:55].astype(str)))
         self.assertIn("bull", set(regime.iloc[90:].astype(str)))
 
+    def test_classify_macd_cross_sticky(self) -> None:
+        """MACD 金叉后粘性保持牛市，直到死叉。"""
+        idx = pd.bdate_range("2024-01-01", periods=160)
+        close = pd.Series(
+            np.linspace(120, 80, 50).tolist()
+            + np.linspace(80, 140, 60).tolist()
+            + np.linspace(140, 90, 50).tolist(),
+            index=idx,
+        )
+        regime = classify_market_regime(close, method="macd_cross")
+        states = set(regime.astype(str))
+        self.assertIn("bull", states)
+        self.assertIn("bear", states)
+        # 中段上涨后应进入 bull 并粘性保持一段
+        bull_idx = [i for i, v in enumerate(regime.astype(str)) if v == "bull"]
+        self.assertGreaterEqual(len(bull_idx), 10)
+        first_bull = bull_idx[0]
+        # 从首个 bull 起直到首次 bear，中间不应跳到 sideways
+        mid = regime.iloc[first_bull:]
+        for v in mid.astype(str):
+            if v == "bear":
+                break
+            self.assertEqual(v, "bull")
+
     def test_tp_policy_defaults(self) -> None:
         p = resolve_factor4_tp_policy()
         self.assertEqual(p["trigger"], "prev_high")
         self.assertEqual(p["regime_method"], "ma_cross")
         self.assertEqual(p["ma_fast"], 5)
         self.assertEqual(p["ma_slow"], 10)
+        self.assertEqual(p["macd_fast"], 12)
+        self.assertEqual(p["macd_slow"], 26)
+        self.assertEqual(p["macd_signal"], 9)
         self.assertAlmostEqual(p["strength_min"], 0.0)
         self.assertAlmostEqual(p["slope_weight"], 0.5)
         self.assertEqual(p["bull_levels"], (0.20, 0.30, 0.40))

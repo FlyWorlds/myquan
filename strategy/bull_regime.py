@@ -30,11 +30,14 @@ DEFAULT_BULL_PARAMS: dict[str, Any] = {
     "buffer": 0.0,
 }
 
-# 三态行情：默认 MA5/MA10 金叉死叉+缠绕+力度；可选旧 roc_ma
-DEFAULT_REGIME_METHOD = "ma_cross"  # ma_cross | roc_ma
+# 三态行情：默认 MA5/MA10 金叉死叉粘性；可选 macd_cross / roc_ma
+DEFAULT_REGIME_METHOD = "ma_cross"  # ma_cross | macd_cross | roc_ma
 DEFAULT_REGIME_FAST = 5
 DEFAULT_REGIME_SLOW = 10
-# |MA快-MA慢|/收盘 < 该阈值 → 缠绕（震荡）
+DEFAULT_MACD_FAST = 12
+DEFAULT_MACD_SLOW = 26
+DEFAULT_MACD_SIGNAL = 9
+# |MA快-MA慢|/收盘 < 该阈值 → 缠绕（震荡）；粘性交叉模式基本不用
 DEFAULT_REGIME_ENTANGLE_PCT = 0.008
 # 近 N 日内金叉+死叉次数 ≥2 → 也视为缠绕
 DEFAULT_REGIME_CROSS_LOOKBACK = 5
@@ -132,6 +135,35 @@ def ma_cross_strength(
     )
 
 
+def _sticky_from_crosses(
+    golden: pd.Series,
+    death: pd.Series,
+    *,
+    strength: pd.Series | None = None,
+    strength_min: float = 0.0,
+) -> pd.Series:
+    """金叉/死叉事件 → 粘性牛/跌状态。"""
+    g = golden.fillna(False)
+    d = death.fillna(False)
+    thr = float(strength_min)
+    if thr > 0 and strength is not None:
+        s = strength.fillna(0.0)
+        valid_gc = g & (s >= thr)
+        valid_dc = d & (s >= thr)
+    else:
+        valid_gc = g
+        valid_dc = d
+    out = []
+    state = REGIME_SIDEWAYS
+    for i in range(len(g)):
+        if bool(valid_gc.iloc[i]):
+            state = REGIME_BULL
+        elif bool(valid_dc.iloc[i]):
+            state = REGIME_BEAR
+        out.append(state)
+    return pd.Series(out, index=g.index, dtype=object)
+
+
 def classify_market_regime_ma_cross(
     close: pd.Series,
     *,
@@ -149,38 +181,78 @@ def classify_market_regime_ma_cross(
       · 金叉 → 切入牛市；持有期止盈按牛市档，直到死叉
       · 死叉 → 切入下跌；持有期止盈按下跌档，直到金叉
       · 尚未出现过交叉 → 震荡
-    中途价差收窄不改档。strength_min>0 时可要求交叉当日力度达标才切换
-   （默认 0：交叉即切换，力度仅作诊断）。
     """
     del entangle_pct, cross_lookback
-    px = close.astype(float)
     feat = ma_cross_strength(
-        px,
+        close.astype(float),
         ma_fast=ma_fast,
         ma_slow=ma_slow,
         slope_n=slope_n,
         slope_weight=slope_weight,
     )
-    strength = feat["strength"].fillna(0.0)
-    golden = feat["golden"].fillna(False)
-    death = feat["death"].fillna(False)
-    thr = float(strength_min)
-    if thr > 0:
-        valid_gc = golden & (strength >= thr)
-        valid_dc = death & (strength >= thr)
-    else:
-        valid_gc = golden
-        valid_dc = death
+    return _sticky_from_crosses(
+        feat["golden"],
+        feat["death"],
+        strength=feat["strength"],
+        strength_min=strength_min,
+    )
 
-    out = []
-    state = REGIME_SIDEWAYS
-    for i in range(len(px)):
-        if bool(valid_gc.iloc[i]):
-            state = REGIME_BULL
-        elif bool(valid_dc.iloc[i]):
-            state = REGIME_BEAR
-        out.append(state)
-    return pd.Series(out, index=px.index, dtype=object)
+
+def macd_cross_features(
+    close: pd.Series,
+    *,
+    fast: int = DEFAULT_MACD_FAST,
+    slow: int = DEFAULT_MACD_SLOW,
+    signal: int = DEFAULT_MACD_SIGNAL,
+) -> pd.DataFrame:
+    """标准 MACD：DIF=EMA快−EMA慢，DEA=EMA(DIF)，柱=DIF−DEA。"""
+    px = close.astype(float)
+    f = max(2, int(fast))
+    s = max(f + 1, int(slow))
+    sig = max(1, int(signal))
+    ema_f = px.ewm(span=f, adjust=False).mean()
+    ema_s = px.ewm(span=s, adjust=False).mean()
+    dif = ema_f - ema_s
+    dea = dif.ewm(span=sig, adjust=False).mean()
+    hist = dif - dea
+    # 力度：|DIF−DEA|/收盘（无量纲相对强度）
+    strength = (dif - dea).abs() / px.replace(0.0, pd.NA)
+    golden = (dif > dea) & (dif.shift(1) <= dea.shift(1))
+    death = (dif < dea) & (dif.shift(1) >= dea.shift(1))
+    return pd.DataFrame(
+        {
+            "dif": dif,
+            "dea": dea,
+            "hist": hist,
+            "strength": strength.fillna(0.0),
+            "golden": golden.fillna(False),
+            "death": death.fillna(False),
+        },
+        index=px.index,
+    )
+
+
+def classify_market_regime_macd_cross(
+    close: pd.Series,
+    *,
+    macd_fast: int = DEFAULT_MACD_FAST,
+    macd_slow: int = DEFAULT_MACD_SLOW,
+    macd_signal: int = DEFAULT_MACD_SIGNAL,
+    strength_min: float = 0.0,
+) -> pd.Series:
+    """MACD 金叉死叉粘性状态机（尾盘确认，与 MA 交叉同结构）。"""
+    feat = macd_cross_features(
+        close,
+        fast=macd_fast,
+        slow=macd_slow,
+        signal=macd_signal,
+    )
+    return _sticky_from_crosses(
+        feat["golden"],
+        feat["death"],
+        strength=feat["strength"],
+        strength_min=strength_min,
+    )
 
 
 def classify_market_regime_roc_ma(
@@ -212,6 +284,9 @@ def classify_market_regime(
     strength_min: float = DEFAULT_REGIME_STRENGTH_MIN,
     slope_n: int = DEFAULT_REGIME_SLOPE_N,
     slope_weight: float = DEFAULT_REGIME_SLOPE_WEIGHT,
+    macd_fast: int = DEFAULT_MACD_FAST,
+    macd_slow: int = DEFAULT_MACD_SLOW,
+    macd_signal: int = DEFAULT_MACD_SIGNAL,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> pd.Series:
@@ -219,6 +294,14 @@ def classify_market_regime(
     m = str(method or DEFAULT_REGIME_METHOD).lower()
     if m in ("roc_ma", "ma60_roc", "legacy"):
         return classify_market_regime_roc_ma(close, ma_n=ma_n, roc_n=roc_n)
+    if m in ("macd", "macd_cross"):
+        return classify_market_regime_macd_cross(
+            close,
+            macd_fast=macd_fast,
+            macd_slow=macd_slow,
+            macd_signal=macd_signal,
+            strength_min=strength_min,
+        )
     return classify_market_regime_ma_cross(
         close,
         ma_fast=ma_fast,
@@ -242,6 +325,9 @@ def build_market_regime_series(
     strength_min: float = DEFAULT_REGIME_STRENGTH_MIN,
     slope_n: int = DEFAULT_REGIME_SLOPE_N,
     slope_weight: float = DEFAULT_REGIME_SLOPE_WEIGHT,
+    macd_fast: int = DEFAULT_MACD_FAST,
+    macd_slow: int = DEFAULT_MACD_SLOW,
+    macd_signal: int = DEFAULT_MACD_SIGNAL,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> pd.DataFrame:
@@ -249,9 +335,10 @@ def build_market_regime_series(
     out = daily.copy()
     if "close" not in out.columns:
         raise KeyError("daily 缺少 close")
+    method_l = str(method or DEFAULT_REGIME_METHOD).lower()
     raw = classify_market_regime(
         out["close"],
-        method=method,
+        method=method_l,
         ma_fast=ma_fast,
         ma_slow=ma_slow,
         entangle_pct=entangle_pct,
@@ -259,6 +346,9 @@ def build_market_regime_series(
         strength_min=strength_min,
         slope_n=slope_n,
         slope_weight=slope_weight,
+        macd_fast=macd_fast,
+        macd_slow=macd_slow,
+        macd_signal=macd_signal,
         ma_n=ma_n,
         roc_n=roc_n,
     )
@@ -268,12 +358,16 @@ def build_market_regime_series(
     out["bull_raw"] = (raw == REGIME_BULL).astype(float)
     out["bull_target"] = out["bull_raw"]
     out["bull_exec"] = out["bull_raw"].shift(1)
-    # 诊断列：力度（仅 ma_cross）
-    if str(method or DEFAULT_REGIME_METHOD).lower() not in (
-        "roc_ma",
-        "ma60_roc",
-        "legacy",
-    ):
+    if method_l in ("macd", "macd_cross"):
+        feat = macd_cross_features(
+            out["close"], fast=macd_fast, slow=macd_slow, signal=macd_signal
+        )
+        out["regime_strength"] = feat["strength"]
+        out["regime_golden"] = feat["golden"]
+        out["regime_death"] = feat["death"]
+        out["regime_dif"] = feat["dif"]
+        out["regime_dea"] = feat["dea"]
+    elif method_l not in ("roc_ma", "ma60_roc", "legacy"):
         feat = ma_cross_strength(
             out["close"],
             ma_fast=ma_fast,
@@ -341,6 +435,9 @@ def market_regime_by_date(
     strength_min: float = DEFAULT_REGIME_STRENGTH_MIN,
     slope_n: int = DEFAULT_REGIME_SLOPE_N,
     slope_weight: float = DEFAULT_REGIME_SLOPE_WEIGHT,
+    macd_fast: int = DEFAULT_MACD_FAST,
+    macd_slow: int = DEFAULT_MACD_SLOW,
+    macd_signal: int = DEFAULT_MACD_SIGNAL,
     ma_n: int = DEFAULT_REGIME_MA_N,
     roc_n: int = DEFAULT_REGIME_ROC_N,
 ) -> dict[str, str]:
@@ -355,6 +452,9 @@ def market_regime_by_date(
         strength_min=strength_min,
         slope_n=slope_n,
         slope_weight=slope_weight,
+        macd_fast=macd_fast,
+        macd_slow=macd_slow,
+        macd_signal=macd_signal,
         ma_n=ma_n,
         roc_n=roc_n,
     )
@@ -409,6 +509,9 @@ def resolve_factor4_tp_policy(
         ).lower(),
         "ma_fast": int(p.get("regime_ma_fast") or DEFAULT_REGIME_FAST),
         "ma_slow": int(p.get("regime_ma_slow") or DEFAULT_REGIME_SLOW),
+        "macd_fast": int(p.get("regime_macd_fast") or DEFAULT_MACD_FAST),
+        "macd_slow": int(p.get("regime_macd_slow") or DEFAULT_MACD_SLOW),
+        "macd_signal": int(p.get("regime_macd_signal") or DEFAULT_MACD_SIGNAL),
         "entangle_pct": float(
             p["regime_entangle_pct"]
             if p.get("regime_entangle_pct") is not None
@@ -453,6 +556,11 @@ def bull_rules_text(kind: str, params: dict[str, Any] | None = None) -> str:
         regime_line = (
             f"  · 行情三态（旧：MA{tp['ma_n']}+ROC{tp['roc_n']}，收盘确认次日生效）\n"
         )
+    elif method in ("macd", "macd_cross"):
+        regime_line = (
+            f"  · 行情三态（MACD{tp['macd_fast']}/{tp['macd_slow']}/{tp['macd_signal']} "
+            f"尾盘金叉死叉粘性：金叉→牛至死叉，死叉→跌至金叉；次日开盘生效）\n"
+        )
     else:
         regime_line = (
             f"  · 行情三态（MA{tp['ma_fast']}/MA{tp['ma_slow']} 尾盘交叉粘性："
@@ -488,6 +596,9 @@ __all__ = [
     "DEFAULT_REGIME_METHOD",
     "DEFAULT_REGIME_FAST",
     "DEFAULT_REGIME_SLOW",
+    "DEFAULT_MACD_FAST",
+    "DEFAULT_MACD_SLOW",
+    "DEFAULT_MACD_SIGNAL",
     "DEFAULT_REGIME_ENTANGLE_PCT",
     "DEFAULT_REGIME_CROSS_LOOKBACK",
     "DEFAULT_REGIME_STRENGTH_MIN",
@@ -511,8 +622,10 @@ __all__ = [
     "market_regime_by_date",
     "classify_market_regime",
     "classify_market_regime_ma_cross",
+    "classify_market_regime_macd_cross",
     "classify_market_regime_roc_ma",
     "ma_cross_strength",
+    "macd_cross_features",
     "bull_rules_text",
     "factor4_rules_text",
     "raw_to_bull_target",
