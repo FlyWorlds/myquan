@@ -84,6 +84,17 @@ class OpenBreak3Strategy(Strategy):
     factor4_kind: str = "roc_ma"
     bull_by_date: dict[str, bool] = {}
     factor4_stop_widen_mult: float = 0.0
+    # 双均线死叉/即将死叉分批止盈（runner 注入 ma_tp_by_date）
+    ma_tp_enabled: bool = False
+    ma_tp_fast: int = 5
+    ma_tp_slow: int = 20
+    ma_tp_near_gap: float = 0.008
+    ma_tp_near_reduce: float = 0.40
+    ma_tp_death_reduce: float = 1.0
+    ma_tp_min_profit: float = 0.03
+    ma_tp_min_hold_bars: int = 1
+    ma_tp_lock_pct: float | None = 0.0
+    ma_tp_by_date: dict[str, str] = {}
 
     def _is_bull_today(self, day: str) -> bool:
         if not bool(self.factor4_enabled):
@@ -131,6 +142,7 @@ class OpenBreak3Strategy(Strategy):
         self.buy_day: str | None = None
         self.initial_qty: float | None = None
         self.tp_done: set[int] = set()
+        self.ma_tp_done: set[str] = set()
         self.stop_floor: float | None = None
         self.bars_held: int = 0
         self.consec_stops: int = 0
@@ -186,6 +198,17 @@ class OpenBreak3Strategy(Strategy):
             if self.take_profit_lock_pct is not None:
                 bits.append(f"锁{self.take_profit_lock_pct*100:.0f}%")
             sell_txt = "+买/" + "/".join(bits) + "/余仓止损"
+        elif bool(self.ma_tp_enabled):
+            near_r = float(self.ma_tp_near_reduce or 0.0)
+            death_r = float(self.ma_tp_death_reduce or 0.0)
+            death_txt = (
+                "死叉清余" if death_r >= 1.0 - 1e-12 else f"死叉再减{death_r*100:.0f}%"
+            )
+            sell_txt = (
+                f"+买/MA{int(self.ma_tp_fast)}/{int(self.ma_tp_slow)}"
+                f"近死叉≤{float(self.ma_tp_near_gap)*100:.1f}%减{near_r*100:.0f}%/"
+                f"{death_txt}/余仓止损"
+            )
         else:
             sell_txt = "+买/-止损，仅止损全清"
         skip_bits: list[str] = []
@@ -244,6 +267,7 @@ class OpenBreak3Strategy(Strategy):
         self.buy_day = None
         self.initial_qty = None
         self.tp_done = set()
+        self.ma_tp_done = set()
         self.stop_floor = None
         self.bars_held = 0
 
@@ -337,6 +361,112 @@ class OpenBreak3Strategy(Strategy):
         if qty < lot and avail >= lot:
             qty = lot
         return min(qty, float(avail))
+
+    def _tp_slice_qty_frac(self, avail: float, frac: float) -> float:
+        """按初始仓位 × frac 取整手减仓；frac≥1 则清可卖余仓。"""
+        if avail <= 0:
+            return 0.0
+        lot = float(self.lot_size)
+        if float(frac) >= 1.0 - 1e-12:
+            return float(avail)
+        base = float(self.initial_qty or 0)
+        if base <= 0:
+            return 0.0
+        raw = base * float(frac)
+        qty = float(int(raw // lot) * lot)
+        if qty < lot and avail >= lot:
+            qty = lot
+        return min(qty, float(avail))
+
+    def _try_ma_death_tp(
+        self,
+        *,
+        day: str,
+        open_px: float,
+        avail: float,
+        pos: float,
+    ) -> tuple[float, float, bool]:
+        """双均线即将死叉/死叉：次日开盘分批减仓。
+
+        返回 (avail, pos, fully_exited)。
+        """
+        if not bool(self.ma_tp_enabled):
+            return avail, pos, False
+        if self.entry_price is None or float(self.entry_price) <= 0:
+            return avail, pos, False
+        if avail <= 0 or pos <= 0:
+            return avail, pos, False
+
+        sig = str((self.ma_tp_by_date or {}).get(day, "") or "")
+        if sig not in ("near", "death"):
+            return avail, pos, False
+
+        min_hold = int(self.ma_tp_min_hold_bars or 0)
+        bars = int(getattr(self, "bars_held", 0) or 0)
+        if bars < min_hold:
+            self.log(
+                f"{day} 均线止盈信号={sig} 但持有{bars}日<{min_hold}，跳过 "
+                f"{self._fmt_hold(open_px)}"
+            )
+            return avail, pos, False
+
+        pnl = float(open_px) / float(self.entry_price) - 1.0
+        min_profit = float(self.ma_tp_min_profit or 0.0)
+        if pnl + 1e-12 < min_profit:
+            self.log(
+                f"{day} 均线止盈信号={sig} 但开盘浮盈{pnl*100:.2f}%"
+                f"<门槛{min_profit*100:.1f}%，跳过"
+            )
+            return avail, pos, False
+
+        # 死叉优先：若当日是 death 且尚未做 death，可直接减；near 仅一次
+        stages: list[tuple[str, float]] = []
+        if sig == "near" and "near" not in self.ma_tp_done:
+            stages.append(("near", float(self.ma_tp_near_reduce or 0.0)))
+        elif sig == "death":
+            # 死叉日：若尚未做 near，可先记 near 跳过（趋势已破，直接 death）
+            if "death" not in self.ma_tp_done:
+                stages.append(("death", float(self.ma_tp_death_reduce or 0.0)))
+
+        if not stages:
+            return avail, pos, False
+
+        for stage, frac in stages:
+            if frac <= 0:
+                self.ma_tp_done.add(stage)
+                continue
+            qty = self._tp_slice_qty_frac(avail, frac)
+            if qty <= 0:
+                self.ma_tp_done.add(stage)
+                continue
+            tag = "即将死叉" if stage == "near" else "死叉"
+            self.sell(self.symbol, qty, price=float(open_px))
+            avail -= qty
+            pos -= qty
+            self.ma_tp_done.add(stage)
+            self.log(
+                f"{day} 均线{tag}止盈 "
+                f"MA{int(self.ma_tp_fast)}/{int(self.ma_tp_slow)} "
+                f"减仓{frac*100:.0f}% qty={qty:.0f} 开盘={open_px:.2f} "
+                f"(初始仓={float(self.initial_qty or 0):.0f}) "
+                f"{self._fmt_hold(open_px)}"
+            )
+            # 近死叉后可选抬止损
+            if stage == "near" and self.ma_tp_lock_pct is not None:
+                floor = float(self.entry_price) * (
+                    1.0 + float(self.ma_tp_lock_pct)
+                )
+                if self.stop_floor is None or floor > float(self.stop_floor):
+                    self.stop_floor = floor
+                    self.log(
+                        f"{day} 近死叉抬止损下限@{floor:.2f}"
+                        f"(锁+{float(self.ma_tp_lock_pct)*100:.0f}%)"
+                    )
+            if avail <= 0 or pos <= 0:
+                self._reset_trade_state()
+                self._reset_entry_gate()
+                return max(avail, 0.0), max(pos, 0.0), True
+        return avail, pos, False
 
     def _try_take_profits(
         self,
@@ -667,6 +797,12 @@ class OpenBreak3Strategy(Strategy):
             # 非买入日持仓：累计持有交易日（隔日止损判定用）
             if self.buy_day is not None and self.buy_day != day:
                 self.bars_held = int(getattr(self, "bars_held", 0) or 0) + 1
+
+            avail, pos, ma_done = self._try_ma_death_tp(
+                day=day, open_px=o, avail=avail, pos=pos
+            )
+            if ma_done or (pos <= 0 and avail <= 0):
+                return
 
             if self._try_prev_high_take_profit(
                 day=day, open_px=o, avail=avail, pos=pos

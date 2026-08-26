@@ -107,6 +107,17 @@ class BacktestConfig:
     factor4_skip_f1_entry_in_bull: bool = False
     # 牛市内放宽止损倍数（>1 时替代完全暂停止损；例 2.0 = 止损放宽一倍）
     factor4_stop_widen_mult: float = 0.0
+    # 双均线死叉/即将死叉分批止盈（收盘确认→次日开盘；默认关）
+    ma_tp_enabled: bool = False
+    ma_tp_fast: int = 5
+    ma_tp_slow: int = 20
+    ma_tp_near_gap: float = 0.008
+    ma_tp_near_reduce: float = 0.40
+    ma_tp_death_reduce: float = 1.0
+    ma_tp_min_profit: float = 0.03
+    ma_tp_min_hold_bars: int = 1
+    # 近死叉后抬止损：相对买入价；0.0=抬到成本；None=不抬
+    ma_tp_lock_pct: float | None = 0.0
 
     @property
     def slippage(self) -> dict[str, str | float]:
@@ -160,6 +171,15 @@ class BacktestConfig:
                 parts.append(f"锁盈+{self.take_profit_lock_pct*100:.0f}%")
             parts.append("止损清余")
             sell = "".join(parts) if len(parts) == 1 else "+".join(parts[:1]) + "(" + ",".join(parts[1:]) + ")"
+        elif bool(self.ma_tp_enabled):
+            near_r = float(self.ma_tp_near_reduce or 0.0)
+            death_r = float(self.ma_tp_death_reduce or 0.0)
+            death_txt = "死叉清余" if death_r >= 1.0 - 1e-12 else f"死叉再减{death_r*100:.0f}%"
+            sell = (
+                f"MA{int(self.ma_tp_fast)}/{int(self.ma_tp_slow)}"
+                f"近死叉≤{float(self.ma_tp_near_gap)*100:.1f}%减{near_r*100:.0f}%/"
+                f"{death_txt}/余仓止损"
+            )
         else:
             sell = "仅止损卖"
         skip_n = int(self.skip_buy_after_consec_stops or 0)
@@ -325,4 +345,16 @@ def apply_s1_recommended(cfg: BacktestConfig) -> BacktestConfig:
         regime_tp_enabled=False,
         factor4_enabled=False,
         factor4_stop_widen_mult=0.0,
+        ma_tp_enabled=False,
     )
+
+
+def apply_s1_ma_death_tp(cfg: BacktestConfig) -> BacktestConfig:
+    """策略1 研究叠加：双均线即将死叉/死叉分批止盈（不改因子1 买卖阈值）。
+
+    默认参数见 ``strategy.death_cross_tp.recommended_params``；须回测对照仅止损后
+    再决定是否盯盘启用。
+    """
+    from strategy.death_cross_tp import recommended_params
+
+    return replace(cfg, **recommended_params())  # type: ignore[arg-type]

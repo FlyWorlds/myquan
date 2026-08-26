@@ -111,6 +111,20 @@ def apply_strategy_config(
         strategy.bull_by_date = dict(getattr(cfg, "_bull_by_date", {}) or {})
     else:
         strategy.bull_by_date = {}
+    strategy.ma_tp_enabled = bool(getattr(cfg, "ma_tp_enabled", False))
+    strategy.ma_tp_fast = int(getattr(cfg, "ma_tp_fast", 5) or 5)
+    strategy.ma_tp_slow = int(getattr(cfg, "ma_tp_slow", 20) or 20)
+    strategy.ma_tp_near_gap = float(getattr(cfg, "ma_tp_near_gap", 0.008) or 0.008)
+    strategy.ma_tp_near_reduce = float(getattr(cfg, "ma_tp_near_reduce", 0.40) or 0.0)
+    strategy.ma_tp_death_reduce = float(getattr(cfg, "ma_tp_death_reduce", 1.0) or 0.0)
+    strategy.ma_tp_min_profit = float(getattr(cfg, "ma_tp_min_profit", 0.03) or 0.0)
+    strategy.ma_tp_min_hold_bars = int(getattr(cfg, "ma_tp_min_hold_bars", 1) or 0)
+    lock_ma = getattr(cfg, "ma_tp_lock_pct", 0.0)
+    strategy.ma_tp_lock_pct = float(lock_ma) if lock_ma is not None else None
+    if bool(getattr(cfg, "ma_tp_enabled", False)):
+        strategy.ma_tp_by_date = dict(getattr(cfg, "_ma_tp_by_date", {}) or {})
+    else:
+        strategy.ma_tp_by_date = {}
     return strategy
 
 
@@ -127,6 +141,27 @@ def prepare_factor4(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
         kind=str(getattr(cfg, "factor4_kind", "roc_ma") or "roc_ma"),
         params=params,
     )
+
+
+def prepare_ma_tp(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
+    """预计算双均线死叉/即将死叉次日执行映射。"""
+    if not bool(getattr(cfg, "ma_tp_enabled", False)):
+        cfg._ma_tp_by_date = {}
+        return
+    from strategy.death_cross_tp import ma_tp_exec_by_date
+
+    cfg._ma_tp_by_date = ma_tp_exec_by_date(
+        daily,
+        fast=int(getattr(cfg, "ma_tp_fast", 5) or 5),
+        slow=int(getattr(cfg, "ma_tp_slow", 20) or 20),
+        near_gap=float(getattr(cfg, "ma_tp_near_gap", 0.008) or 0.008),
+    )
+
+
+def prepare_open_break_extras(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
+    """因子4 + 均线止盈等开盘突破附加信号。"""
+    prepare_factor4(cfg, daily)
+    prepare_ma_tp(cfg, daily)
 
 
 def build_open_break_strategy(cfg: BacktestConfig) -> OpenBreak3Strategy:
@@ -168,7 +203,12 @@ def run_open_break(
         params=cfg,
         strategy_cls=OpenBreak3Strategy,
         configure=apply_strategy_config,
-        prepare=prepare_factor4 if bool(getattr(cfg, "factor4_enabled", False)) else None,
+        prepare=(
+            prepare_open_break_extras
+            if bool(getattr(cfg, "factor4_enabled", False))
+            or bool(getattr(cfg, "ma_tp_enabled", False))
+            else None
+        ),
         print_summary_fn=print_summary if verbose else None,
         summary_kwargs={
             "symbol_name": cfg.symbol_name,

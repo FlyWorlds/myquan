@@ -1,0 +1,22 @@
+{
+  "start": "20200101",
+  "oos_start": "2024-01-01",
+  "variants": [
+    "stop_only",
+    "rec_5_20_near40_death100",
+    "ma5_10_near40_death100",
+    "ma5_10_near50_death50",
+    "ma3_8_near40_death100",
+    "ma5_10_minprof5",
+    "death_only_5_20"
+  ],
+  "pick": "rec_5_20_near40_death100",
+  "recommended": {
+    "ma_tp_fast": 5,
+    "ma_tp_slow": 20,
+    "ma_tp_near_gap": 0.008,
+    "ma_tp_near_reduce": 0.4,
+    "ma_tp_death_reduce": 1.0,
+    "ma_tp_min_profit": 0.03
+  }
+}

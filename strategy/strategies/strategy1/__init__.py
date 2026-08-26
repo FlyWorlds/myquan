@@ -241,7 +241,8 @@ def _bind() -> StrategySpec:
         name=STRATEGY_NAME,
         description=(
             "援军战法：因子1 开盘±2.5%一次打满/阴小阳/禁双阳跨日≥5%/仅止损"
-            " + 因子2 回撤加减仓预警（回测不注资）"
+            " + 因子2 回撤加减仓预警（回测不注资）；"
+            "可选研究叠加双均线即将死叉/死叉分批止盈（apply_s1_ma_death_tp）"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy1,
