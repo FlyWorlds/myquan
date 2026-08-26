@@ -3,7 +3,7 @@
 收盘确认，次日开盘生效；叠在因子1 上：
   · 买卖仍走因子1 开盘±pct
   · 阈值止损始终全清
-  · 行情默认：MA5/MA10 金叉/死叉 + 缠绕 + 力度过滤
+  · 行情默认：MA5/MA10 尾盘金叉/死叉粘性状态（有效交叉后持有期跟档，直到反向交叉）
   · 牛市：分档减仓止盈（默认 +20/30/40%，各减约 1/3）
   · 震荡：分档减仓止盈（默认 +10/15/20%，各减约 1/3）
   · 下跌：分档减仓止盈（默认 +5/10/15%，各减约 1/3）
@@ -38,8 +38,8 @@ DEFAULT_REGIME_SLOW = 10
 DEFAULT_REGIME_ENTANGLE_PCT = 0.008
 # 近 N 日内金叉+死叉次数 ≥2 → 也视为缠绕
 DEFAULT_REGIME_CROSS_LOOKBACK = 5
-# 力度：价差强度 + 斜率加权；低于此值的多/空头只算弱排列→震荡
-DEFAULT_REGIME_STRENGTH_MIN = 0.015
+# 力度诊断用；粘性切换默认不拦交叉（strength_min=0）
+DEFAULT_REGIME_STRENGTH_MIN = 0.0
 DEFAULT_REGIME_SLOPE_N = 3
 DEFAULT_REGIME_SLOPE_WEIGHT = 0.5
 # 旧口径兼容
@@ -139,17 +139,20 @@ def classify_market_regime_ma_cross(
     ma_slow: int = DEFAULT_REGIME_SLOW,
     entangle_pct: float = DEFAULT_REGIME_ENTANGLE_PCT,
     cross_lookback: int = DEFAULT_REGIME_CROSS_LOOKBACK,
-    strength_min: float = DEFAULT_REGIME_STRENGTH_MIN,
+    strength_min: float = 0.0,
     slope_n: int = DEFAULT_REGIME_SLOPE_N,
     slope_weight: float = DEFAULT_REGIME_SLOPE_WEIGHT,
 ) -> pd.Series:
-    """MA快/慢 + 金叉死叉力度 → 牛/震/跌。
+    """MA快/慢金叉死叉「粘性状态机」→ 牛/震/跌。
 
-    · 缠绕：价差 < entangle_pct，或近 lookback 日交叉≥2 → 震
-    · 强金叉/强多头：MA快>MA慢 且 strength≥strength_min → 牛
-    · 强死叉/强空头：MA快<MA慢 且 strength≥strength_min → 跌
-    · 弱排列（有方向但力度不够）→ 震
+    每日尾盘结算交叉：
+      · 金叉 → 切入牛市；持有期止盈按牛市档，直到死叉
+      · 死叉 → 切入下跌；持有期止盈按下跌档，直到金叉
+      · 尚未出现过交叉 → 震荡
+    中途价差收窄不改档。strength_min>0 时可要求交叉当日力度达标才切换
+   （默认 0：交叉即切换，力度仅作诊断）。
     """
+    del entangle_pct, cross_lookback
     px = close.astype(float)
     feat = ma_cross_strength(
         px,
@@ -158,18 +161,26 @@ def classify_market_regime_ma_cross(
         slope_n=slope_n,
         slope_weight=slope_weight,
     )
-    lb = max(2, int(cross_lookback))
-    cross_n = (
-        feat["golden"].astype(float) + feat["death"].astype(float)
-    ).rolling(lb, min_periods=1).sum()
-    entangled = (feat["spread"] < float(entangle_pct)) | (cross_n >= 2.0)
-    strong = feat["strength"] >= float(strength_min)
-    # 交叉当日若力度不足，强制视为弱信号（震）
-    weak_cross = (feat["golden"] | feat["death"]) & (~strong)
-    regime = pd.Series(REGIME_SIDEWAYS, index=px.index, dtype=object)
-    bull = (~entangled) & (~weak_cross) & strong & (feat["ma_fast"] > feat["ma_slow"])
-    bear = (~entangled) & (~weak_cross) & strong & (feat["ma_fast"] < feat["ma_slow"])
-    return regime.mask(bull, REGIME_BULL).mask(bear, REGIME_BEAR)
+    strength = feat["strength"].fillna(0.0)
+    golden = feat["golden"].fillna(False)
+    death = feat["death"].fillna(False)
+    thr = float(strength_min)
+    if thr > 0:
+        valid_gc = golden & (strength >= thr)
+        valid_dc = death & (strength >= thr)
+    else:
+        valid_gc = golden
+        valid_dc = death
+
+    out = []
+    state = REGIME_SIDEWAYS
+    for i in range(len(px)):
+        if bool(valid_gc.iloc[i]):
+            state = REGIME_BULL
+        elif bool(valid_dc.iloc[i]):
+            state = REGIME_BEAR
+        out.append(state)
+    return pd.Series(out, index=px.index, dtype=object)
 
 
 def classify_market_regime_roc_ma(
@@ -444,11 +455,15 @@ def bull_rules_text(kind: str, params: dict[str, Any] | None = None) -> str:
         )
     else:
         regime_line = (
-            f"  · 行情三态（MA{tp['ma_fast']}/MA{tp['ma_slow']}："
-            f"金叉多头+力度≥{tp['strength_min']*100:.1f}%→牛、"
-            f"死叉空头+力度≥{tp['strength_min']*100:.1f}%→跌、"
-            f"|差|/价<{tp['entangle_pct']*100:.1f}%或近{tp['cross_lookback']}日交叉≥2或弱交叉→缠绕震；"
-            f"力度=价差+{tp['slope_weight']:.1f}×顺势斜率；收盘确认次日生效）\n"
+            f"  · 行情三态（MA{tp['ma_fast']}/MA{tp['ma_slow']} 尾盘交叉粘性："
+            f"金叉→牛并保持至死叉；死叉→跌并保持至金叉；"
+            f"力度=价差+{tp['slope_weight']:.1f}×顺势斜率（诊断"
+            + (
+                f"；切换门槛≥{tp['strength_min']*100:.1f}%"
+                if float(tp["strength_min"]) > 0
+                else "；默认交叉即切换"
+            )
+            + "）；收盘确认次日开盘生效）\n"
         )
     return (
         base.replace("因子3 — 动量因子", "因子4 — 行情三态 + 分档止盈")

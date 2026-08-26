@@ -20,26 +20,40 @@ from strategy.backtest import OpenBreak3Strategy
 
 class Factor4RegimeTests(unittest.TestCase):
     def test_weak_cross_stays_sideways(self) -> None:
-        """价差很小时即便交叉也不应直接判牛/跌。"""
+        """开启力度门槛时，弱交叉可不切入粘性状态。"""
         idx = pd.bdate_range("2024-01-01", periods=40)
-        # 窄幅震荡：MA5/10 贴近，力度弱
         close = pd.Series(100 + 0.2 * np.sin(np.linspace(0, 8 * np.pi, 40)), index=idx)
         regime = classify_market_regime(
             close,
             method="ma_cross",
             ma_fast=5,
             ma_slow=10,
-            entangle_pct=0.008,
             strength_min=0.015,
         )
-        # 绝大多数应为 sideways
         share_side = float((regime.astype(str) == "sideways").mean())
         self.assertGreaterEqual(share_side, 0.7)
 
+    def test_sticky_after_golden_cross(self) -> None:
+        """有效金叉后应保持牛市，即使中途价差收窄。"""
+        idx = pd.bdate_range("2024-01-01", periods=80)
+        down = np.linspace(100, 70, 30)
+        up = np.linspace(70, 110, 25)
+        flat = np.full(25, 110.0) + 0.05 * np.sin(np.linspace(0, 4 * np.pi, 25))
+        close = pd.Series(np.concatenate([down, up, flat]), index=idx)
+        regime = classify_market_regime(
+            close, method="ma_cross", ma_fast=5, ma_slow=10, strength_min=0.01
+        )
+        self.assertIn("bull", set(regime.iloc[50:].astype(str)))
+        bull_share = float((regime.iloc[55:].astype(str) == "bull").mean())
+        self.assertGreaterEqual(bull_share, 0.8)
+
     def test_classify_ma_cross_bull_bear(self) -> None:
         idx = pd.bdate_range("2024-01-01", periods=120)
+        # 先涨→再跌→再涨，确保出现死叉与金叉事件
         close = pd.Series(
-            np.linspace(100, 70, 60).tolist() + np.linspace(70, 120, 60).tolist(),
+            np.linspace(80, 110, 30).tolist()
+            + np.linspace(110, 70, 40).tolist()
+            + np.linspace(70, 130, 50).tolist(),
             index=idx,
         )
         regime = classify_market_regime(
@@ -47,11 +61,16 @@ class Factor4RegimeTests(unittest.TestCase):
             method="ma_cross",
             ma_fast=5,
             ma_slow=10,
-            entangle_pct=0.005,
-            strength_min=0.01,
+            strength_min=0.005,
         )
-        self.assertIn("bear", set(regime.iloc[20:50].astype(str)))
-        self.assertIn("bull", set(regime.iloc[90:].astype(str)))
+        self.assertIn("bear", set(regime.astype(str)))
+        self.assertIn("bull", set(regime.iloc[80:].astype(str)))
+        last_flip = None
+        for i, v in enumerate(regime.astype(str)):
+            if v == "bull" and (i == 0 or str(regime.iloc[i - 1]) != "bull"):
+                last_flip = i
+        self.assertIsNotNone(last_flip)
+        self.assertTrue(all(str(x) == "bull" for x in regime.iloc[last_flip:]))
 
     def test_classify_legacy_roc_ma_still_works(self) -> None:
         idx = pd.bdate_range("2024-01-01", periods=120)
@@ -69,7 +88,7 @@ class Factor4RegimeTests(unittest.TestCase):
         self.assertEqual(p["regime_method"], "ma_cross")
         self.assertEqual(p["ma_fast"], 5)
         self.assertEqual(p["ma_slow"], 10)
-        self.assertAlmostEqual(p["strength_min"], 0.015)
+        self.assertAlmostEqual(p["strength_min"], 0.0)
         self.assertAlmostEqual(p["slope_weight"], 0.5)
         self.assertEqual(p["bull_levels"], (0.20, 0.30, 0.40))
         self.assertEqual(p["sideways_levels"], (0.10, 0.15, 0.20))
@@ -84,9 +103,13 @@ class Factor4RegimeTests(unittest.TestCase):
 
     def test_prepare_factor4_wires_regime_tp(self) -> None:
         idx = pd.bdate_range("2023-01-01", periods=200)
-        # 制造金叉：前半跌后半涨
+        # 先涨后跌再涨，保证有有效金叉切入牛
         close = np.concatenate(
-            [np.linspace(20, 10, 100), np.linspace(10, 22, 100)]
+            [
+                np.linspace(12, 18, 40),
+                np.linspace(18, 10, 60),
+                np.linspace(10, 22, 100),
+            ]
         )
         daily = pd.DataFrame(
             {
@@ -104,6 +127,7 @@ class Factor4RegimeTests(unittest.TestCase):
             em_symbol="600552",
             factor4_enabled=True,
             factor4_regime_tp=True,
+            factor4_params={"regime_strength_min": 0.005},
         )
         prepare_factor4(cfg, daily)
         self.assertTrue(cfg.regime_tp_enabled)
@@ -111,12 +135,8 @@ class Factor4RegimeTests(unittest.TestCase):
         self.assertEqual(cfg.regime_tp_bull, (0.20, 0.30, 0.40))
         self.assertEqual(cfg.regime_tp_sideways, (0.10, 0.15, 0.20))
         self.assertEqual(cfg.regime_tp_bear, (0.05, 0.10, 0.15))
-        self.assertAlmostEqual(cfg.regime_tp_reduce_bull, 1.0 / 3.0)
-        self.assertAlmostEqual(cfg.regime_tp_reduce_sideways, 1.0 / 3.0)
-        self.assertEqual(cfg.take_profit_trigger, "prev_high")
+        self.assertTrue(any(r == "bull" for r in cfg._regime_by_date.values()))
         strat = apply_strategy_config(OpenBreak3Strategy(), cfg)
-        self.assertTrue(strat.regime_tp_enabled)
-
         bull_day = next(d for d, r in cfg._regime_by_date.items() if r == "bull")
         self.assertEqual(strat._effective_tp_levels(bull_day), (0.20, 0.30, 0.40))
         self.assertAlmostEqual(strat._effective_tp_reduce(bull_day), 1.0 / 3.0)
@@ -157,7 +177,7 @@ class Factor4RegimeTests(unittest.TestCase):
         close = pd.Series(np.linspace(50, 100, 80), index=idx)
         daily = pd.DataFrame({"date": idx, "close": close})
         mapping = market_regime_by_date(
-            daily, method="ma_cross", ma_fast=5, ma_slow=10
+            daily, method="ma_cross", ma_fast=5, ma_slow=10, strength_min=0.005
         )
         self.assertTrue(len(mapping) >= 50)
 

@@ -155,7 +155,7 @@ def format_factor4_tag(
     if mode == "suppressed":
         return "牛市·暂停止损"
     if reg == "bull":
-        return "牛市·强金叉/分档20/30/40"
+        return "牛市·金叉后粘性/分档20/30/40"
     if reg == "bear":
-        return "下跌·强死叉/分档5/10/15"
-    return "震荡·缠绕或弱交叉/分档10/15/20"
+        return "下跌·死叉后粘性/分档5/10/15"
+    return "震荡·尚未有效交叉/分档10/15/20"
