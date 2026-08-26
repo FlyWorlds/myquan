@@ -77,13 +77,19 @@ class OpenBreak3Strategy(Strategy):
     skip_buy_after_consec_stops: int = 0
     # 当天买、下一交易日止损 → 跳过下一次买点，再下一次才买
     skip_buy_after_overnight_stop: bool = False
-    # 因子4：牛市持股 regime（由 runner 注入 bull_by_date）
+    # 因子4：行情三态 / 旧牛市持股（由 runner 注入 bull_by_date）
     factor4_enabled: bool = False
     factor4_bull_entry: bool = False
     factor4_skip_f1_entry_in_bull: bool = False
     factor4_kind: str = "roc_ma"
     bull_by_date: dict[str, bool] = {}
     factor4_stop_widen_mult: float = 0.0
+    # True=牛市完全暂停止损（旧行为）；默认 False：阈值止损始终全清
+    factor4_suppress_stop_in_bull: bool = False
+    # 分行情止盈减仓比例（1=波段全清；<1=分档减仓）
+    regime_tp_reduce_bull: float = 1.0
+    regime_tp_reduce_sideways: float = 1.0
+    regime_tp_reduce_bear: float = 1.0 / 3.0
 
     def _is_bull_today(self, day: str) -> bool:
         if not bool(self.factor4_enabled):
@@ -198,13 +204,17 @@ class OpenBreak3Strategy(Strategy):
         f4_bits: list[str] = []
         if bool(self.factor4_enabled):
             f4_bits.append(f"因子4={self.factor4_kind}")
+            if bool(self.regime_tp_enabled):
+                f4_bits.append("牛/震波段止盈+下跌分档减仓")
             if self.factor4_bull_entry:
                 f4_bits.append("牛市开盘建仓")
             widen = float(self.factor4_stop_widen_mult or 0.0)
             if widen > 1.0:
                 f4_bits.append(f"牛市止损放宽{widen:g}倍")
-            else:
+            elif bool(getattr(self, "factor4_suppress_stop_in_bull", False)):
                 f4_bits.append("牛市暂停止损")
+            else:
+                f4_bits.append("阈值止损全清")
             if self.factor4_skip_f1_entry_in_bull:
                 f4_bits.append("牛市跳过F1买点")
         f4_txt = (" | " + "；".join(f4_bits)) if f4_bits else ""
@@ -324,19 +334,43 @@ class OpenBreak3Strategy(Strategy):
             )
         return False
 
-    def _tp_slice_qty(self, avail: float) -> float:
+    def _tp_slice_qty(self, avail: float, *, reduce: float | None = None) -> float:
         """按初始仓位比例取整手减仓数量。"""
         base = float(self.initial_qty or 0)
         if base <= 0 or avail <= 0:
             return 0.0
         lot = float(self.lot_size)
-        if float(self.take_profit_reduce or 0.0) >= 1.0 - 1e-12:
+        red = float(self.take_profit_reduce or 0.0) if reduce is None else float(reduce)
+        if red >= 1.0 - 1e-12:
             return float(avail)
-        raw = base * float(self.take_profit_reduce)
+        raw = base * red
         qty = float(int(raw // lot) * lot)
         if qty < lot and avail >= lot:
             qty = lot
         return min(qty, float(avail))
+
+    def _regime_today(self, day: str) -> str:
+        return str((getattr(self, "regime_by_date", None) or {}).get(day, "sideways"))
+
+    def _effective_tp_levels(self, day: str) -> tuple[float, ...]:
+        if not bool(getattr(self, "regime_tp_enabled", False)):
+            return tuple(self.take_profit_levels or ())
+        regime = self._regime_today(day)
+        if regime == "bull":
+            return tuple(getattr(self, "regime_tp_bull", ()) or ())
+        if regime == "bear":
+            return tuple(getattr(self, "regime_tp_bear", (0.10,)) or ())
+        return tuple(getattr(self, "regime_tp_sideways", (0.15,)) or ())
+
+    def _effective_tp_reduce(self, day: str) -> float:
+        if not bool(getattr(self, "regime_tp_enabled", False)):
+            return float(self.take_profit_reduce or 0.0)
+        regime = self._regime_today(day)
+        if regime == "bull":
+            return float(getattr(self, "regime_tp_reduce_bull", 1.0) or 1.0)
+        if regime == "bear":
+            return float(getattr(self, "regime_tp_reduce_bear", 1.0 / 3.0) or (1.0 / 3.0))
+        return float(getattr(self, "regime_tp_reduce_sideways", 1.0) or 1.0)
 
     def _try_take_profits(
         self,
@@ -384,18 +418,20 @@ class OpenBreak3Strategy(Strategy):
                         f"{day} 止盈档+{float(lvl)*100:.0f}%抬止损下限@"
                         f"{floor:.2f}(锁+{float(self.take_profit_lock_pct)*100:.0f}%)"
                     )
-            # 减仓（reduce=0 则只抬止损）
-            if self.take_profit_reduce and self.take_profit_reduce > 0 and avail > 0:
-                qty = self._tp_slice_qty(avail)
+            # 减仓（reduce=0 则只抬止损）；行情三态用分行情减仓比例
+            reduce = self._effective_tp_reduce(day)
+            if reduce > 0 and avail > 0:
+                qty = self._tp_slice_qty(avail, reduce=reduce)
                 if qty > 0:
                     self.sell(self.symbol, qty, price=tp_px)
                     avail -= qty
                     pos -= qty
                     self.log(
                         f"{day} 止盈档+{float(lvl)*100:.0f}%→挂+{limit_lvl*100:.0f}%成交 "
-                        f"减仓{self.take_profit_reduce*100:.0f}% "
+                        f"减仓{reduce*100:.0f}% "
                         f"qty={qty:.0f} 限价={tp_px:.2f} "
-                        f"(初始仓={float(self.initial_qty or 0):.0f}) "
+                        f"(初始仓={float(self.initial_qty or 0):.0f} "
+                        f"regime={self._regime_today(day)}) "
                         f"{self._fmt_hold(tp_px)}"
                     )
             if avail <= 0 or pos <= 0:
@@ -437,16 +473,6 @@ class OpenBreak3Strategy(Strategy):
             single_yang_min_pct=self.single_yang_min_pct,
         )
 
-    def _effective_tp_levels(self, day: str) -> tuple[float, ...]:
-        if not bool(getattr(self, "regime_tp_enabled", False)):
-            return tuple(self.take_profit_levels or ())
-        regime = str((getattr(self, "regime_by_date", None) or {}).get(day, "sideways"))
-        if regime == "bull":
-            return tuple(getattr(self, "regime_tp_bull", ()) or ())
-        if regime == "bear":
-            return tuple(getattr(self, "regime_tp_bear", (0.10,)) or ())
-        return tuple(getattr(self, "regime_tp_sideways", (0.15,)) or ())
-
     def _try_prev_high_take_profit(
         self,
         *,
@@ -455,7 +481,7 @@ class OpenBreak3Strategy(Strategy):
         avail: float,
         pos: float,
     ) -> bool:
-        """昨日最高价已触及止盈 → 今日开盘全清（无同日最高价前视）。"""
+        """昨日最高价已触及止盈 → 今日开盘按行情减仓比例兑现（波段/分档）。"""
         if str(self.take_profit_trigger) != "prev_high":
             return False
         levels = self._effective_tp_levels(day)
@@ -468,24 +494,57 @@ class OpenBreak3Strategy(Strategy):
             return False
         offset = float(self.take_profit_limit_offset or 0.0)
         mark = float(self.prev_high)
-        for lvl in levels:
+        reduce = self._effective_tp_reduce(day)
+        acted = False
+        for i, lvl in enumerate(levels):
+            if i in self.tp_done:
+                continue
             tp_px = float(self.entry_price) * (1.0 + float(lvl) + offset)
             if mark + 1e-12 < tp_px:
                 continue
-            return bool(
-                self._exit_all(
-                    day=day,
-                    avail=avail,
-                    pos=pos,
-                    price=float(open_px),
-                    reason=(
-                        f"前日高点止盈+{float(lvl)*100:.0f}%"
-                        f"(昨高={mark:.2f} 开盘={open_px:.2f})"
-                    ),
-                    is_stop=False,
+            self.tp_done.add(i)
+            if self.take_profit_lock_pct is not None and self.entry_price is not None:
+                floor = float(self.entry_price) * (
+                    1.0 + float(self.take_profit_lock_pct)
                 )
+                if self.stop_floor is None or floor > float(self.stop_floor):
+                    self.stop_floor = floor
+            if reduce <= 0 or avail <= 0:
+                acted = True
+                continue
+            if reduce >= 1.0 - 1e-12:
+                return bool(
+                    self._exit_all(
+                        day=day,
+                        avail=avail,
+                        pos=pos,
+                        price=float(open_px),
+                        reason=(
+                            f"前日高点波段止盈+{float(lvl)*100:.0f}%"
+                            f"(昨高={mark:.2f} 开盘={open_px:.2f} "
+                            f"regime={self._regime_today(day)})"
+                        ),
+                        is_stop=False,
+                    )
+                )
+            qty = self._tp_slice_qty(avail, reduce=reduce)
+            if qty <= 0:
+                continue
+            self.sell(self.symbol, qty, price=float(open_px))
+            avail -= qty
+            pos -= qty
+            acted = True
+            self.log(
+                f"{day} 前日高点分档止盈+{float(lvl)*100:.0f}% "
+                f"减仓{reduce*100:.0f}% qty={qty:.0f} 开盘={open_px:.2f} "
+                f"(昨高={mark:.2f} regime={self._regime_today(day)}) "
+                f"{self._fmt_hold(open_px)}"
             )
-        return False
+            if avail <= 0 or pos <= 0:
+                self._reset_trade_state()
+                self._reset_entry_gate()
+                return True
+        return acted
 
     def _can_enter_by_prev_filter(self) -> bool:
         tick = float(self.tick)
@@ -685,7 +744,9 @@ class OpenBreak3Strategy(Strategy):
 
             if hit_stop and bull_today and bool(self.factor4_enabled):
                 widen_mult = float(getattr(self, "factor4_stop_widen_mult", 0.0) or 0.0)
-                if widen_mult <= 1.0:
+                suppress = bool(getattr(self, "factor4_suppress_stop_in_bull", False))
+                # 新默认：阈值止损始终全清；仅显式 suppress 时牛市暂不卖
+                if suppress and widen_mult <= 1.0:
                     self.log(
                         f"{day} 因子4牛市持股：触止损 {stop_px:.2f} 暂不卖 "
                         f"(open={o:.2f} low={low:.2f}) {self._fmt_hold(c)}"

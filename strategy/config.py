@@ -75,12 +75,16 @@ class BacktestConfig:
     energy_allowed_by_date: dict | None = None
     # 滚动夏普衰减门控：date -> 跳过买入
     halt_by_date: dict | None = None
-    # 行情 regime 调整止盈（bull/sideways/bear），与因子4 独立
+    # 行情 regime 调整止盈（bull/sideways/bear）；因子4 开启时可自动注入
     regime_tp_enabled: bool = False
     regime_by_date: dict | None = None
     regime_tp_bull: tuple[float, ...] = ()
     regime_tp_sideways: tuple[float, ...] = (0.15,)
     regime_tp_bear: tuple[float, ...] = (0.10,)
+    # 分行情减仓比例：1.0=该档全清（波段）；<1=按初始仓比例分档减
+    regime_tp_reduce_bull: float = 1.0
+    regime_tp_reduce_sideways: float = 1.0
+    regime_tp_reduce_bear: float = 1.0 / 3.0
     # 连续 N 次止损后：跳过下一次策略买入，再下一次才买；0=关闭
     # 例 N=2 → 止损、止损、跳过第3次买点、第4次买点才买；循环
     skip_buy_after_consec_stops: int = 0
@@ -97,16 +101,20 @@ class BacktestConfig:
     # 因子3·动量（单因子策略用；默认=高低点时间距离）
     mom_kind: str = "dist_hl"
     mom_params: dict | None = None
-    # 因子4·牛市持股（叠因子1：趋势内暂停止损 / 可选开盘建仓）
+    # 因子4·行情三态止盈（叠因子1；阈值止损始终全清）
     factor4_enabled: bool = False
     factor4_kind: str = "roc_ma"
     factor4_params: dict | None = None
-    # 牛市空仓时开盘建仓持股（否则仅抑制止损）
+    # True=按牛/震/跌自动挂波段与分档止盈（默认）；False=仅旧牛市止损逻辑
+    factor4_regime_tp: bool = True
+    # 牛市空仓时开盘建仓持股（兼容旧行为，默认关）
     factor4_bull_entry: bool = False
     # 牛市内跳过因子1 突破买点（已有仓或 bull_entry 时）
     factor4_skip_f1_entry_in_bull: bool = False
-    # 牛市内放宽止损倍数（>1 时替代完全暂停止损；例 2.0 = 止损放宽一倍）
+    # 牛市内放宽止损倍数（>1）；0=不放宽。新默认不暂停止损，阈值止损全清
     factor4_stop_widen_mult: float = 0.0
+    # True=牛市内完全暂停止损（旧行为）；与波段止盈并用时需显式打开
+    factor4_suppress_stop_in_bull: bool = False
 
     @property
     def slippage(self) -> dict[str, str | float]:
@@ -256,6 +264,8 @@ FACTOR4_REPAIR_UNIFIED: dict[str, object] = {
     "factor4_params": {"n": 60, "ma_n": 60},
     "factor4_stop_widen_mult": 2.0,
     "factor4_bull_entry": False,
+    # 修复扫描保留旧「牛市放宽止损」口径，不自动挂行情止盈
+    "factor4_regime_tp": False,
 }
 
 # 策略7逐票累计超额优先：启用F4，但仅在牛市regime内放宽止损。
@@ -270,6 +280,7 @@ FACTOR4_REPAIR_KAICHENG: dict[str, object] = {
     },
     "factor4_stop_widen_mult": 1.5,
     "factor4_bull_entry": False,
+    "factor4_regime_tp": False,
 }
 FACTOR4_REPAIR_TIANTONG: dict[str, object] = {
     "factor4_enabled": True,
@@ -283,6 +294,7 @@ FACTOR4_REPAIR_TIANTONG: dict[str, object] = {
     # 基础止损3%；放宽不宜过大（2x→6%回撤难承受）→ 1.3x ≈ 3.9%
     "factor4_stop_widen_mult": 1.3,
     "factor4_bull_entry": False,
+    "factor4_regime_tp": False,
 }
 # 科创综指样本短：沿用统一 roc_ma60 + 止损放宽2x
 FACTOR4_REPAIR_KCZZ: dict[str, object] = {
@@ -291,6 +303,7 @@ FACTOR4_REPAIR_KCZZ: dict[str, object] = {
     "factor4_params": {"n": 60, "ma_n": 60},
     "factor4_stop_widen_mult": 2.0,
     "factor4_bull_entry": False,
+    "factor4_regime_tp": False,
 }
 
 

@@ -93,6 +93,15 @@ def apply_strategy_config(
         getattr(cfg, "regime_tp_sideways", (0.15,)) or (0.15,)
     )
     strategy.regime_tp_bear = tuple(getattr(cfg, "regime_tp_bear", (0.10,)) or (0.10,))
+    strategy.regime_tp_reduce_bull = float(
+        getattr(cfg, "regime_tp_reduce_bull", 1.0) or 1.0
+    )
+    strategy.regime_tp_reduce_sideways = float(
+        getattr(cfg, "regime_tp_reduce_sideways", 1.0) or 1.0
+    )
+    strategy.regime_tp_reduce_bear = float(
+        getattr(cfg, "regime_tp_reduce_bear", 1.0 / 3.0) or (1.0 / 3.0)
+    )
     strategy.skip_buy_after_consec_stops = int(
         getattr(cfg, "skip_buy_after_consec_stops", 0) or 0
     )
@@ -107,26 +116,62 @@ def apply_strategy_config(
     strategy.factor4_stop_widen_mult = float(
         getattr(cfg, "factor4_stop_widen_mult", 0.0) or 0.0
     )
+    strategy.factor4_suppress_stop_in_bull = bool(
+        getattr(cfg, "factor4_suppress_stop_in_bull", False)
+    )
     if bool(getattr(cfg, "factor4_enabled", False)):
         strategy.bull_by_date = dict(getattr(cfg, "_bull_by_date", {}) or {})
+        # 行情三态映射（止盈档用）；prepare_factor4 写入
+        if not strategy.regime_by_date:
+            strategy.regime_by_date = dict(getattr(cfg, "_regime_by_date", {}) or {})
     else:
         strategy.bull_by_date = {}
     return strategy
 
 
 def prepare_factor4(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
-    """预计算因子4牛市 regime 映射，挂到 cfg._bull_by_date。"""
+    """预计算因子4 牛市/三态行情，并在默认模式下挂上波段与分档止盈。"""
     if not bool(getattr(cfg, "factor4_enabled", False)):
         cfg._bull_by_date = {}
+        cfg._regime_by_date = {}
         return
-    from strategy.bull_regime import bull_regime_by_date
 
-    params = getattr(cfg, "factor4_params", None) or {}
+    from strategy.bull_regime import (
+        bull_regime_by_date,
+        market_regime_by_date,
+        resolve_factor4_tp_policy,
+    )
+
+    params = dict(getattr(cfg, "factor4_params", None) or {})
     cfg._bull_by_date = bull_regime_by_date(
         daily,
         kind=str(getattr(cfg, "factor4_kind", "roc_ma") or "roc_ma"),
         params=params,
     )
+    policy = resolve_factor4_tp_policy(params)
+    cfg._regime_by_date = market_regime_by_date(
+        daily,
+        ma_n=int(policy["ma_n"]),
+        roc_n=int(policy["roc_n"]),
+    )
+
+    # 默认：因子4 自动打开行情止盈；factor4_regime_tp=False 则只保留旧牛市止损逻辑
+    if not bool(getattr(cfg, "factor4_regime_tp", True)):
+        return
+
+    cfg.regime_tp_enabled = True
+    if not getattr(cfg, "regime_by_date", None):
+        cfg.regime_by_date = dict(cfg._regime_by_date)
+    cfg.regime_tp_bull = tuple(policy["bull_levels"])
+    cfg.regime_tp_sideways = tuple(policy["sideways_levels"])
+    cfg.regime_tp_bear = tuple(policy["bear_levels"])
+    cfg.regime_tp_reduce_bull = float(policy["bull_reduce"])
+    cfg.regime_tp_reduce_sideways = float(policy["sideways_reduce"])
+    cfg.regime_tp_reduce_bear = float(policy["bear_reduce"])
+    # 波段默认昨高触及→今开卖；已显式设为 close 则保留
+    trig = str(getattr(cfg, "take_profit_trigger", "high") or "high").lower()
+    if trig not in ("close", "prev_high"):
+        cfg.take_profit_trigger = str(policy["trigger"])
 
 
 def build_open_break_strategy(cfg: BacktestConfig) -> OpenBreak3Strategy:

@@ -1302,6 +1302,15 @@ def collect_rows(
                     kind=f4_kind,
                     params=f4_params,
                 )
+                from holdingStocks.factor4_watch import regime_today
+
+                f4_regime = regime_today(
+                    w["sina"],
+                    str(q["session"]),
+                    daily,
+                    kind=f4_kind,
+                    params=f4_params,
+                )
                 stop_pct, f4_mode = effective_stop_pct(
                     base_stop_pct, bull=bull, widen_mult=f4_widen
                 )
@@ -1312,6 +1321,7 @@ def collect_rows(
             else:
                 bull = False
                 f4_widen = 1.0
+                f4_regime = "sideways"
                 stop_pct = base_stop_pct
                 f4_mode = "off"
                 stop_pct_for_levels = base_stop_pct
@@ -1379,7 +1389,12 @@ def collect_rows(
             else:
                 hit_stop = hit_eff_stop
             f4_tag = (
-                format_factor4_tag(bull=bull, mode=f4_mode, widen_mult=f4_widen)
+                format_factor4_tag(
+                    bull=bull,
+                    mode=f4_mode,
+                    widen_mult=f4_widen,
+                    regime=f4_regime,
+                )
                 if USE_FACTOR4
                 else "-"
             )

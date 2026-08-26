@@ -55,7 +55,7 @@ strategy/
 | **factor1** | 因子1 | 开盘突破买卖 | `open_break.py`：买=`ceil(open×(1+pct))`，卖=开盘−pct 止损；前日阴/小阳；禁双阳跨日≥5%；T+1。支持非对称 `entry_pct`/`stop_pct` |
 | **factor2** | 因子2 | 回撤加减仓**预警** | `dd_alert.py`：默认加仓≥20% / 减仓≤10%；**回测不注资**。旧注资见 `dd_topup.py` |
 | **factor3** | 因子3·动量 | 截面选股 / 单票择时 | `momentum.py`：组合默认截面反转打分；单票可用 `dist_hl` 等（收盘确认→次日开盘） |
-| **factor4** | 因子4 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1止损；可选空仓开盘建仓。叠在因子1上用 |
+| **factor4** | 因子4·行情止盈 | 叠因子1 | `bull_regime.py`：牛/震/跌三态；牛与震荡波段止盈、下跌分档减仓；阈值止损全清；可选旧版牛市放宽/暂停止损 |
 | **factor5** | 因子5·Serenity前瞻主题 | 动态 A 股**研究候选池** | `serenity_factor5.py`：Serenity 公开帖 → 前瞻看多主题 → A 股概念代理；不复制美股代码、不直接交易 |
 | **factor6** | 因子6·组合动量ETF轮动 | 宽基 ETF 轮动 | `etf_combo_momentum.py`：短窗+长窗 ROC 合成分数，收盘 TopK，动量失效空仓；次日开盘执行 |
 | **factor7** | 因子7·行业ETF双动量 | 月频行业主线轮动 | `industry_residual_momentum.py`：12月普通动量 + 100月PCA六因子改进残差动量，各50%合成；月末Top3 |
