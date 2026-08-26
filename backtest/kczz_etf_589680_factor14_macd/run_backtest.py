@@ -311,7 +311,7 @@ def main() -> None:
             "策略%": round(s, 2),
             "持有%": round(h, 2),
             "超额%": round(s - h, 2),
-            "回撤%": round(dd, 2),
+            "回撤%": round(abs(dd), 2),
         }
 
     summary = {
