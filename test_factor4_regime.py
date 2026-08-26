@@ -30,11 +30,16 @@ class Factor4RegimeTests(unittest.TestCase):
     def test_tp_policy_defaults(self) -> None:
         p = resolve_factor4_tp_policy()
         self.assertEqual(p["trigger"], "prev_high")
-        self.assertEqual(p["bull_levels"], (0.20,))
+        self.assertEqual(p["bull_levels"], ())
         self.assertEqual(p["sideways_levels"], (0.15,))
         self.assertEqual(p["bear_levels"], (0.08, 0.12, 0.18))
         self.assertAlmostEqual(p["bull_reduce"], 1.0)
         self.assertAlmostEqual(p["bear_reduce"], 1.0 / 3.0)
+        # 显式空档保留；显式牛市档可覆盖
+        self.assertEqual(resolve_factor4_tp_policy({"tp_bull": ()})["bull_levels"], ())
+        self.assertEqual(
+            resolve_factor4_tp_policy({"tp_bull": (0.20,)})["bull_levels"], (0.20,)
+        )
 
     def test_prepare_factor4_wires_regime_tp(self) -> None:
         idx = pd.bdate_range("2023-01-01", periods=200)
@@ -58,17 +63,17 @@ class Factor4RegimeTests(unittest.TestCase):
         prepare_factor4(cfg, daily)
         self.assertTrue(cfg.regime_tp_enabled)
         self.assertTrue(bool(cfg._regime_by_date))
-        self.assertEqual(cfg.regime_tp_bull, (0.20,))
+        self.assertEqual(cfg.regime_tp_bull, ())
         self.assertEqual(cfg.take_profit_trigger, "prev_high")
         strat = apply_strategy_config(OpenBreak3Strategy(), cfg)
         self.assertTrue(strat.regime_tp_enabled)
         self.assertAlmostEqual(strat.regime_tp_reduce_bear, 1.0 / 3.0)
 
-        day = next(iter(cfg._regime_by_date))
-        levels = strat._effective_tp_levels(day)
-        reduce = strat._effective_tp_reduce(day)
-        self.assertTrue(isinstance(levels, tuple))
-        self.assertGreater(reduce, 0.0)
+        # 找一天 bull / non-bull
+        bull_day = next(d for d, r in cfg._regime_by_date.items() if r == "bull")
+        other_day = next(d for d, r in cfg._regime_by_date.items() if r != "bull")
+        self.assertEqual(strat._effective_tp_levels(bull_day), ())
+        self.assertTrue(len(strat._effective_tp_levels(other_day)) >= 1)
 
     def test_legacy_repair_disables_auto_tp(self) -> None:
         idx = pd.bdate_range("2023-01-01", periods=100)

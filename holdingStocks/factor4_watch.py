@@ -145,7 +145,7 @@ def format_factor4_tag(
     if mode == "suppressed":
         return "牛市·暂停止损"
     if reg == "bull":
-        return "牛市·波段止盈/阈值止损全清"
+        return "牛市·仅阈值不止盈"
     if reg == "bear":
         return "下跌·分档减仓止盈/阈值止损全清"
     return "震荡·波段止盈/阈值止损全清"

@@ -3,7 +3,8 @@
 收盘确认，次日开盘生效；叠在因子1 上：
   · 买卖仍走因子1 开盘±pct
   · 阈值止损始终全清
-  · 牛市 / 震荡：波段止盈（默认昨高触及 → 今开按档减仓/全清）
+  · 牛市：仅按开盘阈值执行，不设止盈（让利润奔跑）
+  · 震荡：波段止盈（默认昨高触及 → 今开按档减仓/全清）
   · 下跌（含下跌震荡）：分档减仓止盈，余仓仍走阈值止损全清
 """
 
@@ -34,10 +35,11 @@ DEFAULT_REGIME_ROC_N = 20
 
 # 因子4 默认止盈政策（相对买入价）
 DEFAULT_FACTOR4_TP_TRIGGER = "prev_high"
-DEFAULT_FACTOR4_TP_BULL: tuple[float, ...] = (0.20,)
+# 牛市空档 = 不设止盈，只走因子1 开盘阈值止损
+DEFAULT_FACTOR4_TP_BULL: tuple[float, ...] = ()
 DEFAULT_FACTOR4_TP_SIDEWAYS: tuple[float, ...] = (0.15,)
 DEFAULT_FACTOR4_TP_BEAR: tuple[float, ...] = (0.08, 0.12, 0.18)
-DEFAULT_FACTOR4_TP_REDUCE_BULL = 1.0  # 波段全清
+DEFAULT_FACTOR4_TP_REDUCE_BULL = 1.0  # 若显式配置牛市档位则默认全清
 DEFAULT_FACTOR4_TP_REDUCE_SIDEWAYS = 1.0
 DEFAULT_FACTOR4_TP_REDUCE_BEAR = 1.0 / 3.0  # 下跌震荡分档减仓
 
@@ -179,6 +181,17 @@ def market_regime_by_date(
     return out
 
 
+def _tp_levels(
+    p: Mapping[str, Any],
+    key: str,
+    default: tuple[float, ...],
+) -> tuple[float, ...]:
+    """允许显式传空 tuple 关闭该行情止盈（`or` 会把 () 当成 falsy）。"""
+    if key not in p or p[key] is None:
+        return tuple(default)
+    return tuple(p[key])
+
+
 def resolve_factor4_tp_policy(
     params: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -186,9 +199,9 @@ def resolve_factor4_tp_policy(
     p = dict(params or {})
     return {
         "trigger": str(p.get("tp_trigger") or DEFAULT_FACTOR4_TP_TRIGGER),
-        "bull_levels": tuple(p.get("tp_bull") or DEFAULT_FACTOR4_TP_BULL),
-        "sideways_levels": tuple(p.get("tp_sideways") or DEFAULT_FACTOR4_TP_SIDEWAYS),
-        "bear_levels": tuple(p.get("tp_bear") or DEFAULT_FACTOR4_TP_BEAR),
+        "bull_levels": _tp_levels(p, "tp_bull", DEFAULT_FACTOR4_TP_BULL),
+        "sideways_levels": _tp_levels(p, "tp_sideways", DEFAULT_FACTOR4_TP_SIDEWAYS),
+        "bear_levels": _tp_levels(p, "tp_bear", DEFAULT_FACTOR4_TP_BEAR),
         "bull_reduce": float(
             p["tp_reduce_bull"]
             if p.get("tp_reduce_bull") is not None
@@ -214,19 +227,25 @@ def bull_rules_text(kind: str, params: dict[str, Any] | None = None) -> str:
     kind = str(kind or DEFAULT_BULL_KIND).lower()
     tp = resolve_factor4_tp_policy(p)
     base = momentum_rules_text(kind, p)
-    bull_lv = "/".join(f"{x*100:.0f}" for x in tp["bull_levels"]) or "关"
+    bull_lv = "/".join(f"{x*100:.0f}" for x in tp["bull_levels"])
     side_lv = "/".join(f"{x*100:.0f}" for x in tp["sideways_levels"]) or "关"
     bear_lv = "/".join(f"{x*100:.0f}" for x in tp["bear_levels"]) or "关"
+    if bull_lv:
+        bull_line = (
+            f"  · 牛市波段止盈：+{bull_lv}% × 减仓{tp['bull_reduce']*100:.0f}%\n"
+        )
+    else:
+        bull_line = "  · 牛市：仅按开盘阈值执行，不设止盈\n"
     return (
         base.replace("因子3 — 动量因子", "因子4 — 行情三态 + 波段/分档止盈")
         + "\n【叠因子1】\n"
-        "  · 买卖与阈值止损仍走因子1；触及开盘−pct 止损 → 全清\n"
-        f"  · 行情三态（MA{tp['ma_n']}+ROC{tp['roc_n']}，收盘确认次日生效）\n"
-        f"  · 牛市波段止盈：+{bull_lv}% × 减仓{tp['bull_reduce']*100:.0f}%\n"
-        f"  · 震荡波段止盈：+{side_lv}% × 减仓{tp['sideways_reduce']*100:.0f}%\n"
-        f"  · 下跌/下跌震荡分档减仓：+{bear_lv}% × 各减{tp['bear_reduce']*100:.0f}%\n"
-        f"  · 止盈触发：{tp['trigger']}（prev_high=昨高触及今开卖）\n"
-        "  · 可选兼容：旧版牛市暂停止损 / 放宽止损 / 开盘建仓\n"
+        + "  · 买卖与阈值止损仍走因子1；触及开盘−pct 止损 → 全清\n"
+        + f"  · 行情三态（MA{tp['ma_n']}+ROC{tp['roc_n']}，收盘确认次日生效）\n"
+        + bull_line
+        + f"  · 震荡波段止盈：+{side_lv}% × 减仓{tp['sideways_reduce']*100:.0f}%\n"
+        + f"  · 下跌/下跌震荡分档减仓：+{bear_lv}% × 各减{tp['bear_reduce']*100:.0f}%\n"
+        + f"  · 止盈触发：{tp['trigger']}（prev_high=昨高触及今开卖；牛市无档时不适用）\n"
+        + "  · 可选兼容：旧版牛市暂停止损 / 放宽止损 / 开盘建仓\n"
     )
 
 

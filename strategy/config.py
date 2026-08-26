@@ -105,7 +105,7 @@ class BacktestConfig:
     factor4_enabled: bool = False
     factor4_kind: str = "roc_ma"
     factor4_params: dict | None = None
-    # True=按牛/震/跌自动挂波段与分档止盈（默认）；False=仅旧牛市止损逻辑
+    # True=按震/跌自动挂波段与分档止盈（默认；牛市默认无止盈档）；False=仅旧牛市止损逻辑
     factor4_regime_tp: bool = True
     # 牛市空仓时开盘建仓持股（兼容旧行为，默认关）
     factor4_bull_entry: bool = False
