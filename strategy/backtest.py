@@ -19,6 +19,7 @@ from strategy.open_break import (
     STOP_PCT,
     TICK_SIZE,
     entry_trigger_price,
+    is_small_yin,
     is_yang,
     limit_down_state,
     prev_day_allows_entry,
@@ -77,6 +78,8 @@ class OpenBreak3Strategy(Strategy):
     skip_buy_after_consec_stops: int = 0
     # 当天买、下一交易日止损 → 跳过下一次买点，再下一次才买
     skip_buy_after_overnight_stop: bool = False
+    # 连续小阴离场：持仓期连续 N 根小阴收盘全清；0=关闭
+    consec_small_yin_exit: int = 0
     # 因子4：牛市持股 regime（由 runner 注入 bull_by_date）
     factor4_enabled: bool = False
     factor4_bull_entry: bool = False
@@ -134,6 +137,7 @@ class OpenBreak3Strategy(Strategy):
         self.stop_floor: float | None = None
         self.bars_held: int = 0
         self.consec_stops: int = 0
+        self.consec_small_yin: int = 0
         # normal | skip_next | take_next
         self.entry_gate: str = "normal"
         entry_txt = (
@@ -194,6 +198,11 @@ class OpenBreak3Strategy(Strategy):
             skip_bits.append(f"连止损{skip_n}次后跳过下一次买入、再下一次才买(循环)")
         if self.skip_buy_after_overnight_stop:
             skip_bits.append("隔日止损后跳过下一次买入、再下一次才买(循环)")
+        sy_n = int(getattr(self, "consec_small_yin_exit", 0) or 0)
+        if sy_n > 0:
+            skip_bits.append(
+                f"连续{sy_n}根小阴(实体跌幅≤止损阈值)收盘离场"
+            )
         skip_txt = (" | " + "；".join(skip_bits)) if skip_bits else ""
         f4_bits: list[str] = []
         if bool(self.factor4_enabled):
@@ -246,6 +255,7 @@ class OpenBreak3Strategy(Strategy):
         self.tp_done = set()
         self.stop_floor = None
         self.bars_held = 0
+        self.consec_small_yin = 0
 
     def _sync_position_state(self) -> float:
         pos = float(self.get_position(self.symbol))
@@ -731,6 +741,34 @@ class OpenBreak3Strategy(Strategy):
                     is_stop=True,
                 )
                 return
+
+            # 未触开盘止损：检查连续小阴慢跌离场
+            sy_need = int(getattr(self, "consec_small_yin_exit", 0) or 0)
+            if sy_need > 0:
+                if is_small_yin(
+                    o,
+                    c,
+                    max_drop_pct=float(self.stop_pct),
+                    tick=float(self.tick),
+                ):
+                    self.consec_small_yin = (
+                        int(getattr(self, "consec_small_yin", 0) or 0) + 1
+                    )
+                else:
+                    self.consec_small_yin = 0
+                if self.consec_small_yin >= sy_need:
+                    self._exit_all(
+                        day=day,
+                        avail=avail,
+                        pos=pos,
+                        price=c,
+                        reason=(
+                            f"连续{self.consec_small_yin}根小阴离场"
+                            f"(实体跌幅≤{self.stop_pct*100:.1f}%)"
+                        ),
+                        is_stop=False,
+                    )
+                    return
         finally:
             self._roll_prev_bars(o, c, h)
 

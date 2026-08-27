@@ -73,6 +73,7 @@ FACTOR_BINDINGS = (
         ban_single_yang=DEFAULT_BAN_SINGLE_YANG,
         double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
         double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+        consec_small_yin_exit=0,
         filter=strategy1_factor_filter,
         filter_desc="前日阴/小阳 + 禁双阳跨日≥5%",
     ),

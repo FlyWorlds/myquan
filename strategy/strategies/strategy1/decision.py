@@ -5,6 +5,7 @@ from __future__ import annotations
 from strategy.core.context import Decision, MarketContext
 from strategy.core.decision import BaseDecisionEngine
 from strategy.core.protocols import StrategySpec
+from strategy.open_break import DEFAULT_PCT, is_small_yin
 from strategy.strategies.strategy1.bindings import FACTOR_BINDINGS, STRATEGY_ID, STRATEGY_NAME
 
 
@@ -13,6 +14,7 @@ class Strategy1Decision(BaseDecisionEngine):
     决策规则（与 open_break / OpenBreak3 一致）：
     - 空仓 + 因子允许 + high 触买点 → buy
     - 有仓 + 非 T+1 + low 触止损 → sell
+    - 有仓 + 非 T+1 + 连续小阴（可选）→ sell@收盘
     - 其余 → hold
     触发用 high/low，不用现价（避免漏触发）。
     """
@@ -33,6 +35,12 @@ class Strategy1Decision(BaseDecisionEngine):
 
         high = float(ctx.high)
         low = float(ctx.low)
+        stop_pct = float(
+            binding.params.get("stop_pct")
+            or binding.params.get("entry_pct")
+            or DEFAULT_PCT
+        )
+        sy_need = int(binding.params.get("consec_small_yin_exit") or 0)
 
         if ctx.has_position:
             if ctx.t_plus_one:
@@ -51,6 +59,29 @@ class Strategy1Decision(BaseDecisionEngine):
                     stop_price=stop_px,
                     tags=("stop", "factor1"),
                 )
+            # N=2：今日小阴 + 前日小阴 → 收盘离场（回测持仓连阴的简化口径）
+            if (
+                sy_need >= 2
+                and ctx.prev_open is not None
+                and ctx.prev_close is not None
+            ):
+                today_sy = is_small_yin(
+                    ctx.open, ctx.close, max_drop_pct=stop_pct
+                )
+                prev_sy = is_small_yin(
+                    float(ctx.prev_open),
+                    float(ctx.prev_close),
+                    max_drop_pct=stop_pct,
+                )
+                if today_sy and prev_sy:
+                    return Decision.sell(
+                        float(ctx.close),
+                        reason=f"连续小阴离场(实体跌幅≤{stop_pct*100:.1f}%)",
+                        factor_id="factor1",
+                        buy_price=buy_px,
+                        stop_price=stop_px,
+                        tags=("small_yin", "factor1"),
+                    )
             return Decision.hold(
                 "持仓未触止损",
                 buy_price=buy_px,

@@ -86,6 +86,9 @@ class BacktestConfig:
     skip_buy_after_consec_stops: int = 0
     # 当天买入、下一交易日即止损：跳过下一次买点，再下一次才买；循环
     skip_buy_after_overnight_stop: bool = False
+    # 连续小阴离场：持仓期连续 N 根「阴线且实体跌幅≤止损阈值」则收盘全清；0=关闭
+    # 例 N=2 → 今小阴+次日小阴（每天跌幅未破开盘止损阈值）→ 第2日收盘离场
+    consec_small_yin_exit: int = 0
     # 因子2（策略一默认叠加）：None=用 strategy1 bindings / dd_topup 默认
     factor2_enabled: bool | None = None
     factor2_add_pct: float | None = None  # 均匀每档；与 factor2_add_pcts 二选一

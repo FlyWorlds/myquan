@@ -33,8 +33,13 @@ STRATEGY_RULES = """
   ① 止损
      · 当日最低价 <= floor(开盘价 × (1 - 阈值)) → 按止损触发价全清
 
-  ② 未触止损
-     · 无论阴线、阳线或十字，均继续持有
+  ② 连续小阴离场（可选，默认关闭）
+     · 小阴：阴线，且当日实体跌幅 (开-收)/开 ≤ 阈值（每日跌幅未破阈值、硬止损不触发）
+     · 持仓期连续 N 根小阴（默认研究用 N=2）→ 当日收盘全清
+     · 用于慢跌阴跌：每天都不够触发开盘止损，但连续阴跌仍离场
+
+  ③ 未触止损 / 未连续小阴
+     · 继续持有
 
 【术语】
   · 全清：可用仓位 100% 卖出
@@ -420,6 +425,26 @@ def is_yin(open_px: float, close_px: float, *, tick: float = TICK_SIZE) -> bool:
 def is_yang(open_px: float, close_px: float, *, tick: float = TICK_SIZE) -> bool:
     """阳线：收盘至少高于开盘 1 跳；十字（开≈收）不算阳。"""
     return float(close_px) >= float(open_px) + float(tick) - 1e-12
+
+
+def is_small_yin(
+    open_px: float,
+    close_px: float,
+    *,
+    max_drop_pct: float,
+    tick: float = TICK_SIZE,
+) -> bool:
+    """小阴：阴线，且实体跌幅 (开-收)/开 不超过 max_drop_pct（通常=止损阈值）。
+
+    用于「每天跌幅未破阈值」的慢跌识别；大阴（实体跌幅>阈值）不算小阴
+   （通常当日低点已触发开盘止损）。
+    """
+    o = float(open_px)
+    c = float(close_px)
+    if o <= 0 or not is_yin(o, c, tick=tick):
+        return False
+    drop = (o - c) / o
+    return 0.0 < drop <= float(max_drop_pct) + 1e-12
 
 
 def is_doji(open_px: float, close_px: float, *, tick: float = TICK_SIZE) -> bool:

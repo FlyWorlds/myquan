@@ -13,6 +13,7 @@ import strategy.data as data
 from strategy.open_break import (
     entry_filters_ok,
     has_double_yang_before,
+    is_small_yin,
     limit_down_state,
     should_block_entry_by_yang,
     strategy_levels,
@@ -25,6 +26,16 @@ class StrategyRuleTests(unittest.TestCase):
         levels = strategy_levels(15.05)
         self.assertEqual(levels["buy_trigger"], 15.43)
         self.assertEqual(levels["stop"], 14.67)
+
+    def test_small_yin_within_stop_threshold(self) -> None:
+        # 开10收9.8 → 跌2% ≤3%：小阴
+        self.assertTrue(is_small_yin(10.0, 9.8, max_drop_pct=0.03))
+        # 开10收9.6 → 跌4% >3%：非小阴
+        self.assertFalse(is_small_yin(10.0, 9.6, max_drop_pct=0.03))
+        # 阳线不算
+        self.assertFalse(is_small_yin(10.0, 10.2, max_drop_pct=0.03))
+        # 十字不算阴
+        self.assertFalse(is_small_yin(10.0, 10.0, max_drop_pct=0.03))
 
     def test_limit_up_open_cannot_buy(self) -> None:
         from strategy.open_break import cannot_buy_limit_up, limit_up_state
