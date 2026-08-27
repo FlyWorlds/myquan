@@ -10,6 +10,7 @@ data_cache/
 *.parquet
 backtest/universe_abc/daily_cache/
 backtest/universe_zz500_1000/
+backtest/factor1_three_stocks/daily_cache/
 
 # 回测产物（报告 / 临时输出）
 backtest/*_report.html
