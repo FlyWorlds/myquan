@@ -77,6 +77,11 @@ class OpenBreak3Strategy(Strategy):
     skip_buy_after_consec_stops: int = 0
     # 当天买、下一交易日止损 → 跳过下一次买点，再下一次才买
     skip_buy_after_overnight_stop: bool = False
+    # 当日止损后尾盘再买（新仓当日不可卖）；默认关
+    allow_same_day_rebuy_after_stop: bool = False
+    rebuy_require_yang: bool = True
+    rebuy_above_stop_pct: float = 0.0
+    rebuy_from_low_pct: float = 0.0
     # 因子4：牛市持股 regime（由 runner 注入 bull_by_date）
     factor4_enabled: bool = False
     factor4_bull_entry: bool = False
@@ -134,6 +139,7 @@ class OpenBreak3Strategy(Strategy):
         self.stop_floor: float | None = None
         self.bars_held: int = 0
         self.consec_stops: int = 0
+        self.same_day_rebuy_count: int = 0
         # normal | skip_next | take_next
         self.entry_gate: str = "normal"
         entry_txt = (
@@ -194,6 +200,19 @@ class OpenBreak3Strategy(Strategy):
             skip_bits.append(f"连止损{skip_n}次后跳过下一次买入、再下一次才买(循环)")
         if self.skip_buy_after_overnight_stop:
             skip_bits.append("隔日止损后跳过下一次买入、再下一次才买(循环)")
+        if bool(self.allow_same_day_rebuy_after_stop):
+            rb = ["止损当日尾盘再买(新仓T+1)"]
+            if bool(self.rebuy_require_yang):
+                rb.append("须收阳")
+            above = float(self.rebuy_above_stop_pct or 0.0)
+            from_low = float(self.rebuy_from_low_pct or 0.0)
+            if above > 0:
+                rb.append(f"收盘>止损+{above*100:.1f}点")
+            else:
+                rb.append("收盘≥止损价")
+            if from_low > 0:
+                rb.append(f"距最低≥{from_low*100:.1f}点")
+            skip_bits.append("+".join(rb))
         skip_txt = (" | " + "；".join(skip_bits)) if skip_bits else ""
         f4_bits: list[str] = []
         if bool(self.factor4_enabled):
@@ -574,6 +593,91 @@ class OpenBreak3Strategy(Strategy):
         )
         return True
 
+    def _same_day_rebuy_ok(
+        self,
+        *,
+        open_px: float,
+        low_px: float,
+        close_px: float,
+        stop_px: float,
+    ) -> bool:
+        """止损当日尾盘再买过滤：可选收阳 / 高于止损价X点 / 距最低价反弹X点。"""
+        if bool(self.rebuy_require_yang) and not is_yang(
+            open_px, close_px, tick=float(self.tick)
+        ):
+            return False
+        above = float(self.rebuy_above_stop_pct or 0.0)
+        if close_px + 1e-12 < float(stop_px) * (1.0 + above):
+            return False
+        from_low = float(self.rebuy_from_low_pct or 0.0)
+        if from_low > 0:
+            base = float(open_px) if float(open_px) > 0 else float(stop_px)
+            if base <= 0:
+                return False
+            if (float(close_px) - float(low_px)) / base + 1e-12 < from_low:
+                return False
+        return True
+
+    def _try_same_day_rebuy_after_stop(
+        self,
+        *,
+        day: str,
+        open_px: float,
+        high_px: float,
+        low_px: float,
+        close_px: float,
+        stop_px: float,
+    ) -> bool:
+        """止损清仓后，若开启则按尾盘条件再买；买入日记为当日 → T+1 当日不可卖。"""
+        if not bool(self.allow_same_day_rebuy_after_stop):
+            return False
+        # 刚 _exit_all 后引擎仓位可能尚未结算，以 armed/buy_day 为准
+        if not self.armed or self.buy_day is not None:
+            return False
+        if not self._same_day_rebuy_ok(
+            open_px=open_px, low_px=low_px, close_px=close_px, stop_px=stop_px
+        ):
+            return False
+
+        px = float(close_px)
+        if px <= 0:
+            return False
+        # 同日刚 sell 后，order_target_percent 易与未结算仓位打架；按购买力显式买
+        lot = float(self.lot_size)
+        try:
+            bp = float(self.buying_power)
+        except Exception:  # noqa: BLE001
+            bp = 0.0
+        budget = bp * float(self.target_pct)
+        raw_qty = budget / px if px > 0 else 0.0
+        qty = float(int(raw_qty // lot) * lot)
+        if qty < lot:
+            self.log(
+                f"{day} 止损后尾盘再买资金不足 "
+                f"bp={bp:.2f} px={px:.3f} target={self.target_pct*100:.1f}%"
+            )
+            return False
+        oid = self.buy(self.symbol, qty, price=px)
+        if not oid:
+            self.log(f"{day} 止损后尾盘再买下单失败 qty={qty:.0f} px={px:.3f}")
+            return False
+        self.armed = False
+        self.entry_price = px
+        self.buy_day = day
+        self.bars_held = 0
+        self.initial_qty = qty
+        self.same_day_rebuy_count = int(getattr(self, "same_day_rebuy_count", 0) or 0) + 1
+        above = float(self.rebuy_above_stop_pct or 0.0)
+        from_low = float(self.rebuy_from_low_pct or 0.0)
+        yang_txt = "收阳+" if bool(self.rebuy_require_yang) else ""
+        self.log(
+            f"{day} 止损后尾盘再买({yang_txt}高于止损{above*100:.1f}点/"
+            f"距低≥{from_low*100:.1f}点) "
+            f"qty={qty:.0f} 限价={px:.3f} stop={stop_px:.3f} low={low_px:.3f} "
+            f"oid={oid} 持有收益=+0.00%"
+        )
+        return True
+
     def on_bar(self, bar) -> None:
         if bar.symbol != self.symbol:
             return
@@ -722,7 +826,7 @@ class OpenBreak3Strategy(Strategy):
                         f"(open={o:.2f} low={low:.2f})"
                     )
                 )
-                self._exit_all(
+                exited = self._exit_all(
                     day=day,
                     avail=avail,
                     pos=pos,
@@ -730,6 +834,15 @@ class OpenBreak3Strategy(Strategy):
                     reason=reason,
                     is_stop=True,
                 )
+                if exited:
+                    self._try_same_day_rebuy_after_stop(
+                        day=day,
+                        open_px=o,
+                        high_px=h,
+                        low_px=low,
+                        close_px=c,
+                        stop_px=float(stop_px),
+                    )
                 return
         finally:
             self._roll_prev_bars(o, c, h)

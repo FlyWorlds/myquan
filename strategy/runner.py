@@ -99,6 +99,14 @@ def apply_strategy_config(
     strategy.skip_buy_after_overnight_stop = bool(
         getattr(cfg, "skip_buy_after_overnight_stop", False)
     )
+    strategy.allow_same_day_rebuy_after_stop = bool(
+        getattr(cfg, "allow_same_day_rebuy_after_stop", False)
+    )
+    strategy.rebuy_require_yang = bool(getattr(cfg, "rebuy_require_yang", True))
+    strategy.rebuy_above_stop_pct = float(
+        getattr(cfg, "rebuy_above_stop_pct", 0.0) or 0.0
+    )
+    strategy.rebuy_from_low_pct = float(getattr(cfg, "rebuy_from_low_pct", 0.0) or 0.0)
     strategy.factor4_enabled = bool(getattr(cfg, "factor4_enabled", False))
     strategy.factor4_bull_entry = bool(getattr(cfg, "factor4_bull_entry", False))
     strategy.factor4_skip_f1_entry_in_bull = bool(
