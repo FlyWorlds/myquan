@@ -1,0 +1,20 @@
+{
+  "kind": "rev",
+  "n": 90,
+  "top_k": 10,
+  "hold_days": null,
+  "min_score": null,
+  "ma_filter": null,
+  "mode": "dual",
+  "n2": 40,
+  "w": 1.0,
+  "entry_pct": 0.025,
+  "stop_pct": 0.025,
+  "require_f1_precond": true,
+  "ban_double_yang": true,
+  "double_yang_combined_min_pct": 0.05,
+  "double_yang_combined_mode": "span",
+  "start": "20250101",
+  "warm_start": "20240101",
+  "universe": "zz500_1000_mainboard"
+}
