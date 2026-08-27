@@ -1,0 +1,21 @@
+{
+  "symbol": "sh600330",
+  "name": "天通股份",
+  "start": "20250102",
+  "end_requested": "20260827",
+  "end_actual": "20260826",
+  "entry_stop_pct": 3.0,
+  "regime_tp": {
+    "bull": "不止盈",
+    "sideways": "15%全清@prev_high",
+    "bear": "10%全清@prev_high",
+    "source": "天通自身收盘 MA60+ROC20，次日生效"
+  },
+  "regime_day_counts": {
+    "bull": 216,
+    "bear": 96,
+    "sideways": 88
+  },
+  "factor2_enabled": false,
+  "note": "分月收益=该月末权益(或收盘)/上月末-1；累计为月收益几何连乘。"
+}
