@@ -86,6 +86,16 @@ class BacktestConfig:
     skip_buy_after_consec_stops: int = 0
     # 当天买入、下一交易日即止损：跳过下一次买点，再下一次才买；循环
     skip_buy_after_overnight_stop: bool = False
+    # 当日打止损后允许尾盘再买（新仓 T+1，当日不可再卖）；默认关闭=止损当日禁买
+    allow_same_day_rebuy_after_stop: bool = False
+    # 尾盘再买过滤：须收阳（相对开盘实体≥1跳）
+    rebuy_require_yang: bool = True
+    # 收盘相对止损价至少高出该比例（0.01=1个点）；0=仅需收盘≥止损价
+    rebuy_above_stop_pct: float = 0.0
+    # 收盘相对止损价最多高出该比例；None=不限制上沿（仅下限）
+    rebuy_above_stop_max_pct: float | None = None
+    # 收盘相对当日最低价反弹至少该比例（相对开盘，0.01=1个点）；0=不限制
+    rebuy_from_low_pct: float = 0.0
     # 因子2（策略一默认叠加）：None=用 strategy1 bindings / dd_topup 默认
     factor2_enabled: bool | None = None
     factor2_add_pct: float | None = None  # 均匀每档；与 factor2_add_pcts 二选一
@@ -169,6 +179,17 @@ class BacktestConfig:
         if self.skip_buy_after_overnight_stop:
             skip_bits.append("隔日止损跳买")
         skip = ("/" + "+".join(skip_bits)) if skip_bits else ""
+        if self.allow_same_day_rebuy_after_stop:
+            rb = ["止损日尾盘再买"]
+            if self.rebuy_require_yang:
+                rb.append("收阳")
+            above = float(self.rebuy_above_stop_pct or 0.0)
+            from_low = float(self.rebuy_from_low_pct or 0.0)
+            if above > 0:
+                rb.append(f"收盘>止损+{above * 100:.1f}点")
+            if from_low > 0:
+                rb.append(f"距低≥{from_low * 100:.1f}点")
+            skip += "/" + "+".join(rb)
         ep = self.resolved_entry_pct()
         sp = self.resolved_stop_pct()
         if abs(ep - sp) < 1e-12:
