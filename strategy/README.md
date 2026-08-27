@@ -99,13 +99,16 @@ for b in get_strategy_bindings("strategy3"):
 ```
 
 ```python
-from strategy import run_strategy3, run_strategy5
+from strategy import run_strategy3, run_strategy5, run_strategy11
 
 # 策略五：因子11 近高 Top5 等权持有（研究回测，不构成投资建议）
 run_strategy5(start="20200102")
 
 # 策略三：5 个槽位，单主题1只、固定持有5日
 run_strategy3(start="20260101", max_positions=5, max_per_theme=1, hold_days=5)
+
+# 策略十一：天通默认，日线笔 vs 因子1 费用后盈亏比（研究）
+run_strategy11()  # 或 get_strategy("缠论笔算盈亏比").run()
 ```
 
 策略二（缠论选股，研究回测，不构成投资建议）：
