@@ -2,18 +2,26 @@
   "start": "2025-01-02",
   "end": "2026-08-26",
   "n_days": 400,
-  "total_return_pct": 4.05293466984038,
-  "max_drawdown_pct": 26.80488209574986,
-  "sharpe": 0.2297573489558187,
-  "end_equity": 1040529.3466984038,
-  "n_trades": 1109,
+  "total_return_pct": 3.272368837510453,
+  "max_drawdown_pct": 27.345793471219114,
+  "sharpe": 0.20696829847049406,
+  "end_equity": 1032723.6883751046,
+  "n_trades": 1185,
   "n_buys": 558,
   "n_stop_exits": 551,
   "n_time_exits": 0,
+  "n_tp_exits": 76,
   "n_breakout_miss": 2334,
   "top_k": 10,
   "hold_days": null,
   "entry_pct": 0.025,
   "stop_pct": 0.025,
-  "factor": "f3f1/zz500_1000_mainboard/dual{n=90+40*w1,top=10,entry=0.025,stop=0.025,pre=1}"
+  "take_profit_levels": [
+    0.15,
+    0.2,
+    0.25
+  ],
+  "take_profit_reduce": 0.2,
+  "take_profit_trigger": "high",
+  "factor": "f3f1/zz500_1000_mainboard/dual{n=90+40*w1,top=10,entry=0.025,stop=0.025,pre=1,tp=15+20+25}"
 }

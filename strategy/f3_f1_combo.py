@@ -9,13 +9,13 @@
 相对旧对照 `_unreg_s6`（开盘直接买 + 止损/到期卖）：
   · 选股加了因子1前置；
   · 买入改为开盘突破触发，而非开盘市价；
-  · 默认只止损卖出（可选 hold_days 到期卖）。
+  · 默认分档止盈（+15/20/25% 各减初始仓 20%）+ 余仓止损；可选 hold_days 到期卖。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import pandas as pd
@@ -38,11 +38,16 @@ from strategy.open_break import (
 
 LOT = 100
 
+# 与凯盛分档止盈对照脚本同口径
+DEFAULT_TP_LEVELS: tuple[float, ...] = (0.15, 0.20, 0.25)
+DEFAULT_TP_REDUCE = 0.20
+DEFAULT_TP_TRIGGER = "high"  # high | close
+
 COMBO_DEFAULTS: dict[str, Any] = {
     "kind": "rev",
     "n": 90,
     "top_k": 3,
-    "hold_days": None,  # None=只止损；设整数则额外到期开盘卖
+    "hold_days": None,  # None=不止到期；设整数则额外到期开盘卖
     "min_score": None,
     "ma_filter": None,
     "mode": "dual",
@@ -54,10 +59,34 @@ COMBO_DEFAULTS: dict[str, Any] = {
     "ban_double_yang": DEFAULT_BAN_DOUBLE_YANG,
     "double_yang_combined_min_pct": DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     "double_yang_combined_mode": DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+    "take_profit_levels": DEFAULT_TP_LEVELS,
+    "take_profit_reduce": DEFAULT_TP_REDUCE,
+    "take_profit_trigger": DEFAULT_TP_TRIGGER,
+    "take_profit_limit_offset": 0.0,
+    "take_profit_lock_pct": None,
     "start": "20200101",
     "warm_start": "20180101",
     "universe": "zz500_1000_mainboard",
 }
+
+
+def _normalize_tp_levels(levels: Sequence[float] | None) -> tuple[float, ...]:
+    if not levels:
+        return ()
+    return tuple(float(x) for x in levels)
+
+
+def _tp_slice_qty(avail: float, initial_shares: float, reduce: float) -> float:
+    """按初始仓比例取整手减仓数量。"""
+    if initial_shares <= 0 or avail <= 0 or reduce <= 0:
+        return 0.0
+    if float(reduce) >= 1.0 - 1e-12:
+        return float(int(avail // LOT) * LOT) if avail >= LOT else 0.0
+    raw = float(initial_shares) * float(reduce)
+    qty = float(int(raw // LOT) * LOT)
+    if qty < LOT and avail >= LOT:
+        qty = float(LOT)
+    return min(qty, float(int(avail // LOT) * LOT))
 
 
 def combo_rules_text(
@@ -67,12 +96,24 @@ def combo_rules_text(
     double_yang_combined_min_pct: float = DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     top_k: int = 3,
     hold_days: int | None = None,
+    take_profit_levels: Sequence[float] | None = DEFAULT_TP_LEVELS,
+    take_profit_reduce: float = DEFAULT_TP_REDUCE,
+    take_profit_trigger: str = DEFAULT_TP_TRIGGER,
 ) -> str:
     hold_txt = (
-        f"持满 {hold_days} 日未止损则开盘到期卖"
+        f"持满 {hold_days} 日未止损/未止盈清仓则开盘到期卖"
         if hold_days is not None
-        else "不设到期，仅止损卖出"
+        else "不设到期"
     )
+    levels = _normalize_tp_levels(take_profit_levels)
+    if levels:
+        lv = "/".join(f"{x*100:.0f}" for x in levels)
+        tp_txt = (
+            f"分档止盈 +{lv}%（相对买入价，触发={take_profit_trigger}），"
+            f"各减初始仓 {take_profit_reduce*100:.0f}%；余仓继续止损"
+        )
+    else:
+        tp_txt = "关闭分档止盈"
     return f"""================================================================================
   因子3选股 × 因子1前置 × 因子1买卖（研究组合）
 ================================================================================
@@ -86,8 +127,9 @@ def combo_rules_text(
   · 空仓且名单内：最高价 >= ceil(开盘×(1+{entry_pct*100:.1f}%)) 按触发价限价买；
   · 当日未触发则错过该信号（不递延），避免前置与交易日错位。
 
-【卖出】
-  · 止损：最低价 <= floor(开盘×(1-{stop_pct*100:.1f}%)) → 全清；
+【卖出】（非买入日；同日先止盈再止损）
+  · {tp_txt}
+  · 止损：最低价 <= floor(开盘×(1-{stop_pct*100:.1f}%)) → 余仓全清；
   · {hold_txt}
   · T+1：买入当日不卖。
 ================================================================================
@@ -223,8 +265,19 @@ def simulate_f3_f1_combo(
     initial_cash: float,
     factor_label: str,
     hold_days: int | None = None,
+    take_profit_levels: Sequence[float] | None = DEFAULT_TP_LEVELS,
+    take_profit_reduce: float = DEFAULT_TP_REDUCE,
+    take_profit_trigger: str = DEFAULT_TP_TRIGGER,
+    take_profit_limit_offset: float = 0.0,
+    take_profit_lock_pct: float | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """因子3名单 → 次日因子1突破买 / 止损卖（可选到期）。"""
+    """因子3名单 → 次日因子1突破买 / 分档止盈 + 止损卖（可选到期）。"""
+    tp_levels = _normalize_tp_levels(take_profit_levels)
+    tp_reduce = float(take_profit_reduce or 0.0)
+    tp_trig = str(take_profit_trigger or "high").lower()
+    tp_off = float(take_profit_limit_offset or 0.0)
+    tp_lock = float(take_profit_lock_pct) if take_profit_lock_pct is not None else None
+
     all_dates = [pd.Timestamp(d) for d in factor.index]
     date_to_i = {d: i for i, d in enumerate(all_dates)}
     cash = float(initial_cash)
@@ -234,13 +287,14 @@ def simulate_f3_f1_combo(
     pick_rows: list[dict] = []
     n_stop = 0
     n_time = 0
+    n_tp = 0
     n_miss = 0  # 有名单但未触发突破
 
     for di, d in enumerate(all_dates):
         if d < bt_start:
             continue
 
-        # 1) 卖出：止损 / 可选到期
+        # 1) 卖出：同日先分档止盈，再止损 / 可选到期（买入日 T+1 不卖）
         still: list[dict[str, Any]] = []
         for pos in positions:
             sym = pos["sym"]
@@ -253,31 +307,84 @@ def simulate_f3_f1_combo(
                 still.append(pos)
                 continue
             o = float(opens.at[d, sym])
+            hi = (
+                float(highs.at[d, sym])
+                if sym in highs.columns and not pd.isna(highs.at[d, sym])
+                else o
+            )
             low = (
                 float(lows.at[d, sym])
                 if sym in lows.columns and not pd.isna(lows.at[d, sym])
                 else o
             )
-            sold = False
-            reason = ""
-            px = 0.0
-            if held >= 1:
-                stop_px = stop_trigger_price(o, stop_pct=stop_pct)
-                if low <= stop_px + 1e-12:
-                    raw = o if o <= stop_px + 1e-12 else stop_px
+            cl = (
+                float(closes.at[d, sym])
+                if sym in closes.columns and not pd.isna(closes.at[d, sym])
+                else o
+            )
+
+            if held < 1:
+                still.append(pos)
+                continue
+
+            # --- 分档止盈（相对买入价）---
+            if tp_levels and tp_reduce > 0 and float(pos.get("entry_price") or 0) > 0:
+                mark = cl if tp_trig == "close" else hi
+                entry_px = float(pos["entry_price"])
+                done: set[int] = set(pos.get("tp_done") or ())
+                for i, lvl in enumerate(tp_levels):
+                    if i in done:
+                        continue
+                    if float(pos["shares"]) < LOT:
+                        break
+                    limit_lvl = float(lvl) + tp_off
+                    tp_px = entry_px * (1.0 + limit_lvl)
+                    if mark + 1e-12 < tp_px:
+                        continue
+                    done.add(i)
+                    if tp_lock is not None:
+                        floor = entry_px * (1.0 + tp_lock)
+                        cur = pos.get("stop_floor")
+                        if cur is None or floor > float(cur):
+                            pos["stop_floor"] = floor
+                    qty = _tp_slice_qty(
+                        float(pos["shares"]), float(pos["initial_shares"]), tp_reduce
+                    )
+                    if qty <= 0:
+                        continue
+                    raw = o if o >= tp_px - 1e-12 else tp_px
                     px = raw * (1.0 - SLIP)
-                    reason = "stop"
-                    sold = True
-                    n_stop += 1
-                elif hold_days is not None and held >= int(hold_days):
-                    px = o * (1.0 - SLIP)
-                    reason = "time"
-                    sold = True
-                    n_time += 1
-            if sold:
-                proceeds = pos["shares"] * px
+                    proceeds = qty * px
+                    fee = proceeds * (COMMISSION + STAMP)
+                    cash += proceeds - fee
+                    pos["shares"] = float(pos["shares"]) - qty
+                    n_tp += 1
+                    trade_rows.append(
+                        {
+                            "date": d,
+                            "symbol": sym,
+                            "side": "sell",
+                            "shares": qty,
+                            "price": px,
+                            "reason": f"tp_{int(round(float(lvl)*100))}",
+                        }
+                    )
+                pos["tp_done"] = done
+                if float(pos["shares"]) < LOT - 1e-9:
+                    continue  # 止盈已清仓，不进 still
+
+            # --- 止损（可被锁盈抬高）---
+            stop_px = stop_trigger_price(o, stop_pct=stop_pct)
+            floor = pos.get("stop_floor")
+            if floor is not None:
+                stop_px = max(float(stop_px), float(floor))
+            if low <= stop_px + 1e-12:
+                raw = o if o <= stop_px + 1e-12 else stop_px
+                px = raw * (1.0 - SLIP)
+                proceeds = float(pos["shares"]) * px
                 fee = proceeds * (COMMISSION + STAMP)
                 cash += proceeds - fee
+                n_stop += 1
                 trade_rows.append(
                     {
                         "date": d,
@@ -285,11 +392,31 @@ def simulate_f3_f1_combo(
                         "side": "sell",
                         "shares": pos["shares"],
                         "price": px,
-                        "reason": reason,
+                        "reason": "stop",
                     }
                 )
-            else:
-                still.append(pos)
+                continue
+
+            # --- 可选到期 ---
+            if hold_days is not None and held >= int(hold_days):
+                px = o * (1.0 - SLIP)
+                proceeds = float(pos["shares"]) * px
+                fee = proceeds * (COMMISSION + STAMP)
+                cash += proceeds - fee
+                n_time += 1
+                trade_rows.append(
+                    {
+                        "date": d,
+                        "symbol": sym,
+                        "side": "sell",
+                        "shares": pos["shares"],
+                        "price": px,
+                        "reason": "time",
+                    }
+                )
+                continue
+
+            still.append(pos)
         positions = still
 
         # 2) 昨日名单 → 今日因子1突破买入（空槽才接；当日未触发即错过）
@@ -340,7 +467,17 @@ def simulate_f3_f1_combo(
                     if cost + fee > cash + 1e-9:
                         continue
                     cash -= cost + fee
-                    positions.append({"sym": sym, "shares": shares, "entry_i": di})
+                    positions.append(
+                        {
+                            "sym": sym,
+                            "shares": float(shares),
+                            "initial_shares": float(shares),
+                            "entry_i": di,
+                            "entry_price": float(px / (1.0 + SLIP)),  # 成交前触发/开盘价
+                            "tp_done": set(),
+                            "stop_floor": None,
+                        }
+                    )
                     held_syms.add(sym)
                     trade_rows.append(
                         {
@@ -357,7 +494,7 @@ def simulate_f3_f1_combo(
         for pos in positions:
             sym = pos["sym"]
             if sym in closes.columns and not pd.isna(closes.at[d, sym]):
-                eq += pos["shares"] * float(closes.at[d, sym])
+                eq += float(pos["shares"]) * float(closes.at[d, sym])
         equity_rows.append({"date": d, "equity": eq})
 
     eq_df = pd.DataFrame(equity_rows)
@@ -388,11 +525,15 @@ def simulate_f3_f1_combo(
         "n_buys": int((tr_df["side"] == "buy").sum()) if not tr_df.empty else 0,
         "n_stop_exits": int(n_stop),
         "n_time_exits": int(n_time),
+        "n_tp_exits": int(n_tp),
         "n_breakout_miss": int(n_miss),
         "top_k": top_k,
         "hold_days": hold_days,
         "entry_pct": entry_pct,
         "stop_pct": stop_pct,
+        "take_profit_levels": list(tp_levels),
+        "take_profit_reduce": tp_reduce,
+        "take_profit_trigger": tp_trig,
         "factor": factor_label,
     }
     return eq_df, tr_df, {**stats, "picks": pk_df}
@@ -453,12 +594,24 @@ def run_f3_f1_combo(
     ep = float(cfg["entry_pct"])
     sp = float(cfg["stop_pct"])
     use_pre = bool(cfg.get("require_f1_precond", True))
+    tp_levels = _normalize_tp_levels(cfg.get("take_profit_levels"))
+    tp_reduce = float(cfg.get("take_profit_reduce") or 0.0)
+    tp_trig = str(cfg.get("take_profit_trigger") or DEFAULT_TP_TRIGGER)
+    tp_off = float(cfg.get("take_profit_limit_offset") or 0.0)
+    tp_lock_raw = cfg.get("take_profit_lock_pct")
+    tp_lock = float(tp_lock_raw) if tp_lock_raw is not None else None
 
     if verbose:
+        tp_txt = (
+            f"tp=+{'/'.join(f'{x*100:.0f}' for x in tp_levels)}%"
+            f"×{tp_reduce*100:.0f}%@{tp_trig}"
+            if tp_levels
+            else "tp=off"
+        )
         print(
             f"[f3×f1] pool={univ_key} mode={cfg.get('mode')} kind={cfg['kind']} "
             f"n={cfg['n']} n2={cfg.get('n2')} top_k={cfg['top_k']} "
-            f"entry={ep*100:.1f}% stop={sp*100:.1f}% "
+            f"entry={ep*100:.1f}% stop={sp*100:.1f}% {tp_txt} "
             f"precond={'on' if use_pre else 'off'} hold={cfg.get('hold_days')} "
             f"{cfg['start']}→{end}"
         )
@@ -502,7 +655,8 @@ def run_f3_f1_combo(
         factor = _cs_z(r1) + w * _cs_z(r2)
         label = (
             f"f3f1/{univ_key}/dual{{n={cfg['n']}+{cfg['n2']}*w{w:g},"
-            f"top={cfg['top_k']},entry={ep},stop={sp},pre={int(use_pre)}}}"
+            f"top={cfg['top_k']},entry={ep},stop={sp},pre={int(use_pre)},"
+            f"tp={'+'.join(str(int(x*100)) for x in tp_levels) or 'off'}}}"
         )
     else:
         factor = zz.compute_factor(
@@ -517,7 +671,8 @@ def run_f3_f1_combo(
         )
         label = (
             f"f3f1/{univ_key}/{cfg['kind']}{{n={cfg['n']},top={cfg['top_k']},"
-            f"entry={ep},stop={sp},pre={int(use_pre)}}}"
+            f"entry={ep},stop={sp},pre={int(use_pre)},"
+            f"tp={'+'.join(str(int(x*100)) for x in tp_levels) or 'off'}}}"
         )
 
     factor, mask = apply_f1_precond_to_factor(
@@ -559,6 +714,11 @@ def run_f3_f1_combo(
         initial_cash=cash,
         factor_label=label,
         hold_days=int(hd) if hd is not None else None,
+        take_profit_levels=tp_levels,
+        take_profit_reduce=tp_reduce,
+        take_profit_trigger=tp_trig,
+        take_profit_limit_offset=tp_off,
+        take_profit_lock_pct=tp_lock,
     )
     if eq_df is None or eq_df.empty:
         raise RuntimeError("f3×f1 组合：无权益曲线")
@@ -589,8 +749,8 @@ def run_f3_f1_combo(
         print(
             f"收益{stats['total_return_pct']:.2f}% DD{stats['max_drawdown_pct']:.2f}% "
             f"夏普{stats['sharpe']:.3f} 买{stats['n_buys']} "
-            f"止损{stats['n_stop_exits']} 到期{stats['n_time_exits']} "
-            f"未触发{stats['n_breakout_miss']}"
+            f"止盈{stats['n_tp_exits']} 止损{stats['n_stop_exits']} "
+            f"到期{stats['n_time_exits']} 未触发{stats['n_breakout_miss']}"
         )
 
     return ComboResult(
@@ -606,6 +766,9 @@ def run_f3_f1_combo(
 
 __all__ = [
     "COMBO_DEFAULTS",
+    "DEFAULT_TP_LEVELS",
+    "DEFAULT_TP_REDUCE",
+    "DEFAULT_TP_TRIGGER",
     "ComboResult",
     "apply_f1_precond_to_factor",
     "build_factor1_entry_mask",

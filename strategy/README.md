@@ -97,7 +97,7 @@ for f in list_factors():
 | 前置 | 信号日作「前日」：阴/小阳；禁双阳跨日≥5% |
 | 选股 | 资格池内因子3 TopK（默认 dual 反转） |
 | 买入 | 次日 `high ≥ ceil(open×1.025)` 限价；未触发则错过 |
-| 卖出 | 仅开盘−2.5% 止损（可选 `hold_days` 到期） |
+| 卖出 | 默认分档止盈 +15/20/25% 各减初始仓20%（相对买入价、high 触发），余仓开盘−2.5% 止损；可选 `hold_days` |
 
 ```bash
 cd backtest && python compare_f3_f1_precond.py --rules

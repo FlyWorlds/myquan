@@ -103,10 +103,25 @@ def main() -> None:
     p.add_argument("--workers", type=int, default=12)
     p.add_argument("--refresh", action="store_true")
     p.add_argument("--hold-days", type=int, default=None)
+    p.add_argument(
+        "--tp-levels",
+        type=str,
+        default="0.15,0.20,0.25",
+        help="分档止盈涨幅，逗号分隔；空字符串关闭",
+    )
+    p.add_argument("--tp-reduce", type=float, default=0.20)
+    p.add_argument("--no-tp", action="store_true", help="关闭分档止盈（仅止损）")
     args = p.parse_args()
 
     end = args.end or pd.Timestamp.today().strftime("%Y%m%d")
     OUT.mkdir(parents=True, exist_ok=True)
+
+    if args.no_tp or not str(args.tp_levels).strip():
+        tp_levels: tuple[float, ...] = ()
+    else:
+        tp_levels = tuple(
+            float(x.strip()) for x in str(args.tp_levels).split(",") if x.strip()
+        )
 
     univ = zz.load_zz500_1000_mainboard()
     symbols = univ["symbol"].tolist()
@@ -140,7 +155,8 @@ def main() -> None:
             wide.to_parquet(target)
 
     print(
-        f"[backtest] f3×f1 Top{args.top_k} {args.start}→{end} precond=on",
+        f"[backtest] f3×f1 Top{args.top_k} {args.start}→{end} precond=on "
+        f"tp={tp_levels or 'off'}",
         flush=True,
     )
     res = run_f3_f1_combo(
@@ -152,14 +168,18 @@ def main() -> None:
         require_f1_precond=True,
         refresh=False,
         verbose=True,
+        take_profit_levels=tp_levels,
+        take_profit_reduce=float(args.tp_reduce),
     )
 
+    # 去掉 stats 里的 DataFrame 再落盘
+    stats = {k: v for k, v in res.stats.items() if k != "picks"}
     res.equity.to_csv(OUT / "equity.csv", index=False, encoding="utf-8-sig")
     res.trades.to_csv(OUT / "trades.csv", index=False, encoding="utf-8-sig")
     res.picks.to_csv(OUT / "picks.csv", index=False, encoding="utf-8-sig")
     res.yearly.to_csv(OUT / "yearly.csv", index=False, encoding="utf-8-sig")
     (OUT / "summary.json").write_text(
-        json.dumps(res.stats, ensure_ascii=False, indent=2, default=str),
+        json.dumps(stats, ensure_ascii=False, indent=2, default=str),
         encoding="utf-8",
     )
     (OUT / "config.json").write_text(
@@ -175,13 +195,15 @@ def main() -> None:
         "max_drawdown_pct",
         "sharpe",
         "n_buys",
+        "n_tp_exits",
         "n_stop_exits",
         "n_time_exits",
         "n_breakout_miss",
         "end_equity",
         "top_k",
+        "take_profit_levels",
     ):
-        print(f"{k}: {res.stats.get(k)}")
+        print(f"{k}: {stats.get(k)}")
     if not res.yearly.empty:
         print("\n分年:")
         print(res.yearly.to_string(index=False))
