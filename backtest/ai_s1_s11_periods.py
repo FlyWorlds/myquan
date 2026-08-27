@@ -72,6 +72,16 @@ TOP_N = 20
 ST_SKIP = True
 
 
+def _is_chinext_or_star(code: str) -> bool:
+    c = str(code).zfill(6)
+    return c.startswith(("688", "689", "300", "301"))
+
+
+def _is_bj(code: str) -> bool:
+    c = str(code).zfill(6)
+    return c.startswith(("8", "4", "9"))
+
+
 def _today() -> str:
     return dt.date.today().strftime("%Y%m%d")
 
@@ -85,7 +95,7 @@ def _to_symbol(code: str) -> str | None:
     return f"sz{c}"
 
 
-def load_universe(path: Path) -> pd.DataFrame:
+def load_universe(path: Path, *, mainboard_only: bool = False) -> pd.DataFrame:
     df = pd.read_csv(path, dtype=str)
     code_col = "代码" if "代码" in df.columns else "code"
     name_col = "名称" if "名称" in df.columns else "name"
@@ -97,6 +107,9 @@ def load_universe(path: Path) -> pd.DataFrame:
     ).drop_duplicates("code")
     if ST_SKIP:
         out = out[~out["name"].str.upper().str.contains("ST", na=False)].copy()
+    if mainboard_only:
+        out = out[~out["code"].map(_is_chinext_or_star)].copy()
+        out = out[~out["code"].map(_is_bj)].copy()
     out["symbol"] = out["code"].map(_to_symbol)
     return out.dropna(subset=["symbol"]).reset_index(drop=True)
 
@@ -391,15 +404,23 @@ def _fmt(v: object, nd: int = 2) -> str:
     return f"{x:.{nd}f}"
 
 
-def build_report(df: pd.DataFrame, top_s1: pd.DataFrame, top_s11: pd.DataFrame, oos_end: str) -> str:
+def build_report(
+    df: pd.DataFrame,
+    top_s1: pd.DataFrame,
+    top_s11: pd.DataFrame,
+    oos_end: str,
+    *,
+    mainboard_only: bool = False,
+) -> str:
     thr_dist = (
         top_s1["thr"].value_counts().sort_index().to_dict() if "thr" in top_s1.columns else {}
     )
+    pool_note = "仅沪深主板（已剔除科创688/689、创业300/301、北交）" if mainboard_only else "东财 AI应用（剔 ST/北交）"
     lines = [
         "# AI应用 · 策略1 / 策略11 三段回测（无因子13过门）",
         "",
         f"- 生成时间：{dt.datetime.now():%Y-%m-%d %H:%M:%S}",
-        f"- 股票池：东财 AI应用（剔 ST/北交），有效 {int(df['ok'].sum())}/{len(df)}",
+        f"- 股票池：{pool_note}，有效 {int(df['ok'].sum())}/{len(df)}",
         "- **不做因子13质量带过滤**；定参段只调开盘突破阈值 ±2% / 2.5% / 3%",
         "",
         "## 1. 区间与规则",
@@ -507,17 +528,22 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--no-s11", action="store_true", help="跳过策略11（更快）")
     ap.add_argument("--limit", type=int, default=0, help="调试用：只跑前 N 只")
+    ap.add_argument(
+        "--mainboard-only",
+        action="store_true",
+        help="剔除科创板(688/689)、创业板(300/301)与北交所",
+    )
     args = ap.parse_args()
 
     oos_end = _today()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    univ = load_universe(args.universe)
+    univ = load_universe(args.universe, mainboard_only=args.mainboard_only)
     if args.limit > 0:
         univ = univ.head(args.limit)
     do_s11 = not args.no_s11
     print(
         f"宇宙 {len(univ)} | FIT {FIT_START}-{FIT_END} | VAL {VAL_START}-{VAL_END} | "
-        f"OOS {OOS_START}-{oos_end} | s11={do_s11}"
+        f"OOS {OOS_START}-{oos_end} | s11={do_s11} | mainboard_only={args.mainboard_only}"
     )
 
     rows: list[dict] = []
@@ -571,7 +597,13 @@ def main() -> None:
     top_s1.to_csv(top_s1_csv, index=False, encoding="utf-8-sig")
     if len(top_s11):
         top_s11.to_csv(top_s11_csv, index=False, encoding="utf-8-sig")
-    report = build_report(df, top_s1, top_s11 if len(top_s11) else top_s1.iloc[0:0], oos_end)
+    report = build_report(
+        df,
+        top_s1,
+        top_s11 if len(top_s11) else top_s1.iloc[0:0],
+        oos_end,
+        mainboard_only=args.mainboard_only,
+    )
     report_md.write_text(report, encoding="utf-8")
     meta.write_text(
         json.dumps(
