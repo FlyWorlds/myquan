@@ -7,8 +7,9 @@
 
 用法：
   cd backtest
-  python factor1_three_stocks.py
-  python factor1_three_stocks.py --force-refresh
+  python3 factor1_three_stocks.py
+  python3 factor1_three_stocks.py --start 20250101 --tag from2025
+  python3 factor1_three_stocks.py --force-refresh
 """
 
 from __future__ import annotations
@@ -31,16 +32,11 @@ from strategy.data import fetch_daily
 logging.disable(logging.CRITICAL)
 
 ROOT = Path(__file__).resolve().parent
-OUT_DIR = ROOT / "factor1_three_stocks"
-CACHE_DIR = OUT_DIR / "daily_cache"
-DETAIL_CSV = OUT_DIR / "detail.csv"
-SUMMARY_CSV = OUT_DIR / "summary_best.csv"
-SUMMARY_TXT = OUT_DIR / "summary.txt"
-MONTHLY_DIR = OUT_DIR / "monthly"
-
-START_DATE = "20200101"
+OUT_ROOT = ROOT / "factor1_three_stocks"
+CACHE_DIR = OUT_ROOT / "daily_cache"
 INITIAL_CASH = 100_000.0
 THRESHOLDS = (0.02, 0.025, 0.03)
+DEFAULT_START = "20200101"
 
 STOCKS = [
     {"code": "603399", "name": "永杉锂业", "symbol": "sh603399"},
@@ -136,9 +132,11 @@ def _trade_stats(result) -> dict[str, float | int | None]:
 def backtest_one(
     stock: dict,
     *,
+    start_date: str,
     end_date: str,
     force_refresh: bool,
     verbose: bool,
+    monthly_dir: Path,
 ) -> list[dict]:
     code = stock["code"]
     name = stock["name"]
@@ -149,7 +147,7 @@ def backtest_one(
     try:
         daily = fetch_daily(
             symbol,
-            START_DATE,
+            start_date,
             end_date,
             cache_path=cache_path,
             force_refresh=force_refresh,
@@ -158,7 +156,7 @@ def backtest_one(
         # 旧签名无 force_refresh
         daily = fetch_daily(
             symbol,
-            START_DATE,
+            start_date,
             end_date,
             cache_path=cache_path,
         )
@@ -177,7 +175,7 @@ def backtest_one(
             )
         return rows
 
-    if daily is None or daily.empty or len(daily) < 60:
+    if daily is None or daily.empty or len(daily) < 40:
         err = f"日线不足({0 if daily is None else len(daily)})"
         for pct in THRESHOLDS:
             rows.append(
@@ -220,7 +218,7 @@ def backtest_one(
                 symbol_name=name,
                 em_symbol=code,
                 threshold_pct=pct,
-                start_date=START_DATE,
+                start_date=start_date,
                 end_date=end_date,
                 initial_cash=INITIAL_CASH,
                 entry_ref="today_open",
@@ -262,8 +260,8 @@ def backtest_one(
                 result, daily, initial_cash=INITIAL_CASH
             )
             if not monthly.empty:
-                MONTHLY_DIR.mkdir(parents=True, exist_ok=True)
-                mpath = MONTHLY_DIR / f"{name}_{pct*100:.1f}pct_monthly.csv"
+                monthly_dir.mkdir(parents=True, exist_ok=True)
+                mpath = monthly_dir / f"{name}_{pct*100:.1f}pct_monthly.csv"
                 monthly.to_csv(mpath, index=False, encoding="utf-8-sig")
                 base["monthly_csv"] = str(mpath.name)
 
@@ -317,11 +315,18 @@ def _pick_best(df: pd.DataFrame) -> pd.DataFrame:
     return ok.loc[idx].drop(columns=["rank_score"]).sort_values("code")
 
 
-def _write_summary_txt(detail: pd.DataFrame, best: pd.DataFrame) -> None:
+def _write_summary_txt(
+    detail: pd.DataFrame,
+    best: pd.DataFrame,
+    *,
+    start_date: str,
+    end_date: str,
+    summary_txt: Path,
+) -> None:
     lines: list[str] = []
     lines.append("# 因子1 三标的多阈值回测摘要")
     lines.append("")
-    lines.append(f"- 区间起点: {START_DATE}")
+    lines.append(f"- 区间: {start_date} → {end_date}")
     lines.append(f"- 阈值: {', '.join(f'±{p*100:.1f}%' for p in THRESHOLDS)}")
     lines.append("- 规则: 开盘突破买入 + 仅止损；前日阴/小阳；禁双阳跨日≥5%；T+1")
     lines.append("- 不含因子2 注资")
@@ -353,7 +358,7 @@ def _write_summary_txt(detail: pd.DataFrame, best: pd.DataFrame) -> None:
         lines.append("(无成功结果)")
     else:
         lines.append(best[show].to_string(index=False))
-    SUMMARY_TXT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    summary_txt.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -361,39 +366,71 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force-refresh", action="store_true", help="忽略日线缓存重拉")
     parser.add_argument("--quiet", action="store_true", help="少打印摘要")
     parser.add_argument(
+        "--start",
+        default=DEFAULT_START,
+        help="起始日期 YYYYMMDD（默认 20200101）",
+    )
+    parser.add_argument(
         "--end",
         default=dt.date.today().strftime("%Y%m%d"),
         help="结束日期 YYYYMMDD",
     )
+    parser.add_argument(
+        "--tag",
+        default="",
+        help="输出子目录名；空则默认区间写根目录，非默认起点写 fromYYYY",
+    )
     args = parser.parse_args(argv)
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    start_date = str(args.start)
+    end_date = str(args.end)
+    tag = str(args.tag or "").strip()
+    if not tag and start_date != DEFAULT_START:
+        tag = f"from{start_date[:4]}"
+    out_dir = OUT_ROOT / tag if tag else OUT_ROOT
+    detail_csv = out_dir / "detail.csv"
+    summary_csv = out_dir / "summary_best.csv"
+    summary_txt = out_dir / "summary.txt"
+    monthly_dir = out_dir / "monthly"
+
+    out_dir.mkdir(parents=True, exist_ok=True)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    MONTHLY_DIR.mkdir(parents=True, exist_ok=True)
+    monthly_dir.mkdir(parents=True, exist_ok=True)
 
     all_rows: list[dict] = []
     for stock in STOCKS:
-        print(f"\n>>> {stock['name']} ({stock['symbol']})")
+        print(f"\n>>> {stock['name']} ({stock['symbol']})  {start_date}→{end_date}")
         all_rows.extend(
             backtest_one(
                 stock,
-                end_date=args.end,
+                start_date=start_date,
+                end_date=end_date,
                 force_refresh=bool(args.force_refresh),
                 verbose=not bool(args.quiet),
+                monthly_dir=monthly_dir,
             )
         )
 
     detail = pd.DataFrame(all_rows)
-    detail.to_csv(DETAIL_CSV, index=False, encoding="utf-8-sig")
+    detail.to_csv(detail_csv, index=False, encoding="utf-8-sig")
     best = _pick_best(detail)
     if not best.empty:
-        best.to_csv(SUMMARY_CSV, index=False, encoding="utf-8-sig")
-    _write_summary_txt(detail, best)
+        best.to_csv(summary_csv, index=False, encoding="utf-8-sig")
+    _write_summary_txt(
+        detail,
+        best,
+        start_date=start_date,
+        end_date=end_date,
+        summary_txt=summary_txt,
+    )
 
     print("\n========== 汇总 ==========")
+    print(f"区间: {start_date} → {end_date}")
     cols = [
         "name",
         "阈值%",
+        "start",
+        "end",
         "total_return_pct",
         "bh_return_pct",
         "excess_return_pct",
@@ -409,9 +446,9 @@ def main(argv: list[str] | None = None) -> int:
     ]
     show = [c for c in cols if c in detail.columns]
     print(detail[show].to_string(index=False))
-    print(f"\n明细: {DETAIL_CSV}")
-    print(f"最优: {SUMMARY_CSV}")
-    print(f"摘要: {SUMMARY_TXT}")
+    print(f"\n明细: {detail_csv}")
+    print(f"最优: {summary_csv}")
+    print(f"摘要: {summary_txt}")
     return 0 if (detail["ok"] == 1).any() else 1
 
 
