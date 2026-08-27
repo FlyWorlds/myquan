@@ -112,6 +112,10 @@ from strategy.strategies.strategy3 import run_strategy3, run_strategy7  # noqa: 
 from strategy.strategies.strategy4 import run_strategy4, run_strategy9  # noqa: E402
 from strategy.strategies.strategy5 import run_strategy5, run_strategy10  # noqa: E402
 from strategy.strategies.strategy6 import run_strategy6  # noqa: E402
+from strategy.f3_f1_combo import (  # noqa: E402
+    combo_rules_text,
+    run_f3_f1_combo,
+)
 
 __all__ = [
     "DEFAULT_PCT",
@@ -193,6 +197,8 @@ __all__ = [
     "run_strategy7",
     "run_strategy9",
     "run_strategy10",
+    "run_f3_f1_combo",
+    "combo_rules_text",
     "apply_strategy_config",
     "build_open_break_strategy",
     "metric",

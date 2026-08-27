@@ -30,6 +30,7 @@ strategy/
 │   └── factor8.py        # CZSC 缠论结构与一/二/三类买卖点
 │       # 另有 factor9 日线动能 / factor10 价格选股 / factor11 两段近高
 ├── near_high_hold.py     # 因子11 / 策略五：两段近高 Top5 等权持有
+├── f3_f1_combo.py        # 因子3选股 × 因子1前置 × 因子1买卖（研究）
 
 ├── strategies/
 │   ├── strategy1/ … strategy5/
@@ -54,7 +55,7 @@ strategy/
 |----|------|------|-------------|
 | **factor1** | 因子1 | 开盘突破买卖 | `open_break.py`：买=`ceil(open×(1+pct))`，卖=开盘−pct 止损；前日阴/小阳；禁双阳跨日≥5%；T+1。支持非对称 `entry_pct`/`stop_pct` |
 | **factor2** | 因子2 | 回撤加减仓**预警** | `dd_alert.py`：默认加仓≥20% / 减仓≤10%；**回测不注资**。旧注资见 `dd_topup.py` |
-| **factor3** | 因子3·动量 | 截面选股 / 单票择时 | `momentum.py`：组合默认截面反转打分；单票可用 `dist_hl` 等（收盘确认→次日开盘） |
+| **factor3** | 因子3·动量 | 截面选股 / 单票择时 | `momentum.py`：组合默认截面反转打分；单票可用 `dist_hl` 等。与因子1组合见 `f3_f1_combo.py`（前置过滤→选股→突破买卖） |
 | **factor4** | 因子4 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1止损；可选空仓开盘建仓。叠在因子1上用 |
 | **factor5** | 因子5·Serenity前瞻主题 | 动态 A 股**研究候选池** | `serenity_factor5.py`：Serenity 公开帖 → 前瞻看多主题 → A 股概念代理；不复制美股代码、不直接交易 |
 | **factor6** | 因子6·组合动量ETF轮动 | 宽基 ETF 轮动 | `etf_combo_momentum.py`：短窗+长窗 ROC 合成分数，收盘 TopK，动量失效空仓；次日开盘执行 |
@@ -86,6 +87,30 @@ for f in list_factors():
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
 
 旧执行层 3/4/5/6/8 的研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。现行 strategy6 是新注册的因子12 持有，不是旧动量混合。
+
+### 因子3 × 因子1 组合（研究，未单独占策略号）
+
+想法：先过因子1开仓前置，再用因子3截面选股，买卖走因子1。
+
+| 步骤 | 规则 |
+|------|------|
+| 前置 | 信号日作「前日」：阴/小阳；禁双阳跨日≥5% |
+| 选股 | 资格池内因子3 TopK（默认 dual 反转） |
+| 买入 | 次日 `high ≥ ceil(open×1.025)` 限价；未触发则错过 |
+| 卖出 | 默认分档止盈 +5/8/10% 各减初始仓20%（相对买入价、high 触发），余仓开盘−2.5% 止损；可选 `hold_days` |
+
+```bash
+cd backtest && python compare_f3_f1_precond.py --rules
+cd backtest && python compare_f3_f1_precond.py --start 20200101 --top-k 3
+# 只跑新组合：
+cd backtest && python compare_f3_f1_precond.py --skip-old
+```
+
+```python
+from strategy.f3_f1_combo import run_f3_f1_combo
+
+run_f3_f1_combo(start="20200101", top_k=3, require_f1_precond=True)
+```
 
 ```python
 from strategy import list_strategies, get_strategy_bindings
@@ -190,6 +215,9 @@ cd backtest && python run.py kaicheng --no-open
 python -m strategy.etf_combo_momentum
 # 旧对照：因子3选股+因子1止损
 cd backtest && python compare_f3_select_f1_stop.py
+# 新组合：因子1前置 + 因子3选股 + 因子1突破买/止损
+cd backtest && python compare_f3_f1_precond.py --rules
+cd backtest && python compare_f3_f1_precond.py --start 20200101
 # 策略三：五槽位、单主题一只、固定持有5日
 python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 --max-per-theme 1 --hold-days 5
 # 因子7（Python API；离线测试不拉行情）
