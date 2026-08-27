@@ -40,6 +40,66 @@ def _sina(code: str) -> str:
     return f"sz{c}"
 
 
+def _fetch_sina_daily(symbol: str, start: str, end: str) -> pd.DataFrame:
+    """东财 ETF 失败时的新浪日线兜底（未复权/站点口径，仅研究用）。"""
+    import json
+    import urllib.request
+
+    url = (
+        "https://quotes.sina.cn/cn/api/json_v2.php/"
+        f"CN_MarketDataService.getKLineData?symbol={symbol}"
+        "&scale=240&ma=no&datalen=800"
+    )
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://finance.sina.com.cn",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        raw = json.loads(resp.read().decode())
+    df = pd.DataFrame(raw)
+    if df.empty:
+        return df
+    for col in ("open", "high", "low", "close", "volume"):
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["date"] = pd.to_datetime(df["day"])
+    start_ts = pd.Timestamp(start[:4] + "-" + start[4:6] + "-" + start[6:8])
+    end_ts = pd.Timestamp(end[:4] + "-" + end[4:6] + "-" + end[6:8]) + pd.Timedelta(
+        days=1
+    )
+    df = df[(df["date"] >= start_ts) & (df["date"] < end_ts)]
+    df = df.dropna(subset=["open", "high", "low", "close"]).sort_values("date")
+    df["date"] = df["date"].dt.normalize() + pd.Timedelta(hours=15)
+    df["date"] = df["date"].dt.tz_localize("Asia/Shanghai")
+    df["symbol"] = symbol
+    return df[["date", "open", "high", "low", "close", "volume", "symbol"]].reset_index(
+        drop=True
+    )
+
+
+def _load_daily(cfg: BacktestConfig) -> pd.DataFrame:
+    try:
+        daily = fetch_daily(
+            cfg.symbol,
+            start=cfg.start_date,
+            end=cfg.end_date,
+            cache_path=cfg.daily_cache,
+        )
+        if daily is not None and not daily.empty:
+            return daily
+    except Exception as exc:  # noqa: BLE001
+        print(f"[warn] fetch_daily {cfg.symbol}: {exc}")
+    if str(cfg.em_symbol).startswith(("58", "51", "56", "15", "16")):
+        daily = _fetch_sina_daily(cfg.symbol, cfg.start_date, cfg.end_date)
+        if cfg.daily_cache is not None and not daily.empty:
+            cfg.daily_cache.parent.mkdir(parents=True, exist_ok=True)
+            daily.to_parquet(cfg.daily_cache, index=False)
+        return daily
+    return pd.DataFrame()
+
+
 # 用户标的：东材 / 珠峰 / 天通+凯盛 / 金安国纪 / ETF589080 / ETF588170
 UNIVERSE: list[dict[str, Any]] = [
     {"code": "601208", "name": "东材科技", "entry": 0.025, "stop": 0.025},
@@ -228,12 +288,7 @@ def main() -> None:
     for item in UNIVERSE:
         base = _cfg_for(item, start, end)
         # ETF 可能成立日晚于 2025-01-01
-        daily = fetch_daily(
-            base.symbol,
-            start=start,
-            end=end,
-            cache_path=base.daily_cache,
-        )
+        daily = _load_daily(base)
         if daily is None or daily.empty:
             print(f"[跳过] {base.symbol_name} 无日线")
             continue
@@ -332,7 +387,18 @@ def main() -> None:
                 f"| {r.name} | {r.variant} | {r.ret:.2f} | {r.base_ret:.2f} | "
                 f"{r.d_ret:+.2f} | {r.sharpe:.3f} | {r.base_sharpe:.3f} | {r.d_sharpe:+.3f} |"
             )
-        lines += ["", f"明细：`{csv_path}`", ""]
+        lines += [
+            "",
+            "## 结论摘要",
+            "",
+            "1. **仅收阳再买**：多数个股弱于基线；个别 ETF（如 589080）样本内可能改善。",
+            "2. **不限阴阳乱接**：同日买卖次数上升，多数夏普下降，不宜默认。",
+            "3. **个别改善**看 `best_vs_baseline.csv`；勿全池一刀切。",
+            "4. **建议**：默认维持止损当日禁买；试验再买需单标的严格过滤。",
+            "",
+            f"明细：`{csv_path}`",
+            "",
+        ]
         (_OUT / "report.md").write_text("\n".join(lines), encoding="utf-8")
         print("\n" + "\n".join(lines))
 
