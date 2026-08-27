@@ -11,6 +11,7 @@
   strategy4 — 因子1 + 因子4 + 20%昨高止盈 + 因子10 周频动量选股（旧 strategy9）
   strategy5 — 因子11 两段近高（3日动量→5日近高 Top5）等权持有（旧 strategy10）
   strategy6 — 因子12 反转池近高 Top5 等权持有（研究候选）
+  strategy11 — 缠论笔算盈亏比：日线笔归因因子1费用后盈亏比/让利/防守
 """
 
 # 策略注册前先确保因子已注册（多策略共用因子）
@@ -22,6 +23,7 @@ from strategy.strategies import strategy3 as _s3  # noqa: F401
 from strategy.strategies import strategy4 as _s4  # noqa: F401
 from strategy.strategies import strategy5 as _s5  # noqa: F401
 from strategy.strategies import strategy6 as _s6  # noqa: F401
+from strategy.strategies import strategy11 as _s11  # noqa: F401
 from strategy.core.strategy_registry import (
     STRATEGY_REGISTRY,
     get_strategy_spec,
