@@ -1,9 +1,12 @@
-"""因子4：牛市持股 regime（修复因子1在趋势市跑输平权持有）。
+"""因子4：行情三态 + 分档止盈（叠在因子1 上）。
 
-叠在因子1上时：
-  · 牛市 regime 内持仓 → 暂停止损（持股不动）
-  · 可选牛市空仓 → 开盘建仓持股
-  · 非牛市 → 因子1 原逻辑
+以因子1 为基准：
+  · 开盘±pct 买卖；触及阈值止损 → 始终全清
+  · 行情：MA5/MA10 尾盘金叉/死叉粘性状态（有效交叉后持有期跟档，直到反向交叉）
+  · 牛市：+20/30/40% 分档减仓
+  · 震荡：+10/15/20% 分档减仓
+  · 下跌：+5/10/15% 分档减仓；余仓继续阈值止损
+  · 可选兼容旧「牛市暂停止损 / 放宽止损 / 开盘建仓」
 """
 
 from __future__ import annotations
@@ -13,18 +16,22 @@ from typing import Any
 from strategy.bull_regime import (
     DEFAULT_BULL_KIND,
     DEFAULT_BULL_PARAMS,
-    bull_rules_text,
     build_bull_regime,
+    build_market_regime_series,
+    bull_rules_text,
+    factor4_rules_text,
+    market_regime_by_date,
+    resolve_factor4_tp_policy,
 )
 from strategy.core.factor_registry import register_factor
 from strategy.core.protocols import FactorSpec
 
 FACTOR_ID = "factor4"
-FACTOR_NAME = "因子4"
+FACTOR_NAME = "因子4·行情止盈"
 
 
 def _rules() -> str:
-    return bull_rules_text(DEFAULT_BULL_KIND, DEFAULT_BULL_PARAMS)
+    return factor4_rules_text(DEFAULT_BULL_PARAMS)
 
 
 def is_bull_regime(
@@ -42,18 +49,40 @@ def is_bull_regime(
     return True
 
 
+def factor4_signal(**kwargs: Any) -> dict[str, Any]:
+    """研究信号：返回当日 regime 与止盈政策摘要。"""
+    regime = kwargs.get("regime") or kwargs.get("regime_exec")
+    bull = kwargs.get("bull_exec")
+    if bull is None and regime is not None:
+        bull = 1.0 if str(regime) == "bull" else 0.0
+    policy = resolve_factor4_tp_policy(kwargs.get("params"))
+    return {
+        "factor_id": FACTOR_ID,
+        "bull": is_bull_regime(bull if bull is None else float(bull or 0.0)),
+        "regime": None if regime is None else str(regime),
+        "tp_policy": policy,
+        "stop_policy": "threshold_full_exit",
+    }
+
+
 SPEC = FactorSpec(
     id=FACTOR_ID,
     name=FACTOR_NAME,
-    description="牛市持股：趋势 regime 内暂停止损；可选空仓开盘建仓",
+    description=(
+        "叠因子1：MA5/10尾盘金叉死叉粘性分行情；"
+        "牛20/30/40、震10/15/20、跌5/10/15分档减仓；阈值止损全清"
+    ),
     rules_text=_rules(),
     implemented=True,
-    signal=lambda **kw: {"bull": is_bull_regime(kw.get("bull_exec"))},
+    signal=factor4_signal,
     meta={
-        "kind": "bull_hold",
+        "kind": "regime_take_profit",
         "default_kind": DEFAULT_BULL_KIND,
         "default_params": dict(DEFAULT_BULL_PARAMS),
-        "overlay": "factor1_stop_suppress",
+        "overlay": "factor1_regime_tp",
+        "regimes": ("bull", "sideways", "bear"),
+        "stop": "threshold_full_clear",
+        "research_only": True,
     },
 )
 
@@ -64,5 +93,11 @@ __all__ = [
     "FACTOR_NAME",
     "SPEC",
     "is_bull_regime",
+    "factor4_signal",
     "build_bull_regime",
+    "build_market_regime_series",
+    "market_regime_by_date",
+    "resolve_factor4_tp_policy",
+    "bull_rules_text",
+    "factor4_rules_text",
 ]

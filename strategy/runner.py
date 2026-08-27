@@ -88,11 +88,24 @@ def apply_strategy_config(
     strategy.halt_by_date = dict(getattr(cfg, "halt_by_date", None) or {})
     strategy.regime_tp_enabled = bool(getattr(cfg, "regime_tp_enabled", False))
     strategy.regime_by_date = dict(getattr(cfg, "regime_by_date", None) or {})
-    strategy.regime_tp_bull = tuple(getattr(cfg, "regime_tp_bull", ()) or ())
-    strategy.regime_tp_sideways = tuple(
-        getattr(cfg, "regime_tp_sideways", (0.15,)) or (0.15,)
+    _bull_lv = getattr(cfg, "regime_tp_bull", None)
+    strategy.regime_tp_bull = tuple(
+        (0.20, 0.30, 0.40) if _bull_lv is None else _bull_lv
     )
-    strategy.regime_tp_bear = tuple(getattr(cfg, "regime_tp_bear", (0.10,)) or (0.10,))
+    _side_lv = getattr(cfg, "regime_tp_sideways", None)
+    strategy.regime_tp_sideways = tuple(
+        (0.10, 0.15, 0.20) if _side_lv is None else _side_lv
+    )
+    _bear_lv = getattr(cfg, "regime_tp_bear", None)
+    strategy.regime_tp_bear = tuple(
+        (0.05, 0.10, 0.15) if _bear_lv is None else _bear_lv
+    )
+    _rb = getattr(cfg, "regime_tp_reduce_bull", None)
+    strategy.regime_tp_reduce_bull = float(1.0 / 3.0 if _rb is None else _rb)
+    _rs = getattr(cfg, "regime_tp_reduce_sideways", None)
+    strategy.regime_tp_reduce_sideways = float(1.0 / 3.0 if _rs is None else _rs)
+    _rr = getattr(cfg, "regime_tp_reduce_bear", None)
+    strategy.regime_tp_reduce_bear = float(1.0 / 3.0 if _rr is None else _rr)
     strategy.skip_buy_after_consec_stops = int(
         getattr(cfg, "skip_buy_after_consec_stops", 0) or 0
     )
@@ -107,26 +120,121 @@ def apply_strategy_config(
     strategy.factor4_stop_widen_mult = float(
         getattr(cfg, "factor4_stop_widen_mult", 0.0) or 0.0
     )
+    strategy.factor4_suppress_stop_in_bull = bool(
+        getattr(cfg, "factor4_suppress_stop_in_bull", False)
+    )
     if bool(getattr(cfg, "factor4_enabled", False)):
         strategy.bull_by_date = dict(getattr(cfg, "_bull_by_date", {}) or {})
+        # 行情三态映射（止盈档用）；prepare_factor4 写入
+        if not strategy.regime_by_date:
+            strategy.regime_by_date = dict(getattr(cfg, "_regime_by_date", {}) or {})
     else:
         strategy.bull_by_date = {}
     return strategy
 
 
 def prepare_factor4(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
-    """预计算因子4牛市 regime 映射，挂到 cfg._bull_by_date。"""
+    """预计算因子4 牛市/三态行情，并在默认模式下挂上波段与分档止盈。"""
     if not bool(getattr(cfg, "factor4_enabled", False)):
         cfg._bull_by_date = {}
+        cfg._regime_by_date = {}
+        _apply_ma_entry_gate(cfg, daily)
         return
-    from strategy.bull_regime import bull_regime_by_date
 
-    params = getattr(cfg, "factor4_params", None) or {}
+    from strategy.bull_regime import (
+        bull_regime_by_date,
+        market_regime_by_date,
+        resolve_factor4_tp_policy,
+    )
+
+    params = dict(getattr(cfg, "factor4_params", None) or {})
     cfg._bull_by_date = bull_regime_by_date(
         daily,
         kind=str(getattr(cfg, "factor4_kind", "roc_ma") or "roc_ma"),
         params=params,
     )
+    policy = resolve_factor4_tp_policy(params)
+    cfg._regime_by_date = market_regime_by_date(
+        daily,
+        method=str(policy["regime_method"]),
+        ma_fast=int(policy["ma_fast"]),
+        ma_slow=int(policy["ma_slow"]),
+        entangle_pct=float(policy["entangle_pct"]),
+        cross_lookback=int(policy["cross_lookback"]),
+        strength_min=float(policy["strength_min"]),
+        slope_n=int(policy["slope_n"]),
+        slope_weight=float(policy["slope_weight"]),
+        macd_fast=int(policy["macd_fast"]),
+        macd_slow=int(policy["macd_slow"]),
+        macd_signal=int(policy["macd_signal"]),
+        macd_div_lookback=int(policy["macd_div_lookback"]),
+        ma_n=int(policy["ma_n"]),
+        roc_n=int(policy["roc_n"]),
+    )
+
+    # 默认：因子4 自动打开行情止盈；factor4_regime_tp=False 则只保留旧牛市止损逻辑
+    if bool(getattr(cfg, "factor4_regime_tp", True)):
+        cfg.regime_tp_enabled = True
+        if not getattr(cfg, "regime_by_date", None):
+            cfg.regime_by_date = dict(cfg._regime_by_date)
+        cfg.regime_tp_bull = tuple(policy["bull_levels"])
+        cfg.regime_tp_sideways = tuple(policy["sideways_levels"])
+        cfg.regime_tp_bear = tuple(policy["bear_levels"])
+        cfg.regime_tp_reduce_bull = float(policy["bull_reduce"])
+        cfg.regime_tp_reduce_sideways = float(policy["sideways_reduce"])
+        cfg.regime_tp_reduce_bear = float(policy["bear_reduce"])
+        # 波段默认昨高触及→今开卖；已显式设为 close 则保留
+        trig = str(getattr(cfg, "take_profit_trigger", "high") or "high").lower()
+        if trig not in ("close", "prev_high"):
+            cfg.take_profit_trigger = str(policy["trigger"])
+
+    _apply_ma_entry_gate(cfg, daily)
+
+
+def _apply_ma_entry_gate(cfg: BacktestConfig, daily: pd.DataFrame) -> None:
+    """死叉不开仓；即将金叉 / 金叉趋势才允许买入（写入 energy_allowed_by_date）。"""
+    params = dict(getattr(cfg, "factor4_params", None) or {})
+    want = bool(getattr(cfg, "ma_entry_gate", False))
+    if params.get("ma_entry_gate") is not None:
+        want = bool(params.get("ma_entry_gate"))
+    eg = str(params.get("entry_gate") or "").strip().lower()
+    if eg in ("ma_cross", "ma", "golden", "golden_trend"):
+        want = True
+    if not want:
+        return
+
+    from strategy.bull_regime import (
+        ma_cross_entry_allowed_by_date,
+        resolve_factor4_tp_policy,
+    )
+
+    policy = resolve_factor4_tp_policy(params)
+    cfg.energy_allowed_by_date = ma_cross_entry_allowed_by_date(
+        daily,
+        ma_fast=int(policy["ma_fast"]),
+        ma_slow=int(policy["ma_slow"]),
+        approach_gap=float(policy["entry_approach_gap"]),
+        slope_n=int(policy["entry_approach_slope_n"]),
+        require_gap_shrink=bool(policy["entry_require_gap_shrink"]),
+    )
+
+
+def _needs_prepare(cfg: BacktestConfig) -> bool:
+    if bool(getattr(cfg, "factor4_enabled", False)):
+        return True
+    if bool(getattr(cfg, "ma_entry_gate", False)):
+        return True
+    params = dict(getattr(cfg, "factor4_params", None) or {})
+    if bool(params.get("ma_entry_gate")):
+        return True
+    if str(params.get("entry_gate") or "").strip().lower() in (
+        "ma_cross",
+        "ma",
+        "golden",
+        "golden_trend",
+    ):
+        return True
+    return False
 
 
 def build_open_break_strategy(cfg: BacktestConfig) -> OpenBreak3Strategy:
@@ -168,7 +276,7 @@ def run_open_break(
         params=cfg,
         strategy_cls=OpenBreak3Strategy,
         configure=apply_strategy_config,
-        prepare=prepare_factor4 if bool(getattr(cfg, "factor4_enabled", False)) else None,
+        prepare=prepare_factor4 if _needs_prepare(cfg) else None,
         print_summary_fn=print_summary if verbose else None,
         summary_kwargs={
             "symbol_name": cfg.symbol_name,
