@@ -32,10 +32,11 @@ from backtest.ai_s1_s11_periods import (  # noqa: E402
     FULL_START,
     MIN_BARS,
     _metrics_from_equity,
+    _slice,
     _trade_stats,
     load_daily,
+    simulate_with_trades,
 )
-from backtest.factor1_monthly_top3 import _month_ends  # noqa: E402
 
 OUT_DIR = _MYQUAN / "backtest" / "ai_s1_s11_periods" / "monthly_decay"
 METRICS_CSV = _MYQUAN / "backtest" / "ai_s1_s11_periods" / "all_metrics.csv"
@@ -52,113 +53,6 @@ def _today() -> str:
     return dt.date.today().strftime("%Y%m%d")
 
 
-def simulate_with_trade_dates(
-    o: np.ndarray,
-    h: np.ndarray,
-    l: np.ndarray,
-    c: np.ndarray,
-    dates: pd.DatetimeIndex,
-    *,
-    thr: float,
-) -> tuple[np.ndarray, list[tuple[pd.Timestamp, float]]]:
-    """返回权益序列与 (平仓日, 收益率) 列表。"""
-    # 复用逻辑：本地轻量改写以记录平仓日
-    import math
-
-    from strategy.costs import ENGINE_COMMISSION_RATE as COMMISSION  # noqa: WPS433
-    from strategy.costs import SLIPPAGE_VALUE as SLIP  # noqa: WPS433
-    from strategy.costs import STAMP_TAX_RATE as STAMP  # noqa: WPS433
-    from strategy.open_break import (  # noqa: WPS433
-        DEFAULT_BAN_DOUBLE_YANG,
-        DEFAULT_BAN_SINGLE_YANG,
-        DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
-        DEFAULT_DOUBLE_YANG_COMBINED_MODE,
-        TICK_SIZE,
-        entry_trigger_price,
-        limit_down_state,
-        prev_day_allows_entry,
-        should_block_entry_by_yang,
-        stop_trigger_price,
-    )
-
-    n = len(o)
-    equity = np.empty(n, dtype=np.float64)
-    cash = 100_000.0
-    shares = 0.0
-    entry_px = 0.0
-    buy_i = -1
-    tick = TICK_SIZE
-    target_pct = 0.95
-    lot = 100
-    trade_events: list[tuple[pd.Timestamp, float]] = []
-
-    for i in range(n):
-        oi, hi, li, ci = float(o[i]), float(h[i]), float(l[i]), float(c[i])
-        if oi <= 0 or ci <= 0:
-            equity[i] = cash + shares * (ci if ci > 0 else 0.0)
-            continue
-        buy_px = entry_trigger_price(oi, entry_pct=thr, tick=tick)
-        stop_px = stop_trigger_price(oi, stop_pct=thr, tick=tick)
-
-        if shares > 0:
-            if i > buy_i and li <= stop_px + 1e-12:
-                prev_c = float(c[i - 1]) if i > 0 else ci
-                lim = limit_down_state(
-                    prev_close=prev_c,
-                    open_px=oi,
-                    high_px=hi,
-                    low_px=li,
-                    close_px=ci,
-                    limit_down_pct=0.10,
-                    tick=tick,
-                )
-                if not bool(lim["locked"]):
-                    sell_px = float(lim["limit_px"] if bool(lim["opened"]) else stop_px)
-                    sell_px *= 1.0 - SLIP
-                    proceeds = shares * sell_px
-                    fee = proceeds * COMMISSION + proceeds * STAMP
-                    cash += proceeds - fee
-                    if entry_px > 0:
-                        trade_events.append((pd.Timestamp(dates[i]).normalize(), sell_px / entry_px - 1.0))
-                    shares = 0.0
-                    entry_px = 0.0
-                    buy_i = -1
-        else:
-            if i >= 1:
-                po, pc = float(o[i - 1]), float(c[i - 1])
-                allows = prev_day_allows_entry(
-                    po, pc, prev_small_yang_pct=thr, prev_entry_mode="yin_or_small_yang"
-                )
-                blocked = False
-                if i >= 2:
-                    blocked = should_block_entry_by_yang(
-                        float(o[i - 2]),
-                        float(c[i - 2]),
-                        po,
-                        pc,
-                        tick=tick,
-                        ban_double_yang=DEFAULT_BAN_DOUBLE_YANG,
-                        ban_single_yang=DEFAULT_BAN_SINGLE_YANG,
-                        double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
-                        double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
-                    )
-                if allows and (not blocked) and (hi + 1e-12 >= buy_px):
-                    px = buy_px * (1.0 + SLIP)
-                    budget = cash * target_pct
-                    raw = math.floor(budget / (px * lot)) * lot
-                    if raw >= lot:
-                        cost = raw * px
-                        fee = cost * COMMISSION
-                        if cost + fee <= cash:
-                            cash -= cost + fee
-                            shares = float(raw)
-                            entry_px = px
-                            buy_i = i
-        equity[i] = cash + shares * ci
-
-    return equity, trade_events
-
-
 def month_metrics_one(
     daily: pd.DataFrame,
     thr: float,
@@ -173,24 +67,28 @@ def month_metrics_one(
             "excess": np.nan,
             "win_rate": np.nan,
             "pl_ratio": np.nan,
+            "pl_ratio_vs_bh": np.nan,
+            "mean_lag_pct": np.nan,
+            "mean_def_pct": np.nan,
             "mdd": np.nan,
             "ret": np.nan,
             "n_trades": 0,
             "ok": 0,
         }
-    dates = pd.DatetimeIndex(sub["date"])
     o = sub["open"].to_numpy(float)
     h = sub["high"].to_numpy(float)
     l = sub["low"].to_numpy(float)
     c = sub["close"].to_numpy(float)
-    eq, trades = simulate_with_trade_dates(o, h, l, c, dates, thr=thr)
+    eq, trade_pairs = simulate_with_trades(o, h, l, c, thr=thr)
     m = _metrics_from_equity(eq, c)
-    month_trades = [r for d, r in trades if m_start <= d <= m_end]
-    ts = _trade_stats(month_trades)
+    ts = _trade_stats(trade_pairs)
     return {
         "excess": m["excess_return_pct"],
         "win_rate": ts["win_rate"],
         "pl_ratio": ts["pl_ratio"],
+        "pl_ratio_vs_bh": ts["pl_ratio_vs_bh"],
+        "mean_lag_pct": ts.get("mean_lag_pct", np.nan),
+        "mean_def_pct": ts.get("mean_def_pct", np.nan),
         "mdd": m["max_drawdown_pct"],
         "ret": m["total_return_pct"],
         "n_trades": int(ts["n_trades"]),
@@ -240,6 +138,7 @@ def pool_median_monthly(stock_monthly: pd.DataFrame) -> pd.DataFrame:
             excess_median=("excess", "median"),
             win_rate_median=("win_rate", "median"),
             pl_ratio_median=("pl_ratio", "median"),
+            pl_ratio_vs_bh_median=("pl_ratio_vs_bh", "median"),
             mdd_median=("mdd", "median"),
             ret_median=("ret", "median"),
         )
@@ -257,6 +156,7 @@ def top5_equal_monthly(stock_monthly: pd.DataFrame, top5: pd.DataFrame) -> pd.Da
             excess_mean=("excess", "mean"),
             win_rate_mean=("win_rate", "mean"),
             pl_ratio_mean=("pl_ratio", "mean"),
+            pl_ratio_vs_bh_mean=("pl_ratio_vs_bh", "mean"),
             mdd_mean=("mdd", "mean"),
             ret_mean=("ret", "mean"),
             n_stocks=("code", "nunique"),
@@ -279,7 +179,9 @@ def forward_decay(stock_monthly: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFra
 
     pivot_ex = stock_monthly.pivot_table(index="month", columns="code", values="excess", aggfunc="first")
     pivot_wr = stock_monthly.pivot_table(index="month", columns="code", values="win_rate", aggfunc="first")
-    pivot_pl = stock_monthly.pivot_table(index="month", columns="code", values="pl_ratio", aggfunc="first")
+    pivot_pl = stock_monthly.pivot_table(
+        index="month", columns="code", values="pl_ratio_vs_bh", aggfunc="first"
+    )
     pivot_mdd = stock_monthly.pivot_table(index="month", columns="code", values="mdd", aggfunc="first")
 
     lag_rows = []

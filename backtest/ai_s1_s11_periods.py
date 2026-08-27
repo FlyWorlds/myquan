@@ -35,6 +35,11 @@ logging.disable(logging.CRITICAL)
 
 from backtest.factor1_monthly_top3 import _metrics_from_equity  # noqa: E402
 from strategy.bi_pl_ratio import analyze_bi_pl_ratio  # noqa: E402
+from strategy.pl_ratio_vs_bh import (  # noqa: E402
+    TradePair,
+    hold_return,
+    pl_ratio_vs_bh_from_pairs,
+)
 from strategy.costs import (  # noqa: E402
     ENGINE_COMMISSION_RATE as COMMISSION,
     SLIPPAGE_VALUE as SLIP,
@@ -70,6 +75,13 @@ MIN_BARS = 60
 MIN_TRADES = 5
 TOP_N = 20
 ST_SKIP = True
+
+# 综合打分权重：胜率 / 相对盈亏比 / 超额 / 低回撤
+W_SCORE_WIN = 0.30
+W_SCORE_REL_PL = 0.25
+W_SCORE_EX = 0.30
+W_SCORE_DD = 0.15
+REL_PL_CAP = 20.0  # 相对盈亏比封顶，避免 inf 扭曲分位
 
 
 def _is_chinext_or_star(code: str) -> bool:
@@ -129,7 +141,7 @@ def simulate_with_trades(
     c: np.ndarray,
     *,
     thr: float,
-) -> tuple[np.ndarray, list[float]]:
+) -> tuple[np.ndarray, list[TradePair]]:
     n = len(o)
     equity = np.empty(n, dtype=np.float64)
     cash = float(INITIAL_CASH)
@@ -137,7 +149,7 @@ def simulate_with_trades(
     entry_px = 0.0
     buy_i = -1
     tick = TICK_SIZE
-    trade_rets: list[float] = []
+    trade_pairs: list[TradePair] = []
 
     for i in range(n):
         oi, hi, li, ci = float(o[i]), float(h[i]), float(l[i]), float(c[i])
@@ -165,8 +177,10 @@ def simulate_with_trades(
                     proceeds = shares * sell_px
                     fee = proceeds * COMMISSION + proceeds * STAMP
                     cash += proceeds - fee
-                    if entry_px > 0:
-                        trade_rets.append(sell_px / entry_px - 1.0)
+                    if entry_px > 0 and buy_i >= 0:
+                        strat_ret = sell_px / entry_px - 1.0
+                        bh_ret = hold_return(c, buy_i, i)
+                        trade_pairs.append((strat_ret, bh_ret))
                     shares = 0.0
                     entry_px = 0.0
                     buy_i = -1
@@ -202,18 +216,21 @@ def simulate_with_trades(
                             entry_px = px
                             buy_i = i
         equity[i] = cash + shares * ci
-    return equity, trade_rets
+    return equity, trade_pairs
 
 
-def _trade_stats(trade_rets: list[float]) -> dict[str, float]:
-    if not trade_rets:
+def _trade_stats(trade_pairs: list[TradePair]) -> dict[str, float]:
+    if not trade_pairs:
         return {
             "n_trades": 0,
             "win_rate": np.nan,
             "profit_factor": np.nan,
             "pl_ratio": np.nan,
+            "pl_ratio_vs_bh": np.nan,
+            "mean_lag_pct": np.nan,
+            "mean_def_pct": np.nan,
         }
-    arr = np.asarray(trade_rets, float)
+    arr = np.asarray([p[0] for p in trade_pairs], float)
     wins = arr[arr > 0]
     losses = arr[arr <= 0]
     sum_w = float(wins.sum()) if len(wins) else 0.0
@@ -222,11 +239,13 @@ def _trade_stats(trade_rets: list[float]) -> dict[str, float]:
     aw = float(wins.mean()) if len(wins) else np.nan
     al = float(losses.mean()) if len(losses) else np.nan
     pl = abs(aw / al) if (al == al and al != 0) else np.nan
+    vbh = pl_ratio_vs_bh_from_pairs(trade_pairs)
     return {
         "n_trades": len(arr),
         "win_rate": float(len(wins) / len(arr) * 100.0),
         "profit_factor": float(pf),
         "pl_ratio": pl,
+        **vbh,
     }
 
 
@@ -243,6 +262,9 @@ def eval_s1(daily: pd.DataFrame, start: str, end: str, thr: float) -> dict[str, 
         "win_rate": np.nan,
         "profit_factor": np.nan,
         "pl_ratio": np.nan,
+        "pl_ratio_vs_bh": np.nan,
+        "mean_lag_pct": np.nan,
+        "mean_def_pct": np.nan,
         "n_bars": 0 if sub is None else len(sub),
     }
     if sub is None or len(sub) < MIN_BARS:
@@ -251,9 +273,9 @@ def eval_s1(daily: pd.DataFrame, start: str, end: str, thr: float) -> dict[str, 
     h = sub["high"].to_numpy(float)
     l = sub["low"].to_numpy(float)
     c = sub["close"].to_numpy(float)
-    eq, trades = simulate_with_trades(o, h, l, c, thr=thr)
+    eq, trade_pairs = simulate_with_trades(o, h, l, c, thr=thr)
     m = _metrics_from_equity(eq, c)
-    ts = _trade_stats(trades)
+    ts = _trade_stats(trade_pairs)
     return {
         "ret": m["total_return_pct"],
         "mdd": m["max_drawdown_pct"],
@@ -320,10 +342,12 @@ def tune_thr(daily: pd.DataFrame) -> tuple[float, dict[str, float]]:
         if int(m.get("n_bars") or 0) < MIN_BARS:
             continue
         excess = float(m["excess"]) if m["excess"] == m["excess"] else -1e9
-        pl = float(m["pl_ratio"]) if m["pl_ratio"] == m["pl_ratio"] else -1e9
+        pl_vbh = float(m["pl_ratio_vs_bh"]) if m.get("pl_ratio_vs_bh") == m.get("pl_ratio_vs_bh") else -1e9
+        if pl_vbh == float("inf"):
+            pl_vbh = 1e6
         sh = float(m["sharpe"]) if m["sharpe"] == m["sharpe"] else -1e9
         flag = 1.0 if excess > 0 else 0.0
-        key = (flag, pl, excess, sh)
+        key = (flag, pl_vbh, excess, sh)
         if key > best_key:
             best_key = key
             best_thr = thr
@@ -404,6 +428,127 @@ def _fmt(v: object, nd: int = 2) -> str:
     return f"{x:.{nd}f}"
 
 
+def _pct_rank(s: pd.Series) -> pd.Series:
+    return s.rank(method="average", pct=True)
+
+
+def _score_one_segment(sub: pd.DataFrame, prefix: str) -> pd.DataFrame:
+    """单段四维分位打分：胜率、相对盈亏比、超额、回撤(越小越好)。"""
+    wr = f"{prefix}_s1_win_rate"
+    rel = f"{prefix}_s1_pl_ratio_vs_bh"
+    ex = f"{prefix}_s1_excess"
+    dd = f"{prefix}_s1_mdd"
+    out = sub.copy()
+    rel_v = pd.to_numeric(out[rel], errors="coerce").clip(upper=REL_PL_CAP)
+    out[f"rk_{prefix}_win"] = _pct_rank(pd.to_numeric(out[wr], errors="coerce"))
+    out[f"rk_{prefix}_rel_pl"] = _pct_rank(rel_v)
+    out[f"rk_{prefix}_ex"] = _pct_rank(pd.to_numeric(out[ex], errors="coerce"))
+    out[f"rk_{prefix}_dd"] = 1.0 - _pct_rank(pd.to_numeric(out[dd], errors="coerce"))
+    out[f"score_{prefix}"] = (
+        W_SCORE_WIN * out[f"rk_{prefix}_win"]
+        + W_SCORE_REL_PL * out[f"rk_{prefix}_rel_pl"]
+        + W_SCORE_EX * out[f"rk_{prefix}_ex"]
+        + W_SCORE_DD * out[f"rk_{prefix}_dd"]
+    )
+    return out
+
+
+def build_scored_pool(df: pd.DataFrame) -> pd.DataFrame:
+    ok = df[df["ok"] == 1].copy()
+    ok = ok[pd.to_numeric(ok["oos_s1_n_trades"], errors="coerce").fillna(0) >= MIN_TRADES]
+    if ok.empty:
+        return ok
+    ok = _score_one_segment(ok, "oos")
+    val_ok = pd.to_numeric(ok["val_s1_n_trades"], errors="coerce").fillna(0) >= MIN_TRADES
+    ok = _score_one_segment(ok, "val")
+    ok["score_blend"] = np.where(
+        val_ok,
+        0.60 * ok["score_oos"] + 0.40 * ok["score_val"],
+        ok["score_oos"],
+    )
+    ok = ok.sort_values(
+        ["score_blend", "score_oos", "oos_s1_excess", "oos_s1_pl_ratio_vs_bh"],
+        ascending=[False, False, False, False],
+        na_position="last",
+    )
+    return ok.reset_index(drop=True)
+
+
+def build_top5_score_report(scored: pd.DataFrame, *, mainboard_only: bool) -> str:
+    pool_note = "沪深主板" if mainboard_only else "东财 AI应用"
+    lines = [
+        "# AI应用 · 综合打分 Top5（相对盈亏比口径）",
+        "",
+        f"- 生成时间：{dt.datetime.now():%Y-%m-%d %H:%M:%S}",
+        f"- 股票池：{pool_note}（剔 ST/北交{'；剔科创/创业' if mainboard_only else ''}）",
+        "- 打分维度：**胜率、相对盈亏比、超额、回撤**（策略1口径）",
+        "",
+        "## 打分公式",
+        "",
+        "单段得分 = `0.30×胜率分位 + 0.25×相对盈亏比分位 + 0.30×超额分位 + 0.15×(1−回撤分位)`",
+        "",
+        "- **相对盈亏比** = 亏损笔平均防守 ÷ 盈利笔平均落后（相对同期买入持有，越大越好）",
+        "- 稳健分 `score_blend` = **0.60×样本外 + 0.40×验证**（验证闭环不足则只用样本外）",
+        "- 分位为池内横截面 percentile rank；相对盈亏比封顶 20",
+        "",
+        "## Top5（稳健分）",
+        "",
+        "| 名次 | 代码 | 名称 | thr% | 稳健分 | OOS分 | 胜率% | 相对盈亏比 | 超额% | 回撤% | VAL超额% | VAL相对盈亏比 |",
+        "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    top5 = scored.head(5)
+    for i, r in enumerate(top5.itertuples(index=False), 1):
+        lines.append(
+            f"| {i} | {str(r.code).zfill(6)} | {r.name} | {_fmt(float(r.thr)*100,1)} | "
+            f"{_fmt(r.score_blend, 3)} | {_fmt(r.score_oos, 3)} | "
+            f"{_fmt(r.oos_s1_win_rate, 1)} | {_fmt(r.oos_s1_pl_ratio_vs_bh)} | "
+            f"{_fmt(r.oos_s1_excess)} | {_fmt(r.oos_s1_mdd)} | "
+            f"{_fmt(r.val_s1_excess)} | {_fmt(r.val_s1_pl_ratio_vs_bh)} |"
+        )
+
+    lines += [
+        "",
+        "## 分项贡献（样本外分位）",
+        "",
+        "| 名次 | 代码 | 名称 | 胜率分位 | 相对盈亏比分位 | 超额分位 | 低回撤分位 |",
+        "|---:|---|---|---:|---:|---:|---:|",
+    ]
+    for i, r in enumerate(top5.itertuples(index=False), 1):
+        lines.append(
+            f"| {i} | {str(r.code).zfill(6)} | {r.name} | "
+            f"{_fmt(r.rk_oos_win, 3)} | {_fmt(r.rk_oos_rel_pl, 3)} | "
+            f"{_fmt(r.rk_oos_ex, 3)} | {_fmt(r.rk_oos_dd, 3)} |"
+        )
+
+    oos_top = scored.sort_values("score_oos", ascending=False).head(5)
+    lines += [
+        "",
+        "## 对照：纯样本外得分 Top5",
+        "",
+        "| 名次 | 代码 | 名称 | OOS分 | 胜率% | 相对盈亏比 | 超额% | 回撤% |",
+        "|---:|---|---|---:|---:|---:|---:|---:|",
+    ]
+    for i, r in enumerate(oos_top.itertuples(index=False), 1):
+        lines.append(
+            f"| {i} | {str(r.code).zfill(6)} | {r.name} | {_fmt(r.score_oos, 3)} | "
+            f"{_fmt(r.oos_s1_win_rate, 1)} | {_fmt(r.oos_s1_pl_ratio_vs_bh)} | "
+            f"{_fmt(r.oos_s1_excess)} | {_fmt(r.oos_s1_mdd)} |"
+        )
+
+    lines += [
+        "",
+        "## 说明",
+        "",
+        "- 未使用因子13过门。",
+        "- 主推荐看「稳健分 Top5」；纯 OOS 榜供对照。",
+        "- 分位打分依赖当前池截面，换池后分数不可直接比。",
+        "",
+        "本报告仅供研究参考，不构成任何投资建议。",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def build_report(
     df: pd.DataFrame,
     top_s1: pd.DataFrame,
@@ -431,22 +576,23 @@ def build_report(
         f"| 验证 VAL | {VAL_START} → {VAL_END} | 2023–2025 验证窗（至2024末） |",
         f"| 样本外 OOS | {OOS_START} → {oos_end} | 2025 至今 |",
         "",
-        "- 策略1：因子1 开盘突破权益；指标=盈亏比 / 超额(相对买入持有) / 最大回撤",
+        "- 策略1：因子1 开盘突破权益；指标=**相对盈亏比** / 传统盈亏比 / 超额 / 最大回撤",
+        "- 相对盈亏比：盈利笔落后(持股−策略)越小越好，亏损笔防守(策略−持股)越大越好，比值=均防守/均落后",
         "- 策略11：同因子1成交 + 日线笔归因盈亏比；超额/回撤沿用策略1权益口径",
         f"- Top20 定参阈值分布：{thr_dist}",
         "",
         "## 2. 策略1 · 样本外超额 Top20",
         "",
-        "| 名次 | 代码 | 名称 | thr% | OOS盈亏比 | OOS超额% | OOS回撤% | "
-        "VAL盈亏比 | VAL超额% | VAL回撤% | FIT盈亏比 | FIT超额% | FIT回撤% |",
-        "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| 名次 | 代码 | 名称 | thr% | OOS相对盈亏比 | OOS传统盈亏比 | OOS超额% | OOS回撤% | "
+        "VAL相对盈亏比 | VAL超额% | FIT相对盈亏比 | FIT超额% |",
+        "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for i, r in enumerate(top_s1.itertuples(index=False), 1):
         lines.append(
             f"| {i} | {str(r.code).zfill(6)} | {r.name} | {_fmt(float(r.thr)*100,1)} | "
-            f"{_fmt(r.oos_s1_pl_ratio)} | {_fmt(r.oos_s1_excess)} | {_fmt(r.oos_s1_mdd)} | "
-            f"{_fmt(r.val_s1_pl_ratio)} | {_fmt(r.val_s1_excess)} | {_fmt(r.val_s1_mdd)} | "
-            f"{_fmt(r.fit_s1_pl_ratio)} | {_fmt(r.fit_s1_excess)} | {_fmt(r.fit_s1_mdd)} |"
+            f"{_fmt(r.oos_s1_pl_ratio_vs_bh)} | {_fmt(r.oos_s1_pl_ratio)} | {_fmt(r.oos_s1_excess)} | "
+            f"{_fmt(r.oos_s1_mdd)} | {_fmt(r.val_s1_pl_ratio_vs_bh)} | {_fmt(r.val_s1_excess)} | "
+            f"{_fmt(r.fit_s1_pl_ratio_vs_bh)} | {_fmt(r.fit_s1_excess)} |"
         )
 
     lines += [
@@ -482,20 +628,21 @@ def build_report(
     ok = df[df["ok"] == 1]
     if len(ok):
         lines.append(
-            "| 策略/段 | 中位盈亏比 | 中位超额% | 中位回撤% | 超额>0占比 |"
+            "| 策略/段 | 中位相对盈亏比 | 中位传统盈亏比 | 中位超额% | 中位回撤% | 超额>0占比 |"
         )
-        lines.append("|---|---:|---:|---:|---:|")
-        for label, pl, ex, dd in (
-            ("S1 FIT", "fit_s1_pl_ratio", "fit_s1_excess", "fit_s1_mdd"),
-            ("S1 VAL", "val_s1_pl_ratio", "val_s1_excess", "val_s1_mdd"),
-            ("S1 OOS", "oos_s1_pl_ratio", "oos_s1_excess", "oos_s1_mdd"),
+        lines.append("|---|---:|---:|---:|---:|---:|")
+        for label, pl_vbh, pl, ex, dd in (
+            ("S1 FIT", "fit_s1_pl_ratio_vs_bh", "fit_s1_pl_ratio", "fit_s1_excess", "fit_s1_mdd"),
+            ("S1 VAL", "val_s1_pl_ratio_vs_bh", "val_s1_pl_ratio", "val_s1_excess", "val_s1_mdd"),
+            ("S1 OOS", "oos_s1_pl_ratio_vs_bh", "oos_s1_pl_ratio", "oos_s1_excess", "oos_s1_mdd"),
         ):
+            pl_v = pd.to_numeric(ok[pl_vbh], errors="coerce")
             plv = pd.to_numeric(ok[pl], errors="coerce")
             exv = pd.to_numeric(ok[ex], errors="coerce")
             ddv = pd.to_numeric(ok[dd], errors="coerce")
             lines.append(
-                f"| {label} | {_fmt(plv.median())} | {_fmt(exv.median())} | "
-                f"{_fmt(ddv.median())} | {_fmt((exv > 0).mean()*100,1)}% |"
+                f"| {label} | {_fmt(pl_v.median())} | {_fmt(plv.median())} | "
+                f"{_fmt(exv.median())} | {_fmt(ddv.median())} | {_fmt((exv > 0).mean()*100,1)}% |"
             )
         if "oos_s11_pl_ratio" in ok.columns:
             for label, pl in (
@@ -570,7 +717,7 @@ def main() -> None:
     # 策略1 Top20：OOS 超额
     s1 = ok[ok["oos_s1_n_trades"].fillna(0) >= MIN_TRADES].copy()
     s1 = s1.sort_values(
-        by=["oos_s1_excess", "oos_s1_pl_ratio", "val_s1_excess"],
+        by=["oos_s1_excess", "oos_s1_pl_ratio_vs_bh", "val_s1_excess"],
         ascending=[False, False, False],
         na_position="last",
     )
@@ -592,6 +739,25 @@ def main() -> None:
     top_s11_csv = OUT_DIR / "top20_strategy11_oos_pl.csv"
     report_md = OUT_DIR / "report.md"
     meta = OUT_DIR / "run_meta.json"
+
+    scored = build_scored_pool(ok)
+    scored_csv = OUT_DIR / (
+        "all_scored_mainboard.csv" if args.mainboard_only else "all_scored.csv"
+    )
+    top5_blend_csv = OUT_DIR / "top5_score_blend.csv"
+    top5_oos_csv = OUT_DIR / "top5_score_oos.csv"
+    top5_report_md = OUT_DIR / "report_top5_score.md"
+
+    if len(scored):
+        scored.to_csv(scored_csv, index=False, encoding="utf-8-sig")
+        top5_blend = scored.head(5)
+        top5_oos = scored.sort_values("score_oos", ascending=False).head(5)
+        top5_blend.to_csv(top5_blend_csv, index=False, encoding="utf-8-sig")
+        top5_oos.to_csv(top5_oos_csv, index=False, encoding="utf-8-sig")
+        top5_report = build_top5_score_report(scored, mainboard_only=args.mainboard_only)
+        top5_report_md.write_text(top5_report, encoding="utf-8")
+        print("\n" + top5_report)
+        print(f"\n写入 {top5_report_md}")
 
     df.to_csv(all_csv, index=False, encoding="utf-8-sig")
     top_s1.to_csv(top_s1_csv, index=False, encoding="utf-8-sig")
