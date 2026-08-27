@@ -9,7 +9,7 @@
 相对旧对照 `_unreg_s6`（开盘直接买 + 止损/到期卖）：
   · 选股加了因子1前置；
   · 买入改为开盘突破触发，而非开盘市价；
-  · 默认分档止盈（+15/20/25% 各减初始仓 20%）+ 余仓止损；可选 hold_days 到期卖。
+  · 默认分档止盈（+5/8/10% 各减初始仓 20%）+ 余仓止损；可选 hold_days 到期卖。
 """
 
 from __future__ import annotations
@@ -38,8 +38,8 @@ from strategy.open_break import (
 
 LOT = 100
 
-# 与凯盛分档止盈对照脚本同口径
-DEFAULT_TP_LEVELS: tuple[float, ...] = (0.15, 0.20, 0.25)
+# 短持突破组合：档位低于经典 15/20/25，便于更早兑现
+DEFAULT_TP_LEVELS: tuple[float, ...] = (0.05, 0.08, 0.10)
 DEFAULT_TP_REDUCE = 0.20
 DEFAULT_TP_TRIGGER = "high"  # high | close
 

@@ -106,7 +106,7 @@ def main() -> None:
     p.add_argument(
         "--tp-levels",
         type=str,
-        default="0.15,0.20,0.25",
+        default="0.05,0.08,0.10",
         help="分档止盈涨幅，逗号分隔；空字符串关闭",
     )
     p.add_argument("--tp-reduce", type=float, default=0.20)
