@@ -11,6 +11,7 @@ class _Fake:
     tick = 0.01
     rebuy_require_yang = True
     rebuy_above_stop_pct = 0.0
+    rebuy_above_stop_max_pct = None
     rebuy_from_low_pct = 0.0
 
     def _same_day_rebuy_ok(self, *, open_px, low_px, close_px, stop_px):
@@ -41,6 +42,20 @@ class TestSameDayRebuyFilter(unittest.TestCase):
         s.rebuy_require_yang = True
         self.assertFalse(
             s._same_day_rebuy_ok(open_px=100, low_px=97, close_px=99, stop_px=97.5)
+        )
+
+    def test_stop_band_cap(self) -> None:
+        s = _Fake()
+        s.rebuy_require_yang = False
+        s.rebuy_above_stop_pct = 0.005
+        s.rebuy_above_stop_max_pct = 0.01
+        # 0.7% above stop → in 0.5-1 band
+        self.assertTrue(
+            s._same_day_rebuy_ok(open_px=100, low_px=97, close_px=98.18, stop_px=97.5)
+        )
+        # 1.2% above stop → out of band
+        self.assertFalse(
+            s._same_day_rebuy_ok(open_px=100, low_px=97, close_px=98.67, stop_px=97.5)
         )
 
     def test_from_low_gate(self) -> None:

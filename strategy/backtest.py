@@ -81,6 +81,7 @@ class OpenBreak3Strategy(Strategy):
     allow_same_day_rebuy_after_stop: bool = False
     rebuy_require_yang: bool = True
     rebuy_above_stop_pct: float = 0.0
+    rebuy_above_stop_max_pct: float | None = None
     rebuy_from_low_pct: float = 0.0
     # 因子4：牛市持股 regime（由 runner 注入 bull_by_date）
     factor4_enabled: bool = False
@@ -607,8 +608,14 @@ class OpenBreak3Strategy(Strategy):
         ):
             return False
         above = float(self.rebuy_above_stop_pct or 0.0)
-        if close_px + 1e-12 < float(stop_px) * (1.0 + above):
+        floor_px = float(stop_px) * (1.0 + above)
+        if close_px + 1e-12 < floor_px:
             return False
+        cap = getattr(self, "rebuy_above_stop_max_pct", None)
+        if cap is not None:
+            ceil_px = float(stop_px) * (1.0 + float(cap))
+            if close_px - 1e-12 > ceil_px:
+                return False
         from_low = float(self.rebuy_from_low_pct or 0.0)
         if from_low > 0:
             base = float(open_px) if float(open_px) > 0 else float(stop_px)

@@ -92,6 +92,8 @@ class BacktestConfig:
     rebuy_require_yang: bool = True
     # 收盘相对止损价至少高出该比例（0.01=1个点）；0=仅需收盘≥止损价
     rebuy_above_stop_pct: float = 0.0
+    # 收盘相对止损价最多高出该比例；None=不限制上沿（仅下限）
+    rebuy_above_stop_max_pct: float | None = None
     # 收盘相对当日最低价反弹至少该比例（相对开盘，0.01=1个点）；0=不限制
     rebuy_from_low_pct: float = 0.0
     # 因子2（策略一默认叠加）：None=用 strategy1 bindings / dd_topup 默认

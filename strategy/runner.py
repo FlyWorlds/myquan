@@ -106,6 +106,8 @@ def apply_strategy_config(
     strategy.rebuy_above_stop_pct = float(
         getattr(cfg, "rebuy_above_stop_pct", 0.0) or 0.0
     )
+    cap = getattr(cfg, "rebuy_above_stop_max_pct", None)
+    strategy.rebuy_above_stop_max_pct = float(cap) if cap is not None else None
     strategy.rebuy_from_low_pct = float(getattr(cfg, "rebuy_from_low_pct", 0.0) or 0.0)
     strategy.factor4_enabled = bool(getattr(cfg, "factor4_enabled", False))
     strategy.factor4_bull_entry = bool(getattr(cfg, "factor4_bull_entry", False))
