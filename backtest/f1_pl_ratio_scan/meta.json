@@ -1,0 +1,18 @@
+{
+  "start": "2025-01-02",
+  "end": "20260827",
+  "min_trades": 8,
+  "thresholds": [
+    0.02,
+    0.025,
+    0.03
+  ],
+  "n_universe": 1800,
+  "n_best": 1795,
+  "definition": {
+    "strat": "本笔买→卖净收益%",
+    "hold": "上笔卖收盘→本笔卖收盘%",
+    "pl_ratio": "均盈%/|均亏%|",
+    "rank": "每票最优阈值按 strat_pl_ratio"
+  }
+}

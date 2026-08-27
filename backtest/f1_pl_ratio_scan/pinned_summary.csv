@@ -1,0 +1,3 @@
+﻿code,name,symbol,thr_pct,ok,error,n_trades,strat_pl_ratio,strat_win_rate,strat_avg_win_pct,strat_avg_loss_pct,strat_profit_factor,strat_sum_pct,hold_pl_ratio,hold_win_rate,hold_avg_win_pct,hold_avg_loss_pct,hold_profit_factor,hold_sum_pct,excess_pl_ratio,excess_win_rate,excess_sum_pct,pl_ratio_edge
+600330,天通股份,sh600330,3.0,1,,59,2.082,54.24,10.756,-5.166,2.467,204.7,1.57,55.93,10.413,-6.632,1.993,171.21,1.853,40.68,33.49,0.512
+600552,凯盛科技,sh600552,2.5,1,,52,2.206,50.0,7.191,-3.26,2.206,102.21,1.211,53.85,8.326,-6.875,1.474,75.01,1.702,42.31,27.2,0.995

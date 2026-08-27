@@ -1,0 +1,11 @@
+{
+  "universe": "CSI300",
+  "n_universe": 300,
+  "n_ok": 300,
+  "n_hits": 22,
+  "n_clean": 20,
+  "thr": 0.025,
+  "start": "2025-01-02",
+  "end": "20260827",
+  "ratio_min": 1.3
+}
