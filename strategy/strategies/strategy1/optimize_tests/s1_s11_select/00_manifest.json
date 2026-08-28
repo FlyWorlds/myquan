@@ -1,0 +1,45 @@
+{
+  "is_window": "2020-01-01~2024-12-31",
+  "val_window": "2025-01-01~20260827",
+  "select_metric": "IS portfolio Sharpe (strategy1 gates + s11 pl_ratio filter)",
+  "best_params": {
+    "entry_pct": 0.025,
+    "pl_ratio_min": 2.0,
+    "min_trades": 3,
+    "top_k": 3,
+    "value_col": "px_near_high"
+  },
+  "is_metrics": {
+    "ret_pct": 839.613012293713,
+    "sharpe": 2.2959116404387454,
+    "mdd_pct": 15.380093687435004,
+    "ann_pct": 56.575239684241964,
+    "n_days": 1212
+  },
+  "val_metrics": {
+    "ret_pct": 211.91755499707168,
+    "sharpe": 3.5149872693386177,
+    "mdd_pct": 20.04929556964977,
+    "ann_pct": 99.41029710593281,
+    "n_days": 401
+  },
+  "n_eligible_val": 14,
+  "eligible_symbols": [
+    "sh600105",
+    "sh600206",
+    "sh600552",
+    "sh601020",
+    "sh603083",
+    "sz001339",
+    "sz002290",
+    "sz002335",
+    "sz002378",
+    "sz002636",
+    "sz002738",
+    "sz301205",
+    "sz301392",
+    "sz301550"
+  ],
+  "fee_note": "strategy1 round-trip incl stamp; portfolio equal-weight weekly gate",
+  "disclaimer": "研究回测，不构成投资建议"
+}
