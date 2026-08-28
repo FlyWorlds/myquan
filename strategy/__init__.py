@@ -8,11 +8,11 @@
   · backtest.py / runner.py         — 执行层（下单与回测）
 
 默认生效：援军战法（strategy1）= 因子1（开盘±2.5% 一次打满）+ 因子2（回撤预警）。
-因子 1–12 均保留。现行策略：1 / 2 / 3 / 4 / 5 / 6 / 11。旧号 strategy7/9/10 仍是别名。
+因子 1–14 均保留。现行策略：1 / 2 / 3 / 4 / 5 / 6 / 11 / 12。旧号 strategy7/9/10 仍是别名。
 策略三：因子5事件开仓、单主题一只、固定持有五日。
 策略五：因子11 两段近高（3日动量→5日近高 Top5）等权持有（研究，非默认）。
 策略六：因子12 反转池近高（研究候选，2024–2025 未确认）。
-策略十一：缠论笔算盈亏比（日线笔归因因子1费用后盈亏比/让利/防守）。
+策略十二：竞价一字联动选股（因子14 题材锚 + 高开联动 TopK 等权持有）。
 兼容旧 API：run_open_break（仅因子1交易）/ open_break3 / STRATEGY_RULES 等保持可用。
 """
 
@@ -114,6 +114,7 @@ from strategy.strategies.strategy4 import run_strategy4, run_strategy9  # noqa: 
 from strategy.strategies.strategy5 import run_strategy5, run_strategy10  # noqa: E402
 from strategy.strategies.strategy6 import run_strategy6  # noqa: E402
 from strategy.strategies.strategy11 import run_strategy11  # noqa: E402
+from strategy.strategies.strategy12 import run_strategy12  # noqa: E402
 
 __all__ = [
     "DEFAULT_PCT",
@@ -196,6 +197,7 @@ __all__ = [
     "run_strategy9",
     "run_strategy10",
     "run_strategy11",
+    "run_strategy12",
     "apply_strategy_config",
     "build_open_break_strategy",
     "metric",

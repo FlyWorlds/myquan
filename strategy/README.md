@@ -63,6 +63,8 @@ strategy/
 | **factor10** | 因子10·价格选股 | 策略1/4 周频开仓名单 | `s1_price_select.py`：近高/趋势/动量/上涨日占比；本周收盘排名，下一周才允许因子1 开仓 |
 | **factor11** | 因子11·两段近高选股 | 截面选股 | `near_high_hold.py`：3日动量 Top20 内再取贴近5日高点 Top5；周频冻结；**一字涨停开盘不可买** |
 | **factor12** | 因子12·反转池近高 | 截面选股 | `factor12_combo.py`：20日涨幅最低 Top20 内再取贴近5日高点 Top5；**研究候选**，2024–2025 未确认，不替换因子11 |
+| **factor13** | 因子13·策略1质量带选股 | 截面选股 | `factor13_fit.py`：上年开盘突破质量带 Top10；年/季频滚动 |
+| **factor14** | 因子14·竞价一字联动 | 日频事件选股 | `auction_yizi_linkage.py`：竞价/开盘一字为题材锚，同概念高开联动 TopK |
 | **cf1** | CF1·流动性门控反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
@@ -85,6 +87,7 @@ for f in list_factors():
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
 | **strategy11** | 缠论笔算盈亏比 | factor1 | ✅ 研究 | 日线笔归因：因子1费用后闭环按买入笔记账，跨笔卖点平移；输出盈亏比/让利/防守；别名 `s11` / `bi_pl` / `笔盈亏比` |
+| **strategy12** | 策略十二·竞价一字联动选股 | factor14 | ✅ 研究 | 当日竞价/开盘一字为题材锚，同概念内选高开联动 Top5，T 开盘等权持有；别名 `s12` / `auction_yizi` / `竞价一字联动` |
 
 旧执行层 3/4/5/6/8 的研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。现行 strategy6 是新注册的因子12 持有，不是旧动量混合。
 
@@ -99,7 +102,7 @@ for b in get_strategy_bindings("strategy3"):
 ```
 
 ```python
-from strategy import run_strategy3, run_strategy5, run_strategy11
+from strategy import run_strategy3, run_strategy5, run_strategy11, run_strategy12
 
 # 策略五：因子11 近高 Top5 等权持有（研究回测，不构成投资建议）
 run_strategy5(start="20200102")
@@ -109,6 +112,9 @@ run_strategy3(start="20260101", max_positions=5, max_per_theme=1, hold_days=5)
 
 # 策略十一：天通默认，日线笔 vs 因子1 费用后盈亏比（研究）
 run_strategy11()  # 或 get_strategy("缠论笔算盈亏比").run()
+
+# 策略十二：竞价一字联动 Top5（研究；需概念成分时可传 concepts=）
+run_strategy12(start="20240101")
 ```
 
 策略二（缠论选股，研究回测，不构成投资建议）：
@@ -232,6 +238,8 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy4` | 因子1+4+10 开盘突破组合；默认观察池；旧名 `run_strategy9` |
 | `run_strategy5` | 因子11 近高 Top5 等权持有；`start` / `end` / `stage1_k` / `stage2_k`；旧名 `run_strategy10` |
 | `run_strategy6` | 因子12 反转池近高 Top5 等权持有；研究候选，不替换策略五 |
+| `run_strategy11` | 缠论笔算盈亏比；`panel` / `panel_path` / `factor_column` / `start` / `end` |
+| `run_strategy12` | 因子14 竞价一字联动 TopK 等权持有；`start` / `end` / `top_k` / `hold_days` / `concepts` |
 | `run_strategy2` | 因子8缠论选股；`panel` / `panel_path` / `factor_column` / `start` / `end` |
 | `OpenBreak3Strategy` | = Strategy1 执行类 |
 | `KCZZ_ETF` | 科创综指 589680 预设（买2.5%/止3.5%、T+1） |
