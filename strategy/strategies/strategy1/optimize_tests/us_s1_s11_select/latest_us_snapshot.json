@@ -1,0 +1,46 @@
+{
+  "us_date": "2026-08-27",
+  "prev_us_date": "2026-08-26",
+  "themes": [
+    {
+      "theme": "software",
+      "etf": "IGV",
+      "ret_pct": 7.74
+    },
+    {
+      "theme": "tech",
+      "etf": "XLK",
+      "ret_pct": 3.16
+    },
+    {
+      "theme": "semiconductor",
+      "etf": "SMH",
+      "ret_pct": 3.1
+    },
+    {
+      "theme": "innovation",
+      "etf": "ARKK",
+      "ret_pct": 1.87
+    },
+    {
+      "theme": "nasdaq",
+      "etf": "QQQ",
+      "ret_pct": 1.37
+    },
+    {
+      "theme": "mining",
+      "etf": "GDX",
+      "ret_pct": 1.24
+    },
+    {
+      "theme": "industrial",
+      "etf": "XLI",
+      "ret_pct": -0.85
+    },
+    {
+      "theme": "comm",
+      "etf": "XLC",
+      "ret_pct": -1.07
+    }
+  ]
+}
