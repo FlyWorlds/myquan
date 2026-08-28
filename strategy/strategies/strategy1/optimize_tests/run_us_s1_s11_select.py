@@ -28,15 +28,12 @@ if str(_MYQUAN) not in sys.path:
 warnings.filterwarnings("ignore")
 logging.disable(logging.CRITICAL)
 
-from strategy.us_a_linkage import (  # noqa: E402
-    UsLinkageConfig,
-    WATCHLIST_US_THEMES,
-    allowed_from_us_weekly_gate,
-    fetch_us_theme_returns,
-    latest_us_theme_snapshot,
-    merge_allowed,
-    us_gate_by_a_share_week,
+from strategy.us_a_factor import (  # noqa: E402
+    panel_us_a_linkage,
+    weekly_allowed_from_factor,
+    factor14_signal,
 )
+from strategy.us_a_linkage import fetch_us_theme_returns, merge_allowed, WATCHLIST_US_THEMES  # noqa: E402
 from strategy.strategies.strategy1.optimize_tests.run_s1_s11_select import (  # noqa: E402
     CASH,
     DATA_CACHE,
@@ -90,10 +87,12 @@ def main() -> None:
 
     us_rets = fetch_us_theme_returns("2019-12-01", _fmt_end(END))
     us_rets.to_csv(OUT / "us_theme_daily_returns.csv")
-    snap = latest_us_theme_snapshot()
+    snap = factor14_signal(theme_returns=us_rets)
     (OUT / "latest_us_snapshot.json").write_text(
         json.dumps(snap, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    panel_f14 = panel_us_a_linkage(dailies, theme_returns=us_rets)
+    panel_f14.to_csv(OUT / "factor14_panel.csv", index=False)
 
     all_dates = sorted(
         {
@@ -134,13 +133,12 @@ def main() -> None:
         US_TOP_N_GRID,
         US_MIN_RET_GRID,
     ):
-        us_cfg = UsLinkageConfig(
-            top_n_themes=int(us_top),
-            min_theme_ret=float(us_min),
-            use_top_n=True,
-            use_min_ret=us_min > 0,
-        )
-        us_weekly = us_gate_by_a_share_week(all_dates, us_rets, cfg=us_cfg)
+        f14_params = {
+            "top_n_themes": int(us_top),
+            "min_theme_ret": float(us_min),
+            "use_top_n": True,
+            "use_min_ret": us_min > 0,
+        }
 
         s11_eligible = filter_symbols(
             bi_by_pct[ep], pl_ratio_min=pl_min, min_trades=min_tr
@@ -148,9 +146,10 @@ def main() -> None:
         if not s11_eligible:
             continue
 
-        us_syms: set[str] = set()
-        for picked in us_weekly.values():
-            us_syms |= picked
+        us_allowed_tmp = weekly_allowed_from_factor(
+            panel_f14, theme_returns=us_rets, params=f14_params
+        )
+        us_syms = {s for s, d in us_allowed_tmp.items() if any(d.values())}
         linkage_eligible = s11_eligible & us_syms
         if not linkage_eligible:
             continue
@@ -162,8 +161,11 @@ def main() -> None:
         s1_allowed = weekly_topk_allowed(
             sub_panel, value_col=val_col, k=top_k, always=PINNED
         )
-        us_allowed = allowed_from_us_weekly_gate(
-            linkage_eligible, all_dates, us_weekly, always=PINNED
+        us_allowed = weekly_allowed_from_factor(
+            panel_f14[panel_f14["symbol"].isin(linkage_eligible)],
+            theme_returns=us_rets,
+            params=f14_params,
+            always=PINNED,
         )
         merged = merge_allowed(s1_allowed, us_allowed)
 
@@ -204,13 +206,12 @@ def main() -> None:
     best_us_min = float(best["us_min_ret"])
     print("best IS:", best.to_dict())
 
-    us_cfg_best = UsLinkageConfig(
-        top_n_themes=best_us_top,
-        min_theme_ret=best_us_min,
-        use_top_n=True,
-        use_min_ret=best_us_min > 0,
-    )
-    us_weekly_val = us_gate_by_a_share_week(all_dates, us_rets, cfg=us_cfg_best)
+    f14_best = {
+        "top_n_themes": best_us_top,
+        "min_theme_ret": best_us_min,
+        "use_top_n": True,
+        "use_min_ret": best_us_min > 0,
+    }
 
     bi_val: dict[str, dict] = {}
     for sym, meta in metas.items():
@@ -218,17 +219,24 @@ def main() -> None:
             dailies[sym], meta, entry_pct=best_ep, start=IS_START, end=IS_END
         )
     s11_val = filter_symbols(bi_val, pl_ratio_min=best_pl, min_trades=best_min_tr)
-    us_syms_val: set[str] = set()
-    for picked in us_weekly_val.values():
-        us_syms_val |= picked
+    us_gate_all = weekly_allowed_from_factor(
+        panel_f14,
+        theme_returns=us_rets,
+        params=f14_best,
+        always=PINNED,
+    )
+    us_syms_val = {s for s, d in us_gate_all.items() if any(d.values())}
     linkage_val = s11_val & us_syms_val
 
     sub_panel_val = panel[panel["symbol"].isin(linkage_val)].copy()
     s1_allowed_val = weekly_topk_allowed(
         sub_panel_val, value_col=best_col, k=best_k, always=PINNED
     )
-    us_allowed_val = allowed_from_us_weekly_gate(
-        linkage_val, all_dates, us_weekly_val, always=PINNED
+    us_allowed_val = weekly_allowed_from_factor(
+        panel_f14[panel_f14["symbol"].isin(linkage_val)],
+        theme_returns=us_rets,
+        params=f14_best,
+        always=PINNED,
     )
     merged_val = merge_allowed(s1_allowed_val, us_allowed_val)
     navs_val = {s: nav_by_pct[best_ep][s] for s in linkage_val}
@@ -264,7 +272,8 @@ def main() -> None:
     picks_df.to_csv(OUT / "eligible_symbols_2025.csv", index=False)
 
     manifest = {
-        "pipeline": "US_theme_gate -> strategy11_pl_ratio -> strategy1_weekly_topk",
+        "pipeline": "factor14 -> strategy11_pl_ratio -> strategy1_weekly_topk",
+        "factor14": "factor14_us_a_theme_linkage",
         "is_window": f"{IS_START.date()}~{IS_END.date()}",
         "val_window": f"{VAL_START.date()}~{END}",
         "us_data": "yfinance theme ETFs",

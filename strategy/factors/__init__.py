@@ -14,6 +14,7 @@
   · factor11 — 两段近高选股（3日动量 Top20 → 贴近5日高点 Top5）
   · factor12 — 20日反转池 → 近5日高 Top5（研究候选，不替换 factor11）
   · factor13 — 策略1契合选股（质量带 / 夏普波动率契合，见 factor13_sharpe_vol）
+  · factor14 — 美股隔夜主题 → A 股联动（主题 ETF + 静态标签门控）
   · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
 """
 
@@ -30,6 +31,7 @@ from strategy.factors import factor10 as _factor10  # noqa: F401
 from strategy.factors import factor11 as _factor11  # noqa: F401
 from strategy.factors import factor12 as _factor12  # noqa: F401
 from strategy.factors import factor13 as _factor13  # noqa: F401
+from strategy.factors import factor14 as _factor14  # noqa: F401
 from strategy.factors import factor_cf1 as _factor_cf1  # noqa: F401
 from strategy.core.factor_registry import FACTOR_REGISTRY, get_factor, list_factors
 
