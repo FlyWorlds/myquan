@@ -1,8 +1,8 @@
-"""凯盛科技 / 天通股份 · 策略1 相对盈亏比三段测试。
+"""凯盛科技 / 天通股份 · 策略1 三段测试（传统盈亏比口径）。
 
-与 ``backtest/ai_s1_s11_periods.py`` 同一套口径：
-  FIT 网格择优 thr ∈ {2%, 2.5%, 3%}；VAL/OOS 冻结阈值。
-  另附历史固定阈值（凯盛 2.5%、天通 3.0%）对照。
+与 ``backtest/ai_s1_s11_periods.py`` 同一套三段划分与模拟逻辑；
+FIT 网格择优 thr ∈ {2%, 2.5%, 3%}，按**传统盈亏比**（avg win / avg loss）排序。
+另附历史固定阈值（凯盛 2.5%、天通 3.0%）对照。
 
   python backtest/kaicheng_tiantong_rel_pl/run.py
 """
@@ -32,6 +32,30 @@ STOCKS = [
 ]
 
 
+def tune_thr_pl(daily: pd.DataFrame) -> tuple[float, dict[str, float]]:
+    """FIT 段择优：超额>0 优先，再比传统盈亏比、夏普。"""
+    best_thr = 0.025
+    best: dict[str, float] | None = None
+    best_key = (-1e18, -1e18, -1e18)
+
+    for thr in s11.THR_GRID:
+        m = s11.eval_s1(daily, s11.FIT_START, s11.FIT_END, thr)
+        if int(m.get("n_bars") or 0) < s11.MIN_BARS:
+            continue
+        excess = float(m["excess"]) if m["excess"] == m["excess"] else -1e9
+        pl = float(m["pl_ratio"]) if m.get("pl_ratio") == m.get("pl_ratio") else -1e9
+        if pl == float("inf"):
+            pl = 1e6
+        sh = float(m["sharpe"]) if m["sharpe"] == m["sharpe"] else -1e9
+        flag = 1.0 if excess > 0 else 0.0
+        key = (flag, pl, excess, sh)
+        if key > best_key:
+            best_key = key
+            best_thr = thr
+            best = m
+    return best_thr, best or s11.eval_s1(daily, s11.FIT_START, s11.FIT_END, best_thr)
+
+
 def _ensure_cache(cfg, end: str) -> None:
     cache = CACHE_DIR / f"{cfg.symbol}_daily_qfq.parquet"
     fetch_daily(cfg.symbol, s11.FULL_START, end, cache_path=cache)
@@ -47,7 +71,7 @@ def run_one(cfg, pinned_thr: float) -> dict:
     if daily is None:
         raise RuntimeError(f"no cache for {symbol}")
 
-    thr, fit_tune = s11.tune_thr(daily)
+    thr, fit_tune = tune_thr_pl(daily)
     val_tune = s11.eval_s1(daily, s11.VAL_START, s11.VAL_END, thr)
     oos_tune = s11.eval_s1(daily, s11.OOS_START, OOS_END, thr)
     full_tune = s11.eval_s1(daily, s11.FULL_START, OOS_END, thr)
@@ -104,20 +128,19 @@ def _fmt(v: object, nd: int = 2, pct: bool = False) -> str:
 
 def write_report(df: pd.DataFrame) -> None:
     lines = [
-        "# 凯盛科技 / 天通股份 · 策略1 相对盈亏比测试",
+        "# 凯盛科技 / 天通股份 · 策略1 传统盈亏比测试",
         "",
         f"数据截至 {OOS_END}；FIT {s11.FIT_START}–{s11.FIT_END}，"
         f"VAL {s11.VAL_START}–{s11.VAL_END}，OOS {s11.OOS_START}–{OOS_END}。",
         "",
-        "## 相对盈亏比口径",
-        "- 盈利笔落后 lag = max(0, 持股收益 − 策略收益)",
-        "- 亏损笔防守 def = max(0, 策略收益 − 持股收益)",
-        "- **相对盈亏比** = 亏损笔均 def ÷ 盈利笔均 lag（越大越好）",
+        "## 传统盈亏比口径",
+        "- **盈亏比** = 盈利笔平均收益 ÷ |亏损笔平均收益|（avg win / avg loss，越大越好）",
+        "- FIT 网格择优 thr∈{2%, 2.5%, 3%}，按超额>0 → 传统盈亏比 → 夏普排序",
         "",
-        "## 网格择优阈值（FIT 段 thr∈{2%,2.5%,3%}）",
+        "## 网格择优阈值",
         "",
-        "| 标的 | 择优阈值 | 段 | 策略收益 | 持股收益 | 超额 | 最大回撤 | 胜率 | 传统盈亏比 | 相对盈亏比 | 均落后% | 均防守% | 笔数 |",
-        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| 标的 | 择优阈值 | 段 | 策略收益 | 持股收益 | 超额 | 最大回撤 | 胜率 | 盈亏比 | 利润因子 | 笔数 |",
+        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for _, r in df.iterrows():
         for seg, label in (
@@ -126,25 +149,20 @@ def write_report(df: pd.DataFrame) -> None:
             ("oos_tune", "OOS"),
             ("full_tune", "全段"),
         ):
-            lag = r.get(f"{seg}_mean_lag_pct")
-            defn = r.get(f"{seg}_mean_def_pct")
-            lag_s = _fmt(float(lag) * 100, nd=2) if lag == lag else "-"
-            def_s = _fmt(float(defn) * 100, nd=2) if defn == defn else "-"
             lines.append(
                 f"| {r['name']} | {float(r['tuned_thr'])*100:.1f}% | {label} | "
                 f"{_fmt(r[f'{seg}_ret'], pct=True)} | {_fmt(r[f'{seg}_bh_ret'], pct=True)} | "
                 f"{_fmt(r[f'{seg}_excess'], pct=True)} | {_fmt(r[f'{seg}_mdd'], pct=True)} | "
                 f"{_fmt(r[f'{seg}_win_rate'], pct=True)} | {_fmt(r[f'{seg}_pl_ratio'])} | "
-                f"{_fmt(r[f'{seg}_pl_ratio_vs_bh'])} | {lag_s} | {def_s} | "
-                f"{int(r[f'{seg}_n_trades'])} |"
+                f"{_fmt(r[f'{seg}_profit_factor'])} | {int(r[f'{seg}_n_trades'])} |"
             )
 
     lines += [
         "",
         "## 历史固定阈值（凯盛2.5% / 天通3.0%）",
         "",
-        "| 标的 | 固定阈值 | 段 | 超额 | 相对盈亏比 | 笔数 |",
-        "|---|---:|---|---:|---:|---:|",
+        "| 标的 | 固定阈值 | 段 | 超额 | 盈亏比 | 胜率 | 笔数 |",
+        "|---|---:|---|---:|---:|---:|---:|",
     ]
     for _, r in df.iterrows():
         for seg, label in (
@@ -155,8 +173,8 @@ def write_report(df: pd.DataFrame) -> None:
         ):
             lines.append(
                 f"| {r['name']} | {float(r['pinned_thr'])*100:.1f}% | {label} | "
-                f"{_fmt(r[f'{seg}_excess'], pct=True)} | {_fmt(r[f'{seg}_pl_ratio_vs_bh'])} | "
-                f"{int(r[f'{seg}_n_trades'])} |"
+                f"{_fmt(r[f'{seg}_excess'], pct=True)} | {_fmt(r[f'{seg}_pl_ratio'])} | "
+                f"{_fmt(r[f'{seg}_win_rate'], pct=True)} | {int(r[f'{seg}_n_trades'])} |"
             )
 
     lines += [
@@ -194,7 +212,16 @@ def main() -> None:
     df = pd.DataFrame(rows)
     df.to_csv(OUT_DIR / "metrics.csv", index=False, encoding="utf-8-sig")
     write_report(df)
-    print(f"Wrote {OUT_DIR / 'report.md'}")
+
+    print("=== OOS 摘要（传统盈亏比）===")
+    for _, r in df.iterrows():
+        print(
+            f"{r['name']}: thr={float(r['tuned_thr'])*100:.1f}% "
+            f"OOS超额={_fmt(r['oos_tune_excess'], pct=True)} "
+            f"盈亏比={_fmt(r['oos_tune_pl_ratio'])} "
+            f"胜率={_fmt(r['oos_tune_win_rate'], pct=True)}"
+        )
+    print(f"\nWrote {OUT_DIR / 'report.md'}")
 
 
 if __name__ == "__main__":
