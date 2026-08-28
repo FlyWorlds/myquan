@@ -134,12 +134,12 @@ def write_report(df: pd.DataFrame) -> None:
         f"VAL {s11.VAL_START}–{s11.VAL_END}，OOS {s11.OOS_START}–{OOS_END}。",
         "",
         "## 传统盈亏比口径",
-        "- **盈亏比** = 盈利笔平均收益 ÷ |亏损笔平均收益|（avg win / avg loss，越大越好）",
+        "- **传统盈亏比** = 盈利笔平均收益 ÷ |亏损笔平均收益|（avg win / avg loss，越大越好）",
         "- FIT 网格择优 thr∈{2%, 2.5%, 3%}，按超额>0 → 传统盈亏比 → 夏普排序",
         "",
         "## 网格择优阈值",
         "",
-        "| 标的 | 择优阈值 | 段 | 策略收益 | 持股收益 | 超额 | 最大回撤 | 胜率 | 盈亏比 | 利润因子 | 笔数 |",
+        "| 标的 | 择优阈值 | 段 | 策略收益 | 持股收益 | 超额 | 最大回撤 | 胜率 | 传统盈亏比 | 利润因子 | 笔数 |",
         "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for _, r in df.iterrows():
@@ -161,7 +161,7 @@ def write_report(df: pd.DataFrame) -> None:
         "",
         "## 历史固定阈值（凯盛2.5% / 天通3.0%）",
         "",
-        "| 标的 | 固定阈值 | 段 | 超额 | 盈亏比 | 胜率 | 笔数 |",
+        "| 标的 | 固定阈值 | 段 | 超额 | 传统盈亏比 | 胜率 | 笔数 |",
         "|---|---:|---|---:|---:|---:|---:|",
     ]
     for _, r in df.iterrows():
@@ -181,7 +181,7 @@ def write_report(df: pd.DataFrame) -> None:
         "",
         "## 策略11（笔归因，与择优阈值一致）",
         "",
-        "| 标的 | 段 | S11盈亏比 | 胜率 | 笔数 | 因子1复利% |",
+        "| 标的 | 段 | S11传统盈亏比 | 胜率 | 笔数 | 因子1复利% |",
         "|---|---|---:|---:|---:|---:|",
     ]
     for _, r in df.iterrows():
@@ -218,7 +218,7 @@ def main() -> None:
         print(
             f"{r['name']}: thr={float(r['tuned_thr'])*100:.1f}% "
             f"OOS超额={_fmt(r['oos_tune_excess'], pct=True)} "
-            f"盈亏比={_fmt(r['oos_tune_pl_ratio'])} "
+            f"传统盈亏比={_fmt(r['oos_tune_pl_ratio'])} "
             f"胜率={_fmt(r['oos_tune_win_rate'], pct=True)}"
         )
     print(f"\nWrote {OUT_DIR / 'report.md'}")

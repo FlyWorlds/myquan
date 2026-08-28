@@ -2,7 +2,7 @@
 
 口径：
   · 阈值：沿用 all_metrics.csv 定参段（FIT）冻结 thr
-  · 指标：胜率 / 盈亏比 / 超额% / 最大回撤%（策略1权益）
+  · 指标：胜率 / 传统盈亏比 / 超额% / 最大回撤%（策略1权益）
   · 序列：自然月截面中位数（全池）+ Top5 等权组合 + Top5 单票
   · 衰减：月末滚动12M选股 Top20 → 前瞻 1–12 个月累计超额均值
 
@@ -344,7 +344,7 @@ def build_html(
   <div class="card"><h2>全池月度超额%（中位数）</h2><canvas id="c_excess"></canvas>
     <p class="note">灰线=Top5等权均值；彩色虚线=稳健分Top5单票。</p></div>
   <div class="card"><h2>全池月度胜率%（中位数）</h2><canvas id="c_wr"></canvas></div>
-  <div class="card"><h2>全池月度盈亏比（中位数）</h2><canvas id="c_pl"></canvas></div>
+  <div class="card"><h2>全池月度传统盈亏比（中位数）</h2><canvas id="c_pl"></canvas></div>
   <div class="card"><h2>全池月度最大回撤%（中位数）</h2><canvas id="c_mdd"></canvas></div>
   <div class="card"><h2>滚动12M选股 Top20 · 前瞻累计超额衰减</h2><canvas id="c_decay"></canvas>
     <p class="note">选股窗=过去12自然月均值超额；前瞻=Top20 在随后 1–12 个月的累计超额均值；decay=前瞻−选股。</p></div>
@@ -381,7 +381,7 @@ function lineChart(id, label, poolKey, yLabel) {{
 
 lineChart('c_excess','超额','excess','超额 %');
 lineChart('c_wr','胜率','win_rate','胜率 %');
-lineChart('c_pl','盈亏比','pl_ratio','盈亏比');
+lineChart('c_pl','传统盈亏比','pl_ratio','传统盈亏比');
 lineChart('c_mdd','回撤','mdd','回撤 %');
 
 new Chart(document.getElementById('c_decay'), {{
@@ -419,11 +419,11 @@ def build_md(
         "",
         "- **全池中位**：每月截面中位数（当月闭环≥2笔的票才计入）",
         "- **Top5等权**：稳健分 Top5 当月指标算术均值",
-        "- 指标：超额%、胜率%、盈亏比、最大回撤%",
+        "- 指标：超额%、胜率%、传统盈亏比、最大回撤%",
         "",
         "## 2. 近期全池月度中位（最近6个月）",
         "",
-        "| 月份 | 超额% | 胜率% | 盈亏比 | 回撤% | 有效票 |",
+        "| 月份 | 超额% | 胜率% | 传统盈亏比 | 回撤% | 有效票 |",
         "|---|---:|---:|---:|---:|---:|",
     ]
     tail = pool.tail(6)
@@ -437,7 +437,7 @@ def build_md(
         "",
         "## 3. Top5 等权月度（最近6个月）",
         "",
-        "| 月份 | 超额% | 胜率% | 盈亏比 | 回撤% |",
+        "| 月份 | 超额% | 胜率% | 传统盈亏比 | 回撤% |",
         "|---|---:|---:|---:|---:|",
     ]
     tail5 = top5_eq.tail(6)
@@ -546,7 +546,7 @@ def main() -> None:
         last = pool.iloc[-1]
         print(
             f"最近月 {last['month']}: 超额中位 {last['excess_median']:.2f}% "
-            f"胜率 {last['win_rate_median']:.2f}% 盈亏比 {last['pl_ratio_median']:.2f}"
+            f"胜率 {last['win_rate_median']:.2f}% 传统盈亏比 {last['pl_ratio_median']:.2f}"
         )
 
 

@@ -4,8 +4,8 @@
 验证 VAL : 2023-01-01 → 2024-12-31  （冻结 FIT 阈值）
 样本外 OOS: 2025-01-01 → 今
 
-策略1：开盘突破权益曲线 → 盈亏比 / 超额 / 回撤
-策略11：同套因子1成交 + 日线笔归因 → 盈亏比；超额/回撤沿用因子1权益
+策略1：开盘突破权益曲线 → 传统盈亏比 / 超额 / 回撤
+策略11：同套因子1成交 + 日线笔归因 → 传统盈亏比；超额/回撤沿用因子1权益
 
   python backtest/ai_s1_s11_periods.py --cache-only
 """
@@ -220,6 +220,7 @@ def simulate_with_trades(
 
 
 def _trade_stats(trade_pairs: list[TradePair]) -> dict[str, float]:
+    """逐笔统计：含传统盈亏比 pl_ratio 与相对盈亏比 pl_ratio_vs_bh。"""
     if not trade_pairs:
         return {
             "n_trades": 0,
@@ -332,7 +333,7 @@ def eval_s11(daily: pd.DataFrame, start: str, end: str, thr: float, symbol: str,
 
 
 def tune_thr(daily: pd.DataFrame) -> tuple[float, dict[str, float]]:
-    """定参段择优：优先超额>0，再比盈亏比、夏普。"""
+    """定参段择优：优先超额>0，再比相对盈亏比、夏普。"""
     best_thr = 0.025
     best: dict[str, float] | None = None
     best_key = (-1e18, -1e18, -1e18)
@@ -578,7 +579,7 @@ def build_report(
         "",
         "- 策略1：因子1 开盘突破权益；指标=**相对盈亏比** / 传统盈亏比 / 超额 / 最大回撤",
         "- 相对盈亏比：盈利笔落后(持股−策略)越小越好，亏损笔防守(策略−持股)越大越好，比值=均防守/均落后",
-        "- 策略11：同因子1成交 + 日线笔归因盈亏比；超额/回撤沿用策略1权益口径",
+        "- 策略11：同因子1成交 + 日线笔归因传统盈亏比；超额/回撤沿用策略1权益口径",
         f"- Top20 定参阈值分布：{thr_dist}",
         "",
         "## 2. 策略1 · 样本外超额 Top20",
@@ -597,10 +598,10 @@ def build_report(
 
     lines += [
         "",
-        "## 3. 策略11 · 样本外笔归因盈亏比 Top20",
+        "## 3. 策略11 · 样本外笔归因传统盈亏比 Top20",
         "",
-        "| 名次 | 代码 | 名称 | thr% | OOS盈亏比 | OOS胜率% | OOS复合% | "
-        "VAL盈亏比 | FIT盈亏比 | OOS超额%(S1) | OOS回撤%(S1) |",
+        "| 名次 | 代码 | 名称 | thr% | OOS传统盈亏比 | OOS胜率% | OOS复合% | "
+        "VAL传统盈亏比 | FIT传统盈亏比 | OOS超额%(S1) | OOS回撤%(S1) |",
         "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for i, r in enumerate(top_s11.itertuples(index=False), 1):
@@ -619,7 +620,7 @@ def build_report(
         "",
         "## 4. 两榜交集",
         "",
-        f"- 策略1 OOS超额 Top20 ∩ 策略11 OOS盈亏比 Top20：**{len(both)}** 只",
+        f"- 策略1 OOS超额 Top20 ∩ 策略11 OOS传统盈亏比 Top20：**{len(both)}** 只",
         f"- {', '.join(both) if both else '无'}",
         "",
         "## 5. 池内汇总（全有效样本）",
