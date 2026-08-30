@@ -1,0 +1,49 @@
+---
+description: 策略/因子/回测变更时同步更新 READ.md、TODO.MD、docs/ 与 strategy/README.md
+alwaysApply: true
+---
+
+# 文档同步规则
+
+本仓库以 **READ.md** 为项目总览，**strategy/README.md** 为策略/因子注册表（文末 § 文档维护规则，与本文一致），**docs/** 为专题说明。改代码时须同步改文档，避免「能跑但文档过期」。
+
+## 何时必须更新文档
+
+| 变更类型 | 必改文件 |
+|----------|----------|
+| 新增/删除策略、改默认绑定 | `strategy/README.md`、`docs/STRATEGY.md`、`READ.md`（若影响默认行为） |
+| 新增/删除因子、改因子默认参数 | `strategy/README.md`、`strategy/factors/factor*.py` 描述、`docs/FACTOR*.md`（若有） |
+| 因子13 选股规则/锁定名单/门槛 | `docs/FACTOR13.md`、`backtest/factor13_bear_shield/LOCKED.json`、`READ.md` |
+| 因子1 买卖规则、成本、T+1 | `strategy/open_break.py` 注释、`docs/STRATEGY.md`、`strategy/STRATEGY_AUDIT.md`（若审计结论变） |
+| 盯盘/预警/合格池 | `holdingStocks/README.md`、`READ.md` 盯盘节 |
+| 任务优先级、里程碑 | `TODO.MD` |
+| 新回测入口、CLI 路径 | `READ.md` 运行示例、`strategy/README.md` 回测 CLI |
+
+## 更新顺序（Agent / 开发者）
+
+1. 先改代码与 `backtest/` 产物（csv/json/report）。
+2. 更新 **专题文档**（`docs/` 或 `strategy/README.md` 对应节）。
+3. 更新 **READ.md** 摘要（默认策略、因子13 锁定状态、运行命令）。
+4. 更新 **TODO.MD**（已完成打 ✅、新任务入合适优先级）。
+5. 若规则/门槛 **锁定**，写入 `backtest/factor13_bear_shield/LOCKED.json` 并在 `docs/FACTOR13.md` 注明锁定日期。
+
+## 因子13 双轨说明（勿混写）
+
+- **质量带**（`factor13_fit.py` / `factor13.py`）：夏普+回撤甜区，历史 walk-forward。
+- **熊市盾牌 thr\* Top3**（`factor13_bear_shield.py`，**当前锁定**）：WF + 个股阈值 + 稳定性过滤。
+
+文档中写清「当前生产/研究默认」指向哪一条；锁定期间 **禁止** 在文档里写未经验证的调参结果为主结论。
+
+## 表述要求
+
+- 回测数字须标注区间、是否样本外、是否等权；研究用途，非投资建议。
+- 命令路径与仓库内实际脚本一致（优先 `python strategy/run_*.py`）。
+- 不在 READ.md 重复 strategy/README 全文；用链接 + 一两句摘要。
+
+## 自检清单（提交前）
+
+- [ ] READ.md 默认策略/因子13 状态与代码一致
+- [ ] strategy/README 因子/策略表含新增项
+- [ ] TODO.MD 已完成项有日期或 ✅
+- [ ] 锁定配置有 LOCKED.json / recommended.json
+- [ ] 新增 CLI 在 READ.md 有示例命令

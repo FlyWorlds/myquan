@@ -1,6 +1,11 @@
 # strategy — 可插拔策略 / 因子 / 决策框架
 
+> 项目总览：[`READ.md`](../READ.md) · 策略专题：[`docs/STRATEGY.md`](../docs/STRATEGY.md) · 因子13：[`docs/FACTOR13.md`](../docs/FACTOR13.md) · 任务：[`TODO.MD`](../TODO.MD)  
+> **文档同步规则**见本文 [§ 文档维护规则](#文档维护规则)；Cursor 规则：`.cursor/rules/docs-sync.mdc`
+
 默认生效：**援军战法（strategy1）= 因子1（开盘±2.5% 一次打满）+ 因子2（回撤加减仓预警）**。
+
+动态选股（研究，🔒锁定）：**因子13 · 熊市盾牌 thr\* Top3** → 2026：东材 / 珠峰 / 雷赛（[`LOCKED.json`](../backtest/factor13_bear_shield/LOCKED.json)）
 
 - 决策/盯盘买卖只看因子1；因子2 默认只挂预警阈值（**回测不注资**）。
 - 仅因子1交易：`run_open_break` 或 `python strategy1.py --no-factor2`。
@@ -28,7 +33,11 @@ strategy/
 │   ├── factor6.py        # 组合动量 ETF 轮动
 │   ├── factor7.py        # 行业 ETF 普通动量 + 改进残差动量
 │   └── factor8.py        # CZSC 缠论结构与一/二/三类买卖点
-│       # 另有 factor9 日线动能 / factor10 价格选股 / factor11 两段近高
+│       # 另有 factor9 日线动能 / factor10 价格选股 / factor11 两段近高 / factor13 契合选股
+├── factor13_bear_shield.py   # 因子13 B 线：熊市盾牌 WF + thr* Top3（🔒锁定）
+├── factor13_fit.py           # 因子13 A 线：质量带 walk-forward
+├── run_factor13_bear_shield_wf.py
+├── run_factor13_bear_shield_tune_pit.py
 ├── near_high_hold.py     # 因子11 / 策略五：两段近高 Top5 等权持有
 
 ├── strategies/
@@ -63,6 +72,7 @@ strategy/
 | **factor10** | 因子10·价格选股 | 策略1/4 周频开仓名单 | `s1_price_select.py`：近高/趋势/动量/上涨日占比；本周收盘排名，下一周才允许因子1 开仓 |
 | **factor11** | 因子11·两段近高选股 | 截面选股 | `near_high_hold.py`：3日动量 Top20 内再取贴近5日高点 Top5；周频冻结；**一字涨停开盘不可买** |
 | **factor12** | 因子12·反转池近高 | 截面选股 | `factor12_combo.py`：20日涨幅最低 Top20 内再取贴近5日高点 Top5；**研究候选**，2024–2025 未确认，不替换因子11 |
+| **factor13** | 因子13·策略1契合选股 | 动态合格池 / 熊年盾牌 | **A 线** `factor13_fit.py`：质量带夏普/回撤；**B 线（🔒锁定）** `factor13_bear_shield.py`：WF + thr\* Top3，见 [`docs/FACTOR13.md`](../docs/FACTOR13.md) |
 | **cf1** | CF1·流动性门控反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
@@ -135,6 +145,17 @@ refresh_strategy3_factor5()
 
 策略三仅使用因子5作为开仓来源；单主题最多一只、固定持有5日，不再使用因子1止损、因子4或凯盛/天通/科创综指ETF的旧默认池。
 
+### 因子13 · 熊市盾牌 thr\* Top3（🔒 锁定，研究）
+
+- **说明**：[`docs/FACTOR13.md`](../docs/FACTOR13.md) · **锁定**：`backtest/factor13_bear_shield/LOCKED.json`
+- **交易**：仍用策略一·因子1；每票 `thr*` 由 ≤T−1 拟合窗夏普择优（天通 ±3%）
+- **2026 名单**：东材 ±2.5%、西藏珠峰 ±2.5%、雷赛智能 ±3%
+
+```bash
+python strategy/run_factor13_bear_shield_wf.py
+python strategy/run_factor13_bear_shield_tune_pit.py   # VALID 调参（锁定前）
+```
+
 ### 因子7说明：行业 ETF 双动量
 
 先把时间说清楚：这个成绩来自 **2024年2月6日到2026年6月30日**，只代表这段牛市样本。它怎么抓到主线？方法并不神秘。把市场想成一块每月更新的行业积分榜，科技、金融、医药、资源等15只行业ETF全部上场；月底一到，策略重新打分，只留下前三名，每只三分之一仓位，然后整整拿一个月。它不预测谁会突然启动，只让资金一直跟着已经出现的主线跑。
@@ -161,6 +182,7 @@ refresh_strategy3_factor5()
 | 因子6 ETF 组合动量 | `etf_combo_momentum.DEFAULT_*` | 直接调 `run_etf_combo_momentum(...)` |
 | 因子7 行业 ETF 双动量 | `industry_residual_momentum.DEFAULT_PARAMS` / `DEFAULT_UNIVERSE` | 直接调 `run_industry_residual_momentum(...)` |
 | 因子8 缠论买卖点 | `strategy/chan` / `evaluation.md` | `strategy2/bindings` / `backtest/strategy2.py` |
+| 因子13 熊盾 Top3 | `factor13_bear_shield.DEFAULT_PARAMS` | **🔒锁定**见 `LOCKED.json`；解锁前勿改；真源 `factor13_bear_shield.py` |
 
 ```python
 from strategy.dd_alert import derive_thresholds
@@ -201,6 +223,9 @@ python -c "from strategy.industry_residual_momentum import run_industry_residual
 # 策略二：缠论合成数据流水线 / 真实面板挖掘
 cd backtest && python strategy2.py demo --symbols 32
 cd backtest && python strategy2.py mine --panel ../data_cache/strategy2_chan/feature_panel.parquet
+# 因子13：熊市盾牌 WF（thr* Top3，锁定配置）
+python strategy/run_factor13_bear_shield_wf.py
+python strategy/run_factor13_bear_shield_tune_pit.py   # VALID 调参（锁定前）
 ```
 
 ## 如何扩展（开闭）
@@ -235,3 +260,65 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy2` | 因子8缠论选股；`panel` / `panel_path` / `factor_column` / `start` / `end` |
 | `OpenBreak3Strategy` | = Strategy1 执行类 |
 | `KCZZ_ETF` | 科创综指 589680 预设（买2.5%/止3.5%、T+1） |
+
+---
+
+## 文档维护规则
+
+改 `strategy/` 下策略、因子、bindings、runner 或相关回测脚本时，**须同步更新文档**。
+
+- **本文 § 文档维护规则**：开发者可读的真源（表格、顺序、自检）
+- **Cursor Agent**：`.cursor/rules/docs-sync.mdc`（`alwaysApply`，与本文一致）
+
+### 何时必须更新
+
+| 变更类型 | 必改文件 |
+|----------|----------|
+| 新增/删除策略、改默认绑定 | **本文**、`docs/STRATEGY.md`、`READ.md` |
+| 新增/删除因子、改 `DEFAULT_*` | **本文**因子表、`factors/factor*.py` 描述、`docs/FACTOR*.md` |
+| 因子13 规则/名单/门槛 | `docs/FACTOR13.md`、`backtest/factor13_bear_shield/LOCKED.json`、`READ.md` |
+| 因子1 买卖/T+1/成本 | `open_break.py`、`docs/STRATEGY.md`、`STRATEGY_AUDIT.md`（审计变时） |
+| 盯盘/预警/合格池 | `holdingStocks/README.md`、`READ.md` 盯盘节 |
+| 新 CLI / `run_*.py` | **本文**回测 CLI 节、`READ.md` 运行示例 |
+| 里程碑 / 锁定 / 解锁 | `TODO.MD`、`LOCKED.json` |
+
+### 更新顺序
+
+1. 代码 + `backtest/` 产物（csv / json / report）
+2. **strategy/README.md**（注册表、CLI、默认参数表）
+3. `docs/` 专题（`STRATEGY.md`、`FACTOR13.md` 等）
+4. `READ.md` 摘要、`TODO.MD` 任务状态
+
+### 因子13 双轨（勿混写）
+
+| 线 | 模块 | 状态 |
+|----|------|------|
+| A 质量带 | `factor13_fit.py` → `factors/factor13.py` | 历史 walk-forward |
+| B 熊市盾牌 thr\* Top3 | `factor13_bear_shield.py` | **🔒 当前锁定** |
+
+锁定期间：文档与 `LOCKED.json` 为准；**禁止**把未盲测验证的调参结果写为主结论。
+
+### 表述要求
+
+- 回测数字须标注区间、是否样本外、是否等权；研究用途，非投资建议。
+- 命令路径与仓库内实际脚本一致（优先 `python strategy/run_*.py`）。
+- `READ.md` 不重复本文全文；用链接 + 一两句摘要。
+
+### 提交前自检
+
+- [ ] 本文因子/策略表含新增项
+- [ ] 回测 CLI 命令可运行且路径正确
+- [ ] `READ.md` / `docs/` 与默认行为一致
+- [ ] 因子13 锁定项已写 `LOCKED.json` + `docs/FACTOR13.md`
+- [ ] 回测数字标注区间、是否 OOS、研究免责声明
+
+### 相关文档
+
+| 文件 | 用途 |
+|------|------|
+| [`READ.md`](../READ.md) | 项目总览 |
+| [`docs/STRATEGY.md`](../docs/STRATEGY.md) | 策略说明专题 |
+| [`docs/FACTOR13.md`](../docs/FACTOR13.md) | 因子13 详述 |
+| [`STRATEGY_AUDIT.md`](STRATEGY_AUDIT.md) | 凯盛单票审计底稿 |
+| [`TODO.MD`](../TODO.MD) | 任务与锁定项 |
+| [`.cursor/rules/docs-sync.mdc`](../.cursor/rules/docs-sync.mdc) | Cursor Agent 文档同步规则 |

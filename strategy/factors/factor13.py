@@ -1,4 +1,9 @@
-"""因子13：策略一·因子1 契合选股（质量带 Walk-Forward）。"""
+"""因子13：策略一·因子1 契合选股。
+
+双轨实现（详见 docs/FACTOR13.md）：
+  · A 质量带：factor13_fit.py（夏普/回撤甜区 walk-forward）
+  · B 熊市盾牌 thr* Top3：factor13_bear_shield.py（当前锁定，WF 样本外）
+"""
 
 from __future__ import annotations
 
@@ -14,7 +19,7 @@ from strategy.factor13_fit import (
 )
 
 FACTOR_ID = "factor13"
-FACTOR_NAME = "因子13·策略1质量带选股"
+FACTOR_NAME = "因子13·策略1契合选股（质量带 / 熊盾）"
 
 
 def _rules() -> str:
@@ -25,8 +30,8 @@ SPEC = FactorSpec(
     id=FACTOR_ID,
     name=FACTOR_NAME,
     description=(
-        "上年开盘突破：夏普适中、回撤约20–30%、策略回撤≤约持有一半，"
-        "按 score_quality 取 Top10（不足放宽补齐）；支持年频/季频滚动"
+        "策略1开盘突破契合选股。质量带：夏普适中、回撤甜区、score_quality TopK；"
+        "生产研究默认见 factor13_bear_shield（WF thr* Top3，LOCKED.json）"
     ),
     rules_text=_rules(),
     implemented=True,
@@ -38,6 +43,8 @@ SPEC = FactorSpec(
         "timing": "year_t_quality_band_hold_year_t_plus_1",
         "research_only": True,
         "best_rule": load_best_rule(),
+        "bear_shield_locked": "backtest/factor13_bear_shield/LOCKED.json",
+        "docs": "docs/FACTOR13.md",
     },
 )
 

@@ -13,7 +13,7 @@
   · factor10 — 价格选股（周频冻结近高/趋势/动量）
   · factor11 — 两段近高选股（3日动量 Top20 → 贴近5日高点 Top5）
   · factor12 — 20日反转池 → 近5日高 Top5（研究候选，不替换 factor11）
-  · factor13 — 策略1契合选股（质量带 / 夏普波动率契合，见 factor13_sharpe_vol）
+  · factor13 — 策略1契合选股（质量带 factor13_fit / 熊盾 factor13_bear_shield，见 docs/FACTOR13.md）
   · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
 """
 
