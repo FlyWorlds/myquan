@@ -10,20 +10,21 @@ const pdg = props.row['价位小数'] ?? 2
 const visual = computed(() => resolveSignalVisual(props.row))
 
 const cardClass = computed(() => {
-  const v = visual.value
-  if (v.tier === 'trigger-buy') return 'signal-trigger-buy border-up/50'
-  if (v.tier === 'warn-buy') return 'signal-warn-buy border-up/40'
-  if (v.tier === 'trigger-sell') return 'signal-trigger-sell border-down/50'
-  if (v.tier === 'warn-sell') return 'signal-warn-sell border-down/40'
-  if (v.tier === 'hold') return 'signal-hold border-accent/30'
-  if (int(props.row.持仓) > 0) return 'border-accent/20 bg-ui-surface'
-  if (props.row.已实现) return 'border-ui-hairline bg-ui-surface opacity-90'
-  return 'border-ui-hairline bg-ui-surface'
+  const map: Record<string, string> = {
+    'trigger-buy': 'signal-trigger-buy border-up/50',
+    'warn-buy': 'signal-warn-buy border-up/40',
+    'trigger-sell': 'signal-trigger-sell border-down/50',
+    'warn-sell': 'signal-warn-sell border-down/40',
+    hold: 'signal-hold-real border-sky-400/30',
+    'paper-hold': 'signal-hold-paper border-violet-400/30',
+    'ban-buy': 'signal-ban-buy border-up/25',
+    flat: 'signal-flat border-ui-hairline',
+  }
+  const tier = visual.value.tier
+  if (tier && map[tier]) return map[tier]
+  if (Number(props.row.持仓) > 0) return 'signal-hold-real border-sky-400/30'
+  return 'signal-flat border-ui-hairline'
 })
-
-function int(v: unknown) {
-  return Number(v) || 0
-}
 </script>
 
 <template>

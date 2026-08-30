@@ -18,12 +18,13 @@ from strategy.strategies.strategy8.theme_linkage import run_theme_linkage_backte
 def _print_rules() -> str:
     head = compose_rules(STRATEGY_NAME, bindings=FACTOR_BINDINGS)
     extra = """
------ 题材联动规则 -----
+----- 题材联动规则（v3 · 当日定题材）-----
 1. 题材：通达信概念成分（离线 tdx_members_index.json）
-2. 因子14：统计 T-1 同题材涨停同伴数 theme_lu_count
-3. 股池：同题材≥2只涨停 → 昨日涨停票（共振）+ 未涨停联动票（补涨）
+2. 因子14：**当日**收盘涨停池 → 同题材同伴数 theme_lu_count ≥ 3
+3. 股池：默认 linkage = 热题材内**非当日涨停**联动票（排除龙头）
 4. 情绪：T-1 连板梯度（连板≥2、最高板 2～5），与策略三同源
-5. 买卖：因子1 ±阈值；T+1 止损或收盘清
+5. 买卖：**当日**因子1 ±阈值突破即买；T+1 止损或收盘清
+6. 因子15：默认关闭（--gap-filter 可选启用低开带）
 仅供研究，不构成投资建议。
 """
     return head + "\n" + extra.strip()
@@ -37,7 +38,10 @@ def _bind() -> StrategySpec:
     return StrategySpec(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
-        description="涨停池同题材共振 + 联动补涨；因子14 选股 + 因子1 执行",
+        description=(
+            "当日涨停定热题材（theme_lu≥3）→ 联动票当日因子1 ±阈值；"
+            "T-1 连板梯度门槛；因子15 默认关"
+        ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy8,
         default_config=None,

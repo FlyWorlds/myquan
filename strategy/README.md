@@ -1,6 +1,6 @@
 # strategy — 可插拔策略 / 因子 / 决策框架
 
-> 项目总览：[`READ.md`](../READ.md) · 策略专题：[`docs/STRATEGY.md`](../docs/STRATEGY.md) · 因子13：[`docs/FACTOR13.md`](../docs/FACTOR13.md) · 任务：[`TODO.MD`](../TODO.MD)  
+> 项目总览：[`READ.md`](../READ.md) · 策略专题：[`docs/STRATEGY.md`](../docs/STRATEGY.md) · 因子13：[`docs/FACTOR13.md`](../docs/FACTOR13.md) · 因子14：[`docs/FACTOR14.md`](../docs/FACTOR14.md) · 任务：[`TODO.MD`](../TODO.MD)  
 > **文档同步规则**见本文 [§ 文档维护规则](#文档维护规则)；Cursor 规则：`.cursor/rules/docs-sync.mdc`
 
 默认生效：**援军战法（strategy1）= 因子1（开盘±2.5% 一次打满）+ 因子2（回撤加减仓预警）**。
@@ -74,7 +74,7 @@ strategy/
 | **factor11** | 因子11·两段近高选股 | 截面选股 | `near_high_hold.py`：3日动量 Top20 内再取贴近5日高点 Top5；周频冻结；**一字涨停开盘不可买** |
 | **factor12** | 因子12·反转池近高 | 截面选股 | `factor12_combo.py`：20日涨幅最低 Top20 内再取贴近5日高点 Top5；**研究候选**，2024–2025 未确认，不替换因子11 |
 | **factor13** | 因子13·策略1契合选股 | 动态合格池 / 熊年盾牌 | **A 线** `factor13_fit.py`：质量带夏普/回撤；**B 线（🔒锁定）** `factor13_bear_shield.py`：WF + thr\* Top3，见 [`docs/FACTOR13.md`](../docs/FACTOR13.md) |
-| **factor14** | 因子14·题材共振 | 题材联动选股 | **当日**同题材涨停同伴数 `theme_lu_count≥3`；通达信概念；供策略八 |
+| **factor14** | 因子14·题材共振 | 题材联动选股 | **当日**同题材涨停同伴数 `theme_lu_count≥3`；见 [`docs/FACTOR14.md`](../docs/FACTOR14.md) |
 | **factor15** | 因子15·晋级低开 | 题材联动过滤（可选） | gap ∈ [-4.5%, -0.3%]；默认关闭，需 `--gap-filter` |
 | **cf1** | CF1·流动性门控反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
@@ -93,12 +93,12 @@ for f in list_factors():
 |----|------|----------|------|------|
 | **strategy1** | 援军战法 | factor1 + factor2 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警；别名 `open_break3` / `s1` / `策略一` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
-| **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1情绪+±阈值（不过门）；回测：首板+gap/量比+情绪 · 别名 `s3` |
+| **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮展示+±阈值；回测：首板+gap/量比 · 别名 `s3` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧号 `strategy9` / `s9` / `策略九` |
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
 | **strategy7** | 策略七·缠论笔算盈亏比 | factor1 | ✅ 研究 | 日线笔归因：因子1费用后闭环按买入笔记账，跨笔卖点平移；输出盈亏比/让利/防守；别名 `s7` / `s11` / `strategy11` / `bi_pl` / `笔盈亏比` |
-| **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**→联动票当日±阈值；2025→ +4.8%（±2.5%）；`backtest/strategy8_theme_linkage/` |
+| **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
 
 旧执行层 3/4/5/6/8 的研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。现行 strategy6 是新注册的因子12 持有，不是旧动量混合。
 
@@ -148,7 +148,7 @@ python -c "from strategy import run_strategy3; run_strategy3()"
 python -c "from strategy import run_strategy8; run_strategy8(start='20250101')"
 ```
 
-策略三：首板晋级 / 昨日涨停池 + T-1 情绪 + 因子1。策略八：题材联动（**当日涨停定题材** + 因子14 + 因子1 当日阈值），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。
+策略三：昨日涨停池 + T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示 + 因子1 ±阈值。策略八：题材联动（**当日涨停定题材** + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。
 
 ### 因子13 · 熊市盾牌 thr\* Top3（🔒 锁定，研究）
 
@@ -326,6 +326,7 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | [`READ.md`](../READ.md) | 项目总览 |
 | [`docs/STRATEGY.md`](../docs/STRATEGY.md) | 策略说明专题 |
 | [`docs/FACTOR13.md`](../docs/FACTOR13.md) | 因子13 详述 |
+| [`docs/FACTOR14.md`](../docs/FACTOR14.md) | 因子14 题材共振 |
 | [`STRATEGY_AUDIT.md`](STRATEGY_AUDIT.md) | 凯盛单票审计底稿 |
 | [`TODO.MD`](../TODO.MD) | 任务与锁定项 |
 | [`.cursor/rules/docs-sync.mdc`](../.cursor/rules/docs-sync.mdc) | Cursor Agent 文档同步规则 |

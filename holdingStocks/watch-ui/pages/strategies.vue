@@ -17,6 +17,12 @@ useHead({ title: '策略说明 · 持仓盯盘' })
       </p>
     </header>
 
+    <RegistryAnchorNav
+      v-if="strategies.length"
+      :items="strategies.map((s) => ({ id: s.id }))"
+      aria-label="策略锚点"
+    />
+
     <p v-if="loading" class="text-sm text-ui-text-2">加载中…</p>
     <p v-else-if="error" class="text-sm text-ui-danger">{{ error }}</p>
 
@@ -25,7 +31,7 @@ useHead({ title: '策略说明 · 持仓盯盘' })
         v-for="tab in strategies"
         :id="tab.id"
         :key="tab.id"
-        class="scroll-mt-24"
+        class="registry-scroll-target"
       >
         <StrategyInfoPanel :tab="tab" />
         <StrategyPicksPanel :picks="tab.picks" />

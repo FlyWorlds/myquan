@@ -51,16 +51,58 @@ python -c "from strategy import run_open_break; ..."
 | ID | 名称 | 核心 | 状态 |
 |----|------|------|------|
 | strategy2 | 缠论 | factor8 | 研究 |
-| strategy3 | 首板晋级 | factor1；**盯盘**=昨日涨停池+T-1情绪+±阈值（不过门）；**回测**=首板+gap/量比 | 研究 |
+| strategy3 | 首板晋级 | factor1 | 研究；见 §3.1 |
 | strategy4 | F4 止盈动量 | factor1+4+10 | 研究 |
 | strategy5 | 近高 Top5 等权 | factor11 | 研究 |
 | strategy6 | 反转池近高 | factor12 | 研究，未替换 strategy5 |
 | strategy7 | 策略七·缠论笔盈亏比 | factor1 | 研究 |
-| strategy8 | 题材联动 | factor14 + factor1 | 研究；**当日涨停**定题材→联动候选当日±阈值；2025→ 见 REPORT |
+| strategy8 | 题材联动 | factor14 + factor1 | 研究；见 §3.2 |
 
-因子14：同题材昨日涨停同伴数（通达信概念 offline 索引）。
+因子14：**当日**同题材涨停同伴数（通达信概念 offline 索引），见 [`FACTOR14.md`](FACTOR14.md)。
 
 组合动量/行业 ETF：因子6、因子7（见 `strategy/README.md`）。
+
+---
+
+### 3.1 策略三 · 首板晋级（strategy3）
+
+**盯盘口径**
+
+- 宇宙：中证1000 **昨日收盘涨停**全池
+- **T-1 情绪门槛**（决定是否今日可做）：连板家数 `mkt_lianban ≥ 2`，最高板 `mkt_max_height ∈ [2, 5]`
+- **T-1 涨停家数阶段**（展示用，与门槛独立）：
+  - 冰点：`mkt_lu ≤ 6`
+  - 正常：7～14
+  - 高潮：`≥ 15`
+- 执行：晋级日 **因子1 ±阈值**突破买（盯盘不过阴/小阳过门）；T+1 止损或收盘清
+
+**回测口径**（`backtest/strategy3_first_board/`）
+
+- 选股：昨日首板（近5日无涨停）、非一字/秒板、量比≥1.4、晋级日低开带
+- 同上 T-1 连板梯度门槛；可选 `--mkt-lu-min/max`
+
+真源：`strategy/strategies/strategy3/`、`strategy/strategies/strategy3/sentiment_phase.py`、`holdingStocks/strategy3_watch.py`
+
+---
+
+### 3.2 策略八 · 题材联动（strategy8 · v3 当日定题材）
+
+| 项 | 说明 |
+|---|---|
+| 定题材 | **当日**收盘涨停池 → 因子14 `theme_lu_count ≥ 3` |
+| 股池 | 默认 `linkage`：热题材内**非当日涨停**联动票 |
+| 买卖 | **当日**因子1 ±阈值突破即买（非次日晋级买） |
+| 情绪 | T-1 连板梯度（与策略三同源）；T-1 涨停家数阶段同策略三展示 |
+| 因子15 | 默认**关闭**；`--gap-filter` 可选启用低开带 |
+
+**回测参考**（2025-01-02 → 2026-08-11，研究，非投资建议）：
+
+| 阈值 | 总收益 | 最大回撤 | 笔数 |
+|------|--------|----------|------|
+| ±2.5% | +6.1% | 4.4% | 179 |
+| ±3.0% | +9.1% | 2.9% | 184 |
+
+真源：`strategy/strategies/strategy8/theme_linkage.py` · 报告：`backtest/strategy8_theme_linkage/REPORT.md`
 
 ---
 
@@ -87,5 +129,6 @@ python -c "from strategy import run_open_break; ..."
 | [`READ.md`](../READ.md) | 项目总览、安装、运行 |
 | [`strategy/README.md`](../strategy/README.md) | 因子/策略注册表、CLI |
 | [`FACTOR13.md`](FACTOR13.md) | 因子13 质量带 + 熊市盾牌 |
+| [`FACTOR14.md`](FACTOR14.md) | 因子14 题材共振（策略八） |
 | [`TODO.MD`](../TODO.MD) | 任务优先级 |
 | [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak 审计底稿 |

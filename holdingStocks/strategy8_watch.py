@@ -234,9 +234,14 @@ def enrich_theme_row(item: dict[str, Any], *, quote: dict[str, Any] | None, gate
     entry_pct = float(f1p.get("entry_pct") or DEFAULT_PCT)
     stop_pct = float(f1p.get("stop_pct") or entry_pct)
     tick = float(f1p.get("tick") or TICK_SIZE)
+    quote_name = str(quote.get("name") or "") if quote else ""
     row = {
         "代码": item.get("code"),
-        "名称": item.get("name"),
+        "名称": resolve_stock_name(
+            symbol=str(item.get("symbol") or ""),
+            code=str(item.get("code") or ""),
+            name=str(item.get("name") or quote_name or ""),
+        ),
         "题材": item.get("题材"),
         "题材涨停数": item.get("题材涨停数"),
         "类型": item.get("类型"),

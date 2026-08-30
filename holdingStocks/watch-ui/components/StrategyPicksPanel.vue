@@ -52,6 +52,7 @@ const kindLabel: Record<string, string> = {
             </td>
             <td class="px-2 py-1 text-xs text-ui-text-3">
               <template v-if="it.thr != null">阈值 ±{{ (Number(it.thr) * 100).toFixed(1) }}%</template>
+              <template v-else-if="it.theme != null">{{ it.theme }} · lu {{ it.theme_lu }}</template>
               <template v-else-if="it.score != null">score {{ Number(it.score).toFixed(2) }}</template>
               <template v-else-if="it.gap_pct != null">gap {{ it.gap_pct }}% · 量比 {{ it.vol_ratio }}</template>
               <template v-else>—</template>

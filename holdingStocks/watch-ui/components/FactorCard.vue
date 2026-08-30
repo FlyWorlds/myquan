@@ -5,7 +5,7 @@ defineProps<{ factor: FactorEntry }>()
 </script>
 
 <template>
-  <article :id="factor.id" class="card scroll-mt-24 p-4">
+  <article :id="factor.id" class="card registry-scroll-target p-4">
     <header class="flex flex-wrap items-start justify-between gap-2">
       <div>
         <h2 class="text-lg font-bold">

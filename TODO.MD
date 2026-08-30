@@ -36,6 +36,7 @@
 ### 文档同步（2026-08-30）
 - [x] **READ.md** 增加 § 策略与因子注册表（因子/策略摘要表）
 - [x] **docs-sync.mdc** 策略/因子变更同步 READ + strategy/README
+- [x] 策略三 T-1 情绪阶段（冰点/正常/高潮）+ 策略八 v3 当日定题材说明同步（`docs/STRATEGY.md`、`FACTOR14.md`、注册表 description）
 
 ---
 

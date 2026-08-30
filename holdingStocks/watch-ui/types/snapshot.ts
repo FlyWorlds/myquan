@@ -83,6 +83,9 @@ export interface StrategyPickItem {
   vol_ratio?: number
   mkt_lianban?: number
   trade_date?: string
+  theme?: string
+  theme_lu?: number
+  pool_tag?: string
   weight?: number
 }
 

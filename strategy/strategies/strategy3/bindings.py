@@ -17,9 +17,10 @@ FACTOR_BINDINGS = (
         stop_pct=DEFAULT_PCT,
         prev_entry_mode="limit_up_ok",
         filter_desc=(
-            "盯盘：宇宙=中证1000昨日收盘涨停全池；T-1情绪门槛决定今日可否做；"
-            "晋级日因子1 ±阈值突破买，前日涨停不过阴/小阳过门；"
-            "回测研究另含首板/gap/量比等过滤（见 backtest/strategy3_first_board）"
+            "盯盘：宇宙=中证1000昨日收盘涨停全池；"
+            "T-1 连板梯度（lb≥2、h2～5）决定今日可否做；"
+            "T-1 涨停家数展示冰点≤6/正常7～14/高潮≥15（与门槛独立）；"
+            "晋级日因子1 ±阈值突破买；回测另含首板/gap/量比（见 strategy3_first_board）"
         ),
         enabled=True,
     ),

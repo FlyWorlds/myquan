@@ -107,6 +107,19 @@
     @apply bg-ui-fill-active text-accent;
   }
 
+  /* 策略/因子说明页：锚点 pill 导航，吸顶于 WatchNav 下方 */
+  .registry-sticky-nav {
+    position: sticky;
+    top: var(--watch-nav-h, 3.25rem);
+    z-index: 20;
+    background-color: color-mix(in srgb, var(--ui-page) 95%, transparent);
+    @apply -mx-4 mb-4 flex flex-wrap gap-2 border-b border-ui-hairline px-4 py-3 backdrop-blur-md;
+  }
+
+  .registry-scroll-target {
+    scroll-margin-top: var(--registry-scroll-mt, 9.5rem);
+  }
+
   .v-loading-mask {
     @apply absolute inset-0 z-20 flex items-center justify-center bg-black/50;
   }
@@ -207,6 +220,39 @@
     0 0 22px color-mix(in srgb, var(--watch-down) 32%, transparent);
 }
 
+.signal-hold-real {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, #38bdf8 14%, var(--ui-surface)),
+    var(--ui-surface)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #38bdf8 35%, transparent);
+}
+
+.signal-hold-paper {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, #a78bfa 12%, var(--ui-surface)),
+    var(--ui-surface)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #a78bfa 30%, transparent);
+}
+
+.signal-flat {
+  background: var(--ui-surface);
+  box-shadow: inset 0 0 0 1px var(--ui-hairline);
+}
+
+.signal-ban-buy {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--watch-up) 10%, var(--ui-surface)),
+    var(--ui-surface)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-up) 22%, transparent);
+  opacity: 0.92;
+}
+
 .signal-hold {
   background: linear-gradient(
     135deg,
@@ -244,6 +290,24 @@
   background: linear-gradient(135deg, var(--watch-down), color-mix(in srgb, var(--watch-down) 70%, #000));
   border: 1px solid color-mix(in srgb, var(--watch-down) 75%, #fff);
   box-shadow: 0 0 12px color-mix(in srgb, var(--watch-down) 40%, transparent);
+}
+
+.signal-badge-hold-real {
+  color: #38bdf8;
+  background: color-mix(in srgb, #38bdf8 16%, transparent);
+  border: 1px solid color-mix(in srgb, #38bdf8 40%, transparent);
+}
+
+.signal-badge-hold-paper {
+  color: #a78bfa;
+  background: color-mix(in srgb, #a78bfa 14%, transparent);
+  border: 1px solid color-mix(in srgb, #a78bfa 35%, transparent);
+}
+
+.signal-badge-ban-buy {
+  color: var(--watch-up);
+  background: color-mix(in srgb, var(--watch-up) 12%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--watch-up) 35%, transparent);
 }
 
 .signal-badge-hold {

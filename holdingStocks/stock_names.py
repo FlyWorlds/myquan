@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -9,6 +11,9 @@ from typing import Any
 import pandas as pd
 
 _MYQUAN = Path(__file__).resolve().parents[1]
+_AK_CACHE = Path(__file__).resolve().parent / "cache" / "a_share_code_names.json"
+_CACHE_MIN_SIZE = 5400
+_CACHE_MAX_AGE_SEC = 3 * 86400
 
 
 def code_from_symbol(sym: str) -> str:
@@ -17,6 +22,182 @@ def code_from_symbol(sym: str) -> str:
         return s[2:].zfill(6)
     digits = "".join(ch for ch in s if ch.isdigit())
     return digits.zfill(6)[-6:] if digits else s
+
+
+def _is_bad_name(code: str, name: str) -> bool:
+    c = str(code).zfill(6)
+    n = str(name or "").strip()
+    if not n:
+        return True
+    if n.lower().startswith(("sh", "sz")):
+        return True
+    if n.startswith("SYN"):
+        return True
+    if n.isdigit() and n.zfill(6) == c:
+        return True
+    return False
+
+
+def _read_name_cache() -> dict[str, str]:
+    if not _AK_CACHE.is_file():
+        return {}
+    try:
+        raw = json.loads(_AK_CACHE.read_text(encoding="utf-8"))
+        return {
+            str(k).zfill(6): str(v).strip()
+            for k, v in raw.items()
+            if v and not _is_bad_name(str(k).zfill(6), str(v))
+        }
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _write_name_cache(data: dict[str, str]) -> None:
+    if not data:
+        return
+    _AK_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    _AK_CACHE.write_text(
+        json.dumps(dict(sorted(data.items())), ensure_ascii=False, indent=0),
+        encoding="utf-8",
+    )
+
+
+def _cache_stale(data: dict[str, str]) -> bool:
+    if not data:
+        return True
+    if len(data) < _CACHE_MIN_SIZE:
+        return True
+    if not _AK_CACHE.is_file():
+        return True
+    return (time.time() - _AK_CACHE.stat().st_mtime) > _CACHE_MAX_AGE_SEC
+
+
+def _fetch_akshare_full_map() -> dict[str, str]:
+    out: dict[str, str] = {}
+    try:
+        import akshare as ak
+
+        df = ak.stock_info_a_code_name()
+        for _, r in df.iterrows():
+            c = str(r.get("code", "")).zfill(6)
+            n = str(r.get("name", "")).strip()
+            if c and n and not _is_bad_name(c, n):
+                out[c] = n
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _fetch_baostock_full_map() -> dict[str, str]:
+    out: dict[str, str] = {}
+    try:
+        import baostock as bs
+
+        lg = bs.login()
+        if lg.error_code != "0":
+            return out
+        day = pd.Timestamp.now().strftime("%Y-%m-%d")
+        rs = bs.query_all_stock(day=day)
+        if rs.error_code != "0":
+            rs = bs.query_all_stock(day=pd.Timestamp.now().normalize().strftime("%Y-%m-%d"))
+        while rs.error_code == "0" and rs.next():
+            row = rs.get_row_data()
+            sym = str(row[0] or "")
+            name = str(row[2] if len(row) > 2 else "").strip()
+            code = "".join(ch for ch in sym if ch.isdigit())[-6:].zfill(6)
+            if code and name and not _is_bad_name(code, name):
+                out[code] = name
+        bs.logout()
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _merge_refresh_name_cache(existing: dict[str, str]) -> dict[str, str]:
+    out = dict(existing)
+    ak = _fetch_akshare_full_map()
+    if ak:
+        out.update(ak)
+    else:
+        bs = _fetch_baostock_full_map()
+        for c, n in bs.items():
+            out.setdefault(c, n)
+    if out:
+        _write_name_cache(out)
+    return out
+
+
+def _univ_missing_codes(cached: dict[str, str]) -> set[str]:
+    p = _MYQUAN / "backtest/strategy3_first_board/zz1000_univ.parquet"
+    if not p.is_file():
+        return set()
+    try:
+        df = pd.read_parquet(p)
+    except Exception:  # noqa: BLE001
+        return set()
+    missing: set[str] = set()
+    for _, r in df.iterrows():
+        c = str(r.get("code", "")).zfill(6)
+        if c and c not in cached:
+            missing.add(c)
+    return missing
+
+
+@lru_cache(maxsize=1)
+def _akshare_name_map() -> dict[str, str]:
+    """A 股 code→name（本地 JSON；过期或偏旧时 akshare 增量刷新）。"""
+    out = _read_name_cache()
+    if _cache_stale(out) or _univ_missing_codes(out):
+        out = _merge_refresh_name_cache(out)
+    return out
+
+
+@lru_cache(maxsize=512)
+def _lookup_name_online(code: str) -> str:
+    """单票补查（东财 → akshare），命中后写入本地缓存。"""
+    c = str(code).zfill(6)
+    if not c.isdigit() or len(c) != 6:
+        return ""
+    try:
+        import requests
+
+        secid = f"1.{c}" if c[0] in "569" else f"0.{c}"
+        resp = requests.get(
+            "https://push2.eastmoney.com/api/qt/stock/get",
+            params={"secid": secid, "fields": "f58"},
+            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/"},
+            timeout=6,
+        )
+        data = (resp.json() or {}).get("data") or {}
+        n = str(data.get("f58") or "").strip()
+        if n and not _is_bad_name(c, n):
+            _remember_name(c, n)
+            return n
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        ak = _fetch_akshare_full_map()
+        hit = ak.get(c, "")
+        if hit:
+            _remember_name(c, hit)
+            return hit
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
+def _remember_name(code: str, name: str) -> None:
+    c = str(code).zfill(6)
+    n = str(name).strip()
+    if _is_bad_name(c, n):
+        return
+    data = _read_name_cache()
+    if data.get(c) == n:
+        return
+    data[c] = n
+    _write_name_cache(data)
+    _akshare_name_map.cache_clear()
+    name_by_code.cache_clear()
 
 
 @lru_cache(maxsize=1)
@@ -29,13 +210,7 @@ def name_by_code() -> dict[str, str]:
             return
         c = str(code).zfill(6)
         n = str(name).strip()
-        if not c or not n:
-            return
-        if n.isdigit() and n.zfill(6) == c:
-            return
-        if n.lower().startswith(("sh", "sz")):
-            return
-        if n.startswith("SYN"):
+        if not c or not n or _is_bad_name(c, n):
             return
         out[c] = n
 
@@ -58,7 +233,6 @@ def name_by_code() -> dict[str, str]:
             _put(r.get("code"), r.get("name"))
 
     try:
-        import json
         import sys
 
         hs = Path(__file__).resolve().parent
@@ -78,6 +252,10 @@ def name_by_code() -> dict[str, str]:
     except Exception:  # noqa: BLE001
         pass
 
+    for c, n in _akshare_name_map().items():
+        if c not in out:
+            out[c] = n
+
     return out
 
 
@@ -88,14 +266,26 @@ def resolve_stock_name(*, symbol: str = "", code: str = "", name: str = "") -> s
     if c.isdigit():
         c = c.zfill(6)
     n = str(name or "").strip()
-    if n and n not in {sym, c} and not n.lower().startswith(("sh", "sz")) and not n.startswith("SYN"):
-        if not (n.isdigit() and n.zfill(6) == c.zfill(6)):
-            return n
+    if n and n not in {sym, c} and not _is_bad_name(c, n):
+        return n
     hit = name_by_code().get(c)
     if hit:
         return hit
-    return n if n and not n.lower().startswith(("sh", "sz")) and not (n.isdigit() and n.zfill(6) == c) else ""
+    online = _lookup_name_online(c)
+    if online:
+        return online
+    return n if n and not _is_bad_name(c, n) else ""
+
+
+def refresh_name_cache(*, force: bool = False) -> int:
+    """手动刷新全量名称缓存，返回条目数。"""
+    existing = {} if force else _read_name_cache()
+    data = _merge_refresh_name_cache(existing)
+    invalidate_name_cache()
+    return len(data)
 
 
 def invalidate_name_cache() -> None:
     name_by_code.cache_clear()
+    _akshare_name_map.cache_clear()
+    _lookup_name_online.cache_clear()

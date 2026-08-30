@@ -701,6 +701,7 @@ def _quote_from_sina_spot(spot: dict[str, Any]) -> dict[str, Any]:
         "prev_close": float(prev) if prev is not None else None,
         "day_chg_pct": day_chg,
         "last_ts": str(spot.get("last_ts") or _now()),
+        "name": str(spot.get("name") or "").strip(),
         "_day_bars": pd.DataFrame(),
     }
 
@@ -1649,6 +1650,7 @@ def fetch_sina_spot(sina: str) -> dict[str, Any] | None:
         "last": last_px,
         "prev_close": prev_close,
         "last_ts": stamp,
+        "name": str(parts[0] or "").strip(),
     }
 
 

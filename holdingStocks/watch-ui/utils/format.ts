@@ -20,9 +20,15 @@ export function fmtMoney(v?: number | null): string {
   return v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-/** 名称（代码）；无名称时仅显示代码 */
-export function stockLabel(code?: string | null, name?: string | null): string {
-  const c = String(code || '').trim()
+/** 名称（代码）；无名称时仅显示代码。也接受 { code, name } 对象。 */
+export function stockLabel(
+  codeOrRow?: string | null | { code?: string | null; name?: string | null },
+  name?: string | null,
+): string {
+  if (codeOrRow != null && typeof codeOrRow === 'object') {
+    return stockLabel(codeOrRow.code, codeOrRow.name)
+  }
+  const c = String(codeOrRow || '').trim()
   const n = String(name || '').trim()
   if (!c) return n || '—'
   const badName =

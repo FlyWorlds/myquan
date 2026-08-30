@@ -17,16 +17,11 @@ useHead({ title: '因子说明 · 持仓盯盘' })
       </p>
     </header>
 
-    <nav v-if="factors.length" class="mb-4 flex flex-wrap gap-2">
-      <a
-        v-for="f in factors"
-        :key="f.id"
-        :href="`#${f.id}`"
-        class="tab-pill tab-pill-idle text-xs"
-      >
-        {{ f.id }}
-      </a>
-    </nav>
+    <RegistryAnchorNav
+      v-if="factors.length"
+      :items="factors.map((f) => ({ id: f.id }))"
+      aria-label="因子锚点"
+    />
 
     <p v-if="loading" class="text-sm text-ui-text-2">加载中…</p>
     <p v-else-if="error" class="text-sm text-ui-danger">{{ error }}</p>

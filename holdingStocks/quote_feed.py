@@ -408,6 +408,7 @@ def fetch_sina_batch(sinas: list[str]) -> dict[str, dict[str, Any]]:
                 continue
             session = parts[30] or datetime.now().strftime("%Y-%m-%d")
             stamp = f"{session} {parts[31]}" if parts[31] else f"{session} 09:25:00"
+            stock_name = str(parts[0] or "").strip()
             out[code] = {
                 "session": session,
                 "open": open_px,
@@ -416,6 +417,7 @@ def fetch_sina_batch(sinas: list[str]) -> dict[str, dict[str, Any]]:
                 "last": last_px,
                 "prev_close": prev_close,
                 "last_ts": stamp,
+                "name": stock_name,
             }
     return out
 

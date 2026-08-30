@@ -64,8 +64,9 @@ def _bind() -> StrategySpec:
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
         description=(
-            "中证1000内昨日首板票（近5交易日无涨停），次日按因子1 ±阈值开盘突破买入；"
-            "T-1 连板梯度情绪过滤；排除一字/秒板。"
+            "盯盘：中证1000昨日涨停池，T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示，"
+            "晋级日因子1 ±阈值（不过阴/小阳过门）；"
+            "回测：首板+gap/量比+情绪，见 backtest/strategy3_first_board"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy3,

@@ -33,7 +33,7 @@ def _rules() -> str:
 因子15·题材晋级低开
   · 晋级日开盘相对昨收 gap ∈ [{GAP_MIN*100:.1f}%, {GAP_MAX*100:.1f}%]
   · 过滤高开追高与深跌抄底；与策略三首板 gap 带同源
-  · 策略八默认用于「题材联动补涨」候选
+  · 策略八可选：CLI `--gap-filter` 启用；默认关闭，直接因子1 ±阈值
 研究用途，非投资建议。
 """.strip()
 
@@ -41,7 +41,7 @@ def _rules() -> str:
 SPEC = FactorSpec(
     id=FACTOR_ID,
     name=FACTOR_NAME,
-    description="晋级日低开带过滤/打分；策略八联动补涨默认启用",
+    description="晋级日低开带过滤/打分；策略八默认关闭，需 --gap-filter 启用",
     rules_text=_rules(),
     implemented=True,
     meta={
