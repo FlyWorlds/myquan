@@ -29,6 +29,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -142,11 +143,32 @@ WATCH_UI_DEV_PORT = 3000
 # watch 模式本地 WebSocket 广播（/ws）；非 watch 为 None
 _ws_hub: LocalWsHub | None = None
 _last_watch_snapshot: dict[str, Any] | None = None
+_last_snapshot_digest: str | None = None
 _strategies_api_cache: list[dict[str, Any]] | None = None
 _factors_api_cache: list[dict[str, Any]] | None = None
+_HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
+_REPLAY_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _MIN_WATCH_REFRESH_SEC = 1.0
 _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
 _INDEX_CACHE_TTL_SEC = 15.0
+# 盯盘 loop 快照推送日志：每 N 次打印一条（冷启动始终打印）；1=每次；环境变量 WATCH_SNAPSHOT_LOG_EVERY
+_WATCH_SNAPSHOT_LOG_EVERY = max(1, int(os.environ.get("WATCH_SNAPSHOT_LOG_EVERY", "12")))
+_watch_snapshot_push_n = 0
+
+
+def _log_watch_snapshot_push(message: str, *, force: bool = False) -> None:
+    """限频输出「快照已推送」，避免 loop 每 5s 刷屏。"""
+    global _watch_snapshot_push_n
+    if force:
+        print(message)
+        return
+    _watch_snapshot_push_n += 1
+    every = _WATCH_SNAPSHOT_LOG_EVERY
+    if every <= 1 or (_watch_snapshot_push_n % every == 0):
+        if every > 1:
+            print(f"{message}（累计第 {_watch_snapshot_push_n} 次 · 每 {every} 次输出）")
+        else:
+            print(message)
 
 
 def _factor1_binding_params() -> dict[str, Any]:
@@ -188,6 +210,8 @@ def _entry_gate_detail(
     prev_shape = "-"
     if prev_o is not None and prev_c is not None and float(prev_o) > 0:
         prev_shape = bar_shape(float(prev_o), float(prev_c), tick=tick)
+    if prev_entry_mode == "limit_up_ok":
+        return True, "前日涨停·免过门", prev_shape
     allow = entry_filters_ok(
         prev_o,
         prev_c,
@@ -320,6 +344,19 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
                 "factors": factors,
             }
         )
+        if spec.id == "strategy3":
+            from strategy3_watch import load_backtest_summary
+
+            tabs[-1]["backtest"] = load_backtest_summary()
+            tabs[-1]["reportPath"] = "backtest/strategy3_first_board/REPORT.md"
+        if spec.id == "strategy8":
+            from strategy8_watch import load_backtest_summary as load_s8_summary
+
+            tabs[-1]["backtest"] = load_s8_summary()
+            tabs[-1]["reportPath"] = "backtest/strategy8_theme_linkage/REPORT.md"
+        from strategy_picks_loader import load_strategy_picks
+
+        tabs[-1]["picks"] = load_strategy_picks(spec.id)
     tabs.sort(key=lambda t: int(_strategy_tab_number(str(t["id"]))))
     return tabs
 
@@ -491,19 +528,65 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
+    """快照业务指纹（不含 clock/ts，用于去重写盘/WS）。"""
+    payload = {
+        "account": snapshot.get("account"),
+        "indices": snapshot.get("indices"),
+        "holdings": snapshot.get("holdings"),
+        "strategy1": snapshot.get("strategy1"),
+        "strategy3": snapshot.get("strategy3"),
+        "strategy8": snapshot.get("strategy8"),
+        "phaseKey": snapshot.get("phaseKey"),
+        "strategy": snapshot.get("strategy"),
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def publish_watch_snapshot(
     rows: list[dict[str, Any]],
     indices: list[dict[str, Any]] | None = None,
     *,
     refresh_sec: int = 5,
-) -> Path:
-    """推送 JSON 快照（WebSocket + holdings_watch.json），盯盘模式不写 HTML。"""
-    global _last_watch_snapshot
+    get_quote: Callable[[str], dict[str, Any]] | None = None,
+) -> tuple[Path, bool]:
+    """推送 JSON 快照（WebSocket + holdings_watch.json），盯盘模式不写 HTML。
+
+    返回 (路径, 是否已写盘并广播)；业务数据未变时跳过 I/O/WS。
+    """
+    global _last_watch_snapshot, _last_snapshot_digest
     indices = indices or []
     clock_now = _now()
     phase_key = market_phase()
     phase_label = market_phase_label(phase_key)
     account = _build_watch_account_summary(rows)
+    session_today = next(
+        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
+        "",
+    )
+    from strategy3_watch import build_strategy3_payload
+    from strategy8_watch import build_strategy8_payload
+
+    def _batch_quote(sinas: list[str]) -> dict[str, dict[str, Any]]:
+        batch = fetch_sina_batch([s.lower() for s in sinas])
+        out: dict[str, dict[str, Any]] = {}
+        for s in sinas:
+            spot = batch.get(s.lower())
+            if spot:
+                out[s.lower()] = _quote_from_sina_spot(spot)
+        return out
+
+    strategy3 = build_strategy3_payload(
+        session=session_today or None,
+        get_quote=get_quote,
+        batch_quote=_batch_quote,
+    )
+    strategy8 = build_strategy8_payload(
+        session=session_today or None,
+        get_quote=get_quote,
+        batch_quote=_batch_quote,
+    )
     snapshot = build_watch_snapshot(
         rows=rows,
         indices=indices,
@@ -517,8 +600,20 @@ def publish_watch_snapshot(
             "factorsLabel": _STRATEGY_FACTORS_LABEL,
         },
         strategies=_get_strategies_api_cache(),
+        strategy3=strategy3,
+        strategy8=strategy8,
         refresh_sec=refresh_sec,
     )
+    digest = _snapshot_business_digest(snapshot)
+    if digest == _last_snapshot_digest and _last_watch_snapshot is not None:
+        snap = dict(_last_watch_snapshot)
+        snap["clock"] = clock_now
+        snap["updatedAt"] = clock_now
+        snap["ts"] = int(datetime.now().timestamp() * 1000)
+        _last_watch_snapshot = snap
+        return WATCH_META_FILE, False
+
+    _last_snapshot_digest = digest
     _last_watch_snapshot = snapshot
     body = json.dumps(snapshot, ensure_ascii=False)
     _atomic_write_text(WATCH_META_FILE, body, encoding="utf-8")
@@ -528,7 +623,7 @@ def publish_watch_snapshot(
             hub.broadcast_text(body)
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] WS 广播失败: {e}")
-    return WATCH_META_FILE
+    return WATCH_META_FILE, True
 
 
 # 兼容旧名
@@ -670,6 +765,52 @@ def _watch_daily(sina: str, *, lookback_days: int | None = None) -> pd.DataFrame
         df = pd.DataFrame()
     _DAILY_CACHE[sina] = (today, df)
     return df
+
+
+def _daily_frame_sig(daily: pd.DataFrame) -> str:
+    if daily is None or daily.empty:
+        return "empty"
+    last = daily.iloc[-1]
+    return f"{len(daily)}:{last.get('date', '')}"
+
+
+def _replay_last_factor_triggers_cached(
+    sina: str,
+    daily: pd.DataFrame,
+    *,
+    entry_pct: float,
+    stop_pct: float,
+    tick: float,
+    prev_entry_mode: str,
+    limit_down_pct: float,
+) -> dict[str, Any]:
+    """日线回放缓存：同一交易日、同一日线签名与阈值参数不重复算。"""
+    today = str(pd.Timestamp.now().date())
+    key = (
+        str(sina).lower(),
+        today,
+        _daily_frame_sig(daily),
+        float(entry_pct),
+        float(stop_pct),
+        float(tick),
+        str(prev_entry_mode),
+        float(limit_down_pct),
+    )
+    hit = _REPLAY_CACHE.get(key)
+    if hit is not None:
+        return hit
+    out = replay_last_factor_triggers(
+        daily,
+        entry_pct=entry_pct,
+        stop_pct=stop_pct,
+        tick=tick,
+        prev_entry_mode=prev_entry_mode,
+        limit_down_pct=limit_down_pct,
+    )
+    if len(_REPLAY_CACHE) > 512:
+        _REPLAY_CACHE.clear()
+    _REPLAY_CACHE[key] = out
+    return out
 
 
 def _prev_bars_from_daily(
@@ -988,7 +1129,18 @@ def _apply_trigger_date_fields(
 
 
 
+def _holdings_file_mtime() -> float:
+    try:
+        return HOLDINGS_FILE.stat().st_mtime if HOLDINGS_FILE.exists() else 0.0
+    except OSError:
+        return 0.0
+
+
 def load_holdings() -> dict[str, Any]:
+    mtime = _holdings_file_mtime()
+    cached = _HOLDINGS_CACHE.get("data")
+    if cached is not None and float(_HOLDINGS_CACHE.get("mtime") or 0.0) >= mtime:
+        return cached
     if not HOLDINGS_FILE.exists():
         data = {
             "updated_at": None,
@@ -1013,6 +1165,8 @@ def load_holdings() -> dict[str, Any]:
     data.setdefault("account_total_open", None)
     data.setdefault("account_total_open_session", None)
     data.setdefault("alert_sticky", {})
+    _HOLDINGS_CACHE["data"] = data
+    _HOLDINGS_CACHE["mtime"] = _holdings_file_mtime()
     return data
 
 
@@ -1220,6 +1374,8 @@ def save_holdings(data: dict[str, Any]) -> None:
     data["updated_at"] = _now()
     with HOLDINGS_FILE.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    _HOLDINGS_CACHE["data"] = data
+    _HOLDINGS_CACHE["mtime"] = _holdings_file_mtime()
 
 
 def _purge_stale_realized(data: dict[str, Any], session: str) -> None:
@@ -1788,7 +1944,8 @@ def collect_rows(
                 f1p=f1p,
             )
             auction_ref = round(float(q["last"]), px_digits)
-            replay = replay_last_factor_triggers(
+            replay = _replay_last_factor_triggers_cached(
+                w["sina"],
                 daily,
                 entry_pct=entry_pct,
                 stop_pct=base_stop_pct,
@@ -2169,14 +2326,11 @@ def collect_rows(
             day_pnl = None
             day_pnl_pct = None
             day_base = None
-            if cost is not None:
+            if cost is not None and qty > 0:
                 cost_f = float(cost)
                 pnl_pct = (q["last"] / cost_f - 1.0) * 100.0
-                if qty > 0:
-                    pnl = (q["last"] - cost_f) * qty
-                    cost_value = cost_f * qty
-                else:
-                    pnl = q["last"] - cost_f
+                pnl = (q["last"] - cost_f) * qty
+                cost_value = cost_f * qty
 
             if qty > 0:
                 today_cost = pos.get("today_cost")
@@ -2294,6 +2448,17 @@ def collect_rows(
                 code=code,
                 allow_entry=allow_entry,
             )
+            try:
+                from strategy3_watch import enrich_first_board_row
+
+                row["_s3_fb"] = enrich_first_board_row(
+                    code=code,
+                    daily=daily,
+                    session=str(q["session"]),
+                    open_px=float(q["open"]) if q.get("open") else 0.0,
+                )
+            except Exception:  # noqa: BLE001
+                row["_s3_fb"] = {}
             rows.append(row)
         except Exception as e:  # noqa: BLE001
             pos = positions.get(code, {})
@@ -2366,6 +2531,7 @@ def collect_rows(
 
     for r in rows:
         _finalize_position_row(r)
+        _enrich_float_pnl(r)
 
     total_mv = sum(
         float(r["市值"])
@@ -2398,6 +2564,57 @@ def collect_rows(
         r["因子2回撤%"] = f2_status.get("dd_pct")
         r["因子2档位"] = f2_status.get("layers")
     return sort_watch_rows(rows)
+
+
+def _enrich_float_pnl(row: dict[str, Any]) -> None:
+    """策略一口径浮盈：买入成本起算；持仓动态、卖出结算。"""
+    if row.get("error"):
+        return
+    last = row.get("现价")
+    if last is None:
+        return
+    try:
+        last_f = float(last)
+    except (TypeError, ValueError):
+        return
+    if last_f <= 0:
+        return
+
+    qty = int(row.get("持仓") or 0)
+    if row.get("已实现"):
+        if row.get("浮盈") is not None:
+            row["盈亏状态"] = "结算"
+        return
+
+    cost = row.get("成本")
+    if qty > 0 and cost is not None:
+        cost_f = float(cost)
+        row["浮盈"] = round((last_f - cost_f) * qty, 2)
+        row["浮盈%"] = round((last_f / cost_f - 1.0) * 100.0, 2)
+        row["盈亏状态"] = "浮盈"
+        return
+
+    paper = bool(row.get("策略回放持有")) or str(row.get("持仓状态") or "") == "策略持有"
+    if paper and qty <= 0:
+        buy_px = row.get("已触发因子价")
+        if buy_px is None:
+            buy_px = row.get("因子价")
+        if buy_px is not None:
+            try:
+                bp = float(buy_px)
+            except (TypeError, ValueError):
+                bp = 0.0
+            if bp > 0:
+                row["浮盈"] = round(last_f - bp, 2)
+                row["浮盈%"] = round((last_f / bp - 1.0) * 100.0, 2)
+                row["盈亏状态"] = "浮盈"
+                row["盈亏说明"] = "策略买入价·单股"
+        return
+
+    if qty <= 0:
+        row["浮盈"] = None
+        row["浮盈%"] = None
+        row["盈亏状态"] = None
 
 
 def _finalize_position_row(row: dict[str, Any]) -> None:
@@ -2720,7 +2937,7 @@ def cmd_status(args: argparse.Namespace) -> None:
             refresh_sec = int(meta.get("refreshSec") or meta.get("refresh_sec") or refresh_sec)
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             pass
-        path = publish_watch_snapshot(rows, indices=indices, refresh_sec=refresh_sec)
+        path = publish_watch_snapshot(rows, indices=indices, refresh_sec=refresh_sec)[0]
         print(f"检测到盯盘进程 (pid={lock.get('pid')})，已推送 JSON 快照: {path.name}")
         url = _report_url_if_watching()
         if url:
@@ -3024,11 +3241,13 @@ def _refresh_once(
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
     wechat: bool = False,
-) -> Path:
+) -> tuple[Path, bool]:
     global _last_auction_skip_log
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices_cached()
-    path = publish_watch_snapshot(rows, indices=indices, refresh_sec=refresh_sec)
+    path, published = publish_watch_snapshot(
+        rows, indices=indices, refresh_sec=refresh_sec, get_quote=get_quote
+    )
     if wechat and is_signal_window():
         try:
             from wechat_notify import notify_watch_rows
@@ -3042,7 +3261,7 @@ def _refresh_once(
             _last_auction_skip_log = now_m
             ph = market_phase_label()
             print(f"[{_now()}] 早盘 {ph}；微信推送待 9:30 连续竞价")
-    return path
+    return path, published
 
 
 def _parse_hhmm(text: str) -> tuple[int, int]:
@@ -3089,13 +3308,15 @@ def _refresh_open_prices(
     refresh_sec: int,
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
-) -> Path:
+) -> tuple[Path, bool]:
     """强制拉一次行情，用最新开盘重算买点/止损并推送 JSON 快照。"""
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices()
-    path = publish_watch_snapshot(rows, indices=indices, refresh_sec=refresh_sec)
+    path, published = publish_watch_snapshot(
+        rows, indices=indices, refresh_sec=refresh_sec, get_quote=get_quote
+    )
     _log_watchlist_opens(rows)
-    return path
+    return path, published
 
 
 def _pid_alive(pid: int) -> bool:
@@ -3462,11 +3683,11 @@ def cmd_watch(args: argparse.Namespace) -> None:
     def reseed_live() -> int:
         return _reseed_live_batch(feed)
 
-    def safe_refresh() -> Path:
+    def safe_refresh() -> tuple[Path, bool]:
         with refresh_lock:
             return _refresh_once(interval, get_quote=get_quote, wechat=wechat)
 
-    def safe_open_refresh() -> Path:
+    def safe_open_refresh() -> tuple[Path, bool]:
         with refresh_lock:
             reseed_live()
             return _refresh_open_prices(interval, get_quote=get_quote)
@@ -3477,9 +3698,12 @@ def cmd_watch(args: argparse.Namespace) -> None:
         n_fast = reseed_live()
         _daily_cache_warm()
         feed.start()
-        report = safe_refresh()
+        report, _ = safe_refresh()
         elapsed = time.perf_counter() - t0
-        print(f"快照已推送: {report}（实时 {n_fast} 只 · {elapsed:.1f}s）")
+        _log_watch_snapshot_push(
+            f"快照已推送: {report}（实时 {n_fast} 只 · {elapsed:.1f}s）",
+            force=True,
+        )
     except Exception as e:
         feed.stop()
         _ws_hub = None
@@ -3498,8 +3722,11 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 break
             last = time.monotonic()
             try:
-                safe_refresh()
-                print(f"[{_now()}] 快照已推送 → {WATCH_META_FILE.name}")
+                _, published = safe_refresh()
+                if published:
+                    _log_watch_snapshot_push(
+                        f"[{_now()}] 快照已推送 → {WATCH_META_FILE.name}",
+                    )
             except Exception as e:
                 print(f"[{_now()}] 更新失败: {e}")
 
@@ -3694,7 +3921,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
     )
     print(
         "行情: 东财 SSE + 新浪批量实时（不拉历史分钟 K）· "
-        f"刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · Ctrl+C 停止"
+        f"刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · "
+        f"快照日志每 {_WATCH_SNAPSHOT_LOG_EVERY} 次 · Ctrl+C 停止"
     )
     print(
         f"开盘价定时: 每日 9:25 锁定开盘并算阈值；里程碑 "

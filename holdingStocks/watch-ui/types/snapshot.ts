@@ -35,8 +35,12 @@ export interface HoldingRow {
   当日涨幅?: number | null
   较开盘涨幅?: number | null
   持仓?: number
+  成本?: number | null
   浮盈?: number | null
   '浮盈%'?: number | null
+  盈亏状态?: string | null
+  盈亏说明?: string | null
+  已实现?: boolean
   当日盈亏?: number | null
   '当日盈亏%'?: number | null
   持仓状态?: string
@@ -68,6 +72,121 @@ export interface StrategyFactor {
   description?: string
 }
 
+export interface StrategyPickItem {
+  rank?: number
+  symbol?: string
+  code?: string
+  name?: string
+  score?: number
+  thr?: number
+  gap_pct?: number
+  vol_ratio?: number
+  mkt_lianban?: number
+  trade_date?: string
+  weight?: number
+}
+
+export interface StrategyPicks {
+  kind: 'weekly' | 'daily' | 'locked' | 'signals' | 'none' | string
+  asOf?: string | null
+  source?: string | null
+  note?: string
+  items?: StrategyPickItem[]
+}
+
+export interface StrategyBacktestRow {
+  entry_pct?: number
+  total_return_pct?: number
+  max_drawdown_pct?: number
+  sharpe_ratio?: number
+  win_rate?: number
+  n_trades?: number
+  start?: string
+  end?: string
+}
+
+export interface Strategy3Sentiment {
+  tradeDate?: string
+  rawTradeDate?: string | null
+  sentimentDate?: string | null
+  mkt_lu?: number
+  mkt_lianban?: number
+  mkt_max_height?: number
+  mkt_ladder_score?: number
+  luPhase?: 'ice' | 'normal' | 'climax' | null
+  luPhaseLabel?: string
+  luPhaseHint?: string
+  luPhaseRanges?: string
+  gateOk?: boolean
+  gateReasons?: string[]
+  rules?: string
+  cacheNote?: string
+}
+
+export interface Strategy3Row {
+  代码?: string
+  名称?: string
+  昨日首板?: boolean
+  连板?: number
+  涨停日?: string | null
+  首板日?: string | null
+  晋级低开%?: number | null
+  量比?: number | null
+  可操作?: boolean
+  买点?: number | null
+  止损?: number | null
+  '阈值%'?: string
+  因子侧?: string
+  挂单说明?: string
+  现价?: number | null
+  开盘?: number | null
+}
+
+export interface Strategy3Payload {
+  sentiment?: Strategy3Sentiment
+  backtest?: StrategyBacktestRow[]
+  rows?: Strategy3Row[]
+  poolDate?: string | null
+  poolCount?: number
+  effectiveTradeDate?: string
+  cacheNote?: string
+}
+
+export interface Strategy8HotTheme {
+  name: string
+  luCount: number
+  members?: number
+}
+
+export interface Strategy8Row {
+  代码?: string
+  名称?: string
+  题材?: string
+  题材涨停数?: number
+  类型?: string
+  当日涨停?: boolean
+  可操作?: boolean
+  买点?: number | null
+  止损?: number | null
+  '阈值%'?: string
+  因子侧?: string
+  挂单说明?: string
+  现价?: number | null
+  开盘?: number | null
+}
+
+export interface Strategy8Payload {
+  sentiment?: Strategy3Sentiment
+  hotThemes?: Strategy8HotTheme[]
+  backtest?: StrategyBacktestRow[]
+  rows?: Strategy8Row[]
+  themeDate?: string | null
+  luCount?: number
+  poolDate?: string | null
+  poolCount?: number
+  rules?: string
+}
+
 export interface StrategyTab {
   id: string
   label: string
@@ -77,6 +196,9 @@ export interface StrategyTab {
   implemented?: boolean
   is_watch_default?: boolean
   factors: StrategyFactor[]
+  backtest?: StrategyBacktestRow[]
+  reportPath?: string
+  picks?: StrategyPicks
 }
 
 export interface WatchSnapshot {
@@ -97,5 +219,7 @@ export interface WatchSnapshot {
   indices: IndexQuote[]
   holdings: HoldingRow[]
   strategy1: HoldingRow[]
+  strategy3?: Strategy3Payload
+  strategy8?: Strategy8Payload
   strategies: StrategyTab[]
 }

@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 import pandas as pd
+import numpy as np
 
 import strategy.data as data
 from strategy.open_break import (
@@ -124,6 +125,38 @@ class StrategyRuleTests(unittest.TestCase):
             )
         )
 
+    def test_limit_up_ok_skips_yin_yang_gate(self) -> None:
+        from strategy.open_break import prev_day_allows_entry
+
+        # 前日大阳线（涨停形态）在 limit_up_ok 下仍允许
+        self.assertTrue(
+            prev_day_allows_entry(10.0, 11.0, prev_entry_mode="limit_up_ok")
+        )
+        self.assertTrue(
+            entry_filters_ok(
+                10.0,
+                11.0,
+                10.0,
+                10.3,
+                prev_entry_mode="limit_up_ok",
+            )
+        )
+
+    def test_first_board_requires_five_lu_free_days(self) -> None:
+        from strategy.strategies.strategy3.first_board import (
+            FIRST_BOARD_LU_FREE_DAYS,
+            is_first_board_at,
+            mark_first_board,
+        )
+
+        self.assertEqual(FIRST_BOARD_LU_FREE_DAYS, 5)
+        lu = np.array([0, 0, 0, 0, 0, 0, 1, 0, 1], dtype=bool)
+        fb = mark_first_board(lu)
+        self.assertTrue(fb[6])
+        self.assertFalse(fb[8])  # 前日有涨停，非首板
+        self.assertTrue(is_first_board_at(lu, 6))
+        self.assertFalse(is_first_board_at(lu, 8))
+
     def test_factor2_dd_alert(self) -> None:
         from strategy import get_factor, get_strategy, get_strategy_bindings
         from strategy.dd_alert import derive_thresholds, evaluate_alert
@@ -161,18 +194,16 @@ class StrategyRuleTests(unittest.TestCase):
         self.assertEqual(get_strategy("strategy1").name, "援军战法")
         self.assertEqual(get_strategy("援军战法").id, "strategy1")
 
-    def test_strategy3_binds_factor5_as_event_universe(self) -> None:
+    def test_strategy3_binds_factor1_first_board(self) -> None:
         from strategy import get_strategy, get_strategy_bindings
 
         self.assertEqual(get_strategy("strategy3").id, "strategy3")
+        self.assertIn("首板", get_strategy("strategy3").name)
         bindings = {binding.factor_id: binding for binding in get_strategy_bindings("strategy3")}
-        self.assertEqual(set(bindings), {"factor5"})
-        factor5 = bindings["factor5"]
-        self.assertEqual(factor5.role, "universe")
-        self.assertEqual(factor5.params["lookback_days"], 0)
-        self.assertEqual(factor5.params["max_candidates"], 5)
-        self.assertEqual(factor5.params["max_per_theme"], 1)
-        self.assertEqual(factor5.params["hold_days"], 5)
+        self.assertEqual(set(bindings), {"factor1"})
+        f1 = bindings["factor1"]
+        self.assertEqual(f1.role, "both")
+        self.assertEqual(f1.params.get("prev_entry_mode"), "limit_up_ok")
 
 
 class DailyCacheTests(unittest.TestCase):
@@ -524,18 +555,15 @@ class Factor6HybridTests(unittest.TestCase):
 
 
 class Strategy3SlotBindingTests(unittest.TestCase):
-    def test_strategy3_binds_fixed_hold_event_universe(self) -> None:
+    def test_strategy3_binds_first_board_factor1(self) -> None:
         from strategy import get_strategy, get_strategy_bindings
 
         strategy = get_strategy("strategy3")
         bindings = get_strategy_bindings("strategy3")
         self.assertEqual(strategy.id, "strategy3")
-        self.assertEqual(strategy.factor_ids, ("factor5",))
+        self.assertEqual(strategy.factor_ids, ("factor1",))
         by_id = {binding.factor_id: binding for binding in bindings}
-        self.assertEqual(by_id["factor5"].role, "universe")
-        self.assertEqual(by_id["factor5"].params["max_positions"], 5)
-        self.assertEqual(by_id["factor5"].params["max_per_theme"], 1)
-        self.assertEqual(by_id["factor5"].params["hold_days"], 5)
+        self.assertEqual(by_id["factor1"].role, "both")
 
 
 if __name__ == "__main__":

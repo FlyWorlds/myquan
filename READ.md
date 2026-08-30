@@ -1,4 +1,13 @@
 <!-- # myquan — AKQuant 框架接入说明 -->
+## 盯盘要点
+
+**启动（推荐）**
+
+```bash
+cd holdingStocks && python index.py watch --no-wechat --ui-dev
+# 浏览器 http://127.0.0.1:3000/  ·  改 Vue 热更新，无需 build
+# 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
+```
 
 本目录基于 [AKQuant](https://github.com/akfamily/akquant) 做 A 股策略回测与盯盘。
 
@@ -73,6 +82,8 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13 WF 回测
 | **factor11** | 因子11·两段近高 | 截面选股 | `near_high_hold.py`：动量 Top20→近高 Top5；供策略五 |
 | **factor12** | 因子12·反转池近高 | 截面选股（研究） | `factor12_combo.py`：20 日反转 Top20→近高 Top5；供策略六 |
 | **factor13** | 因子13·契合选股 | 动态合格池 | **A 线**质量带 `factor13_fit.py`；**B 线（🔒锁定）**熊盾 `factor13_bear_shield.py` |
+| **factor14** | 因子14·题材共振 | 题材联动选股 | **当日**同题材涨停同伴数≥3；通达信概念；供策略八 |
+| **factor15** | 因子15·晋级低开 | 题材联动过滤（可选） | gap 低开带；策略八默认关闭 |
 | **cf1** | CF1·流动性门控 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
@@ -81,11 +92,12 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13 WF 回测
 |----|------|----------|------|------|
 | **strategy1** | 援军战法 | factor1 + factor2 | ✅ **默认** | 开盘±2.5% 一次打满 + 回撤预警；别名 `open_break3` / `s1` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30 分小转大 + 日线二/三买卖；别名 `chan` |
-| **strategy3** | 策略三·主题事件 | factor5 | ✅ | 500/1000 成分，5 槽位、单主题 1 只、持 5 日 |
+| **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1情绪+因子1±阈值（不过门）；回测见 `backtest/strategy3_first_board/` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 突破 + 牛市放宽 + 20% 昨高全清 + 周频 Top5 |
 | **strategy5** | 策略五·近高 Top5 | factor11 | ✅ 研究 | 周频等权持有；别名 `near_high` |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
 | **strategy7** | 策略七·缠论笔算盈亏比 | factor1 | ✅ 研究 | 日线笔 vs 因子1 费用后盈亏比；别名 `s7` / `strategy11` / `bi_pl` |
+| **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材→联动±阈值；2025→ +4.8%（±2.5%）；见 REPORT |
 
 旧执行层研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。
 
@@ -199,14 +211,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 ---
 
-## 盯盘要点
 
-**启动（推荐）**
-
-```bash
-cd holdingStocks && python index.py watch --no-wechat --ui-dev
-# 浏览器 http://127.0.0.1:3000/  ·  改 Vue 热更新，无需 build
-```
 
 - 规则与 **因子1** 同源（`strategy/open_break.py`）；**Nuxt 前端** 展示持仓 + **策略1–7 Tab**（`策略N-名称`）；策略1 展示早盘节点与阈值过门，其余 Tab 展示挂载因子说明；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。
 - 早盘节点：9:15 竞价 → 9:20 不可撤 → 9:25 算阈值/过门 → 9:30 触发信号（`watch_config.py`）。
@@ -227,3 +232,13 @@ cd holdingStocks && python index.py watch --no-wechat --ui-dev
 - 因子13：[`docs/FACTOR13.md`](docs/FACTOR13.md)
 - 凯盛审计底稿：[`strategy/STRATEGY_AUDIT.md`](strategy/STRATEGY_AUDIT.md)
 - 任务清单：[`TODO.MD`](TODO.MD)
+
+
+## 盯盘要点
+
+**启动（推荐）**
+
+```bash
+cd holdingStocks && python index.py watch --no-wechat --ui-dev
+# 浏览器 http://127.0.0.1:3000/  ·  改 Vue 热更新，无需 build
+```

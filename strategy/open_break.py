@@ -228,6 +228,67 @@ def cannot_buy_limit_up(
     return bool(st["open_at_limit"] or st["locked"])
 
 
+def is_miaoban_unbuyable(
+    *,
+    prev_close: float | None,
+    open_px: float,
+    high_px: float,
+    low_px: float,
+    close_px: float,
+    limit_up_pct: float = 0.10,
+    entry_pct: float = DEFAULT_PCT,
+    tick: float = TICK_SIZE,
+) -> bool:
+    """秒板/直线封板：非一字开盘但日内迅速封涨停，日线近似为买不到。
+
+    与 b6-limitup-pool「首封≤09:31」一致的可买性约束；无分钟线时用
+    「低贴开、振幅窄、收盘封板」近似。
+    """
+    if cannot_buy_limit_up(
+        prev_close=prev_close,
+        open_px=open_px,
+        high_px=high_px,
+        low_px=low_px,
+        close_px=close_px,
+        limit_up_pct=limit_up_pct,
+        tick=tick,
+    ):
+        return True
+    st = limit_up_state(
+        prev_close=prev_close,
+        open_px=open_px,
+        high_px=high_px,
+        low_px=low_px,
+        close_px=close_px,
+        limit_up_pct=limit_up_pct,
+        tick=tick,
+    )
+    if not bool(st["touched"]):
+        return False
+    limit_px = float(st["limit_px"] or 0.0)
+    o, h, l, c = float(open_px), float(high_px), float(low_px), float(close_px)
+    if limit_px <= 0 or o <= 0:
+        return False
+    tol = max(float(tick) * 0.51, 1e-8)
+    if abs(c - limit_px) > tol or abs(h - limit_px) > tol:
+        return False
+    if prev_close is None or float(prev_close) <= 0:
+        return False
+    open_ret = o / float(prev_close) - 1.0
+    if open_ret >= float(limit_up_pct) - LIMIT_UP_OPEN_TOL:
+        return True
+    buy_px = entry_trigger_price(o, entry_pct=entry_pct, tick=tick)
+    if buy_px >= limit_px - tol:
+        return True
+    # 低开后窄振幅直拉封板：突破买点窗口极短
+    if l <= o * 1.015 and (h - l) / o <= 0.045 and open_ret < 0.05:
+        return True
+    # 低点从未触及买点（一字拉升穿越）
+    if l > buy_px + tol and h >= limit_px - tol:
+        return True
+    return False
+
+
 def strategy_levels(
     open_px: float,
     *,
@@ -382,6 +443,8 @@ def entry_filters_ok(
     single_yang_min_pct: float | None = None,
 ) -> bool:
     """今日是否允许开仓（前日阴/小阳 + 双阳跨日过滤；十字不算阳）。"""
+    if prev_entry_mode == "limit_up_ok":
+        return True
     if prev_entry_mode != "any":
         if prev_open is None or prev_close is None:
             return False
@@ -446,7 +509,7 @@ def prev_day_allows_entry(
 ) -> bool:
     if prev_open <= 0:
         return False
-    if prev_entry_mode == "any":
+    if prev_entry_mode in ("any", "limit_up_ok"):
         return True
     # 阴线或十字：允许（十字不算阳，视同可开仓的弱势日）
     if not is_yang(prev_open, prev_close, tick=tick):

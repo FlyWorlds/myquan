@@ -1,6 +1,6 @@
-import type { StrategyFactor, StrategyTab } from '~/types/snapshot'
+import type { StrategyFactor, StrategyPicks, StrategyPickItem, StrategyTab } from '~/types/snapshot'
 
-export type { StrategyFactor, StrategyTab }
+export type { StrategyFactor, StrategyPicks, StrategyPickItem, StrategyTab }
 
 export interface FactorUsedBy {
   id: string
@@ -20,4 +20,16 @@ export interface FactorEntry {
   used_by?: FactorUsedBy[]
 }
 
-export type StrategyEntry = StrategyTab
+export interface StrategyBacktestRow {
+  entry_pct?: number
+  total_return_pct?: number
+  max_drawdown_pct?: number
+  sharpe_ratio?: number
+  win_rate?: number
+  n_trades?: number
+}
+
+export type StrategyEntry = StrategyTab & {
+  backtest?: StrategyBacktestRow[]
+  reportPath?: string
+}

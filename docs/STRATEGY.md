@@ -51,11 +51,14 @@ python -c "from strategy import run_open_break; ..."
 | ID | 名称 | 核心 | 状态 |
 |----|------|------|------|
 | strategy2 | 缠论 | factor8 | 研究 |
-| strategy3 | Serenity 主题 | factor5，5 槽位 | 研究 |
+| strategy3 | 首板晋级 | factor1；**盯盘**=昨日涨停池+T-1情绪+±阈值（不过门）；**回测**=首板+gap/量比 | 研究 |
 | strategy4 | F4 止盈动量 | factor1+4+10 | 研究 |
 | strategy5 | 近高 Top5 等权 | factor11 | 研究 |
 | strategy6 | 反转池近高 | factor12 | 研究，未替换 strategy5 |
 | strategy7 | 策略七·缠论笔盈亏比 | factor1 | 研究 |
+| strategy8 | 题材联动 | factor14 + factor1 | 研究；**当日涨停**定题材→联动候选当日±阈值；2025→ 见 REPORT |
+
+因子14：同题材昨日涨停同伴数（通达信概念 offline 索引）。
 
 组合动量/行业 ETF：因子6、因子7（见 `strategy/README.md`）。
 

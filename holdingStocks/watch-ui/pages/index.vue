@@ -37,6 +37,8 @@ function tabLabel(id: string) {
 }
 
 const strategy1Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy1'))
+const strategy3Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy3'))
+const strategy8Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy8'))
 const loading = computed(() => !snapshot.value && wsStatus.value.includes('连接'))
 </script>
 
@@ -108,16 +110,46 @@ const loading = computed(() => !snapshot.value && wsStatus.value.includes('连�
 
       <section v-show="activeTab === 'strategy1'">
         <StrategyInfoPanel v-if="strategy1Tab" :tab="strategy1Tab" class="mb-4" />
-        <Strategy1Panel v-if="snapshot" :rows="snapshot.strategy1" :phase="snapshot.phase" />
+        <StrategyPicksPanel :picks="strategy1Tab?.picks" />
+        <Strategy1Panel v-if="snapshot" :rows="snapshot.strategy1" :phase="snapshot.phase" class="mt-4" />
       </section>
 
-      <section v-for="tab in strategyTabs.filter((t) => t.id !== 'strategy1')" :key="tab.id" v-show="activeTab === tab.id">
+      <section v-show="activeTab === 'strategy3'">
+        <StrategyInfoPanel v-if="strategy3Tab" :tab="strategy3Tab" class="mb-4" />
+        <StrategyPicksPanel :picks="strategy3Tab?.picks" />
+        <Strategy3Panel
+          v-if="snapshot"
+          class="mt-4"
+          :tab="strategy3Tab"
+          :payload="snapshot.strategy3"
+          :phase="snapshot.phase"
+        />
+      </section>
+
+      <section v-show="activeTab === 'strategy8'">
+        <StrategyInfoPanel v-if="strategy8Tab" :tab="strategy8Tab" class="mb-4" />
+        <StrategyPicksPanel :picks="strategy8Tab?.picks" />
+        <Strategy8Panel
+          v-if="snapshot"
+          class="mt-4"
+          :tab="strategy8Tab"
+          :payload="snapshot.strategy8"
+          :phase="snapshot.phase"
+        />
+      </section>
+
+      <section
+        v-for="tab in strategyTabs.filter((t) => t.id !== 'strategy1' && t.id !== 'strategy3' && t.id !== 'strategy8')"
+        :key="tab.id"
+        v-show="activeTab === tab.id"
+      >
         <StrategyInfoPanel :tab="tab" />
+        <StrategyPicksPanel :picks="tab.picks" />
       </section>
     </template>
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘默认绑定 {{ snapshot?.strategy?.name || '策略一' }}。策略1 Tab 展示早盘过门/阈值实时表；其余 Tab 为注册表因子说明。
+      盯盘默认绑定 {{ snapshot?.strategy?.name || '策略一' }}。各策略 Tab 含注册表说明 + 选股/信号（有产物时）；策略1/3/8 另有实时表。
       完整说明见
       <NuxtLink to="/strategies" class="text-accent hover:underline">策略说明</NuxtLink>
       、

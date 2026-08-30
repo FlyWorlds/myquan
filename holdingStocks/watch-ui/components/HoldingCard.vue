@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
-import { fmtNum, fmtSignedMoney, fmtSignedPct } from '~/utils/format'
+import { fmtNum } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 
 const props = defineProps<{ row: HoldingRow }>()
@@ -20,8 +20,9 @@ const cardClass = computed(() => {
     <header class="mb-2 flex items-start justify-between gap-2">
       <div>
         <span class="rounded-full border border-ui-hairline px-2 py-0.5 text-xs text-accent">{{ row.市场 }}</span>
-        <h2 class="mt-1 text-base font-bold">
+        <h2 class="mt-1 flex flex-wrap items-baseline text-base font-bold">
           <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ row.名称 }}</a>
+          <FloatPnlInline :row="row" />
         </h2>
         <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive text-xs text-ui-text-2 hover:text-accent">{{ row.代码 }}</a>
       </div>
@@ -42,7 +43,7 @@ const cardClass = computed(() => {
       <div><span class="text-ui-text-2">现价</span> <b class="sensitive">{{ fmtNum(row.现价, pdg) }}</b></div>
       <div><span class="text-ui-text-2">当日涨幅</span> <b class="sensitive"><ChgText :chg="row.当日涨幅">{{ fmtSignedPct(row.当日涨幅) }}</ChgText></b></div>
       <div><span class="text-ui-text-2">持仓</span> <b class="sensitive">{{ row.持仓 ?? 0 }}</b></div>
-      <div><span class="text-ui-text-2">浮盈</span> <b class="sensitive"><ChgText :chg="row.浮盈">{{ fmtSignedMoney(row.浮盈) }}</ChgText></b></div>
+      <div><span class="text-ui-text-2">成本</span> <b class="sensitive">{{ row.成本 != null ? fmtNum(row.成本, pdg) : '-' }}</b></div>
       <div><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
       <div><span class="text-ui-text-2">因子触发</span> <b>{{ row.因子触发 || '-' }}</b></div>
       <div class="col-span-2 text-xs text-ui-text-2">{{ row.挂单说明 || row.预警 }}</div>

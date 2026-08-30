@@ -7,11 +7,12 @@
 
   strategy1 — 援军战法（默认）：因子1（买卖）+ 因子2（回撤预警）
   strategy2 — 缠论选股：日线交易，30分钟小转大一买/二买，日线二/三卖退出
-  strategy3 — 因子5 Serenity 公开帖驱动的主题事件策略
+  strategy3 — 首板晋级：昨日首板 → 次日因子1 开盘突破
   strategy4 — 因子1 + 因子4 + 20%昨高止盈 + 因子10 周频动量选股（旧 strategy9）
   strategy5 — 因子11 两段近高（3日动量→5日近高 Top5）等权持有（旧 strategy10）
   strategy6 — 因子12 反转池近高 Top5 等权持有（研究候选）
   strategy7 — 缠论笔算盈亏比：日线笔归因因子1费用后盈亏比/让利/防守（旧 strategy11）
+  strategy8 — 题材联动：涨停池同题材共振 + 联动补涨（因子14 + 因子1）
 """
 
 # 策略注册前先确保因子已注册（多策略共用因子）
@@ -24,6 +25,7 @@ from strategy.strategies import strategy4 as _s4  # noqa: F401
 from strategy.strategies import strategy5 as _s5  # noqa: F401
 from strategy.strategies import strategy6 as _s6  # noqa: F401
 from strategy.strategies import strategy7 as _s7  # noqa: F401
+from strategy.strategies import strategy8 as _s8  # noqa: F401
 from strategy.core.strategy_registry import (
     STRATEGY_REGISTRY,
     get_strategy_spec,

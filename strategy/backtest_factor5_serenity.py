@@ -149,7 +149,7 @@ def run_backtest(
     重要：这是主题代理池的历史研究。A股主题映射当前是静态配置，不能消除
     映射名单随时间变化产生的前视偏差，因此结果只能用于机制诊断。
     """
-    from strategy.strategies.strategy3.portfolio import simulate_factor5_event_slots_f1_stop
+    from strategy.strategies._legacy_s3_factor5.portfolio import simulate_factor5_event_slots_f1_stop
 
     eligible_codes = _zz500_1000_mainboard_codes()
     warm_start = (pd.Timestamp(start) - pd.Timedelta(days=35)).strftime("%Y%m%d")

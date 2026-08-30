@@ -1,0 +1,309 @@
+"""各注册策略的选股/信号产物加载（供 watch-ui /api/strategies）。"""
+
+from __future__ import annotations
+
+import json
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+from stock_names import code_from_symbol, invalidate_name_cache, resolve_stock_name
+
+_MYQUAN = Path(__file__).resolve().parents[1]
+
+_PICK_SOURCES: dict[str, dict[str, Any]] = {
+    "strategy1": {
+        "kind": "locked",
+        "paths": [
+            _MYQUAN / "backtest/factor13_bear_shield/LOCKED.json",
+            _MYQUAN / "backtest/factor13_bear_shield/picks_2025_for_2026.csv",
+        ],
+    },
+    "strategy2": {
+        "kind": "daily",
+        "paths": [
+            _MYQUAN / "backtest/strategy2_chan_daily_out/final_test_picks.csv",
+            _MYQUAN / "backtest/strategy2_chan_out/final_test_picks.csv",
+        ],
+    },
+    "strategy3": {
+        "kind": "signals",
+        "paths": [
+            _MYQUAN / "backtest/strategy3_first_board/signals_0p0250_lag1_lb2_h2_5.parquet",
+            _MYQUAN / "backtest/strategy3_first_board/signals_0p0300_lag1_lb2_h2_5.parquet",
+        ],
+    },
+    "strategy8": {
+        "kind": "signals",
+        "paths": [
+            _MYQUAN / "backtest/strategy8_theme_linkage/signals_0p0250_td0_tm3_linkage_tmax9_lag1_lb2_h2_5.parquet",
+            _MYQUAN / "backtest/strategy8_theme_linkage/signals_0p0300_td0_tm3_linkage_tmax9_lag1_lb2_h2_5.parquet",
+        ],
+    },
+    "strategy4": {
+        "kind": "weekly",
+        "paths": [
+            _MYQUAN / "strategy/strategies/strategy4/backtest_2025/weekly_picks.csv",
+        ],
+    },
+    "strategy5": {
+        "kind": "weekly",
+        "paths": [
+            _MYQUAN / "strategy/strategies/strategy5/backtest_mom3_high5_k5/weekly_picks.csv",
+            _MYQUAN / "strategy/strategies/strategy5/backtest/weekly_picks.csv",
+        ],
+    },
+}
+
+
+def _code_from_symbol(sym: str) -> str:
+    return code_from_symbol(sym)
+
+
+def _resolve_name(*, symbol: str = "", code: str = "", name: str = "") -> str:
+    return resolve_stock_name(symbol=symbol, code=code, name=name)
+
+
+def _empty_picks(kind: str = "none", *, note: str = "") -> dict[str, Any]:
+    return {"kind": kind, "asOf": None, "source": None, "note": note, "items": []}
+
+
+def _first_existing(paths: list[Path]) -> Path | None:
+    for p in paths:
+        if p.is_file():
+            return p
+    return None
+
+
+def _load_factor13_locked(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    year = max((k for k in data if k.startswith("picks_")), default="picks_2026")
+    raw = data.get(year) or data.get("picks_2026") or []
+    items = []
+    for row in raw:
+        sym = str(row.get("symbol", ""))
+        items.append(
+            {
+                "rank": int(row.get("rank", 0)),
+                "symbol": sym,
+                "code": _code_from_symbol(sym),
+                "name": _resolve_name(symbol=sym, code=_code_from_symbol(sym), name=str(row.get("name", ""))),
+                "thr": row.get("thr"),
+            }
+        )
+    return {
+        "kind": "locked",
+        "asOf": str(data.get("locked_at") or year.replace("picks_", "")),
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": "因子13 熊盾 Top3（strategy1 动态合格池研究，🔒锁定）",
+        "items": items,
+    }
+
+
+def _load_factor13_csv(path: Path) -> dict[str, Any]:
+    df = pd.read_csv(path)
+    items = []
+    for _, r in df.iterrows():
+        sym = str(r.get("symbol", ""))
+        items.append(
+            {
+                "rank": int(r.get("rank", 0)),
+                "symbol": sym,
+                "code": _code_from_symbol(sym),
+                "name": _resolve_name(symbol=sym, code=_code_from_symbol(sym), name=str(r.get("name", ""))),
+                "thr": r.get("thr"),
+            }
+        )
+    return {
+        "kind": "locked",
+        "asOf": None,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": "因子13 WF 选股 CSV",
+        "items": items[:10],
+    }
+
+
+def _load_weekly_csv(path: Path, *, symbol_col: str) -> dict[str, Any]:
+    df = pd.read_csv(path)
+    if df.empty:
+        return _empty_picks("weekly", note="weekly_picks 为空")
+    row = df.iloc[-1]
+    date_col = "week" if "week" in df.columns else "date"
+    as_of = str(row.get(date_col, ""))
+    raw = str(row.get(symbol_col, "") or "")
+    syms = [s.strip() for s in raw.split(",") if s.strip()]
+    items = []
+    for i, sym in enumerate(syms):
+        code = _code_from_symbol(sym)
+        items.append(
+            {
+                "rank": i + 1,
+                "symbol": sym,
+                "code": code,
+                "name": _resolve_name(symbol=sym, code=code),
+            }
+        )
+    return {
+        "kind": "weekly",
+        "asOf": as_of,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": f"最近一周 Top{len(items)}（{date_col}={as_of}）",
+        "items": items,
+    }
+
+
+def _load_strategy2_daily(path: Path) -> dict[str, Any]:
+    df = pd.read_csv(path)
+    if df.empty:
+        return _empty_picks("daily")
+    df["dt"] = pd.to_datetime(df["dt"])
+    latest = df["dt"].max()
+    sub = df[df["dt"] == latest].sort_values("score", ascending=False)
+    demo = sub["symbol"].astype(str).str.startswith("SYN").any()
+    items = []
+    for i, (_, r) in enumerate(sub.iterrows()):
+        sym = str(r["symbol"])
+        code = _code_from_symbol(sym)
+        items.append(
+            {
+                "rank": i + 1,
+                "symbol": sym,
+                "code": code,
+                "name": _resolve_name(symbol=sym, code=code, name=sym if sym.startswith("SYN") else ""),
+                "score": float(r.get("score", 0)),
+                "weight": float(r.get("weight", 0)),
+            }
+        )
+    note = "缠论截面 TopK 等权"
+    if demo:
+        note += "（当前文件为演示/合成标的 SYN*）"
+    return {
+        "kind": "daily",
+        "asOf": str(latest.date()) if pd.notna(latest) else None,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": note,
+        "items": items,
+    }
+
+
+def _load_strategy3_signals(path: Path) -> dict[str, Any]:
+    df = pd.read_parquet(path)
+    if df.empty or "entry" not in df.columns:
+        return _empty_picks("signals", note="无信号缓存")
+    entries = df[df["entry"] == True].copy()  # noqa: E712
+    if entries.empty:
+        return _empty_picks("signals", note="无可买信号")
+    entries["trade_date"] = pd.to_datetime(entries["trade_date"])
+    latest = entries["trade_date"].max()
+    sub = entries[entries["trade_date"] == latest].sort_values(
+        "rank_score", ascending=False
+    )
+    items = []
+    for i, (_, r) in enumerate(sub.head(10).iterrows()):
+        sym = str(r.get("symbol", ""))
+        code = str(r.get("code", ""))
+        items.append(
+            {
+                "rank": i + 1,
+                "symbol": sym,
+                "code": code,
+                "name": _resolve_name(symbol=sym, code=code, name=str(r.get("name", ""))),
+                "score": float(r.get("rank_score", 0)),
+                "gap_pct": r.get("gap_pct"),
+                "vol_ratio": r.get("vol_ratio"),
+                "mkt_lianban": r.get("mkt_lianban"),
+                "trade_date": str(r.get("trade_date", ""))[:10],
+            }
+        )
+    return {
+        "kind": "signals",
+        "asOf": str(latest.date()) if pd.notna(latest) else None,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": f"首板晋级可买信号（晋级日 {str(latest.date())[:10]}，按 rank_score）",
+        "items": items,
+    }
+
+
+def _load_strategy8_signals(path: Path) -> dict[str, Any]:
+    df = pd.read_parquet(path)
+    if df.empty or "entry" not in df.columns:
+        return _empty_picks("signals", note="无信号缓存")
+    entries = df[df["entry"] == True].copy()  # noqa: E712
+    if entries.empty:
+        return _empty_picks("signals", note="无可买信号")
+    entries["trade_date"] = pd.to_datetime(entries["trade_date"])
+    latest = entries["trade_date"].max()
+    sub = entries[entries["trade_date"] == latest].sort_values(
+        "rank_score", ascending=False
+    )
+    items = []
+    for i, (_, r) in enumerate(sub.head(10).iterrows()):
+        sym = str(r.get("symbol", ""))
+        code = str(r.get("code", ""))
+        items.append(
+            {
+                "rank": i + 1,
+                "symbol": sym,
+                "code": code,
+                "name": _resolve_name(symbol=sym, code=code, name=str(r.get("name", ""))),
+                "score": float(r.get("rank_score", 0)),
+                "theme": r.get("theme_name"),
+                "theme_lu": r.get("theme_lu_count"),
+                "pool_tag": r.get("pool_tag"),
+                "trade_date": str(r.get("trade_date", ""))[:10],
+            }
+        )
+    return {
+        "kind": "signals",
+        "asOf": str(latest.date()) if pd.notna(latest) else None,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": f"题材联动可买信号（执行日 {str(latest.date())[:10]}，按 rank_score）",
+        "items": items,
+    }
+
+
+@lru_cache(maxsize=16)
+def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
+    """返回策略最新选股/信号快照。"""
+    sid = str(strategy_id)
+    if sid == "strategy6":
+        return _empty_picks(
+            "none",
+            note="因子12 周频 gate 需截面面板；运行 strategy6 回测后自行导出 weekly_picks",
+        )
+    if sid == "strategy7":
+        return _empty_picks("none", note="单票笔归因策略，无截面选股名单")
+
+    spec = _PICK_SOURCES.get(sid)
+    if not spec:
+        return _empty_picks()
+
+    path = _first_existing(list(spec["paths"]))
+    if path is None:
+        return _empty_picks(str(spec["kind"]), note="产物文件不存在，需先跑回测")
+
+    try:
+        if sid == "strategy1":
+            if path.suffix == ".json":
+                return _load_factor13_locked(path)
+            return _load_factor13_csv(path)
+        if sid == "strategy2":
+            return _load_strategy2_daily(path)
+        if sid == "strategy3":
+            return _load_strategy3_signals(path)
+        if sid == "strategy8":
+            return _load_strategy8_signals(path)
+        if sid in ("strategy4", "strategy5"):
+            col = "symbols" if sid == "strategy4" else "picks"
+            return _load_weekly_csv(path, symbol_col=col)
+    except Exception as e:  # noqa: BLE001
+        return _empty_picks(str(spec.get("kind", "none")), note=f"读取失败: {e}")
+
+    return _empty_picks()
+
+
+def invalidate_picks_cache() -> None:
+    load_strategy_picks.cache_clear()
+    invalidate_name_cache()

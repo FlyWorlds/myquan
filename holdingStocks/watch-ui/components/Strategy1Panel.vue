@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
-import { fmtNum } from '~/utils/format'
+import { fmtNum, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 
 defineProps<{ rows: HoldingRow[]; phase?: string }>()
@@ -23,10 +23,9 @@ const steps = [
     </div>
     <div class="card overflow-x-auto">
       <table class="min-w-full text-sm">
-        <thead class="sticky top-16 z-10 bg-ui-surface text-left text-ui-text-2">
+        <thead class="bg-ui-surface text-left text-ui-text-2">
           <tr>
-            <th class="px-2 py-2">代码</th>
-            <th class="px-2 py-2">名称</th>
+            <th class="px-2 py-2">标的</th>
             <th class="px-2 py-2">竞价/开盘</th>
             <th class="px-2 py-2">现价</th>
             <th class="px-2 py-2">前日</th>
@@ -40,11 +39,11 @@ const steps = [
         </thead>
         <tbody>
           <tr v-for="r in rows" :key="String(r.代码)" class="border-t border-ui-hairline">
-            <td class="px-2 py-2">
-              <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive text-accent hover:underline">{{ r.代码 }}</a>
-            </td>
-            <td class="px-2 py-2">
-              <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ r.名称 }}</a>
+            <td class="px-2 py-2 align-top">
+              <div class="leading-snug">
+                <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
+                <FloatPnlInline :row="r" block />
+              </div>
             </td>
             <td class="sensitive px-2 py-2">{{ r.阈值就绪 ? fmtNum(r.开盘, r['价位小数'] ?? 2) : (r.竞价参考 != null ? fmtNum(r.竞价参考, r['价位小数'] ?? 2) : '待9:25') }}</td>
             <td class="sensitive px-2 py-2">{{ fmtNum(r.现价, r['价位小数'] ?? 2) }}</td>

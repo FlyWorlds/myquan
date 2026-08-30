@@ -42,6 +42,8 @@ def build_watch_snapshot(
     account: dict[str, Any],
     meta: dict[str, Any],
     strategies: list[dict[str, Any]] | None = None,
+    strategy3: dict[str, Any] | None = None,
+    strategy8: dict[str, Any] | None = None,
     refresh_sec: int = 5,
 ) -> dict[str, Any]:
     """构建 WatchSnapshot v1。"""
@@ -69,5 +71,7 @@ def build_watch_snapshot(
         "indices": [_index_json(ix) for ix in indices],
         "holdings": holdings,
         "strategy1": strategy1_rows,
+        "strategy3": strategy3 or {},
+        "strategy8": strategy8 or {},
         "strategies": strategies or [],
     }
