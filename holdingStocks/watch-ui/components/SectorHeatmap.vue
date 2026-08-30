@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { SectorCell, SectorKindPayload } from '~/types/sectors'
+import type { SectorKindPayload } from '~/types/sectors'
+import { formatMetricValue } from '~/composables/useSectorsLive'
 
 const props = defineProps<{
   kind: SectorKindPayload
@@ -15,14 +16,7 @@ const emit = defineEmits<{
 const selected = ref<string | null>(null)
 
 function fmtVal(metric: string, v: number | null | undefined) {
-  if (v === null || v === undefined || Number.isNaN(Number(v))) return '-'
-  const x = Number(v)
-  if (metric === '涨幅') return `${x.toFixed(2)}%`
-  if (metric === '涨停数') return String(Math.round(x))
-  const abs = Math.abs(x)
-  if (abs >= 1e8) return `${(x / 1e8).toFixed(2)}亿`
-  if (abs >= 1e4) return `${(x / 1e4).toFixed(1)}万`
-  return x.toFixed(0)
+  return formatMetricValue(metric, v)
 }
 
 function clsNum(v: number | null | undefined) {

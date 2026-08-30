@@ -53,6 +53,15 @@ python index.py --days 5 --no-members --no-open
 
 启动：`cd holdingStocks && python index.py watch --ui-dev` → 浏览器打开 `/sectors`。
 
-**盘中实时**：与盯盘 WebSocket **5s 同步**推送 `snapshot.sectors`（今日概念涨跌 + 详情页龙头现价）。需 `watch` 模式运行；概念详情页进入时调用 `/api/sectors/focus?concept=名称` 订阅成分股报价。
+| 指标 | 来源 | 说明 |
+|------|------|------|
+| 涨幅 | 通达信概念指数 | pytdx 实时/历史 |
+| 成交额 | 通达信概念指数 | 指数 amount 字段 |
+| 涨停数 | **可算** | 成分股现价聚合（新浪，~30s 刷新） |
+| 涨跌比 | **可算** | 成分上涨家数 ÷ 下跌家数 |
+| 主力净额 | **东财补充** | 概念名称近似匹配，非通达信直连 |
+| 强度 | **可算** | 合成：涨幅 × (1+涨跌比/5) + 涨停数×0.35 |
+
+Web 筛选框支持以上 6 项；历史列仅涨幅/成交额来自通达信，其余以「今日」列实时为准。
 
 `tdx.py` 为通达信真源；`rotation.py` 默认同花顺；`tdx_rotation.py` + `api.py` + `live.py` 供 Web 通达信概念轮动。

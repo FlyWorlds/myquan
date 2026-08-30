@@ -219,11 +219,19 @@ export interface SectorsConceptToday {
   close?: number | null
   资金?: number | null
   资金口径?: string
+  涨停数?: number
+  涨跌比?: number | null
+  上涨家数?: number
+  下跌家数?: number
+  主力净额?: number | null
+  主力净额口径?: string
+  强度?: number | null
 }
 
 export interface SectorsLivePayload {
   source?: string
   spotAt?: string
+  memberStatsAt?: string | null
   conceptToday?: Record<string, SectorsConceptToday>
   focusConcept?: string | null
   conceptIndex?: {

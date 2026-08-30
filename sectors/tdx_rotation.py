@@ -7,16 +7,43 @@ from typing import Any
 
 import pandas as pd
 
-from .rotation import (
-    METRICS,
+from .metrics import (
     METRIC_FIELD,
-    _collect_ranked_names,
+    ROTATION_METRICS,
+    build_member_stats_map,
+    enrich_concept_row,
+    fetch_em_concept_main_flow,
+)
+from .rotation import (
     _merge_snaps,
-    _rank_day,
     _session_label,
     _today,
 )
 from .tdx import fetch_tdx_board_members, fetch_tdx_concept_history, fetch_tdx_concept_spot
+
+
+def _rank_day_multi(
+    boards: list[dict[str, Any]],
+    metric: str,
+    top_n: int = 10,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    field = METRIC_FIELD[metric]
+    rows = [b for b in boards if b.get(field) is not None]
+    rows.sort(key=lambda x: float(x.get(field) or 0), reverse=True)
+
+    def cell(b: dict[str, Any], rank: int) -> dict[str, Any]:
+        return {
+            "name": b.get("板块") or "",
+            "value": b.get(field),
+            "rank": rank,
+            "label": b.get("label") or "",
+            "metric": metric,
+        }
+
+    top = [cell(b, i + 1) for i, b in enumerate(rows[:top_n])]
+    weak = rows[-top_n:] if len(rows) >= top_n else rows
+    bottom = [cell(b, top_n - i) for i, b in enumerate(weak)]
+    return top, bottom
 
 
 def _clean(v: Any) -> float | None:
@@ -95,7 +122,29 @@ def build_tdx_concept_rotation_payload(
     concept_hist = fetch_tdx_concept_history(days=days)
     print("  通达信概念今日行情…")
     boards_df = fetch_tdx_concept_spot()
-    today_rows = _boards_df_to_rows(boards_df)
+    print("  聚合成分股涨停/涨跌比（新浪，首次较慢）…")
+    member_stats = build_member_stats_map()
+    main_flow = fetch_em_concept_main_flow()
+    today_rows = []
+    for _, r in boards_df.iterrows():
+        base = {
+            "板块": str(r.get("板块") or ""),
+            "label": str(r.get("label") or ""),
+            "涨跌幅": _clean(r.get("涨跌幅")),
+            "涨停数": 0,
+            "资金": _clean(r.get("资金")),
+            "资金口径": str(r.get("资金口径") or "成交额"),
+            "领涨名称": str(r.get("领涨名称") or ""),
+            "领涨涨幅": _clean(r.get("领涨涨幅")),
+        }
+        today_rows.append(
+            enrich_concept_row(
+                base["板块"],
+                base,
+                member_stats=member_stats,
+                main_flow=main_flow,
+            )
+        )
     today_snap = {
         "date": session,
         "kind": "概念",
@@ -107,19 +156,24 @@ def build_tdx_concept_rotation_payload(
     dates = [_session_label(str(s.get("date") or "")) for s in snaps_desc]
 
     by_metric: dict[str, Any] = {}
-    for metric in METRICS:
+    for metric in ROTATION_METRICS:
         tops, bottoms = [], []
         for s in snaps_desc:
-            t, b = _rank_day(s.get("boards") or [], metric, top_n=top_n)
+            t, b = _rank_day_multi(s.get("boards") or [], metric, top_n=top_n)
             tops.append(t)
             bottoms.append(b)
         by_metric[metric] = {"top": tops, "bottom": bottoms}
 
     members: dict[str, list[dict[str, Any]]] = {}
     if with_members:
-        names = _collect_ranked_names(today_rows, top_n)
+        names: set[str] = set()
+        for metric in ROTATION_METRICS:
+            t, b = _rank_day_multi(today_rows, metric, top_n=top_n)
+            for cell in t + b:
+                if cell.get("name"):
+                    names.add(str(cell["name"]))
         for s in snaps_desc[: min(3, len(snaps_desc))]:
-            t, b = _rank_day(s.get("boards") or [], "涨幅", top_n=top_n)
+            t, b = _rank_day_multi(s.get("boards") or [], "涨幅", top_n=top_n)
             for cell in t + b:
                 if cell.get("name"):
                     names.add(str(cell["name"]))
@@ -131,14 +185,17 @@ def build_tdx_concept_rotation_payload(
         "session": session,
         "top_n": top_n,
         "days": days,
-        "metrics": list(METRICS),
+        "metrics": list(ROTATION_METRICS),
         "source": "通达信概念",
         "kinds": {
             "概念": {
                 "dates": dates,
                 "by_metric": by_metric,
                 "members": members,
-                "fund_note": "概念=通达信纯概念（tdxzs 类别4）；资金=板块成交额。",
+                "fund_note": (
+                    "概念=通达信；成交额/涨幅=指数；涨停数/涨跌比=成分股聚合；"
+                    "主力净额=东财概念（名称近似匹配）；强度=合成指标。"
+                ),
                 "board_count": int(len(boards_df)),
             }
         },

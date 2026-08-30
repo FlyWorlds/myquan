@@ -2,7 +2,7 @@
 import type { SectorRotationPayload } from '~/types/sectors'
 
 const { fetchRotation } = useSectorsApi()
-const { mergedKind, liveAt, refreshSec } = useSectorsLive()
+const { mergedKind, liveAt, memberStatsAt, refreshSec } = useSectorsLive()
 const router = useRouter()
 const store = useWatchStore()
 
@@ -15,7 +15,9 @@ const heatmapRef = ref<{ clearSelection: () => void } | null>(null)
 
 const topN = computed(() => payload.value?.top_n || 10)
 const baseKind = computed(() => payload.value?.kinds?.概念 || null)
-const kindData = computed(() => mergedKind(baseKind.value, topN.value))
+const kindData = computed(() =>
+  mergedKind(baseKind.value, topN.value, payload.value?.metrics),
+)
 
 const wsLabel = computed(() => {
   const st = store.wsStatus
@@ -105,7 +107,7 @@ onMounted(() => load())
 
       <p class="text-xs text-ui-text-3">
         历史 {{ payload?.updated_at }} · {{ kindData.fund_note }} · 共 {{ kindData.board_count }} 个概念
-        <span v-if="liveAt"> · 今日行情 {{ liveAt }}</span>
+        <span v-if="memberStatsAt" class="text-ui-text-3"> · 涨停/涨跌比 {{ memberStatsAt }}</span>
       </p>
     </template>
   </div>
