@@ -35,6 +35,29 @@ def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def filter_portfolio_holdings(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """持仓 Tab：实仓 + 当日已结算 + 置顶三票（含刚卖出仍盯）。"""
+    from watch_config import PINNED_WATCHLIST, code_key
+
+    pinned_order = {code_key(w["code"]): i for i, w in enumerate(PINNED_WATCHLIST)}
+    picked: list[dict[str, Any]] = []
+    for r in rows:
+        if r.get("error"):
+            continue
+        c = code_key(str(r.get("代码") or ""))
+        qty = int(r.get("持仓") or 0)
+        if qty > 0 or bool(r.get("已实现")) or c in pinned_order:
+            picked.append(r)
+
+    def _sort_key(r: dict[str, Any]) -> tuple[int, int]:
+        c = code_key(str(r.get("代码") or ""))
+        qty = int(r.get("持仓") or 0)
+        tier = 0 if qty > 0 else (1 if bool(r.get("已实现")) else 2)
+        return (tier, pinned_order.get(c, 9999))
+
+    return sorted(picked, key=_sort_key)
+
+
 def build_watch_snapshot(
     *,
     rows: list[dict[str, Any]],
@@ -47,7 +70,7 @@ def build_watch_snapshot(
     refresh_sec: int = 5,
 ) -> dict[str, Any]:
     """构建 WatchSnapshot v1。"""
-    holdings = [_row_json(r) for r in rows]
+    holdings = [_row_json(r) for r in filter_portfolio_holdings(rows)]
     strategy1_rows = [
         _row_json(r)
         for r in rows
