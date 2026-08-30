@@ -73,6 +73,8 @@ export interface StrategyTab {
   label: string
   name: string
   description?: string
+  aliases?: string[]
+  implemented?: boolean
   is_watch_default?: boolean
   factors: StrategyFactor[]
 }

@@ -93,13 +93,19 @@ pip install -r ../requirements.txt
 栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（WebSocket `/ws`），不再每次生成 HTML。
 
 ```bash
-# 开发（Python watch 与 Nuxt 并行）
+# 日常开发（无需 build）：Python API + Nuxt 热更新
+cd holdingStocks && python index.py watch --port 8765 --no-wechat --ui-dev
+# 浏览器 http://127.0.0.1:3000/  ·  API/WS 由 Vite 代理到 :8765
+
+# 或分两终端（等价）
 cd holdingStocks && python index.py watch --port 8765 --no-wechat
 cd holdingStocks/watch-ui && npm install && npm run dev   # http://127.0.0.1:3000
 
-# 生产构建（nuxt generate → 复制到 dist/，Python 静态托管）
+# 无 watch-ui/dist 时，watch 会自动走 dev 模式（仍建议显式 --ui-dev）
+
+# 生产 / 单端口部署（需先 build）
 cd holdingStocks/watch-ui && npm run build
-cd holdingStocks && python index.py watch --port 8765 --no-wechat
+cd holdingStocks && python index.py watch --port 8765 --no-wechat --ui-static
 # 打开 http://127.0.0.1:8765/
 ```
 
@@ -108,8 +114,19 @@ API：
 | 路径 | 说明 |
 |------|------|
 | `GET /api/snapshot` | 最新 WatchSnapshot v1 |
-| `GET /api/strategies` | 策略 Tab + 因子绑定 |
+| `GET /api/strategies` | 策略 Tab + 因子绑定（注册表同源） |
+| `GET /api/factors` | 因子说明 + 挂载策略（注册表同源） |
 | `WS /ws` | 推送 snapshot（与 `/api/snapshot` 同结构） |
+
+前端路由（Nuxt SPA，Python 回退 `index.html`）：
+
+| 路径 | 说明 |
+|------|------|
+| `/` | 持仓盯盘（首页） |
+| `/strategies` | 策略说明（全量注册表） |
+| `/factors` | 因子说明（全量注册表 + 规则摘要） |
+
+顶栏可跳转；**新增/改策略或因子**后更新 `strategy/` 注册表并**重启 watch**，说明页自动同步（无需改前端静态文案）。
 
 CLI 单次刷新（非 watch）：`python index.py` 终端输出；若 watch 已在跑则同步 JSON 并可选打开前端。
 

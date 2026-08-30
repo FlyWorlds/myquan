@@ -32,6 +32,7 @@ import argparse
 import json
 import math
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -41,7 +42,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 from urllib.parse import quote
 
 import akshare as ak
@@ -135,11 +136,14 @@ TRADES_FILE = ROOT / "trades.jsonl"
 WATCH_META_FILE = ROOT / "holdings_watch.json"
 WATCH_PID_FILE = ROOT / "holdings_watch.pid"
 WATCH_UI_DIST = ROOT / "watch-ui" / "dist"
+WATCH_UI_DIR = ROOT / "watch-ui"
+WATCH_UI_DEV_PORT = 3000
 
 # watch 模式本地 WebSocket 广播（/ws）；非 watch 为 None
 _ws_hub: LocalWsHub | None = None
 _last_watch_snapshot: dict[str, Any] | None = None
 _strategies_api_cache: list[dict[str, Any]] | None = None
+_factors_api_cache: list[dict[str, Any]] | None = None
 _MIN_WATCH_REFRESH_SEC = 1.0
 _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
 _INDEX_CACHE_TTL_SEC = 15.0
@@ -310,12 +314,69 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
                 "label": _strategy_tab_label(spec.id, spec.name),
                 "name": spec.name,
                 "description": str(spec.description or "").strip(),
+                "aliases": [str(a) for a in spec.aliases],
+                "implemented": bool(spec.implemented),
                 "is_watch_default": spec.id == STRATEGY_ID,
                 "factors": factors,
             }
         )
     tabs.sort(key=lambda t: int(_strategy_tab_number(str(t["id"]))))
     return tabs
+
+
+def _json_safe_meta(meta: Mapping[str, Any] | None) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, val in (meta or {}).items():
+        if isinstance(val, (str, int, float, bool)) or val is None:
+            out[str(key)] = val
+        elif isinstance(val, (list, tuple)):
+            out[str(key)] = [
+                x for x in val if isinstance(x, (str, int, float, bool))
+            ]
+    return out
+
+
+def _load_watch_factors_api() -> list[dict[str, Any]]:
+    """从 factor 注册表加载因子说明（供 watch-ui /api/factors）。"""
+    from strategy.core.factor_registry import list_factors
+    from strategy.core.strategy_registry import list_strategy_specs
+
+    used_by: dict[str, list[dict[str, str]]] = {}
+    for spec in list_strategy_specs():
+        for b in spec.factor_bindings:
+            if not b.enabled:
+                continue
+            used_by.setdefault(str(b.factor_id), []).append(
+                {
+                    "id": spec.id,
+                    "name": spec.name,
+                    "label": _strategy_tab_label(spec.id, spec.name),
+                    "role": _FACTOR_ROLE_ZH.get(str(b.role), str(b.role)),
+                    "filter_desc": str(b.filter_desc or "").strip(),
+                }
+            )
+
+    rows: list[dict[str, Any]] = []
+    for fspec in list_factors():
+        rows.append(
+            {
+                "id": fspec.id,
+                "name": fspec.name,
+                "description": str(fspec.description or "").strip(),
+                "rules_text": str(fspec.rules_text or "").strip(),
+                "implemented": bool(fspec.implemented),
+                "meta": _json_safe_meta(fspec.meta),
+                "used_by": used_by.get(str(fspec.id), []),
+            }
+        )
+    return rows
+
+
+def _get_factors_api_cache() -> list[dict[str, Any]]:
+    global _factors_api_cache
+    if _factors_api_cache is None:
+        _factors_api_cache = _load_watch_factors_api()
+    return _factors_api_cache
 
 
 
@@ -2667,10 +2728,13 @@ def cmd_status(args: argparse.Namespace) -> None:
             print(f"前端: {url}")
             if not getattr(args, "no_open", False):
                 webbrowser.open(url)
-    elif (WATCH_UI_DIST / "index.html").is_file():
-        print(f"提示: 启动 Web 盯盘 → python index.py watch  （前端已构建于 watch-ui/dist）")
+    elif _watch_ui_dist_ready():
+        print("提示: 启动 Web 盯盘 → python index.py watch  （生产静态页 watch-ui/dist）")
     else:
-        print("提示: cd holdingStocks/watch-ui && npm run build && python index.py watch")
+        print(
+            "提示: 开发前端无需 build → "
+            "python index.py watch --ui-dev  （或单独 npm run dev，见 holdingStocks/README.md）"
+        )
 
     print(f"策略: {STRATEGY_NAME}（{_STRATEGY_SYNC_NOTE}）")
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
@@ -3085,7 +3149,12 @@ def _read_watch_lock() -> dict[str, Any] | None:
     return None
 
 
-def _acquire_watch_lock(*, host: str, port: int) -> None:
+def _acquire_watch_lock(
+    *,
+    host: str,
+    port: int,
+    ui_dev_port: int | None = None,
+) -> None:
     """防止多个 watch 同时写 HTML，页面会来回跳变。"""
     existing = _read_watch_lock()
     if existing:
@@ -3096,11 +3165,15 @@ def _acquire_watch_lock(*, host: str, port: int) -> None:
                 f"请先在对应终端 Ctrl+C 停掉，再重新启动，"
                 f"否则新旧进程会抢写报告。"
             )
+    payload: dict[str, Any] = {
+        "pid": os.getpid(),
+        "host": host,
+        "port": int(port),
+    }
+    if ui_dev_port:
+        payload["uiDevPort"] = int(ui_dev_port)
     WATCH_PID_FILE.write_text(
-        json.dumps(
-            {"pid": os.getpid(), "host": host, "port": int(port)},
-            ensure_ascii=False,
-        ),
+        json.dumps(payload, ensure_ascii=False),
         encoding="utf-8",
     )
 
@@ -3124,6 +3197,96 @@ def _watch_ui_url(host: str, port: int) -> str:
     return f"http://{host}:{int(port)}/"
 
 
+def _watch_ui_dev_url(host: str = "127.0.0.1", port: int = WATCH_UI_DEV_PORT) -> str:
+    return f"http://{host}:{int(port)}/"
+
+
+def _tcp_port_open(host: str, port: int, *, timeout: float = 0.4) -> bool:
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _watch_ui_dist_ready() -> bool:
+    return (WATCH_UI_DIST / "index.html").is_file()
+
+
+def _resolve_watch_ui_mode(args: argparse.Namespace) -> tuple[bool, int]:
+    """是否走 Nuxt dev（:3000）及端口。无 dist 时默认 dev，无需 build。"""
+    dev_port = int(getattr(args, "ui_dev_port", None) or WATCH_UI_DEV_PORT)
+    force_dev = bool(getattr(args, "ui_dev", False))
+    force_static = bool(getattr(args, "ui_static", False))
+    env_dev = os.environ.get("WATCH_UI_DEV", "").strip().lower() in ("1", "true", "yes")
+    if force_static:
+        return False, dev_port
+    if force_dev or env_dev or not _watch_ui_dist_ready():
+        return True, dev_port
+    return False, dev_port
+
+
+def _start_watch_ui_dev(*, port: int, on_log: Callable[[str], None] | None = None) -> subprocess.Popen[str] | None:
+    """启动 watch-ui 的 npm run dev（Vite 代理 /api、/ws → 8765）。"""
+    if not (WATCH_UI_DIR / "package.json").is_file():
+        if on_log:
+            on_log("未找到 watch-ui/package.json，跳过前端 dev")
+        return None
+    if _tcp_port_open("127.0.0.1", port):
+        if on_log:
+            on_log(f"前端 dev 已在 http://127.0.0.1:{port}/ 运行")
+        return None
+    if not (WATCH_UI_DIR / "node_modules").is_dir():
+        if on_log:
+            on_log("请先: cd holdingStocks/watch-ui && npm install")
+        return None
+    if on_log:
+        on_log(f"启动 Nuxt dev → http://127.0.0.1:{port}/ （API 仍走 :8765 代理）")
+    proc = subprocess.Popen(
+        ["npm", "run", "dev", "--", "--port", str(port), "--host", "127.0.0.1"],
+        cwd=WATCH_UI_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=os.environ.copy(),
+    )
+
+    def _pipe() -> None:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            if on_log and line.strip():
+                on_log(f"[watch-ui] {line.rstrip()}")
+
+    threading.Thread(target=_pipe, daemon=True).start()
+    for _ in range(60):
+        if proc.poll() is not None:
+            if on_log:
+                on_log("watch-ui dev 进程已退出，请手动 cd watch-ui && npm run dev")
+            return None
+        if _tcp_port_open("127.0.0.1", port):
+            return proc
+        time.sleep(0.5)
+    if on_log:
+        on_log(f"等待 http://127.0.0.1:{port}/ 超时，请检查 watch-ui 终端输出")
+    return proc
+
+
+def _stop_watch_ui_dev(proc: subprocess.Popen[str] | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+def _watch_browser_url(*, host: str, api_port: int, ui_dev_port: int | None) -> str:
+    if ui_dev_port:
+        return _watch_ui_dev_url(host if host != "0.0.0.0" else "127.0.0.1", ui_dev_port)
+    return _watch_ui_url(host if host != "0.0.0.0" else "127.0.0.1", api_port)
+
+
 def _report_url_if_watching() -> str | None:
     lock = _read_watch_lock()
     if not lock:
@@ -3132,7 +3295,12 @@ def _report_url_if_watching() -> str | None:
     port = lock.get("port")
     if port is None:
         return None
-    return _watch_ui_url(host, int(port))
+    ui_dev = lock.get("uiDevPort")
+    return _watch_browser_url(
+        host=host,
+        api_port=int(port),
+        ui_dev_port=int(ui_dev) if ui_dev else None,
+    )
 
 
 def cmd_review(args: argparse.Namespace) -> None:
@@ -3236,6 +3404,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
     interval = max(2, int(args.interval))
     host = str(args.host)
     port = int(args.port)
+    use_ui_dev, ui_dev_port = _resolve_watch_ui_mode(args)
+    ui_dev_proc: subprocess.Popen[str] | None = None
     wechat = not bool(getattr(args, "no_wechat", False))
     skip_wechat_check = bool(getattr(args, "skip_wechat_check", False))
     wechat_optional = bool(getattr(args, "wechat_optional", False))
@@ -3264,7 +3434,11 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 )
                 raise SystemExit(1)
 
-    _acquire_watch_lock(host=host, port=port)
+    _acquire_watch_lock(
+        host=host,
+        port=port,
+        ui_dev_port=ui_dev_port if use_ui_dev else None,
+    )
     stop = threading.Event()
     refresh_lock = threading.Lock()
     ws_hub = LocalWsHub()
@@ -3432,6 +3606,9 @@ def cmd_watch(args: argparse.Namespace) -> None:
             if path == "/api/strategies":
                 self._send_json(_get_strategies_api_cache())
                 return
+            if path == "/api/factors":
+                self._send_json(_get_factors_api_cache())
+                return
             if path in ("/api/snapshot", f"/{WATCH_META_FILE.name}"):
                 snap = _last_watch_snapshot
                 if snap is None and WATCH_META_FILE.is_file():
@@ -3486,13 +3663,24 @@ def cmd_watch(args: argparse.Namespace) -> None:
             f"端口 {host}:{port} 无法绑定（可能已有盯盘在跑）。\n"
             f"请先停掉旧进程再启动，避免抢写报告。\n{e}"
         ) from e
-    url = _watch_ui_url(host, port)
-    print(f"盯盘服务已启动: {url}")
-    if (WATCH_UI_DIST / "index.html").is_file():
-        print("前端: watch-ui/dist（Nuxt 3 · JSON WebSocket）")
+    url = _watch_browser_url(
+        host=host,
+        api_port=port,
+        ui_dev_port=ui_dev_port if use_ui_dev else None,
+    )
+    print(f"盯盘 API 已启动: http://{host}:{port}/")
+    if use_ui_dev:
+        ui_dev_proc = _start_watch_ui_dev(
+            port=ui_dev_port,
+            on_log=lambda m: print(f"[{_now()}] {m}"),
+        )
+        print(f"前端 dev: http://127.0.0.1:{ui_dev_port}/ （Vite 代理 /api、/ws → :{port}）")
+    elif _watch_ui_dist_ready():
+        print(f"前端静态: http://{host}:{port}/ （watch-ui/dist）")
     else:
         print(
-            "提示: 未找到 watch-ui/dist，请先 cd holdingStocks/watch-ui && npm run build"
+            "提示: 无 watch-ui/dist；开发请 python index.py watch --ui-dev "
+            "或另开终端 cd watch-ui && npm run dev"
         )
     print(f"本地 WebSocket: ws://{host}:{port}/ws")
     print(
@@ -3544,6 +3732,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         stop.set()
         feed.stop()
         _ws_hub = None
+        _stop_watch_ui_dev(ui_dev_proc)
         try:
             server.shutdown()
         except Exception:  # noqa: BLE001
@@ -3604,6 +3793,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="每日强制刷新盯盘开盘价的时刻，默认09:30",
     )
     w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
+    w.add_argument(
+        "--ui-dev",
+        action="store_true",
+        help="Nuxt 开发服（默认 :3000，代理 API/WS）；无 dist 时自动启用",
+    )
+    w.add_argument(
+        "--ui-static",
+        action="store_true",
+        help="强制使用 watch-ui/dist 静态页（须先 npm run build）",
+    )
+    w.add_argument(
+        "--ui-dev-port",
+        type=int,
+        default=WATCH_UI_DEV_PORT,
+        help=f"Nuxt dev 端口，默认 {WATCH_UI_DEV_PORT}",
+    )
     w.add_argument(
         "--no-wechat",
         action="store_true",

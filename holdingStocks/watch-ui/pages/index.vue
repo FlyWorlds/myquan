@@ -44,7 +44,6 @@ const strategy1Tab = computed(() => strategyTabs.value.find((t) => t.id === 'str
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <ThemeToggle />
         <button type="button" class="btn btn-ghost" @click="store.togglePrivacy()">
           {{ privacyHidden ? '显示持仓' : '隐藏持仓' }}
         </button>
@@ -91,6 +90,11 @@ const strategy1Tab = computed(() => strategyTabs.value.find((t) => t.id === 'str
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
       盯盘默认绑定 {{ snapshot?.strategy?.name }}。策略1 Tab 展示早盘过门/阈值实时表；其余 Tab 为注册表因子说明。
+      完整说明见
+      <NuxtLink to="/strategies" class="text-accent hover:underline">策略说明</NuxtLink>
+      、
+      <NuxtLink to="/factors" class="text-accent hover:underline">因子说明</NuxtLink>
+      。
       当前 Tab：{{ activeTab === 'holdings' ? '持仓' : tabLabel(activeTab) }}。
     </p>
   </div>

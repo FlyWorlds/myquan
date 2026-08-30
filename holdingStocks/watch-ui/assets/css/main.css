@@ -99,6 +99,14 @@
     @apply bg-ui-fill-hover;
   }
 
+  .nav-link {
+    @apply rounded-lg px-3 py-2 text-sm font-semibold text-ui-text-2 transition duration-200 ease-ui hover:bg-ui-fill-hover hover:text-ui-text;
+  }
+
+  .nav-link-active {
+    @apply bg-ui-fill-active text-accent;
+  }
+
   .v-loading-mask {
     @apply absolute inset-0 z-20 flex items-center justify-center bg-black/50;
   }
