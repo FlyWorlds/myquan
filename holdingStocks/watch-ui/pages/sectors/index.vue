@@ -2,7 +2,9 @@
 import type { SectorRotationPayload } from '~/types/sectors'
 
 const { fetchRotation } = useSectorsApi()
+const { mergedKind, liveAt, refreshSec } = useSectorsLive()
 const router = useRouter()
+const store = useWatchStore()
 
 const loading = ref(true)
 const error = ref('')
@@ -11,8 +13,15 @@ const metric = ref('涨幅')
 const selected = ref<string | null>(null)
 const heatmapRef = ref<{ clearSelection: () => void } | null>(null)
 
-const kindData = computed(() => payload.value?.kinds?.概念 || null)
 const topN = computed(() => payload.value?.top_n || 10)
+const baseKind = computed(() => payload.value?.kinds?.概念 || null)
+const kindData = computed(() => mergedKind(baseKind.value, topN.value))
+
+const wsLabel = computed(() => {
+  const st = store.wsStatus
+  if (liveAt.value) return `实时 ${liveAt.value} · ${refreshSec.value}s`
+  return st
+})
 
 async function load(refresh = false) {
   loading.value = true
@@ -54,16 +63,17 @@ onMounted(() => load())
       <div>
         <h1 class="text-xl font-bold">板块轮动</h1>
         <p class="mt-1 text-sm text-ui-text-2">
-          通达信概念 · 点击格子选中追踪；再次点击或「查看龙头」进入近半年 K 线与波段龙头
+          通达信概念 · 今日列随盯盘 {{ refreshSec }}s 推送刷新；点击格子进入波段龙头
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <button class="btn btn-ghost" :disabled="loading" @click="load(true)">刷新</button>
+        <span class="text-xs text-ui-text-3">{{ wsLabel }}</span>
+        <button class="btn btn-ghost" :disabled="loading" @click="load(true)">重载历史</button>
       </div>
     </div>
 
     <div v-if="loading" class="rounded-xl border border-ui-hairline bg-ui-surface p-8 text-center text-ui-text-2">
-      正在拉取通达信概念行情（首次较慢）…
+      正在拉取通达信概念历史（首次较慢）…
     </div>
     <div v-else-if="error" class="rounded-xl border border-ui-hairline bg-ui-surface p-6 text-watch-up">
       {{ error }}
@@ -94,7 +104,8 @@ onMounted(() => load())
       />
 
       <p class="text-xs text-ui-text-3">
-        更新 {{ payload?.updated_at }} · {{ kindData.fund_note }} · 共 {{ kindData.board_count }} 个概念
+        历史 {{ payload?.updated_at }} · {{ kindData.fund_note }} · 共 {{ kindData.board_count }} 个概念
+        <span v-if="liveAt"> · 今日行情 {{ liveAt }}</span>
       </p>
     </template>
   </div>

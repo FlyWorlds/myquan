@@ -48,8 +48,11 @@ python index.py --days 5 --no-members --no-open
 |------|------|
 | `GET /api/sectors/rotation?days=20&top_n=10` | 通达信概念轮动热力表数据 |
 | `GET /api/sectors/concept/{名称}?months=6` | 概念指数 K 线 + 近半年波段龙头 |
+| `GET /api/sectors/focus?concept=名称` | 订阅概念成分/龙头实时报价（随 WS 5s 推送） |
 | `GET /api/sectors/status` | 通达信链路可用性 |
 
 启动：`cd holdingStocks && python index.py watch --ui-dev` → 浏览器打开 `/sectors`。
 
-`tdx.py` 为通达信真源；`rotation.py` 默认同花顺；`tdx_rotation.py` + `api.py` 供 Web 通达信概念轮动。
+**盘中实时**：与盯盘 WebSocket **5s 同步**推送 `snapshot.sectors`（今日概念涨跌 + 详情页龙头现价）。需 `watch` 模式运行；概念详情页进入时调用 `/api/sectors/focus?concept=名称` 订阅成分股报价。
+
+`tdx.py` 为通达信真源；`rotation.py` 默认同花顺；`tdx_rotation.py` + `api.py` + `live.py` 供 Web 通达信概念轮动。

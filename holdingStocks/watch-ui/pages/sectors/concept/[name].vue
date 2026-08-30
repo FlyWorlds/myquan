@@ -3,11 +3,49 @@ import type { ConceptDetailPayload } from '~/types/sectors'
 
 const route = useRoute()
 const { fetchConceptDetail } = useSectorsApi()
+const { sectors, liveAt, refreshSec, setFocus } = useSectorsLive()
+const store = useWatchStore()
 
 const conceptName = computed(() => decodeURIComponent(String(route.params.name || '')))
 const loading = ref(true)
 const error = ref('')
 const detail = ref<ConceptDetailPayload | null>(null)
+
+const conceptLive = computed(() => {
+  if (sectors.value?.conceptIndex?.name === conceptName.value) {
+    return sectors.value.conceptIndex
+  }
+  const row = sectors.value?.conceptToday?.[conceptName.value]
+  if (!row) return null
+  return {
+    name: conceptName.value,
+    code: row.code,
+    price: row.close,
+    chgPct: row.涨跌幅,
+    amount: row.资金,
+  }
+})
+
+const liveSegments = computed(() => {
+  const quotes = sectors.value?.quotes || {}
+  if (!detail.value?.segments?.length) return []
+  return detail.value.segments.map((seg) => ({
+    ...seg,
+    leaders: seg.leaders.map((l) => {
+      const q = quotes[l.code]
+      return {
+        ...l,
+        livePrice: q?.price ?? null,
+        liveChgPct: q?.chgPct ?? null,
+      }
+    }),
+  }))
+})
+
+const wsLabel = computed(() => {
+  if (liveAt.value) return `实时 ${liveAt.value} · ${refreshSec.value}s`
+  return store.wsStatus
+})
 
 async function load(refresh = false) {
   loading.value = true
@@ -22,8 +60,19 @@ async function load(refresh = false) {
   }
 }
 
-onMounted(() => load())
-watch(conceptName, () => load())
+onMounted(async () => {
+  await setFocus(conceptName.value)
+  await load()
+})
+
+onBeforeUnmount(() => {
+  void setFocus(null)
+})
+
+watch(conceptName, async () => {
+  await setFocus(conceptName.value)
+  await load()
+})
 </script>
 
 <template>
@@ -35,13 +84,23 @@ watch(conceptName, () => load())
           {{ conceptName }}
           <span v-if="detail?.code" class="ml-2 text-sm font-normal text-ui-text-2">{{ detail.code }}</span>
         </h1>
-        <p class="mt-1 text-sm text-ui-text-2">通达信概念指数 · 近半年 K 线 · 上涨波段龙头统计</p>
+        <p v-if="conceptLive" class="mt-1 text-sm">
+          <span class="font-semibold">{{ conceptLive.price?.toFixed(2) ?? '-' }}</span>
+          <span
+            class="ml-2 font-semibold"
+            :class="(conceptLive.chgPct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'"
+          >
+            {{ conceptLive.chgPct != null ? `${conceptLive.chgPct >= 0 ? '+' : ''}${conceptLive.chgPct.toFixed(2)}%` : '-' }}
+          </span>
+          <span class="ml-3 text-ui-text-3">{{ wsLabel }}</span>
+        </p>
+        <p v-else class="mt-1 text-sm text-ui-text-2">通达信概念指数 · 近半年 K 线 · 波段龙头</p>
       </div>
-      <button class="btn btn-ghost" :disabled="loading" @click="load(true)">刷新</button>
+      <button class="btn btn-ghost" :disabled="loading" @click="load(true)">重载波段</button>
     </div>
 
     <div v-if="loading" class="rounded-xl border border-ui-hairline bg-ui-surface p-8 text-center text-ui-text-2">
-      正在计算波段龙头（首次较慢，会缓存 6 小时）…
+      正在加载概念详情…
     </div>
     <div v-else-if="error" class="rounded-xl border border-ui-hairline bg-ui-surface p-6 text-watch-up">
       {{ error }}
@@ -51,7 +110,7 @@ watch(conceptName, () => load())
 
       <div class="grid gap-4 lg:grid-cols-2">
         <section
-          v-for="seg in detail.segments"
+          v-for="seg in liveSegments"
           :key="`${seg.start_date}-${seg.end_date}`"
           class="rounded-xl border border-ui-hairline bg-ui-surface p-4"
         >
@@ -65,6 +124,8 @@ watch(conceptName, () => load())
                 <th class="pb-2">排名</th>
                 <th class="pb-2">龙头</th>
                 <th class="pb-2 text-right">区间涨幅</th>
+                <th class="pb-2 text-right">现价</th>
+                <th class="pb-2 text-right">今日</th>
               </tr>
             </thead>
             <tbody>
@@ -72,6 +133,13 @@ watch(conceptName, () => load())
                 <td class="py-2">{{ l.rank }}</td>
                 <td class="py-2">{{ l.name }} <span class="text-ui-text-3">{{ l.code }}</span></td>
                 <td class="py-2 text-right font-semibold text-watch-up">+{{ l.return_pct.toFixed(2) }}%</td>
+                <td class="py-2 text-right">{{ l.livePrice != null ? l.livePrice.toFixed(2) : '-' }}</td>
+                <td
+                  class="py-2 text-right font-semibold"
+                  :class="(l.liveChgPct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'"
+                >
+                  {{ l.liveChgPct != null ? `${l.liveChgPct >= 0 ? '+' : ''}${l.liveChgPct.toFixed(2)}%` : '-' }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -85,11 +153,21 @@ watch(conceptName, () => load())
             v-for="m in detail.members_preview"
             :key="m.code"
             class="rounded-md border border-ui-hairline px-2 py-1"
-          >{{ m.name }} {{ m.code }}</span>
+          >
+            {{ m.name }} {{ m.code }}
+            <template v-if="sectors?.quotes?.[m.code]">
+              · {{ sectors.quotes[m.code].price?.toFixed(2) }}
+              <span :class="(sectors.quotes[m.code].chgPct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'">
+                {{ sectors.quotes[m.code].chgPct != null ? `${sectors.quotes[m.code].chgPct!.toFixed(2)}%` : '' }}
+              </span>
+            </template>
+          </span>
         </p>
       </section>
 
-      <p class="text-xs text-ui-text-3">更新 {{ detail.updated_at }} · {{ detail.source }}</p>
+      <p class="text-xs text-ui-text-3">
+        波段 {{ detail.updated_at }} · 现价随盯盘 {{ refreshSec }}s 刷新 · {{ detail.source }}
+      </p>
     </template>
   </div>
 </template>
