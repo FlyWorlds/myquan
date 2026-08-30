@@ -35,7 +35,21 @@ python index.py --days 5 --no-members --no-open
 | `data.py` | 成分股回退（东财） |
 | `rotation.py` | 指标、历史、快照 |
 | `report.py` | 轮动 HTML |
+| `tdx.py` | 通达信行业/概念/成分股 + pytdx |
+| `tdx_rotation.py` | 通达信概念轮动 payload |
+| `concept_leaders.py` | 概念波段龙头统计 |
+| `api.py` | Web API 数据层 |
 | `snapshots/` | 按日快照 |
 | `cache/` | 同花顺代码映射、涨停缓存 |
 
-`tdx.py` 已停用（保留文件仅供参考，默认不再调用）。
+**Web 行情（通达信概念）**：`holdingStocks` watch 服务提供 API，Nuxt 前端 `/sectors` 热力表 + 概念 K 线龙头图。
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/sectors/rotation?days=20&top_n=10` | 通达信概念轮动热力表数据 |
+| `GET /api/sectors/concept/{名称}?months=6` | 概念指数 K 线 + 近半年波段龙头 |
+| `GET /api/sectors/status` | 通达信链路可用性 |
+
+启动：`cd holdingStocks && python index.py watch --ui-dev` → 浏览器打开 `/sectors`。
+
+`tdx.py` 为通达信真源；`rotation.py` 默认同花顺；`tdx_rotation.py` + `api.py` 供 Web 通达信概念轮动。

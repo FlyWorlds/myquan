@@ -1,0 +1,95 @@
+<script setup lang="ts">
+import type { ConceptDetailPayload } from '~/types/sectors'
+
+const route = useRoute()
+const { fetchConceptDetail } = useSectorsApi()
+
+const conceptName = computed(() => decodeURIComponent(String(route.params.name || '')))
+const loading = ref(true)
+const error = ref('')
+const detail = ref<ConceptDetailPayload | null>(null)
+
+async function load(refresh = false) {
+  loading.value = true
+  error.value = ''
+  try {
+    detail.value = await fetchConceptDetail(conceptName.value, 6, refresh)
+    if (detail.value?.error) error.value = detail.value.error
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => load())
+watch(conceptName, () => load())
+</script>
+
+<template>
+  <div class="mx-auto max-w-7xl space-y-4 px-4 py-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <NuxtLink to="/sectors" class="text-sm text-ui-text-2 hover:text-ui-text">← 板块轮动</NuxtLink>
+        <h1 class="mt-2 text-xl font-bold">
+          {{ conceptName }}
+          <span v-if="detail?.code" class="ml-2 text-sm font-normal text-ui-text-2">{{ detail.code }}</span>
+        </h1>
+        <p class="mt-1 text-sm text-ui-text-2">通达信概念指数 · 近半年 K 线 · 上涨波段龙头统计</p>
+      </div>
+      <button class="btn btn-ghost" :disabled="loading" @click="load(true)">刷新</button>
+    </div>
+
+    <div v-if="loading" class="rounded-xl border border-ui-hairline bg-ui-surface p-8 text-center text-ui-text-2">
+      正在计算波段龙头（首次较慢，会缓存 6 小时）…
+    </div>
+    <div v-else-if="error" class="rounded-xl border border-ui-hairline bg-ui-surface p-6 text-watch-up">
+      {{ error }}
+    </div>
+    <template v-else-if="detail">
+      <ConceptKlineChart :detail="detail" />
+
+      <div class="grid gap-4 lg:grid-cols-2">
+        <section
+          v-for="seg in detail.segments"
+          :key="`${seg.start_date}-${seg.end_date}`"
+          class="rounded-xl border border-ui-hairline bg-ui-surface p-4"
+        >
+          <h3 class="text-sm font-semibold">
+            {{ seg.start_date }} ~ {{ seg.end_date }}
+            <span class="ml-2 text-ui-text-2">{{ seg.days }}日 · 指数 +{{ seg.gain_pct }}%</span>
+          </h3>
+          <table class="mt-3 w-full text-sm">
+            <thead>
+              <tr class="text-left text-ui-text-2">
+                <th class="pb-2">排名</th>
+                <th class="pb-2">龙头</th>
+                <th class="pb-2 text-right">区间涨幅</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="l in seg.leaders" :key="l.code" class="border-t border-ui-hairline">
+                <td class="py-2">{{ l.rank }}</td>
+                <td class="py-2">{{ l.name }} <span class="text-ui-text-3">{{ l.code }}</span></td>
+                <td class="py-2 text-right font-semibold text-watch-up">+{{ l.return_pct.toFixed(2) }}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <section class="rounded-xl border border-ui-hairline bg-ui-surface p-4">
+        <h3 class="text-sm font-semibold">成分股预览（{{ detail.member_count }} 只）</h3>
+        <p class="mt-2 flex flex-wrap gap-2 text-xs text-ui-text-2">
+          <span
+            v-for="m in detail.members_preview"
+            :key="m.code"
+            class="rounded-md border border-ui-hairline px-2 py-1"
+          >{{ m.name }} {{ m.code }}</span>
+        </p>
+      </section>
+
+      <p class="text-xs text-ui-text-3">更新 {{ detail.updated_at }} · {{ detail.source }}</p>
+    </template>
+  </div>
+</template>
