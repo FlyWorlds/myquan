@@ -562,7 +562,7 @@ def run_bi_pl_ratio(
         )
 
     if out_dir is None:
-        out_dir = Path("data_cache") / "strategy11_bi_pl" / sym.lower()
+        out_dir = Path("data_cache") / "strategy7_bi_pl" / sym.lower()
 
     result = analyze_bi_pl_ratio(
         daily,

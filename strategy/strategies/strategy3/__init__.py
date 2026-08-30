@@ -79,7 +79,6 @@ def run_strategy3(
 
 
 refresh_strategy7_factor5 = refresh_strategy3_factor5
-run_strategy7 = run_strategy3
 
 
 def _bind() -> StrategySpec:
@@ -102,11 +101,8 @@ def _bind() -> StrategySpec:
         print_rules=_print_rules,
         aliases=(
             "s3",
-            "s7",
-            "strategy7",
             "factor5_serenity",
             "策略三",
-            "策略七",
         ),
         implemented=True,
         meta={
@@ -126,5 +122,4 @@ __all__ = [
     "refresh_strategy3_factor5",
     "refresh_strategy7_factor5",
     "run_strategy3",
-    "run_strategy7",
 ]

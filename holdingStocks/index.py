@@ -8,16 +8,15 @@
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
 功能：
-  · 拉取当日开盘、最高、最低、现价（东财 SSE + 新浪批量兜底；冷启动用分钟线）
+  · 拉取当日实时行情（东财 SSE + 新浪批量；盯盘不拉历史分钟 K）
   · 因子1 与 strategy1 bindings / open_break 同源
   · 因子2 与 strategy/dd_alert 同源
   · 有仓：止损自动结算（全清）；空仓：已触买/将买入建议限价
   · 本地 JSON 记录持仓；T+1 买入日不可卖
 
 用法：
-  python index.py              # 查看标的行情 + 持仓，并生成 HTML
-  python index.py html         # 仅生成/打开 HTML 报告
-  python index.py watch        # 一套：OpenClaw→微信自检→盯盘；09:30后才触发信号；每日09:30刷新开盘价
+  python index.py              # 终端查看行情 + 持仓（若 watch 在跑则同步 JSON 并打开前端）
+  python index.py watch        # 长驻盯盘：Nuxt 前端 + WebSocket JSON 推送
   python index.py buy 600552 15.50 400
   python index.py sell 600552 16.20 400
   python index.py set-cost 600552 15.95 --qty 400
@@ -38,11 +37,12 @@ import sys
 import threading
 import time
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from html import escape
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import quote
 
 import akshare as ak
 import pandas as pd
@@ -52,7 +52,7 @@ _MYQUAN_ROOT = Path(__file__).resolve().parents[1]
 if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
-from quote_feed import LocalWsHub, QuoteFeedManager, ws_accept_key
+from quote_feed import LocalWsHub, QuoteFeedManager, fetch_sina_batch, ws_accept_key
 from strategy.minute import pull_akshare_1m
 from strategy import get_strategy_bindings
 from strategy.open_break import (
@@ -70,8 +70,11 @@ from strategy.open_break import (
     entry_filters_ok,
     format_trigger_md,
     is_t1_buy_day,
+    is_yang,
     limit_down_state,
+    prev_day_allows_entry,
     replay_last_factor_triggers,
+    should_block_entry_by_yang,
     strategy_levels,
     strategy_signal,
 )
@@ -85,6 +88,7 @@ from factor4_watch import (
     resolve_factor4_spec,
 )
 from watch_config import (
+    AUCTION_MILESTONES,
     FACTOR4_ID,
     FACTOR_ID,
     INDEX_WATCH,
@@ -98,12 +102,17 @@ from watch_config import (
     code_key as _code_key,
     empty_position as _empty_position,
     find_meta as _find_meta,
+    is_auction_quote_window,
     is_auction_window,
     is_signal_window,
+    is_threshold_ready,
+    market_phase,
+    market_phase_label,
     sellable_qty as _sellable_qty,
     sina_of as _sina_of,
     watchlist_codes_label as _watchlist_codes_label,
 )
+from watch_snapshot import build_watch_snapshot
 
 # 盯盘与回测共用：默认策略一 = 因子1（买卖）+ 因子2（回撤预警）
 # 标的池唯一真源：watch_config.WATCHLIST
@@ -115,7 +124,7 @@ _STRATEGY_FACTORS_LABEL = (
     else "因子1买卖 + 因子2回撤预警"
 )
 _STRATEGY_SYNC_NOTE = (
-    "与 strategy7 bindings / bull_regime 同源"
+    "与 strategy3/strategy4 bindings / bull_regime 同源"
     if USE_FACTOR4
     else "与 strategy1 bindings / open_break 同源"
 )
@@ -123,12 +132,14 @@ _STRATEGY_SYNC_NOTE = (
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
 TRADES_FILE = ROOT / "trades.jsonl"
-REPORT_FILE = ROOT / "holdings_report.html"
 WATCH_META_FILE = ROOT / "holdings_watch.json"
 WATCH_PID_FILE = ROOT / "holdings_watch.pid"
+WATCH_UI_DIST = ROOT / "watch-ui" / "dist"
 
 # watch 模式本地 WebSocket 广播（/ws）；非 watch 为 None
 _ws_hub: LocalWsHub | None = None
+_last_watch_snapshot: dict[str, Any] | None = None
+_strategies_api_cache: list[dict[str, Any]] | None = None
 _MIN_WATCH_REFRESH_SEC = 1.0
 _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
 _INDEX_CACHE_TTL_SEC = 15.0
@@ -157,6 +168,313 @@ def _factor1_binding_params() -> dict[str, Any]:
 _strategy1_factor1_params = _factor1_binding_params
 
 
+def _entry_gate_detail(
+    prev_o: float | None,
+    prev_c: float | None,
+    prev2_o: float | None,
+    prev2_c: float | None,
+    *,
+    entry_pct: float,
+    prev_entry_mode: str,
+    tick: float,
+    f1p: dict[str, Any] | None = None,
+) -> tuple[bool, str, str]:
+    """返回 (allow_entry, 过门说明, 前日形态)。"""
+    p = f1p or _factor1_binding_params()
+    prev_shape = "-"
+    if prev_o is not None and prev_c is not None and float(prev_o) > 0:
+        prev_shape = bar_shape(float(prev_o), float(prev_c), tick=tick)
+    allow = entry_filters_ok(
+        prev_o,
+        prev_c,
+        prev2_o,
+        prev2_c,
+        entry_pct=entry_pct,
+        prev_entry_mode=prev_entry_mode,
+        tick=tick,
+        ban_double_yang=bool(p.get("ban_double_yang", DEFAULT_BAN_DOUBLE_YANG)),
+        ban_single_yang=bool(p.get("ban_single_yang", DEFAULT_BAN_SINGLE_YANG)),
+        yang_min_pct=float(p.get("yang_min_pct") or 0.0),
+        double_yang_second_min_pct=p.get("double_yang_second_min_pct"),
+        double_yang_combined_min_pct=p.get(
+            "double_yang_combined_min_pct", DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT
+        ),
+        double_yang_combined_mode=str(
+            p.get("double_yang_combined_mode", DEFAULT_DOUBLE_YANG_COMBINED_MODE)
+            or DEFAULT_DOUBLE_YANG_COMBINED_MODE
+        ),
+        single_yang_min_pct=p.get("single_yang_min_pct"),
+    )
+    if allow:
+        if prev_shape == "阴":
+            return True, "前日阴线·过门", prev_shape
+        if prev_shape == "十字":
+            return True, "前日十字·过门", prev_shape
+        if prev_shape == "阳":
+            return True, "前日小阳·过门", prev_shape
+        return True, "过门", prev_shape
+    if prev_o is None or prev_c is None:
+        return False, "缺前日K线", prev_shape
+    if not prev_day_allows_entry(
+        float(prev_o),
+        float(prev_c),
+        prev_small_yang_pct=entry_pct,
+        prev_entry_mode=prev_entry_mode,
+        tick=tick,
+    ):
+        if is_yang(float(prev_o), float(prev_c), tick=tick):
+            return False, "前日大阳·不过门", prev_shape
+        return False, "前日形态·不过门", prev_shape
+    if should_block_entry_by_yang(
+        prev2_o,
+        prev2_c,
+        prev_o,
+        prev_c,
+        tick=tick,
+        ban_double_yang=bool(p.get("ban_double_yang", DEFAULT_BAN_DOUBLE_YANG)),
+        ban_single_yang=bool(p.get("ban_single_yang", DEFAULT_BAN_SINGLE_YANG)),
+        yang_min_pct=float(p.get("yang_min_pct") or 0.0),
+        double_yang_second_min_pct=p.get("double_yang_second_min_pct"),
+        double_yang_combined_min_pct=p.get(
+            "double_yang_combined_min_pct", DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT
+        ),
+        double_yang_combined_mode=str(
+            p.get("double_yang_combined_mode", DEFAULT_DOUBLE_YANG_COMBINED_MODE)
+            or DEFAULT_DOUBLE_YANG_COMBINED_MODE
+        ),
+        single_yang_min_pct=p.get("single_yang_min_pct"),
+    ):
+        return False, "双阳跨日·禁买", prev_shape
+    return False, "禁买", prev_shape
+
+
+
+
+_FACTOR_ROLE_ZH: dict[str, str] = {
+    "both": "买卖",
+    "entry": "开仓/选股",
+    "exit": "退出",
+    "custom": "预警/叠加",
+    "universe": "标的池",
+}
+
+
+def _strategy_tab_number(strategy_id: str) -> str:
+    sid = str(strategy_id)
+    if sid.startswith("strategy") and sid[8:].isdigit():
+        return sid[8:]
+    return sid
+
+
+def _strategy_tab_short_name(name: str) -> str:
+    text = str(name).strip()
+    if "·" in text:
+        return text.split("·", 1)[1].strip()
+    return text
+
+
+def _strategy_tab_label(strategy_id: str, name: str) -> str:
+    return f"策略{_strategy_tab_number(strategy_id)}-{_strategy_tab_short_name(name)}"
+
+
+def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
+    """从 strategy 注册表加载盯盘页策略 Tab（因子绑定 + 名称）。"""
+    from strategy.core.factor_registry import get_factor
+    from strategy.core.strategy_registry import list_strategy_specs
+
+    tabs: list[dict[str, Any]] = []
+    for spec in list_strategy_specs():
+        factors: list[dict[str, str]] = []
+        for b in spec.factor_bindings:
+            if not b.enabled:
+                continue
+            try:
+                fspec = get_factor(b.factor_id)
+                fname = str(fspec.name)
+                fdesc = str(fspec.description or "").strip()
+            except KeyError:
+                fname = str(b.factor_id)
+                fdesc = ""
+            factors.append(
+                {
+                    "id": str(b.factor_id),
+                    "name": fname,
+                    "role": _FACTOR_ROLE_ZH.get(str(b.role), str(b.role)),
+                    "filter_desc": str(b.filter_desc or "").strip(),
+                    "description": fdesc,
+                }
+            )
+        tabs.append(
+            {
+                "id": spec.id,
+                "label": _strategy_tab_label(spec.id, spec.name),
+                "name": spec.name,
+                "description": str(spec.description or "").strip(),
+                "is_watch_default": spec.id == STRATEGY_ID,
+                "factors": factors,
+            }
+        )
+    tabs.sort(key=lambda t: int(_strategy_tab_number(str(t["id"]))))
+    return tabs
+
+
+
+
+def _get_strategies_api_cache() -> list[dict[str, Any]]:
+    global _strategies_api_cache
+    if _strategies_api_cache is None:
+        _strategies_api_cache = _load_watch_strategy_tabs()
+    return _strategies_api_cache
+
+
+def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """账户合计（JSON 快照 / CLI 共用口径）。"""
+    total_pnl = 0.0
+    total_day_pnl = 0.0
+    total_mv = 0.0
+    total_mv_no_cost = 0.0
+    total_cost = 0.0
+    total_day_base = 0.0
+    settled_pnl = 0.0
+    settled_day = 0.0
+    settled_n = 0
+    has_pos = False
+    has_day = False
+    for r in rows:
+        qty = int(r.get("持仓") or 0)
+        realized = bool(r.get("已实现"))
+        if r.get("浮盈") is not None and (qty > 0 or realized):
+            total_pnl += float(r["浮盈"])
+            has_pos = True
+        if r.get("当日盈亏") is not None and (qty > 0 or realized):
+            total_day_pnl += float(r["当日盈亏"])
+            has_day = True
+            db = r.get("当日基数")
+            if db is not None and float(db) > 0:
+                total_day_base += float(db)
+            else:
+                dpct = r.get("当日盈亏%")
+                if dpct is not None and abs(float(dpct)) > 1e-12:
+                    total_day_base += float(r["当日盈亏"]) / (float(dpct) / 100.0)
+                elif r.get("市值") is not None and not realized:
+                    total_day_base += float(r["市值"]) - float(r["当日盈亏"])
+        if realized:
+            settled_n += 1
+            if r.get("浮盈") is not None:
+                settled_pnl += float(r["浮盈"])
+            if r.get("当日盈亏") is not None:
+                settled_day += float(r["当日盈亏"])
+            if r.get("成本") is not None and r.get("卖出数量"):
+                total_cost += float(r["成本"]) * int(r["卖出数量"])
+        if r.get("市值") is not None and qty > 0:
+            mv = float(r["市值"])
+            total_mv += mv
+            if r.get("成本额") is None:
+                total_mv_no_cost += mv
+        if r.get("成本额") is not None and qty > 0:
+            total_cost += float(r["成本额"])
+    total_pnl_pct = (total_pnl / total_cost * 100.0) if total_cost > 0 else None
+    total_day_pct = (
+        (total_day_pnl / total_day_base * 100.0) if has_day and total_day_base > 0 else None
+    )
+    holdings_meta = load_holdings()
+    account_total = _account_total(rows, holdings_meta)
+    available_cash = _available_cash(rows, holdings_meta)
+    session_for_open = next(
+        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
+        str(pd.Timestamp.now().date()),
+    )
+    _ensure_account_open_session(
+        holdings_meta,
+        session=session_for_open,
+        account_total=account_total,
+    )
+    holdings_meta = load_holdings()
+    account_open = _account_total_open(holdings_meta)
+    if account_total is not None and account_open is not None:
+        total_pnl = round(float(account_total) - float(account_open), 2)
+        has_pos = True
+        total_pnl_pct = round(total_pnl / float(account_open) * 100.0, 2)
+    if has_day and account_open is not None and account_open > 0:
+        total_day_pct = round(total_day_pnl / float(account_open) * 100.0, 2)
+    position_pct = (
+        round(total_mv / account_total * 100.0, 1)
+        if account_total and account_total > 0 and total_mv > 0
+        else None
+    )
+    today_opened = _today_opened_cost(rows, session_for_open)
+    f2_raw = (
+        holdings_meta.get("factor2")
+        if isinstance(holdings_meta.get("factor2"), dict)
+        else None
+    )
+    return {
+        "totalPnl": total_pnl if has_pos else None,
+        "totalPnlPct": total_pnl_pct,
+        "dayPnl": total_day_pnl if has_day else None,
+        "dayPnlPct": total_day_pct,
+        "accountTotal": account_total,
+        "accountOpen": account_open,
+        "availableCash": available_cash,
+        "positionPct": position_pct,
+        "marketValue": total_mv if total_mv > 0 else None,
+        "cost": total_cost if total_cost > 0 else None,
+        "marketValueNoCost": total_mv_no_cost if total_mv_no_cost > 0 else None,
+        "todayOpened": today_opened if today_opened > 0 else None,
+        "settledCount": settled_n,
+        "settledPnl": settled_pnl if settled_n > 0 else None,
+        "settledDayPnl": settled_day if settled_n > 0 else None,
+        "factor2Summary": format_factor2_summary(f2_raw),
+    }
+
+
+def publish_watch_snapshot(
+    rows: list[dict[str, Any]],
+    indices: list[dict[str, Any]] | None = None,
+    *,
+    refresh_sec: int = 5,
+) -> Path:
+    """推送 JSON 快照（WebSocket + holdings_watch.json），盯盘模式不写 HTML。"""
+    global _last_watch_snapshot
+    indices = indices or []
+    clock_now = _now()
+    phase_key = market_phase()
+    phase_label = market_phase_label(phase_key)
+    account = _build_watch_account_summary(rows)
+    snapshot = build_watch_snapshot(
+        rows=rows,
+        indices=indices,
+        account=account,
+        meta={
+            "clock": clock_now,
+            "phase": phase_label,
+            "phaseKey": phase_key,
+            "strategyId": STRATEGY_ID,
+            "strategyName": STRATEGY_NAME,
+            "factorsLabel": _STRATEGY_FACTORS_LABEL,
+        },
+        strategies=_get_strategies_api_cache(),
+        refresh_sec=refresh_sec,
+    )
+    _last_watch_snapshot = snapshot
+    _atomic_write_text(
+        WATCH_META_FILE,
+        json.dumps(snapshot, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    hub = _ws_hub
+    if hub is not None:
+        try:
+            hub.broadcast_json(snapshot)
+        except Exception:  # noqa: BLE001
+            pass
+    return WATCH_META_FILE
+
+
+# 兼容旧名
+_strategy1_factor1_params = _factor1_binding_params
+
+
 def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[str, Any]]:
     """盯盘高频刷新时缓存大盘指数，避免每次重拉拖慢推送。"""
     now = time.monotonic()
@@ -171,6 +489,8 @@ def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[
 
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 
 
 def _atomic_write_text(path: Path, text: str, encoding: str = "utf-8") -> None:
@@ -208,6 +528,67 @@ def _px_digits(tick: float) -> int:
     if tick >= 1:
         return 0
     return max(0, -int(round(math.log10(tick))))
+
+
+def _quote_from_sina_spot(spot: dict[str, Any]) -> dict[str, Any]:
+    """新浪快照 → collect_rows 可用的 quote dict（无分钟 K）。"""
+    prev = spot.get("prev_close")
+    last = float(spot["last"])
+    day_chg = None
+    if prev is not None and float(prev) > 0:
+        day_chg = (last / float(prev) - 1.0) * 100.0
+    return {
+        "session": str(spot.get("session") or pd.Timestamp.now().date()),
+        "open": float(spot["open"]),
+        "high": float(spot["high"]),
+        "low": float(spot["low"]),
+        "last": last,
+        "prev_close": float(prev) if prev is not None else None,
+        "day_chg_pct": day_chg,
+        "last_ts": str(spot.get("last_ts") or _now()),
+        "_day_bars": pd.DataFrame(),
+    }
+
+
+def _reseed_sina_batch(
+    feed: QuoteFeedManager,
+    watchlist: list[dict[str, Any]] | None = None,
+) -> int:
+    """冷启动快路径：新浪批量快照 seed（~2s），先让页面可用。"""
+    items = watchlist if watchlist is not None else WATCHLIST
+    sinas = [str(w["sina"]).lower() for w in items]
+    batch = fetch_sina_batch(sinas)
+    n = 0
+    for w in items:
+        spot = batch.get(str(w["sina"]).lower())
+        if not spot:
+            continue
+        feed.seed(w["sina"], _quote_from_sina_spot(spot))
+        n += 1
+    return n
+
+
+def fetch_today_quote_live(sina: str) -> dict[str, Any]:
+    """盯盘专用：仅新浪实时快照，不请求东财历史分钟 K。"""
+    spot = fetch_sina_spot(sina)
+    if spot is None:
+        raise RuntimeError(f"无实时行情: {sina}")
+    return _quote_from_sina_spot(spot)
+
+
+def _reseed_live_batch(
+    feed: QuoteFeedManager,
+    watchlist: list[dict[str, Any]] | None = None,
+) -> int:
+    """刷新当日实时快照（新浪批量）。"""
+    return _reseed_sina_batch(feed, watchlist)
+
+
+def _daily_cache_warm(watchlist: list[dict[str, Any]] | None = None) -> None:
+    """并行预热日线缓存，避免首屏 collect_rows 串行等 IO。"""
+    items = watchlist if watchlist is not None else WATCHLIST
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda w: _watch_daily(w["sina"]), items))
 
 
 # 日线缓存：当日只拉一次，供前日过滤与最近因子触发
@@ -1275,6 +1656,10 @@ def collect_rows(
     sticky = _alert_sticky_map(holdings)
     rows: list[dict[str, Any]] = []
     session_today: str | None = None
+    phase_now = market_phase()
+    phase_label = market_phase_label(phase_now)
+    threshold_ok = is_threshold_ready()
+    signal_ok_global = is_signal_window()
 
     for w in WATCHLIST:
         code = w["code"]
@@ -1332,7 +1717,7 @@ def collect_rows(
             day_chg = q.get("day_chg_pct")
             prev_o, prev_c, prev2_o, prev2_c = _prev_bars_from_daily(daily, q["session"])
             f1p = _factor1_binding_params()
-            allow_entry = entry_filters_ok(
+            allow_entry, gate_label, prev_shape = _entry_gate_detail(
                 prev_o,
                 prev_c,
                 prev2_o,
@@ -1340,27 +1725,9 @@ def collect_rows(
                 entry_pct=entry_pct,
                 prev_entry_mode=prev_entry_mode,
                 tick=tick,
-                ban_double_yang=bool(
-                    f1p.get("ban_double_yang", DEFAULT_BAN_DOUBLE_YANG)
-                ),
-                ban_single_yang=bool(
-                    f1p.get("ban_single_yang", DEFAULT_BAN_SINGLE_YANG)
-                ),
-                yang_min_pct=float(f1p.get("yang_min_pct") or 0.0),
-                double_yang_second_min_pct=f1p.get("double_yang_second_min_pct"),
-                double_yang_combined_min_pct=f1p.get(
-                    "double_yang_combined_min_pct",
-                    DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
-                ),
-                double_yang_combined_mode=str(
-                    f1p.get(
-                        "double_yang_combined_mode",
-                        DEFAULT_DOUBLE_YANG_COMBINED_MODE,
-                    )
-                    or DEFAULT_DOUBLE_YANG_COMBINED_MODE
-                ),
-                single_yang_min_pct=f1p.get("single_yang_min_pct"),
+                f1p=f1p,
             )
+            auction_ref = round(float(q["last"]), px_digits)
             replay = replay_last_factor_triggers(
                 daily,
                 entry_pct=entry_pct,
@@ -1383,10 +1750,13 @@ def collect_rows(
                 if USE_FACTOR4
                 else "-"
             )
-            # 竞价/开盘前：盘面价无连续交易意义，不触发买卖判定与止损结算
-            signal_ok = is_signal_window()
-            if not signal_ok:
+            # 9:25 前：仅竞价参考；9:25–9:30：算阈值/过门但不结算；9:30 起全触发
+            preview_ok = threshold_ok
+            signal_ok = signal_ok_global
+            if not preview_ok:
                 hit_buy = False
+                hit_stop = False
+            elif not signal_ok:
                 hit_stop = False
             # 当日止损/已结算卖出 → 禁止再买（纸面回放持有触止损同样禁买）
             _realized_pre = realized_map.get(code)
@@ -1633,7 +2003,7 @@ def collect_rows(
                 px_digits=px_digits,
                 t0=t0,
                 # 纸面仓禁止买入预警
-                allow_entry=False if paper_active else allow_entry,
+                allow_entry=False if paper_active else (allow_entry and preview_ok),
             )
             if qty > 0 and hit_stop and stop_locked:
                 limit_px = float(limit_state["limit_px"])
@@ -1844,6 +2214,12 @@ def collect_rows(
                     "更新": q["last_ts"][11:19]
                     if len(q["last_ts"]) >= 19
                     else q["last_ts"],
+                    "market_phase": phase_label,
+                    "过门": gate_label,
+                    "过门OK": allow_entry,
+                    "前日形态": prev_shape,
+                    "阈值就绪": preview_ok,
+                    "竞价参考": auction_ref,
                     "error": None,
             }
             _apply_trigger_date_fields(
@@ -2129,891 +2505,6 @@ def _fmt_num(v: Any, digits: int = 2) -> str:
         return str(v)
 
 
-def _cls_chg(v: Any) -> str:
-    try:
-        x = float(v)
-    except (TypeError, ValueError):
-        return ""
-    if x > 0:
-        return "up"
-    if x < 0:
-        return "down"
-    return "flat"
-
-
-def _s(html: str) -> str:
-    """包一层敏感数据标记，页内眼睛按钮可隐藏（指数区不使用）。"""
-    return f'<span class="sensitive">{html}</span>'
-
-
-def write_html_report(
-    rows: list[dict[str, Any]],
-    indices: list[dict[str, Any]] | None = None,
-    path: Path = REPORT_FILE,
-    *,
-    refresh_sec: int | None = None,
-) -> Path:
-    """生成持仓盯盘 HTML。refresh_sec>0 时启用盯盘自动刷新脚本。"""
-    indices = indices or []
-    total_pnl = 0.0  # 未平仓浮盈 + 今日已结算盈亏
-    total_day_pnl = 0.0  # 未平仓当日 + 已结算当日
-    total_mv = 0.0
-    total_mv_no_cost = 0.0
-    total_cost = 0.0  # 未平仓成本 + 已结算成本（用于总盈亏%）
-    total_day_base = 0.0
-    settled_pnl = 0.0
-    settled_day = 0.0
-    settled_n = 0
-    has_pos = False
-    has_day = False
-    for r in rows:
-        qty = int(r.get("持仓") or 0)
-        realized = bool(r.get("已实现"))
-        # 总盈亏：持仓浮盈 + 已结算锁定盈亏
-        if r.get("浮盈") is not None and (qty > 0 or realized):
-            total_pnl += float(r["浮盈"])
-            has_pos = True
-        if r.get("当日盈亏") is not None and (qty > 0 or realized):
-            total_day_pnl += float(r["当日盈亏"])
-            has_day = True
-            db = r.get("当日基数")
-            if db is not None and float(db) > 0:
-                total_day_base += float(db)
-            else:
-                dpct = r.get("当日盈亏%")
-                if dpct is not None and abs(float(dpct)) > 1e-12:
-                    total_day_base += float(r["当日盈亏"]) / (float(dpct) / 100.0)
-                elif r.get("市值") is not None and not realized:
-                    total_day_base += float(r["市值"]) - float(r["当日盈亏"])
-        if realized:
-            settled_n += 1
-            if r.get("浮盈") is not None:
-                settled_pnl += float(r["浮盈"])
-            if r.get("当日盈亏") is not None:
-                settled_day += float(r["当日盈亏"])
-            if r.get("成本") is not None and r.get("卖出数量"):
-                total_cost += float(r["成本"]) * int(r["卖出数量"])
-        if r.get("市值") is not None and qty > 0:
-            mv = float(r["市值"])
-            total_mv += mv
-            if r.get("成本额") is None:
-                total_mv_no_cost += mv
-        if r.get("成本额") is not None and qty > 0:
-            total_cost += float(r["成本额"])
-    total_pnl_pct = (total_pnl / total_cost * 100.0) if total_cost > 0 else None
-    total_day_pct = (
-        (total_day_pnl / total_day_base * 100.0) if has_day and total_day_base > 0 else None
-    )
-    holdings_meta = load_holdings()
-    account_total = _account_total(rows, holdings_meta)
-    available_cash = _available_cash(rows, holdings_meta)
-    session_for_open = next(
-        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
-        str(pd.Timestamp.now().date()),
-    )
-    _ensure_account_open_session(
-        holdings_meta,
-        session=session_for_open,
-        account_total=account_total,
-    )
-    holdings_meta = load_holdings()
-    account_open = _account_total_open(holdings_meta)
-    # 有日初总资产时：合计盈亏=总资产相对日初变动；盈亏%统一用日初总资产做分母
-    if account_total is not None and account_open is not None:
-        total_pnl = round(float(account_total) - float(account_open), 2)
-        has_pos = True
-        total_pnl_pct = round(total_pnl / float(account_open) * 100.0, 2)
-    if has_day and account_open is not None and account_open > 0:
-        total_day_pct = round(total_day_pnl / float(account_open) * 100.0, 2)
-    position_pct = (
-        round(total_mv / account_total * 100.0, 1)
-        if account_total and account_total > 0 and total_mv > 0
-        else None
-    )
-    today_opened = _today_opened_cost(rows, session_for_open)
-
-    index_cards = []
-    for ix in indices:
-        err = ix.get("error")
-        price = ix.get("price")
-        pts = ix.get("chg_points")
-        pct = ix.get("chg_pct")
-        index_cards.append(
-            f"""
-            <div class="index-card">
-              <div class="index-name">
-                <span class="market">{escape(str(ix.get('market','')))}</span>
-                <strong>{escape(str(ix.get('name','')))}</strong>
-                <code>{escape(str(ix.get('code','')))}</code>
-              </div>
-              {"<div class='err'>" + escape(str(err)) + "</div>" if err else f'''
-              <div class="index-metrics">
-                <div><span>点数</span><b>{_fmt_num(price, 2)}</b></div>
-                <div><span>涨跌点数</span><b class="{_cls_chg(pts)}">{('-' if pts is None else f'{float(pts):+.2f}')}</b></div>
-                <div><span>涨跌幅</span><b class="{_cls_chg(pct)}">{('-' if pct is None else f'{float(pct):+.2f}%')}</b></div>
-              </div>
-              '''}
-            </div>
-            """
-        )
-
-    cards = []
-    for r in rows:
-        err = r.get("error")
-        day_chg = r.get("当日涨幅")
-        vs_open = r.get("较开盘点")
-        vs_open_pct = r.get("较开盘涨幅")
-        pnl = r.get("浮盈")
-        pnl_pct = r.get("浮盈%")
-        day_pnl = r.get("当日盈亏")
-        day_pnl_pct = r.get("当日盈亏%")
-        alert = r.get("预警") or ""
-        pos_status = str(r.get("持仓状态") or "")
-        weight = r.get("仓位%")
-        weight_txt = "" if weight is None else f" {float(weight):.1f}%"
-        bg = r.get("bg_class") or ""
-        suggest_px = r.get("建议挂单")
-        suggest_note = r.get("挂单说明") or ""
-        # 角标：持仓状态为主；附带策略明细（已触买/将止损/T+1/当日禁买 等）
-        if pos_status == "当日禁买":
-            badge_txt = alert if alert and alert not in ("空仓", "-") else "当日禁买"
-            badge_cls = "tag-flat"
-        elif pos_status == "策略持有":
-            if r.get("近止损") or "将止损" in alert or "止损" in alert:
-                badge_txt = (
-                    f"策略持有 · {alert}"
-                    if alert and alert not in ("策略回放持有·未登记仓",)
-                    else "策略持有 · 近止损"
-                )
-                badge_cls = "tag-alert"
-            else:
-                badge_txt = "策略持有"
-                badge_cls = "tag-hold"
-        elif alert.startswith("持有"):
-            badge_txt = alert
-            badge_cls = "tag-hold"
-        elif pos_status == "持有":
-            badge_txt = "持有"
-            badge_cls = "tag-hold"
-        elif pos_status == "待卖出":
-            badge_txt = f"待卖出 · {alert}" if alert and alert != "待卖出" else "待卖出"
-            badge_cls = "tag-alert"
-        elif pos_status == "待买入":
-            badge_txt = f"待买入 · {alert}" if alert and alert not in ("空仓", "待买入") else "待买入"
-            badge_cls = "tag-alert"
-        elif pos_status == "空仓":
-            badge_txt = "空仓"
-            badge_cls = "tag-flat"
-        else:
-            badge_txt = alert or pos_status or "-"
-            badge_cls = "tag-alert"
-        alert_html = ""
-        if badge_txt and badge_txt != "-":
-            wt_html = (
-                f'<span class="wt sensitive">{escape(weight_txt)}</span>' if weight_txt else ""
-            )
-            alert_html = (
-                f'<div class="alert-badge {badge_cls}">'
-                f"{escape(badge_txt)}{wt_html}</div>"
-            )
-        pdg = int(r.get("价位小数") or 2)
-        qty_card = int(r.get("持仓") or 0)
-        suggest_html = ""
-        # 待买入/待卖出：建议挂单=因子价；持有/策略持有：展示卖出因子价（策略止损）
-        factor_px_row = r.get("因子价")
-        stop_px_row = r.get("止损")
-        sell_factor_px = (
-            factor_px_row
-            if factor_px_row is not None
-            else stop_px_row
-        )
-        if (
-            suggest_px is not None
-            and pos_status in ("待买入", "待卖出")
-            and bg in ("warn-buy", "warn-sell")
-            and factor_px_row is not None
-            and abs(float(suggest_px) - float(factor_px_row)) <= 1e-9
-        ):
-            suggest_html = (
-                f'<div class="suggest-order sensitive">'
-                f'建议挂单 <strong>{_fmt_num(suggest_px, pdg)}</strong>'
-                f'{" · " + escape(suggest_note) if suggest_note else ""}'
-                f"</div>"
-            )
-        elif sell_factor_px is not None and pos_status in ("持有", "策略持有"):
-            thr = r.get("阈值%")
-            f4 = str(r.get("因子4") or "")
-            if isinstance(thr, (int, float)):
-                thr_txt = f"开盘−{float(thr):g}%"
-            elif thr:
-                thr_txt = str(thr)
-            else:
-                thr_txt = f"开盘−{DEFAULT_PCT * 100:.1f}%"
-            if f4 and f4 not in ("-", "非牛市·因子1止损"):
-                thr_txt = f"{thr_txt} · {f4}"
-            if pos_status == "策略持有":
-                t1_note = " · 未登记仓·仅策略参考"
-            else:
-                t1_note = " · T+1暂不可卖" if "T+1" in alert else " · 可预埋条件卖"
-            suggest_html = (
-                f'<div class="suggest-order sensitive">'
-                f'卖出因子价 <strong>{_fmt_num(sell_factor_px, pdg)}</strong>'
-                f' · {escape(thr_txt)}止损{escape(t1_note)}'
-                f"</div>"
-            )
-        card_cls = f"card {bg}".strip()
-        factor_side = str(r.get("因子侧") or "-")
-        factor_px = r.get("因子价")
-        if factor_px is None and (qty_card > 0 or pos_status == "策略持有"):
-            factor_px = stop_px_row
-        factor_hit = str(r.get("因子触发") or "-")
-        hit_live = (
-            factor_hit == "已触发"
-            or str(factor_hit).startswith("已触发 ")
-            or str(factor_hit).startswith("策略止损")
-        )
-        near_live = factor_hit == "接近"
-        hit_cls = (
-            "tag-buy"
-            if factor_side == "买入" and (hit_live or near_live)
-            else (
-                "tag-sell"
-                if (factor_side == "卖出" or pos_status == "策略持有")
-                and (hit_live or near_live or r.get("近止损"))
-                else (
-                    "tag-flat"
-                    if factor_hit.startswith("不可用") or pos_status == "当日禁买"
-                    else (
-                        "tag-hold"
-                        if factor_side == "持有" or factor_hit not in ("-", "未触发", "")
-                        else ""
-                    )
-                )
-            )
-        )
-        side_cls = (
-            "tag-buy"
-            if factor_side == "买入"
-            else (
-                "tag-sell"
-                if factor_side == "卖出"
-                else (
-                    "tag-hold"
-                    if factor_side == "持有"
-                    else ("tag-flat" if factor_side == "空仓" else "")
-                )
-            )
-        )
-        # 有仓/策略持有：因子价即卖出止损价；当日禁买：展示上次买入因子价
-        if qty_card > 0 or pos_status == "策略持有":
-            factor_px_cls = "tag-sell"
-            factor_px_label = "卖出因子价"
-        elif pos_status == "当日禁买":
-            factor_px_cls = "tag-buy"
-            factor_px_label = "买入因子价"
-        elif pos_status in ("待买入", "空仓"):
-            factor_px_cls = side_cls
-            factor_px_label = "买入因子价"
-        else:
-            factor_px_cls = side_cls
-            factor_px_label = "因子价"
-        pos_cls = (
-            "tag-hold"
-            if pos_status in ("持有", "策略持有")
-            else (
-                "tag-alert"
-                if pos_status in ("待卖出", "待买入")
-                else ("tag-flat" if pos_status in ("空仓", "当日禁买") else "")
-            )
-        )
-        paper_like = qty_card > 0 or pos_status in ("策略持有", "当日禁买")
-        trig_side = str(r.get("已触发因子侧") or ("买入" if paper_like else "卖出"))
-        next_side = str(r.get("未触发因子侧") or ("卖出" if paper_like else "买入"))
-        trig_ref = r.get("已触发因子价")
-        next_ref = r.get("未触发因子价")
-        d_trig_px = r.get("距已触发价差")
-        d_trig_pct = r.get("距已触发%")
-        d_next_px = r.get("距未触发价差")
-        d_next_pct = r.get("距未触发%")
-
-        def _dist_cell(
-            label: str, side: str, ref_px: Any, dpx: Any, dpct: Any
-        ) -> str:
-            side_tag = "tag-buy" if side == "买入" else ("tag-sell" if side == "卖出" else "")
-            ref_txt = (
-                f"因子@{_fmt_num(ref_px, pdg)}" if ref_px is not None else ""
-            )
-            if dpx is not None and dpct is not None:
-                body = (
-                    f'<b class="{_cls_chg(dpct)}">'
-                    f'{_s(f"{float(dpx):+.{pdg}f} ({float(dpct):+.2f}%)")}'
-                    f"</b>"
-                    f'<em class="{side_tag}">{escape(side)}{escape(ref_txt)}</em>'
-                )
-            else:
-                body = (
-                    f"<b>-</b>"
-                    f'<em class="{side_tag}">{escape(side)}{escape(ref_txt)}</em>'
-                )
-            return (
-                f'<div class="dist-factor">'
-                f"<span>{escape(label)}</span>{body}</div>"
-            )
-
-        dist_html = (
-            _dist_cell("距已触发因子", trig_side, trig_ref, d_trig_px, d_trig_pct)
-            + _dist_cell("距未触发因子", next_side, next_ref, d_next_px, d_next_pct)
-        )
-        cards.append(
-            f"""
-            <article class="{card_cls}">
-              <header>
-                <div class="title">
-                  <span class="market">{escape(str(r['市场']))}</span>
-                  <h2 class="sensitive">{escape(str(r['名称']))}</h2>
-                  <code class="sensitive">{escape(str(r['代码']))}</code>
-                  {alert_html}
-                </div>
-                <div class="price">
-                  <div class="last">{_s(_fmt_num(r.get('现价'), pdg))}</div>
-                  <div class="chg {_cls_chg(day_chg)}">
-                    {_s('-' if day_chg is None else f'{float(day_chg):+.2f}%')}
-                  </div>
-                </div>
-              </header>
-              {"<p class='err'>行情失败: " + escape(str(err)) + "</p>" if err else ""}
-              {suggest_html}
-              <div class="grid">
-                <div><span>持仓状态</span><b class="{pos_cls}">{escape(pos_status or '-')}</b></div>
-                <div><span>持股数</span><b>{_s(str(int(r.get('持仓') or 0)))}</b></div>
-                <div><span>可卖</span><b>{_s(str(int(r.get('可用') or 0)) if int(r.get('持仓') or 0) > 0 else '-')}</b></div>
-                <div><span>当日涨幅</span><b class="{_cls_chg(day_chg)}">{_s('-' if day_chg is None else f'{float(day_chg):+.2f}%')}</b></div>
-                <div><span>开盘</span><b>{_s(_fmt_num(r.get('开盘'), pdg))}</b></div>
-                <div><span>较开盘涨幅</span><b class="{_cls_chg(vs_open_pct)}">{_s('-' if vs_open_pct is None else f'{float(vs_open_pct):+.2f}%')}</b></div>
-                <div><span>因子侧</span><b class="{side_cls}">{escape(factor_side)}</b></div>
-                <div><span>{factor_px_label}</span><b class="{factor_px_cls}">{_s(_fmt_num(factor_px, pdg) if factor_px is not None else '-')}</b></div>
-                <div><span>因子触发</span><b class="{hit_cls}">{escape(factor_hit)}</b></div>
-                {dist_html}
-              </div>
-              <footer>更新 {escape(str(r.get('更新') or '-'))}</footer>
-            </article>
-            """
-        )
-
-    clock_now = _now()
-    indices_html = "".join(index_cards)
-    cards_html = "".join(cards)
-    _f2_raw = (
-        holdings_meta.get("factor2")
-        if isinstance(holdings_meta.get("factor2"), dict)
-        else None
-    )
-    _f2_txt = format_factor2_summary(_f2_raw)
-    summary_html = f"""
-      <div class="summary">
-        <div class="label">合计盈亏</div>
-        <div class="value {_cls_chg(total_pnl if has_pos else None)}">
-          {_s('-' if not has_pos else f'{total_pnl:+.2f}')}
-          <span style="font-size:0.95rem;font-weight:600;margin-left:6px;">
-            {_s('-' if total_pnl_pct is None else f'{total_pnl_pct:+.2f}%')}
-          </span>
-        </div>
-        <div class="day-line">
-          <span class="day-label">当日盈亏</span>
-          <span class="day-value {_cls_chg(total_day_pnl if has_day else None)}">
-            {_s('-' if not has_day else f'{total_day_pnl:+.2f}')}
-            {_s(' ' + ('-' if total_day_pct is None else f'{total_day_pct:+.2f}%'))}
-          </span>
-        </div>
-        <div class="meta sensitive">
-          总资产 {_fmt_num(account_total)}
-          · 可用 {_fmt_num(available_cash)}
-          · 仓位 {('-' if position_pct is None else f'{position_pct:.1f}%')}
-          · 市值 {_fmt_num(total_mv if total_mv else None)}
-          · 成本 {_fmt_num(total_cost if total_cost else None)}
-          · 当日开仓 {_fmt_num(today_opened if today_opened > 0 else None)}
-          {f' · 未计成本市值 {_fmt_num(total_mv_no_cost)}' if total_mv_no_cost > 0 else ''}
-          {f' · 今日结算{settled_n}笔 盈亏{settled_pnl:+.2f}/当日{settled_day:+.2f}' if settled_n > 0 else ''}
-        </div>
-        <div class="meta factor2-line">{escape(_f2_txt)}</div>
-      </div>
-    """
-    top_html = indices_html + summary_html
-
-    refresh_head = ""
-    refresh_script = ""
-    watch_hint = "刷新请重新运行 <code>python index.py</code> 或 <code>python index.py html</code>。"
-    hero_extra = ""
-    live_payload: dict[str, Any] | None = None
-    if refresh_sec is not None and int(refresh_sec) > 0:
-        sec = int(refresh_sec)
-        refresh_head = ""
-        hero_extra = (
-            f' · <span class="watch-live">盯盘中</span>'
-            f' · <span id="watch-status">WebSocket 连接中…</span>'
-        )
-        watch_hint = (
-            "盯盘模式：WebSocket 推送就地更新数据，"
-            "<strong>不会自动整页刷新</strong>（需整页时请手动 F5）。"
-            " 停止请在终端 Ctrl+C。"
-        )
-        live_payload = {
-            "type": "live",
-            "ts": int(datetime.now().timestamp() * 1000),
-            "updated_at": clock_now,
-            "clock": clock_now,
-            "top_html": top_html,
-            "cards_html": cards_html,
-            "refresh_sec": sec,
-        }
-        refresh_script = f"""
-<script>
-(function () {{
-  const metaUrl = "/holdings_watch.json";
-  const wsPath = (location.protocol === "https:" ? "wss://" : "ws://")
-    + location.host + "/ws";
-  const statusEl = document.getElementById("watch-status");
-  const clockEl = document.getElementById("live-clock");
-  let useWs = false;
-  let ws = null;
-  let wsRetry = 0;
-  let syncing = false;
-  let lastTs = null;
-
-  function setStatus(text) {{
-    if (statusEl) statusEl.textContent = text;
-  }}
-
-  function applyLive(j) {{
-    if (!j || j.type !== "live") return;
-    if (j.ts != null && lastTs != null && String(j.ts) === String(lastTs)) return;
-    lastTs = j.ts != null ? String(j.ts) : lastTs;
-    const top = document.getElementById("live-top-row");
-    const cards = document.getElementById("live-cards");
-    if (top && typeof j.top_html === "string") top.innerHTML = j.top_html;
-    if (cards && typeof j.cards_html === "string") cards.innerHTML = j.cards_html;
-    if (clockEl && j.clock) clockEl.textContent = j.clock;
-    if (j.updated_at) setStatus("实时 " + j.updated_at);
-  }}
-
-  async function syncFallback() {{
-    if (useWs || syncing) return;
-    syncing = true;
-    try {{
-      const r = await fetch(metaUrl + "?t=" + Date.now(), {{ cache: "no-store" }});
-      if (!r.ok) return;
-      const j = await r.json();
-      applyLive(j);
-      setStatus("兜底同步 " + (j.updated_at || ""));
-    }} catch (e) {{
-      setStatus("推送断开，等待重连…");
-    }} finally {{
-      syncing = false;
-    }}
-  }}
-
-  function connectWs() {{
-    try {{
-      ws = new WebSocket(wsPath);
-    }} catch (e) {{
-      useWs = false;
-      setStatus("WebSocket 不可用，改用兜底同步");
-      return;
-    }}
-    ws.onopen = function () {{
-      useWs = true;
-      wsRetry = 0;
-      setStatus("WebSocket 已连接");
-    }};
-    ws.onmessage = function (ev) {{
-      try {{
-        applyLive(JSON.parse(ev.data || "{{}}"));
-      }} catch (e) {{}}
-    }};
-    ws.onclose = function () {{
-      useWs = false;
-      ws = null;
-      setStatus("推送断开，重连中…");
-      const delay = Math.min(15000, 1000 * Math.pow(2, wsRetry++));
-      setTimeout(connectWs, delay);
-    }};
-    ws.onerror = function () {{
-      try {{ ws && ws.close(); }} catch (e) {{}}
-    }};
-  }}
-
-  connectWs();
-  // 仅在 WS 断开时用 JSON 就地补数，绝不 location.reload
-  setInterval(function () {{
-    if (!useWs) syncFallback();
-  }}, Math.max(3000, {sec} * 1000));
-}})();
-</script>
-"""
-
-    html = f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />{refresh_head}
-  <title>持仓盯盘 · {_watchlist_codes_label()}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
-  <style>
-    :root {{
-      --bg0: #f3f6f4;
-      --bg1: #e7efe9;
-      --ink: #14201a;
-      --muted: #5c6f66;
-      --line: #c9d6cf;
-      --card: rgba(255,255,255,0.82);
-      --up: #b42318;
-      --down: #0b7a45;
-      --accent: #1f6b4a;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      min-height: 100vh;
-      color: var(--ink);
-      font-family: "IBM Plex Sans", "Noto Sans SC", sans-serif;
-      background:
-        radial-gradient(1200px 600px at 10% -10%, #d9ebe0 0%, transparent 55%),
-        radial-gradient(900px 500px at 100% 0%, #e4eef8 0%, transparent 50%),
-        linear-gradient(180deg, var(--bg0), var(--bg1));
-    }}
-    .wrap {{ width: min(1100px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }}
-    .hero {{
-      margin-bottom: 12px;
-    }}
-    .hero-row {{
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-    }}
-    .privacy-toggle {{
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 42px;
-      height: 42px;
-      margin-top: 2px;
-      padding: 0;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--card);
-      color: var(--muted);
-      cursor: pointer;
-      transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-    }}
-    .privacy-toggle:hover {{
-      color: var(--accent);
-      border-color: #b7d2c4;
-      background: rgba(255,255,255,0.95);
-    }}
-    .privacy-toggle svg {{ width: 22px; height: 22px; display: block; }}
-    .privacy-toggle .icon-eye-on {{ display: none; }}
-    body:not(.privacy-hidden) .privacy-toggle .icon-eye-on {{ display: block; }}
-    body:not(.privacy-hidden) .privacy-toggle .icon-eye-off {{ display: none; }}
-    body.privacy-hidden .sensitive {{
-      filter: blur(7px);
-      user-select: none;
-      pointer-events: none;
-    }}
-    body.privacy-hidden h2.sensitive,
-    body.privacy-hidden code.sensitive {{
-      filter: blur(8px);
-      color: transparent;
-      text-shadow: 0 0 10px rgba(28, 35, 51, 0.55);
-    }}
-    body.privacy-hidden .sensitive.up,
-    body.privacy-hidden .sensitive.down,
-    body.privacy-hidden .sensitive.flat {{
-      color: transparent !important;
-    }}
-    .hero h1 {{
-      margin: 0 0 6px; font-size: clamp(1.6rem, 3vw, 2.2rem); letter-spacing: -0.02em;
-    }}
-    .hero p {{ margin: 0; color: var(--muted); font-size: 0.95rem; }}
-    .watch-live {{ color: var(--accent); font-weight: 600; }}
-    #watch-status {{ color: var(--accent); font-variant-numeric: tabular-nums; }}
-    #live-clock {{ font-variant-numeric: tabular-nums; }}
-    .top-row {{
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 16px;
-      align-items: stretch;
-    }}
-    .summary {{
-      min-width: 0;
-      padding: 14px 16px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: var(--card);
-      backdrop-filter: blur(8px);
-    }}
-    .summary .label {{ color: var(--muted); font-size: 0.85rem; }}
-    .summary .value {{ font-size: 1.55rem; font-weight: 700; margin-top: 4px; }}
-    .summary .sub {{ color: var(--muted); font-size: 0.9rem; margin-top: 2px; }}
-    .summary .day-line {{
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px dashed var(--line);
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 12px;
-    }}
-    .summary .day-line .day-label {{ color: var(--muted); font-size: 0.85rem; }}
-    .summary .day-line .day-value {{ font-size: 1.05rem; font-weight: 700; }}
-    .summary .meta {{ color: var(--muted); font-size: 0.78rem; margin-top: 8px; line-height: 1.4; }}
-    .summary .factor2-line {{
-      color: #1f2937;
-      font-size: 0.86rem;
-      font-weight: 600;
-      margin-top: 10px;
-      line-height: 1.45;
-    }}
-    .index-card {{
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: var(--card);
-      backdrop-filter: blur(8px);
-      padding: 14px 16px;
-      min-width: 0;
-    }}
-    .index-name {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }}
-    .index-name strong {{ font-size: 1.05rem; }}
-    .index-name code {{ color: var(--muted); font-size: 0.85rem; }}
-    .index-metrics {{
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-    }}
-    .index-metrics span {{ display: block; color: var(--muted); font-size: 0.78rem; }}
-    .index-metrics b {{ font-size: 1.05rem; font-weight: 700; }}
-    @media (max-width: 900px) {{
-      .top-row {{ grid-template-columns: 1fr; }}
-    }}
-    .cards {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
-    }}
-    .card {{
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--card);
-      backdrop-filter: blur(8px);
-      padding: 10px 12px;
-      box-shadow: 0 6px 18px rgba(20, 32, 26, 0.04);
-      transition: background 0.25s ease, border-color 0.25s ease;
-    }}
-    /* 将买入：红底；将卖出：绿底（A股习惯）；持有/空仓为中性态 */
-    .card.warn-buy {{
-      background: rgba(255, 214, 214, 0.92);
-      border-color: #e08a8a;
-      box-shadow: 0 8px 20px rgba(180, 35, 24, 0.10);
-    }}
-    .card.warn-sell {{
-      background: rgba(198, 236, 214, 0.92);
-      border-color: #6fbf8f;
-      box-shadow: 0 8px 20px rgba(11, 122, 69, 0.10);
-    }}
-    .card.status-hold {{
-      background: rgba(255,255,255,0.88);
-      border-color: var(--line);
-    }}
-    .card.status-flat {{
-      background: rgba(255,255,255,0.72);
-      border-color: #d5ddd8;
-    }}
-    .card header {{ display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }}
-    .market {{
-      display: inline-block; font-size: 0.68rem; color: var(--accent);
-      border: 1px solid #b7d2c4; border-radius: 999px; padding: 1px 6px; margin-bottom: 3px;
-    }}
-    .title h2 {{ margin: 0; font-size: 1.0rem; }}
-    .title code {{ color: var(--muted); font-size: 0.78rem; }}
-    .alert-badge {{
-      display: inline-block;
-      margin-top: 4px;
-      padding: 2px 7px;
-      border-radius: 5px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      color: var(--up);
-      background: rgba(180, 35, 24, 0.12);
-      border: 1px solid rgba(180, 35, 24, 0.35);
-    }}
-    .card.warn-buy .alert-badge,
-    .card.warn-sell .alert-badge {{
-      color: var(--up);
-      background: rgba(180, 35, 24, 0.16);
-      border-color: rgba(180, 35, 24, 0.45);
-    }}
-    .card.status-hold .alert-badge {{
-      color: var(--accent);
-      background: rgba(31, 107, 74, 0.10);
-      border-color: rgba(31, 107, 74, 0.30);
-    }}
-    .card.status-flat .alert-badge {{
-      color: var(--muted);
-      background: rgba(92, 111, 102, 0.08);
-      border-color: rgba(92, 111, 102, 0.25);
-    }}
-    .alert-badge .wt {{
-      margin-left: 2px;
-      font-weight: 600;
-      opacity: 0.85;
-    }}
-    .tag-hold {{ color: var(--accent); font-weight: 700; }}
-    .tag-flat {{ color: var(--muted); }}
-    .suggest-order {{
-      margin: 0 0 8px;
-      padding: 5px 8px;
-      border-radius: 6px;
-      font-size: 0.78rem;
-      background: rgba(255,255,255,0.55);
-      border: 1px dashed var(--line);
-    }}
-    .suggest-order strong {{ font-size: 0.92rem; margin-left: 4px; }}
-    .price {{ text-align: right; }}
-    .last {{ font-size: 1.35rem; font-weight: 700; line-height: 1.1; }}
-    .chg {{ font-size: 0.8rem; margin-top: 2px; }}
-    .grid {{
-      display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px;
-      border-top: 1px dashed var(--line); padding-top: 8px;
-    }}
-    .grid div span {{ display: block; color: var(--muted); font-size: 0.68rem; }}
-    .grid div b {{ font-size: 0.86rem; font-weight: 600; }}
-    .grid .dist-factor {{
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 8px;
-    }}
-    .grid .dist-factor span {{ display: inline; margin-right: 6px; }}
-    .grid .dist-factor b {{
-      white-space: nowrap;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: 0.01em;
-      flex: 1;
-      text-align: right;
-    }}
-    .grid .dist-factor em {{
-      font-style: normal;
-      font-size: 0.72rem;
-      font-weight: 600;
-      min-width: 2em;
-      text-align: right;
-    }}
-    .up {{ color: var(--up); }}
-    .down {{ color: var(--down); }}
-    .flat {{ color: var(--muted); }}
-    .tag-yes {{ color: var(--accent); }}
-    .tag-alert {{ color: var(--up); font-weight: 700; }}
-    .tag-buy {{ color: var(--up); }}
-    .tag-sell {{ color: var(--down); }}
-    .err {{ color: var(--up); font-size: 0.8rem; }}
-    footer {{ margin-top: 8px; color: var(--muted); font-size: 0.72rem; }}
-    .note {{ margin-top: 18px; color: var(--muted); font-size: 0.86rem; line-height: 1.5; }}
-    @media (min-width: 900px) {{
-      .cards {{ grid-template-columns: repeat(4, 1fr); }}
-    }}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="hero">
-      <div class="hero-row">
-        <div>
-          <h1>持仓盯盘</h1>
-          <p><span class="sensitive">{escape(_watchlist_codes_label())}</span> · {STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL} · <span id="live-clock">{escape(clock_now)}</span>{hero_extra}</p>
-        </div>
-        <button type="button" id="privacy-toggle" class="privacy-toggle" title="点击隐藏持仓数据" aria-label="显示或隐藏持仓数据" aria-pressed="false">
-          <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-            <line x1="1" y1="1" x2="23" y2="23"/>
-          </svg>
-          <svg class="icon-eye-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    <div class="top-row" id="live-top-row">
-      {top_html}
-    </div>
-    <div class="cards" id="live-cards">
-      {cards_html}
-    </div>
-    <p class="note">
-      策略锁定 {STRATEGY_NAME}（{_STRATEGY_SYNC_NOTE}）。
-      因子1：买卖点/止损；卖出仅止损全清。
-      因子2：账户回撤加减仓预警（摘要见合计区；只预警不改现金）。
-      {"因子4：牛市 regime 内止损放宽或暂停（与回测 per_symbol 对齐）。" if USE_FACTOR4 else ""}
-      持仓状态：待买入 / 待卖出 / 持有 / 空仓；策略回放未登记=策略持有；当日止损后=当日禁买。
-      规则：T+1当日不卖；持有仅止损卖；止损/卖出当日不买。
-      卡片排序：实仓待卖出 → 实仓持有 → 曾经持仓 → 待买入 → 策略持有 → 空仓。
-      因子侧：待卖出预警→卖出；待买入预警→买入；策略持有→持有；其余→空仓。
-      因子触发：盘中预警写「已触发 M/D」；止损日写「策略止损 M/D」；否则最近因子日。
-      距已触发/未触发：因子一旦触发即自动翻转，并写入 factor_memory。
-      因子价：空仓/待买入=买点；持有/策略持有=止损价；当日禁买=上次买入因子价。
-      |距未触发%|≤{NEAR_FACTOR_PCT:g}% → 将买入/将止损。微信：P0因子已触发 / P1触发预警带；有仓只推止损，空仓只推买入。
-      {watch_hint}
-    </p>
-  </div>
-  {refresh_script}
-<script>
-(function () {{
-  const KEY = "holdings_privacy_hidden";
-  const btn = document.getElementById("privacy-toggle");
-  if (!btn) return;
-
-  function isHidden() {{
-    const v = localStorage.getItem(KEY);
-    if (v === null) return false;
-    return v === "1";
-  }}
-
-  function apply(hidden) {{
-    document.body.classList.toggle("privacy-hidden", hidden);
-    localStorage.setItem(KEY, hidden ? "1" : "0");
-    btn.setAttribute("aria-pressed", hidden ? "true" : "false");
-    btn.title = hidden ? "点击显示持仓数据" : "点击隐藏持仓数据";
-  }}
-
-  apply(isHidden());
-  btn.addEventListener("click", function () {{
-    apply(!document.body.classList.contains("privacy-hidden"));
-  }});
-}})();
-</script>
-</body>
-</html>
-"""
-    _atomic_write_text(path, html, encoding="utf-8")
-    if live_payload is not None:
-        # 先写完 HTML，再推送完整 live 载荷（页面就地改 DOM，不整页刷新）
-        _atomic_write_text(
-            WATCH_META_FILE,
-            json.dumps(live_payload, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        hub = _ws_hub
-        if hub is not None:
-            try:
-                hub.broadcast_json(live_payload)
-            except Exception:  # noqa: BLE001
-                pass
-    return path
 
 
 def cmd_status(args: argparse.Namespace) -> None:
@@ -3161,11 +2652,26 @@ def cmd_status(args: argparse.Namespace) -> None:
     else:
         print("合计当日盈亏: -")
 
-    report = _write_html_respecting_watch(rows, indices=indices)
-    print(f"HTML 报告: {report}")
-    if not getattr(args, "no_open", False):
+    lock = _read_watch_lock()
+    if lock:
+        refresh_sec = 5
+        try:
+            meta = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
+            refresh_sec = int(meta.get("refreshSec") or meta.get("refresh_sec") or refresh_sec)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            pass
+        path = publish_watch_snapshot(rows, indices=indices, refresh_sec=refresh_sec)
+        print(f"检测到盯盘进程 (pid={lock.get('pid')})，已推送 JSON 快照: {path.name}")
         url = _report_url_if_watching()
-        webbrowser.open(url if url else report.resolve().as_uri())
+        if url:
+            print(f"前端: {url}")
+            if not getattr(args, "no_open", False):
+                webbrowser.open(url)
+    elif (WATCH_UI_DIST / "index.html").is_file():
+        print(f"提示: 启动 Web 盯盘 → python index.py watch  （前端已构建于 watch-ui/dist）")
+    else:
+        print("提示: cd holdingStocks/watch-ui && npm run build && python index.py watch")
+
     print(f"策略: {STRATEGY_NAME}（{_STRATEGY_SYNC_NOTE}）")
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
     print("     当日盈亏(现价盈亏): 隔夜=(现价-昨收)×持股；今买=(现价-今买成交价)×今买股数")
@@ -3174,26 +2680,6 @@ def cmd_status(args: argparse.Namespace) -> None:
     _f2 = load_holdings().get("factor2")
     print(f"     {format_factor2_summary(_f2 if isinstance(_f2, dict) else None)}")
 
-
-def cmd_html(args: argparse.Namespace) -> None:
-    rows = collect_rows()
-    indices = fetch_indices()
-    report = _write_html_respecting_watch(rows, indices=indices)
-    print(f"HTML 报告已生成: {report}")
-    for ix in indices:
-        if ix.get("error"):
-            print(f"  {ix['name']}: 失败 {ix['error']}")
-            continue
-        pts = ix["chg_points"]
-        pct = ix["chg_pct"]
-        print(
-            f"  {ix['name']}: 点数 {_fmt_num(ix['price'])} | "
-            f"涨跌点数 {('-' if pts is None else f'{pts:+.2f}')} | "
-            f"涨跌幅 {('-' if pct is None else f'{pct:+.2f}%')}"
-        )
-    if not getattr(args, "no_open", False):
-        url = _report_url_if_watching()
-        webbrowser.open(url if url else report.resolve().as_uri())
 
 
 def cmd_set_account(args: argparse.Namespace) -> None:
@@ -3479,7 +2965,7 @@ def _refresh_once(
     global _last_auction_skip_log
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices_cached()
-    path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
+    path = publish_watch_snapshot(rows, indices=indices, refresh_sec=refresh_sec)
     if wechat and is_signal_window():
         try:
             from wechat_notify import notify_watch_rows
@@ -3491,7 +2977,8 @@ def _refresh_once(
         now_m = time.monotonic()
         if now_m - _last_auction_skip_log >= 60.0:
             _last_auction_skip_log = now_m
-            print(f"[{_now()}] 集合竞价中（09:15–09:30），跳过因子预警推送")
+            ph = market_phase_label()
+            print(f"[{_now()}] 早盘 {ph}；微信推送待 9:30 连续竞价")
     return path
 
 
@@ -3511,12 +2998,26 @@ def _next_open_refresh_at(
     hour: int = OPEN_PRICE_REFRESH_HOUR,
     minute: int = OPEN_PRICE_REFRESH_MINUTE,
 ) -> datetime:
-    """下一档开盘价刷新时刻（默认每日 09:30，连续竞价开始）。"""
+    """下一档开盘价刷新时刻（默认每日 09:25）。"""
     now = now or datetime.now()
     target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if now >= target:
         target += timedelta(days=1)
     return target
+
+
+def _next_auction_milestone(
+    now: datetime | None = None,
+) -> tuple[datetime, str, str]:
+    """下一早盘里程碑：(时刻, 标签, 动作 reseed|open|refresh)。"""
+    now = now or datetime.now()
+    candidates: list[tuple[datetime, str, str]] = []
+    for h, m, label, action in AUCTION_MILESTONES:
+        t = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        if t <= now:
+            t += timedelta(days=1)
+        candidates.append((t, label, action))
+    return min(candidates, key=lambda x: x[0])
 
 
 def _log_watchlist_opens(rows: list[dict[str, Any]]) -> None:
@@ -3540,10 +3041,10 @@ def _refresh_open_prices(
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
 ) -> Path:
-    """强制拉一次行情，用最新开盘重算买点/止损并写报告。"""
+    """强制拉一次行情，用最新开盘重算买点/止损并推送 JSON 快照。"""
     rows = collect_rows(get_quote=get_quote)
     indices = fetch_indices()
-    path = write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
+    path = publish_watch_snapshot(rows, indices=indices, refresh_sec=refresh_sec)
     _log_watchlist_opens(rows)
     return path
 
@@ -3619,6 +3120,10 @@ def _release_watch_lock() -> None:
         pass
 
 
+def _watch_ui_url(host: str, port: int) -> str:
+    return f"http://{host}:{int(port)}/"
+
+
 def _report_url_if_watching() -> str | None:
     lock = _read_watch_lock()
     if not lock:
@@ -3627,27 +3132,7 @@ def _report_url_if_watching() -> str | None:
     port = lock.get("port")
     if port is None:
         return None
-    return f"http://{host}:{int(port)}/{REPORT_FILE.name}"
-
-
-def _write_html_respecting_watch(
-    rows: list[dict[str, Any]],
-    indices: list[dict[str, Any]] | None = None,
-) -> Path:
-    """status/html 写报告时：若盯盘在跑则保留刷新脚本，避免撕掉自动刷新。"""
-    lock = _read_watch_lock()
-    if not lock:
-        return write_html_report(rows, indices=indices)
-    refresh_sec = 60
-    try:
-        meta = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
-        refresh_sec = int(meta.get("refresh_sec") or refresh_sec)
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
-        pass
-    print(
-        f"检测到盯盘进程 (pid={lock.get('pid')})，保留自动刷新写入报告。"
-    )
-    return write_html_report(rows, indices=indices, refresh_sec=refresh_sec)
+    return _watch_ui_url(host, int(port))
 
 
 def cmd_review(args: argparse.Namespace) -> None:
@@ -3779,10 +3264,6 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 )
                 raise SystemExit(1)
 
-    open_h, open_m = _parse_hhmm(
-        getattr(args, "open_at", None)
-        or f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}"
-    )
     _acquire_watch_lock(host=host, port=port)
     stop = threading.Event()
     refresh_lock = threading.Lock()
@@ -3798,14 +3279,12 @@ def cmd_watch(args: argparse.Namespace) -> None:
     def get_quote(sina: str) -> dict[str, Any]:
         q = feed.get_quote(sina)
         if q is None:
-            q = fetch_today_quote(sina)
+            q = fetch_today_quote_live(sina)
             feed.seed(sina, q)
         return q
 
-    def reseed_all() -> None:
-        for w in WATCHLIST:
-            q = fetch_today_quote(w["sina"])
-            feed.seed(w["sina"], q)
+    def reseed_live() -> int:
+        return _reseed_live_batch(feed)
 
     def safe_refresh() -> Path:
         with refresh_lock:
@@ -3813,15 +3292,18 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
     def safe_open_refresh() -> Path:
         with refresh_lock:
-            reseed_all()
+            reseed_live()
             return _refresh_open_prices(interval, get_quote=get_quote)
 
-    print("冷启动：拉取开盘/分钟线并 seed…")
+    print("冷启动：新浪批量实时快照 + 预热日线…")
     try:
-        reseed_all()
+        t0 = time.perf_counter()
+        n_fast = reseed_live()
+        _daily_cache_warm()
         feed.start()
         report = safe_refresh()
-        print(f"报告已生成: {report}")
+        elapsed = time.perf_counter() - t0
+        print(f"快照已推送: {report}（实时 {n_fast} 只 · {elapsed:.1f}s）")
     except Exception as e:
         feed.stop()
         _ws_hub = None
@@ -3841,33 +3323,39 @@ def cmd_watch(args: argparse.Namespace) -> None:
             last = time.monotonic()
             try:
                 safe_refresh()
-                print(f"[{_now()}] 行情已更新 → {REPORT_FILE.name}")
+                print(f"[{_now()}] 快照已推送 → {WATCH_META_FILE.name}")
             except Exception as e:
                 print(f"[{_now()}] 更新失败: {e}")
 
-    def open_price_loop() -> None:
-        """每日固定时刻刷新盯盘开盘价（默认 09:30，连续竞价开始）。"""
+    def auction_milestone_loop() -> None:
+        """每日 9:15 / 9:20 / 9:25 / 9:30 定时动作。"""
         while not stop.is_set():
-            nxt = _next_open_refresh_at(hour=open_h, minute=open_m)
+            nxt, label, action = _next_auction_milestone()
             wait = (nxt - datetime.now()).total_seconds()
             print(
-                f"[{_now()}] 下次开盘价刷新 {_watchlist_codes_label()} @ "
-                f"{nxt.strftime('%Y-%m-%d %H:%M:%S')}（约 {wait:.0f}s）"
+                f"[{_now()}] 下次早盘节点 [{label}] "
+                f"@ {nxt.strftime('%Y-%m-%d %H:%M:%S')}（约 {wait:.0f}s）"
             )
             if stop.wait(max(1.0, wait)):
                 break
             try:
-                safe_open_refresh()
-                print(f"[{_now()}] 开盘价已写入 → {REPORT_FILE.name}")
+                if action == "reseed":
+                    reseed_live()
+                    safe_refresh()
+                elif action == "open":
+                    safe_open_refresh()
+                else:
+                    safe_refresh()
+                print(f"[{_now()}] 早盘节点 · {label}")
             except Exception as e:
-                print(f"[{_now()}] 开盘价刷新失败: {e}")
+                print(f"[{_now()}] 早盘节点失败 [{label}]: {e}")
 
     worker = threading.Thread(target=loop, name="holdings-watch", daemon=True)
     worker.start()
-    open_worker = threading.Thread(
-        target=open_price_loop, name="holdings-open-refresh", daemon=True
+    milestone_worker = threading.Thread(
+        target=auction_milestone_loop, name="holdings-auction-milestones", daemon=True
     )
-    open_worker.start()
+    milestone_worker.start()
 
     class _Handler(SimpleHTTPRequestHandler):
         def __init__(self, *a: Any, **kw: Any) -> None:
@@ -3875,7 +3363,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
         def log_message(self, fmt: str, *log_args: Any) -> None:
             path = getattr(self, "path", "") or ""
-            if WATCH_META_FILE.name in path or REPORT_FILE.name in path:
+            if WATCH_META_FILE.name in path or path.startswith("/api/"):
                 return
             if path.split("?", 1)[0] == "/ws":
                 return
@@ -3883,15 +3371,87 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
         def end_headers(self) -> None:
             path = self.path.split("?", 1)[0]
-            if path in (f"/{REPORT_FILE.name}", f"/{WATCH_META_FILE.name}"):
+            if path in (
+                f"/{WATCH_META_FILE.name}",
+                "/api/snapshot",
+            ):
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
                 self.send_header("Pragma", "no-cache")
             super().end_headers()
+
+        def _send_json(self, data: Any, *, status: int = 200) -> None:
+            body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        @staticmethod
+        def _content_type(path: Path) -> str:
+            ext = path.suffix.lower()
+            return {
+                ".html": "text/html; charset=utf-8",
+                ".js": "application/javascript; charset=utf-8",
+                ".css": "text/css; charset=utf-8",
+                ".svg": "image/svg+xml",
+                ".json": "application/json; charset=utf-8",
+                ".ico": "image/x-icon",
+                ".png": "image/png",
+                ".woff2": "font/woff2",
+            }.get(ext, "application/octet-stream")
+
+        def _serve_path(self, file_path: Path) -> None:
+            if not file_path.is_file():
+                self.send_error(404, "Not Found")
+                return
+            data = file_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", self._content_type(file_path))
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _resolve_ui_file(self, path: str) -> Path | None:
+            if not (WATCH_UI_DIST / "index.html").is_file():
+                return None
+            rel = path.split("?", 1)[0].lstrip("/") or "index.html"
+            candidate = (WATCH_UI_DIST / rel).resolve()
+            try:
+                candidate.relative_to(WATCH_UI_DIST.resolve())
+            except ValueError:
+                return None
+            return candidate if candidate.is_file() else None
 
         def do_GET(self) -> None:  # noqa: N802
             path = self.path.split("?", 1)[0]
             if path == "/ws":
                 self._handle_ws_upgrade()
+                return
+            if path == "/api/strategies":
+                self._send_json(_get_strategies_api_cache())
+                return
+            if path in ("/api/snapshot", f"/{WATCH_META_FILE.name}"):
+                snap = _last_watch_snapshot
+                if snap is None and WATCH_META_FILE.is_file():
+                    try:
+                        snap = json.loads(
+                            WATCH_META_FILE.read_text(encoding="utf-8")
+                        )
+                    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                        snap = None
+                if snap is None:
+                    self._send_json({"error": "snapshot unavailable"}, status=503)
+                    return
+                self._send_json(snap)
+                return
+            ui_file = self._resolve_ui_file(path)
+            if ui_file is not None:
+                self._serve_path(ui_file)
+                return
+            if (WATCH_UI_DIST / "index.html").is_file() and path != f"/{WATCH_META_FILE.name}":
+                self._serve_path(WATCH_UI_DIST / "index.html")
                 return
             super().do_GET()
 
@@ -3926,24 +3486,31 @@ def cmd_watch(args: argparse.Namespace) -> None:
             f"端口 {host}:{port} 无法绑定（可能已有盯盘在跑）。\n"
             f"请先停掉旧进程再启动，避免抢写报告。\n{e}"
         ) from e
-    url = f"http://{host}:{port}/{REPORT_FILE.name}"
+    url = _watch_ui_url(host, port)
     print(f"盯盘服务已启动: {url}")
+    if (WATCH_UI_DIST / "index.html").is_file():
+        print("前端: watch-ui/dist（Nuxt 3 · JSON WebSocket）")
+    else:
+        print(
+            "提示: 未找到 watch-ui/dist，请先 cd holdingStocks/watch-ui && npm run build"
+        )
     print(f"本地 WebSocket: ws://{host}:{port}/ws")
     print(
         f"策略同步: {STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL}"
     )
     print(
-        f"行情: 东财 SSE + 新浪批量兜底 · 刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · "
-        f"无行情保底 {interval}s · Ctrl+C 停止"
+        "行情: 东财 SSE + 新浪批量实时（不拉历史分钟 K）· "
+        f"刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · Ctrl+C 停止"
     )
     print(
-        f"开盘价定时: 每日 {open_h:02d}:{open_m:02d} 刷新盯盘标的 "
-        f"({_watchlist_codes_label()})"
+        f"开盘价定时: 每日 9:25 锁定开盘并算阈值；里程碑 "
+        f"{', '.join(f'{h:02d}:{m:02d}' for h, m, _, _ in AUCTION_MILESTONES)}"
     )
     print(
-        "信号窗口: 09:30 起触发买卖/止损结算/微信预警；"
-        "09:15–09:30 集合竞价仅刷新行情不触发"
+        "信号窗口: 9:15 拉竞价 · 9:25 算阈值/过门 · 9:30 起触发买卖/止损/微信；"
+        "9:15–9:30 不结算止损"
     )
+    print(f"当前阶段: {market_phase_label()}")
     pct_note = " / ".join(
         f"{w['code']}±{float(w['pct'])*100:.1f}%"
         for w in WATCHLIST
@@ -3988,13 +3555,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="持仓记录与盯盘")
     sub = p.add_subparsers(dest="cmd")
 
-    s = sub.add_parser("status", help="查看行情+持仓并生成 HTML（默认）")
+    s = sub.add_parser("status", help="终端查看行情+持仓（默认）")
     s.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     s.set_defaults(func=cmd_status)
-
-    html_p = sub.add_parser("html", help="生成并打开 HTML 报告")
-    html_p.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
-    html_p.set_defaults(func=cmd_html)
 
     rev = sub.add_parser(
         "review",

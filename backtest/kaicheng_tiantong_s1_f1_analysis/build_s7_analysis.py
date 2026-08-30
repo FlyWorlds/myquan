@@ -16,7 +16,7 @@ if str(_MYQUAN) not in sys.path:
 
 warnings.filterwarnings("ignore")
 
-from strategy import KAICHENG, TIANTONG, run_strategy7  # noqa: E402
+from strategy import KAICHENG, TIANTONG, run_strategy3  # noqa: E402
 from strategy.backtest import metric, monthly_returns_df  # noqa: E402
 
 DIR = Path(__file__).resolve().parent
@@ -231,8 +231,8 @@ def _norm_from_monthly(m: pd.DataFrame) -> tuple[list[str], list[float], list[fl
 
 
 def build_data() -> dict[str, Any]:
-    rk, dk = run_strategy7(KAICHENG, mode="unified", verbose=False, show_report=False)
-    rt, dt = run_strategy7(TIANTONG, mode="unified", verbose=False, show_report=False)
+    rk, dk = run_strategy3(KAICHENG, mode="unified", verbose=False, show_report=False)
+    rt, dt = run_strategy3(TIANTONG, mode="unified", verbose=False, show_report=False)
     cash = float(KAICHENG.initial_cash)
 
     mk = _monthly_rows(rk, dk, label="凯盛科技", initial_cash=cash)

@@ -1,14 +1,14 @@
-"""缠论笔算盈亏比 · 决策层：与因子1 开盘突破一致（研究归因不改下单）。"""
+"""策略七·缠论笔算盈亏比 · 决策层：与因子1 开盘突破一致（研究归因不改下单）。"""
 
 from __future__ import annotations
 
 from strategy.core.context import Decision, MarketContext
 from strategy.core.decision import BaseDecisionEngine
 from strategy.core.protocols import StrategySpec
-from strategy.strategies.strategy11.bindings import FACTOR_BINDINGS, STRATEGY_ID, STRATEGY_NAME
+from strategy.strategies.strategy7.bindings import FACTOR_BINDINGS, STRATEGY_ID, STRATEGY_NAME
 
 
-class Strategy11Decision(BaseDecisionEngine):
+class Strategy7Decision(BaseDecisionEngine):
     """空仓触买点买入；有仓触开盘止损卖出；其余持有。"""
 
     strategy_id = STRATEGY_ID
@@ -34,7 +34,7 @@ class Strategy11Decision(BaseDecisionEngine):
                     "T+1 禁卖",
                     buy_price=buy_px,
                     stop_price=stop_px,
-                    tags=("t1", "strategy11"),
+                    tags=("t1", "strategy7"),
                 )
             if low <= stop_px + 1e-12:
                 return Decision.sell(
@@ -43,13 +43,13 @@ class Strategy11Decision(BaseDecisionEngine):
                     factor_id="factor1",
                     buy_price=buy_px,
                     stop_price=stop_px,
-                    tags=("stop", "factor1", "strategy11"),
+                    tags=("stop", "factor1", "strategy7"),
                 )
             return Decision.hold(
                 "持仓未触止损",
                 buy_price=buy_px,
                 stop_price=stop_px,
-                tags=("strategy11",),
+                tags=("strategy7",),
             )
 
         if not self.factor_allowed(binding, ctx):
@@ -57,7 +57,7 @@ class Strategy11Decision(BaseDecisionEngine):
                 "因子过滤未通过（前日/前前日条件）",
                 buy_price=buy_px,
                 stop_price=stop_px,
-                tags=("filter", "strategy11"),
+                tags=("filter", "strategy7"),
             )
         if high + 1e-12 >= buy_px:
             return Decision.buy(
@@ -66,19 +66,22 @@ class Strategy11Decision(BaseDecisionEngine):
                 factor_id="factor1",
                 buy_price=buy_px,
                 stop_price=stop_px,
-                tags=("entry", "factor1", "strategy11"),
+                tags=("entry", "factor1", "strategy7"),
             )
         return Decision.hold(
             "空仓未触买点",
             buy_price=buy_px,
             stop_price=stop_px,
-            tags=("strategy11",),
+            tags=("strategy7",),
         )
 
 
-def create_decision_engine(spec: StrategySpec | None = None) -> Strategy11Decision:
+def create_decision_engine(spec: StrategySpec | None = None) -> Strategy7Decision:
     bindings = spec.factor_bindings if spec is not None else FACTOR_BINDINGS
-    return Strategy11Decision(bindings=bindings)
+    return Strategy7Decision(bindings=bindings)
 
 
-__all__ = ["Strategy11Decision", "create_decision_engine"]
+# 兼容旧类名
+Strategy11Decision = Strategy7Decision
+
+__all__ = ["Strategy7Decision", "Strategy11Decision", "create_decision_engine"]

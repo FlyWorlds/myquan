@@ -26,16 +26,27 @@ STRATEGY_NAME = "策略一·因子1+因子2"
 # 策略三（旧号策略七）才叠因子4；策略一关闭
 USE_FACTOR4 = False
 
-# 集合竞价 09:15–09:30：盘面价无连续交易意义，此间不触发买卖/止损结算/微信预警
+# 早盘节点（A 股集合竞价 + 连续竞价）
 AUCTION_START_HOUR = 9
-AUCTION_START_MINUTE = 15
-# 连续竞价开始后方可触发因子信号
+AUCTION_START_MINUTE = 15  # 9:15 起拉竞价行情；报单可撤
+AUCTION_NO_CANCEL_HOUR = 9
+AUCTION_NO_CANCEL_MINUTE = 20  # 9:20 起不可撤单
+AUCTION_OPEN_HOUR = 9
+AUCTION_OPEN_MINUTE = 25  # 9:25 开盘价确定 → 算过门/买点/止损
 SIGNAL_ACTIVE_HOUR = 9
-SIGNAL_ACTIVE_MINUTE = 30
+SIGNAL_ACTIVE_MINUTE = 30  # 9:30 连续竞价 → 触发买卖/止损结算/微信
 
-# 开盘价强制刷新（连续竞价开始，避开竞价脏价）
-OPEN_PRICE_REFRESH_HOUR = 9
-OPEN_PRICE_REFRESH_MINUTE = 30
+# 开盘价强制刷新（与 9:25 对齐）
+OPEN_PRICE_REFRESH_HOUR = AUCTION_OPEN_HOUR
+OPEN_PRICE_REFRESH_MINUTE = AUCTION_OPEN_MINUTE
+
+# watch 里程碑：(时, 分, 日志标签, 动作 reseed|open|refresh)
+AUCTION_MILESTONES: tuple[tuple[int, int, str, str], ...] = (
+    (9, 15, "竞价开始·拉行情（可撤单）", "reseed"),
+    (9, 20, "竞价·不可撤单", "refresh"),
+    (9, 25, "开盘价确定·算阈值/过门", "open"),
+    (9, 30, "连续竞价·信号触发", "refresh"),
+)
 
 INDEX_WATCH: list[dict[str, str]] = [
     {"code": "sh000001", "name": "上证指数", "market": "上证"},
@@ -43,25 +54,67 @@ INDEX_WATCH: list[dict[str, str]] = [
 ]
 
 
-def is_signal_window(now: Any | None = None) -> bool:
-    """连续竞价开始后才允许因子触发/止损结算/微信预警。
-
-    09:15–09:30 集合竞价盘面价无连续交易意义，此间返回 False。
-    """
+def _clock_minutes(now: Any | None = None) -> int:
     from datetime import datetime as _dt
 
     ts = now if isinstance(now, _dt) else _dt.now()
-    return (int(ts.hour) * 60 + int(ts.minute)) >= (
+    return int(ts.hour) * 60 + int(ts.minute)
+
+
+def market_phase(now: Any | None = None) -> str:
+    """盘前 / 竞价可撤 / 竞价不可撤 / 阈值盯盘 / 连续竞价。"""
+    m = _clock_minutes(now)
+    a15 = AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
+    a20 = AUCTION_NO_CANCEL_HOUR * 60 + AUCTION_NO_CANCEL_MINUTE
+    a25 = AUCTION_OPEN_HOUR * 60 + AUCTION_OPEN_MINUTE
+    a30 = SIGNAL_ACTIVE_HOUR * 60 + SIGNAL_ACTIVE_MINUTE
+    if m < a15:
+        return "pre_auction"
+    if m < a20:
+        return "auction_cancel"
+    if m < a25:
+        return "auction_locked"
+    if m < a30:
+        return "open_set"
+    return "continuous"
+
+
+def market_phase_label(phase: str | None = None, *, now: Any | None = None) -> str:
+    ph = phase or market_phase(now)
+    labels = {
+        "pre_auction": "盘前（9:15 前）",
+        "auction_cancel": "集合竞价·可撤单（9:15–9:20）",
+        "auction_locked": "集合竞价·不可撤单（9:20–9:25）",
+        "open_set": "开盘价已出·阈值盯盘（9:25–9:30）",
+        "continuous": "连续竞价·信号触发（9:30 起）",
+    }
+    return labels.get(ph, ph)
+
+
+def is_auction_quote_window(now: Any | None = None) -> bool:
+    """9:15 起拉竞价行情（watch 高频刷新）。"""
+    return _clock_minutes(now) >= (
+        AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
+    )
+
+
+def is_threshold_ready(now: Any | None = None) -> bool:
+    """9:25 起用开盘价算过门/买点/止损（9:30 前不结算）。"""
+    return _clock_minutes(now) >= (
+        AUCTION_OPEN_HOUR * 60 + AUCTION_OPEN_MINUTE
+    )
+
+
+def is_signal_window(now: Any | None = None) -> bool:
+    """9:30 起才允许因子触发/止损结算/微信预警。"""
+    return _clock_minutes(now) >= (
         SIGNAL_ACTIVE_HOUR * 60 + SIGNAL_ACTIVE_MINUTE
     )
 
 
 def is_auction_window(now: Any | None = None) -> bool:
     """是否处于集合竞价时段 09:15–09:30（不含 09:30）。"""
-    from datetime import datetime as _dt
-
-    ts = now if isinstance(now, _dt) else _dt.now()
-    t = int(ts.hour) * 60 + int(ts.minute)
+    t = _clock_minutes(now)
     start = AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
     end = SIGNAL_ACTIVE_HOUR * 60 + SIGNAL_ACTIVE_MINUTE
     return start <= t < end
@@ -132,7 +185,7 @@ limit_up_pct_of = limit_down_pct_of
 
 
 # ---------------------------------------------------------------------------
-# 策略三默认宇宙（与 strategy.config / 旧 strategy7.default_s7_universe 对齐）
+# 策略三默认宇宙（与 strategy.config 对齐；S7 为历史命名）
 # ---------------------------------------------------------------------------
 S7_WATCHLIST: list[dict[str, Any]] = [
     watch_item(

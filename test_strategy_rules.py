@@ -161,10 +161,10 @@ class StrategyRuleTests(unittest.TestCase):
         self.assertEqual(get_strategy("strategy1").name, "援军战法")
         self.assertEqual(get_strategy("援军战法").id, "strategy1")
 
-    def test_strategy7_binds_factor5_as_event_universe(self) -> None:
+    def test_strategy3_binds_factor5_as_event_universe(self) -> None:
         from strategy import get_strategy, get_strategy_bindings
 
-        self.assertEqual(get_strategy("strategy7").id, "strategy3")
+        self.assertEqual(get_strategy("strategy3").id, "strategy3")
         bindings = {binding.factor_id: binding for binding in get_strategy_bindings("strategy3")}
         self.assertEqual(set(bindings), {"factor5"})
         factor5 = bindings["factor5"]
@@ -523,13 +523,13 @@ class Factor6HybridTests(unittest.TestCase):
         self.assertTrue((sells["reason"] == "stop").any())
 
 
-class Strategy7SlotBindingTests(unittest.TestCase):
-    def test_strategy7_binds_fixed_hold_event_universe(self) -> None:
+class Strategy3SlotBindingTests(unittest.TestCase):
+    def test_strategy3_binds_fixed_hold_event_universe(self) -> None:
         from strategy import get_strategy, get_strategy_bindings
 
         strategy = get_strategy("strategy3")
         bindings = get_strategy_bindings("strategy3")
-        self.assertEqual(get_strategy("strategy7").id, "strategy3")
+        self.assertEqual(strategy.id, "strategy3")
         self.assertEqual(strategy.factor_ids, ("factor5",))
         by_id = {binding.factor_id: binding for binding in bindings}
         self.assertEqual(by_id["factor5"].role, "universe")

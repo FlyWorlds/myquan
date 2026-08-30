@@ -1,4 +1,4 @@
-"""策略十一·缠论笔算盈亏比：注册、决策与笔归因确定性测试。"""
+"""策略七·缠论笔算盈亏比：注册、决策与笔归因确定性测试。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import unittest
 import pandas as pd
 
 import strategy.factors  # noqa: F401
-import strategy.strategies.strategy11  # noqa: F401
+import strategy.strategies.strategy7  # noqa: F401
 from strategy.bi_pl_ratio import (
     aggregate_bi_vs_factor1,
     analyze_bi_pl_ratio,
@@ -19,29 +19,21 @@ from strategy.bi_pl_ratio import (
 from strategy.core.context import MarketContext
 from strategy.core.strategy_registry import get_strategy_spec, resolve_strategy_id
 from strategy.costs import COST_ROUND_TRIP, ENGINE_COMMISSION_RATE, SLIPPAGE_VALUE, STAMP_TAX_RATE
-from strategy.strategies.strategy11.decision import create_decision_engine
+from strategy.strategies.strategy7.decision import create_decision_engine
 
 
 def _synthetic_daily() -> pd.DataFrame:
     """构造可触发买入与止损的简易日线（阴线后大阳突破，再回撤止损）。"""
     rows = [
-        # 两根阴线，满足前日阴/小阳
         ("2024-01-02", 10.0, 10.1, 9.8, 9.9),
         ("2024-01-03", 9.9, 10.0, 9.7, 9.8),
-        # 突破买入：开 10，买点 10.25，高触及
         ("2024-01-04", 10.0, 10.40, 9.95, 10.30),
-        # T+1 不卖
         ("2024-01-05", 10.30, 10.50, 10.20, 10.40),
-        # 开盘止损：开 10.40 → 止损 10.09；低点触及 → 盈利止出也可能
         ("2024-01-08", 10.40, 10.45, 10.05, 10.10),
-        # 再来一轮：阴线
         ("2024-01-09", 10.10, 10.15, 9.90, 9.95),
         ("2024-01-10", 9.95, 10.00, 9.80, 9.85),
-        # 买入
         ("2024-01-11", 9.90, 10.30, 9.85, 10.20),
-        # T+1
         ("2024-01-12", 10.20, 10.25, 10.10, 10.15),
-        # 止损亏损：开 10.0 → 止损 9.70
         ("2024-01-15", 10.00, 10.05, 9.60, 9.65),
     ]
     return pd.DataFrame(
@@ -49,15 +41,17 @@ def _synthetic_daily() -> pd.DataFrame:
     ).assign(volume=1_000_000.0, symbol="sh600330")
 
 
-class Strategy11RegistryTests(unittest.TestCase):
+class Strategy7RegistryTests(unittest.TestCase):
     def test_registered_name_and_aliases(self) -> None:
-        spec = get_strategy_spec("strategy11")
-        self.assertEqual(spec.name, "缠论笔算盈亏比")
-        self.assertEqual(resolve_strategy_id("缠论笔算盈亏比"), "strategy11")
-        self.assertEqual(resolve_strategy_id("bi_pl_ratio"), "strategy11")
-        self.assertEqual(resolve_strategy_id("s11"), "strategy11")
-        # 旧 strategy7 仍指向策略三
-        self.assertEqual(resolve_strategy_id("strategy7"), "strategy3")
+        spec = get_strategy_spec("strategy7")
+        self.assertEqual(spec.name, "策略七·缠论笔算盈亏比")
+        self.assertEqual(resolve_strategy_id("缠论笔算盈亏比"), "strategy7")
+        self.assertEqual(resolve_strategy_id("bi_pl_ratio"), "strategy7")
+        self.assertEqual(resolve_strategy_id("s7"), "strategy7")
+        self.assertEqual(resolve_strategy_id("strategy11"), "strategy7")
+        self.assertEqual(resolve_strategy_id("s11"), "strategy7")
+        self.assertEqual(resolve_strategy_id("策略七"), "strategy7")
+        self.assertEqual(resolve_strategy_id("strategy3"), "strategy3")
 
     def test_decision_buy_and_stop(self) -> None:
         engine = create_decision_engine()
@@ -163,7 +157,6 @@ class BiPlRatioCoreTests(unittest.TestCase):
         trades, holding = replay_factor1_trades(daily, entry_pct=0.025)
         self.assertGreaterEqual(len(trades), 1)
         self.assertFalse(holding)
-        # 费用后收益应低于毛收益
         self.assertTrue((trades["ret"] < trades["ret_gross"]).all())
         years = year_pl_stats(
             attribute_trades_to_bis(
@@ -192,7 +185,6 @@ class BiPlRatioCoreTests(unittest.TestCase):
     def test_analyze_end_to_end_with_cached_bars(self) -> None:
         path = "/workspace/data_cache/sh600330_daily_qfq.parquet"
         daily = pd.read_parquet(path)
-        # 缩短窗口加速
         daily = daily[pd.to_datetime(daily["date"]) >= "2024-01-01"].copy()
         result = analyze_bi_pl_ratio(
             daily,

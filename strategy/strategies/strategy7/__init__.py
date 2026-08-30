@@ -1,4 +1,4 @@
-"""策略十一：缠论笔算盈亏比。
+"""策略七：缠论笔算盈亏比。
 
 用 CZSC 日线笔切分行情，把因子1（开盘突破）费用后闭环交易按买入笔归因；
 卖点落在另一笔时，卖价差价平移记入买入笔，并输出盈亏比 / 让利 / 防守。
@@ -13,12 +13,12 @@ from strategy.config import TIANTONG
 from strategy.core.protocols import StrategySpec
 from strategy.core.strategy_registry import register_strategy
 from strategy.strategies._common import compose_rules
-from strategy.strategies.strategy11.bindings import (
+from strategy.strategies.strategy7.bindings import (
     FACTOR_BINDINGS,
     STRATEGY_ID,
     STRATEGY_NAME,
 )
-from strategy.strategies.strategy11.decision import Strategy11Decision, create_decision_engine
+from strategy.strategies.strategy7.decision import Strategy7Decision, create_decision_engine
 
 
 def _print_rules() -> str:
@@ -36,9 +36,12 @@ def _print_rules() -> str:
     return head + "\n" + extra.strip()
 
 
-def run_strategy11(cfg: Any = None, **kwargs: Any) -> BiPlRatioResult:
+def run_strategy7(cfg: Any = None, **kwargs: Any) -> BiPlRatioResult:
     """默认对天通股份跑笔盈亏比报告；可用 kwargs 覆盖 symbol/区间/阈值。"""
     return run_bi_pl_ratio(cfg if cfg is not None else TIANTONG, **kwargs)
+
+
+run_strategy11 = run_strategy7
 
 
 def _bind() -> StrategySpec:
@@ -50,17 +53,20 @@ def _bind() -> StrategySpec:
             "跨笔卖点平移，输出盈亏比/让利/防守"
         ),
         factor_bindings=FACTOR_BINDINGS,
-        run=run_strategy11,
+        run=run_strategy7,
         default_config=TIANTONG,
         strategy_cls=None,
         print_rules=_print_rules,
         decision_factory=create_decision_engine,
         aliases=(
+            "s7",
             "s11",
+            "strategy11",
             "bi_pl",
             "bi_pl_ratio",
             "缠论笔算盈亏比",
             "笔盈亏比",
+            "策略七",
         ),
         implemented=True,
         meta={
@@ -78,10 +84,11 @@ __all__ = [
     "STRATEGY_ID",
     "STRATEGY_NAME",
     "FACTOR_BINDINGS",
-    "Strategy11Decision",
+    "Strategy7Decision",
     "create_decision_engine",
     "analyze_bi_pl_ratio",
     "run_bi_pl_ratio",
+    "run_strategy7",
     "run_strategy11",
     "BiPlRatioResult",
 ]

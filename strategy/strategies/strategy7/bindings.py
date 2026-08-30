@@ -1,4 +1,4 @@
-"""缠论笔算盈亏比（strategy11）· 因子绑定。
+"""策略七·缠论笔算盈亏比（strategy7）· 因子绑定。
 
 交易真源仍是因子1（开盘突破）；本策略的研究产出是日线笔归因盈亏比、
 让利与防守，不改变因子1 下单规则。
@@ -16,8 +16,8 @@ from strategy.open_break import (
 )
 from strategy.strategies.strategy1.bindings import strategy1_factor_filter
 
-STRATEGY_ID = "strategy11"
-STRATEGY_NAME = "缠论笔算盈亏比"
+STRATEGY_ID = "strategy7"
+STRATEGY_NAME = "策略七·缠论笔算盈亏比"
 
 FACTOR_BINDINGS = (
     bind_factor(

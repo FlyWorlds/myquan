@@ -67,8 +67,9 @@ strategy/
 | **factor4** | 因子4 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1止损；可选空仓开盘建仓。叠在因子1上用 |
 | **factor5** | 因子5·Serenity前瞻主题 | 动态 A 股**研究候选池** | `serenity_factor5.py`：Serenity 公开帖 → 前瞻看多主题 → A 股概念代理；不复制美股代码、不直接交易 |
 | **factor6** | 因子6·组合动量ETF轮动 | 宽基 ETF 轮动 | `etf_combo_momentum.py`：短窗+长窗 ROC 合成分数，收盘 TopK，动量失效空仓；次日开盘执行 |
-| **factor7** | 因子7·行业ETF双动量 | 月频行业主线轮动 | `industry_residual_momentum.py`：12月普通动量 + 100月PCA六因子改进残差动量，各50%合成；月末Top3 |
-| **factor9** | 因子9·日线多空动能 | 选股/开仓门控 | `ls_energy.py`：日线多空能量，T 收盘→T+1 开盘；截面 TopK 可叠在因子1 上（研究 overlay） |
+| **factor7** | 因子7·行业ETF双动量 | 月频行业主线轮动 | `industry_residual_momentum.py`：12月普通+100月PCA残差各50%；月末Top3 |
+| **factor8** | 因子8·缠论结构 | 结构买卖点 | `chan/`：一/二/三类买卖点；供策略二 |
+| **factor9** | 因子9·日线多空动能 | 选股/开仓门控 | `ls_energy.py`：T 收盘→T+1 开盘；可叠因子1（研究 overlay） |
 | **factor10** | 因子10·价格选股 | 策略1/4 周频开仓名单 | `s1_price_select.py`：近高/趋势/动量/上涨日占比；本周收盘排名，下一周才允许因子1 开仓 |
 | **factor11** | 因子11·两段近高选股 | 截面选股 | `near_high_hold.py`：3日动量 Top20 内再取贴近5日高点 Top5；周频冻结；**一字涨停开盘不可买** |
 | **factor12** | 因子12·反转池近高 | 截面选股 | `factor12_combo.py`：20日涨幅最低 Top20 内再取贴近5日高点 Top5；**研究候选**，2024–2025 未确认，不替换因子11 |
@@ -90,11 +91,11 @@ for f in list_factors():
 |----|------|----------|------|------|
 | **strategy1** | 援军战法 | factor1 + factor2 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警；别名 `open_break3` / `s1` / `策略一` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
-| **strategy3** | 策略三·主题事件 | factor5 | ✅ | 因子5事件候选仅限中证500/1000主板非ST成分股，最多5个槽位；单主题最多1只、固定持有5日；旧号 `strategy7` / `s7` / `策略七` |
+| **strategy3** | 策略三·主题事件 | factor5 | ✅ | 因子5事件候选仅限中证500/1000主板非ST成分股，最多5个槽位；单主题最多1只、固定持有5日；别名 `s3` / `策略三` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧号 `strategy9` / `s9` / `策略九` |
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
-| **strategy11** | 缠论笔算盈亏比 | factor1 | ✅ 研究 | 日线笔归因：因子1费用后闭环按买入笔记账，跨笔卖点平移；输出盈亏比/让利/防守；别名 `s11` / `bi_pl` / `笔盈亏比` |
+| **strategy7** | 策略七·缠论笔算盈亏比 | factor1 | ✅ 研究 | 日线笔归因：因子1费用后闭环按买入笔记账，跨笔卖点平移；输出盈亏比/让利/防守；别名 `s7` / `s11` / `strategy11` / `bi_pl` / `笔盈亏比` |
 
 旧执行层 3/4/5/6/8 的研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。现行 strategy6 是新注册的因子12 持有，不是旧动量混合。
 
@@ -109,7 +110,7 @@ for b in get_strategy_bindings("strategy3"):
 ```
 
 ```python
-from strategy import run_strategy3, run_strategy5, run_strategy11
+from strategy import run_strategy3, run_strategy5, run_strategy7
 
 # 策略五：因子11 近高 Top5 等权持有（研究回测，不构成投资建议）
 run_strategy5(start="20200102")
@@ -117,8 +118,8 @@ run_strategy5(start="20200102")
 # 策略三：5 个槽位，单主题1只、固定持有5日
 run_strategy3(start="20260101", max_positions=5, max_per_theme=1, hold_days=5)
 
-# 策略十一：天通默认，日线笔 vs 因子1 费用后盈亏比（研究）
-run_strategy11()  # 或 get_strategy("缠论笔算盈亏比").run()
+# 策略七：天通默认，日线笔 vs 因子1 费用后盈亏比（研究）
+run_strategy7()  # 或 get_strategy("缠论笔算盈亏比").run()；旧名 run_strategy11
 ```
 
 策略二（缠论选股，研究回测，不构成投资建议）：
@@ -253,7 +254,7 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `get_strategy("open_break3")` | → strategy1 |
 | `run_open_break` | **仅因子1交易**（不含因子2） |
 | `run_strategy1` | 因子1 + 因子2预警（默认不注资） |
-| `run_strategy3` | 因子5事件开仓 + 固定持有；`start` / `end` / `max_positions` / `max_per_theme` / `hold_days`；旧名 `run_strategy7` |
+| `run_strategy3` | 因子5事件开仓 + 固定持有；`start` / `end` / `max_positions` / `max_per_theme` / `hold_days` |
 | `run_strategy4` | 因子1+4+10 开盘突破组合；默认观察池；旧名 `run_strategy9` |
 | `run_strategy5` | 因子11 近高 Top5 等权持有；`start` / `end` / `stage1_k` / `stage2_k`；旧名 `run_strategy10` |
 | `run_strategy6` | 因子12 反转池近高 Top5 等权持有；研究候选，不替换策略五 |
@@ -274,8 +275,8 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 
 | 变更类型 | 必改文件 |
 |----------|----------|
-| 新增/删除策略、改默认绑定 | **本文**、`docs/STRATEGY.md`、`READ.md` |
-| 新增/删除因子、改 `DEFAULT_*` | **本文**因子表、`factors/factor*.py` 描述、`docs/FACTOR*.md` |
+| 新增/删除策略、改默认绑定 | **本文**、`docs/STRATEGY.md`、**READ.md § 策略与因子注册表** |
+| 新增/删除因子、改 `DEFAULT_*` | **本文**因子表、`factors/factor*.py` 描述、`docs/FACTOR*.md`、**READ.md § 因子一览** |
 | 因子13 规则/名单/门槛 | `docs/FACTOR13.md`、`backtest/factor13_bear_shield/LOCKED.json`、`READ.md` |
 | 因子1 买卖/T+1/成本 | `open_break.py`、`docs/STRATEGY.md`、`STRATEGY_AUDIT.md`（审计变时） |
 | 盯盘/预警/合格池 | `holdingStocks/README.md`、`READ.md` 盯盘节 |
@@ -287,7 +288,8 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 1. 代码 + `backtest/` 产物（csv / json / report）
 2. **strategy/README.md**（注册表、CLI、默认参数表）
 3. `docs/` 专题（`STRATEGY.md`、`FACTOR13.md` 等）
-4. `READ.md` 摘要、`TODO.MD` 任务状态
+4. `READ.md`：`当前生效` + **§ 策略与因子注册表**（摘要表）、运行命令、盯盘节
+5. `TODO.MD`：任务状态（✅ / 锁定表）；**不写**因子/策略注册表
 
 ### 因子13 双轨（勿混写）
 
@@ -308,7 +310,8 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 
 - [ ] 本文因子/策略表含新增项
 - [ ] 回测 CLI 命令可运行且路径正确
-- [ ] `READ.md` / `docs/` 与默认行为一致
+- [ ] `READ.md` **§ 策略与因子注册表** 与本文因子/策略表一致
+- [ ] `READ.md` / `docs/` / `TODO.MD` 锁定项与默认行为一致
 - [ ] 因子13 锁定项已写 `LOCKED.json` + `docs/FACTOR13.md`
 - [ ] 回测数字标注区间、是否 OOS、研究免责声明
 

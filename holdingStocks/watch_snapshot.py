@@ -1,0 +1,73 @@
+"""盯盘 JSON 快照（WatchSnapshot v1）— 供 Vue 前端 / WebSocket 使用。"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+
+SNAPSHOT_VERSION = 1
+
+
+def _row_json(row: dict[str, Any]) -> dict[str, Any]:
+    """collect_rows 行 → JSON 可序列化 dict（保留中文键，与现有逻辑一致）。"""
+    out: dict[str, Any] = {}
+    for k, v in row.items():
+        if k == "bg_class":
+            out["bgClass"] = v
+            continue
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            out[k] = v
+        else:
+            out[k] = str(v)
+    return out
+
+
+def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "code": ix.get("code"),
+        "name": ix.get("name"),
+        "market": ix.get("market"),
+        "price": ix.get("price"),
+        "chgPoints": ix.get("chg_points"),
+        "chgPct": ix.get("chg_pct"),
+        "error": ix.get("error"),
+    }
+
+
+def build_watch_snapshot(
+    *,
+    rows: list[dict[str, Any]],
+    indices: list[dict[str, Any]],
+    account: dict[str, Any],
+    meta: dict[str, Any],
+    strategies: list[dict[str, Any]] | None = None,
+    refresh_sec: int = 5,
+) -> dict[str, Any]:
+    """构建 WatchSnapshot v1。"""
+    holdings = [_row_json(r) for r in rows]
+    strategy1_rows = [
+        _row_json(r)
+        for r in rows
+        if not r.get("error")
+    ]
+    return {
+        "v": SNAPSHOT_VERSION,
+        "type": "snapshot",
+        "ts": int(datetime.now().timestamp() * 1000),
+        "updatedAt": meta.get("clock") or "",
+        "clock": meta.get("clock") or "",
+        "phase": meta.get("phase") or "",
+        "phaseKey": meta.get("phaseKey") or "",
+        "refreshSec": int(refresh_sec),
+        "strategy": {
+            "id": meta.get("strategyId") or "",
+            "name": meta.get("strategyName") or "",
+            "factorsLabel": meta.get("factorsLabel") or "",
+        },
+        "account": account,
+        "indices": [_index_json(ix) for ix in indices],
+        "holdings": holdings,
+        "strategy1": strategy1_rows,
+        "strategies": strategies or [],
+    }

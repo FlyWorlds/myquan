@@ -27,7 +27,7 @@ import pandas as pd  # noqa: E402
 from strategy import KAICHENG, TIANTONG, run_open_break  # noqa: E402
 from strategy.backtest import metric  # noqa: E402
 from strategy.config import resolve_factor4_repair  # noqa: E402
-from strategy.strategies.strategy3 import run_strategy7  # noqa: E402
+from strategy.strategies.strategy3 import run_strategy3  # noqa: E402
 
 OUT_DIR = Path(__file__).resolve().parent
 OUT_MONTHLY = OUT_DIR / "monthly_f1_vs_s7.csv"
@@ -94,7 +94,7 @@ def _run_f1(cfg: Any) -> tuple[Any, pd.DataFrame]:
 
 
 def _run_s7(cfg: Any) -> tuple[Any, pd.DataFrame]:
-    return run_strategy7(cfg, mode="per_symbol", verbose=False)
+    return run_strategy3(cfg, mode="per_symbol", verbose=False)
 
 
 def _pack(label: str, mode: str, result: Any, daily: pd.DataFrame) -> dict[str, Any]:

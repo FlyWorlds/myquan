@@ -1,7 +1,8 @@
 # 任务清单（myquan）
 
 > 与 [`READ.md`](READ.md) 总览、[`docs/STRATEGY.md`](docs/STRATEGY.md) 策略说明同步维护。  
-> 文档变更规则：`.cursor/rules/docs-sync.mdc`
+> 文档变更规则：`.cursor/rules/docs-sync.mdc`  
+> 策略/因子注册表见 [`strategy/README.md`](strategy/README.md)、[`READ.md`](READ.md) § 策略与因子注册表（**不在本文重复**）。
 
 **最后整理**：2026-08-30
 
@@ -25,6 +26,16 @@
 - [x] 策略一挂载因子2（回撤阶梯预警，回测不注资）
 - [x] 因子3 动量、因子5 Serenity、因子6/7 ETF 轮动等（见 `strategy/README.md`）
 
+### 盯盘 · holdingStocks（2026-08-30）
+- [x] 早盘节点 9:15/9:20/9:25/9:30 + 策略1-援军战法 Tab（阈值/过门）
+- [x] `watch` 冷启动优化：仅新浪实时批量，不串行拉历史分钟 K
+- [x] 股票名/代码跳转百度财经外链
+- [x] 持仓置顶：凯盛 500、珠峰 700；天通已卖仍置顶跟踪
+
+### 文档同步（2026-08-30）
+- [x] **READ.md** 增加 § 策略与因子注册表（因子/策略摘要表）
+- [x] **docs-sync.mdc** 策略/因子变更同步 READ + strategy/README
+
 ---
 
 ## 锁定 🔒（暂停改参）
@@ -47,7 +58,7 @@
 - [ ] 样本外稳定后，策略六/因子13 动态池接入日常盯盘
 
 ### P2
-- [ ] 独立新因子：3K 反转、缠论结构深化（`factor4` 仍为占位）
+- [ ] 独立新因子：3K 反转、缠论结构深化
 - [ ] 因子13 质量带（A 线）与熊盾（B 线）统一注册表文案
 
 ### P3
@@ -58,10 +69,15 @@
 
 ## 文档维护（随改随更）
 
+**规则真源**：`.cursor/rules/docs-sync.mdc` · `strategy/README.md` § 文档维护规则
+
+**新增/删因子或策略**：`strategy/README.md` → `docs/` → **READ.md**（摘要表）；**TODO.MD 只更新任务/锁定/已完成**，不写注册表。
+
 | 文件 | 用途 |
 |------|------|
-| `READ.md` | 项目总览 |
-| `strategy/README.md` | 因子/策略注册表 |
+| `strategy/README.md` | 因子/策略注册表（完整真源） |
+| `READ.md` | 项目总览 + 因子/策略摘要表 |
 | `docs/STRATEGY.md` | 策略专题 |
 | `docs/FACTOR13.md` | 因子13 双轨 + 锁定 |
-| `TODO.MD` | 本清单 |
+| `TODO.MD` | **本清单**（任务 / 锁定 / 里程碑） |
+| `.cursor/rules/docs-sync.mdc` | Cursor Agent 文档同步规则 |

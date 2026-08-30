@@ -46,9 +46,48 @@ cd backtest && python strategy1.py --rules
 python strategy/run_factor13_bear_shield_wf.py   # 因子13 WF 回测
 ```
 
-策略与因子注册表：[`strategy/README.md`](strategy/README.md) · 策略专题：[`docs/STRATEGY.md`](docs/STRATEGY.md)
-
 **任务进度**：[`TODO.MD`](TODO.MD)（P0 行情/预警 ✅；P0 持仓入库待做；因子13 已锁定）
+
+---
+
+## 策略与因子注册表（摘要）
+
+**完整真源**：[`strategy/README.md`](strategy/README.md) · 策略专题：[`docs/STRATEGY.md`](docs/STRATEGY.md) · 文档索引：[`docs/README.md`](docs/README.md)
+
+> 新增/改因子或策略时，须同步更新 **strategy/README.md → docs/ → 本文**；任务/锁定见 [`TODO.MD`](TODO.MD)（见 [`.cursor/rules/docs-sync.mdc`](.cursor/rules/docs-sync.mdc)）。
+
+### 因子一览
+
+| ID | 名称 | 作用 | 模块 / 要点 |
+|----|------|------|-------------|
+| **factor1** | 因子1 | 开盘突破买卖 | `open_break.py`：买突破、卖止损、T+1；单票可非对称 entry/stop |
+| **factor2** | 因子2 | 回撤加减仓**预警** | `dd_alert.py`：默认加仓≥20% / 减仓≤10%；**回测不注资** |
+| **factor3** | 因子3·动量 | 截面选股 / 单票择时 | `momentum.py`：组合截面反转；单票 dist_hl 等 |
+| **factor4** | 因子4 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1 止损 |
+| **factor5** | 因子5·Serenity | 前瞻主题研究池 | `serenity_factor5.py`：公开帖→主题→A 股概念代理 |
+| **factor6** | 因子6·ETF轮动 | 宽基 ETF 轮动 | `etf_combo_momentum.py`：短长窗 ROC 合成，TopK |
+| **factor7** | 因子7·行业ETF | 月频行业主线 | `industry_residual_momentum.py`：普通+残差动量各 50% |
+| **factor8** | 因子8·缠论 | 结构买卖点 | `chan/`：一/二/三类买卖点；供策略二 |
+| **factor9** | 因子9·多空动能 | 选股/开仓门控 | `ls_energy.py`：日线多空能量 overlay |
+| **factor10** | 因子10·价格选股 | 周频开仓名单 | `s1_price_select.py`：近高/趋势/动量；供策略四 |
+| **factor11** | 因子11·两段近高 | 截面选股 | `near_high_hold.py`：动量 Top20→近高 Top5；供策略五 |
+| **factor12** | 因子12·反转池近高 | 截面选股（研究） | `factor12_combo.py`：20 日反转 Top20→近高 Top5；供策略六 |
+| **factor13** | 因子13·契合选股 | 动态合格池 | **A 线**质量带 `factor13_fit.py`；**B 线（🔒锁定）**熊盾 `factor13_bear_shield.py` |
+| **cf1** | CF1·流动性门控 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
+
+### 策略一览
+
+| ID | 名称 | 绑定因子 | 状态 | 说明 |
+|----|------|----------|------|------|
+| **strategy1** | 援军战法 | factor1 + factor2 | ✅ **默认** | 开盘±2.5% 一次打满 + 回撤预警；别名 `open_break3` / `s1` |
+| **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30 分小转大 + 日线二/三买卖；别名 `chan` |
+| **strategy3** | 策略三·主题事件 | factor5 | ✅ | 500/1000 成分，5 槽位、单主题 1 只、持 5 日 |
+| **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 突破 + 牛市放宽 + 20% 昨高全清 + 周频 Top5 |
+| **strategy5** | 策略五·近高 Top5 | factor11 | ✅ 研究 | 周频等权持有；别名 `near_high` |
+| **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
+| **strategy7** | 策略七·缠论笔算盈亏比 | factor1 | ✅ 研究 | 日线笔 vs 因子1 费用后盈亏比；别名 `s7` / `strategy11` / `bi_pl` |
+
+旧执行层研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。
 
 ---
 
@@ -152,10 +191,14 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 ## 盯盘要点
 
-- 规则与 **因子1** 同源（`strategy/open_break.py`）。
+- 规则与 **因子1** 同源（`strategy/open_break.py`）；**Nuxt 前端** 展示持仓 + **策略1–11 Tab**（`策略N-名称`）；策略1 展示早盘节点与阈值过门，其余 Tab 展示挂载因子说明。
+- 早盘节点：9:15 竞价 → 9:20 不可撤 → 9:25 算阈值/过门 → 9:30 触发信号（`watch_config.py`）。
 - 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
-- 行情：东财 SSE + 新浪兜底 + 本地 WS（P0 ✅）。
+- 行情：`python index.py watch` 推送 **JSON 快照**（WebSocket `/ws` + Nuxt `holdingStocks/watch-ui`）；`python index.py` 仅终端输出。
+- 股票名/代码外链：百度财经 `finance.baidu.com/stock/ab-{code}`。
 - 微信预警：OpenClaw（P0 ✅）；自动结算不下真实委托。
+
+详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
 
 ---
 

@@ -195,7 +195,7 @@ python index.py review --no-wechat
 
 # 长驻盯盘（默认开微信推送）
 python index.py watch --interval 5 --port 8765 --no-open
-# 页面：http://127.0.0.1:8765/holdings_report.html
+# 页面：http://127.0.0.1:8765/
 
 # 仅盯盘、不推微信
 python index.py watch --no-wechat --no-open

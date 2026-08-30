@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* PandaAI 风格 design tokens + 盯盘涨跌色 */
+:root,
+:root[data-ui-scheme='dark'] {
+  --bg-color: #000;
+  --ui-page: #000;
+  --ui-surface: #141414;
+  --ui-ink: #0a0a0a;
+  --ui-hairline: hsla(0, 0%, 100%, 0.1);
+  --ui-hairline-strong: hsla(0, 0%, 100%, 0.18);
+  --ui-text: #fff;
+  --ui-text-2: hsla(0, 0%, 100%, 0.55);
+  --ui-text-3: hsla(0, 0%, 100%, 0.4);
+  --ui-fill-hover: hsla(0, 0%, 100%, 0.06);
+  --ui-fill-active: hsla(0, 0%, 100%, 0.12);
+  --ui-danger: #e5484d;
+  --ui-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+  --ui-shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.45);
+  --ui-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --watch-accent: #5eead4;
+  --watch-up: #f87171;
+  --watch-down: #34d399;
+  --ui-scrollbar: #3c3c3c;
+}
+
+:root[data-ui-scheme='light'] {
+  --bg-color: #fff;
+  --ui-page: #f5f7f6;
+  --ui-surface: #fff;
+  --ui-ink: #fafafa;
+  --ui-hairline: #e5e5e5;
+  --ui-hairline-strong: #d4d4d4;
+  --ui-text: #0a0a0a;
+  --ui-text-2: #737373;
+  --ui-text-3: #a1a1a1;
+  --ui-fill-hover: #f5f5f5;
+  --ui-fill-active: #e5e5e5;
+  --ui-danger: #e7000b;
+  --ui-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --ui-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --watch-accent: #1f6b4a;
+  --watch-up: #b42318;
+  --watch-down: #027a48;
+  --ui-scrollbar: #d4d4d4;
+}
+
+@layer base {
+  html {
+    scrollbar-color: var(--ui-scrollbar) transparent;
+    scrollbar-width: thin;
+  }
+
+  body {
+    @apply min-h-screen bg-ui-page font-sans text-ui-text antialiased;
+    margin: 0;
+    text-rendering: optimizeLegibility;
+    transition: color 0.25s var(--ui-ease), background-color 0.25s var(--ui-ease);
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg border border-ui-hairline px-3 py-2 text-sm font-semibold transition duration-200 ease-ui;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-ui-text hover:bg-ui-fill-hover;
+  }
+
+  .btn-cta {
+    @apply border-transparent bg-ui-text text-ui-ink;
+  }
+
+  .btn-cta:hover {
+    opacity: 0.9;
+  }
+
+  .card {
+    @apply rounded-xl border border-ui-hairline bg-ui-surface shadow-ui backdrop-blur-sm;
+  }
+
+  .tab-pill {
+    @apply rounded-full border px-4 py-2 text-sm font-semibold transition duration-200 ease-ui;
+  }
+
+  .tab-pill-active {
+    @apply border-accent text-accent;
+    background-color: color-mix(in srgb, var(--watch-accent) 15%, transparent);
+  }
+
+  .tab-pill-idle {
+    @apply border-ui-hairline text-ui-text-2;
+  }
+
+  .tab-pill-idle:hover {
+    @apply bg-ui-fill-hover;
+  }
+
+  .v-loading-mask {
+    @apply absolute inset-0 z-20 flex items-center justify-center bg-black/50;
+  }
+
+  .v-loading-spinner {
+    @apply h-8 w-8 animate-spin rounded-full border-2 border-ui-text-3 border-t-accent;
+  }
+}
+
+.privacy-hidden .sensitive {
+  filter: blur(6px);
+  user-select: none;
+}

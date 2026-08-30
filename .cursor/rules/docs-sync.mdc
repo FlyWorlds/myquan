@@ -5,27 +5,44 @@ alwaysApply: true
 
 # 文档同步规则
 
-本仓库以 **READ.md** 为项目总览，**strategy/README.md** 为策略/因子注册表（文末 § 文档维护规则，与本文一致），**docs/** 为专题说明。改代码时须同步改文档，避免「能跑但文档过期」。
+本仓库以 **READ.md** 为项目总览，**strategy/README.md** 为策略/因子注册表（文末 § 文档维护规则，与本文一致），**docs/** 为专题说明，**TODO.MD** 为任务与锁定项。改代码时须同步改文档，避免「能跑但文档过期」。
+
+**每次**变更策略、因子、默认绑定、盯盘行为或回测入口时，**必须**走完下方更新顺序，不得只改代码。
 
 ## 何时必须更新文档
 
 | 变更类型 | 必改文件 |
 |----------|----------|
-| 新增/删除策略、改默认绑定 | `strategy/README.md`、`docs/STRATEGY.md`、`READ.md`（若影响默认行为） |
-| 新增/删除因子、改因子默认参数 | `strategy/README.md`、`strategy/factors/factor*.py` 描述、`docs/FACTOR*.md`（若有） |
-| 因子13 选股规则/锁定名单/门槛 | `docs/FACTOR13.md`、`backtest/factor13_bear_shield/LOCKED.json`、`READ.md` |
-| 因子1 买卖规则、成本、T+1 | `strategy/open_break.py` 注释、`docs/STRATEGY.md`、`strategy/STRATEGY_AUDIT.md`（若审计结论变） |
-| 盯盘/预警/合格池 | `holdingStocks/README.md`、`READ.md` 盯盘节 |
-| 任务优先级、里程碑 | `TODO.MD` |
-| 新回测入口、CLI 路径 | `READ.md` 运行示例、`strategy/README.md` 回测 CLI |
+| 新增/删除策略、改默认绑定 | `strategy/README.md`、`docs/STRATEGY.md`、**READ.md § 策略与因子注册表** |
+| 新增/删除因子、改因子默认参数 | `strategy/README.md`、`strategy/factors/factor*.py` 描述、`docs/FACTOR*.md`（若有）、**READ.md § 因子一览** |
+| 因子13 选股规则/锁定名单/门槛 | `docs/FACTOR13.md`、`backtest/factor13_bear_shield/LOCKED.json`、**READ.md**（当前生效 + 因子13 行）、**TODO.MD** 锁定表 |
+| 因子1 买卖规则、成本、T+1 | `strategy/open_break.py` 注释、`docs/STRATEGY.md`、`strategy/STRATEGY_AUDIT.md`（若审计结论变）、**READ.md** 盯盘/当前生效 |
+| 盯盘/预警/合格池 | `holdingStocks/README.md`、**READ.md** 盯盘节 |
+| 任务优先级、里程碑、锁定/解锁 | **TODO.MD**；若影响默认行为则同步 **READ.md** |
+| 新回测入口、CLI 路径 | `READ.md` 运行示例、`strategy/README.md` 回测 CLI、**TODO.MD**（若为新能力则 ✅） |
 
 ## 更新顺序（Agent / 开发者）
 
+### 新增 / 删因子或策略
+
+```
+代码 + backtest 产物 → strategy/README.md → docs/ → READ.md 摘要表
+```
+
+1. 代码与 `backtest/` 产物（csv/json/report）。
+2. **strategy/README.md**：因子/策略表、bindings、CLI、默认参数。
+3. **docs/**：`STRATEGY.md`；新因子补 `FACTOR*.md`（若有）。
+4. **READ.md**：§ 策略与因子注册表（因子/策略摘要表）；默认绑定变则改「当前生效」。
+5. **TODO.MD**（若涉及）：里程碑 ✅、锁定表、新待办；**不写**因子/策略注册表。
+
+### 其他变更（通用）
+
 1. 先改代码与 `backtest/` 产物（csv/json/report）。
-2. 更新 **专题文档**（`docs/` 或 `strategy/README.md` 对应节）。
-3. 更新 **READ.md** 摘要（默认策略、因子13 锁定状态、运行命令）。
-4. 更新 **TODO.MD**（已完成打 ✅、新任务入合适优先级）。
-5. 若规则/门槛 **锁定**，写入 `backtest/factor13_bear_shield/LOCKED.json` 并在 `docs/FACTOR13.md` 注明锁定日期。
+2. 更新 **strategy/README.md**（因子/策略表、CLI、默认参数）。
+3. 更新 **专题文档**（`docs/STRATEGY.md`、`docs/FACTOR*.md` 等）。
+4. 更新 **READ.md**：`当前生效`、**§ 策略与因子注册表**（因子/策略摘要表）、运行命令、盯盘节。
+5. 更新 **TODO.MD**：已完成打 ✅、新任务入合适优先级、锁定表与 READ 一致。
+6. 若规则/门槛 **锁定**，写入 `backtest/factor13_bear_shield/LOCKED.json` 并在 `docs/FACTOR13.md` 注明锁定日期。
 
 ## 因子13 双轨说明（勿混写）
 
@@ -42,8 +59,9 @@ alwaysApply: true
 
 ## 自检清单（提交前）
 
-- [ ] READ.md 默认策略/因子13 状态与代码一致
-- [ ] strategy/README 因子/策略表含新增项
-- [ ] TODO.MD 已完成项有日期或 ✅
+- [ ] strategy/README 因子/策略表含新增项（完整真源）
+- [ ] READ.md **§ 策略与因子注册表** 摘要表与 strategy/README 一致
+- [ ] READ.md 默认策略/因子13 锁定状态与代码一致
+- [ ] TODO.MD 锁定表与 READ 一致（**不含**注册表重复）
 - [ ] 锁定配置有 LOCKED.json / recommended.json
-- [ ] 新增 CLI 在 READ.md 有示例命令
+- [ ] 新增 CLI 在 READ.md 与 strategy/README 均有示例命令

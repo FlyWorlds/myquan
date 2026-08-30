@@ -55,7 +55,7 @@ python -c "from strategy import run_open_break; ..."
 | strategy4 | F4 止盈动量 | factor1+4+10 | 研究 |
 | strategy5 | 近高 Top5 等权 | factor11 | 研究 |
 | strategy6 | 反转池近高 | factor12 | 研究，未替换 strategy5 |
-| strategy11 | 缠论笔盈亏比 | factor1 | 研究 |
+| strategy7 | 策略七·缠论笔盈亏比 | factor1 | 研究 |
 
 组合动量/行业 ETF：因子6、因子7（见 `strategy/README.md`）。
 
