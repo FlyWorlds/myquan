@@ -3664,6 +3664,13 @@ def cmd_watch(args: argparse.Namespace) -> None:
         port=port,
         ui_dev_port=ui_dev_port if use_ui_dev else None,
     )
+    try:
+        from stock_names import warm_name_cache
+
+        n_names = warm_name_cache()
+        print(f"[{_now()}] 股票名称缓存已预热（{n_names} 条）")
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 名称缓存预热失败（继续）: {e}")
     stop = threading.Event()
     refresh_lock = threading.Lock()
     ws_hub = LocalWsHub()

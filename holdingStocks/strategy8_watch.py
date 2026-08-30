@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from stock_names import resolve_stock_name
+from stock_names import lookup_names_for_codes, resolve_stock_name
 from strategy.open_break import DEFAULT_PCT, TICK_SIZE, strategy_levels
 from strategy.strategies.strategy8.concept_index import (
     load_concept_maps,
@@ -36,6 +36,24 @@ LU_TOL = 0.012
 MIN_THEME_LU = 3
 POOL_MODE = "linkage"
 _POOL_CACHE: dict[str, dict[str, Any]] = {}
+_POOL_CACHE_VER = "names_v3"
+
+
+def _display_stock_name(
+    *,
+    code: str,
+    symbol: str = "",
+    raw_name: str = "",
+    quote_name: str = "",
+) -> str:
+    """题材池展示名：忽略宇宙表里的 code 占位，强制走名称缓存。"""
+    c = str(code).zfill(6)
+    sym = str(symbol or "").strip()
+    for candidate in (raw_name, quote_name):
+        hit = resolve_stock_name(symbol=sym, code=c, name=str(candidate or ""))
+        if hit:
+            return hit
+    return resolve_stock_name(symbol=sym, code=c, name="") or c
 
 
 @lru_cache(maxsize=1)
@@ -98,7 +116,7 @@ def _scan_today_lu_codes(
     for row in univ.itertuples(index=False):
         code = str(row.code).zfill(6)
         symbol = str(row.symbol)
-        name = resolve_stock_name(symbol=symbol, code=code, name=str(row.name))
+        name = _display_stock_name(code=code, symbol=symbol, raw_name=str(row.name))
         sina = sina_of(code).lower()
         q = quotes.get(sina)
         if _quote_is_limit_up(code, q):
@@ -149,7 +167,7 @@ def scan_theme_linkage_pool(
     effective = _normalize_trade_date(session) if session else None
     if not effective:
         return {"themeDate": None, "hotThemes": [], "rows": []}
-    cache_key = f"{effective}:{POOL_MODE}"
+    cache_key = f"{_POOL_CACHE_VER}:{effective}:{POOL_MODE}"
     if cache_key in _POOL_CACHE and not quotes:
         return _POOL_CACHE[cache_key]
 
@@ -172,7 +190,7 @@ def scan_theme_linkage_pool(
     for row in univ.itertuples(index=False):
         code = str(row.code).zfill(6)
         symbol = str(row.symbol)
-        name = resolve_stock_name(symbol=symbol, code=code, name=str(row.name))
+        name = _display_stock_name(code=code, symbol=symbol, raw_name=str(row.name))
         theme_lu, theme_name, theme_members = theme_lu_stats(
             code, lu_codes, code_to_concepts=code_concepts, concept_to_codes=concept_codes
         )
@@ -235,13 +253,16 @@ def enrich_theme_row(item: dict[str, Any], *, quote: dict[str, Any] | None, gate
     stop_pct = float(f1p.get("stop_pct") or entry_pct)
     tick = float(f1p.get("tick") or TICK_SIZE)
     quote_name = str(quote.get("name") or "") if quote else ""
+    code = str(item.get("code") or "").zfill(6)
+    display_name = _display_stock_name(
+        code=code,
+        symbol=str(item.get("symbol") or ""),
+        raw_name=str(item.get("name") or ""),
+        quote_name=quote_name,
+    )
     row = {
-        "代码": item.get("code"),
-        "名称": resolve_stock_name(
-            symbol=str(item.get("symbol") or ""),
-            code=str(item.get("code") or ""),
-            name=str(item.get("name") or quote_name or ""),
-        ),
+        "代码": code,
+        "名称": display_name,
         "题材": item.get("题材"),
         "题材涨停数": item.get("题材涨停数"),
         "类型": item.get("类型"),
@@ -328,6 +349,12 @@ def build_strategy8_payload(
         row = enrich_theme_row(item, quote=quotes.get(sina), gate_ok=gate_ok)
         rows.append(row)
 
+    name_map = lookup_names_for_codes([str(r.get("代码") or "") for r in rows])
+    for row in rows:
+        c = str(row.get("代码") or "").zfill(6)
+        if not row.get("名称") or str(row.get("名称")) == c:
+            row["名称"] = name_map.get(c) or row.get("名称") or c
+
     return {
         "sentiment": sentiment,
         "hotThemes": scanned.get("hotThemes") or [],
@@ -335,6 +362,7 @@ def build_strategy8_payload(
         "luCount": scanned.get("luCount"),
         "poolCount": len(rows),
         "rows": rows,
+        "nameMap": name_map,
         "backtest": load_backtest_summary(),
         "rules": f"当日涨停定题材≥{MIN_THEME_LU} · 当日因子1 ±阈值 · {_gate_rules_text()}",
     }

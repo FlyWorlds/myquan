@@ -188,6 +188,7 @@ export interface Strategy8Payload {
   poolDate?: string | null
   poolCount?: number
   rules?: string
+  nameMap?: Record<string, string>
 }
 
 export interface StrategyTab {

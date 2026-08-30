@@ -271,10 +271,36 @@ def resolve_stock_name(*, symbol: str = "", code: str = "", name: str = "") -> s
     hit = name_by_code().get(c)
     if hit:
         return hit
+    hit = _read_name_cache().get(c)
+    if hit:
+        return hit
     online = _lookup_name_online(c)
     if online:
         return online
     return n if n and not _is_bad_name(c, n) else ""
+
+
+def lookup_names_for_codes(codes: list[str]) -> dict[str, str]:
+    """批量 code→中文名（池表/快照用，尽量不走逐码网络）。"""
+    base = name_by_code()
+    ak = _read_name_cache()
+    out: dict[str, str] = {}
+    for raw in codes:
+        c = str(raw).zfill(6)
+        if not c.isdigit():
+            continue
+        n = base.get(c) or ak.get(c) or resolve_stock_name(code=c)
+        if n:
+            out[c] = n
+    return out
+
+
+def warm_name_cache() -> int:
+    """watch 启动时预热名称表，避免 LRU 未加载 akshare 缓存。"""
+    invalidate_name_cache()
+    merged = _akshare_name_map()
+    table = name_by_code()
+    return max(len(merged), len(table))
 
 
 def refresh_name_cache(*, force: bool = False) -> int:

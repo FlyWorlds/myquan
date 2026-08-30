@@ -11,6 +11,13 @@ const props = defineProps<{
 
 const sentiment = computed(() => props.payload?.sentiment)
 const rows = computed(() => props.payload?.rows || [])
+const nameMap = computed(() => props.payload?.nameMap || {})
+
+function rowLabel(code?: string | null, name?: string | null) {
+  const c = String(code || '').trim()
+  const n = String(name || '').trim() || String(nameMap.value[c] || '').trim()
+  return stockLabel(c, n)
+}
 const hotThemes = computed(() => props.payload?.hotThemes || [])
 const backtest = computed(() => props.payload?.backtest || props.tab?.backtest || [])
 const poolCount = computed(() => props.payload?.poolCount ?? rows.value.length)
@@ -146,7 +153,7 @@ const luPhaseClass = computed(() => {
                 rel="noopener"
                 class="text-accent hover:underline"
               >
-                {{ stockLabel(row.代码, row.名称) }}
+                {{ rowLabel(row.代码, row.名称) }}
               </a>
             </td>
             <td class="px-2 py-2 max-w-[8rem] truncate" :title="String(row.题材)">{{ row.题材 }}</td>
