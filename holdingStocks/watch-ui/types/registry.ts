@@ -17,10 +17,7 @@ export interface FactorEntry {
   rules_text?: string
   implemented?: boolean
   meta?: Record<string, unknown>
-  used_by: FactorUsedBy[]
+  used_by?: FactorUsedBy[]
 }
 
-export interface StrategyEntry extends StrategyTab {
-  aliases?: string[]
-  implemented?: boolean
-}
+export type StrategyEntry = StrategyTab

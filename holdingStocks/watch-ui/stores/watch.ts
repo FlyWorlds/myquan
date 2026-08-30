@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { shallowRef, ref } from 'vue'
 import type { StrategyTab, WatchSnapshot } from '~/types/snapshot'
 
 function readPrivacyHidden(): boolean {
@@ -8,7 +8,7 @@ function readPrivacyHidden(): boolean {
 }
 
 export const useWatchStore = defineStore('watch', () => {
-  const snapshot = ref<WatchSnapshot | null>(null)
+  const snapshot = shallowRef<WatchSnapshot | null>(null)
   const strategies = ref<StrategyTab[]>([])
   const wsStatus = ref('连接中…')
   const privacyHidden = ref(readPrivacyHidden())
@@ -24,6 +24,10 @@ export const useWatchStore = defineStore('watch', () => {
     strategies.value = list
   }
 
+  function setWsStatus(msg: string) {
+    wsStatus.value = msg
+  }
+
   function togglePrivacy() {
     privacyHidden.value = !privacyHidden.value
     if (import.meta.client) {
@@ -31,5 +35,22 @@ export const useWatchStore = defineStore('watch', () => {
     }
   }
 
-  return { snapshot, strategies, wsStatus, privacyHidden, setSnapshot, setStrategies, togglePrivacy }
+  const wsDisconnected = computed(
+    () =>
+      wsStatus.value.includes('断开') ||
+      wsStatus.value.includes('重连') ||
+      wsStatus.value.includes('不可用'),
+  )
+
+  return {
+    snapshot,
+    strategies,
+    wsStatus,
+    wsDisconnected,
+    privacyHidden,
+    setSnapshot,
+    setStrategies,
+    setWsStatus,
+    togglePrivacy,
+  }
 })

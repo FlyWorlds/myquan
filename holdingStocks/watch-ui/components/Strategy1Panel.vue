@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
+import { fmtNum } from '~/utils/format'
+import { baiduStockUrl } from '~/utils/stockLink'
 
 defineProps<{ rows: HoldingRow[]; phase?: string }>()
 
@@ -9,16 +11,6 @@ const steps = [
   ['9:25', '阈值/过门'],
   ['9:30', '信号触发'],
 ]
-
-function baiduUrl(code?: string, name?: string) {
-  const c = (code || '').replace(/\D/g, '')
-  return `https://finance.baidu.com/stock/ab-${c}?name=${encodeURIComponent(name || '')}`
-}
-
-function fmt(v?: number | null, d = 2) {
-  if (v == null) return '-'
-  return v.toFixed(d)
-}
 </script>
 
 <template>
@@ -31,7 +23,7 @@ function fmt(v?: number | null, d = 2) {
     </div>
     <div class="card overflow-x-auto">
       <table class="min-w-full text-sm">
-        <thead class="bg-ui-fill-hover text-left text-ui-text-2">
+        <thead class="sticky top-16 z-10 bg-ui-surface text-left text-ui-text-2">
           <tr>
             <th class="px-2 py-2">代码</th>
             <th class="px-2 py-2">名称</th>
@@ -49,18 +41,18 @@ function fmt(v?: number | null, d = 2) {
         <tbody>
           <tr v-for="r in rows" :key="String(r.代码)" class="border-t border-ui-hairline">
             <td class="px-2 py-2">
-              <a :href="baiduUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive text-accent hover:underline">{{ r.代码 }}</a>
+              <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive text-accent hover:underline">{{ r.代码 }}</a>
             </td>
             <td class="px-2 py-2">
-              <a :href="baiduUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ r.名称 }}</a>
+              <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ r.名称 }}</a>
             </td>
-            <td class="sensitive px-2 py-2">{{ r.阈值就绪 ? fmt(r.开盘, r['价位小数'] ?? 2) : (r.竞价参考 != null ? fmt(r.竞价参考, r['价位小数'] ?? 2) : '待9:25') }}</td>
-            <td class="sensitive px-2 py-2">{{ fmt(r.现价, r['价位小数'] ?? 2) }}</td>
+            <td class="sensitive px-2 py-2">{{ r.阈值就绪 ? fmtNum(r.开盘, r['价位小数'] ?? 2) : (r.竞价参考 != null ? fmtNum(r.竞价参考, r['价位小数'] ?? 2) : '待9:25') }}</td>
+            <td class="sensitive px-2 py-2">{{ fmtNum(r.现价, r['价位小数'] ?? 2) }}</td>
             <td class="px-2 py-2">{{ r.前日形态 || '-' }}</td>
             <td class="px-2 py-2 font-semibold" :class="r.过门OK ? 'text-up' : 'text-ui-text-2'">{{ r.过门 || '-' }}</td>
             <td class="px-2 py-2">{{ r['阈值%'] || '-' }}</td>
-            <td class="sensitive px-2 py-2">{{ r.阈值就绪 ? fmt(r.买点, r['价位小数'] ?? 2) : '-' }}</td>
-            <td class="sensitive px-2 py-2">{{ r.阈值就绪 ? fmt(r.止损, r['价位小数'] ?? 2) : '-' }}</td>
+            <td class="sensitive px-2 py-2">{{ r.阈值就绪 ? fmtNum(r.买点, r['价位小数'] ?? 2) : '-' }}</td>
+            <td class="sensitive px-2 py-2">{{ r.阈值就绪 ? fmtNum(r.止损, r['价位小数'] ?? 2) : '-' }}</td>
             <td class="px-2 py-2">{{ r.因子侧 || '-' }}</td>
             <td class="max-w-[220px] px-2 py-2 text-xs text-ui-text-2">{{ r.挂单说明 || r.预警 || '-' }}</td>
           </tr>

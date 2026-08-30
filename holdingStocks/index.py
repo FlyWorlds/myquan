@@ -358,6 +358,8 @@ def _load_watch_factors_api() -> list[dict[str, Any]]:
 
     rows: list[dict[str, Any]] = []
     for fspec in list_factors():
+        bindings = used_by.get(str(fspec.id), [])
+        bindings.sort(key=lambda s: int(_strategy_tab_number(str(s["id"]))))
         rows.append(
             {
                 "id": fspec.id,
@@ -366,7 +368,7 @@ def _load_watch_factors_api() -> list[dict[str, Any]]:
                 "rules_text": str(fspec.rules_text or "").strip(),
                 "implemented": bool(fspec.implemented),
                 "meta": _json_safe_meta(fspec.meta),
-                "used_by": used_by.get(str(fspec.id), []),
+                "used_by": bindings,
             }
         )
     return rows
@@ -518,17 +520,14 @@ def publish_watch_snapshot(
         refresh_sec=refresh_sec,
     )
     _last_watch_snapshot = snapshot
-    _atomic_write_text(
-        WATCH_META_FILE,
-        json.dumps(snapshot, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    body = json.dumps(snapshot, ensure_ascii=False)
+    _atomic_write_text(WATCH_META_FILE, body, encoding="utf-8")
     hub = _ws_hub
     if hub is not None:
         try:
-            hub.broadcast_json(snapshot)
-        except Exception:  # noqa: BLE001
-            pass
+            hub.broadcast_text(body)
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] WS 广播失败: {e}")
     return WATCH_META_FILE
 
 
@@ -3056,20 +3055,6 @@ def _parse_hhmm(text: str) -> tuple[int, int]:
     return hour, minute
 
 
-def _next_open_refresh_at(
-    now: datetime | None = None,
-    *,
-    hour: int = OPEN_PRICE_REFRESH_HOUR,
-    minute: int = OPEN_PRICE_REFRESH_MINUTE,
-) -> datetime:
-    """下一档开盘价刷新时刻（默认每日 09:25）。"""
-    now = now or datetime.now()
-    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if now >= target:
-        target += timedelta(days=1)
-    return target
-
-
 def _next_auction_milestone(
     now: datetime | None = None,
 ) -> tuple[datetime, str, str]:
@@ -3155,7 +3140,7 @@ def _acquire_watch_lock(
     port: int,
     ui_dev_port: int | None = None,
 ) -> None:
-    """防止多个 watch 同时写 HTML，页面会来回跳变。"""
+    """防止多个 watch 同时写快照，页面会来回跳变。"""
     existing = _read_watch_lock()
     if existing:
         old = int(existing.get("pid") or 0)
@@ -3193,11 +3178,7 @@ def _release_watch_lock() -> None:
         pass
 
 
-def _watch_ui_url(host: str, port: int) -> str:
-    return f"http://{host}:{int(port)}/"
-
-
-def _watch_ui_dev_url(host: str = "127.0.0.1", port: int = WATCH_UI_DEV_PORT) -> str:
+def _watch_page_url(host: str, port: int) -> str:
     return f"http://{host}:{int(port)}/"
 
 
@@ -3226,29 +3207,41 @@ def _resolve_watch_ui_mode(args: argparse.Namespace) -> tuple[bool, int]:
     return False, dev_port
 
 
-def _start_watch_ui_dev(*, port: int, on_log: Callable[[str], None] | None = None) -> subprocess.Popen[str] | None:
-    """启动 watch-ui 的 npm run dev（Vite 代理 /api、/ws → 8765）。"""
+def _start_watch_ui_dev(
+    *,
+    port: int,
+    api_port: int,
+    on_log: Callable[[str], None] | None = None,
+) -> subprocess.Popen[str] | None:
+    """启动 watch-ui 的 npm run dev（Nuxt 代理 /api、/ws → api_port）。"""
     if not (WATCH_UI_DIR / "package.json").is_file():
         if on_log:
             on_log("未找到 watch-ui/package.json，跳过前端 dev")
         return None
     if _tcp_port_open("127.0.0.1", port):
         if on_log:
-            on_log(f"前端 dev 已在 http://127.0.0.1:{port}/ 运行")
+            on_log(f"前端 dev 已在 http://127.0.0.1:{port}/ 运行（API :{api_port}）")
         return None
     if not (WATCH_UI_DIR / "node_modules").is_dir():
         if on_log:
             on_log("请先: cd holdingStocks/watch-ui && npm install")
         return None
     if on_log:
-        on_log(f"启动 Nuxt dev → http://127.0.0.1:{port}/ （API 仍走 :8765 代理）")
+        on_log(
+            f"启动 Nuxt dev → http://127.0.0.1:{port}/ "
+            f"（代理 /api、/ws → :{api_port}）"
+        )
+    env = os.environ.copy()
+    env["WATCH_API_PORT"] = str(int(api_port))
+    env["NUXT_PORT"] = str(int(port))
     proc = subprocess.Popen(
-        ["npm", "run", "dev", "--", "--port", str(port), "--host", "127.0.0.1"],
+        ["npm", "run", "dev"],
         cwd=WATCH_UI_DIR,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        env=os.environ.copy(),
+        env=env,
+        start_new_session=True,
     )
 
     def _pipe() -> None:
@@ -3268,23 +3261,32 @@ def _start_watch_ui_dev(*, port: int, on_log: Callable[[str], None] | None = Non
         time.sleep(0.5)
     if on_log:
         on_log(f"等待 http://127.0.0.1:{port}/ 超时，请检查 watch-ui 终端输出")
-    return proc
+    _stop_watch_ui_dev(proc)
+    return None
 
 
 def _stop_watch_ui_dev(proc: subprocess.Popen[str] | None) -> None:
     if proc is None or proc.poll() is not None:
         return
-    proc.terminate()
     try:
+        os.killpg(os.getpgid(proc.pid), 15)
         proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+    except (ProcessLookupError, subprocess.TimeoutExpired):
+        try:
+            os.killpg(os.getpgid(proc.pid), 9)
+        except ProcessLookupError:
+            pass
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
 
 
 def _watch_browser_url(*, host: str, api_port: int, ui_dev_port: int | None) -> str:
+    page_host = host if host != "0.0.0.0" else "127.0.0.1"
     if ui_dev_port:
-        return _watch_ui_dev_url(host if host != "0.0.0.0" else "127.0.0.1", ui_dev_port)
-    return _watch_ui_url(host if host != "0.0.0.0" else "127.0.0.1", api_port)
+        return _watch_page_url(page_host, ui_dev_port)
+    return _watch_page_url(page_host, api_port)
 
 
 def _report_url_if_watching() -> str | None:
@@ -3588,7 +3590,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             self.wfile.write(data)
 
         def _resolve_ui_file(self, path: str) -> Path | None:
-            if not (WATCH_UI_DIST / "index.html").is_file():
+            if not _watch_ui_dist_ready():
                 return None
             rel = path.split("?", 1)[0].lstrip("/") or "index.html"
             candidate = (WATCH_UI_DIST / rel).resolve()
@@ -3627,10 +3629,10 @@ def cmd_watch(args: argparse.Namespace) -> None:
             if ui_file is not None:
                 self._serve_path(ui_file)
                 return
-            if (WATCH_UI_DIST / "index.html").is_file() and path != f"/{WATCH_META_FILE.name}":
+            if _watch_ui_dist_ready() and path != f"/{WATCH_META_FILE.name}":
                 self._serve_path(WATCH_UI_DIST / "index.html")
                 return
-            super().do_GET()
+            self.send_error(404, "Not Found")
 
         def _handle_ws_upgrade(self) -> None:
             key = self.headers.get("Sec-WebSocket-Key")
@@ -3672,9 +3674,13 @@ def cmd_watch(args: argparse.Namespace) -> None:
     if use_ui_dev:
         ui_dev_proc = _start_watch_ui_dev(
             port=ui_dev_port,
+            api_port=port,
             on_log=lambda m: print(f"[{_now()}] {m}"),
         )
-        print(f"前端 dev: http://127.0.0.1:{ui_dev_port}/ （Vite 代理 /api、/ws → :{port}）")
+        print(
+            f"前端 dev: http://127.0.0.1:{ui_dev_port}/ "
+            f"（Nuxt 代理 /api、/ws → :{port}）"
+        )
     elif _watch_ui_dist_ready():
         print(f"前端静态: http://{host}:{port}/ （watch-ui/dist）")
     else:
@@ -3787,11 +3793,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     w.add_argument("--host", default="127.0.0.1", help="监听地址")
     w.add_argument("--port", type=int, default=8765, help="端口，默认8765")
-    w.add_argument(
-        "--open-at",
-        default=f"{OPEN_PRICE_REFRESH_HOUR:02d}:{OPEN_PRICE_REFRESH_MINUTE:02d}",
-        help="每日强制刷新盯盘开盘价的时刻，默认09:30",
-    )
     w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     w.add_argument(
         "--ui-dev",

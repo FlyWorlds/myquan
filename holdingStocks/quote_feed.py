@@ -576,7 +576,10 @@ class LocalWsHub:
             pass
 
     def broadcast_json(self, payload: dict[str, Any]) -> None:
-        raw = ws_pack_text(json.dumps(payload, ensure_ascii=False))
+        self.broadcast_text(json.dumps(payload, ensure_ascii=False))
+
+    def broadcast_text(self, text: str) -> None:
+        raw = ws_pack_text(text)
         dead: list[socket.socket] = []
         with self._lock:
             clients = list(self._clients)

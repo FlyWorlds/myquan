@@ -94,19 +94,19 @@ pip install -r ../requirements.txt
 
 ```bash
 # 日常开发（无需 build）：Python API + Nuxt 热更新
-cd holdingStocks && python index.py watch --port 8765 --no-wechat --ui-dev
-# 浏览器 http://127.0.0.1:3000/  ·  API/WS 由 Vite 代理到 :8765
+cd holdingStocks && python index.py watch --no-wechat --ui-dev
+# 前端 http://127.0.0.1:3000/  ·  API/WS :8765（Nuxt 代理，随 --port 注入 WATCH_API_PORT）
 
-# 或分两终端（等价）
-cd holdingStocks && python index.py watch --port 8765 --no-wechat
-cd holdingStocks/watch-ui && npm install && npm run dev   # http://127.0.0.1:3000
+# 或分两终端
+cd holdingStocks && python index.py watch --no-wechat
+cd holdingStocks/watch-ui && npm install && WATCH_API_PORT=8765 npm run dev
 
-# 无 watch-ui/dist 时，watch 会自动走 dev 模式（仍建议显式 --ui-dev）
+# 无 watch-ui/dist 时，watch 会自动走 dev 模式
 
 # 生产 / 单端口部署（需先 build）
 cd holdingStocks/watch-ui && npm run build
-cd holdingStocks && python index.py watch --port 8765 --no-wechat --ui-static
-# 打开 http://127.0.0.1:8765/
+cd holdingStocks && python index.py watch --no-wechat --ui-static
+# http://127.0.0.1:8765/
 ```
 
 API：

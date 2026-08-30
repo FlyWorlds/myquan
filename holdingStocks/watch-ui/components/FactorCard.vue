@@ -35,7 +35,7 @@ defineProps<{ factor: FactorEntry }>()
     <div v-if="factor.used_by?.length" class="mt-4">
       <h3 class="text-sm font-semibold text-ui-text">挂载策略</h3>
       <ul class="mt-2 space-y-1 text-sm text-ui-text-2">
-        <li v-for="s in factor.used_by" :key="`${s.id}-${s.role}`">
+        <li v-for="s in factor.used_by ?? []" :key="`${s.id}-${s.role}`">
           <NuxtLink :to="`/strategies#${s.id}`" class="text-accent hover:underline">{{ s.label }}</NuxtLink>
           · {{ s.role }}
           <span v-if="s.filter_desc">（{{ s.filter_desc }}）</span>

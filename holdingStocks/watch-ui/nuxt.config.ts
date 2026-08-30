@@ -1,4 +1,9 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+const watchApiHost = process.env.WATCH_API_HOST || '127.0.0.1'
+const watchApiPort = process.env.WATCH_API_PORT || '8765'
+const watchApiOrigin = `http://${watchApiHost}:${watchApiPort}`
+const devPort = Number(process.env.NUXT_PORT || process.env.PORT || 3000)
+
 export default defineNuxtConfig({
   ssr: false,
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss'],
@@ -6,12 +11,25 @@ export default defineNuxtConfig({
   tailwindcss: {
     cssPath: '~/assets/css/main.css',
   },
-  devtools: { enabled: false },
+  devtools: { enabled: process.env.NODE_ENV === 'development' },
+  runtimeConfig: {
+    public: {
+      watchApiPort,
+      watchApiHost,
+    },
+  },
+  devServer: {
+    host: '127.0.0.1',
+    port: devPort,
+  },
   app: {
     head: {
       title: '持仓盯盘',
       htmlAttrs: { lang: 'zh-CN' },
-      meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1' }],
+      meta: [
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'description', content: 'A 股持仓盯盘 · 策略一因子1+2 · WebSocket 实时推送' },
+      ],
       script: [
         {
           key: 'theme-init',
@@ -22,16 +40,12 @@ export default defineNuxtConfig({
       ],
     },
   },
-  devServer: {
-    host: '127.0.0.1',
-    port: 3000,
-  },
   vite: {
     server: {
       proxy: {
-        '/ws': { target: 'ws://127.0.0.1:8765', ws: true },
-        '/api': { target: 'http://127.0.0.1:8765' },
-        '/holdings_watch.json': { target: 'http://127.0.0.1:8765' },
+        '/ws': { target: `ws://${watchApiHost}:${watchApiPort}`, ws: true },
+        '/api': { target: watchApiOrigin },
+        '/holdings_watch.json': { target: watchApiOrigin },
       },
     },
   },
