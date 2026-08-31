@@ -171,6 +171,22 @@ def build_member_stats_map(
     return out
 
 
+def _lookup_member_stats(
+    name: str, member_stats: dict[str, dict[str, Any]] | None
+) -> dict[str, Any]:
+    if not member_stats:
+        return {}
+    hit = member_stats.get(name)
+    if hit:
+        return hit
+    stripped = str(name).replace("概念", "").strip()
+    if stripped and stripped != name:
+        for key in (stripped, stripped + "概念"):
+            if key in member_stats:
+                return member_stats[key]
+    return {}
+
+
 def enrich_concept_row(
     name: str,
     base: dict[str, Any],
@@ -180,7 +196,7 @@ def enrich_concept_row(
 ) -> dict[str, Any]:
     """合并指数行情 + 成分聚合 + 主力净额 + 强度。"""
     row = dict(base)
-    ms = (member_stats or {}).get(name) or {}
+    ms = _lookup_member_stats(name, member_stats)
     row["涨停数"] = int(ms.get("涨停数") or 0)
     row["涨跌比"] = ms.get("涨跌比")
     row["上涨家数"] = ms.get("上涨家数")

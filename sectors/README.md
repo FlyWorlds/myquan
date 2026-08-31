@@ -49,13 +49,13 @@ python index.py --days 5 --no-members --no-open
 
 | 接口 | 说明 |
 |------|------|
-| `GET /api/sectors/rotation?days=20&top_n=10` | 通达信概念轮动热力表数据 |
+| `GET /api/sectors/members?name=` | 板块成分股（通达信索引优先，名称对不上则东财） |
 | `GET /api/sectors/concept/{名称}?months=6` | 概念指数 K 线 + 近半年波段龙头（通达信失败则东财） |
 | `GET /api/sectors/concept/{名称}/leaders?start=2025-01-01&top_n=5` | **因子16** 概念龙头 Top5（2025至今） |
 | `GET /api/sectors/focus?concept=名称` | 订阅概念成分/龙头实时报价（随 WS 5s 推送） |
 | `GET /api/sectors/status` | 通达信链路可用性 |
 
-启动：`cd holdingStocks && python start_watch.py` → 浏览器打开 `http://127.0.0.1:3000/sectors`。
+启动：`cd holdingStocks && python start_watch.py` → 浏览器打开 `http://127.0.0.1:3000/sectors`。点击热力表格子加载成分股。
 
 | 指标 | 来源 | 说明 |
 |------|------|------|

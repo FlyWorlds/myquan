@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .tdx import _clean, _connect_api, _stock_market, load_concepts, load_members_index, resolve_concept_by_name, tdx_hq_available
+from .tdx import _clean, _connect_api, _stock_market, load_concepts, resolve_concept_by_name, tdx_hq_available
 
 _concept_boards: list[dict[str, str]] | None = None
 _live_source = "通达信概念"
@@ -102,10 +102,25 @@ def fetch_concept_index_spot_live() -> dict[str, dict[str, Any]]:
     return spot
 
 
+def _stock_name_map() -> dict[str, str]:
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "holdingStocks" / "cache" / "a_share_code_names.json"
+    if not path.is_file():
+        return {}
+    try:
+        import json
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return {str(k).zfill(6): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
+    except Exception:
+        return {}
+
+
 def member_codes_for_concept(name: str, *, limit: int = 200) -> list[str]:
-    index = load_members_index()
-    codes = (index.get("概念") or {}).get(str(name).strip()) or []
-    out = [str(c).zfill(6) for c in codes[:limit] if str(c).strip()]
+    from .tdx import lookup_member_codes
+
+    out = lookup_member_codes("概念", name)[:limit]
     if out:
         return out
     try:
@@ -122,6 +137,84 @@ def member_codes_for_concept(name: str, *, limit: int = 200) -> list[str]:
         ][:limit]
     except Exception:
         return []
+
+
+def fetch_concept_member_rows(name: str, *, limit: int = 80) -> dict[str, Any]:
+    """热力表下钻成分股：通达信索引优先，对不上名称则东财。"""
+    name = str(name or "").strip()
+    if not name:
+        return {"name": "", "source": "", "members": [], "count": 0, "error": "概念名为空"}
+
+    from .tdx import lookup_member_codes
+
+    codes = lookup_member_codes("概念", name)
+    names = _stock_name_map()
+    if codes:
+        quotes: dict[str, dict[str, Any]] = {}
+        try:
+            quotes = stock_quotes_by_codes(codes[:limit])
+        except Exception:
+            quotes = {}
+        members = []
+        for code in codes[:limit]:
+            q = quotes.get(code) or {}
+            members.append(
+                {
+                    "代码": code,
+                    "名称": names.get(code) or str(q.get("name") or code),
+                    "现价": q.get("price"),
+                    "涨跌幅": q.get("chgPct"),
+                    "成交额": q.get("amount"),
+                    "换手率": None,
+                }
+            )
+        return {
+            "name": name,
+            "source": "通达信概念",
+            "members": members,
+            "count": len(codes),
+        }
+
+    try:
+        from .rotation import em_concept_code_of, fetch_em_concept_members
+
+        bk = em_concept_code_of(name)
+        if not bk:
+            return {
+                "name": name,
+                "source": "",
+                "members": [],
+                "count": 0,
+                "error": f"找不到「{name}」成分股（通达信无索引，东财无同名概念）",
+            }
+        raw = fetch_em_concept_members(bk, limit=limit)
+        members = [
+            {
+                "代码": str(m.get("纯代码") or m.get("代码") or "").zfill(6),
+                "名称": str(m.get("名称") or names.get(str(m.get("代码") or "").zfill(6)) or ""),
+                "现价": m.get("现价"),
+                "涨跌幅": m.get("涨跌幅"),
+                "成交额": m.get("成交额"),
+                "换手率": m.get("换手率"),
+            }
+            for m in raw
+            if str(m.get("纯代码") or m.get("代码") or "").strip()
+        ]
+        return {
+            "name": name,
+            "source": "东财概念",
+            "code": bk,
+            "members": members,
+            "count": len(members),
+        }
+    except Exception as e:
+        return {
+            "name": name,
+            "source": "",
+            "members": [],
+            "count": 0,
+            "error": str(e),
+        }
 
 
 def leader_codes_from_detail(detail: dict[str, Any]) -> list[str]:
@@ -166,12 +259,14 @@ def _quotes_from_tdx(codes: list[str]) -> dict[str, dict[str, Any]]:
 
 
 def stock_quotes_by_codes(codes: list[str]) -> dict[str, dict[str, Any]]:
-    """成分股/龙头现价：通达信批量，失败则新浪。"""
+    """成分股/龙头现价：通达信批量，失败或空结果则新浪。"""
     if not codes:
         return {}
     if tdx_hq_available():
         try:
-            return _quotes_from_tdx(codes)
+            out = _quotes_from_tdx(codes)
+            if out:
+                return out
         except Exception:
             pass
     from .metrics import fetch_member_quotes_sina

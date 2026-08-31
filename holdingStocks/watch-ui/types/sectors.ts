@@ -6,6 +6,15 @@ export interface SectorCell {
   metric?: string
 }
 
+export interface SectorMember {
+  代码: string
+  名称: string
+  现价?: number | null
+  涨跌幅?: number | null
+  换手率?: number | null
+  成交额?: number | null
+}
+
 export interface SectorKindPayload {
   dates: string[]
   by_metric: Record<
@@ -20,13 +29,13 @@ export interface SectorKindPayload {
   board_count?: number
 }
 
-export interface SectorMember {
-  代码: string
-  名称: string
-  现价?: number | null
-  涨跌幅?: number | null
-  换手率?: number | null
-  成交额?: number | null
+export interface SectorMembersPayload {
+  name: string
+  source?: string
+  code?: string
+  count: number
+  members: SectorMember[]
+  error?: string
 }
 
 export interface SectorRotationPayload {

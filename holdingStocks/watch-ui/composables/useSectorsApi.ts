@@ -1,4 +1,4 @@
-import type { ConceptDetailPayload, ConceptLeaderScoresPayload, SectorRotationPayload } from '~/types/sectors'
+import type { ConceptDetailPayload, ConceptLeaderScoresPayload, SectorMembersPayload, SectorRotationPayload } from '~/types/sectors'
 
 async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(path, { cache: 'no-store' })
@@ -45,5 +45,13 @@ export function useSectorsApi() {
     )
   }
 
-  return { fetchRotation, fetchConceptDetail, fetchConceptLeaderScores }
+  async function fetchConceptMembers(name: string, limit = 80) {
+    const qs = new URLSearchParams({
+      name,
+      limit: String(limit),
+    })
+    return apiGet<SectorMembersPayload>(`/api/sectors/members?${qs}`)
+  }
+
+  return { fetchRotation, fetchConceptDetail, fetchConceptLeaderScores, fetchConceptMembers }
 }

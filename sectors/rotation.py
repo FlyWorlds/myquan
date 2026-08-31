@@ -178,7 +178,7 @@ def em_concept_code_of(name: str) -> str | None:
                 if n and c:
                     _EM_CODE_MAP[n] = c
         _EM_CODE_MAP_TS = now
-    return _EM_CODE_MAP.get(name) or None
+    return _EM_CODE_MAP.get(name) or _EM_CODE_MAP.get(name.replace("概念", "") + "概念") or _EM_CODE_MAP.get(name.replace("概念", ""))
 
 
 def fetch_em_concept_kline(code: str, *, count: int = 130) -> list[dict[str, Any]]:

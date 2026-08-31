@@ -643,8 +643,12 @@ def load_members_index(*, force: bool = False) -> dict[str, dict[str, list[str]]
     if not force and not _members_index_stale() and TDX_MEMBERS_INDEX.is_file():
         try:
             data = json.loads(TDX_MEMBERS_INDEX.read_text(encoding="utf-8"))
-            if data.get("行业") and data.get("概念"):
-                return {"行业": data["行业"], "概念": data["概念"]}
+            # Windows 无 tdxhy 时「行业」可为空；有概念成分即可复用缓存
+            if data.get("概念"):
+                return {
+                    "行业": data.get("行业") or {},
+                    "概念": data["概念"],
+                }
         except Exception:
             pass
 
@@ -710,6 +714,35 @@ def _fetch_quotes(codes: list[str]) -> dict[str, dict[str, Any]]:
     return out
 
 
+def lookup_member_codes(kind: str, name: str) -> list[str]:
+    """板块名 → 成分代码。概念支持去掉「概念」后缀、唯一子串模糊匹配。"""
+    kind = str(kind).strip()
+    name = str(name or "").strip()
+    if not name or kind not in ("行业", "概念"):
+        return []
+    index = load_members_index().get(kind) or {}
+    hit = index.get(name)
+    if hit:
+        return [str(c).zfill(6) for c in hit if str(c).strip()]
+    if kind != "概念":
+        return []
+    stripped = name.replace("概念", "").strip()
+    if stripped and stripped != name:
+        alt = index.get(stripped) or index.get(stripped + "概念")
+        if alt:
+            return [str(c).zfill(6) for c in alt if str(c).strip()]
+    fuzzy: list[str] = []
+    for key, codes in index.items():
+        k2 = str(key).replace("概念", "").strip()
+        if not stripped:
+            continue
+        if stripped == k2 or stripped in str(key) or k2 in name:
+            fuzzy.append(str(key))
+    if len(fuzzy) == 1:
+        return [str(c).zfill(6) for c in index[fuzzy[0]] if str(c).strip()]
+    return []
+
+
 def fetch_tdx_board_members(
     kind: str,
     name: str,
@@ -723,8 +756,7 @@ def fetch_tdx_board_members(
     if kind not in ("行业", "概念"):
         raise ValueError("kind 仅支持 行业 / 概念")
 
-    index = load_members_index()
-    codes = (index.get(kind) or {}).get(name) or []
+    codes = lookup_member_codes(kind, name)
     if not codes:
         return pd.DataFrame()
 

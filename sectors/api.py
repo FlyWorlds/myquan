@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
 from .concept_leaders import build_concept_detail
 from .leader_score import get_concept_scored_leaders
+from .live import fetch_concept_member_rows
 from .tdx import tdx_availability, tdx_hq_available
 from .tdx_rotation import (
     build_em_concept_rotation_payload,
@@ -56,6 +58,19 @@ def _rotation_has_data(payload: dict[str, Any] | None) -> bool:
     return False
 
 
+def _payload_age_sec(payload: dict[str, Any] | None) -> float:
+    if not payload:
+        return 1e9
+    raw = str(payload.get("updated_at") or "")
+    if not raw:
+        return 1e9
+    try:
+        ts = datetime.strptime(raw[:19], "%Y-%m-%d %H:%M:%S")
+        return max(0.0, (datetime.now() - ts).total_seconds())
+    except ValueError:
+        return 1e9
+
+
 def get_rotation_payload(*, days: int = 20, top_n: int = 10, refresh: bool = False) -> dict[str, Any]:
     """通达信概念轮动 payload（内存 + 磁盘缓存）；空结果不缓存，行情失败回退东财。"""
     now = time.time()
@@ -70,7 +85,7 @@ def get_rotation_payload(*, days: int = 20, top_n: int = 10, refresh: bool = Fal
 
         if not refresh:
             disk = _load_rotation_disk()
-            if _rotation_has_data(disk):
+            if _rotation_has_data(disk) and _payload_age_sec(disk) < _ROTATION_TTL_SEC:
                 _rotation_mem["payload"] = disk
                 _rotation_mem["ts"] = now
                 return disk
@@ -92,6 +107,11 @@ def get_rotation_payload(*, days: int = 20, top_n: int = 10, refresh: bool = Fal
         _rotation_mem["ts"] = time.time()
     _save_rotation_disk(payload)
     return payload
+
+
+def get_concept_members(concept_name: str, *, limit: int = 80) -> dict[str, Any]:
+    name = unquote(str(concept_name or "").strip())
+    return fetch_concept_member_rows(name, limit=limit)
 
 
 def get_concept_detail(concept_name: str, *, months: int = 6, refresh: bool = False) -> dict[str, Any]:

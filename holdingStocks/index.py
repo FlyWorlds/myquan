@@ -450,6 +450,7 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
     from sectors.api import (
         get_concept_detail,
         get_concept_leader_scores,
+        get_concept_members,
         get_rotation_payload,
         get_status,
     )
@@ -463,6 +464,18 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
         concept = unquote(str(raw).strip()) or None
         set_focus_concept(concept)
         return 200, {"ok": True, "focusConcept": concept}
+    if api_path == "/api/sectors/members":
+        name = unquote(str((qs.get("name") or qs.get("concept") or [""])[0]).strip())
+        limit = max(20, min(_api_int(qs, "limit", 80), 200))
+        if not name:
+            return 400, {"error": "缺少 name"}
+        try:
+            data = get_concept_members(name, limit=limit)
+            if data.get("error") and not data.get("members"):
+                return 404, data
+            return 200, data
+        except Exception as e:
+            return 500, {"error": str(e)}
     if api_path == "/api/sectors/rotation":
         days = max(5, min(_api_int(qs, "days", 20), 60))
         top_n = max(5, min(_api_int(qs, "top_n", 10), 20))
