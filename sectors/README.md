@@ -43,12 +43,14 @@ python index.py --days 5 --no-members --no-open
 | `snapshots/` | 按日快照 |
 | `cache/` | 同花顺代码映射、涨停缓存 |
 
-**Web 行情（通达信概念）**：`holdingStocks` watch 服务提供 API，Nuxt 前端 `/sectors` 热力表 + 概念 K 线龙头图。
+**Web 行情**：优先通达信概念指数（pytdx）；**连不上则回退东财概念**（今日列仍可用，历史列可能暂缺）。
+
+`holdingStocks` watch 服务提供 API，Nuxt 前端 `/sectors` 热力表 + 概念 K 线龙头图。
 
 | 接口 | 说明 |
 |------|------|
 | `GET /api/sectors/rotation?days=20&top_n=10` | 通达信概念轮动热力表数据 |
-| `GET /api/sectors/concept/{名称}?months=6` | 概念指数 K 线 + 近半年波段龙头 |
+| `GET /api/sectors/concept/{名称}?months=6` | 概念指数 K 线 + 近半年波段龙头（通达信失败则东财） |
 | `GET /api/sectors/concept/{名称}/leaders?start=2025-01-01&top_n=5` | **因子16** 概念龙头 Top5（2025至今） |
 | `GET /api/sectors/focus?concept=名称` | 订阅概念成分/龙头实时报价（随 WS 5s 推送） |
 | `GET /api/sectors/status` | 通达信链路可用性 |

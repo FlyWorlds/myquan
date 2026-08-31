@@ -116,7 +116,9 @@ watch(conceptName, async () => {
           </span>
           <span class="ml-3 text-ui-text-3">{{ wsLabel }}</span>
         </p>
-        <p v-else class="mt-1 text-sm text-ui-text-2">通达信概念指数 · 近半年 K 线 · 波段龙头</p>
+        <p v-else class="mt-1 text-sm text-ui-text-2">
+          {{ detail?.source || '概念' }}指数 · 近半年 K 线 · 波段龙头
+        </p>
       </div>
       <button class="btn btn-ghost" :disabled="loading || scoreLoading" @click="reloadAll(true)">
         重载

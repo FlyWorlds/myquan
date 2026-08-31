@@ -96,6 +96,8 @@ pip install -r ../requirements.txt
 
 ## 前端 watch-ui（Nuxt 3 + Vue 3 + Pinia + Tailwind）
 
+浏览器 **http://127.0.0.1:3000/sectors** 为板块轮动热力表。优先通达信概念指数；行情连不上时回退东财概念（今日列）。点格子「查看龙头」同样通达信优先、失败则东财成分 + K 线。
+
 栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（HTTP `/api` + WebSocket `/ws`），不生成 HTML、不托管页面。
 
 ```bash

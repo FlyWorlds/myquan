@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import struct
+import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -46,6 +47,20 @@ TDX_SERVERS: tuple[tuple[str, int], ...] = (
     ("114.80.63.12", 7709),
 )
 
+# 连不上时短路一段时间，避免盯盘每轮卡 30s+
+_TDX_FAIL_UNTIL = 0.0
+_TDX_RETRY_SEC = 90.0
+
+
+def tdx_hq_available() -> bool:
+    return time.time() >= _TDX_FAIL_UNTIL
+
+
+def _mark_tdx_down() -> None:
+    global _TDX_FAIL_UNTIL
+    _TDX_FAIL_UNTIL = time.time() + _TDX_RETRY_SEC
+
+
 # tdxzs.cfg: 2=行业 3=地域 4=概念 5=风格；第5列 0=一级
 CAT_INDUSTRY = "2"
 CAT_CONCEPT = "4"
@@ -69,18 +84,24 @@ def mac_tdx_installed() -> bool:
 
 
 def _connect_api():
+    global _TDX_FAIL_UNTIL
+    if time.time() < _TDX_FAIL_UNTIL:
+        raise ConnectionError("无法连接通达信行情服务器")
     try:
         from pytdx.hq import TdxHq_API
     except ImportError as e:
+        _mark_tdx_down()
         raise ImportError("未安装 pytdx，请 pip install pytdx") from e
 
     api = TdxHq_API()
     for ip, port in TDX_SERVERS:
         try:
-            if api.connect(ip, port, time_out=8):
+            if api.connect(ip, port, time_out=2):
+                _TDX_FAIL_UNTIL = 0.0
                 return api
         except Exception:
             continue
+    _mark_tdx_down()
     raise ConnectionError("无法连接通达信行情服务器")
 
 

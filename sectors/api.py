@@ -11,8 +11,11 @@ from urllib.parse import unquote
 
 from .concept_leaders import build_concept_detail
 from .leader_score import get_concept_scored_leaders
-from .tdx import tdx_availability
-from .tdx_rotation import build_tdx_concept_rotation_payload
+from .tdx import tdx_availability, tdx_hq_available
+from .tdx_rotation import (
+    build_em_concept_rotation_payload,
+    build_tdx_concept_rotation_payload,
+)
 
 ROOT = Path(__file__).resolve().parent
 CACHE_DIR = ROOT / "cache"
@@ -37,25 +40,53 @@ def _save_rotation_disk(payload: dict[str, Any]) -> None:
     _ROTATION_CACHE.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
+def _rotation_has_data(payload: dict[str, Any] | None) -> bool:
+    if not payload or not isinstance(payload, dict):
+        return False
+    kind = (payload.get("kinds") or {}).get("概念") or {}
+    if int(kind.get("board_count") or 0) > 0:
+        return True
+    by = kind.get("by_metric") or {}
+    for block in by.values():
+        if not isinstance(block, dict):
+            continue
+        for col in block.get("top") or []:
+            if col:
+                return True
+    return False
+
+
 def get_rotation_payload(*, days: int = 20, top_n: int = 10, refresh: bool = False) -> dict[str, Any]:
-    """通达信概念轮动 payload（内存 + 磁盘缓存）。"""
+    """通达信概念轮动 payload（内存 + 磁盘缓存）；空结果不缓存，行情失败回退东财。"""
     now = time.time()
     with _lock:
+        mem = _rotation_mem.get("payload")
         if (
             not refresh
-            and _rotation_mem.get("payload")
+            and _rotation_has_data(mem)
             and now - float(_rotation_mem.get("ts") or 0) < _ROTATION_TTL_SEC
         ):
-            return _rotation_mem["payload"]
+            return mem
 
         if not refresh:
             disk = _load_rotation_disk()
-            if disk and disk.get("kinds"):
+            if _rotation_has_data(disk):
                 _rotation_mem["payload"] = disk
                 _rotation_mem["ts"] = now
                 return disk
 
-    payload = build_tdx_concept_rotation_payload(days=days, top_n=top_n, with_members=True)
+    payload: dict[str, Any] | None = None
+    if tdx_hq_available():
+        try:
+            payload = build_tdx_concept_rotation_payload(
+                days=days, top_n=top_n, with_members=True
+            )
+        except Exception:
+            payload = None
+    if not _rotation_has_data(payload):
+        payload = build_em_concept_rotation_payload(days=days, top_n=top_n)
+    if not _rotation_has_data(payload):
+        raise RuntimeError("板块轮动无数据：通达信与东财均失败")
     with _lock:
         _rotation_mem["payload"] = payload
         _rotation_mem["ts"] = time.time()

@@ -7,6 +7,7 @@
 cd holdingStocks && python start_watch.py --no-wechat
 # 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
 # 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
+# 板块轮动：http://127.0.0.1:3000/sectors （通达信优先，连不上回退东财概念）
 ```
 
 本目录基于 [AKQuant](https://github.com/akfamily/akquant) 做 A 股策略回测与盯盘。

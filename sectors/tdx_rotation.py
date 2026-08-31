@@ -110,6 +110,109 @@ def _fetch_tdx_members(names: set[str]) -> dict[str, list[dict[str, Any]]]:
     return members
 
 
+def _assemble_rotation_payload(
+    *,
+    today_rows: list[dict[str, Any]],
+    hist: list[dict[str, Any]],
+    session: str,
+    days: int,
+    top_n: int,
+    source: str,
+    fund_note: str,
+    members: dict[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
+    today_snap = {
+        "date": session,
+        "kind": "概念",
+        "boards": today_rows,
+        "source": source,
+    }
+    snaps = _merge_snaps(hist, today_snap, days=days)
+    snaps_desc = list(reversed(snaps))
+    dates = [_session_label(str(s.get("date") or "")) for s in snaps_desc]
+
+    by_metric: dict[str, Any] = {}
+    for metric in ROTATION_METRICS:
+        tops, bottoms = [], []
+        for s in snaps_desc:
+            t, b = _rank_day_multi(s.get("boards") or [], metric, top_n=top_n)
+            tops.append(t)
+            bottoms.append(b)
+        by_metric[metric] = {"top": tops, "bottom": bottoms}
+
+    return {
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "session": session,
+        "top_n": top_n,
+        "days": days,
+        "metrics": list(ROTATION_METRICS),
+        "source": source,
+        "kinds": {
+            "概念": {
+                "dates": dates,
+                "by_metric": by_metric,
+                "members": members or {},
+                "fund_note": fund_note,
+                "board_count": int(len(today_rows)),
+            }
+        },
+    }
+
+
+def build_em_concept_rotation_payload(
+    *,
+    days: int = 20,
+    top_n: int = 10,
+) -> dict[str, Any]:
+    """东财概念轮动（通达信行情不可用时的热力表回退，以今日列为主）。"""
+    from .rotation import _filter_pure_concepts, fetch_em_board_spot
+
+    session = _today()
+    boards_df = _filter_pure_concepts(fetch_em_board_spot("概念"))
+    if boards_df is None or boards_df.empty:
+        raise RuntimeError("东财概念行情为空")
+    member_stats: dict[str, dict[str, Any]] = {}
+    main_flow: dict[str, float] = {}
+    today_rows: list[dict[str, Any]] = []
+    for _, r in boards_df.iterrows():
+        name = str(r.get("板块") or "")
+        if not name:
+            continue
+        fund = _clean(r.get("资金"))
+        if fund is not None and str(r.get("资金口径") or "") == "主力净流入":
+            main_flow[name] = fund
+        base = {
+            "板块": name,
+            "label": str(r.get("label") or ""),
+            "涨跌幅": _clean(r.get("涨跌幅")),
+            "涨停数": 0,
+            "资金": fund,
+            "资金口径": str(r.get("资金口径") or "成交额"),
+            "领涨名称": str(r.get("领涨名称") or ""),
+            "领涨涨幅": _clean(r.get("领涨涨幅")),
+        }
+        today_rows.append(
+            enrich_concept_row(
+                name,
+                base,
+                member_stats=member_stats,
+                main_flow=main_flow,
+            )
+        )
+    return _assemble_rotation_payload(
+        today_rows=today_rows,
+        hist=[],
+        session=session,
+        days=days,
+        top_n=top_n,
+        source="东财概念",
+        fund_note=(
+            "通达信行情不可用，已回退东财概念；历史列暂缺，今日列为实时。"
+            "涨幅/成交额/主力净额=东财；涨停数/涨跌比=成分股聚合（名称能匹配才有）。"
+        ),
+    )
+
+
 def build_tdx_concept_rotation_payload(
     *,
     days: int = 20,

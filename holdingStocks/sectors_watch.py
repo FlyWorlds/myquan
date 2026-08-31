@@ -11,6 +11,7 @@ from sectors.live import (
     concept_index_quote,
     fetch_concept_index_spot_live,
     leader_codes_from_detail,
+    live_source,
     member_codes_for_concept,
     stock_quotes_by_codes,
 )
@@ -113,7 +114,7 @@ def build_sectors_live_payload() -> dict[str, Any]:
 
     focus = get_focus_concept()
     payload: dict[str, Any] = {
-        "source": "通达信概念",
+        "source": live_source(),
         "spotAt": time.strftime("%Y-%m-%d %H:%M:%S"),
         "conceptToday": spot,
         "focusConcept": focus,

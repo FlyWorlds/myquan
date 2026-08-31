@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -135,6 +136,7 @@ def fetch_em_board_spot(kind: str) -> pd.DataFrame:
                     "总成交额": _clean(x.get("f6")),
                     "资金": _clean(x.get("f62")) if x.get("f62") is not None else _clean(x.get("f6")),
                     "资金口径": "主力净流入" if x.get("f62") is not None else "成交额",
+                    "现价": _clean(x.get("f2")),
                     "领涨名称": str(x.get("f128") or ""),
                     "领涨涨幅": _clean(x.get("f136")),
                     "涨停数": 0,
@@ -150,6 +152,128 @@ def fetch_em_board_spot(kind: str) -> pd.DataFrame:
     out = out.sort_values("涨跌幅", ascending=False, na_position="last")
     out = out.drop_duplicates(subset=["板块"], keep="first").reset_index(drop=True)
     return out
+
+
+_EM_CODE_MAP: dict[str, str] = {}
+_EM_CODE_MAP_TS = 0.0
+_EM_CODE_MAP_TTL = 300.0
+
+
+def em_concept_code_of(name: str) -> str | None:
+    """东财概念名称 → BK 代码（如 BK1172）。"""
+    global _EM_CODE_MAP, _EM_CODE_MAP_TS
+    name = str(name or "").strip()
+    if not name:
+        return None
+    if name.upper().startswith("BK") and len(name) >= 6:
+        return name.upper()
+    now = time.time()
+    if now - _EM_CODE_MAP_TS > _EM_CODE_MAP_TTL or not _EM_CODE_MAP:
+        df = fetch_em_board_spot("概念")
+        _EM_CODE_MAP = {}
+        if df is not None and not df.empty:
+            for _, r in df.iterrows():
+                n = str(r.get("板块") or "").strip()
+                c = str(r.get("label") or "").strip().upper()
+                if n and c:
+                    _EM_CODE_MAP[n] = c
+        _EM_CODE_MAP_TS = now
+    return _EM_CODE_MAP.get(name) or None
+
+
+def fetch_em_concept_kline(code: str, *, count: int = 130) -> list[dict[str, Any]]:
+    """东财概念指数日 K（OHLC），不走系统代理。"""
+    code = str(code or "").strip().upper()
+    if not code.startswith("BK"):
+        return []
+    sess = _http()
+    r = sess.get(
+        "https://push2his.eastmoney.com/api/qt/stock/kline/get",
+        params={
+            "secid": f"90.{code}",
+            "fields1": "f1,f2,f3,f4,f5,f6",
+            "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+            "klt": 101,
+            "fqt": 0,
+            "end": "20500101",
+            "lmt": max(int(count), 2),
+        },
+        timeout=15,
+    )
+    r.raise_for_status()
+    klines = ((r.json() or {}).get("data") or {}).get("klines") or []
+    out: list[dict[str, Any]] = []
+    for raw in klines:
+        parts = str(raw).split(",")
+        if len(parts) < 7:
+            continue
+        dt = parts[0][:10]
+        o, c, h, lo = _clean(parts[1]), _clean(parts[2]), _clean(parts[3]), _clean(parts[4])
+        vol, amt = _clean(parts[5]), _clean(parts[6])
+        if not dt or c is None:
+            continue
+        out.append(
+            {
+                "date": dt,
+                "open": o,
+                "high": h,
+                "low": lo,
+                "close": c,
+                "amount": amt,
+                "vol": vol,
+            }
+        )
+    return out
+
+
+def fetch_em_concept_members(code: str, *, limit: int = 200) -> list[dict[str, Any]]:
+    """东财概念成分股（按涨幅排序）。"""
+    code = str(code or "").strip().upper()
+    if not code.startswith("BK"):
+        return []
+    sess = _http()
+    rows: list[dict[str, Any]] = []
+    pn = 1
+    while pn <= 10 and len(rows) < limit:
+        r = sess.get(
+            "https://push2delay.eastmoney.com/api/qt/clist/get",
+            params={
+                "pn": pn,
+                "pz": 100,
+                "po": 1,
+                "np": 1,
+                "ut": "bd1d9ddb04089700cf9c27f6f7426281",
+                "fltt": 2,
+                "invt": 2,
+                "fid": "f3",
+                "fs": f"b:{code}+f:!50",
+                "fields": "f12,f14,f2,f3,f8,f6",
+            },
+            timeout=15,
+        )
+        r.raise_for_status()
+        diff = ((r.json() or {}).get("data") or {}).get("diff") or []
+        if not diff:
+            break
+        for x in diff:
+            c = str(x.get("f12") or "").strip().zfill(6)
+            if len(c) != 6 or not c.isdigit():
+                continue
+            rows.append(
+                {
+                    "代码": c,
+                    "纯代码": c,
+                    "名称": str(x.get("f14") or c),
+                    "现价": _clean(x.get("f2")),
+                    "涨跌幅": _clean(x.get("f3")),
+                    "成交额": _clean(x.get("f6")),
+                    "换手率": _clean(x.get("f8")),
+                }
+            )
+        if len(diff) < 100:
+            break
+        pn += 1
+    return rows[:limit]
 
 
 def fetch_fund_flow_map() -> dict[str, float]:

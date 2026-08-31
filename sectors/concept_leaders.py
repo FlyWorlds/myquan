@@ -52,11 +52,42 @@ def _stock_name_map() -> dict[str, str]:
 
 
 def _stock_return_pct(code: str, start: str, end: str) -> float | None:
+    code = str(code).zfill(6)
+    try:
+        from .rotation import _http
+
+        mkt = 1 if code.startswith("6") else 0
+        sess = _http()
+        r = sess.get(
+            "https://push2his.eastmoney.com/api/qt/stock/kline/get",
+            params={
+                "secid": f"{mkt}.{code}",
+                "fields1": "f1,f2,f3,f4,f5,f6",
+                "fields2": "f51,f52,f53,f54,f55,f56,f57",
+                "klt": 101,
+                "fqt": 1,
+                "beg": str(start).replace("-", "")[:8],
+                "end": str(end).replace("-", "")[:8],
+                "lmt": 800,
+            },
+            timeout=12,
+        )
+        r.raise_for_status()
+        klines = ((r.json() or {}).get("data") or {}).get("klines") or []
+        if len(klines) >= 2:
+            first = str(klines[0]).split(",")
+            last = str(klines[-1]).split(",")
+            o = _clean(first[1]) if len(first) > 1 else None
+            c = _clean(last[2]) if len(last) > 2 else None
+            if o and c and o > 0:
+                return (c / o - 1.0) * 100.0
+    except Exception:
+        pass
     try:
         import akshare as ak
 
         df = ak.stock_zh_a_hist(
-            symbol=str(code).zfill(6),
+            symbol=code,
             period="daily",
             start_date=start.replace("-", ""),
             end_date=end.replace("-", ""),
@@ -152,8 +183,9 @@ def _leaders_for_segment(
     *,
     top_n: int = 3,
     max_workers: int = 12,
+    name_map: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    names = _stock_name_map()
+    names = name_map or {}
     results: list[dict[str, Any]] = []
 
     def _one(code: str) -> dict[str, Any] | None:
@@ -167,7 +199,7 @@ def _leaders_for_segment(
         }
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futs = [pool.submit(_one, c) for c in codes]
+        futs = [pool.submit(_one, c) for c in codes[:40]]
         for fut in as_completed(futs):
             row = fut.result()
             if row is not None:
@@ -190,18 +222,17 @@ def build_concept_detail(
     months: int = 6,
     force: bool = False,
 ) -> dict[str, Any]:
-    """概念详情：近 N 月指数 K 线 + 波段龙头统计。"""
+    """概念详情：近 N 月指数 K 线 + 波段龙头统计。通达信优先，失败回退东财。"""
     concept_name = str(concept_name or "").strip()
-    meta = resolve_concept_by_name(concept_name)
-    if not meta:
-        return {"error": f"未找到通达信概念: {concept_name}"}
+    if not concept_name:
+        return {"error": "概念名为空"}
 
     cache = _cache_path(concept_name)
     if cache.is_file() and not force:
         try:
             cached = json.loads(cache.read_text(encoding="utf-8"))
             ts = str(cached.get("updated_at") or "")
-            if ts:
+            if ts and cached.get("kline"):
                 age = datetime.now() - datetime.fromisoformat(ts)
                 if age < timedelta(hours=6):
                     return cached
@@ -209,32 +240,100 @@ def build_concept_detail(
             pass
 
     bar_count = max(60, int(months * 22))
-    kline = fetch_tdx_index_kline(meta["code"], count=bar_count)
+    tdx_meta = resolve_concept_by_name(concept_name)
+    kline: list[dict[str, Any]] = []
+    source = "通达信概念"
+    code = str((tdx_meta or {}).get("code") or "")
+
+    if tdx_meta:
+        try:
+            from .tdx import tdx_hq_available
+
+            if tdx_hq_available():
+                kline = fetch_tdx_index_kline(tdx_meta["code"], count=bar_count)
+        except Exception:
+            kline = []
+
+    member_rows: list[dict[str, Any]] = []
+    if tdx_meta:
+        try:
+            members_df = fetch_tdx_board_members(
+                "概念", concept_name, with_quotes=False, limit=200
+            )
+            if members_df is not None and not members_df.empty:
+                col = "纯代码" if "纯代码" in members_df.columns else "代码"
+                for _, m in members_df.iterrows():
+                    c = str(m.get(col) or "").zfill(6)
+                    if c.isdigit():
+                        member_rows.append(
+                            {
+                                "code": c,
+                                "name": str(m.get("名称") or c),
+                            }
+                        )
+        except Exception:
+            member_rows = []
+
+    if not kline or not member_rows:
+        from .rotation import (
+            em_concept_code_of,
+            fetch_em_concept_kline,
+            fetch_em_concept_members,
+        )
+
+        bk = em_concept_code_of(concept_name)
+        if bk:
+            if not kline:
+                try:
+                    kline = fetch_em_concept_kline(bk, count=bar_count)
+                    if kline:
+                        source = "东财概念"
+                        code = bk
+                except Exception:
+                    pass
+            if not member_rows:
+                try:
+                    em_mem = fetch_em_concept_members(bk, limit=200)
+                    member_rows = [
+                        {
+                            "code": str(m.get("纯代码") or m.get("代码") or "").zfill(6),
+                            "name": str(m.get("名称") or ""),
+                        }
+                        for m in em_mem
+                        if str(m.get("纯代码") or m.get("代码") or "").strip()
+                    ]
+                    if member_rows and source != "通达信概念":
+                        source = "东财概念"
+                        code = code or bk
+                except Exception:
+                    pass
+
     if not kline:
         return {"error": f"无法拉取概念指数 K 线: {concept_name}"}
 
-    members_df = fetch_tdx_board_members("概念", concept_name, with_quotes=False, limit=200)
-    codes = []
-    if members_df is not None and not members_df.empty:
-        col = "纯代码" if "纯代码" in members_df.columns else "代码"
-        codes = [str(c).zfill(6) for c in members_df[col].tolist() if str(c).strip()]
-
+    codes = [m["code"] for m in member_rows if m.get("code")]
+    name_map = {
+        str(m["code"]): str(m.get("name") or m["code"])
+        for m in member_rows
+        if m.get("code")
+    }
     segments = find_rally_segments(kline)
     rally_leaders: list[dict[str, Any]] = []
     for seg in segments:
-        leaders = _leaders_for_segment(codes, seg["start_date"], seg["end_date"])
+        leaders = _leaders_for_segment(
+            codes[:12], seg["start_date"], seg["end_date"], name_map=name_map
+        )
         rally_leaders.append({**seg, "leaders": leaders})
 
-    names = _stock_name_map()
     members = [
-        {"code": c, "name": names.get(c, c)}
-        for c in codes[:50]
+        {"code": m["code"], "name": m.get("name") or m["code"]}
+        for m in member_rows[:50]
     ]
 
     payload: dict[str, Any] = {
         "concept": concept_name,
-        "code": meta["code"],
-        "source": "通达信概念",
+        "code": code,
+        "source": source,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
         "months": months,
         "kline": kline,

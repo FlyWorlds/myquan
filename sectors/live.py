@@ -1,14 +1,17 @@
-"""通达信概念盘中实时行情（单连接批量拉取，供盯盘 5s 推送）。"""
+"""概念盘中实时行情（通达信优先，连不上则东财回退）。"""
 
 from __future__ import annotations
 
-import threading
 from typing import Any
 
-from .tdx import _clean, _connect_api, _stock_market, load_concepts, load_members_index, resolve_concept_by_name
+from .tdx import _clean, _connect_api, _stock_market, load_concepts, load_members_index, resolve_concept_by_name, tdx_hq_available
 
-_lock = threading.Lock()
 _concept_boards: list[dict[str, str]] | None = None
+_live_source = "通达信概念"
+
+
+def live_source() -> str:
+    return _live_source
 
 
 def _boards() -> list[dict[str, str]]:
@@ -18,8 +21,7 @@ def _boards() -> list[dict[str, str]]:
     return _concept_boards
 
 
-def fetch_concept_index_spot_live() -> dict[str, dict[str, Any]]:
-    """全部通达信概念指数现价（name -> 涨跌幅/资金/code）。"""
+def _spot_from_tdx() -> dict[str, dict[str, Any]]:
     boards = _boards()
     if not boards:
         return {}
@@ -60,10 +62,66 @@ def fetch_concept_index_spot_live() -> dict[str, dict[str, Any]]:
     return by_name
 
 
+def _spot_from_em() -> dict[str, dict[str, Any]]:
+    from .rotation import _filter_pure_concepts, fetch_em_board_spot
+
+    df = _filter_pure_concepts(fetch_em_board_spot("概念"))
+    if df is None or df.empty:
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for _, r in df.iterrows():
+        name = str(r.get("板块") or "").strip()
+        if not name:
+            continue
+        out[name] = {
+            "code": str(r.get("label") or ""),
+            "name": name,
+            "涨跌幅": _clean(r.get("涨跌幅")),
+            "close": _clean(r.get("现价")),
+            "资金": _clean(r.get("资金")),
+            "资金口径": str(r.get("资金口径") or "成交额"),
+        }
+    return out
+
+
+def fetch_concept_index_spot_live() -> dict[str, dict[str, Any]]:
+    """概念指数现价（name -> 涨跌幅/资金/code）。通达信失败则东财。"""
+    global _live_source
+    if tdx_hq_available():
+        try:
+            spot = _spot_from_tdx()
+            if spot:
+                _live_source = "通达信概念"
+                return spot
+        except Exception:
+            pass
+    spot = _spot_from_em()
+    if not spot:
+        raise RuntimeError("概念行情不可用：通达信连不上，东财也无数据")
+    _live_source = "东财概念"
+    return spot
+
+
 def member_codes_for_concept(name: str, *, limit: int = 200) -> list[str]:
     index = load_members_index()
     codes = (index.get("概念") or {}).get(str(name).strip()) or []
-    return [str(c).zfill(6) for c in codes[:limit]]
+    out = [str(c).zfill(6) for c in codes[:limit] if str(c).strip()]
+    if out:
+        return out
+    try:
+        from .rotation import em_concept_code_of, fetch_em_concept_members
+
+        bk = em_concept_code_of(name)
+        if not bk:
+            return []
+        rows = fetch_em_concept_members(bk, limit=limit)
+        return [
+            str(m.get("纯代码") or m.get("代码") or "").zfill(6)
+            for m in rows
+            if str(m.get("纯代码") or m.get("代码") or "").strip()
+        ][:limit]
+    except Exception:
+        return []
 
 
 def leader_codes_from_detail(detail: dict[str, Any]) -> list[str]:
@@ -83,13 +141,9 @@ def leader_codes_from_detail(detail: dict[str, Any]) -> list[str]:
     return codes
 
 
-def stock_quotes_by_codes(codes: list[str]) -> dict[str, dict[str, Any]]:
-    """成分股/龙头现价（pytdx 批量）。"""
-    if not codes:
-        return {}
+def _quotes_from_tdx(codes: list[str]) -> dict[str, dict[str, Any]]:
     pairs = [(_stock_market(c), str(c).zfill(6)) for c in codes]
     out: dict[str, dict[str, Any]] = {}
-
     api = _connect_api()
     try:
         step = 40
@@ -109,6 +163,29 @@ def stock_quotes_by_codes(codes: list[str]) -> dict[str, dict[str, Any]]:
     finally:
         api.disconnect()
     return out
+
+
+def stock_quotes_by_codes(codes: list[str]) -> dict[str, dict[str, Any]]:
+    """成分股/龙头现价：通达信批量，失败则新浪。"""
+    if not codes:
+        return {}
+    if tdx_hq_available():
+        try:
+            return _quotes_from_tdx(codes)
+        except Exception:
+            pass
+    from .metrics import fetch_member_quotes_sina
+
+    raw = fetch_member_quotes_sina([str(c).zfill(6) for c in codes])
+    return {
+        c: {
+            "code": c,
+            "price": v.get("price"),
+            "chgPct": v.get("chgPct"),
+            "amount": None,
+        }
+        for c, v in raw.items()
+    }
 
 
 def concept_index_quote(name: str, today_map: dict[str, dict[str, Any]]) -> dict[str, Any] | None:

@@ -19,6 +19,14 @@ const kindData = computed(() =>
   mergedKind(baseKind.value, topN.value, payload.value?.metrics),
 )
 
+const liveError = computed(() => store.snapshot?.sectors?.error || '')
+const heatmapEmpty = computed(() => {
+  const k = kindData.value
+  if (!k) return true
+  const cols = k.by_metric?.[metric.value]?.top || []
+  return !cols.some((col) => Array.isArray(col) && col.length)
+})
+
 const wsLabel = computed(() => {
   const st = store.wsStatus
   if (liveAt.value) return `实时 ${liveAt.value} · ${refreshSec.value}s`
@@ -65,7 +73,7 @@ onMounted(() => load())
       <div>
         <h1 class="text-xl font-bold">板块轮动</h1>
         <p class="mt-1 text-sm text-ui-text-2">
-          通达信概念 · 今日列随盯盘 {{ refreshSec }}s 推送刷新；点击格子进入波段龙头
+          {{ payload?.source || '概念' }} · 今日列随盯盘 {{ refreshSec }}s 推送刷新；点击格子进入波段龙头
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -75,10 +83,16 @@ onMounted(() => load())
     </div>
 
     <div v-if="loading" class="rounded-xl border border-ui-hairline bg-ui-surface p-8 text-center text-ui-text-2">
-      正在拉取通达信概念历史（首次较慢）…
+      正在拉取概念轮动（首次较慢）…
     </div>
     <div v-else-if="error" class="rounded-xl border border-ui-hairline bg-ui-surface p-6 text-watch-up">
       {{ error }}
+    </div>
+    <div
+      v-else-if="heatmapEmpty"
+      class="rounded-xl border border-ui-hairline bg-ui-surface p-6 text-sm text-ui-text-2"
+    >
+      {{ liveError || '暂无板块数据。可点「重载历史」重试。' }}
     </div>
     <template v-else-if="kindData">
       <div class="flex flex-wrap items-center gap-3 rounded-xl border border-ui-hairline bg-ui-surface px-4 py-3">
