@@ -1,8 +1,8 @@
-# 一套启动：加载 Node24 → OpenClaw+微信自检（由 index.py watch 内完成）→ 盯盘
+# Windows：加载 Node（若有）→ 启动 Python 数据 API + Web 盯盘
 # 用法：
 #   powershell -NoProfile -ExecutionPolicy Bypass -File .\start_watch.ps1
-#   powershell -File .\start_watch.ps1 -- --no-open
-#   powershell -File .\start_watch.ps1 -- --restart-gateway --no-open
+#   powershell -File .\start_watch.ps1 --no-wechat
+#   powershell -File .\start_watch.ps1 --no-open
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -25,16 +25,6 @@ if (-not $py) {
 }
 if (-not $py) { throw "python not found; set MYQUAN_PYTHON" }
 
-$watchArgs = @("index.py", "watch", "--interval", "5", "--port", "8765", "--no-open")
-if ($args.Count -gt 0) {
-    # 允许: start_watch.ps1 -- --restart-gateway
-    $extra = @($args)
-    if ($extra.Count -gt 0 -and $extra[0] -eq "--") {
-        $extra = $extra[1..($extra.Count - 1)]
-    }
-    $watchArgs += $extra
-}
-
-Write-Host "[start_watch] $py $($watchArgs -join ' ')"
-& $py @watchArgs
+Write-Host "[start_watch] $py start_watch.py $($args -join ' ')"
+& $py (Join-Path $Root "start_watch.py") @args
 exit $LASTEXITCODE

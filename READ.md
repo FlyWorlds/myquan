@@ -1,11 +1,11 @@
 <!-- # myquan — AKQuant 框架接入说明 -->
 ## 盯盘要点
 
-**启动（推荐）**
+**启动（推荐，Mac / Windows）**
 
 ```bash
-cd holdingStocks && python index.py watch --no-wechat --ui-dev
-# 浏览器 http://127.0.0.1:3000/  ·  改 Vue 热更新，无需 build
+cd holdingStocks && python start_watch.py --no-wechat
+# 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
 # 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
 ```
 
@@ -153,18 +153,13 @@ cd myquan && python strategy/run_factor13_bear_shield_wf.py
 # 离线规则测试
 cd myquan && python -m unittest -v test_strategy_rules.py
 
-# 持仓盯盘（日常开发，无需 build）
-cd myquan/holdingStocks && python index.py watch --no-wechat --ui-dev
-# 前端 http://127.0.0.1:3000/  ·  API/WS :8765（Vite 代理）
+# 持仓盯盘（Web 页面 + Python 数据）
+cd myquan/holdingStocks && python start_watch.py --no-wechat
+# 浏览器 http://127.0.0.1:3000/  ·  API/WS :8765
 
 # 或分两终端
 cd myquan/holdingStocks && python index.py watch --no-wechat
 cd myquan/holdingStocks/watch-ui && npm run dev
-
-# 生产 / 单端口（需先 npm run build）
-cd myquan/holdingStocks/watch-ui && npm run build
-cd myquan/holdingStocks && python index.py watch --no-wechat --ui-static
-# http://127.0.0.1:8765/
 ```
 
 盯盘细节：[`holdingStocks/README.md`](holdingStocks/README.md)
@@ -219,7 +214,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 - 规则与 **因子1** 同源（`strategy/open_break.py`）；**Nuxt 前端** 展示持仓 + **策略1–7 Tab**（`策略N-名称`）；策略1 展示早盘节点与阈值过门，其余 Tab 展示挂载因子说明；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。
 - 早盘节点：9:15 竞价 → 9:20 不可撤 → 9:25 算阈值/过门 → 9:30 触发信号（`watch_config.py`）。
 - 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
-- 行情：`python index.py watch` 推送 **JSON 快照**（WebSocket `/ws`）；前端日常 **`npm run dev`**（`:3000`，无需 build），或 build 后由 Python 托管 `watch-ui/dist`（`:8765`）。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
+- 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。一键启动：`python start_watch.py`。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
 - 股票名/代码外链：百度财经 `finance.baidu.com/stock/ab-{code}`。
 - 微信预警：OpenClaw（P0 ✅）；自动结算不下真实委托。
 
@@ -242,6 +237,6 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 **启动（推荐）**
 
 ```bash
-cd holdingStocks && python index.py watch --no-wechat --ui-dev
-# 浏览器 http://127.0.0.1:3000/  ·  改 Vue 热更新，无需 build
+cd holdingStocks && python start_watch.py --no-wechat
+# 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
 ```

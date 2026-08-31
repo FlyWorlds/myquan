@@ -281,7 +281,7 @@ FIT_WATCHLIST: list[dict[str, Any]] = [
     for c, n in _FIT_WATCH
 ]
 
-# 定案置顶三票（策略一阈值；实仓优先，天通已卖仍置顶盯盘）
+# 定案置顶三票（策略一阈值；实仓优先，三票始终置顶盯盘）
 PINNED_WATCHLIST: list[dict[str, Any]] = [
     watch_item("600552", "凯盛科技", pct=0.025),
     watch_item("600338", "西藏珠峰", pct=0.025),

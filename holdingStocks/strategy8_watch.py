@@ -59,7 +59,7 @@ def _display_stock_name(
 @lru_cache(maxsize=1)
 def _concept_maps() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     univ = _load_univ()
-    if univ.empty:
+    if univ.empty or "code" not in univ.columns:
         return {}, {}
     codes = tuple(sorted(str(c).zfill(6) for c in univ["code"]))
     return load_concept_maps(codes)
@@ -173,6 +173,16 @@ def scan_theme_linkage_pool(
 
     code_concepts, concept_codes = _concept_maps()
     univ = _load_univ()
+    if univ.empty or "code" not in univ.columns:
+        out = {
+            "themeDate": effective,
+            "luCount": 0,
+            "hotThemes": [],
+            "rows": [],
+        }
+        if not quotes:
+            _POOL_CACHE[cache_key] = out
+        return out
     lu_codes, lu_meta = _scan_today_lu_codes(univ, effective, quotes=quotes)
 
     theme_lu_counts: dict[str, int] = defaultdict(int)
@@ -319,7 +329,11 @@ def build_strategy8_payload(
     from watch_config import sina_of
 
     univ = _load_univ()
-    sinas = [sina_of(str(c).zfill(6)).lower() for c in univ["code"]]
+    if univ.empty or "code" not in univ.columns:
+        codes: list[str] = []
+    else:
+        codes = [str(c).zfill(6) for c in univ["code"]]
+    sinas = [sina_of(c).lower() for c in codes]
     quotes: dict[str, dict[str, Any]] = {}
     if batch_quote and sinas:
         quotes = {k.lower(): v for k, v in batch_quote(sinas).items()}

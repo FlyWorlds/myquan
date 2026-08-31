@@ -43,9 +43,30 @@ export default defineNuxtConfig({
   vite: {
     server: {
       proxy: {
-        '/ws': { target: `ws://${watchApiHost}:${watchApiPort}`, ws: true },
-        '/api': { target: watchApiOrigin },
-        '/holdings_watch.json': { target: watchApiOrigin },
+        '/ws': {
+          target: watchApiOrigin,
+          ws: true,
+          changeOrigin: true,
+          timeout: 0,
+          proxyTimeout: 0,
+          configure(proxy) {
+            proxy.on('error', () => {})
+          },
+        },
+        '/api': {
+          target: watchApiOrigin,
+          changeOrigin: true,
+          configure(proxy) {
+            proxy.on('error', () => {})
+          },
+        },
+        '/holdings_watch.json': {
+          target: watchApiOrigin,
+          changeOrigin: true,
+          configure(proxy) {
+            proxy.on('error', () => {})
+          },
+        },
       },
     },
   },

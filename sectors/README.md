@@ -53,7 +53,7 @@ python index.py --days 5 --no-members --no-open
 | `GET /api/sectors/focus?concept=名称` | 订阅概念成分/龙头实时报价（随 WS 5s 推送） |
 | `GET /api/sectors/status` | 通达信链路可用性 |
 
-启动：`cd holdingStocks && python index.py watch --ui-dev` → 浏览器打开 `/sectors`。
+启动：`cd holdingStocks && python start_watch.py` → 浏览器打开 `http://127.0.0.1:3000/sectors`。
 
 | 指标 | 来源 | 说明 |
 |------|------|------|

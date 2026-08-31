@@ -33,8 +33,10 @@ const cardClass = computed(() => {
       <header class="mb-2 flex items-start justify-between gap-2">
         <div>
           <span class="rounded-full border border-ui-hairline px-2 py-0.5 text-xs text-accent">{{ row.市场 }}</span>
-          <h2 class="mt-1 flex flex-wrap items-baseline text-base font-bold">
+          <h2 class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-bold">
             <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ row.名称 }}</a>
+            <b class="sensitive tabular-nums">{{ fmtNum(row.现价, pdg) }}</b>
+            <ChgText class="sensitive text-sm font-semibold tabular-nums" :chg="row.当日涨幅">{{ fmtSignedPct(row.当日涨幅) }}</ChgText>
             <FloatPnlInline :row="row" />
           </h2>
           <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive text-xs text-ui-text-2 hover:text-accent">{{ row.代码 }}</a>
@@ -43,8 +45,6 @@ const cardClass = computed(() => {
       </header>
       <p v-if="row.error" class="text-sm text-up">{{ row.error }}</p>
       <div v-else class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-        <div><span class="text-ui-text-2">现价</span> <b class="sensitive">{{ fmtNum(row.现价, pdg) }}</b></div>
-        <div><span class="text-ui-text-2">当日涨幅</span> <b class="sensitive"><ChgText :chg="row.当日涨幅">{{ fmtSignedPct(row.当日涨幅) }}</ChgText></b></div>
         <div><span class="text-ui-text-2">持仓</span> <b class="sensitive">{{ row.持仓 ?? 0 }}</b></div>
         <div><span class="text-ui-text-2">成本</span> <b class="sensitive">{{ row.成本 != null ? fmtNum(row.成本, pdg) : '-' }}</b></div>
         <div><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>

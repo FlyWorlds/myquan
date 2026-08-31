@@ -1,7 +1,9 @@
 # 持仓盯盘
-# 浏览器打开：http://127.0.0.1:8765/
+# 浏览器打开：http://127.0.0.1:3000/
 
 本地持仓记录 + 盘中盯盘：**与核心策略一（因子1 + 因子2）同步**。
+
+**Python 只提供数据**（行情、信号、JSON/WebSocket）；**盯盘页面只用 Web**（`watch-ui`）。Mac / Windows 同一套启动方式。
 
 可插拔架构见 `../strategy/README.md`。
 
@@ -24,7 +26,7 @@
 |------|------|-------|------|
 | 600552 | 凯盛科技 | ±2.5% | **持仓 500 股 · 成本 18.112** |
 | 600338 | 西藏珠峰 | ±2.5% | **持仓 700 股 · 成本 13.918** |
-| 600330 | 天通股份 | ±3.0% | **空仓**（已卖出，仍置顶盯买/卖信号） |
+| 600330 | 天通股份 | ±3.0% | **持仓 300 股 · 成本 29.054 · 今日买入 T+1** |
 
 东材科技等在拟合池其余；科创综指 ETF 已移出置顶。
 
@@ -94,23 +96,22 @@ pip install -r ../requirements.txt
 
 ## 前端 watch-ui（Nuxt 3 + Vue 3 + Pinia + Tailwind）
 
-栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（WebSocket `/ws`），不再每次生成 HTML。
+栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（HTTP `/api` + WebSocket `/ws`），不生成 HTML、不托管页面。
 
 ```bash
-# 日常开发（无需 build）：Python API + Nuxt 热更新
-cd holdingStocks && python index.py watch --no-wechat --ui-dev
-# 前端 http://127.0.0.1:3000/  ·  API/WS :8765（Nuxt 代理，随 --port 注入 WATCH_API_PORT）
+# 推荐：一键（Mac / Windows）
+cd holdingStocks && python start_watch.py --no-wechat
+# 浏览器 http://127.0.0.1:3000/  ·  数据 API/WS :8765
+
+# Windows
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start_watch.ps1 --no-wechat
+
+# macOS
+./start_watch.sh --no-wechat
 
 # 或分两终端
 cd holdingStocks && python index.py watch --no-wechat
-cd holdingStocks/watch-ui && npm install && WATCH_API_PORT=8765 npm run dev
-
-# 无 watch-ui/dist 时，watch 会自动走 dev 模式
-
-# 生产 / 单端口部署（需先 build）
-cd holdingStocks/watch-ui && npm run build
-cd holdingStocks && python index.py watch --no-wechat --ui-static
-# http://127.0.0.1:8765/
+cd holdingStocks/watch-ui && npm install && npm run dev
 ```
 
 loop 内「快照已推送」默认**每 12 次**输出一条（冷启动仍打印；业务无变化跳过写盘/WS 时不计次）；恢复每次：`WATCH_SNAPSHOT_LOG_EVERY=1 python index.py watch …`
@@ -126,7 +127,7 @@ API：
 | `GET /api/factors` | 因子说明 + 挂载策略（注册表同源） |
 | `WS /ws` | 推送 snapshot（与 `/api/snapshot` 同结构） |
 
-前端路由（Nuxt SPA，Python 回退 `index.html`）：
+前端路由（Nuxt SPA）：
 
 | 路径 | 说明 |
 |------|------|
@@ -142,8 +143,9 @@ CLI 单次刷新（非 watch）：`python index.py` 终端输出；若 watch 已
 
 ```bash
 cd holdingStocks
+python start_watch.py        # 推荐：数据 API + Web 盯盘（Mac/Windows）
 python index.py              # 终端查看行情 + 持仓
-python index.py watch        # 长驻盯盘：Nuxt 前端 + WebSocket JSON
+python index.py watch        # 仅数据后端（不启页面）
 python index.py buy 600552 15.50 400
 python index.py sell 600552 16.20 400
 ```

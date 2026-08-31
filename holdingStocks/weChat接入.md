@@ -193,12 +193,15 @@ python index.py review
 # 只生成本地、不推送
 python index.py review --no-wechat
 
-# 长驻盯盘（默认开微信推送）
-python index.py watch --interval 5 --port 8765 --no-open
-# 页面：http://127.0.0.1:8765/
+# 长驻数据后端（默认开微信推送；页面另开 start_watch / npm run dev）
+python index.py watch --interval 5 --port 8765
+# Web 盯盘：http://127.0.0.1:3000/
 
-# 仅盯盘、不推微信
-python index.py watch --no-wechat --no-open
+# 仅数据、不推微信
+python index.py watch --no-wechat
+
+# 一键：数据 API + Web 盯盘
+python start_watch.py
 ```
 
 手工推送：

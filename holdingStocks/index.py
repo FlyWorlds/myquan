@@ -33,6 +33,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -650,17 +651,29 @@ def publish_watch_snapshot(
                 out[s.lower()] = _quote_from_sina_spot(spot)
         return out
 
-    strategy3 = build_strategy3_payload(
-        session=session_today or None,
-        get_quote=get_quote,
-        batch_quote=_batch_quote,
-    )
-    strategy8 = build_strategy8_payload(
-        session=session_today or None,
-        get_quote=get_quote,
-        batch_quote=_batch_quote,
-    )
-    sectors = build_sectors_live_payload()
+    try:
+        strategy3 = build_strategy3_payload(
+            session=session_today or None,
+            get_quote=get_quote,
+            batch_quote=_batch_quote,
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 策略三快照失败（继续盯盘）: {e}")
+        strategy3 = {"error": str(e), "rows": []}
+    try:
+        strategy8 = build_strategy8_payload(
+            session=session_today or None,
+            get_quote=get_quote,
+            batch_quote=_batch_quote,
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 策略八快照失败（继续盯盘）: {e}")
+        strategy8 = {"error": str(e), "rows": []}
+    try:
+        sectors = build_sectors_live_payload()
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 板块快照失败（继续盯盘）: {e}")
+        sectors = {"error": str(e), "rows": []}
     snapshot = build_watch_snapshot(
         rows=rows,
         indices=indices,
@@ -3411,11 +3424,17 @@ def _pid_alive(pid: int) -> bool:
         if sys.platform == "win32":
             import ctypes
 
-            handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
-            if handle:
-                ctypes.windll.kernel32.CloseHandle(handle)
-                return True
-            return False
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259
+            handle = ctypes.windll.kernel32.OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid)
+            )
+            if not handle:
+                return False
+            code = ctypes.c_ulong()
+            ok = ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return bool(ok) and int(code.value) == STILL_ACTIVE
         os.kill(pid, 0)
         return True
     except OSError:
@@ -3532,6 +3551,11 @@ def _start_watch_ui_dev(
         if on_log:
             on_log("请先: cd holdingStocks/watch-ui && npm install")
         return None
+    npm = shutil.which("npm") or shutil.which("npm.cmd") or shutil.which("npm.exe")
+    if not npm:
+        if on_log:
+            on_log("未找到 npm，请另开终端: cd holdingStocks/watch-ui && npm run dev")
+        return None
     if on_log:
         on_log(
             f"启动 Nuxt dev → http://127.0.0.1:{port}/ "
@@ -3540,15 +3564,23 @@ def _start_watch_ui_dev(
     env = os.environ.copy()
     env["WATCH_API_PORT"] = str(int(api_port))
     env["NUXT_PORT"] = str(int(port))
-    proc = subprocess.Popen(
-        ["npm", "run", "dev"],
-        cwd=WATCH_UI_DIR,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-        start_new_session=True,
-    )
+    popen_kw: dict[str, Any] = {
+        "cwd": str(WATCH_UI_DIR),
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+        "text": True,
+        "env": env,
+    }
+    if sys.platform == "win32":
+        popen_kw["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_kw["start_new_session"] = True
+    try:
+        proc = subprocess.Popen([npm, "run", "dev"], **popen_kw)
+    except OSError as e:
+        if on_log:
+            on_log(f"启动 watch-ui 失败（Python API 继续）: {e}")
+        return None
 
     def _pipe() -> None:
         assert proc.stdout is not None
@@ -3575,16 +3607,15 @@ def _stop_watch_ui_dev(proc: subprocess.Popen[str] | None) -> None:
     if proc is None or proc.poll() is not None:
         return
     try:
-        os.killpg(os.getpgid(proc.pid), 15)
+        if sys.platform == "win32":
+            proc.terminate()
+        else:
+            os.killpg(os.getpgid(proc.pid), 15)
         proc.wait(timeout=5)
-    except (ProcessLookupError, subprocess.TimeoutExpired):
-        try:
-            os.killpg(os.getpgid(proc.pid), 9)
-        except ProcessLookupError:
-            pass
+    except (OSError, ProcessLookupError, subprocess.TimeoutExpired, AttributeError):
         try:
             proc.kill()
-        except ProcessLookupError:
+        except (OSError, ProcessLookupError):
             pass
 
 
