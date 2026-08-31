@@ -36,6 +36,15 @@
    - 低开日收盘买 → 次日开盘卖
    - 低开日收盘买 → 次日收盘卖
    - 低开日开盘买 → 次日收盘卖
+5. **冲高个股**（中证1000）：低开日按 `high/open-1` 排序
+   - **冠军**：当日最高价相对开盘冲高最大的一只
+   - **Top5**：当日冲高前五；报告附「最近一次大盘低开」当日列表
+   - 分桶统计冠军/Top5 的冲高%、全日%、实体阳比例、次日开/收表现
+   - **冠军频次表**：哪些股经常在低开日充当冲高龙头
+
+### 冲高示例
+
+大盘低开日，某股开盘 10.00、最高 10.80、收盘 10.30 → **冲高%** = 8.0%，**日内%** = 3.0%，**实体阳** = 是。
 
 ## 真源
 
@@ -56,7 +65,7 @@ python -m strategy.run_factor17_market_low_open --no-breadth
 python -m strategy.run_factor17_market_low_open --start 20200101 --end 20251231
 ```
 
-产物：`backtest/factor17_market_low_open/report.md`、`bucket_stats.csv`
+产物：`backtest/factor17_market_low_open/report.md`、`bucket_stats.csv`、`top_high_bucket_stats.csv`、`top_high_leader_freq.csv`
 
 ## 代码调用
 

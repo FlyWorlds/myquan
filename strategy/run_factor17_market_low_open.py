@@ -49,19 +49,43 @@ def main() -> None:
 
     stats = result.get("bucket_stats")
     if stats is not None:
-        stats_path = OUT_DIR / "bucket_stats.csv"
-        stats.to_csv(stats_path, index=False, encoding="utf-8-sig")
+        stats.to_csv(OUT_DIR / "bucket_stats.csv", index=False, encoding="utf-8-sig")
 
-    meta = {k: v for k, v in result.items() if k != "bucket_stats"}
+    th_stats = result.get("top_high_bucket_stats")
+    if th_stats is not None and not th_stats.empty:
+        th_stats.to_csv(OUT_DIR / "top_high_bucket_stats.csv", index=False, encoding="utf-8-sig")
+
+    freq = result.get("top_high_leader_freq")
+    if freq is not None and not freq.empty:
+        freq.to_csv(OUT_DIR / "top_high_leader_freq.csv", index=False, encoding="utf-8-sig")
+
+    meta = {
+        k: v
+        for k, v in result.items()
+        if k
+        not in (
+            "bucket_stats",
+            "top_high_bucket_stats",
+            "top_high_leader_freq",
+        )
+    }
     if stats is not None:
         meta["bucket_stats"] = stats.to_dict(orient="records")
+    if th_stats is not None and not th_stats.empty:
+        meta["top_high_bucket_stats"] = th_stats.to_dict(orient="records")
+    if freq is not None and not freq.empty:
+        meta["top_high_leader_freq"] = freq.head(30).to_dict(orient="records")
     (OUT_DIR / "run_meta.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=2, default=str),
         encoding="utf-8",
     )
 
     print(report_md)
-    print(f"\n已写入:\n  {report_path}\n  {OUT_DIR / 'bucket_stats.csv'}\n  {OUT_DIR / 'run_meta.json'}")
+    print(
+        f"\n已写入:\n  {report_path}\n  {OUT_DIR / 'bucket_stats.csv'}\n"
+        f"  {OUT_DIR / 'top_high_bucket_stats.csv'}\n  {OUT_DIR / 'top_high_leader_freq.csv'}\n"
+        f"  {OUT_DIR / 'run_meta.json'}"
+    )
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@
   "index_symbol": "sh000001",
   "start": "20240101",
   "end": "20260831",
-  "breadth_note": "广度：中证1000，644 个交易日",
+  "breadth_note": "广度：中证1000，643 个交易日；低开日 402 天 · 排序=high_open_pct · Top5",
   "hints": [
     {
       "level": "info",
@@ -22,7 +22,7 @@
     },
     {
       "level": "info",
-      "text": "低开日中证1000实体阳（close>open）家数比例均值约 47.9%；指数常收红（close>open）不等于多数个股相对昨收上涨。"
+      "text": "低开日中证1000实体阳（close>open）家数比例均值约 48.0%；指数常收红（close>open）不等于多数个股相对昨收上涨。"
     }
   ],
   "latest_low_open": {
@@ -32,9 +32,56 @@
     "index_intraday_pct": 0.05,
     "index_day_ret_pct": -0.11,
     "index_intraday_yang": true,
-    "yang_ratio": 63.7
+    "yang_ratio": 61.0
   },
-  "rules_text": "================================================================================\n  因子17 · 大盘低开（指数 + 实体阳家数比例）\n================================================================================\n指数：sh000001（默认上证指数）\n低开：开盘相对昨收 gap% < 0\n实体阳：close > open（相对开盘收红；可与相对昨收仍下跌并存）\n广度池：中证1000成分（可缓存 yang_breadth_zz1000.parquet）\n分桶：微跌(-0.5~0%), 低开(-1~-0.5%), 低开(-2~-1%), 低开(-3~-2%), 大幅(-5~-3%), 急跌(<-5%)\n输出：各桶样本数、指数当日/次日收益、实体阳比例、低开日买卖情景统计\n研究用途，不构成投资建议。\n================================================================================",
+  "latest_low_open_top_stocks": [
+    {
+      "rank": 1,
+      "code": "000059",
+      "name": "华锦股份",
+      "high_open_pct": 8.16,
+      "day_ret_pct": 10.08,
+      "intraday_pct": 8.16,
+      "yang": true
+    },
+    {
+      "rank": 2,
+      "code": "000567",
+      "name": "海德股份",
+      "high_open_pct": 7.85,
+      "day_ret_pct": 10.05,
+      "intraday_pct": 7.85,
+      "yang": true
+    },
+    {
+      "rank": 3,
+      "code": "001267",
+      "name": "汇绿生态",
+      "high_open_pct": 6.96,
+      "day_ret_pct": -2.82,
+      "intraday_pct": -1.61,
+      "yang": false
+    },
+    {
+      "rank": 4,
+      "code": "000422",
+      "name": "湖北宜化",
+      "high_open_pct": 5.59,
+      "day_ret_pct": 4.46,
+      "intraday_pct": 4.79,
+      "yang": true
+    },
+    {
+      "rank": 5,
+      "code": "000420",
+      "name": "吉林化纤",
+      "high_open_pct": 4.9,
+      "day_ret_pct": 2.72,
+      "intraday_pct": 3.0,
+      "yang": true
+    }
+  ],
+  "rules_text": "================================================================================\n  因子17 · 大盘低开（指数 + 实体阳家数比例）\n================================================================================\n指数：sh000001（默认上证指数）\n低开：开盘相对昨收 gap% < 0\n实体阳：close > open（相对开盘收红；可与相对昨收仍下跌并存）\n广度池：中证1000成分（可缓存 yang_breadth_zz1000.parquet）\n分桶：微跌(-0.5~0%), 低开(-1~-0.5%), 低开(-2~-1%), 低开(-3~-2%), 大幅(-5~-3%), 急跌(<-5%)\n输出：各桶样本数、指数当日/次日收益、实体阳比例、低开日买卖情景统计\n      低开日个股冲高 Top（最高价相对开盘 high/open）及领涨股频次、次日表现\n研究用途，不构成投资建议。\n================================================================================",
   "n_index_days": 643,
   "n_low_open_days": 402,
   "bucket_stats": [
@@ -48,7 +95,7 @@
       "idx_next_open_vs_close_mean": -0.079,
       "idx_next_intraday_mean": 0.067,
       "idx_next_total_mean": -0.012,
-      "stock_yang_ratio_mean": 0.484,
+      "stock_yang_ratio_mean": 0.485,
       "ret_open_close_win_pct": 57.1,
       "ret_open_close_mean": 0.121,
       "ret_close_next_open_win_pct": 35.8,
@@ -68,7 +115,7 @@
       "idx_next_open_vs_close_mean": -0.133,
       "idx_next_intraday_mean": 0.035,
       "idx_next_total_mean": -0.096,
-      "stock_yang_ratio_mean": 0.441,
+      "stock_yang_ratio_mean": 0.442,
       "ret_open_close_win_pct": 45.7,
       "ret_open_close_mean": 0.03,
       "ret_close_next_open_win_pct": 47.8,
@@ -88,7 +135,7 @@
       "idx_next_open_vs_close_mean": 0.499,
       "idx_next_intraday_mean": -0.412,
       "idx_next_total_mean": 0.089,
-      "stock_yang_ratio_mean": 0.502,
+      "stock_yang_ratio_mean": 0.513,
       "ret_open_close_win_pct": 33.3,
       "ret_open_close_mean": -0.852,
       "ret_close_next_open_win_pct": 83.3,
@@ -108,7 +155,7 @@
       "idx_next_open_vs_close_mean": 0.503,
       "idx_next_intraday_mean": -0.174,
       "idx_next_total_mean": 0.328,
-      "stock_yang_ratio_mean": 0.581,
+      "stock_yang_ratio_mean": 0.584,
       "ret_open_close_win_pct": 100.0,
       "ret_open_close_mean": 1.438,
       "ret_close_next_open_win_pct": 100.0,
@@ -128,7 +175,7 @@
       "idx_next_open_vs_close_mean": -0.075,
       "idx_next_intraday_mean": 1.657,
       "idx_next_total_mean": 1.582,
-      "stock_yang_ratio_mean": 0.025,
+      "stock_yang_ratio_mean": 0.031,
       "ret_open_close_win_pct": 0.0,
       "ret_open_close_mean": -3.023,
       "ret_close_next_open_win_pct": 0.0,
@@ -137,6 +184,315 @@
       "ret_close_next_close_mean": 1.582,
       "ret_open_next_close_win_pct": 0.0,
       "ret_open_next_close_mean": -1.489
+    }
+  ],
+  "top_high_bucket_stats": [
+    {
+      "bucket": "微跌(-0.5~0%)",
+      "n_days": 347,
+      "top1_high_open_pct_mean": 10.22,
+      "top1_high_prev_pct_mean": 8.96,
+      "top1_day_ret_mean": 6.53,
+      "top1_intraday_mean": 7.76,
+      "top1_yang_pct": 98.0,
+      "top1_next_open_mean": -0.23,
+      "top1_next_close_mean": -0.13,
+      "top5_high_open_pct_mean": 7.79,
+      "top5_day_ret_mean": 4.84
+    },
+    {
+      "bucket": "低开(-1~-0.5%)",
+      "n_days": 46,
+      "top1_high_open_pct_mean": 10.89,
+      "top1_high_prev_pct_mean": 8.2,
+      "top1_day_ret_mean": 5.38,
+      "top1_intraday_mean": 7.98,
+      "top1_yang_pct": 95.7,
+      "top1_next_open_mean": -0.54,
+      "top1_next_close_mean": -0.04,
+      "top5_high_open_pct_mean": 8.48,
+      "top5_day_ret_mean": 3.51
+    },
+    {
+      "bucket": "低开(-2~-1%)",
+      "n_days": 6,
+      "top1_high_open_pct_mean": 12.04,
+      "top1_high_prev_pct_mean": 9.01,
+      "top1_day_ret_mean": 5.39,
+      "top1_intraday_mean": 8.27,
+      "top1_yang_pct": 100.0,
+      "top1_next_open_mean": 0.14,
+      "top1_next_close_mean": -0.22,
+      "top5_high_open_pct_mean": 10.27,
+      "top5_day_ret_mean": 4.32
+    },
+    {
+      "bucket": "低开(-3~-2%)",
+      "n_days": 2,
+      "top1_high_open_pct_mean": 12.34,
+      "top1_high_prev_pct_mean": 10.03,
+      "top1_day_ret_mean": 10.03,
+      "top1_intraday_mean": 12.34,
+      "top1_yang_pct": 100.0,
+      "top1_next_open_mean": 1.87,
+      "top1_next_close_mean": 1.7,
+      "top5_high_open_pct_mean": 10.75,
+      "top5_day_ret_mean": 5.82
+    },
+    {
+      "bucket": "大幅(-5~-3%)",
+      "n_days": 1,
+      "top1_high_open_pct_mean": 7.77,
+      "top1_high_prev_pct_mean": 5.7,
+      "top1_day_ret_mean": 1.35,
+      "top1_intraday_mean": 3.34,
+      "top1_yang_pct": 100.0,
+      "top1_next_open_mean": -0.99,
+      "top1_next_close_mean": -2.01,
+      "top5_high_open_pct_mean": 6.75,
+      "top5_day_ret_mean": -3.27
+    }
+  ],
+  "top_high_leader_freq": [
+    {
+      "code": "000628",
+      "name": "高新发展",
+      "lead_count": 20,
+      "avg_high_open_pct": 10.53633083749224,
+      "avg_day_ret": 6.3867597727461725,
+      "lead_share_pct": 4.98
+    },
+    {
+      "code": "000880",
+      "name": "潍柴重机",
+      "lead_count": 16,
+      "avg_high_open_pct": 11.003765448364373,
+      "avg_day_ret": 6.639519877522732,
+      "lead_share_pct": 3.98
+    },
+    {
+      "code": "001896",
+      "name": "豫能控股",
+      "lead_count": 14,
+      "avg_high_open_pct": 10.230152555998094,
+      "avg_day_ret": 5.8267096905755,
+      "lead_share_pct": 3.48
+    },
+    {
+      "code": "001267",
+      "name": "汇绿生态",
+      "lead_count": 14,
+      "avg_high_open_pct": 10.265532984789646,
+      "avg_day_ret": 6.699534906369309,
+      "lead_share_pct": 3.48
+    },
+    {
+      "code": "000620",
+      "name": "盈新发展",
+      "lead_count": 13,
+      "avg_high_open_pct": 10.63576932198844,
+      "avg_day_ret": 7.403212863864235,
+      "lead_share_pct": 3.23
+    },
+    {
+      "code": "001339",
+      "name": "智微智能",
+      "lead_count": 12,
+      "avg_high_open_pct": 9.507282509172606,
+      "avg_day_ret": 4.82125155958195,
+      "lead_share_pct": 2.99
+    },
+    {
+      "code": "000506",
+      "name": "招金黄金",
+      "lead_count": 11,
+      "avg_high_open_pct": 10.312600231630034,
+      "avg_day_ret": 5.288387727873309,
+      "lead_share_pct": 2.74
+    },
+    {
+      "code": "000688",
+      "name": "国城矿业",
+      "lead_count": 10,
+      "avg_high_open_pct": 9.280987080583255,
+      "avg_day_ret": 5.716786202243049,
+      "lead_share_pct": 2.49
+    },
+    {
+      "code": "000712",
+      "name": "锦龙股份",
+      "lead_count": 10,
+      "avg_high_open_pct": 12.037463834538569,
+      "avg_day_ret": 6.908091706341722,
+      "lead_share_pct": 2.49
+    },
+    {
+      "code": "001236",
+      "name": "弘业期货",
+      "lead_count": 10,
+      "avg_high_open_pct": 10.533774759601021,
+      "avg_day_ret": 5.86946653080213,
+      "lead_share_pct": 2.49
+    },
+    {
+      "code": "000801",
+      "name": "四川九洲",
+      "lead_count": 9,
+      "avg_high_open_pct": 11.219778475211294,
+      "avg_day_ret": 4.095395621698429,
+      "lead_share_pct": 2.24
+    },
+    {
+      "code": "000962",
+      "name": "东方钽业",
+      "lead_count": 9,
+      "avg_high_open_pct": 11.546164140114888,
+      "avg_day_ret": 6.743997503091354,
+      "lead_share_pct": 2.24
+    },
+    {
+      "code": "000810",
+      "name": "创维数字",
+      "lead_count": 9,
+      "avg_high_open_pct": 10.069090827803144,
+      "avg_day_ret": 5.432916194946901,
+      "lead_share_pct": 2.24
+    },
+    {
+      "code": "000099",
+      "name": "中信海直",
+      "lead_count": 9,
+      "avg_high_open_pct": 10.267349117935607,
+      "avg_day_ret": 6.700510252529535,
+      "lead_share_pct": 2.24
+    },
+    {
+      "code": "000901",
+      "name": "航天科技",
+      "lead_count": 8,
+      "avg_high_open_pct": 10.040430735210146,
+      "avg_day_ret": 7.5106483675898,
+      "lead_share_pct": 1.99
+    },
+    {
+      "code": "001359",
+      "name": "平安电工",
+      "lead_count": 8,
+      "avg_high_open_pct": 9.802683400380506,
+      "avg_day_ret": 8.03807515029768,
+      "lead_share_pct": 1.99
+    },
+    {
+      "code": "000833",
+      "name": "粤桂股份",
+      "lead_count": 8,
+      "avg_high_open_pct": 9.236876164689287,
+      "avg_day_ret": 6.470625681773731,
+      "lead_share_pct": 1.99
+    },
+    {
+      "code": "000795",
+      "name": "英洛华",
+      "lead_count": 8,
+      "avg_high_open_pct": 12.417713564322463,
+      "avg_day_ret": 7.726163041416816,
+      "lead_share_pct": 1.99
+    },
+    {
+      "code": "000058",
+      "name": "深赛格",
+      "lead_count": 8,
+      "avg_high_open_pct": 10.56219538070276,
+      "avg_day_ret": 6.8476759897708295,
+      "lead_share_pct": 1.99
+    },
+    {
+      "code": "000534",
+      "name": "万泽股份",
+      "lead_count": 7,
+      "avg_high_open_pct": 10.368890886226453,
+      "avg_day_ret": 7.908651320602725,
+      "lead_share_pct": 1.74
+    },
+    {
+      "code": "000681",
+      "name": "视觉中国",
+      "lead_count": 7,
+      "avg_high_open_pct": 11.336668374263152,
+      "avg_day_ret": 6.001166330523674,
+      "lead_share_pct": 1.74
+    },
+    {
+      "code": "000603",
+      "name": "盛达资源",
+      "lead_count": 7,
+      "avg_high_open_pct": 9.324529149244205,
+      "avg_day_ret": 3.038346759857402,
+      "lead_share_pct": 1.74
+    },
+    {
+      "code": "000837",
+      "name": "秦川机床",
+      "lead_count": 7,
+      "avg_high_open_pct": 10.753167964176978,
+      "avg_day_ret": 6.873483489456777,
+      "lead_share_pct": 1.74
+    },
+    {
+      "code": "001301",
+      "name": "尚太科技",
+      "lead_count": 7,
+      "avg_high_open_pct": 9.132832664323917,
+      "avg_day_ret": 7.988704341615738,
+      "lead_share_pct": 1.74
+    },
+    {
+      "code": "000813",
+      "name": "德展健康",
+      "lead_count": 6,
+      "avg_high_open_pct": 11.092465524813852,
+      "avg_day_ret": 9.009640243055399,
+      "lead_share_pct": 1.49
+    },
+    {
+      "code": "000636",
+      "name": "风华高科",
+      "lead_count": 6,
+      "avg_high_open_pct": 12.561276839172367,
+      "avg_day_ret": 6.751605839796934,
+      "lead_share_pct": 1.49
+    },
+    {
+      "code": "000913",
+      "name": "钱江摩托",
+      "lead_count": 6,
+      "avg_high_open_pct": 9.159055121747903,
+      "avg_day_ret": 7.35961533412636,
+      "lead_share_pct": 1.49
+    },
+    {
+      "code": "000811",
+      "name": "冰轮环境",
+      "lead_count": 6,
+      "avg_high_open_pct": 10.83373825192068,
+      "avg_day_ret": 6.401945182376082,
+      "lead_share_pct": 1.49
+    },
+    {
+      "code": "000680",
+      "name": "山推股份",
+      "lead_count": 6,
+      "avg_high_open_pct": 8.580057035634548,
+      "avg_day_ret": 6.642275277591492,
+      "lead_share_pct": 1.49
+    },
+    {
+      "code": "000567",
+      "name": "海德股份",
+      "lead_count": 6,
+      "avg_high_open_pct": 10.171639682421215,
+      "avg_day_ret": 5.065143151027627,
+      "lead_share_pct": 1.49
     }
   ]
 }
