@@ -85,6 +85,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13 WF 回测
 | **factor14** | 因子14·题材共振 | 题材联动选股 | **当日**同题材涨停同伴数≥3；见 [`docs/FACTOR14.md`](docs/FACTOR14.md) |
 | **factor15** | 因子15·晋级低开 | 题材联动过滤（可选） | gap 低开带；策略八默认关闭 |
 | **factor16** | 因子16·概念龙头评分 | 概念成分龙头排序 | F13质量带 + 因子1 OOS + 缠论笔；见 [`docs/FACTOR16.md`](docs/FACTOR16.md) |
+| **factor17** | 因子17·大盘低开 | 市场低开/实体阳广度 | 上证 gap 分桶 + close>open 家数% + 次日开收；见 [`docs/FACTOR17.md`](docs/FACTOR17.md) |
 | **cf1** | CF1·流动性门控 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
@@ -125,7 +126,8 @@ myquan/
 │   ├── STRATEGY.md          # 策略说明专题
 │   ├── FACTOR13.md          # 因子13（质量带 + 熊盾锁定）
 │   ├── FACTOR14.md          # 因子14 题材共振（策略八）
-│   └── FACTOR16.md          # 因子16 概念龙头评分
+│   ├── FACTOR16.md          # 因子16 概念龙头评分
+│   └── FACTOR17.md          # 因子17 大盘低开
 ├── .cursor/rules/
 │   └── docs-sync.mdc        # 文档同步规则
 ├── strategy/                # 可插拔策略框架

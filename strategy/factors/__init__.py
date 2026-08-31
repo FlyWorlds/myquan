@@ -17,6 +17,7 @@
   · factor14 — 题材共振（同题材涨停同伴数 theme_lu_count，策略八选股）
   · factor15 — 题材晋级低开（晋级日 gap ∈ [-4.5%, -0.3%]，策略八补涨过滤）
   · factor16 — 概念龙头评分（F13质量带 + 因子1 OOS + 缠论笔；见 docs/FACTOR16.md）
+  · factor17 — 大盘低开（指数 gap + 实体阳家数比例 + 次日表现；见 docs/FACTOR17.md）
   · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
 """
 
@@ -36,6 +37,7 @@ from strategy.factors import factor13 as _factor13  # noqa: F401
 from strategy.factors import factor14 as _factor14  # noqa: F401
 from strategy.factors import factor15 as _factor15  # noqa: F401
 from strategy.factors import factor16 as _factor16  # noqa: F401
+from strategy.factors import factor17 as _factor17  # noqa: F401
 from strategy.factors import factor_cf1 as _factor_cf1  # noqa: F401
 from strategy.core.factor_registry import FACTOR_REGISTRY, get_factor, list_factors
 

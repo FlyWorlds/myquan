@@ -324,3 +324,53 @@ def append_today_if_missing(daily: pd.DataFrame, symbol: str) -> pd.DataFrame:
         return daily
     row = pd.DataFrame([snap])
     return pd.concat([daily, row], ignore_index=True)
+
+
+def fetch_index_daily(
+    symbol: str = "sh000001",
+    start: str = "20100101",
+    end: str | None = None,
+    *,
+    cache_path: Path | None = None,
+    force_refresh: bool = False,
+) -> pd.DataFrame:
+    """指数日线（上证 sh000001 等）。AkShare `stock_zh_index_daily`，带 parquet 缓存。"""
+    sym = str(symbol or "sh000001").strip().lower()
+    if not sym.startswith(("sh", "sz")):
+        raise ValueError(f"指数代码需带 sh/sz 前缀: {symbol}")
+    end = end or _latest_completed_weekday().strftime("%Y%m%d")
+    cache_path = cache_path or (
+        Path(__file__).resolve().parents[1]
+        / "data_cache"
+        / f"{sym}_index_daily.parquet"
+    )
+    if cache_path.is_file() and not force_refresh:
+        try:
+            cached = pd.read_parquet(cache_path)
+            if not cached.empty:
+                cached["date"] = pd.to_datetime(cached["date"])
+                s, e = pd.Timestamp(start), pd.Timestamp(end)
+                out = cached[(cached["date"] >= s) & (cached["date"] <= e)].copy()
+                if not out.empty:
+                    out["symbol"] = sym
+                    return out.sort_values("date").reset_index(drop=True)
+        except Exception:
+            pass
+    try:
+        raw = ak.stock_zh_index_daily(symbol=sym)
+    except Exception as exc:
+        raise RuntimeError(f"AkShare 指数日线拉取失败: {sym}") from exc
+    if raw is None or raw.empty:
+        raise RuntimeError(f"指数日线为空: {sym}")
+    df = raw.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    for col in ("open", "high", "low", "close", "volume"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["open", "high", "low", "close"]).sort_values("date")
+    df["symbol"] = sym
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(cache_path, index=False)
+    s, e = pd.Timestamp(start), pd.Timestamp(end)
+    out = df[(df["date"] >= s) & (df["date"] <= e)].copy()
+    return out.reset_index(drop=True)

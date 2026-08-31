@@ -1,0 +1,142 @@
+{
+  "factor_id": "factor17",
+  "params": {
+    "index_symbol": "sh000001",
+    "start": "20150101",
+    "low_open_only": true,
+    "yang_definition": "close_gt_open",
+    "breadth_universe": "zz1000"
+  },
+  "index_symbol": "sh000001",
+  "start": "20240101",
+  "end": "20260831",
+  "breadth_note": "广度：中证1000，644 个交易日",
+  "hints": [
+    {
+      "level": "info",
+      "text": "历史低开日加权表现最佳情景：低开日开盘买入、当日收盘卖出，均收益 +0.09%，胜率约 55.5%。"
+    },
+    {
+      "level": "info",
+      "text": "对比：低开日收盘买入、次日开盘卖出 均收益 -0.07%（胜率约 38.1%），低开日不宜盲目抄底/追涨，需分桶看待。"
+    },
+    {
+      "level": "info",
+      "text": "低开日中证1000实体阳（close>open）家数比例均值约 47.9%；指数常收红（close>open）不等于多数个股相对昨收上涨。"
+    }
+  ],
+  "latest_low_open": {
+    "date": "2026-08-28",
+    "gap_pct": -0.16,
+    "bucket": "微跌(-0.5~0%)",
+    "index_intraday_pct": 0.05,
+    "index_day_ret_pct": -0.11,
+    "index_intraday_yang": true,
+    "yang_ratio": 63.7
+  },
+  "rules_text": "================================================================================\n  因子17 · 大盘低开（指数 + 实体阳家数比例）\n================================================================================\n指数：sh000001（默认上证指数）\n低开：开盘相对昨收 gap% < 0\n实体阳：close > open（相对开盘收红；可与相对昨收仍下跌并存）\n广度池：中证1000成分（可缓存 yang_breadth_zz1000.parquet）\n分桶：微跌(-0.5~0%), 低开(-1~-0.5%), 低开(-2~-1%), 低开(-3~-2%), 大幅(-5~-3%), 急跌(<-5%)\n输出：各桶样本数、指数当日/次日收益、实体阳比例、低开日买卖情景统计\n研究用途，不构成投资建议。\n================================================================================",
+  "n_index_days": 643,
+  "n_low_open_days": 402,
+  "bucket_stats": [
+    {
+      "bucket": "微跌(-0.5~0%)",
+      "n_days": 347,
+      "idx_gap_pct_mean": -0.176,
+      "idx_intraday_pct_mean": 0.121,
+      "idx_day_ret_mean": -0.055,
+      "idx_intraday_yang_pct": 57.1,
+      "idx_next_open_vs_close_mean": -0.079,
+      "idx_next_intraday_mean": 0.067,
+      "idx_next_total_mean": -0.012,
+      "stock_yang_ratio_mean": 0.484,
+      "ret_open_close_win_pct": 57.1,
+      "ret_open_close_mean": 0.121,
+      "ret_close_next_open_win_pct": 35.8,
+      "ret_close_next_open_mean": -0.079,
+      "ret_close_next_close_win_pct": 53.5,
+      "ret_close_next_close_mean": -0.012,
+      "ret_open_next_close_win_pct": 54.6,
+      "ret_open_next_close_mean": 0.109
+    },
+    {
+      "bucket": "低开(-1~-0.5%)",
+      "n_days": 46,
+      "idx_gap_pct_mean": -0.684,
+      "idx_intraday_pct_mean": 0.03,
+      "idx_day_ret_mean": -0.654,
+      "idx_intraday_yang_pct": 45.7,
+      "idx_next_open_vs_close_mean": -0.133,
+      "idx_next_intraday_mean": 0.035,
+      "idx_next_total_mean": -0.096,
+      "stock_yang_ratio_mean": 0.441,
+      "ret_open_close_win_pct": 45.7,
+      "ret_open_close_mean": 0.03,
+      "ret_close_next_open_win_pct": 47.8,
+      "ret_close_next_open_mean": -0.133,
+      "ret_close_next_close_win_pct": 52.2,
+      "ret_close_next_close_mean": -0.096,
+      "ret_open_next_close_win_pct": 52.2,
+      "ret_open_next_close_mean": -0.066
+    },
+    {
+      "bucket": "低开(-2~-1%)",
+      "n_days": 6,
+      "idx_gap_pct_mean": -1.292,
+      "idx_intraday_pct_mean": -0.852,
+      "idx_day_ret_mean": -2.128,
+      "idx_intraday_yang_pct": 33.3,
+      "idx_next_open_vs_close_mean": 0.499,
+      "idx_next_intraday_mean": -0.412,
+      "idx_next_total_mean": 0.089,
+      "stock_yang_ratio_mean": 0.502,
+      "ret_open_close_win_pct": 33.3,
+      "ret_open_close_mean": -0.852,
+      "ret_close_next_open_win_pct": 83.3,
+      "ret_close_next_open_mean": 0.499,
+      "ret_close_next_close_win_pct": 66.7,
+      "ret_close_next_close_mean": 0.089,
+      "ret_open_next_close_win_pct": 33.3,
+      "ret_open_next_close_mean": -0.775
+    },
+    {
+      "bucket": "低开(-3~-2%)",
+      "n_days": 2,
+      "idx_gap_pct_mean": -2.349,
+      "idx_intraday_pct_mean": 1.438,
+      "idx_day_ret_mean": -0.946,
+      "idx_intraday_yang_pct": 100.0,
+      "idx_next_open_vs_close_mean": 0.503,
+      "idx_next_intraday_mean": -0.174,
+      "idx_next_total_mean": 0.328,
+      "stock_yang_ratio_mean": 0.581,
+      "ret_open_close_win_pct": 100.0,
+      "ret_open_close_mean": 1.438,
+      "ret_close_next_open_win_pct": 100.0,
+      "ret_close_next_open_mean": 0.503,
+      "ret_close_next_close_win_pct": 50.0,
+      "ret_close_next_close_mean": 0.328,
+      "ret_open_next_close_win_pct": 100.0,
+      "ret_open_next_close_mean": 1.762
+    },
+    {
+      "bucket": "大幅(-5~-3%)",
+      "n_days": 1,
+      "idx_gap_pct_mean": -4.456,
+      "idx_intraday_pct_mean": -3.023,
+      "idx_day_ret_mean": -7.344,
+      "idx_intraday_yang_pct": 0.0,
+      "idx_next_open_vs_close_mean": -0.075,
+      "idx_next_intraday_mean": 1.657,
+      "idx_next_total_mean": 1.582,
+      "stock_yang_ratio_mean": 0.025,
+      "ret_open_close_win_pct": 0.0,
+      "ret_open_close_mean": -3.023,
+      "ret_close_next_open_win_pct": 0.0,
+      "ret_close_next_open_mean": -0.075,
+      "ret_close_next_close_win_pct": 100.0,
+      "ret_close_next_close_mean": 1.582,
+      "ret_open_next_close_win_pct": 0.0,
+      "ret_open_next_close_mean": -1.489
+    }
+  ]
+}

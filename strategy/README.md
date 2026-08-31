@@ -77,6 +77,7 @@ strategy/
 | **factor14** | 因子14·题材共振 | 题材联动选股 | **当日**同题材涨停同伴数 `theme_lu_count≥3`；见 [`docs/FACTOR14.md`](../docs/FACTOR14.md) |
 | **factor15** | 因子15·晋级低开 | 题材联动过滤（可选） | gap ∈ [-4.5%, -0.3%]；默认关闭，需 `--gap-filter` |
 | **factor16** | 因子16·概念龙头评分 | 概念/池内龙头排序 | `factor16_leader_score.py`：F13质量带 + 因子1 OOS + 缠论笔；见 [`docs/FACTOR16.md`](../docs/FACTOR16.md) |
+| **factor17** | 因子17·大盘低开 | 市场状态 / 择时研究 | `factor17_market_low_open.py`：指数低开分桶 + 实体阳家数% + 次日表现；见 [`docs/FACTOR17.md`](../docs/FACTOR17.md) |
 | **cf1** | CF1·流动性门控反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
