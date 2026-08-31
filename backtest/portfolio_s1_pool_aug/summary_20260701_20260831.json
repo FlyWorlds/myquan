@@ -1,0 +1,405 @@
+{
+  "label": "2026-07-01 → 2026-08-31",
+  "period_start": "2026-07-01",
+  "period_end": "2026-08-31",
+  "data_last_date": "2026-08-28",
+  "start": "2026-07-01",
+  "end": "2026-08-28",
+  "n_stocks": 19,
+  "n_trading_days": 43,
+  "portfolio_strategy_pct": 0.43,
+  "portfolio_bh_pct": -24.87,
+  "excess_pct": 25.31,
+  "pool_label": "策略一全池等权（沪深主板，剔科创/创业）",
+  "monthly": [
+    {
+      "month": "2026-07",
+      "start": "2026-07-01",
+      "end": "2026-07-31",
+      "n_trading_days": 23,
+      "portfolio_strategy_pct": -17.07,
+      "portfolio_bh_pct": -41.14,
+      "excess_pct": 24.08
+    },
+    {
+      "month": "2026-08",
+      "start": "2026-08-03",
+      "end": "2026-08-28",
+      "n_trading_days": 20,
+      "portfolio_strategy_pct": 21.6,
+      "portfolio_bh_pct": 29.72,
+      "excess_pct": -8.12
+    }
+  ],
+  "stocks": [
+    {
+      "code": "600206",
+      "name": "有研新材",
+      "threshold_pct": 3.0,
+      "strategy_pct": 23.48,
+      "bh_pct": -13.83,
+      "excess_pct": 37.31
+    },
+    {
+      "code": "600330",
+      "name": "天通股份",
+      "threshold_pct": 3.0,
+      "strategy_pct": 20.38,
+      "bh_pct": -3.34,
+      "excess_pct": 23.72
+    },
+    {
+      "code": "601020",
+      "name": "华钰矿业",
+      "threshold_pct": 3.0,
+      "strategy_pct": 18.56,
+      "bh_pct": 0.08,
+      "excess_pct": 18.48
+    },
+    {
+      "code": "601208",
+      "name": "东材科技",
+      "threshold_pct": 2.5,
+      "strategy_pct": 18.36,
+      "bh_pct": -23.69,
+      "excess_pct": 42.05
+    },
+    {
+      "code": "002979",
+      "name": "雷赛智能",
+      "threshold_pct": 3.0,
+      "strategy_pct": 16.15,
+      "bh_pct": -1.47,
+      "excess_pct": 17.62
+    },
+    {
+      "code": "002290",
+      "name": "禾盛新材",
+      "threshold_pct": 3.0,
+      "strategy_pct": 10.03,
+      "bh_pct": -30.23,
+      "excess_pct": 40.26
+    },
+    {
+      "code": "603083",
+      "name": "剑桥科技",
+      "threshold_pct": 2.0,
+      "strategy_pct": 7.58,
+      "bh_pct": -20.76,
+      "excess_pct": 28.34
+    },
+    {
+      "code": "600338",
+      "name": "西藏珠峰",
+      "threshold_pct": 2.5,
+      "strategy_pct": 4.42,
+      "bh_pct": -7.17,
+      "excess_pct": 11.59
+    },
+    {
+      "code": "603306",
+      "name": "华懋科技",
+      "threshold_pct": 2.5,
+      "strategy_pct": 1.2,
+      "bh_pct": -24.83,
+      "excess_pct": 26.03
+    },
+    {
+      "code": "002636",
+      "name": "金安国纪",
+      "threshold_pct": 3.0,
+      "strategy_pct": -3.0,
+      "bh_pct": -34.29,
+      "excess_pct": 31.29
+    },
+    {
+      "code": "001389",
+      "name": "广合科技",
+      "threshold_pct": 2.5,
+      "strategy_pct": -3.54,
+      "bh_pct": -27.74,
+      "excess_pct": 24.19
+    },
+    {
+      "code": "002378",
+      "name": "章源钨业",
+      "threshold_pct": 2.0,
+      "strategy_pct": -5.59,
+      "bh_pct": -21.61,
+      "excess_pct": 16.02
+    },
+    {
+      "code": "002335",
+      "name": "科华数据",
+      "threshold_pct": 2.5,
+      "strategy_pct": -8.59,
+      "bh_pct": -23.72,
+      "excess_pct": 15.13
+    },
+    {
+      "code": "600552",
+      "name": "凯盛科技",
+      "threshold_pct": 2.5,
+      "strategy_pct": -8.82,
+      "bh_pct": -39.7,
+      "excess_pct": 30.87
+    },
+    {
+      "code": "002747",
+      "name": "埃斯顿",
+      "threshold_pct": 3.0,
+      "strategy_pct": -9.34,
+      "bh_pct": -23.31,
+      "excess_pct": 13.96
+    },
+    {
+      "code": "002738",
+      "name": "中矿资源",
+      "threshold_pct": 3.0,
+      "strategy_pct": -10.89,
+      "bh_pct": -17.66,
+      "excess_pct": 6.77
+    },
+    {
+      "code": "001339",
+      "name": "智微智能",
+      "threshold_pct": 2.5,
+      "strategy_pct": -17.61,
+      "bh_pct": -24.79,
+      "excess_pct": 7.17
+    },
+    {
+      "code": "603119",
+      "name": "浙江荣泰",
+      "threshold_pct": 3.0,
+      "strategy_pct": -18.48,
+      "bh_pct": -25.56,
+      "excess_pct": 7.08
+    },
+    {
+      "code": "600105",
+      "name": "永鼎股份",
+      "threshold_pct": 3.0,
+      "strategy_pct": -30.29,
+      "bh_pct": -36.28,
+      "excess_pct": 5.99
+    }
+  ],
+  "daily": [
+    {
+      "date": "2026-07-01",
+      "strategy_nav": 100.0,
+      "bh_nav": 100.0
+    },
+    {
+      "date": "2026-07-02",
+      "strategy_nav": 99.83,
+      "bh_nav": 96.67
+    },
+    {
+      "date": "2026-07-03",
+      "strategy_nav": 98.36,
+      "bh_nav": 95.1
+    },
+    {
+      "date": "2026-07-06",
+      "strategy_nav": 97.37,
+      "bh_nav": 90.67
+    },
+    {
+      "date": "2026-07-07",
+      "strategy_nav": 96.74,
+      "bh_nav": 90.23
+    },
+    {
+      "date": "2026-07-08",
+      "strategy_nav": 94.85,
+      "bh_nav": 85.58
+    },
+    {
+      "date": "2026-07-09",
+      "strategy_nav": 95.33,
+      "bh_nav": 89.11
+    },
+    {
+      "date": "2026-07-10",
+      "strategy_nav": 94.02,
+      "bh_nav": 86.79
+    },
+    {
+      "date": "2026-07-13",
+      "strategy_nav": 92.14,
+      "bh_nav": 80.1
+    },
+    {
+      "date": "2026-07-14",
+      "strategy_nav": 94.29,
+      "bh_nav": 83.82
+    },
+    {
+      "date": "2026-07-15",
+      "strategy_nav": 94.83,
+      "bh_nav": 81.82
+    },
+    {
+      "date": "2026-07-16",
+      "strategy_nav": 92.31,
+      "bh_nav": 78.33
+    },
+    {
+      "date": "2026-07-17",
+      "strategy_nav": 90.22,
+      "bh_nav": 71.25
+    },
+    {
+      "date": "2026-07-20",
+      "strategy_nav": 90.0,
+      "bh_nav": 65.15
+    },
+    {
+      "date": "2026-07-21",
+      "strategy_nav": 93.32,
+      "bh_nav": 68.93
+    },
+    {
+      "date": "2026-07-22",
+      "strategy_nav": 91.76,
+      "bh_nav": 67.0
+    },
+    {
+      "date": "2026-07-23",
+      "strategy_nav": 90.27,
+      "bh_nav": 66.66
+    },
+    {
+      "date": "2026-07-24",
+      "strategy_nav": 87.62,
+      "bh_nav": 64.63
+    },
+    {
+      "date": "2026-07-27",
+      "strategy_nav": 88.71,
+      "bh_nav": 67.51
+    },
+    {
+      "date": "2026-07-28",
+      "strategy_nav": 84.38,
+      "bh_nav": 62.53
+    },
+    {
+      "date": "2026-07-29",
+      "strategy_nav": 84.58,
+      "bh_nav": 60.85
+    },
+    {
+      "date": "2026-07-30",
+      "strategy_nav": 82.27,
+      "bh_nav": 57.08
+    },
+    {
+      "date": "2026-07-31",
+      "strategy_nav": 82.93,
+      "bh_nav": 58.86
+    },
+    {
+      "date": "2026-08-03",
+      "strategy_nav": 82.59,
+      "bh_nav": 57.91
+    },
+    {
+      "date": "2026-08-04",
+      "strategy_nav": 86.5,
+      "bh_nav": 62.23
+    },
+    {
+      "date": "2026-08-05",
+      "strategy_nav": 91.65,
+      "bh_nav": 66.28
+    },
+    {
+      "date": "2026-08-06",
+      "strategy_nav": 94.87,
+      "bh_nav": 68.84
+    },
+    {
+      "date": "2026-08-07",
+      "strategy_nav": 98.91,
+      "bh_nav": 72.06
+    },
+    {
+      "date": "2026-08-10",
+      "strategy_nav": 99.17,
+      "bh_nav": 72.5
+    },
+    {
+      "date": "2026-08-11",
+      "strategy_nav": 99.28,
+      "bh_nav": 72.57
+    },
+    {
+      "date": "2026-08-12",
+      "strategy_nav": 100.28,
+      "bh_nav": 74.02
+    },
+    {
+      "date": "2026-08-13",
+      "strategy_nav": 100.05,
+      "bh_nav": 73.04
+    },
+    {
+      "date": "2026-08-14",
+      "strategy_nav": 100.11,
+      "bh_nav": 74.59
+    },
+    {
+      "date": "2026-08-17",
+      "strategy_nav": 102.87,
+      "bh_nav": 77.52
+    },
+    {
+      "date": "2026-08-18",
+      "strategy_nav": 103.54,
+      "bh_nav": 77.5
+    },
+    {
+      "date": "2026-08-19",
+      "strategy_nav": 100.1,
+      "bh_nav": 71.3
+    },
+    {
+      "date": "2026-08-20",
+      "strategy_nav": 99.25,
+      "bh_nav": 71.96
+    },
+    {
+      "date": "2026-08-21",
+      "strategy_nav": 99.18,
+      "bh_nav": 72.67
+    },
+    {
+      "date": "2026-08-24",
+      "strategy_nav": 98.06,
+      "bh_nav": 70.4
+    },
+    {
+      "date": "2026-08-25",
+      "strategy_nav": 98.56,
+      "bh_nav": 71.0
+    },
+    {
+      "date": "2026-08-26",
+      "strategy_nav": 97.62,
+      "bh_nav": 71.35
+    },
+    {
+      "date": "2026-08-27",
+      "strategy_nav": 99.76,
+      "bh_nav": 75.12
+    },
+    {
+      "date": "2026-08-28",
+      "strategy_nav": 100.43,
+      "bh_nav": 75.13
+    }
+  ]
+}

@@ -92,4 +92,18 @@ FACTOR_BINDINGS = (
         ),
         enabled=True,
     ),
+    bind_factor(
+        "factor13a",
+        label="质量带合格池",
+        role="universe",
+        filter_desc="沪深300+500+1000+1500 主板；夏普/回撤甜区 walk-forward；初选≤40",
+        enabled=True,
+    ),
+    bind_factor(
+        "factor16",
+        label="龙头排序",
+        role="entry",
+        filter_desc="f13_pass → OOS 闭环盈亏比/利润因子排序 → Top10 定盘池",
+        enabled=True,
+    ),
 )

@@ -148,7 +148,7 @@ watch(conceptName, async () => {
           v-if="scoreLoading"
           class="mt-4 rounded-lg border border-ui-hairline bg-ui-bg/50 p-6 text-center text-sm text-ui-text-2"
         >
-          正在回测成分股（因子13+因子1+缠论，首次较慢）…
+          正在回测成分股（因子13A+因子1+缠论，首次较慢）…
         </div>
         <div v-else-if="scoreError" class="mt-4 text-sm text-watch-up">{{ scoreError }}</div>
         <div v-else-if="leaderScores?.leaders?.length" class="mt-4 overflow-x-auto">

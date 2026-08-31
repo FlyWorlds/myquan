@@ -103,18 +103,9 @@ def fetch_concept_index_spot_live() -> dict[str, dict[str, Any]]:
 
 
 def _stock_name_map() -> dict[str, str]:
-    from pathlib import Path
+    from .stock_names import stock_name_map
 
-    path = Path(__file__).resolve().parents[1] / "holdingStocks" / "cache" / "a_share_code_names.json"
-    if not path.is_file():
-        return {}
-    try:
-        import json
-
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        return {str(k).zfill(6): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
-    except Exception:
-        return {}
+    return stock_name_map()
 
 
 def member_codes_for_concept(name: str, *, limit: int = 200) -> list[str]:
@@ -145,10 +136,11 @@ def fetch_concept_member_rows(name: str, *, limit: int = 80) -> dict[str, Any]:
     if not name:
         return {"name": "", "source": "", "members": [], "count": 0, "error": "概念名为空"}
 
+    from .stock_names import stock_name_map, stock_name_of
     from .tdx import lookup_member_codes
 
     codes = lookup_member_codes("概念", name)
-    names = _stock_name_map()
+    names = stock_name_map()
     if codes:
         quotes: dict[str, dict[str, Any]] = {}
         try:
@@ -161,7 +153,7 @@ def fetch_concept_member_rows(name: str, *, limit: int = 80) -> dict[str, Any]:
             members.append(
                 {
                     "代码": code,
-                    "名称": names.get(code) or str(q.get("name") or code),
+                    "名称": names.get(code) or str(q.get("name") or stock_name_of(code)),
                     "现价": q.get("price"),
                     "涨跌幅": q.get("chgPct"),
                     "成交额": q.get("amount"),
@@ -191,7 +183,7 @@ def fetch_concept_member_rows(name: str, *, limit: int = 80) -> dict[str, Any]:
         members = [
             {
                 "代码": str(m.get("纯代码") or m.get("代码") or "").zfill(6),
-                "名称": str(m.get("名称") or names.get(str(m.get("代码") or "").zfill(6)) or ""),
+                "名称": str(m.get("名称") or names.get(str(m.get("代码") or "").zfill(6)) or stock_name_of(m.get("代码"))),
                 "现价": m.get("现价"),
                 "涨跌幅": m.get("涨跌幅"),
                 "成交额": m.get("成交额"),

@@ -5,7 +5,9 @@
 
 默认生效：**援军战法（strategy1）= 因子1（开盘±2.5% 一次打满）+ 因子2（回撤加减仓预警）**。
 
-动态选股（研究，🔒锁定）：**因子13 · 熊市盾牌 thr\* Top3** → 2026：东材 / 珠峰 / 雷赛（[`LOCKED.json`](../backtest/factor13_bear_shield/LOCKED.json)）
+动态选股（研究）：**因子13A 质量带 → 因子16 龙头排序 Top10**（[`backtest/s1_f13_refit_2025/`](../backtest/s1_f13_refit_2025/) · 无置顶）
+
+因子13B 熊盾 Top3（🔒锁定对照）：东材 / 珠峰 / 雷赛（[`LOCKED.json`](../backtest/factor13_bear_shield/LOCKED.json)）
 
 - 决策/盯盘买卖只看因子1；因子2 默认只挂预警阈值（**回测不注资**）。
 - 仅因子1交易：`run_open_break` 或 `python strategy1.py --no-factor2`。
@@ -73,10 +75,12 @@ strategy/
 | **factor10** | 因子10·价格选股 | 策略1/4 周频开仓名单 | `s1_price_select.py`：近高/趋势/动量/上涨日占比；本周收盘排名，下一周才允许因子1 开仓 |
 | **factor11** | 因子11·两段近高选股 | 截面选股 | `near_high_hold.py`：3日动量 Top20 内再取贴近5日高点 Top5；周频冻结；**一字涨停开盘不可买** |
 | **factor12** | 因子12·反转池近高 | 截面选股 | `factor12_combo.py`：20日涨幅最低 Top20 内再取贴近5日高点 Top5；**研究候选**，2024–2025 未确认，不替换因子11 |
-| **factor13** | 因子13·策略1契合选股 | 动态合格池 / 熊年盾牌 | **A 线** `factor13_fit.py`：质量带夏普/回撤；**B 线（🔒锁定）** `factor13_bear_shield.py`：WF + thr\* Top3，见 [`docs/FACTOR13.md`](../docs/FACTOR13.md) |
+| **factor13a** | 因子13A·质量带契合选股 | 动态合格池 | `factor13_fit.py`：夏普/回撤甜区 walk-forward；见 [`docs/FACTOR13.md`](../docs/FACTOR13.md) |
+| **factor13b** | 因子13B·熊市盾牌 thr\* Top3 | 熊年防守池（🔒锁定） | `factor13_bear_shield.py`：WF + thr\*；`LOCKED.json` |
+| **factor13** | 因子13（别名→13A） | 兼容 | 等同 factor13a；新代码请用 13a/13b |
 | **factor14** | 因子14·题材共振 | 题材联动选股 | **当日**同题材涨停同伴数 `theme_lu_count≥3`；见 [`docs/FACTOR14.md`](../docs/FACTOR14.md) |
 | **factor15** | 因子15·晋级低开 | 题材联动过滤（可选） | gap ∈ [-4.5%, -0.3%]；默认关闭，需 `--gap-filter` |
-| **factor16** | 因子16·概念龙头评分 | 概念/池内龙头排序 | `factor16_leader_score.py`：F13质量带 + 因子1 OOS + 缠论笔；见 [`docs/FACTOR16.md`](../docs/FACTOR16.md) |
+| **factor16** | 因子16·概念龙头评分 | 概念/池内龙头排序 | `factor16_leader_score.py`：**13A** 质量带 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](../docs/FACTOR16.md) |
 | **cf1** | CF1·流动性门控反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
@@ -92,7 +96,7 @@ for f in list_factors():
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor1 + factor2 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警；别名 `open_break3` / `s1` / `策略一` |
+| **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警；定盘池 13A→16 Top10；别名 `open_break3` / `s1` / `策略一` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
 | **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮展示+±阈值；回测：首板+gap/量比 · 别名 `s3` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧号 `strategy9` / `s9` / `策略九` |
@@ -300,12 +304,13 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 
 ### 因子13 双轨（勿混写）
 
-| 线 | 模块 | 状态 |
-|----|------|------|
-| A 质量带 | `factor13_fit.py` → `factors/factor13.py` | 历史 walk-forward |
-| B 熊市盾牌 thr\* Top3 | `factor13_bear_shield.py` | **🔒 当前锁定** |
+| 注册 ID | 模块 | 状态 |
+|---------|------|------|
+| **factor13a** 质量带 | `factor13_fit.py` → `factors/factor13a.py` | 宽宇宙换池 + walk-forward |
+| **factor13b** 熊盾 thr\* Top3 | `factor13_bear_shield.py` → `factors/factor13b.py` | **🔒 当前锁定** |
+| **factor16** | `factor16_leader_score.py` | 13A 过门 + OOS 盈亏比排序（换池第二层） |
 
-锁定期间：文档与 `LOCKED.json` 为准；**禁止**把未盲测验证的调参结果写为主结论。
+`factor13` = 别名 → `factor13a`。锁定期间：熊盾以 `LOCKED.json` 为准。
 
 ### 表述要求
 

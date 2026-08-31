@@ -1,0 +1,3 @@
+cfg_thr_mode,cfg_sharpe_lo,cfg_sharpe_hi,cfg_mdd_lo,cfg_mdd_hi,cfg_dd_ratio_max,cfg_rank_col,cfg_top_k,fit_year,oos_year,n_cand,n_picks,symbols,oos_ret,oos_med,oos_sharpe,oos_mdd,oos_excess,univ_ret,alpha,pos_n,beat_bh_n
+best,0.7000,2.2000,20.0000,32.0000,0.7000,excess,10,2024,2025,115,10,"sh603728,sz002246,sz002549,sh605198,sz002335,sz002636,sh601595,sh603127,sh603256,sz002434",90.6497,78.7941,1.5775,25.5726,-27.4125,20.2517,70.3980,10,6
+best,0.7000,2.2000,20.0000,32.0000,0.7000,excess,10,2025,2026,25,10,"sz002929,sz002993,sh603338,sh603039,sz002065,sh600967,sh603728,sh600184,sz001339,sz002097",9.5614,0.3690,0.1224,26.4686,10.4056,0.9929,8.5685,5,8

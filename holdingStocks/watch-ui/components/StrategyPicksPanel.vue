@@ -7,6 +7,7 @@ defineProps<{ picks?: StrategyPicks | null }>()
 
 const kindLabel: Record<string, string> = {
   locked: '锁定名单',
+  pool: '宽宇宙换池',
   weekly: '周频选股',
   daily: '日频选股',
   signals: '事件信号',
@@ -51,7 +52,11 @@ const kindLabel: Record<string, string> = {
               <span v-else>{{ stockLabel(it.symbol, it.name) }}</span>
             </td>
             <td class="px-2 py-1 text-xs text-ui-text-3">
-              <template v-if="it.thr != null">阈值 ±{{ (Number(it.thr) * 100).toFixed(1) }}%</template>
+              <template v-if="it.thr != null && it.oos_pl_ratio != null">
+                阈值 ±{{ (Number(it.thr) * 100).toFixed(1) }}% · 盈亏比 {{ Number(it.oos_pl_ratio).toFixed(2) }}
+                <span v-if="it.oos_win_rate_pct != null"> · 胜率 {{ Number(it.oos_win_rate_pct).toFixed(1) }}%</span>
+              </template>
+              <template v-else-if="it.thr != null">阈值 ±{{ (Number(it.thr) * 100).toFixed(1) }}%</template>
               <template v-else-if="it.theme != null">{{ it.theme }} · lu {{ it.theme_lu }}</template>
               <template v-else-if="it.score != null">score {{ Number(it.score).toFixed(2) }}</template>
               <template v-else-if="it.gap_pct != null">gap {{ it.gap_pct }}% · 量比 {{ it.vol_ratio }}</template>

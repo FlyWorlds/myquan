@@ -87,10 +87,17 @@ export interface StrategyPickItem {
   theme_lu?: number
   pool_tag?: string
   weight?: number
+  oos_pl_ratio?: number
+  oos_win_rate_pct?: number
+  oos_excess_pct?: number
+  oos_n_trades?: number
+  f13_pass?: number | boolean
+  f13_score_quality?: number
+  oos_profit_factor?: number
 }
 
 export interface StrategyPicks {
-  kind: 'weekly' | 'daily' | 'locked' | 'signals' | 'none' | string
+  kind: 'weekly' | 'daily' | 'locked' | 'pool' | 'signals' | 'none' | string
   asOf?: string | null
   source?: string | null
   note?: string

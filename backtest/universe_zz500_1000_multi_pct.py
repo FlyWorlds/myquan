@@ -1,6 +1,6 @@
 """中证500+中证1000 因子1 多阈值回测：±2% / ±2.5% / ±3%。
 
-- 剔除科创板（688/689）
+- 剔除科创板（688/689）、创业板（300/301）、北交所
 - 每只股票拉一次日线，三个阈值同跑
 - 有超额（策略收益 > 买入持有）的纳入候选；每只取超额最大的阈值
 - 盯盘池默认再要求夏普≥1（与历史口径一致）；全量超额名单另存
@@ -62,9 +62,13 @@ CSINDEX_CONS_URL = (
 )
 
 
-def _is_star(code: str) -> bool:
+def _is_mainboard(code: str) -> bool:
     c = str(code).zfill(6)
-    return c.startswith(("688", "689"))
+    if c.startswith(("688", "689", "300", "301")):
+        return False
+    if c.startswith(("8", "4")):
+        return False
+    return True
 
 
 def _to_symbol(code: str) -> str:
@@ -90,7 +94,7 @@ def _bh_stats(daily: pd.DataFrame) -> tuple[float | None, float | None]:
     return bh_ret, bh_dd
 
 
-def load_universe(*, drop_star: bool = True) -> pd.DataFrame:
+def load_universe(*, drop_non_mainboard: bool = True) -> pd.DataFrame:
     rows: list[dict] = []
     seen: set[str] = set()
     for code, index_name in INDEXES:
@@ -113,7 +117,7 @@ def load_universe(*, drop_star: bool = True) -> pd.DataFrame:
             c = str(row[code_col]).zfill(6)
             if c in seen:
                 continue
-            if drop_star and _is_star(c):
+            if drop_non_mainboard and not _is_mainboard(c):
                 continue
             seen.add(c)
             rows.append(
@@ -125,11 +129,10 @@ def load_universe(*, drop_star: bool = True) -> pd.DataFrame:
                 }
             )
     out = pd.DataFrame(rows)
-    print(f"成分合计(剔科创板): {len(out)}")
+    print(f"成分合计(剔科创/创业/北交): {len(out)}")
     print(out["index"].value_counts().to_string())
-    star_n = sum(1 for c in seen if _is_star(c))
-    if drop_star:
-        print(f"(已剔除科创板；北交/创业板若在指数内仍保留)")
+    if drop_non_mainboard:
+        print("(已剔除科创板、创业板、北交所)")
     return out
 
 
@@ -406,7 +409,7 @@ def apply_watch(fit: pd.DataFrame, *, also_excess_only: bool = False) -> None:
     # 更新注释
     text3 = re.sub(
         r"# 中证500\+1000 契合池.*",
-        f"# 中证500+1000 契合池（夏普≥{SHARPE_MIN} 且超额>0，剔科创；多阈值优选，按夏普降序）",
+        f"# 中证500+1000 契合池（夏普≥{SHARPE_MIN} 且超额>0，剔科创/创业；多阈值优选，按夏普降序）",
         text3,
         count=1,
     )
@@ -445,7 +448,7 @@ def main() -> None:
     end_date = dt.date.today().strftime("%Y%m%d")
 
     if not args.filter_only:
-        universe = load_universe(drop_star=True)
+        universe = load_universe(drop_non_mainboard=True)
         done = _load_done_codes()
         todo = [
             row.to_dict()

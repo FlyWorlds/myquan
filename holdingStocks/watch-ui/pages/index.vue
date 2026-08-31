@@ -102,7 +102,7 @@ const loading = computed(() => !snapshot.value && wsStatus.value.includes('连�
       <section v-show="activeTab === 'holdings'" class="space-y-4">
         <IndexBar v-if="snapshot" :indices="snapshot.indices" />
         <AccountSummary v-if="snapshot" :account="snapshot.account" />
-        <p v-if="snapshot && !snapshot.holdings?.length" class="text-sm text-ui-text-2">暂无登记持仓，置顶三票与实仓会在此展示。</p>
+        <p v-if="snapshot && !snapshot.holdings?.length" class="text-sm text-ui-text-2">暂无登记持仓，定盘池与实仓会在此展示。</p>
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <HoldingCard v-for="row in snapshot?.holdings || []" :key="String(row.代码)" :row="row" />
         </div>

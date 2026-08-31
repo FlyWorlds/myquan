@@ -762,6 +762,7 @@ def fetch_tdx_board_members(
 
     codes = [str(c).zfill(6) for c in codes[:limit]]
     quotes = _fetch_quotes(codes) if with_quotes else {}
+    from .stock_names import stock_name_of
 
     rows: list[dict[str, Any]] = []
     for code in codes:
@@ -770,7 +771,7 @@ def fetch_tdx_board_members(
             {
                 "纯代码": code,
                 "代码": code,
-                "名称": "",
+                "名称": stock_name_of(code),
                 "现价": q.get("现价"),
                 "涨跌幅": q.get("涨跌幅"),
                 "成交额": q.get("成交额"),

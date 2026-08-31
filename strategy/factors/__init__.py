@@ -13,7 +13,9 @@
   · factor10 — 价格选股（周频冻结近高/趋势/动量）
   · factor11 — 两段近高选股（3日动量 Top20 → 贴近5日高点 Top5）
   · factor12 — 20日反转池 → 近5日高 Top5（研究候选，不替换 factor11）
-  · factor13 — 策略1契合选股（质量带 factor13_fit / 熊盾 factor13_bear_shield，见 docs/FACTOR13.md）
+  · factor13a — 策略1质量带契合选股（factor13_fit）
+  · factor13b — 熊市盾牌 thr* Top3（factor13_bear_shield，🔒锁定）
+  · factor13 — 兼容别名 → factor13a（见 docs/FACTOR13.md）
   · factor14 — 题材共振（同题材涨停同伴数 theme_lu_count，策略八选股）
   · factor15 — 题材晋级低开（晋级日 gap ∈ [-4.5%, -0.3%]，策略八补涨过滤）
   · factor16 — 概念龙头评分（F13质量带 + 因子1 OOS + 缠论笔；见 docs/FACTOR16.md）
@@ -32,6 +34,8 @@ from strategy.factors import factor9 as _factor9  # noqa: F401
 from strategy.factors import factor10 as _factor10  # noqa: F401
 from strategy.factors import factor11 as _factor11  # noqa: F401
 from strategy.factors import factor12 as _factor12  # noqa: F401
+from strategy.factors import factor13a as _factor13a  # noqa: F401
+from strategy.factors import factor13b as _factor13b  # noqa: F401
 from strategy.factors import factor13 as _factor13  # noqa: F401
 from strategy.factors import factor14 as _factor14  # noqa: F401
 from strategy.factors import factor15 as _factor15  # noqa: F401

@@ -77,6 +77,8 @@ def _boards_df_to_rows(boards_df: pd.DataFrame) -> list[dict[str, Any]]:
 def _fetch_tdx_members(names: set[str]) -> dict[str, list[dict[str, Any]]]:
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
+    from .stock_names import stock_name_of
+
     members: dict[str, list[dict[str, Any]]] = {}
     if not names:
         return members
@@ -93,7 +95,7 @@ def _fetch_tdx_members(names: set[str]) -> dict[str, list[dict[str, Any]]]:
             rows.append(
                 {
                     "代码": code,
-                    "名称": str(m.get("名称") or code),
+                    "名称": stock_name_of(code, fallback=str(m.get("名称") or "")),
                     "现价": _clean(m.get("现价")),
                     "涨跌幅": _clean(m.get("涨跌幅")),
                     "换手率": _clean(m.get("换手率")),

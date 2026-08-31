@@ -15,10 +15,12 @@ _MYQUAN = Path(__file__).resolve().parents[1]
 
 _PICK_SOURCES: dict[str, dict[str, Any]] = {
     "strategy1": {
-        "kind": "locked",
+        "kind": "pool",
         "paths": [
+            _MYQUAN / "backtest/s1_f13_refit_2025/summary.json",
+            _MYQUAN / "backtest/s1_f13_refit_2025/pool_detail.csv",
+            _MYQUAN / "backtest/s1_f13_refit_2025/picks_2025_for_2026.csv",
             _MYQUAN / "backtest/factor13_bear_shield/LOCKED.json",
-            _MYQUAN / "backtest/factor13_bear_shield/picks_2025_for_2026.csv",
         ],
     },
     "strategy2": {
@@ -99,6 +101,78 @@ def _load_factor13_locked(path: Path) -> dict[str, Any]:
         "source": str(path.relative_to(_MYQUAN)),
         "note": "因子13 熊盾 Top3（strategy1 动态合格池研究，🔒锁定）",
         "items": items,
+    }
+
+
+def _load_s1_f13_refit_summary(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    raw = data.get("picks") or []
+    items = []
+    for i, row in enumerate(raw):
+        code = str(row.get("code", "")).zfill(6)
+        sym = f"sh{code}" if code.startswith("6") else f"sz{code}"
+        thr = row.get("threshold_pct")
+        items.append(
+            {
+                "rank": i + 1,
+                "symbol": sym,
+                "code": code,
+                "name": _resolve_name(symbol=sym, code=code, name=str(row.get("name", ""))),
+                "thr": float(thr) / 100.0 if thr is not None else None,
+                "f13_pass": row.get("f13_pass"),
+                "f13_score_quality": row.get("f13_score_quality"),
+                "oos_pl_ratio": row.get("oos_pl_ratio"),
+                "oos_win_rate_pct": row.get("oos_win_rate_pct"),
+                "oos_profit_factor": row.get("oos_profit_factor"),
+                "oos_n_trades": row.get("oos_n_trades"),
+                "oos_excess_pct": row.get("oos_excess_pct"),
+            }
+        )
+    chain = str(data.get("selection_chain") or "factor13a → factor16")
+    return {
+        "kind": "pool",
+        "asOf": str(data.get("generated") or "")[:10] or None,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": (
+            f"策略1 定盘池 Top{len(items)}：因子13A 质量带初选≤40 → 因子16 OOS盈亏比排序；"
+            f"无置顶（{chain}）"
+        ),
+        "items": items,
+    }
+
+
+def _load_s1_f13_refit_pool_csv(path: Path) -> dict[str, Any]:
+    df = pd.read_csv(path)
+    if "oos_pl_ratio" in df.columns:
+        df = df.sort_values("oos_pl_ratio", ascending=False)
+    items = []
+    for i, (_, r) in enumerate(df.iterrows()):
+        code = str(r.get("code", "")).zfill(6)
+        sym = f"sh{code}" if code.startswith("6") else f"sz{code}"
+        thr = r.get("threshold_pct", r.get("thr"))
+        thr_f = float(thr) / 100.0 if thr is not None and float(thr) > 1 else float(thr or 0)
+        items.append(
+            {
+                "rank": i + 1,
+                "symbol": sym,
+                "code": code,
+                "name": _resolve_name(symbol=sym, code=code, name=str(r.get("name", ""))),
+                "thr": thr_f if thr_f > 0 else None,
+                "f13_pass": r.get("f13_pass"),
+                "f13_score_quality": r.get("f13_score_quality"),
+                "oos_pl_ratio": r.get("oos_pl_ratio"),
+                "oos_win_rate_pct": r.get("oos_win_rate_pct"),
+                "oos_profit_factor": r.get("oos_profit_factor"),
+                "oos_n_trades": r.get("oos_n_trades"),
+                "oos_excess_pct": r.get("oos_excess_pct"),
+            }
+        )
+    return {
+        "kind": "pool",
+        "asOf": None,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": "策略1 定盘池：因子13A 质量带 → 因子16 龙头排序 Top10（无置顶）",
+        "items": items[:10],
     }
 
 
@@ -286,6 +360,10 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
 
     try:
         if sid == "strategy1":
+            if path.name == "summary.json":
+                return _load_s1_f13_refit_summary(path)
+            if path.name in ("pool_detail.csv", "picks_2025_for_2026.csv"):
+                return _load_s1_f13_refit_pool_csv(path)
             if path.suffix == ".json":
                 return _load_factor13_locked(path)
             return _load_factor13_csv(path)

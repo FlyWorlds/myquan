@@ -2,8 +2,21 @@
 
 > 研究用途，不构成投资建议。
 
-**最后更新**：2026-08-30  
-**当前锁定**：`backtest/factor13_bear_shield/LOCKED.json`（`locked: true`，解锁前勿改默认门槛）
+**最后更新**：2026-08-31  
+**注册表拆分**：`factor13a`（质量带）· `factor13b`（熊盾，🔒锁定）· `factor13`（别名→13A）
+
+---
+
+## 0. 注册 ID（2026-08 拆分）
+
+| ID | 名称 | 模块 | 用途 |
+|----|------|------|------|
+| **factor13a** | 质量带契合选股 | `factor13_fit.py` | 夏普/回撤甜区 → `score_quality` TopK |
+| **factor13b** | 熊市盾牌 thr\* Top3 | `factor13_bear_shield.py` | WF + 个股 thr*（**当前生产锁定**） |
+| **factor13** | 兼容别名 | → `factor13a` | 旧脚本/导入勿断 |
+| **factor16** | 龙头评分 | `factor16_leader_score.py` | **13A 过门** + 因子1 OOS **盈亏比/胜率**排序 |
+
+宽宇宙换池（`backtest/s1_f13_refit_2025.py`）：**13A 网格调参 → 因子16 排序 Top10 → 策略1 执行**。
 
 ---
 

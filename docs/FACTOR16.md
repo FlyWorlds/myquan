@@ -13,7 +13,7 @@
 
 | 阶段 | 区间 | 模块 | 输出 |
 |------|------|------|------|
-| **FIT 定参** | 2020-01-01 → 2023-12-31 | 因子13 `factor13_fit` | 截面 `score_quality`、`f13_pass` |
+| **FIT 定参** | 2020-01-01 → 2023-12-31 | 因子13A `factor13_fit` | 截面 `score_quality`、`f13_pass` |
 | **OOS 样本外** | 默认 2025-01-01 → 今 | 因子1 `ai_concept_f1_f13_report.eval_window` | 盈亏比、胜率、超额、回撤、收益 |
 | **缠论对照** | 同 OOS 窗 | 策略七 `bi_pl_ratio` | `chan_pl_ratio` / `chan_win_rate`（不参与主排序） |
 
@@ -21,7 +21,7 @@
 
 与 [`backtest/ai_concept_f1_f13_report.py`](../backtest/ai_concept_f1_f13_report.py) 一致：
 
-1. `f13_pass` 降序（质量带通过优先）
+1. `f13_pass` 降序（因子13A 质量带通过优先）
 2. `oos_pl_ratio` 降序
 3. `oos_profit_factor` 降序
 4. `score_quality` 降序

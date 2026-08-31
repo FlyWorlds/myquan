@@ -242,6 +242,7 @@ def _bind() -> StrategySpec:
         description=(
             "援军战法：因子1 开盘±2.5%一次打满/阴小阳/禁双阳跨日≥5%/仅止损"
             " + 因子2 回撤加减仓预警（回测不注资）"
+            " + 因子13A 质量带合格池 + 因子16 龙头排序（定盘池 Top10，研究）"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy1,
@@ -254,7 +255,9 @@ def _bind() -> StrategySpec:
         meta={
             "default": True,
             "legacy_id": "open_break3",
-            "factors": ("factor1", "factor2"),
+            "factors": ("factor1", "factor2", "factor13a", "factor16"),
+            "pool_chain": "factor13a_quality_band → factor16_pl_ratio_rank",
+            "pool_size": 10,
             "factor2_overlay": False,
             "factor2_alert_only": True,
         },

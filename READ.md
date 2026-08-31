@@ -47,13 +47,15 @@ akshare DataFrame
 |------|------|
 | **盯盘 / 默认回测** | **策略一 = 因子1 + 因子2 预警**（因子2 回测不注资） |
 | **因子1** | 开盘 ±2.5%（单票可 ±3% 等）；买突破、卖仅止损、T+1 |
-| **动态选股（研究，🔒锁定）** | **因子13 熊市盾牌 thr\* Top3** → 2026：东材、珠峰、雷赛 |
+| **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top10**（宽宇宙主板，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
+| **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
 
-因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 锁定：[`backtest/factor13_bear_shield/LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json)
+因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md)
 
 ```bash
 cd backtest && python strategy1.py --rules
-python strategy/run_factor13_bear_shield_wf.py   # 因子13 WF 回测
+python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
+python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）
 ```
 
 **任务进度**：[`TODO.MD`](TODO.MD)（P0 行情/预警 ✅；P0 持仓入库待做；因子13 已锁定）
@@ -82,17 +84,19 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13 WF 回测
 | **factor10** | 因子10·价格选股 | 周频开仓名单 | `s1_price_select.py`：近高/趋势/动量；供策略四 |
 | **factor11** | 因子11·两段近高 | 截面选股 | `near_high_hold.py`：动量 Top20→近高 Top5；供策略五 |
 | **factor12** | 因子12·反转池近高 | 截面选股（研究） | `factor12_combo.py`：20 日反转 Top20→近高 Top5；供策略六 |
-| **factor13** | 因子13·契合选股 | 动态合格池 | **A 线**质量带 `factor13_fit.py`；**B 线（🔒锁定）**熊盾 `factor13_bear_shield.py` |
+| **factor13a** | 因子13A·质量带 | 动态合格池 | `factor13_fit.py`：夏普/回撤甜区 walk-forward |
+| **factor13b** | 因子13B·熊盾（🔒锁定） | 熊年防守 Top3 | `factor13_bear_shield.py` · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
+| **factor13** | 因子13（别名→13A） | 兼容 | 等同 factor13a |
 | **factor14** | 因子14·题材共振 | 题材联动选股 | **当日**同题材涨停同伴数≥3；见 [`docs/FACTOR14.md`](docs/FACTOR14.md) |
 | **factor15** | 因子15·晋级低开 | 题材联动过滤（可选） | gap 低开带；策略八默认关闭 |
-| **factor16** | 因子16·概念龙头评分 | 概念成分龙头排序 | F13质量带 + 因子1 OOS + 缠论笔；见 [`docs/FACTOR16.md`](docs/FACTOR16.md) |
+| **factor16** | 因子16·龙头评分 | 池内排序 | 13A 过门 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](docs/FACTOR16.md) |
 | **cf1** | CF1·流动性门控 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor1 + factor2 | ✅ **默认** | 开盘±2.5% 一次打满 + 回撤预警；别名 `open_break3` / `s1` |
+| **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 | ✅ **默认** | 开盘±2.5% 一次打满 + 回撤预警；定盘池 13A→16 Top10；别名 `open_break3` / `s1` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30 分小转大 + 日线二/三买卖；别名 `chan` |
 | **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮+±阈值；回测见 `backtest/strategy3_first_board/` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 突破 + 牛市放宽 + 20% 昨高全清 + 周频 Top5 |

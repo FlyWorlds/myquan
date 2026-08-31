@@ -62,14 +62,14 @@ def factor16_rules_text(params: dict[str, Any] | None = None) -> str:
     p = {**DEFAULT_PARAMS, **load_best_rule(), **(params or {})}
     return f"""
 ================================================================================
-  因子16 · 概念龙头评分（F13质量带 + 因子1 OOS + 缠论笔）
+  因子16 · 概念龙头评分（F13A质量带 + 因子1 OOS + 缠论笔）
 ================================================================================
 定参 FIT : {p.get('fit_start')} → {p.get('fit_end')}
-  · 因子13 截面 score_quality + 质量带硬过滤（f13_pass）
+  · 因子13A 截面 score_quality + 质量带硬过滤（f13_pass）
 样本外 OOS: {p.get('oos_start')} → 今（可覆盖 oos_start/oos_end）
   · 策略一因子1 开盘 ±{float(p.get('thr', THR))*100:.1f}%：盈亏比、胜率、超额、回撤
   · 策略七缠论笔盈亏比（OOS 对照列，不参与主排序）
-排序：F13通过优先 → OOS盈亏比 → 利润因子 → score_quality
+排序：F13A通过优先 → OOS盈亏比 → 利润因子 → score_quality
 门槛：FIT bars≥{p.get('min_bars')}；OOS 闭环≥{p.get('min_oos_trades')}
 研究用途，不构成投资建议。
 ================================================================================
@@ -300,7 +300,7 @@ def factor16_signal(
         "universe": picks["code"].tolist() if "code" in picks.columns else [],
         "rules_text": factor16_rules_text(p),
         "scoring": {
-            "quality": "因子13质量带（FIT 截面 score_quality + f13_pass）",
+            "quality": "因子13A质量带（FIT 截面 score_quality + f13_pass）",
             "factor1": f"策略一因子1 OOS 盈亏比/胜率（±{float(p.get('thr', THR))*100:.1f}%）",
             "chan": "策略七缠论笔 OOS 对照",
             "rank": " → ".join(str(x) for x in p.get("rank_by", [])),

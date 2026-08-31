@@ -4,7 +4,7 @@
   · 因子1 买：high≥ceil(open×(1+entry))；前日阴/小阳；禁双阳跨日≥5%；T+1
   · 因子1 卖：开盘−stop 止损全清（个股阈值见 watch_config）
   · 因子2：账户回撤加减仓预警（不自动改现金）
-  · 默认定盘宇宙：凯盛 / 天通 / 科创综指置顶 + 拟合池其余
+  · 默认定盘宇宙：因子13A+16 宽宇宙换池 Top10（无置顶；见 watch_config.WATCHLIST）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
 功能：
@@ -124,7 +124,7 @@ FACTOR2_ID = "factor2"
 _STRATEGY_FACTORS_LABEL = (
     "因子1买卖 + 因子4牛市持股"
     if USE_FACTOR4
-    else "因子1买卖 + 因子2回撤预警"
+    else "因子1买卖 + 因子2回撤预警 · 13A+16池"
 )
 _STRATEGY_SYNC_NOTE = (
     "与 strategy3/strategy4 bindings / bull_regime 同源"

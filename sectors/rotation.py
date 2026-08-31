@@ -522,6 +522,8 @@ def _collect_ranked_names(boards_rows: list[dict[str, Any]], top_n: int) -> set[
 
 
 def _fetch_members_map(kind: str, names: set[str]) -> dict[str, list[dict[str, Any]]]:
+    from .stock_names import stock_name_of
+
     members: dict[str, list[dict[str, Any]]] = {}
     if not names:
         return members
@@ -545,7 +547,7 @@ def _fetch_members_map(kind: str, names: set[str]) -> dict[str, list[dict[str, A
             rows.append(
                 {
                     "代码": code,
-                    "名称": str(m.get("名称") or ""),
+                    "名称": stock_name_of(code, fallback=str(m.get("名称") or "")),
                     "现价": _clean(m.get("现价")),
                     "涨跌幅": _clean(m.get("涨跌幅")),
                     "换手率": _clean(m.get("换手率")),
