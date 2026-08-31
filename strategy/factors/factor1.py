@@ -17,7 +17,7 @@ from strategy.open_break import (
 )
 
 FACTOR_ID = "factor1"
-FACTOR_NAME = "因子1"
+FACTOR_NAME = "因子1-开盘突破"
 
 
 def _rules() -> str:

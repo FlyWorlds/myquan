@@ -6,7 +6,7 @@ from strategy.core.protocols import FactorSpec
 
 
 FACTOR_ID = "factor8"
-FACTOR_NAME = "因子8·缠论结构"
+FACTOR_NAME = "因子8-缠论结构"
 
 RULES_TEXT = """
 一买仅进入候选；候选期内出现二买才确认首次开仓。

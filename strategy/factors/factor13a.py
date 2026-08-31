@@ -17,7 +17,7 @@ from strategy.factor13_fit import (
 )
 
 FACTOR_ID = "factor13a"
-FACTOR_NAME = "因子13A·质量带契合选股"
+FACTOR_NAME = "因子13A-质量带契合选股"
 
 
 def _rules() -> str:

@@ -35,7 +35,7 @@ export function useHoverDelay(delayMs = 1000) {
     leaveTimer = setTimeout(() => {
       show.value = false
       leaveTimer = null
-    }, 120)
+    }, 220)
   }
 
   function onPanelEnter() {

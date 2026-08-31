@@ -14,7 +14,7 @@ from strategy.etf_combo_momentum import (
 )
 
 FACTOR_ID = "factor6"
-FACTOR_NAME = "因子6·组合动量ETF轮动"
+FACTOR_NAME = "因子6-组合动量ETF轮动"
 
 _RULES = (
     etf_combo_momentum_rules_text()

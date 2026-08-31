@@ -14,7 +14,7 @@ from strategy.s1_price_select import (
 )
 
 FACTOR_ID = "factor10"
-FACTOR_NAME = "因子10·价格选股"
+FACTOR_NAME = "因子10-价格选股"
 
 
 def _rules() -> str:

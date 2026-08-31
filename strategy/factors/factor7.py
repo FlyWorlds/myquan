@@ -15,7 +15,7 @@ from strategy.industry_residual_momentum import (
 )
 
 FACTOR_ID = "factor7"
-FACTOR_NAME = "因子7·行业ETF双动量"
+FACTOR_NAME = "因子7-行业ETF双动量"
 
 SPEC = FactorSpec(
     id=FACTOR_ID,

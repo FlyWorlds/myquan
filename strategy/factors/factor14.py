@@ -6,7 +6,7 @@ from strategy.core.factor_registry import register_factor
 from strategy.core.protocols import FactorSpec
 
 FACTOR_ID = "factor14"
-FACTOR_NAME = "因子14·题材共振"
+FACTOR_NAME = "因子14-题材共振"
 
 
 def _rules() -> str:

@@ -6,7 +6,7 @@ from strategy.core.factor_registry import register_factor
 from strategy.core.protocols import FactorSpec
 
 FACTOR_ID = "factor15"
-FACTOR_NAME = "因子15·题材晋级低开"
+FACTOR_NAME = "因子15-题材晋级低开"
 
 GAP_MIN = -0.045
 GAP_MAX = -0.003

@@ -28,7 +28,7 @@ from backtest.ai_concept_f1_f13_report import (  # noqa: E402
 from strategy.factor13_fit import enrich_cross_section_scores, load_best_rule
 
 FACTOR_ID = "factor16"
-FACTOR_NAME = "因子16·概念龙头评分"
+FACTOR_NAME = "因子16-概念龙头评分"
 
 DEFAULT_PARAMS: dict[str, Any] = {
     "fit_start": FIT_START,

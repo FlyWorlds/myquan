@@ -8,6 +8,7 @@ if (import.meta.client) {
   activeTab.value = localStorage.getItem('holdings_active_tab') || 'holdings'
 }
 
+/** 盯盘首页 Tab：后端 snapshot 仅含 watch_tab=true（strategy1/3/8） */
 const strategyTabs = computed(() => {
   if (strategies.value.length) return strategies.value
   return snapshot.value?.strategies || []
@@ -137,20 +138,10 @@ const loading = computed(() => !snapshot.value && wsStatus.value.includes('连�
           :phase="snapshot.phase"
         />
       </section>
-
-      <section
-        v-for="tab in strategyTabs.filter((t) => t.id !== 'strategy1' && t.id !== 'strategy3' && t.id !== 'strategy8')"
-        :key="tab.id"
-        v-show="activeTab === tab.id"
-      >
-        <StrategyInfoPanel :tab="tab" />
-        <StrategyPicksPanel :picks="tab.picks" />
-      </section>
     </template>
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘默认绑定 {{ snapshot?.strategy?.name || '策略一' }}。各策略 Tab 含注册表说明 + 选股/信号（有产物时）；策略1/3/8 另有实时表。
-      完整说明见
+      盯盘 Tab 仅展示有实时面板的策略（策略1 / 3 / 8）。因子持有模板、研究型条目见
       <NuxtLink to="/strategies" class="text-accent hover:underline">策略说明</NuxtLink>
       、
       <NuxtLink to="/factors" class="text-accent hover:underline">因子说明</NuxtLink>

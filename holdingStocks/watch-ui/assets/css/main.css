@@ -125,6 +125,10 @@
     @apply h-full;
   }
 
+  .registry-hover-wrap.registry-hover-active {
+    z-index: 50;
+  }
+
   .registry-card {
     @apply h-full cursor-default;
     background: linear-gradient(
@@ -140,20 +144,56 @@
     box-shadow: 0 8px 28px color-mix(in srgb, var(--watch-accent) 12%, transparent);
   }
 
-  .registry-detail-panel {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: calc(100% + 0.35rem);
-    z-index: 40;
-    max-height: min(70vh, 28rem);
-    overflow: auto;
-    padding: 0.875rem 1rem;
+.registry-detail-panel {
+    position: fixed;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
     border-radius: 0.75rem;
     border: 1px solid color-mix(in srgb, var(--watch-accent) 35%, var(--ui-hairline));
     background: color-mix(in srgb, var(--ui-surface) 92%, var(--ui-page));
     box-shadow: var(--ui-shadow-lg);
     backdrop-filter: blur(12px);
+    pointer-events: auto;
+  }
+
+  .registry-detail-panel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.875rem 1rem 1.25rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .registry-detail-panel--above {
+    transform-origin: bottom right;
+  }
+
+  .registry-detail-panel--below {
+    transform-origin: top right;
+  }
+
+  /* 卡片与浮层之间的鼠标过渡桥（不参与滚动） */
+  .registry-detail-panel--above::after,
+  .registry-detail-panel--below::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0.75rem;
+    pointer-events: auto;
+  }
+
+  .registry-detail-panel--above::after {
+    bottom: -0.75rem;
+  }
+
+  .registry-detail-panel--below::after {
+    top: -0.75rem;
   }
 
   .registry-detail-enter-active,
@@ -164,7 +204,17 @@
   .registry-detail-enter-from,
   .registry-detail-leave-to {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: scale(0.98);
+  }
+
+  .registry-detail-panel--above.registry-detail-enter-from,
+  .registry-detail-panel--above.registry-detail-leave-to {
+    transform: translate(4px, 8px) scale(0.98);
+  }
+
+  .registry-detail-panel--below.registry-detail-enter-from,
+  .registry-detail-panel--below.registry-detail-leave-to {
+    transform: translate(4px, -8px) scale(0.98);
   }
 
   .v-loading-mask {

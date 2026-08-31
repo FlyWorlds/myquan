@@ -24,7 +24,7 @@ from strategy.dd_alert import (
 )
 
 FACTOR_ID = "factor2"
-FACTOR_NAME = "因子2"
+FACTOR_NAME = "因子2-回撤预警"
 
 
 def factor2_rules(thresholds: DdAlertThresholds | None = None) -> str:

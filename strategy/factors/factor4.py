@@ -20,7 +20,7 @@ from strategy.core.factor_registry import register_factor
 from strategy.core.protocols import FactorSpec
 
 FACTOR_ID = "factor4"
-FACTOR_NAME = "因子4"
+FACTOR_NAME = "因子4-牛市持股"
 
 
 def _rules() -> str:

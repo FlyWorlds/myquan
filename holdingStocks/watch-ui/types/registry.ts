@@ -29,7 +29,11 @@ export interface StrategyBacktestRow {
   n_trades?: number
 }
 
+export type StrategyRegistryKind = 'watch' | 'production' | 'factor_template' | 'research'
+
 export type StrategyEntry = StrategyTab & {
   backtest?: StrategyBacktestRow[]
   reportPath?: string
+  registry_kind?: StrategyRegistryKind
+  registry_kind_label?: string
 }

@@ -10,7 +10,7 @@ from strategy.core.protocols import FactorSpec
 from strategy.ls_energy import DEFAULT_PARAMS, compute_ls_energy, ls_energy_rules_text
 
 FACTOR_ID = "factor9"
-FACTOR_NAME = "因子9·日线多空动能"
+FACTOR_NAME = "因子9-日线多空动能"
 
 
 def _rules() -> str:

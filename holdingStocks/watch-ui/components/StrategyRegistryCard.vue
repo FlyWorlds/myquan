@@ -14,6 +14,22 @@ const shortDesc = computed(() => {
   if (!d) return '暂无简介'
   return d.length > 72 ? `${d.slice(0, 72)}…` : d
 })
+
+const kindBadge = computed(() => {
+  if (props.tab.is_watch_default) return null
+  const label = props.tab.registry_kind_label
+  if (!label || props.tab.registry_kind === 'watch') return null
+  return label
+})
+
+const kindBadgeClass = computed(() => {
+  const map: Record<string, string> = {
+    production: 'bg-sky-400/15 text-sky-300',
+    factor_template: 'bg-violet-400/15 text-violet-300',
+    research: 'bg-ui-fill-active text-ui-text-3',
+  }
+  return map[String(props.tab.registry_kind || '')] || 'bg-ui-fill-active text-ui-text-3'
+})
 </script>
 
 <template>
@@ -32,6 +48,19 @@ const shortDesc = computed(() => {
             class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent"
           >
             盯盘默认
+          </span>
+          <span
+            v-else-if="tab.registry_kind === 'watch'"
+            class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent"
+          >
+            盯盘
+          </span>
+          <span
+            v-if="kindBadge"
+            class="rounded-full px-2 py-0.5 text-xs font-semibold"
+            :class="kindBadgeClass"
+          >
+            {{ kindBadge }}
           </span>
           <span
             class="rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -100,8 +129,8 @@ const shortDesc = computed(() => {
         <p v-if="tab.reportPath" class="mt-1 text-xs text-ui-text-3">报告：{{ tab.reportPath }}</p>
       </div>
 
-      <div v-if="tab.picks?.items?.length" class="mt-3 rounded-lg border border-ui-hairline bg-ui-ink/30 p-3">
-        <StrategyPicksPanel :picks="tab.picks" />
+      <div v-if="tab.picks?.items?.length" class="mt-3 rounded-lg border border-ui-hairline bg-ui-ink/30 p-2">
+        <StrategyPicksPanel :picks="tab.picks" class="!mt-0 !border-0 !bg-transparent !p-0 !shadow-none" />
       </div>
     </template>
   </RegistryHoverCard>

@@ -10,7 +10,7 @@ from strategy.serenity_factor5 import DEFAULT_OUTPUT, write_snapshot
 
 
 FACTOR_ID = "factor5"
-FACTOR_NAME = "因子5·Serenity前瞻主题"
+FACTOR_NAME = "因子5-Serenity前瞻主题"
 
 _RULES = """\
 ================================================================================

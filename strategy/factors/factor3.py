@@ -7,7 +7,7 @@ from strategy.core.protocols import FactorSpec
 from strategy.momentum import DEFAULT_KIND, DEFAULT_PARAMS, momentum_rules_text
 
 FACTOR_ID = "factor3"
-FACTOR_NAME = "因子3·动量"
+FACTOR_NAME = "因子3-动量"
 
 _RULES = (
     momentum_rules_text(DEFAULT_KIND, DEFAULT_PARAMS)

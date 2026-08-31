@@ -13,7 +13,7 @@ from strategy.factor12_combo import (
 )
 
 FACTOR_ID = "factor12"
-FACTOR_NAME = "因子12·反转池近高"
+FACTOR_NAME = "因子12-反转池近高"
 
 
 SPEC = FactorSpec(

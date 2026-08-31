@@ -13,7 +13,7 @@ from strategy.near_high_hold import (
 )
 
 FACTOR_ID = "factor11"
-FACTOR_NAME = "因子11·两段近高选股"
+FACTOR_NAME = "因子11-两段近高选股"
 
 
 SPEC = FactorSpec(

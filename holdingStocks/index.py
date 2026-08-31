@@ -288,6 +288,16 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
     "universe": "标的池",
 }
 
+# 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
+WATCH_LIVE_TAB_IDS = frozenset({"strategy1", "strategy3", "strategy8"})
+
+_REGISTRY_KIND_ZH = {
+    "watch": "盯盘",
+    "production": "完整策略",
+    "factor_template": "因子模板",
+    "research": "研究",
+}
+
 
 def _strategy_tab_number(strategy_id: str) -> str:
     sid = str(strategy_id)
@@ -305,6 +315,19 @@ def _strategy_tab_short_name(name: str) -> str:
 
 def _strategy_tab_label(strategy_id: str, name: str) -> str:
     return f"策略{_strategy_tab_number(strategy_id)}-{_strategy_tab_short_name(name)}"
+
+
+def _strategy_registry_kind(strategy_id: str, meta: Mapping[str, Any] | None) -> str:
+    """Web 注册表分区：watch=盯盘 Tab；factor_template=因子持有模板；research=宏观/归因。"""
+    sid = str(strategy_id)
+    m = dict(meta or {})
+    if sid in WATCH_LIVE_TAB_IDS:
+        return "watch"
+    if m.get("standalone_factor"):
+        return "factor_template"
+    if sid in ("strategy7", "strategy9") or m.get("mode") == "market_emotion":
+        return "research"
+    return "production"
 
 
 def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
@@ -343,6 +366,11 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
                 "aliases": [str(a) for a in spec.aliases],
                 "implemented": bool(spec.implemented),
                 "is_watch_default": spec.id == STRATEGY_ID,
+                "watch_tab": spec.id in WATCH_LIVE_TAB_IDS,
+                "registry_kind": _strategy_registry_kind(spec.id, spec.meta),
+                "registry_kind_label": _REGISTRY_KIND_ZH.get(
+                    _strategy_registry_kind(spec.id, spec.meta), "策略"
+                ),
                 "factors": factors,
             }
         )
@@ -700,7 +728,7 @@ def publish_watch_snapshot(
             "strategyName": STRATEGY_NAME,
             "factorsLabel": _STRATEGY_FACTORS_LABEL,
         },
-        strategies=_get_strategies_api_cache(),
+        strategies=[t for t in _get_strategies_api_cache() if t.get("watch_tab")],
         strategy3=strategy3,
         strategy8=strategy8,
         sectors=sectors,

@@ -24,7 +24,7 @@ _MYQUAN = Path(__file__).resolve().parents[2]
 _LOCKED = _MYQUAN / "backtest" / "factor13_bear_shield" / "LOCKED.json"
 
 FACTOR_ID = "factor13b"
-FACTOR_NAME = "因子13B·熊市盾牌 thr* Top3"
+FACTOR_NAME = "因子13B-熊市盾牌 thr* Top3"
 
 
 def _load_locked_params() -> dict[str, Any]:

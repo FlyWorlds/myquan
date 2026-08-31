@@ -7,6 +7,10 @@ const devPort = Number(process.env.NUXT_PORT || process.env.PORT || 3000)
 export default defineNuxtConfig({
   ssr: false,
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss'],
+  // SPA 模式不需要 app manifest；关闭可避免 Vite 冷启动时 #app-manifest 预解析报错
+  experimental: {
+    appManifest: false,
+  },
   css: ['~/assets/css/main.css'],
   tailwindcss: {
     cssPath: '~/assets/css/main.css',

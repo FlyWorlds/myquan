@@ -18,8 +18,7 @@ const usedCount = computed(() => props.factor.used_by?.length ?? 0)
       <template #compact>
         <header class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <span class="rounded-full border border-ui-hairline px-2 py-0.5 text-xs text-accent">{{ factor.id }}</span>
-            <h2 class="mt-1 truncate text-base font-bold text-ui-text">{{ factor.name }}</h2>
+            <h2 class="truncate text-base font-bold text-ui-text">{{ factor.name }}</h2>
             <p class="mt-1 line-clamp-2 text-sm leading-relaxed text-ui-text-2">{{ shortDesc }}</p>
           </div>
           <span
@@ -35,9 +34,8 @@ const usedCount = computed(() => props.factor.used_by?.length ?? 0)
       </template>
 
       <template #detail>
-        <h3 class="text-base font-bold">
-          <code class="text-accent">{{ factor.id }}</code> · {{ factor.name }}
-        </h3>
+        <h3 class="text-base font-bold">{{ factor.name }}</h3>
+        <p class="mt-1 text-xs text-ui-text-3"><code>{{ factor.id }}</code></p>
         <p v-if="factor.description" class="mt-2 text-sm leading-relaxed text-ui-text-2">{{ factor.description }}</p>
 
         <div v-if="factor.meta && Object.keys(factor.meta).length" class="mt-3 flex flex-wrap gap-2">
@@ -63,7 +61,7 @@ const usedCount = computed(() => props.factor.used_by?.length ?? 0)
 
         <div v-if="factor.rules_text" class="mt-4">
           <h4 class="text-sm font-semibold text-ui-text">规则摘要</h4>
-          <pre class="mt-2 max-h-64 overflow-auto rounded-lg border border-ui-hairline bg-ui-ink/40 p-3 text-xs leading-relaxed whitespace-pre-wrap text-ui-text-2">{{ factor.rules_text }}</pre>
+          <pre class="mt-2 max-h-48 overflow-auto rounded-lg border border-ui-hairline bg-ui-ink/40 p-3 text-xs leading-relaxed whitespace-pre-wrap text-ui-text-2">{{ factor.rules_text }}</pre>
         </div>
       </template>
     </RegistryHoverCard>

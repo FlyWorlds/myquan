@@ -14,7 +14,7 @@ from strategy.factors.factor13a import FACTOR_NAME as NAME_A
 from strategy.factors.factor13a import _rules
 
 FACTOR_ID = "factor13"
-FACTOR_NAME = "因子13·契合选股（别名→13A）"
+FACTOR_NAME = "因子13-契合选股（别名→13A）"
 
 
 SPEC = FactorSpec(

@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 FACTOR_ID = "cf1"
-FACTOR_NAME = "CF1·流动性门控反转"
+FACTOR_NAME = "因子CF1-流动性门控反转"
 
 # 冻结规格：发现集 2018–2022 分阶段扫描，验证集 2023–2024 在短名单中选定。
 # 假设起点曾是 rev_n=5 / horizon=5；不得用 2025+ 测试集改这些默认值。
