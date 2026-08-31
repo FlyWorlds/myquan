@@ -1,0 +1,43 @@
+{
+  "strategy": "strategy9",
+  "start": "20200101",
+  "end": "20260831",
+  "universe": "zz1000",
+  "index": "sh000001",
+  "index_name": "上证指数",
+  "ld_open_calm_max": 0,
+  "ld_open_panic_min": 4,
+  "trade_days": 1614,
+  "avg_ld_open": 0.3909541511771995,
+  "hit_rate_pct": 52.23,
+  "max_stocks": null,
+  "workers": 8,
+  "panic_day_pct": 0.62,
+  "calm_day_pct": 86.31,
+  "phase_stats": [
+    {
+      "phase": "calm",
+      "days": 1393,
+      "avg_ld_open": 0.0,
+      "avg_ret_close_pct": 0.03826985642184921,
+      "up_ratio_pct": 52.55,
+      "predict_hit_pct": 52.55
+    },
+    {
+      "phase": "normal",
+      "days": 211,
+      "avg_ld_open": 1.2085308056872037,
+      "avg_ret_close_pct": 0.009245587268674249,
+      "up_ratio_pct": 50.71,
+      "predict_hit_pct": 49.29
+    },
+    {
+      "phase": "panic",
+      "days": 10,
+      "avg_ld_open": 37.6,
+      "avg_ret_close_pct": -2.052667221571917,
+      "up_ratio_pct": 30.0,
+      "predict_hit_pct": 70.0
+    }
+  ]
+}

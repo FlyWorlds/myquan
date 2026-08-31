@@ -8,7 +8,7 @@
   · backtest.py / runner.py         — 执行层（下单与回测）
 
 默认生效：援军战法（strategy1）= 因子1（开盘±2.5% 一次打满）+ 因子2（回撤预警）。
-因子 1–14 均保留。现行策略：1 / 2 / 3 / 4 / 5 / 6 / 7 / 8。旧号 strategy9/10/11 仍是别名。
+因子 1–14 均保留。现行策略：1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 / 9。旧号 strategy9/10/11 中 strategy9 亦指策略四 run 别名。
 策略三：首板晋级（昨日首板 → 次日因子1 ±阈值）。
 策略五：因子11 两段近高（3日动量→5日近高 Top5）等权持有（研究，非默认）。
 策略六：因子12 反转池近高（研究候选，2024–2025 未确认）。
@@ -116,6 +116,7 @@ from strategy.strategies.strategy5 import run_strategy5, run_strategy10  # noqa:
 from strategy.strategies.strategy6 import run_strategy6  # noqa: E402
 from strategy.strategies.strategy7 import run_strategy7, run_strategy11  # noqa: E402
 from strategy.strategies.strategy8 import run_strategy8  # noqa: E402
+from strategy.strategies.strategy9 import run_strategy9_emotion  # noqa: E402
 
 __all__ = [
     "DEFAULT_PCT",
@@ -197,6 +198,7 @@ __all__ = [
     "run_strategy7",
     "run_strategy8",
     "run_strategy9",
+    "run_strategy9_emotion",
     "run_strategy10",
     "run_strategy11",
     "apply_strategy_config",
