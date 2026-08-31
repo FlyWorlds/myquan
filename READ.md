@@ -94,7 +94,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪择时 | 低开开盘跌停家数；策略十二恐慌日空仓 |
 | **factor19** | 因子19-低开反包 | 反转 | 旧假设 | 压力日低开；未过关 |
 | **factor20** | 因子20-跌停次日开板 | 反转 | 已否决 | 昨收跌停今开未封 |
-| **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停今低开；IS 强、OOS 未过关 |
+| **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停且曾开板、今低开；上证昨收≤−2% 空仓；调参窗强、盲测回撤未过关 |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
@@ -108,7 +108,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **strategy5** | 策略五·近高 Top5 | factor11 | ✅ 研究 | 周频等权持有；别名 `near_high` |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
-| **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ OOS 未过关 | 昨收涨停今低开开盘买；IS +600%，OOS −23% |
+| **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2%；调参 2020–2024 +645%/夏普 1.23，盲测 +3.6%/回撤 55% |
 
 `run_strategy7` 已归入 **因子17-缠论笔盈亏比**（Web 策略栏不展示）。
 `run_strategy9_emotion` 已归入 **因子18-低开跌停情绪**（Web 策略栏不展示）。
@@ -168,7 +168,8 @@ cd myquan/backtest && python strategy1.py --rules
 # 因子13 熊市盾牌 WF（thr* Top3，锁定配置）
 cd myquan && python strategy/run_factor13_bear_shield_wf.py
 
-# 策略十二：涨停次日低开（研究，OOS 未过关）
+# 策略十二：涨停次日低开（研究，盲测回撤未过关）
+python backtest/strategy12_emotion_gate/tune.py
 python backtest/strategy12_emotion_gate/run.py
 
 # 离线规则测试

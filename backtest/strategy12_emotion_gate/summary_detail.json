@@ -1,20 +1,23 @@
 {
   "summary": {
     "entry": "open",
-    "total_return_pct": 449.8128118955623,
-    "max_drawdown_pct": 68.55225484188033,
-    "sharpe_ratio": 0.74050131783861,
-    "win_rate": 49.32750504371217,
-    "n_trades": 2974,
-    "end_equity": 5498128.118955622,
-    "is_return_pct": 600.5170652344367,
-    "is_mdd_pct": 50.02322610742511,
-    "is_sharpe": 1.1960770329894856,
-    "oos_return_pct": -22.864531259915566,
-    "oos_mdd_pct": 68.55225484188033,
-    "oos_sharpe": 0.13257918148336825,
+    "total_return_pct": 673.9333965814502,
+    "max_drawdown_pct": 54.99202231582194,
+    "sharpe_ratio": 0.961916207675603,
+    "win_rate": 49.94600431965443,
+    "n_trades": 1852,
+    "end_equity": 7739333.965814502,
+    "is_return_pct": 688.6336036090977,
+    "is_mdd_pct": 36.97133365851809,
+    "is_sharpe": 1.5462273448502526,
+    "oos_return_pct": -5.020326745048143,
+    "oos_mdd_pct": 54.99202231582194,
+    "oos_sharpe": 0.17205169817979118,
     "oos_start": "2024-01-01",
     "passed": false
   },
-  "n_signals": 4202
+  "n_signals": 4202,
+  "n_signals_filtered": 2166,
+  "require_opened": true,
+  "skip_yest_idx_ret": -0.02
 }

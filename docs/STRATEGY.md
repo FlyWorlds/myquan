@@ -56,7 +56,7 @@ python -c "from strategy import run_open_break; ..."
 | strategy5 | 近高 Top5 等权 | factor11 | 研究 |
 | strategy6 | 反转池近高 | factor12 | 研究，未替换 strategy5 |
 | strategy8 | 题材联动 | factor14 + factor1 | 研究；见 §3.2 |
-| strategy12 | 涨停次日低开 | factor18 + factor21 | 研究，OOS 未过关；见 §3.3 |
+| strategy12 | 涨停次日低开 | factor18 + factor21 | 研究，v6 盲测回撤未过关；见 §3.3 |
 
 缠论笔盈亏比已归 **因子17**（原 strategy7 CLI 仍可用）。
 低开跌停情绪已归 **因子18**（原 strategy9 CLI 仍可用）。
@@ -118,13 +118,14 @@ python -c "from strategy import run_open_break; ..."
 | 因子 | 角色 |
 |------|------|
 | factor18 | 恐慌日（低开开盘跌停≥4）空仓 |
-| factor21 | 昨收涨停 + 今日低开 [−4.5%, −0.3%] 未封涨停；开盘买、T+1 收盘清；每日 Top3 |
+| factor21 | 昨收涨停且曾开板 + 今日低开 [−4.5%, −0.3%] 未封涨停；上证昨收≤−2% 空仓；开盘买、T+1 收盘清；每日 Top3 |
 
-**结论：未过关**（研究，非盯盘默认）。2020→2023 IS +600.5% / 夏普 1.20；2024→2026 OOS −22.9% / 回撤 68.6%。样本内有效、样本外衰减，不在 OOS 上调参。
+**结论：未过关**（研究，非盯盘默认）。调参窗 2020-01-02～2024-12-31 +645% / 夏普 1.23；盲测 2025-01-02～2026-08-28 +3.6% / 回撤 55%。今日开盘涨停不买；卖出遇一字跌停顺延；昨一字/未开板剔除。不在盲测窗上再调参。
 
-已否决：v1 恐慌禁买叠因子1；v2/v3 压力日低开；v4 跌停次日开板。
+已否决：v1 恐慌禁买叠因子1；v2/v3 压力日低开；v4 跌停次日开板；v5 无开板过滤。
 
 ```bash
+python backtest/strategy12_emotion_gate/tune.py
 python backtest/strategy12_emotion_gate/run.py
 python -c "from strategy import run_strategy12; run_strategy12()"
 ```
@@ -163,6 +164,6 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 | [`FACTOR18.md`](FACTOR18.md) | 因子18 低开跌停情绪（策略十二择时） |
 | [`FACTOR19.md`](FACTOR19.md) | 因子19 低开反包（旧假设，未过关） |
 | [`FACTOR20.md`](FACTOR20.md) | 因子20 跌停次日开板（已否决） |
-| [`FACTOR21.md`](FACTOR21.md) | 因子21 涨停次日低开（策略十二，OOS 未过关） |
+| [`FACTOR21.md`](FACTOR21.md) | 因子21 涨停次日低开（策略十二，盲测回撤未过关） |
 | [`TODO.MD`](../TODO.MD) | 任务优先级 |
 | [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak 审计底稿 |

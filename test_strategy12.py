@@ -54,8 +54,29 @@ class TestStrategy12LimitUpNextGap(unittest.TestCase):
             ld_open=0,
             gap=-0.02,
             open_px=10.0,
+            yest_opened=True,
+            yest_idx_ret=0.0,
         )
         self.assertTrue(ok["allow"])
+        sealed_yest = factor21_signal(
+            yest_close_limit_up=True,
+            today_limit_up_open=False,
+            ld_open=0,
+            gap=-0.02,
+            open_px=10.0,
+            yest_opened=False,
+        )
+        self.assertFalse(sealed_yest["allow"])
+        idx_down = factor21_signal(
+            yest_close_limit_up=True,
+            today_limit_up_open=False,
+            ld_open=0,
+            gap=-0.02,
+            open_px=10.0,
+            yest_opened=True,
+            yest_idx_ret=-0.025,
+        )
+        self.assertFalse(idx_down["allow"])
 
     def test_decision_buys_on_lu_next_gap(self) -> None:
         eng = create_decision_engine()
@@ -95,6 +116,27 @@ class TestStrategy12LimitUpNextGap(unittest.TestCase):
         d = eng.decide(ctx)
         self.assertEqual(d.action, "hold")
         self.assertIn("恐慌", d.reason)
+
+    def test_decision_blocks_yest_not_opened(self) -> None:
+        eng = create_decision_engine()
+        ctx = MarketContext(
+            open=9.8,
+            high=10.2,
+            low=9.6,
+            close=10.0,
+            prev_close=10.0,
+            position_qty=0,
+            meta={
+                "ld_open": 0,
+                "yest_close_limit_up": True,
+                "today_limit_up_open": False,
+                "gap": -0.02,
+                "yest_opened": False,
+            },
+        )
+        d = eng.decide(ctx)
+        self.assertEqual(d.action, "hold")
+        self.assertIn("未开板", d.reason)
 
     def test_decision_flatten_t1(self) -> None:
         eng = create_decision_engine()

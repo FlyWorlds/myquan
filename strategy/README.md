@@ -86,7 +86,7 @@ strategy/
 | **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪择时 | 中证1000 低开开盘跌停家数→平静/正常/恐慌；**策略十二**恐慌日空仓；CLI `run_strategy9_emotion` |
 | **factor19** | 因子19-低开反包 | 反转 | 旧假设 | 压力日低开开盘买；组合**未过关** |
 | **factor20** | 因子20-跌停次日开板 | 反转 | 已否决 | 昨收跌停今开未封；全样本约 −42% |
-| **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停今低开带；IS 强、OOS 未过关 |
+| **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停且曾开板、今低开；上证昨收≤−2% 空仓；调参窗强、盲测回撤未过关 |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
@@ -109,7 +109,7 @@ for f in list_factors():
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
-| **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ OOS 未过关 | 昨收涨停今低开开盘买；IS +600%，OOS −23%；`backtest/strategy12_emotion_gate/` |
+| **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2% 空仓；调参 2020–2024 +645%/夏普 1.23，盲测 2025→ +3.6%/回撤 55%；`backtest/strategy12_emotion_gate/` |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
 策略九 CLI（`run_strategy9_emotion`）已归入 **因子18**，Web 策略栏不展示。
@@ -160,13 +160,14 @@ python backtest/strategy3_first_board/run.py
 python backtest/strategy8_theme_linkage/run.py --start 20250101
 python -c "from strategy import run_strategy3; run_strategy3()"
 python -c "from strategy import run_strategy8; run_strategy8(start='20250101')"
+python backtest/strategy12_emotion_gate/tune.py
 python backtest/strategy12_emotion_gate/run.py
 python -c "from strategy import run_strategy12; run_strategy12()"
 python backtest/strategy9_limit_down_emotion/run.py --start 20200101
 python -c "from strategy import run_strategy9_emotion; run_strategy9_emotion()"
 ```
 
-策略三：昨日涨停池 + T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示 + 因子1 ±阈值。策略八：题材联动（**当日涨停定题材** + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。策略十二：因子18 恐慌空仓 × 因子21 涨停次日低开（开盘买 T+1 清），IS 强、**OOS 未过关**，报告见 `backtest/strategy12_emotion_gate/REPORT.md`。
+策略三：昨日涨停池 + T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示 + 因子1 ±阈值。策略八：题材联动（**当日涨停定题材** + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。策略十二：因子18 恐慌空仓 × 因子21 涨停次日低开（v6：昨开板 + 上证昨收≤−2% 空仓，开盘买 T+1 清），调参窗强、**盲测回撤未过关**，报告见 `backtest/strategy12_emotion_gate/REPORT.md`。
 
 ### 因子13 · 熊市盾牌 thr\* Top3（🔒 锁定，研究）
 
@@ -282,7 +283,7 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy4` | 因子1+4+10 开盘突破组合；默认观察池；旧名 `run_strategy9` |
 | `run_strategy5` | 因子11 近高 Top5 等权持有；`start` / `end` / `stage1_k` / `stage2_k`；旧名 `run_strategy10` |
 | `run_strategy6` | 因子12 反转池近高 Top5 等权持有；研究候选，不替换策略五 |
-| `run_strategy12` | 因子18 恐慌空仓 + 因子21 涨停次日低开；`backtest/strategy12_emotion_gate/run.py`（OOS 未过关） |
+| `run_strategy12` | 因子18 恐慌空仓 + 因子21 涨停次日低开（v6 昨开板+指数昨收门）；`backtest/strategy12_emotion_gate/run.py`（盲测未过关） |
 | `run_strategy9_emotion` | 因子18 家数对照上证（CLI，Web 不展示） |
 | `run_strategy2` | 因子8缠论选股；`panel` / `panel_path` / `factor_column` / `start` / `end` |
 | `OpenBreak3Strategy` | = Strategy1 执行类 |

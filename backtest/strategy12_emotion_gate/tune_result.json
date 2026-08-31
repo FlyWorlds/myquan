@@ -1,0 +1,249 @@
+{
+  "tune_window": [
+    "2020-01-02",
+    "2024-12-31"
+  ],
+  "blind_window": [
+    "2025-01-02",
+    "data_end"
+  ],
+  "selection": "按 IS 夏普（收益>0、夏普>0、笔数≥150）选取；未见盲测窗。",
+  "n_signals_all": 4202,
+  "yest_opened": 2210,
+  "yest_locked": 21,
+  "variants_is": [
+    {
+      "id": "v5_baseline",
+      "label": "v5 基线（不过滤昨开板）",
+      "params": {
+        "require_opened": false,
+        "max_pos": 3
+      },
+      "n_signals_is": 2962,
+      "is": {
+        "ret_pct": 504.01460347925376,
+        "mdd_pct": 50.39575449980354,
+        "sharpe": 0.9410809372350634,
+        "n_trades": 2138,
+        "win_rate": 50.046772684752106,
+        "end_equity": 6040146.034792538
+      }
+    },
+    {
+      "id": "opened",
+      "label": "要求昨涨停曾开板",
+      "params": {
+        "require_opened": true,
+        "max_pos": 3
+      },
+      "n_signals_is": 1511,
+      "is": {
+        "ret_pct": 582.8153697578766,
+        "mdd_pct": 36.70987988133786,
+        "sharpe": 1.177263448702252,
+        "n_trades": 1317,
+        "win_rate": 51.93621867881549,
+        "end_equity": 6828153.697578765
+      }
+    },
+    {
+      "id": "drop_locked",
+      "label": "仅剔昨一字锁定",
+      "params": {
+        "drop_locked": true,
+        "max_pos": 3
+      },
+      "n_signals_is": 2949,
+      "is": {
+        "ret_pct": 499.0155506086186,
+        "mdd_pct": 53.65116348321959,
+        "sharpe": 0.93942060910023,
+        "n_trades": 2131,
+        "win_rate": 50.070389488503054,
+        "end_equity": 5990155.506086186
+      }
+    },
+    {
+      "id": "opened_pos2",
+      "label": "昨开板 + 最多 2 仓",
+      "params": {
+        "require_opened": true,
+        "max_pos": 2,
+        "max_entries": 2
+      },
+      "n_signals_is": 1511,
+      "is": {
+        "ret_pct": 493.4939682623023,
+        "mdd_pct": 56.98656553817809,
+        "sharpe": 0.9346721849873739,
+        "n_trades": 1133,
+        "win_rate": 51.63283318623124,
+        "end_equity": 5934939.682623023
+      }
+    },
+    {
+      "id": "opened_pos1",
+      "label": "昨开板 + 最多 1 仓",
+      "params": {
+        "require_opened": true,
+        "max_pos": 1,
+        "max_entries": 1
+      },
+      "n_signals_is": 1511,
+      "is": {
+        "ret_pct": 855.9615309640595,
+        "mdd_pct": 69.55110688268488,
+        "sharpe": 0.951151756027616,
+        "n_trades": 751,
+        "win_rate": 52.5965379494008,
+        "end_equity": 9559615.309640596
+      }
+    },
+    {
+      "id": "opened_skip_idx2",
+      "label": "昨开板 + 上证昨收≤−2% 空仓",
+      "params": {
+        "require_opened": true,
+        "max_yest_idx_ret": -0.02,
+        "max_pos": 3
+      },
+      "n_signals_is": 1486,
+      "is": {
+        "ret_pct": 644.9741400480266,
+        "mdd_pct": 36.97133365851809,
+        "sharpe": 1.2324461069757404,
+        "n_trades": 1293,
+        "win_rate": 51.972157772621806,
+        "end_equity": 7449741.400480267
+      }
+    },
+    {
+      "id": "opened_skip_idx3",
+      "label": "昨开板 + 上证昨收≤−3% 空仓",
+      "params": {
+        "require_opened": true,
+        "max_yest_idx_ret": -0.03,
+        "max_pos": 3
+      },
+      "n_signals_is": 1507,
+      "is": {
+        "ret_pct": 637.3660531532223,
+        "mdd_pct": 36.97133365851809,
+        "sharpe": 1.2194278839747643,
+        "n_trades": 1313,
+        "win_rate": 52.01827875095202,
+        "end_equity": 7373660.531532223
+      }
+    },
+    {
+      "id": "opened_gap_deep",
+      "label": "昨开板 + 低开带收窄到 [−4.5%, −0.8%]",
+      "params": {
+        "require_opened": true,
+        "gap_max": -0.008,
+        "max_pos": 3
+      },
+      "n_signals_is": 1204,
+      "is": {
+        "ret_pct": 520.2780649569296,
+        "mdd_pct": 42.50960252299488,
+        "sharpe": 1.2047935305828132,
+        "n_trades": 1077,
+        "win_rate": 52.831940575673165,
+        "end_equity": 6202780.649569296
+      }
+    }
+  ],
+  "winner_id": "opened_skip_idx2",
+  "winner_label": "昨开板 + 上证昨收≤−2% 空仓",
+  "winner_params": {
+    "require_opened": true,
+    "max_yest_idx_ret": -0.02,
+    "max_pos": 3
+  },
+  "blind": {
+    "ret_pct": 3.6190564422283744,
+    "mdd_pct": 55.09439519575792,
+    "sharpe": 0.268013286193761,
+    "n_trades": 559,
+    "win_rate": 45.25939177101968,
+    "end_equity": 1036190.5644222838
+  },
+  "blind_passed": false,
+  "blind_by_year": [
+    {
+      "year": 2025,
+      "n": 330,
+      "mean_ret": 0.415454785164095,
+      "sum_ret": 137.10007910415135,
+      "win": 45.75757575757576
+    },
+    {
+      "year": 2026,
+      "n": 229,
+      "mean_ret": -0.11091814559145727,
+      "sum_ret": -25.400255340443714,
+      "win": 44.54148471615721
+    }
+  ],
+  "blind_2026_by_month": [
+    {
+      "month": 1,
+      "n": 28,
+      "mean_ret": -0.7555609139687449,
+      "sum_ret": -21.155705591124857,
+      "win": 28.57142857142857
+    },
+    {
+      "month": 2,
+      "n": 18,
+      "mean_ret": -1.0820226441139826,
+      "sum_ret": -19.476407594051686,
+      "win": 27.77777777777778
+    },
+    {
+      "month": 3,
+      "n": 31,
+      "mean_ret": -0.14344275706678716,
+      "sum_ret": -4.446725469070402,
+      "win": 48.38709677419355
+    },
+    {
+      "month": 4,
+      "n": 35,
+      "mean_ret": 1.919030151205006,
+      "sum_ret": 67.16605529217522,
+      "win": 60.0
+    },
+    {
+      "month": 5,
+      "n": 31,
+      "mean_ret": -1.4068350525321962,
+      "sum_ret": -43.611886628498084,
+      "win": 41.935483870967744
+    },
+    {
+      "month": 6,
+      "n": 45,
+      "mean_ret": -0.05034934544796531,
+      "sum_ret": -2.265720545158439,
+      "win": 46.666666666666664
+    },
+    {
+      "month": 7,
+      "n": 32,
+      "mean_ret": -3.0308548801684534,
+      "sum_ret": -96.98735616539051,
+      "win": 31.25
+    },
+    {
+      "month": 8,
+      "n": 9,
+      "mean_ret": 10.597499040075002,
+      "sum_ret": 95.37749136067502,
+      "win": 100.0
+    }
+  ],
+  "n_signals_blind": 680,
+  "disclaimer": "研究用途，非投资建议。"
+}

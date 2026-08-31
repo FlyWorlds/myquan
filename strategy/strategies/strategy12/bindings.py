@@ -21,8 +21,8 @@ FACTOR_BINDINGS = (
         label="涨停次日低开",
         role="both",
         filter_desc=(
-            f"昨日收盘涨停，今日 gap ∈ [{GAP_MIN:.1%}, {GAP_MAX:.1%}] 且未封涨停；"
-            "开盘买入，T+1 收盘清；低开越深优先，每日 Top3"
+            f"昨收涨停且曾开板，今日 gap ∈ [{GAP_MIN:.1%}, {GAP_MAX:.1%}] 且未封涨停；"
+            "上证昨收≤−2% 空仓；开盘买入，T+1 收盘清；低开越深优先，每日 Top3"
         ),
     ),
 )

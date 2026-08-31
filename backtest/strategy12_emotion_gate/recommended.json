@@ -1,0 +1,15 @@
+{
+  "id": "opened_skip_idx2",
+  "locked_date": "2026-08-31",
+  "require_opened": true,
+  "max_yest_idx_ret": -0.02,
+  "max_pos": 3,
+  "max_entries": 3,
+  "tune_window": ["2020-01-02", "2024-12-31"],
+  "blind_window": ["2025-01-02", "2026-08-28"],
+  "selection": "IS 夏普最大（收益>0、夏普>0、笔数≥150）；未见盲测窗",
+  "tune_is": {"ret_pct": 644.97, "sharpe": 1.232, "mdd_pct": 36.97, "n_trades": 1293},
+  "blind": {"ret_pct": 3.62, "sharpe": 0.268, "mdd_pct": 55.09, "n_trades": 559},
+  "passed": false,
+  "note": "研究冻结；盲测回撤 55% 未过关。禁止用 2025/2026 再调参。"
+}

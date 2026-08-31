@@ -37,6 +37,8 @@ class Strategy12Decision(BaseDecisionEngine):
             ld_open=_ld_open(ctx),
             gap=_gap(ctx),
             open_px=open_px,
+            yest_opened=_opt_bool(ctx, "yest_opened"),
+            yest_idx_ret=_opt_float(ctx, "yest_idx_ret"),
         )
         if not sig.get("allow"):
             return Decision.hold(
@@ -55,6 +57,23 @@ class Strategy12Decision(BaseDecisionEngine):
 
 def _flag(ctx: MarketContext, key: str) -> bool:
     return bool(dict(ctx.meta or {}).get(key))
+
+
+def _opt_bool(ctx: MarketContext, key: str) -> bool | None:
+    meta = dict(ctx.meta or {})
+    if key not in meta:
+        return None
+    return bool(meta[key])
+
+
+def _opt_float(ctx: MarketContext, key: str) -> float | None:
+    meta = dict(ctx.meta or {})
+    if meta.get(key) is None:
+        return None
+    try:
+        return float(meta[key])
+    except (TypeError, ValueError):
+        return None
 
 
 def _ld_open(ctx: MarketContext) -> int | None:
@@ -82,8 +101,12 @@ def _gap(ctx: MarketContext) -> float | None:
 def _hold_reason(sig: dict) -> str:
     if sig.get("panic"):
         return "因子18恐慌：空仓"
+    if not sig.get("idx_ok", True):
+        return "上证昨收大跌：空仓"
     if not sig.get("yest_lu"):
         return "昨日未收盘涨停"
+    if not sig.get("opened_ok", True):
+        return "昨日涨停未开板（含一字锁定）"
     if not sig.get("gap_ok"):
         return "今日低开不在因子21 带内"
     if not sig.get("opened"):

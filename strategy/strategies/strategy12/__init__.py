@@ -23,10 +23,11 @@ def _print_rules() -> str:
     head = compose_rules(STRATEGY_NAME, bindings=FACTOR_BINDINGS)
     extra = """
 ----- 组合规则 -----
-1. 因子21：昨日收盘涨停，今日低开 -4.5%～-0.3% 且未封涨停 → 开盘买入
-2. 因子18：恐慌日（低开开盘跌停家数≥4）空仓
+1. 因子21：昨收涨停且盘中曾开板，今日低开 -4.5%～-0.3% 且未封涨停 → 开盘买入
+2. 因子18：恐慌日（低开开盘跌停家数≥4）空仓；上证昨收≤-2% 空仓
 3. 退出：T+1 收盘清仓；一字跌停无法卖则顺延
 4. 宇宙中证1000，每日最多 3 只，按低开越深优先
+5. 今日开盘涨停不买（买不进）
 研究用途，非投资建议。
 """
     return head + "\n" + extra.strip()
@@ -65,6 +66,7 @@ def _bind() -> StrategySpec:
             "mode": "lu_next_gap",
             "research_only": True,
             "validation": "oos_failed",
+            "variant": "v6_opened_skip_idx2",
             "factors": ("factor18", "factor21"),
             "backtest_cli": "backtest/strategy12_emotion_gate/run.py",
         },
