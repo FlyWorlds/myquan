@@ -35,7 +35,35 @@ python index.py --days 5 --no-members --no-open
 | `data.py` | 成分股回退（东财） |
 | `rotation.py` | 指标、历史、快照 |
 | `report.py` | 轮动 HTML |
+| `tdx.py` | 通达信行业/概念/成分股 + pytdx |
+| `tdx_rotation.py` | 通达信概念轮动 payload |
+| `concept_leaders.py` | 概念波段龙头统计 |
+| `leader_score.py` | 因子16 概念龙头评分（编排层，真源 `strategy/factor16_leader_score.py`） |
+| `api.py` | Web API 数据层 |
 | `snapshots/` | 按日快照 |
 | `cache/` | 同花顺代码映射、涨停缓存 |
 
-`tdx.py` 已停用（保留文件仅供参考，默认不再调用）。
+**Web 行情（通达信概念）**：`holdingStocks` watch 服务提供 API，Nuxt 前端 `/sectors` 热力表 + 概念 K 线龙头图。
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/sectors/rotation?days=20&top_n=10` | 通达信概念轮动热力表数据 |
+| `GET /api/sectors/concept/{名称}?months=6` | 概念指数 K 线 + 近半年波段龙头 |
+| `GET /api/sectors/concept/{名称}/leaders?start=2025-01-01&top_n=5` | **因子16** 概念龙头 Top5（2025至今） |
+| `GET /api/sectors/focus?concept=名称` | 订阅概念成分/龙头实时报价（随 WS 5s 推送） |
+| `GET /api/sectors/status` | 通达信链路可用性 |
+
+启动：`cd holdingStocks && python index.py watch --ui-dev` → 浏览器打开 `/sectors`。
+
+| 指标 | 来源 | 说明 |
+|------|------|------|
+| 涨幅 | 通达信概念指数 | pytdx 实时/历史 |
+| 成交额 | 通达信概念指数 | 指数 amount 字段 |
+| 涨停数 | **可算** | 成分股现价聚合（新浪，~30s 刷新） |
+| 涨跌比 | **可算** | 成分上涨家数 ÷ 下跌家数 |
+| 主力净额 | **东财补充** | 概念名称近似匹配，非通达信直连 |
+| 强度 | **可算** | 合成：涨幅 × (1+涨跌比/5) + 涨停数×0.35 |
+
+Web 筛选框支持以上 6 项；历史列仅涨幅/成交额来自通达信，其余以「今日」列实时为准。
+
+`tdx.py` 为通达信真源；`rotation.py` 默认同花顺；`tdx_rotation.py` + `api.py` + `live.py` 供 Web 通达信概念轮动。

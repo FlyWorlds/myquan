@@ -200,12 +200,51 @@ def load_concepts() -> list[dict[str, str]]:
     ]
 
 
-def _fetch_index_series(code: str, tail: int) -> list[dict[str, Any]]:
+def _parse_index_bar(bar: dict[str, Any]) -> dict[str, Any] | None:
+    dt = str(bar.get("datetime") or "")
+    if len(dt) >= 10:
+        dt = dt[:10]
+    close = _clean(bar.get("close"))
+    if not dt or close is None:
+        return None
+    return {
+        "date": dt,
+        "open": _clean(bar.get("open")),
+        "high": _clean(bar.get("high")),
+        "low": _clean(bar.get("low")),
+        "close": close,
+        "amount": _clean(bar.get("amount")),
+        "vol": _clean(bar.get("vol")),
+    }
+
+
+def fetch_tdx_index_kline(code: str, *, count: int = 130) -> list[dict[str, Any]]:
+    """通达信板块指数日 K（OHLC）。"""
     api = _connect_api()
     try:
-        bars = api.get_index_bars(9, 1, str(code), 0, max(tail, 2)) or []
+        bars = api.get_index_bars(9, 1, str(code), 0, max(count, 2)) or []
     finally:
         api.disconnect()
+    out: list[dict[str, Any]] = []
+    for bar in bars:
+        row = _parse_index_bar(bar)
+        if row:
+            out.append(row)
+    return out
+
+
+def resolve_concept_by_name(name: str) -> dict[str, str] | None:
+    target = str(name or "").strip()
+    if not target:
+        return None
+    for item in load_concepts():
+        if str(item.get("name") or "").strip() == target:
+            return item
+    return None
+
+
+def _fetch_index_series(code: str, tail: int) -> list[dict[str, Any]]:
+    bars = fetch_tdx_index_kline(code, count=tail + 1)
     out: list[dict[str, Any]] = []
     for i in range(1, len(bars)):
         cur = bars[i]
@@ -213,12 +252,9 @@ def _fetch_index_series(code: str, tail: int) -> list[dict[str, Any]]:
         pc, cc = _clean(prev.get("close")), _clean(cur.get("close"))
         if not pc or not cc:
             continue
-        dt = str(cur.get("datetime") or "")
-        if len(dt) >= 10:
-            dt = dt[:10]
         out.append(
             {
-                "date": dt,
+                "date": cur["date"],
                 "涨跌幅": (cc / pc - 1.0) * 100.0,
                 "资金": _clean(cur.get("amount")),
                 "close": cc,

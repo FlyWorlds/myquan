@@ -44,7 +44,7 @@ from datetime import datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Mapping
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import akshare as ak
 import pandas as pd
@@ -427,6 +427,78 @@ def _get_strategies_api_cache() -> list[dict[str, Any]]:
     return _strategies_api_cache
 
 
+def _parse_api_query(path: str) -> tuple[str, dict[str, list[str]]]:
+    parsed = urlparse(path)
+    return parsed.path, parse_qs(parsed.query)
+
+
+def _api_int(qs: dict[str, list[str]], key: str, default: int) -> int:
+    raw = (qs.get(key) or [""])[0]
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _api_bool(qs: dict[str, list[str]], key: str) -> bool:
+    raw = str((qs.get(key) or [""])[0]).strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
+    from sectors.api import (
+        get_concept_detail,
+        get_concept_leader_scores,
+        get_rotation_payload,
+        get_status,
+    )
+    from sectors_watch import set_focus_concept
+
+    api_path, qs = _parse_api_query(path)
+    if api_path == "/api/sectors/status":
+        return 200, get_status()
+    if api_path == "/api/sectors/focus":
+        raw = (qs.get("concept") or [""])[0]
+        concept = unquote(str(raw).strip()) or None
+        set_focus_concept(concept)
+        return 200, {"ok": True, "focusConcept": concept}
+    if api_path == "/api/sectors/rotation":
+        days = max(5, min(_api_int(qs, "days", 20), 60))
+        top_n = max(5, min(_api_int(qs, "top_n", 10), 20))
+        refresh = _api_bool(qs, "refresh")
+        try:
+            return 200, get_rotation_payload(days=days, top_n=top_n, refresh=refresh)
+        except Exception as e:
+            return 500, {"error": str(e)}
+    if api_path.startswith("/api/sectors/concept/"):
+        tail = api_path.split("/api/sectors/concept/", 1)[1]
+        if "/leaders" in tail:
+            name = unquote(tail.split("/leaders", 1)[0])
+            start = (qs.get("start") or ["2025-01-01"])[0]
+            top_n = max(1, min(_api_int(qs, "top_n", 5), 10))
+            refresh = _api_bool(qs, "refresh")
+            try:
+                data = get_concept_leader_scores(
+                    name, start=str(start), refresh=refresh, top_n=top_n
+                )
+                if data.get("error") and not data.get("leaders"):
+                    return 404, data
+                return 200, data
+            except Exception as e:
+                return 500, {"error": str(e)}
+        name = unquote(tail)
+        months = max(3, min(_api_int(qs, "months", 6), 12))
+        refresh = _api_bool(qs, "refresh")
+        try:
+            data = get_concept_detail(name, months=months, refresh=refresh)
+            if data.get("error"):
+                return 404, data
+            return 200, data
+        except Exception as e:
+            return 500, {"error": str(e)}
+    return 404, {"error": "not found"}
+
+
 def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """账户合计（JSON 快照 / CLI 共用口径）。"""
     total_pnl = 0.0
@@ -567,6 +639,7 @@ def publish_watch_snapshot(
     )
     from strategy3_watch import build_strategy3_payload
     from strategy8_watch import build_strategy8_payload
+    from sectors_watch import build_sectors_live_payload
 
     def _batch_quote(sinas: list[str]) -> dict[str, dict[str, Any]]:
         batch = fetch_sina_batch([s.lower() for s in sinas])
@@ -587,6 +660,7 @@ def publish_watch_snapshot(
         get_quote=get_quote,
         batch_quote=_batch_quote,
     )
+    sectors = build_sectors_live_payload()
     snapshot = build_watch_snapshot(
         rows=rows,
         indices=indices,
@@ -602,6 +676,7 @@ def publish_watch_snapshot(
         strategies=_get_strategies_api_cache(),
         strategy3=strategy3,
         strategy8=strategy8,
+        sectors=sectors,
         refresh_sec=refresh_sec,
     )
     digest = _snapshot_business_digest(snapshot)
@@ -610,7 +685,15 @@ def publish_watch_snapshot(
         snap["clock"] = clock_now
         snap["updatedAt"] = clock_now
         snap["ts"] = int(datetime.now().timestamp() * 1000)
+        snap["sectors"] = sectors
         _last_watch_snapshot = snap
+        body = json.dumps(snap, ensure_ascii=False)
+        hub = _ws_hub
+        if hub is not None:
+            try:
+                hub.broadcast_text(body)
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] WS 广播失败: {e}")
         return WATCH_META_FILE, False
 
     _last_snapshot_digest = digest
@@ -3840,6 +3923,10 @@ def cmd_watch(args: argparse.Namespace) -> None:
             path = self.path.split("?", 1)[0]
             if path == "/ws":
                 self._handle_ws_upgrade()
+                return
+            if path.startswith("/api/sectors/"):
+                status, data = _handle_sectors_api(self.path)
+                self._send_json(data, status=status)
                 return
             if path == "/api/strategies":
                 self._send_json(_get_strategies_api_cache())

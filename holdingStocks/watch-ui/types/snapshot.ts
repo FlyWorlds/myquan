@@ -205,6 +205,47 @@ export interface StrategyTab {
   picks?: StrategyPicks
 }
 
+export interface SectorsLiveQuote {
+  code: string
+  price?: number | null
+  chgPct?: number | null
+  amount?: number | null
+}
+
+export interface SectorsConceptToday {
+  code?: string
+  name?: string
+  涨跌幅?: number | null
+  close?: number | null
+  资金?: number | null
+  资金口径?: string
+  涨停数?: number
+  涨跌比?: number | null
+  上涨家数?: number
+  下跌家数?: number
+  主力净额?: number | null
+  主力净额口径?: string
+  强度?: number | null
+}
+
+export interface SectorsLivePayload {
+  source?: string
+  spotAt?: string
+  memberStatsAt?: string | null
+  conceptToday?: Record<string, SectorsConceptToday>
+  focusConcept?: string | null
+  conceptIndex?: {
+    name?: string
+    code?: string
+    price?: number | null
+    chgPct?: number | null
+    amount?: number | null
+  }
+  quotes?: Record<string, SectorsLiveQuote>
+  segmentCount?: number
+  error?: string | null
+}
+
 export interface WatchSnapshot {
   v: number
   type: 'snapshot'
@@ -225,5 +266,6 @@ export interface WatchSnapshot {
   strategy1: HoldingRow[]
   strategy3?: Strategy3Payload
   strategy8?: Strategy8Payload
+  sectors?: SectorsLivePayload
   strategies: StrategyTab[]
 }
