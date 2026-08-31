@@ -14,6 +14,8 @@
 策略六：因子12 反转池近高（研究候选，2024–2025 未确认）。
 策略七 CLI：缠论笔盈亏比已归 **因子17**（Web 在因子池·缠论；旧号 strategy11/s11）。
 策略八：题材联动（**当日**同题材共振 + 联动票 + 因子1 ±阈值；研究）。
+策略九 CLI：低开跌停情绪已归 **因子18**（Web 在因子池·情绪题材；交易组合见策略十二）。
+策略十二：因子18 恐慌门控 + 因子1 开盘突破 + 因子2 回撤预警（研究组合）。
 兼容旧 API：run_open_break（仅因子1交易）/ open_break3 / STRATEGY_RULES 等保持可用。
 """
 
@@ -117,6 +119,7 @@ from strategy.strategies.strategy6 import run_strategy6  # noqa: E402
 from strategy.strategies.strategy7 import run_strategy7, run_strategy11  # noqa: E402
 from strategy.strategies.strategy8 import run_strategy8  # noqa: E402
 from strategy.strategies.strategy9 import run_strategy9_emotion  # noqa: E402
+from strategy.strategies.strategy12 import run_strategy12  # noqa: E402
 
 __all__ = [
     "DEFAULT_PCT",
@@ -201,6 +204,7 @@ __all__ = [
     "run_strategy9_emotion",
     "run_strategy10",
     "run_strategy11",
+    "run_strategy12",
     "apply_strategy_config",
     "build_open_break_strategy",
     "metric",

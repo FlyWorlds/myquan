@@ -48,8 +48,8 @@ def _bind() -> StrategySpec:
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
         description=(
-            "统计中证1000 每日低开开盘跌停家数；"
-            "按平静/正常/恐慌对照上证指数当日涨跌（2020→）"
+            "兼容 CLI：中证1000 低开开盘跌停家数对照上证；"
+            "Web 请到因子18，交易组合见策略十二"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy9_emotion,
@@ -61,6 +61,8 @@ def _bind() -> StrategySpec:
         meta={
             "default": False,
             "mode": "market_emotion",
+            "web_hide": True,
+            "canonical_factor": "factor18",
             "backtest_cli": "backtest/strategy9_limit_down_emotion/run.py",
             "factors": ("factor18",),
         },

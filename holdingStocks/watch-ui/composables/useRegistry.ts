@@ -1,4 +1,6 @@
 import type { FactorCategory, FactorEntry, StrategyEntry } from '~/types/registry'
+import { mergeFallbackFactors } from '~/utils/factorCategories'
+import { mergeFallbackStrategies } from '~/utils/strategyFallbacks'
 
 export function useRegistry() {
   const strategies = ref<StrategyEntry[]>([])
@@ -11,7 +13,9 @@ export function useRegistry() {
     loading.value = true
     error.value = null
     try {
-      strategies.value = await $fetch<StrategyEntry[]>('/api/strategies', { cache: 'no-store' })
+      strategies.value = mergeFallbackStrategies(
+        await $fetch<StrategyEntry[]>('/api/strategies', { cache: 'no-store' }),
+      )
     } catch (e) {
       error.value = e instanceof Error ? e.message : '加载策略失败'
     } finally {
@@ -28,11 +32,11 @@ export function useRegistry() {
         { cache: 'no-store' },
       )
       if (Array.isArray(data)) {
-        factors.value = data
+        factors.value = mergeFallbackFactors(data)
         factorCategories.value = []
       } else {
         factorCategories.value = data.categories || []
-        factors.value = data.factors || []
+        factors.value = mergeFallbackFactors(data.factors || [])
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : '加载因子失败'

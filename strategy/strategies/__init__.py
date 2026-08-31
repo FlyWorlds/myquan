@@ -13,7 +13,8 @@
   strategy6 — 因子12 反转池近高 Top5 等权持有（研究候选）
   strategy7 — CLI 兼容：缠论笔盈亏比已归因子17（Web 不展示）
   strategy8 — 题材联动：涨停池同题材共振 + 联动补涨（因子14 + 因子1）
-  strategy9 — 低开跌停情绪：中证1000 低开开盘跌停家数 vs 大盘当日涨跌（研究）
+  strategy9 — CLI：低开跌停情绪统计（因子18 研究入口，Web 不展示）
+  strategy12 — 情绪门控开盘突破：因子18 恐慌禁开仓 + 因子1 + 因子2
 """
 
 # 策略注册前先确保因子已注册（多策略共用因子）
@@ -28,6 +29,7 @@ from strategy.strategies import strategy6 as _s6  # noqa: F401
 from strategy.strategies import strategy7 as _s7  # noqa: F401
 from strategy.strategies import strategy8 as _s8  # noqa: F401
 from strategy.strategies import strategy9 as _s9e  # noqa: F401
+from strategy.strategies import strategy12 as _s12  # noqa: F401
 from strategy.core.strategy_registry import (
     STRATEGY_REGISTRY,
     get_strategy_spec,

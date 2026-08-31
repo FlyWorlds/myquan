@@ -349,6 +349,11 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
         )
     if sid == "strategy7":
         return _empty_picks("none", note="单票笔归因策略，无截面选股名单")
+    if sid == "strategy12":
+        return _empty_picks(
+            "none",
+            note="因子18 恐慌日禁开仓 + 因子1 执行；无独立选股名单",
+        )
 
     spec = _PICK_SOURCES.get(sid)
     if not spec:

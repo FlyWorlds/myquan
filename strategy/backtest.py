@@ -67,6 +67,8 @@ class OpenBreak3Strategy(Strategy):
     # 因子9 动能门控 / 夏普衰减门控（date -> 允许买入）；空 dict=关闭
     energy_allowed_by_date: dict[str, bool] = {}
     halt_by_date: dict[str, bool] = {}
+    # 因子18：恐慌日跳过新开仓（date -> True）
+    emotion_halt_by_date: dict[str, bool] = {}
     # 行情 regime 调整止盈（与因子4 止损暂停独立）
     regime_tp_enabled: bool = False
     regime_by_date: dict[str, str] = {}
@@ -533,6 +535,13 @@ class OpenBreak3Strategy(Strategy):
         if halt_map and bool(halt_map.get(day, False)):
             self.log(
                 f"{day} 夏普衰减门控，跳过买入 "
+                f"限价={entry_px:.2f} (open={open_px:.2f} high={high_px:.2f})"
+            )
+            return False
+        emotion_halt = getattr(self, "emotion_halt_by_date", None) or {}
+        if emotion_halt and bool(emotion_halt.get(day, False)):
+            self.log(
+                f"{day} 因子18恐慌门控，跳过买入 "
                 f"限价={entry_px:.2f} (open={open_px:.2f} high={high_px:.2f})"
             )
             return False

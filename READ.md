@@ -50,7 +50,7 @@ akshare DataFrame
 | **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top10**（宽宇宙主板，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
 
-因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md)
+因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md)
 
 ```bash
 cd backtest && python strategy1.py --rules
@@ -91,7 +91,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **factor15** | 因子15-题材晋级低开 | 情绪题材 | 题材联动过滤（可选） | gap 低开带；策略八默认关闭 |
 | **factor16** | 因子16-概念龙头评分 | 选股质量 | 池内排序 | 13A 过门 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](docs/FACTOR16.md) |
 | **factor17** | 因子17-缠论笔盈亏比 | 缠论 | 笔归因评估 | `bi_pl_ratio.py`；原策略七，Web 在因子池 |
-| **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪门控 | 低开开盘跌停家数；策略九挂载 |
+| **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪门控 | 低开开盘跌停家数；策略十二恐慌日禁开仓 |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
@@ -105,9 +105,10 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **strategy5** | 策略五·近高 Top5 | factor11 | ✅ 研究 | 周频等权持有；别名 `near_high` |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
-| **strategy9** | 策略九·低开跌停情绪 | factor18 | ✅ 研究 | 挂载因子18；中证1000 低开开盘跌停家数 → 对照上证当日涨跌 |
+| **strategy12** | 策略十二·情绪门控开盘突破 | factor18 + factor1 + factor2 | ✅ 研究 | 因子18 恐慌日禁新开仓 + 因子1 执行 + 因子2 预警 |
 
 `run_strategy7` 已归入 **因子17-缠论笔盈亏比**（Web 策略栏不展示）。
+`run_strategy9_emotion` 已归入 **因子18-低开跌停情绪**（Web 策略栏不展示）。
 
 旧执行层研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。
 
@@ -135,7 +136,8 @@ myquan/
 │   ├── FACTOR13.md          # 因子13（质量带 + 熊盾锁定）
 │   ├── FACTOR14.md          # 因子14 题材共振（策略八）
 │   ├── FACTOR16.md          # 因子16 概念龙头评分
-│   └── FACTOR17.md          # 因子17 缠论笔盈亏比
+│   ├── FACTOR17.md          # 因子17 缠论笔盈亏比
+│   └── FACTOR18.md          # 因子18 低开跌停情绪
 ├── .cursor/rules/
 │   └── docs-sync.mdc        # 文档同步规则
 ├── strategy/                # 可插拔策略框架
@@ -159,6 +161,9 @@ cd myquan/backtest && python strategy1.py --rules
 
 # 因子13 熊市盾牌 WF（thr* Top3，锁定配置）
 cd myquan && python strategy/run_factor13_bear_shield_wf.py
+
+# 策略十二：因子18 恐慌门控 vs 策略一基线（研究）
+python backtest/strategy12_emotion_gate/run.py
 
 # 离线规则测试
 cd myquan && python -m unittest -v test_strategy_rules.py
@@ -221,7 +226,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 
 
-- 规则与 **因子1** 同源（`strategy/open_break.py`）；**Nuxt 前端** 展示持仓 + **策略1–7 Tab**（`策略N-名称`）；策略1 展示早盘节点与阈值过门，其余 Tab 展示挂载因子说明；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。
+- 规则与 **因子1** 同源（`strategy/open_break.py`）；盯盘首页 Tab 为 **策略1 / 3 / 8**；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。策略十二在 `/strategies` 因子组合栏。
 - 早盘节点：9:15 竞价 → 9:20 不可撤 → 9:25 算阈值/过门 → 9:30 触发信号（`watch_config.py`）。
 - 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
 - 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。一键启动：`python start_watch.py`。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
@@ -238,6 +243,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 - 策略注册表：[`strategy/README.md`](strategy/README.md)
 - 策略专题：[`docs/STRATEGY.md`](docs/STRATEGY.md)
 - 因子13：[`docs/FACTOR13.md`](docs/FACTOR13.md)
+- 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md)
 - 凯盛审计底稿：[`strategy/STRATEGY_AUDIT.md`](strategy/STRATEGY_AUDIT.md)
 - 任务清单：[`TODO.MD`](TODO.MD)
 

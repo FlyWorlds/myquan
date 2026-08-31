@@ -146,8 +146,6 @@ WATCH_UI_DEV_PORT = 3000
 _ws_hub: LocalWsHub | None = None
 _last_watch_snapshot: dict[str, Any] | None = None
 _last_snapshot_digest: str | None = None
-_strategies_api_cache: list[dict[str, Any]] | None = None
-_factors_api_cache: dict[str, Any] | None = None
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
 _REPLAY_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _MIN_WATCH_REFRESH_SEC = 1.0
@@ -284,6 +282,7 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
     "both": "买卖",
     "entry": "开仓/选股",
     "exit": "退出",
+    "filter": "门控",
     "custom": "预警/叠加",
     "universe": "标的池",
 }
@@ -326,6 +325,8 @@ def _strategy_registry_kind(strategy_id: str, meta: Mapping[str, Any] | None) ->
     if sid in WATCH_LIVE_TAB_IDS:
         return "watch"
     if sid in ("strategy5", "strategy6") or m.get("mode") == "weekly_equal_weight_hold":
+        return "combo"
+    if m.get("mode") == "emotion_gate" or sid == "strategy12":
         return "combo"
     if sid == "strategy9" or m.get("mode") == "market_emotion":
         return "research"
@@ -387,6 +388,17 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
 
             tabs[-1]["backtest"] = load_s8_summary()
             tabs[-1]["reportPath"] = "backtest/strategy8_theme_linkage/REPORT.md"
+        if spec.id == "strategy12":
+            import json as _json
+            from pathlib import Path as _Path
+
+            s12 = _Path(__file__).resolve().parents[1] / "backtest" / "strategy12_emotion_gate" / "summary.json"
+            if s12.is_file():
+                try:
+                    tabs[-1]["backtest"] = _json.loads(s12.read_text(encoding="utf-8"))
+                except Exception:  # noqa: BLE001
+                    tabs[-1]["backtest"] = []
+            tabs[-1]["reportPath"] = "backtest/strategy12_emotion_gate/REPORT.md"
         from strategy_picks_loader import load_strategy_picks
 
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
@@ -406,7 +418,7 @@ def _json_safe_meta(meta: Mapping[str, Any] | None) -> dict[str, Any]:
     return out
 
 
-def _load_watch_factors_api() -> list[dict[str, Any]]:
+def _load_watch_factors_api() -> dict[str, Any]:
     """从 factor 注册表加载因子说明（供 watch-ui /api/factors）。"""
     from strategy.core.factor_registry import list_factors
     from strategy.core.strategy_registry import list_strategy_specs
@@ -452,19 +464,15 @@ def _load_watch_factors_api() -> list[dict[str, Any]]:
 
 
 def _get_factors_api_cache() -> dict[str, Any]:
-    global _factors_api_cache
-    if _factors_api_cache is None:
-        _factors_api_cache = _load_watch_factors_api()
-    return _factors_api_cache
+    """每次现算：开发时改因子注册不必重启才能看见列表。"""
+    return _load_watch_factors_api()
 
 
 
 
 def _get_strategies_api_cache() -> list[dict[str, Any]]:
-    global _strategies_api_cache
-    if _strategies_api_cache is None:
-        _strategies_api_cache = _load_watch_strategy_tabs()
-    return _strategies_api_cache
+    """每次现算：开发时改策略注册不必重启才能看见列表。"""
+    return _load_watch_strategy_tabs()
 
 
 def _parse_api_query(path: str) -> tuple[str, dict[str, list[str]]]:

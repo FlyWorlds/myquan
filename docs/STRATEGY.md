@@ -56,9 +56,10 @@ python -c "from strategy import run_open_break; ..."
 | strategy5 | 近高 Top5 等权 | factor11 | 研究 |
 | strategy6 | 反转池近高 | factor12 | 研究，未替换 strategy5 |
 | strategy8 | 题材联动 | factor14 + factor1 | 研究；见 §3.2 |
-| strategy9 | 低开跌停情绪 | factor18 | 研究；见 §3.3 |
+| strategy12 | 情绪门控开盘突破 | factor18 + factor1 + factor2 | 研究；见 §3.3 |
 
 缠论笔盈亏比已归 **因子17**（原 strategy7 CLI 仍可用）。
+低开跌停情绪已归 **因子18**（原 strategy9 CLI 仍可用）。
 
 因子14：**当日**同题材涨停同伴数（通达信概念 offline 索引），见 [`FACTOR14.md`](FACTOR14.md)。
 
@@ -108,30 +109,29 @@ python -c "from strategy import run_open_break; ..."
 
 ---
 
-### 3.3 策略九 · 低开跌停情绪（strategy9）
+### 3.3 策略十二 · 情绪门控开盘突破（strategy12）
 
-**统计口径（2020→今，研究）**
+**组合**
 
-- 宇宙：中证1000（剔 ST / 北交），与策略三同源日线缓存
-- **低开开盘即跌停**：开盘 < 昨收，且开盘价落在跌停价容差内（主板 10% / 科创创业 20%）
-- 大盘参照：上证指数 `sh000001` 收盘相对昨收涨跌幅
+| 因子 | 角色 |
+|------|------|
+| factor18 | 中证1000 低开开盘跌停≥4 → **当日禁止新开仓** |
+| factor1 | 开盘±2.5%，前日阴/小阳，仅止损，T+1 |
+| factor2 | 回撤加减仓预警，回测不注资 |
 
-**情绪阶段（`mkt_ld_open` 家数）**
+已有仓在恐慌日仍按因子1 止损。开盘可观测家数，无未来函数。
 
-- 平静：`0`（当日无低开跌停开盘）
-- 正常：`1～3`
-- 恐慌：`≥ 4`
-
-**方向研判（样本内规则，非投资建议）**
-
-- 恐慌 → 预判当日收跌；平静 → 预判当日收涨；正常 → 顺势偏空
+凯盛/天通 2020→2026 单票样本内，门控**未提升**累计收益（恐慌日约 10 天）；本组合是可挂载风险开关，不替换策略一。
 
 ```bash
-python backtest/strategy9_limit_down_emotion/run.py --start 20200101
-python -c "from strategy import run_strategy9_emotion; run_strategy9_emotion()"
+python backtest/strategy12_emotion_gate/run.py
+python -c "from strategy import run_strategy12; run_strategy12()"
 ```
 
-真源：`strategy/strategies/strategy9/` · 报告：`backtest/strategy9_limit_down_emotion/REPORT.md`
+真源：`strategy/strategies/strategy12/` · 报告：`backtest/strategy12_emotion_gate/REPORT.md`  
+因子说明：[`FACTOR18.md`](FACTOR18.md)
+
+因子18 家数对照上证的 CLI 仍为 `run_strategy9_emotion()`（Web 策略栏不展示）。
 
 ---
 
@@ -159,5 +159,6 @@ python -c "from strategy import run_strategy9_emotion; run_strategy9_emotion()"
 | [`strategy/README.md`](../strategy/README.md) | 因子/策略注册表、CLI |
 | [`FACTOR13.md`](FACTOR13.md) | 因子13 质量带 + 熊市盾牌 |
 | [`FACTOR14.md`](FACTOR14.md) | 因子14 题材共振（策略八） |
+| [`FACTOR18.md`](FACTOR18.md) | 因子18 低开跌停情绪（策略十二门控） |
 | [`TODO.MD`](../TODO.MD) | 任务优先级 |
 | [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak 审计底稿 |

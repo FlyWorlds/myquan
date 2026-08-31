@@ -1,0 +1,59 @@
+{
+  "strategy": "strategy12",
+  "panic_days": 10,
+  "universe": "单票对照：凯盛 / 天通",
+  "interval": "各 BacktestConfig.start_date → 今",
+  "note": "研究用途，非投资建议。门控=因子18 恐慌日禁止新开仓。",
+  "detail": [
+    {
+      "label": "kaicheng",
+      "gated": false,
+      "total_return_pct": 1389.9398653537198,
+      "max_drawdown_pct": 30.461025629216582,
+      "sharpe_ratio": 1.3198055692605362,
+      "win_rate": 43.17180616740088,
+      "n_trades": 227,
+      "entry_pct": 0.025
+    },
+    {
+      "label": "kaicheng",
+      "gated": true,
+      "total_return_pct": 1095.3685466049517,
+      "max_drawdown_pct": 30.469985434383347,
+      "sharpe_ratio": 1.235093587401614,
+      "win_rate": 42.92035398230089,
+      "n_trades": 226,
+      "entry_pct": 0.025
+    },
+    {
+      "label": "tiantong",
+      "gated": false,
+      "total_return_pct": 1312.5916498623599,
+      "max_drawdown_pct": 38.730709365439665,
+      "sharpe_ratio": 1.269026227812398,
+      "win_rate": 49.735449735449734,
+      "n_trades": 189,
+      "entry_pct": 0.025
+    },
+    {
+      "label": "tiantong",
+      "gated": true,
+      "total_return_pct": 765.7447393373399,
+      "max_drawdown_pct": 46.128041849423006,
+      "sharpe_ratio": 1.087301549385438,
+      "win_rate": 48.93617021276596,
+      "n_trades": 188,
+      "entry_pct": 0.025
+    }
+  ],
+  "web": [
+    {
+      "entry_pct": 0.025,
+      "total_return_pct": 1095.3685466049517,
+      "max_drawdown_pct": 30.469985434383347,
+      "sharpe_ratio": 1.235093587401614,
+      "win_rate": 42.92035398230089,
+      "n_trades": 226
+    }
+  ]
+}

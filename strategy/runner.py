@@ -86,6 +86,9 @@ def apply_strategy_config(
         getattr(cfg, "energy_allowed_by_date", None) or {}
     )
     strategy.halt_by_date = dict(getattr(cfg, "halt_by_date", None) or {})
+    strategy.emotion_halt_by_date = dict(
+        getattr(cfg, "emotion_halt_by_date", None) or {}
+    )
     strategy.regime_tp_enabled = bool(getattr(cfg, "regime_tp_enabled", False))
     strategy.regime_by_date = dict(getattr(cfg, "regime_by_date", None) or {})
     strategy.regime_tp_bull = tuple(getattr(cfg, "regime_tp_bull", ()) or ())

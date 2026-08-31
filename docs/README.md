@@ -9,6 +9,7 @@
 | [`FACTOR14.md`](FACTOR14.md) | 因子14 题材共振（策略八） |
 | [`FACTOR16.md`](FACTOR16.md) | 因子16 概念龙头评分 |
 | [`FACTOR17.md`](FACTOR17.md) | 因子17 缠论笔盈亏比（原策略七） |
+| [`FACTOR18.md`](FACTOR18.md) | 因子18 低开跌停情绪（策略十二门控） |
 | [`strategy/README.md`](../strategy/README.md) | 因子/策略注册表、CLI |
 | [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak 审计底稿 |
 

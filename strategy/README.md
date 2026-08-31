@@ -83,7 +83,7 @@ strategy/
 | **factor15** | 因子15-题材晋级低开 | 情绪题材 | 题材联动过滤（可选） | gap ∈ [-4.5%, -0.3%]；默认关闭，需 `--gap-filter` |
 | **factor16** | 因子16-概念龙头评分 | 选股质量 | 概念/池内龙头排序 | `factor16_leader_score.py`：**13A** 质量带 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](../docs/FACTOR16.md) |
 | **factor17** | 因子17-缠论笔盈亏比 | 缠论 | 笔归因评估 | `bi_pl_ratio.py`：因子1 费用后按买入笔记账；原策略七入口，Web 在因子池 |
-| **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪门控 | 中证1000 低开开盘跌停家数→平静/正常/恐慌；策略九挂载 |
+| **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪门控 | 中证1000 低开开盘跌停家数→平静/正常/恐慌；**策略十二**恐慌日禁开仓；CLI 对照 `run_strategy9_emotion` |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
@@ -106,9 +106,10 @@ for f in list_factors():
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
-| **strategy9** | 策略九·低开跌停情绪 | factor18 | ✅ 研究 | 挂载因子18；中证1000 低开开盘跌停家数 → 对照上证当日涨跌；`backtest/strategy9_limit_down_emotion/` |
+| **strategy12** | 策略十二·情绪门控开盘突破 | factor18 + factor1 + factor2 | ✅ 研究 | 因子18 恐慌日禁新开仓 + 因子1 ±2.5% 执行 + 因子2 预警；`backtest/strategy12_emotion_gate/` |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
+策略九 CLI（`run_strategy9_emotion`）已归入 **因子18**，Web 策略栏不展示。
 
 旧执行层 3/4/5/6/8 的研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。现行 strategy6 是新注册的因子12 持有，不是旧动量混合。
 
@@ -123,7 +124,7 @@ for b in get_strategy_bindings("strategy3"):
 ```
 
 ```python
-from strategy import run_strategy3, run_strategy5, run_strategy7, run_strategy8, run_strategy9_emotion
+from strategy import run_strategy3, run_strategy5, run_strategy7, run_strategy8, run_strategy12
 
 # 策略五：因子11 近高 Top5 等权持有（研究回测，不构成投资建议）
 run_strategy5(start="20200102")
@@ -156,11 +157,13 @@ python backtest/strategy3_first_board/run.py
 python backtest/strategy8_theme_linkage/run.py --start 20250101
 python -c "from strategy import run_strategy3; run_strategy3()"
 python -c "from strategy import run_strategy8; run_strategy8(start='20250101')"
+python backtest/strategy12_emotion_gate/run.py
+python -c "from strategy import run_strategy12; run_strategy12()"
 python backtest/strategy9_limit_down_emotion/run.py --start 20200101
 python -c "from strategy import run_strategy9_emotion; run_strategy9_emotion()"
 ```
 
-策略三：昨日涨停池 + T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示 + 因子1 ±阈值。策略八：题材联动（**当日涨停定题材** + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。
+策略三：昨日涨停池 + T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示 + 因子1 ±阈值。策略八：题材联动（**当日涨停定题材** + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。策略十二：因子18 恐慌门控叠因子1，报告见 `backtest/strategy12_emotion_gate/REPORT.md`。
 
 ### 因子13 · 熊市盾牌 thr\* Top3（🔒 锁定，研究）
 
@@ -276,6 +279,8 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy4` | 因子1+4+10 开盘突破组合；默认观察池；旧名 `run_strategy9` |
 | `run_strategy5` | 因子11 近高 Top5 等权持有；`start` / `end` / `stage1_k` / `stage2_k`；旧名 `run_strategy10` |
 | `run_strategy6` | 因子12 反转池近高 Top5 等权持有；研究候选，不替换策略五 |
+| `run_strategy12` | 因子18 恐慌门控 + 因子1 执行 + 因子2 预警；对照 `backtest/strategy12_emotion_gate/run.py` |
+| `run_strategy9_emotion` | 因子18 家数对照上证（CLI，Web 不展示） |
 | `run_strategy2` | 因子8缠论选股；`panel` / `panel_path` / `factor_column` / `start` / `end` |
 | `OpenBreak3Strategy` | = Strategy1 执行类 |
 | `KCZZ_ETF` | 科创综指 589680 预设（买2.5%/止3.5%、T+1） |
