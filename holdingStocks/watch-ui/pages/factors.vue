@@ -13,7 +13,7 @@ useHead({ title: '因子说明 · 持仓盯盘' })
     <header class="mb-6">
       <h1 class="text-2xl font-bold">因子说明</h1>
       <p class="mt-1 text-sm text-ui-text-2">
-        数据来自 <code>strategy/factors</code> 注册表，与 <code>/api/factors</code> 同源；改因子描述或规则后重启 watch 即可同步。
+        卡片样式与持仓 Tab 一致；鼠标悬停 <strong>1 秒</strong> 后显示规则摘要与挂载策略。
       </p>
     </header>
 
@@ -26,7 +26,7 @@ useHead({ title: '因子说明 · 持仓盯盘' })
     <p v-if="loading" class="text-sm text-ui-text-2">加载中…</p>
     <p v-else-if="error" class="text-sm text-ui-danger">{{ error }}</p>
 
-    <div v-else class="space-y-4">
+    <div v-else class="grid gap-3 overflow-visible md:grid-cols-2 xl:grid-cols-3">
       <FactorCard v-for="f in factors" :key="f.id" :factor="f" />
     </div>
 

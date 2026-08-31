@@ -118,6 +118,53 @@
 
   .registry-scroll-target {
     scroll-margin-top: var(--registry-scroll-mt, 9.5rem);
+    overflow: visible;
+  }
+
+  .registry-hover-wrap {
+    @apply h-full;
+  }
+
+  .registry-card {
+    @apply h-full cursor-default;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--ui-surface) 96%, var(--watch-accent) 4%) 0%,
+      var(--ui-surface) 100%
+    );
+  }
+
+  .registry-card:hover,
+  .registry-card-active {
+    border-color: color-mix(in srgb, var(--watch-accent) 40%, var(--ui-hairline));
+    box-shadow: 0 8px 28px color-mix(in srgb, var(--watch-accent) 12%, transparent);
+  }
+
+  .registry-detail-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 0.35rem);
+    z-index: 40;
+    max-height: min(70vh, 28rem);
+    overflow: auto;
+    padding: 0.875rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--watch-accent) 35%, var(--ui-hairline));
+    background: color-mix(in srgb, var(--ui-surface) 92%, var(--ui-page));
+    box-shadow: var(--ui-shadow-lg);
+    backdrop-filter: blur(12px);
+  }
+
+  .registry-detail-enter-active,
+  .registry-detail-leave-active {
+    transition: opacity 0.2s var(--ui-ease), transform 0.2s var(--ui-ease);
+  }
+
+  .registry-detail-enter-from,
+  .registry-detail-leave-to {
+    opacity: 0;
+    transform: translateY(-4px);
   }
 
   .v-loading-mask {

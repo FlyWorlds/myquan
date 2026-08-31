@@ -101,6 +101,7 @@ from watch_config import (
     STRATEGY_NAME,
     USE_FACTOR4,
     WATCHLIST,
+    effective_watchlist,
     calc_day_pnl as _calc_day_pnl,
     code_key as _code_key,
     empty_position as _empty_position,
@@ -820,7 +821,7 @@ def _reseed_sina_batch(
     watchlist: list[dict[str, Any]] | None = None,
 ) -> int:
     """冷启动快路径：新浪批量快照 seed（~2s），先让页面可用。"""
-    items = watchlist if watchlist is not None else WATCHLIST
+    items = watchlist if watchlist is not None else effective_watchlist()
     sinas = [str(w["sina"]).lower() for w in items]
     batch = fetch_sina_batch(sinas)
     n = 0
@@ -851,7 +852,7 @@ def _reseed_live_batch(
 
 def _daily_cache_warm(watchlist: list[dict[str, Any]] | None = None) -> None:
     """并行预热日线缓存，避免首屏 collect_rows 串行等 IO。"""
-    items = watchlist if watchlist is not None else WATCHLIST
+    items = watchlist if watchlist is not None else effective_watchlist()
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda w: _watch_daily(w["sina"]), items))
 
@@ -1258,7 +1259,7 @@ def load_holdings() -> dict[str, Any]:
             "account_cash": None,
             "positions": {
                 w["code"]: _empty_position(w)
-                for w in WATCHLIST
+                for w in effective_watchlist()
             },
             "realized_today": {},
         }
@@ -1267,7 +1268,7 @@ def load_holdings() -> dict[str, Any]:
     with HOLDINGS_FILE.open("r", encoding="utf-8") as f:
         data = json.load(f)
     positions = data.setdefault("positions", {})
-    for w in WATCHLIST:
+    for w in effective_watchlist():
         positions.setdefault(w["code"], _empty_position(w))
     data.setdefault("realized_today", {})
     data.setdefault("account_total", None)
@@ -1989,7 +1990,7 @@ def collect_rows(
     threshold_ok = is_threshold_ready()
     signal_ok_global = is_signal_window()
 
-    for w in WATCHLIST:
+    for w in effective_watchlist():
         code = w["code"]
         entry_pct = _watch_pct(w)
         base_stop_pct = _watch_stop_pct(w)
@@ -3320,7 +3321,7 @@ def cmd_clear(args: argparse.Namespace) -> None:
 def cmd_clear_all(_: argparse.Namespace) -> None:
     """清空全部盯盘标的持仓与当日已实现、绿底粘滞。"""
     data = load_holdings()
-    for w in WATCHLIST:
+    for w in effective_watchlist():
         data["positions"][w["code"]] = _empty_position(w)
     data["realized_today"] = {}
     data["alert_sticky"] = {}
@@ -3403,7 +3404,7 @@ def _next_auction_milestone(
 def _log_watchlist_opens(rows: list[dict[str, Any]]) -> None:
     by_code = {str(r.get("代码")): r for r in rows}
     print(f"[{_now()}] 开盘价定时刷新 · 盯盘 {_watchlist_codes_label()}")
-    for w in WATCHLIST:
+    for w in effective_watchlist():
         r = by_code.get(w["code"], {})
         open_px = r.get("开盘")
         stop_px = r.get("止损")
@@ -3804,7 +3805,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     ws_hub = LocalWsHub()
     _ws_hub = ws_hub
 
-    sinas = [str(w["sina"]).lower() for w in WATCHLIST]
+    sinas = [str(w["sina"]).lower() for w in effective_watchlist()]
     feed = QuoteFeedManager(
         sinas,
         on_log=lambda m: print(f"[{_now()}] {m}"),

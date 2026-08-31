@@ -267,7 +267,27 @@ FIT_WATCHLIST: list[dict[str, Any]] = [
 # 现行盯盘：与契合池一致（无置顶；因子13 及格才入池）
 WATCHLIST: list[dict[str, Any]] = list(FIT_WATCHLIST)
 
+# 持仓 Tab 固定展示：实仓 + 已卖仍跟踪（因子13 熊盾研究票阈值）
+PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
+    watch_item("600552", "凯盛科技", pct=0.025),
+    watch_item("600330", "天通股份", pct=0.03),
+    watch_item("600338", "西藏珠峰", pct=0.025),
+]
+
 # 切策略三：STRATEGY_ID="strategy3"; USE_FACTOR4=True; WATCHLIST=list(S7_WATCHLIST)
+
+
+def effective_watchlist() -> list[dict[str, Any]]:
+    """盯盘拉行情/算信号：持仓置顶 + 定盘池（去重，置顶在前）。"""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST):
+        c = code_key(w["code"])
+        if c in seen:
+            continue
+        seen.add(c)
+        out.append(w)
+    return out
 
 
 def empty_position(meta: dict[str, Any]) -> dict[str, Any]:
