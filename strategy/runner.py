@@ -89,6 +89,12 @@ def apply_strategy_config(
     strategy.emotion_halt_by_date = dict(
         getattr(cfg, "emotion_halt_by_date", None) or {}
     )
+    strategy.emotion_skip_stop_by_date = dict(
+        getattr(cfg, "emotion_skip_stop_by_date", None) or {}
+    )
+    strategy.emotion_relax_filter_by_date = dict(
+        getattr(cfg, "emotion_relax_filter_by_date", None) or {}
+    )
     strategy.regime_tp_enabled = bool(getattr(cfg, "regime_tp_enabled", False))
     strategy.regime_by_date = dict(getattr(cfg, "regime_by_date", None) or {})
     strategy.regime_tp_bull = tuple(getattr(cfg, "regime_tp_bull", ()) or ())

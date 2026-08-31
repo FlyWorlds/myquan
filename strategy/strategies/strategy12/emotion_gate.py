@@ -46,28 +46,34 @@ def load_ld_open_daily(*, path: Path | None = None) -> pd.DataFrame:
     return out
 
 
+def emotion_flag_by_date(
+    *,
+    min_ld: int = LD_OPEN_PANIC_MIN,
+    daily: pd.DataFrame | None = None,
+) -> dict[str, bool]:
+    """mkt_ld_open >= min_ld 的日期 → True。"""
+    df = load_ld_open_daily() if daily is None else daily
+    out: dict[str, bool] = {}
+    if df is None or df.empty or "mkt_ld_open" not in df.columns:
+        return out
+    for _, row in df.iterrows():
+        day = _norm_day(row.get("date"))
+        if not day:
+            continue
+        n = row.get("mkt_ld_open")
+        if pd.isna(n):
+            continue
+        out[day] = int(n) >= int(min_ld)
+    return out
+
+
 def panic_halt_by_date(
     daily: pd.DataFrame | None = None,
     *,
     panic_min: int = LD_OPEN_PANIC_MIN,
 ) -> dict[str, bool]:
-    """恐慌日 → True（当日跳过新开仓）。键为 YYYY-MM-DD。"""
-    df = load_ld_open_daily() if daily is None else daily
-    halt: dict[str, bool] = {}
-    if df is None or df.empty:
-        return halt
-    col = "mkt_ld_open" if "mkt_ld_open" in df.columns else None
-    if col is None:
-        return halt
-    for _, row in df.iterrows():
-        day = _norm_day(row.get("date"))
-        if not day:
-            continue
-        n = row.get(col)
-        if pd.isna(n):
-            continue
-        halt[day] = int(n) >= int(panic_min)
-    return halt
+    """恐慌日 → True（当日跳过新开仓，已否决的旧门控）。"""
+    return emotion_flag_by_date(min_ld=panic_min, daily=daily)
 
 
 def phase_on_day(day: str, *, ld_open: int | None = None) -> dict[str, Any]:
@@ -88,6 +94,7 @@ def phase_on_day(day: str, *, ld_open: int | None = None) -> dict[str, Any]:
 
 __all__ = [
     "load_ld_open_daily",
+    "emotion_flag_by_date",
     "panic_halt_by_date",
     "phase_on_day",
 ]

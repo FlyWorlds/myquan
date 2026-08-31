@@ -1,10 +1,10 @@
 [
   {
-    "entry_pct": 0.025,
-    "total_return_pct": 1095.3685466049517,
-    "max_drawdown_pct": 30.469985434383347,
-    "sharpe_ratio": 1.235093587401614,
-    "win_rate": 42.92035398230089,
-    "n_trades": 226
+    "entry": "open",
+    "total_return_pct": 449.8128118955623,
+    "max_drawdown_pct": 68.55225484188033,
+    "sharpe_ratio": 0.74050131783861,
+    "win_rate": 49.32750504371217,
+    "n_trades": 2974
   }
 ]

@@ -1,59 +1,20 @@
 {
-  "strategy": "strategy12",
-  "panic_days": 10,
-  "universe": "单票对照：凯盛 / 天通",
-  "interval": "各 BacktestConfig.start_date → 今",
-  "note": "研究用途，非投资建议。门控=因子18 恐慌日禁止新开仓。",
-  "detail": [
-    {
-      "label": "kaicheng",
-      "gated": false,
-      "total_return_pct": 1389.9398653537198,
-      "max_drawdown_pct": 30.461025629216582,
-      "sharpe_ratio": 1.3198055692605362,
-      "win_rate": 43.17180616740088,
-      "n_trades": 227,
-      "entry_pct": 0.025
-    },
-    {
-      "label": "kaicheng",
-      "gated": true,
-      "total_return_pct": 1095.3685466049517,
-      "max_drawdown_pct": 30.469985434383347,
-      "sharpe_ratio": 1.235093587401614,
-      "win_rate": 42.92035398230089,
-      "n_trades": 226,
-      "entry_pct": 0.025
-    },
-    {
-      "label": "tiantong",
-      "gated": false,
-      "total_return_pct": 1312.5916498623599,
-      "max_drawdown_pct": 38.730709365439665,
-      "sharpe_ratio": 1.269026227812398,
-      "win_rate": 49.735449735449734,
-      "n_trades": 189,
-      "entry_pct": 0.025
-    },
-    {
-      "label": "tiantong",
-      "gated": true,
-      "total_return_pct": 765.7447393373399,
-      "max_drawdown_pct": 46.128041849423006,
-      "sharpe_ratio": 1.087301549385438,
-      "win_rate": 48.93617021276596,
-      "n_trades": 188,
-      "entry_pct": 0.025
-    }
-  ],
-  "web": [
-    {
-      "entry_pct": 0.025,
-      "total_return_pct": 1095.3685466049517,
-      "max_drawdown_pct": 30.469985434383347,
-      "sharpe_ratio": 1.235093587401614,
-      "win_rate": 42.92035398230089,
-      "n_trades": 226
-    }
-  ]
+  "summary": {
+    "entry": "open",
+    "total_return_pct": 449.8128118955623,
+    "max_drawdown_pct": 68.55225484188033,
+    "sharpe_ratio": 0.74050131783861,
+    "win_rate": 49.32750504371217,
+    "n_trades": 2974,
+    "end_equity": 5498128.118955622,
+    "is_return_pct": 600.5170652344367,
+    "is_mdd_pct": 50.02322610742511,
+    "is_sharpe": 1.1960770329894856,
+    "oos_return_pct": -22.864531259915566,
+    "oos_mdd_pct": 68.55225484188033,
+    "oos_sharpe": 0.13257918148336825,
+    "oos_start": "2024-01-01",
+    "passed": false
+  },
+  "n_signals": 4202
 }

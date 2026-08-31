@@ -4,11 +4,11 @@ import type { StrategyEntry } from '~/types/registry'
 export const FALLBACK_STRATEGIES: StrategyEntry[] = [
   {
     id: 'strategy12',
-    label: '策略12-情绪门控开盘突破',
-    name: '策略十二·情绪门控开盘突破',
+    label: '策略12-涨停次日低开',
+    name: '策略十二·涨停次日低开',
     description:
-      '因子18 恐慌日禁止新开仓 + 因子1 开盘±2.5% 执行 + 因子2 回撤预警；研究组合，非默认盯盘。',
-    aliases: ['s12', 'emotion_gate', '情绪门控', '策略十二'],
+      '昨日收盘涨停、今日低开未封涨停则开盘买，T+1 收盘清；因子18 恐慌日空仓。中证1000 截面。研究组合，非默认盯盘。',
+    aliases: ['s12', 'lu_next_gap', '涨停次日低开', '策略十二'],
     implemented: true,
     is_watch_default: false,
     watch_tab: false,
@@ -18,20 +18,14 @@ export const FALLBACK_STRATEGIES: StrategyEntry[] = [
       {
         id: 'factor18',
         name: '因子18-低开跌停情绪',
-        role: '门控',
-        filter_desc: '中证1000 低开开盘跌停≥4（恐慌）→ 当日禁止新开仓',
+        role: '过滤',
+        filter_desc: '低开开盘跌停家数≥4（恐慌）→ 当日空仓',
       },
       {
-        id: 'factor1',
-        name: '因子1-开盘突破',
+        id: 'factor21',
+        name: '因子21-涨停次日低开',
         role: '买卖',
-        filter_desc: '同策略一：前日阴/小阳 + 禁双阳跨日；恐慌日不新开',
-      },
-      {
-        id: 'factor2',
-        name: '因子2-回撤预警',
-        role: '预警/叠加',
-        filter_desc: '回测不注资',
+        filter_desc: '昨收涨停、今低开 -4.5%～-0.3%；开盘买，T+1 收盘清',
       },
     ],
     reportPath: 'backtest/strategy12_emotion_gate/REPORT.md',

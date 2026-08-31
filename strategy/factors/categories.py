@@ -75,6 +75,9 @@ FACTOR_CATEGORY: dict[str, str] = {
     "factor16": "quality",
     "factor17": "chan",
     "factor18": "sentiment",
+    "factor19": "reversal",
+    "factor20": "reversal",
+    "factor21": "reversal",
     "cf1": "reversal",
 }
 

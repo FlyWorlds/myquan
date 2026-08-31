@@ -326,7 +326,12 @@ def _strategy_registry_kind(strategy_id: str, meta: Mapping[str, Any] | None) ->
         return "watch"
     if sid in ("strategy5", "strategy6") or m.get("mode") == "weekly_equal_weight_hold":
         return "combo"
-    if m.get("mode") == "emotion_gate" or sid == "strategy12":
+    if m.get("mode") in (
+        "emotion_gate",
+        "gap_reclaim",
+        "ld_next_open",
+        "lu_next_gap",
+    ) or sid == "strategy12":
         return "combo"
     if sid == "strategy9" or m.get("mode") == "market_emotion":
         return "research"

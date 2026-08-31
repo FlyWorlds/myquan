@@ -25,7 +25,7 @@ def _rules() -> str:
   · 低开开盘即跌停：开盘 < 昨收 且 开盘价在跌停价容差内
   · 情绪阶段：平静≤{LD_OPEN_CALM_MAX} · 正常{LD_OPEN_CALM_MAX + 1}～{LD_OPEN_PANIC_MIN - 1} · 恐慌≥{LD_OPEN_PANIC_MIN}
   · 研判（研究）：恐慌偏多→预判当日收跌；平静→预判收涨
-  · 用途：大盘情绪门控；策略十二恐慌日禁开仓；CLI 对照见 run_strategy9_emotion
+  · 用途：大盘情绪择时；策略十二用家数≥1 压力日选股；CLI 对照见 run_strategy9_emotion
 研究用途，非投资建议。
 """.strip()
 
@@ -41,7 +41,7 @@ SPEC = FactorSpec(
     name=FACTOR_NAME,
     description=(
         f"中证1000 低开开盘跌停家数：平静≤{LD_OPEN_CALM_MAX} / "
-        f"恐慌≥{LD_OPEN_PANIC_MIN}；策略十二作大盘情绪门控"
+        f"恐慌≥{LD_OPEN_PANIC_MIN}；策略十二作压力日择时"
     ),
     rules_text=_rules(),
     implemented=True,

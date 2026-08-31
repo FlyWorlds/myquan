@@ -75,8 +75,10 @@ class BacktestConfig:
     energy_allowed_by_date: dict | None = None
     # 滚动夏普衰减门控：date -> 跳过买入
     halt_by_date: dict | None = None
-    # 因子18 恐慌日门控：date -> 跳过新开仓
+    # 因子18 恐慌日：跳过新开仓 / 暂停止损 / 放宽前日过滤
     emotion_halt_by_date: dict | None = None
+    emotion_skip_stop_by_date: dict | None = None
+    emotion_relax_filter_by_date: dict | None = None
     # 行情 regime 调整止盈（bull/sideways/bear），与因子4 独立
     regime_tp_enabled: bool = False
     regime_by_date: dict | None = None

@@ -33,6 +33,9 @@ const FACTOR_CATEGORY_BY_ID: Record<string, string> = {
   factor16: 'quality',
   factor17: 'chan',
   factor18: 'sentiment',
+  factor19: 'reversal',
+  factor20: 'reversal',
+  factor21: 'reversal',
   cf1: 'reversal',
 }
 
@@ -76,15 +79,58 @@ export const FALLBACK_FACTORS: FactorEntry[] = [
     category: 'sentiment',
     category_label: '情绪题材',
     implemented: true,
-    description: '中证1000 低开开盘跌停家数：平静≤0 / 恐慌≥4；策略十二作大盘情绪门控。',
+    description: '中证1000 低开开盘跌停家数：平静≤0 / 恐慌≥4；策略十二恐慌日空仓。',
     rules_text:
-      '因子18-低开跌停情绪\n  · 宇宙：中证1000\n  · 低开开盘即跌停 → 平静≤0 · 正常1～3 · 恐慌≥4\n  · 策略十二：恐慌日禁止新开仓\n研究用途，非投资建议。',
+      '因子18-低开跌停情绪\n  · 宇宙：中证1000\n  · 低开开盘即跌停 → 平静≤0 · 正常1～3 · 恐慌≥4\n  · 策略十二：恐慌日空仓\n研究用途，非投资建议。',
     used_by: [
       {
         id: 'strategy12',
-        name: '策略十二·情绪门控开盘突破',
-        label: '策略12-情绪门控开盘突破',
-        role: '门控',
+        name: '策略十二·涨停次日低开',
+        label: '策略12-涨停次日低开',
+        role: '择时',
+        registry_kind: 'combo',
+      },
+    ],
+  },
+  {
+    id: 'factor19',
+    name: '因子19-低开反包',
+    category: 'reversal',
+    category_label: '反转',
+    implemented: true,
+    description:
+      '压力日低开 -8%～-0.5%，开盘买入、T+1 收盘清。旧假设，组合未过关。',
+    rules_text:
+      '因子19-低开反包\n  · 择时：因子18 家数≥1\n  · 个股：gap ∈ [-8%, -0.5%]\n  · 执行：开盘买入；T+1 收盘清仓\n研究用途，非投资建议。',
+    used_by: [],
+  },
+  {
+    id: 'factor20',
+    name: '因子20-跌停次日开板',
+    category: 'reversal',
+    category_label: '反转',
+    implemented: true,
+    description: '昨日收盘跌停、今日开盘未封死。已否决，组合未过关。',
+    rules_text:
+      '因子20-跌停次日开板\n  · 昨收跌停且今开未封\n  · 恐慌日空仓\n研究用途，未过关。',
+    used_by: [],
+  },
+  {
+    id: 'factor21',
+    name: '因子21-涨停次日低开',
+    category: 'reversal',
+    category_label: '反转',
+    implemented: true,
+    description:
+      '昨日收盘涨停、今日低开 -4.5%～-0.3% 且未封涨停；因子18 恐慌日空仓；开盘买、T+1 收盘清。',
+    rules_text:
+      '因子21-涨停次日低开\n  · 昨收涨停且今低开带内\n  · 恐慌日空仓\n  · 开盘买入，T+1 收盘清\n研究用途，非投资建议。',
+    used_by: [
+      {
+        id: 'strategy12',
+        name: '策略十二·涨停次日低开',
+        label: '策略12-涨停次日低开',
+        role: '选股',
         registry_kind: 'combo',
       },
     ],

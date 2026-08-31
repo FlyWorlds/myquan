@@ -1,6 +1,6 @@
 # 因子18 · 低开跌停情绪
 
-> 大盘情绪门控因子，不构成投资建议。本身不下单。
+> 大盘情绪择时因子，不构成投资建议。本身不下单。
 
 中证1000（剔 ST / 北交）每日 **低开开盘即跌停** 家数：
 
@@ -8,24 +8,13 @@
 - 正常 1～3
 - 恐慌 ≥4
 
-开盘即可观测，无未来函数。研判（样本内）：恐慌日上证收跌概率偏高；平静日收涨略多。详见 `backtest/strategy9_limit_down_emotion/REPORT.md`。
+开盘即可观测，无未来函数。研判（样本内）：恐慌日上证均 −2.05%、收涨仅 30%；平静日略偏涨。详见 `backtest/strategy9_limit_down_emotion/REPORT.md`。
 
 ## 挂到策略
 
-Web **因子说明 → 情绪题材**。任意策略 `bindings.py`：
+当前组合：**策略十二** = 因子18 恐慌日空仓 + 因子21 涨停次日低开（研究，**OOS 未过关**）。
 
-```python
-from strategy.core.protocols import bind_factor
-
-bind_factor(
-    "factor18",
-    label="低开跌停情绪门控",
-    role="filter",
-    filter_desc="恐慌日禁止新开仓",
-)
-```
-
-当前交易组合：**策略十二** = 因子18 门控 + 因子1 执行 + 因子2 预警。
+已否决：恐慌日叠凯盛/天通因子1 禁买；压力日买最深低开；跌停次日开板。
 
 CLI 对照（不上 Web 策略栏）：`run_strategy9_emotion()` / `python backtest/strategy9_limit_down_emotion/run.py`。
 

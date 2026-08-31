@@ -50,7 +50,7 @@ akshare DataFrame
 | **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top10**（宽宇宙主板，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
 
-因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md)
+因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md) · 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md)
 
 ```bash
 cd backtest && python strategy1.py --rules
@@ -91,7 +91,10 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **factor15** | 因子15-题材晋级低开 | 情绪题材 | 题材联动过滤（可选） | gap 低开带；策略八默认关闭 |
 | **factor16** | 因子16-概念龙头评分 | 选股质量 | 池内排序 | 13A 过门 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](docs/FACTOR16.md) |
 | **factor17** | 因子17-缠论笔盈亏比 | 缠论 | 笔归因评估 | `bi_pl_ratio.py`；原策略七，Web 在因子池 |
-| **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪门控 | 低开开盘跌停家数；策略十二恐慌日禁开仓 |
+| **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪择时 | 低开开盘跌停家数；策略十二恐慌日空仓 |
+| **factor19** | 因子19-低开反包 | 反转 | 旧假设 | 压力日低开；未过关 |
+| **factor20** | 因子20-跌停次日开板 | 反转 | 已否决 | 昨收跌停今开未封 |
+| **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停今低开；IS 强、OOS 未过关 |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
@@ -105,7 +108,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **strategy5** | 策略五·近高 Top5 | factor11 | ✅ 研究 | 周频等权持有；别名 `near_high` |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
-| **strategy12** | 策略十二·情绪门控开盘突破 | factor18 + factor1 + factor2 | ✅ 研究 | 因子18 恐慌日禁新开仓 + 因子1 执行 + 因子2 预警 |
+| **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ OOS 未过关 | 昨收涨停今低开开盘买；IS +600%，OOS −23% |
 
 `run_strategy7` 已归入 **因子17-缠论笔盈亏比**（Web 策略栏不展示）。
 `run_strategy9_emotion` 已归入 **因子18-低开跌停情绪**（Web 策略栏不展示）。
@@ -137,7 +140,10 @@ myquan/
 │   ├── FACTOR14.md          # 因子14 题材共振（策略八）
 │   ├── FACTOR16.md          # 因子16 概念龙头评分
 │   ├── FACTOR17.md          # 因子17 缠论笔盈亏比
-│   └── FACTOR18.md          # 因子18 低开跌停情绪
+│   ├── FACTOR18.md          # 因子18 低开跌停情绪
+│   ├── FACTOR19.md          # 因子19 低开反包（旧）
+│   ├── FACTOR20.md          # 因子20 跌停次日（否决）
+│   └── FACTOR21.md          # 因子21 涨停次日低开
 ├── .cursor/rules/
 │   └── docs-sync.mdc        # 文档同步规则
 ├── strategy/                # 可插拔策略框架
@@ -162,7 +168,7 @@ cd myquan/backtest && python strategy1.py --rules
 # 因子13 熊市盾牌 WF（thr* Top3，锁定配置）
 cd myquan && python strategy/run_factor13_bear_shield_wf.py
 
-# 策略十二：因子18 恐慌门控 vs 策略一基线（研究）
+# 策略十二：涨停次日低开（研究，OOS 未过关）
 python backtest/strategy12_emotion_gate/run.py
 
 # 离线规则测试
@@ -244,6 +250,8 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 - 策略专题：[`docs/STRATEGY.md`](docs/STRATEGY.md)
 - 因子13：[`docs/FACTOR13.md`](docs/FACTOR13.md)
 - 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md)
+- 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md)
+- 因子19：[`docs/FACTOR19.md`](docs/FACTOR19.md)
 - 凯盛审计底稿：[`strategy/STRATEGY_AUDIT.md`](strategy/STRATEGY_AUDIT.md)
 - 任务清单：[`TODO.MD`](TODO.MD)
 

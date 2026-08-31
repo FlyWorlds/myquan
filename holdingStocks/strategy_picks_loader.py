@@ -44,6 +44,12 @@ _PICK_SOURCES: dict[str, dict[str, Any]] = {
             _MYQUAN / "backtest/strategy8_theme_linkage/signals_0p0300_td0_tm3_linkage_tmax9_lag1_lb2_h2_5.parquet",
         ],
     },
+    "strategy12": {
+        "kind": "signals",
+        "paths": [
+            _MYQUAN / "backtest/strategy12_emotion_gate/signals.parquet",
+        ],
+    },
     "strategy4": {
         "kind": "weekly",
         "paths": [
@@ -338,6 +344,42 @@ def _load_strategy8_signals(path: Path) -> dict[str, Any]:
     }
 
 
+def _load_s12_signals(path: Path) -> dict[str, Any]:
+    df = pd.read_parquet(path)
+    if df.empty:
+        return _empty_picks("signals", note="无信号缓存")
+    if "entry" in df.columns:
+        df = df[df["entry"] == True].copy()  # noqa: E712
+    if df.empty:
+        return _empty_picks("signals", note="无可买信号")
+    df["trade_date"] = pd.to_datetime(df["trade_date"])
+    latest = df["trade_date"].max()
+    sub = df[df["trade_date"] == latest].sort_values("rank_score", ascending=False)
+    items = []
+    for i, (_, r) in enumerate(sub.head(10).iterrows()):
+        sym = str(r.get("symbol", ""))
+        code = str(r.get("code", ""))
+        items.append(
+            {
+                "rank": i + 1,
+                "symbol": sym,
+                "code": code,
+                "name": _resolve_name(symbol=sym, code=code, name=str(r.get("name", ""))),
+                "score": float(r.get("rank_score", 0)),
+                "gap_pct": r.get("gap_pct", (float(r["gap"]) * 100 if pd.notna(r.get("gap")) else None)),
+                "ld_open": r.get("ld_open"),
+                "trade_date": str(r.get("trade_date", ""))[:10],
+            }
+        )
+    return {
+        "kind": "signals",
+        "asOf": str(latest.date()) if pd.notna(latest) else None,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": f"涨停次日低开候选（{str(latest.date())[:10]}，按低开越深优先）",
+        "items": items,
+    }
+
+
 @lru_cache(maxsize=16)
 def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
     """返回策略最新选股/信号快照。"""
@@ -349,11 +391,6 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
         )
     if sid == "strategy7":
         return _empty_picks("none", note="单票笔归因策略，无截面选股名单")
-    if sid == "strategy12":
-        return _empty_picks(
-            "none",
-            note="因子18 恐慌日禁开仓 + 因子1 执行；无独立选股名单",
-        )
 
     spec = _PICK_SOURCES.get(sid)
     if not spec:
@@ -378,6 +415,8 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
             return _load_strategy3_signals(path)
         if sid == "strategy8":
             return _load_strategy8_signals(path)
+        if sid == "strategy12":
+            return _load_s12_signals(path)
         if sid in ("strategy4", "strategy5"):
             col = "symbols" if sid == "strategy4" else "picks"
             return _load_weekly_csv(path, symbol_col=col)

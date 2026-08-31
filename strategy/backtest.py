@@ -67,8 +67,12 @@ class OpenBreak3Strategy(Strategy):
     # 因子9 动能门控 / 夏普衰减门控（date -> 允许买入）；空 dict=关闭
     energy_allowed_by_date: dict[str, bool] = {}
     halt_by_date: dict[str, bool] = {}
-    # 因子18：恐慌日跳过新开仓（date -> True）
+    # 因子18：恐慌日跳过新开仓（date -> True）；已否决，保留开关
     emotion_halt_by_date: dict[str, bool] = {}
+    # 因子18：恐慌日暂停止损（date -> True）
+    emotion_skip_stop_by_date: dict[str, bool] = {}
+    # 因子18：恐慌日放宽前日阴/小阳过滤
+    emotion_relax_filter_by_date: dict[str, bool] = {}
     # 行情 regime 调整止盈（与因子4 止损暂停独立）
     regime_tp_enabled: bool = False
     regime_by_date: dict[str, str] = {}
@@ -523,7 +527,9 @@ class OpenBreak3Strategy(Strategy):
         if (not self.armed) or pos > 0:
             return False
         if not self._can_enter_by_prev_filter():
-            return False
+            relax = getattr(self, "emotion_relax_filter_by_date", None) or {}
+            if not (relax and bool(relax.get(day, False))):
+                return False
         energy_map = getattr(self, "energy_allowed_by_date", None) or {}
         if energy_map and not bool(energy_map.get(day, False)):
             self.log(
@@ -700,6 +706,13 @@ class OpenBreak3Strategy(Strategy):
                         f"(open={o:.2f} low={low:.2f}) {self._fmt_hold(c)}"
                     )
                     return
+            skip_stop = getattr(self, "emotion_skip_stop_by_date", None) or {}
+            if hit_stop and skip_stop and bool(skip_stop.get(day, False)):
+                self.log(
+                    f"{day} 因子18恐慌：触止损 {stop_px:.2f} 暂不卖 "
+                    f"(open={o:.2f} low={low:.2f})"
+                )
+                return
 
             if hit_stop:
                 limit_state = limit_down_state(
