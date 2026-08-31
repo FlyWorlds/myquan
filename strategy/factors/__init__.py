@@ -19,7 +19,10 @@
   · factor14 — 题材共振（同题材涨停同伴数 theme_lu_count，策略八选股）
   · factor15 — 题材晋级低开（晋级日 gap ∈ [-4.5%, -0.3%]，策略八补涨过滤）
   · factor16 — 概念龙头评分（F13质量带 + 因子1 OOS + 缠论笔；见 docs/FACTOR16.md）
+  · factor17 — 缠论笔盈亏比（原策略七研究入口，评估因子）
+  · factor18 — 低开跌停情绪（中证1000 低开开盘跌停家数）
   · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
+  分类见 strategy.factors.categories
 """
 
 from strategy.factors import factor1 as _factor1  # noqa: F401
@@ -40,7 +43,10 @@ from strategy.factors import factor13 as _factor13  # noqa: F401
 from strategy.factors import factor14 as _factor14  # noqa: F401
 from strategy.factors import factor15 as _factor15  # noqa: F401
 from strategy.factors import factor16 as _factor16  # noqa: F401
+from strategy.factors import factor17 as _factor17  # noqa: F401
+from strategy.factors import factor18 as _factor18  # noqa: F401
 from strategy.factors import factor_cf1 as _factor_cf1  # noqa: F401
 from strategy.core.factor_registry import FACTOR_REGISTRY, get_factor, list_factors
+from strategy.factors.categories import list_category_catalog
 
-__all__ = ["FACTOR_REGISTRY", "get_factor", "list_factors"]
+__all__ = ["FACTOR_REGISTRY", "get_factor", "list_factors", "list_category_catalog"]

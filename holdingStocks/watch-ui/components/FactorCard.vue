@@ -19,6 +19,7 @@ const usedCount = computed(() => props.factor.used_by?.length ?? 0)
         <header class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <h2 class="truncate text-base font-bold text-ui-text">{{ factor.name }}</h2>
+            <p v-if="factor.category_label" class="mt-1 text-xs text-ui-text-3">{{ factor.category_label }}</p>
             <p class="mt-1 line-clamp-2 text-sm leading-relaxed text-ui-text-2">{{ shortDesc }}</p>
           </div>
           <span
@@ -29,7 +30,9 @@ const usedCount = computed(() => props.factor.used_by?.length ?? 0)
           </span>
         </header>
         <div class="mt-2 text-sm">
-          <span class="text-ui-text-2">挂载策略</span> <b>{{ usedCount }} 个</b>
+          <span class="text-ui-text-2">挂载策略</span>
+          <b v-if="usedCount">{{ usedCount }} 个</b>
+          <b v-else class="text-accent">可挂 · 尚未绑定</b>
         </div>
       </template>
 
@@ -52,12 +55,21 @@ const usedCount = computed(() => props.factor.used_by?.length ?? 0)
           <h4 class="text-sm font-semibold text-ui-text">挂载策略</h4>
           <ul class="mt-2 space-y-1 text-sm text-ui-text-2">
             <li v-for="s in factor.used_by ?? []" :key="`${s.id}-${s.role}`">
-              <NuxtLink :to="`/strategies#${s.id}`" class="text-accent hover:underline">{{ s.label }}</NuxtLink>
+              <NuxtLink
+                v-if="s.registry_kind !== 'hidden'"
+                :to="`/strategies#${s.id}`"
+                class="text-accent hover:underline"
+              >{{ s.label }}</NuxtLink>
+              <span v-else class="text-ui-text-2">{{ s.label }}（CLI）</span>
               · {{ s.role }}
               <span v-if="s.filter_desc">（{{ s.filter_desc }}）</span>
             </li>
           </ul>
         </div>
+        <p v-else class="mt-4 text-xs leading-relaxed text-ui-text-3">
+          尚未挂到 Web 策略。之后可在策略 <code>bindings.py</code> 里
+          <code>bind_factor('{{ factor.id }}')</code>。
+        </p>
 
         <div v-if="factor.rules_text" class="mt-4">
           <h4 class="text-sm font-semibold text-ui-text">规则摘要</h4>

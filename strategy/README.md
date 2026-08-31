@@ -61,27 +61,30 @@ strategy/
 
 ## 因子一览（`strategy/factors`）
 
-| ID | 名称 | 作用 | 真源 / 要点 |
-|----|------|------|-------------|
-| **factor1** | 因子1-开盘突破 | 开盘突破买卖 | `open_break.py`：买=`ceil(open×(1+pct))`，卖=开盘−pct 止损；前日阴/小阳；禁双阳跨日≥5%；T+1。支持非对称 `entry_pct`/`stop_pct` |
-| **factor2** | 因子2-回撤预警 | 回撤加减仓**预警** | `dd_alert.py`：默认加仓≥20% / 减仓≤10%；**回测不注资**。旧注资见 `dd_topup.py` |
-| **factor3** | 因子3-动量 | 截面选股 / 单票择时 | `momentum.py`：组合默认截面反转打分；单票可用 `dist_hl` 等（收盘确认→次日开盘） |
-| **factor4** | 因子4-牛市持股 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1止损；可选空仓开盘建仓。叠在因子1上用 |
-| **factor5** | 因子5-Serenity前瞻主题 | 动态 A 股**研究候选池** | `serenity_factor5.py`：Serenity 公开帖 → 前瞻看多主题 → A 股概念代理；不复制美股代码、不直接交易 |
-| **factor6** | 因子6-组合动量ETF轮动 | 宽基 ETF 轮动 | `etf_combo_momentum.py`：短窗+长窗 ROC 合成分数，收盘 TopK，动量失效空仓；次日开盘执行 |
-| **factor7** | 因子7-行业ETF双动量 | 月频行业主线轮动 | `industry_residual_momentum.py`：12月普通+100月PCA残差各50%；月末Top3 |
-| **factor8** | 因子8-缠论结构 | 结构买卖点 | `chan/`：一/二/三类买卖点；供策略二 |
-| **factor9** | 因子9-日线多空动能 | 选股/开仓门控 | `ls_energy.py`：T 收盘→T+1 开盘；可叠因子1（研究 overlay） |
-| **factor10** | 因子10-价格选股 | 策略1/4 周频开仓名单 | `s1_price_select.py`：近高/趋势/动量/上涨日占比；本周收盘排名，下一周才允许因子1 开仓 |
-| **factor11** | 因子11-两段近高选股 | 截面选股 | `near_high_hold.py`：3日动量 Top20 内再取贴近5日高点 Top5；周频冻结；**一字涨停开盘不可买** |
-| **factor12** | 因子12-反转池近高 | 截面选股 | `factor12_combo.py`：20日涨幅最低 Top20 内再取贴近5日高点 Top5；**研究候选**，2024–2025 未确认，不替换因子11 |
-| **factor13a** | 因子13A-质量带契合选股 | 动态合格池 | `factor13_fit.py`：夏普/回撤甜区 walk-forward；见 [`docs/FACTOR13.md`](../docs/FACTOR13.md) |
-| **factor13b** | 因子13B-熊市盾牌 thr\* Top3 | 熊年防守池（🔒锁定） | `factor13_bear_shield.py`：WF + thr\*；`LOCKED.json` |
-| **factor13** | 因子13-契合选股（别名→13A） | 兼容 | 等同 factor13a；新代码请用 13a/13b |
-| **factor14** | 因子14-题材共振 | 题材联动选股 | **当日**同题材涨停同伴数 `theme_lu_count≥3`；见 [`docs/FACTOR14.md`](../docs/FACTOR14.md) |
-| **factor15** | 因子15-题材晋级低开 | 题材联动过滤（可选） | gap ∈ [-4.5%, -0.3%]；默认关闭，需 `--gap-filter` |
-| **factor16** | 因子16-概念龙头评分 | 概念/池内龙头排序 | `factor16_leader_score.py`：**13A** 质量带 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](../docs/FACTOR16.md) |
-| **cf1** | 因子CF1-流动性门控反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
+分类真源：`strategy/factors/categories.py`（开盘执行 / 回撤补仓 / 止盈持股 / 动量 / 反转 / 缠论 / 情绪题材 / 选股质量）。
+
+| ID | 名称 | 分类 | 作用 | 真源 / 要点 |
+|----|------|------|------|-------------|
+| **factor2** | 因子2-回撤预警 | 回撤补仓 | 回撤加减仓**预警** | `dd_alert.py`：默认加仓≥20% / 减仓≤10%；**回测不注资**。旧注资见 `dd_topup.py` |
+| **factor3** | 因子3-动量 | 动量 | 截面选股 / 单票择时 | `momentum.py`：组合默认截面反转打分；单票可用 `dist_hl` 等（收盘确认→次日开盘） |
+| **factor4** | 因子4-牛市持股 | 止盈持股 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1止损；可选空仓开盘建仓。叠在因子1上用 |
+| **factor5** | 因子5-Serenity前瞻主题 | 情绪题材 | 动态 A 股**研究候选池** | `serenity_factor5.py`：Serenity 公开帖 → 前瞻看多主题 → A 股概念代理；不复制美股代码、不直接交易 |
+| **factor6** | 因子6-组合动量ETF轮动 | 动量 | 宽基 ETF 轮动 | `etf_combo_momentum.py`：短窗+长窗 ROC 合成分数，收盘 TopK，动量失效空仓；次日开盘执行 |
+| **factor7** | 因子7-行业ETF双动量 | 动量 | 月频行业主线轮动 | `industry_residual_momentum.py`：12月普通+100月PCA残差各50%；月末Top3 |
+| **factor8** | 因子8-缠论结构 | 缠论 | 结构买卖点 | `chan/`：一/二/三类买卖点；供策略二 |
+| **factor9** | 因子9-日线多空动能 | 动量 | 选股/开仓门控 | `ls_energy.py`：T 收盘→T+1 开盘；可叠因子1（研究 overlay） |
+| **factor10** | 因子10-价格选股 | 动量 | 策略1/4 周频开仓名单 | `s1_price_select.py`：近高/趋势/动量/上涨日占比；本周收盘排名，下一周才允许因子1 开仓 |
+| **factor11** | 因子11-两段近高选股 | 动量 | 截面选股 | `near_high_hold.py`：3日动量 Top20 内再取贴近5日高点 Top5；周频冻结；**一字涨停开盘不可买** |
+| **factor12** | 因子12-反转池近高 | 反转 | 截面选股 | `factor12_combo.py`：20日涨幅最低 Top20 内再取贴近5日高点 Top5；**研究候选**，2024–2025 未确认，不替换因子11 |
+| **factor13a** | 因子13A-质量带契合选股 | 选股质量 | 动态合格池 | `factor13_fit.py`：夏普/回撤甜区 walk-forward；见 [`docs/FACTOR13.md`](../docs/FACTOR13.md) |
+| **factor13b** | 因子13B-熊市盾牌 thr\* Top3 | 选股质量 | 熊年防守池（🔒锁定） | `factor13_bear_shield.py`：WF + thr\*；`LOCKED.json` |
+| **factor13** | 因子13-契合选股（别名→13A） | 选股质量 | 兼容 | 等同 factor13a；新代码请用 13a/13b |
+| **factor14** | 因子14-题材共振 | 情绪题材 | 题材联动选股 | **当日**同题材涨停同伴数 `theme_lu_count≥3`；见 [`docs/FACTOR14.md`](../docs/FACTOR14.md) |
+| **factor15** | 因子15-题材晋级低开 | 情绪题材 | 题材联动过滤（可选） | gap ∈ [-4.5%, -0.3%]；默认关闭，需 `--gap-filter` |
+| **factor16** | 因子16-概念龙头评分 | 选股质量 | 概念/池内龙头排序 | `factor16_leader_score.py`：**13A** 质量带 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](../docs/FACTOR16.md) |
+| **factor17** | 因子17-缠论笔盈亏比 | 缠论 | 笔归因评估 | `bi_pl_ratio.py`：因子1 费用后按买入笔记账；原策略七入口，Web 在因子池 |
+| **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪门控 | 中证1000 低开开盘跌停家数→平静/正常/恐慌；策略九挂载 |
+| **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
 from strategy import list_factors
@@ -102,9 +105,10 @@ for f in list_factors():
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧 run 别名 `run_strategy9` / `s9` / `策略九` |
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
-| **strategy7** | 策略七·缠论笔算盈亏比 | factor1 | ✅ 研究 | 日线笔归因：因子1费用后闭环按买入笔记账，跨笔卖点平移；输出盈亏比/让利/防守；别名 `s7` / `s11` / `strategy11` / `bi_pl` / `笔盈亏比` |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
-| **strategy9** | 策略九·低开跌停情绪 | — | ✅ 研究 | 中证1000 **低开开盘跌停**家数 → 对照上证当日涨跌（2020→）；`backtest/strategy9_limit_down_emotion/` |
+| **strategy9** | 策略九·低开跌停情绪 | factor18 | ✅ 研究 | 挂载因子18；中证1000 低开开盘跌停家数 → 对照上证当日涨跌；`backtest/strategy9_limit_down_emotion/` |
+
+策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
 
 旧执行层 3/4/5/6/8 的研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。现行 strategy6 是新注册的因子12 持有，不是旧动量混合。
 

@@ -107,6 +107,39 @@
     @apply bg-ui-fill-active text-accent;
   }
 
+  /* 因子说明页：分类 chip */
+  .factor-cat-nav {
+    @apply mb-5 flex flex-wrap gap-2;
+  }
+
+  .factor-cat-chip {
+    @apply rounded-full border border-ui-hairline px-3 py-1 text-xs font-semibold text-ui-text-2 transition;
+  }
+
+  .factor-cat-chip:hover {
+    @apply bg-ui-fill-hover text-ui-text;
+  }
+
+  .factor-cat-chip-active {
+    border-color: color-mix(in srgb, var(--watch-accent) 45%, var(--ui-hairline));
+    background-color: color-mix(in srgb, var(--watch-accent) 16%, transparent);
+    @apply text-accent;
+  }
+
+  .factor-cat-head {
+    @apply mb-3 border-l-2 pl-3;
+    border-color: color-mix(in srgb, var(--watch-accent) 50%, var(--ui-hairline));
+  }
+
+  .factor-cat-head--execution { border-color: #38bdf8; }
+  .factor-cat-head--drawdown { border-color: #f59e0b; }
+  .factor-cat-head--take_profit { border-color: #34d399; }
+  .factor-cat-head--momentum { border-color: #818cf8; }
+  .factor-cat-head--reversal { border-color: #fb7185; }
+  .factor-cat-head--chan { border-color: #c084fc; }
+  .factor-cat-head--sentiment { border-color: #f472b6; }
+  .factor-cat-head--quality { border-color: #22d3ee; }
+
   /* 策略/因子说明页：锚点 pill 导航，吸顶于 WatchNav 下方 */
   .registry-sticky-nav {
     position: sticky;

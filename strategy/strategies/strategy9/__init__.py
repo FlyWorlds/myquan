@@ -62,7 +62,7 @@ def _bind() -> StrategySpec:
             "default": False,
             "mode": "market_emotion",
             "backtest_cli": "backtest/strategy9_limit_down_emotion/run.py",
-            "factors": (),
+            "factors": ("factor18",),
         },
     )
 

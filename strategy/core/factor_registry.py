@@ -8,20 +8,22 @@ from strategy.core.protocols import FactorSpec
 
 FACTOR_REGISTRY: dict[str, FactorSpec] = {}
 
-_FACTOR_NUM_RE = re.compile(r"^factor(\d+)$", re.I)
+_FACTOR_NUM_RE = re.compile(r"^factor(\d+)([a-z]?)$", re.I)
 _CF_NUM_RE = re.compile(r"^cf(\d+)$", re.I)
 
 
-def factor_sort_key(factor_id: str) -> tuple[int, int, str]:
-    """factor1…factor13 按编号，cf* 其后，其余按 id。"""
+def factor_sort_key(factor_id: str) -> tuple[int, int, int, str]:
+    """factor1…factor18 按编号（13a 紧随 13），cf* 其后，其余按 id。"""
     fid = str(factor_id)
     m = _FACTOR_NUM_RE.match(fid)
     if m:
-        return (0, int(m.group(1)), fid)
+        suffix = m.group(2) or ""
+        sub = (ord(suffix) - 96) if suffix else 0
+        return (0, int(m.group(1)), sub, fid)
     m = _CF_NUM_RE.match(fid)
     if m:
-        return (1, int(m.group(1)), fid)
-    return (2, 0, fid)
+        return (1, int(m.group(1)), 0, fid)
+    return (2, 0, 0, fid)
 
 
 def register_factor(spec: FactorSpec, *, replace: bool = False) -> FactorSpec:

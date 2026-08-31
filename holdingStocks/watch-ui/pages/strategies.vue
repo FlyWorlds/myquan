@@ -21,20 +21,22 @@ const REGISTRY_SECTIONS: { kind: StrategyRegistryKind; title: string; hint: stri
     hint: '独立组合与执行逻辑，暂无盯盘实时表。',
   },
   {
-    kind: 'factor_template',
-    title: '因子模板',
-    hint: '本质是因子 + 固定持有/换池规则，详见因子说明。',
+    kind: 'combo',
+    title: '因子组合',
+    hint: '用因子池里的选股/结构因子挂成持有策略（可再叠开盘执行因子）。',
   },
   {
     kind: 'research',
-    title: '研究 / 宏观',
-    hint: '归因、情绪统计等研究入口，非日常盯盘。',
+    title: '研究',
+    hint: '情绪/宏观对照等研究入口，非日常盯盘。',
   },
 ]
 
 function sectionItems(kind: StrategyRegistryKind) {
   return strategies.value.filter((s) => (s.registry_kind || 'production') === kind)
 }
+
+const hasAny = computed(() => REGISTRY_SECTIONS.some((sec) => sectionItems(sec.kind).length > 0))
 </script>
 
 <template>
@@ -42,8 +44,10 @@ function sectionItems(kind: StrategyRegistryKind) {
     <header class="mb-6">
       <h1 class="text-2xl font-bold">策略说明</h1>
       <p class="mt-1 text-sm text-ui-text-2">
-        卡片样式与持仓 Tab 一致；鼠标悬停 <strong>0.5 秒</strong> 后显示完整说明。
-        仅<strong>盯盘策略</strong>出现在首页 Tab，因子模板与研究型条目在此查阅。
+        策略 = 因子组合 + 执行。悬停 <strong>0.5 秒</strong> 看绑定因子。
+        单因子规则见
+        <NuxtLink to="/factors" class="text-accent hover:underline">因子说明</NuxtLink>
+        。
       </p>
     </header>
 
@@ -73,6 +77,6 @@ function sectionItems(kind: StrategyRegistryKind) {
       </section>
     </template>
 
-    <p v-if="!loading && !error && !strategies.length" class="text-sm text-ui-text-2">暂无注册策略。</p>
+    <p v-if="!loading && !error && !hasAny" class="text-sm text-ui-text-2">暂无注册策略。</p>
   </div>
 </template>

@@ -30,7 +30,7 @@ SPEC = FactorSpec(
         "default_params": dict(DEFAULT_PARAMS),
         "timing": "fit_score_oos_display",
         "research_only": True,
-        "upstream": ["factor13a", "factor13b", "factor1", "strategy7"],
+        "upstream": ["factor13a", "factor13b", "factor1", "factor17"],
         "docs": "docs/FACTOR16.md",
         "sectors_api": "sectors/leader_score.py",
     },

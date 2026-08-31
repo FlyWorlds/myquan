@@ -24,8 +24,7 @@ const kindBadge = computed(() => {
 
 const kindBadgeClass = computed(() => {
   const map: Record<string, string> = {
-    production: 'bg-sky-400/15 text-sky-300',
-    factor_template: 'bg-violet-400/15 text-violet-300',
+    combo: 'bg-violet-400/15 text-violet-300',
     research: 'bg-ui-fill-active text-ui-text-3',
   }
   return map[String(props.tab.registry_kind || '')] || 'bg-ui-fill-active text-ui-text-3'

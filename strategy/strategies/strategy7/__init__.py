@@ -1,7 +1,6 @@
-"""策略七：缠论笔算盈亏比。
+"""策略七 · CLI 包装：缠论笔盈亏比已归因子17。
 
-用 CZSC 日线笔切分行情，把因子1（开盘突破）费用后闭环交易按买入笔归因；
-卖点落在另一笔时，卖价差价平移记入买入笔，并输出盈亏比 / 让利 / 防守。
+保留 run_strategy7 / 旧号 strategy11 以便脚本不改；Web 策略栏不再展示。
 """
 
 from __future__ import annotations
@@ -10,28 +9,30 @@ from typing import Any
 
 from strategy.bi_pl_ratio import BiPlRatioResult, analyze_bi_pl_ratio, run_bi_pl_ratio
 from strategy.config import TIANTONG
-from strategy.core.protocols import StrategySpec
+from strategy.core.protocols import StrategySpec, bind_factor
 from strategy.core.strategy_registry import register_strategy
 from strategy.strategies._common import compose_rules
-from strategy.strategies.strategy7.bindings import (
-    FACTOR_BINDINGS,
-    STRATEGY_ID,
-    STRATEGY_NAME,
-)
 from strategy.strategies.strategy7.decision import Strategy7Decision, create_decision_engine
+
+STRATEGY_ID = "strategy7"
+STRATEGY_NAME = "策略七·缠论笔算盈亏比"
+
+FACTOR_BINDINGS = (
+    bind_factor(
+        "factor17",
+        label="缠论笔盈亏比",
+        role="custom",
+        filter_desc="评估因子：因子1 费用后盈亏按买入笔记账，不单独下单",
+    ),
+)
 
 
 def _print_rules() -> str:
     head = compose_rules(STRATEGY_NAME, bindings=FACTOR_BINDINGS)
     extra = """
------ 笔归因规则 -----
-1. 级别：日线·笔（CZSC；当前库无线段 API 时按笔）
-2. 交易：因子1 开盘±pct，费用用 strategy.costs 统一口径
-3. 记账：闭环收益记入「买入所在笔」；卖点跨笔则卖价平移到买入笔
-4. 向上笔让利 = 笔结构涨幅 − 因子1归因复合收益
-5. 向下笔防守 = 因子1归因复合收益 − 笔结构跌幅
-6. 盈亏比 = 平均盈利 / |平均亏损|（费用后）
-仅供研究，不构成投资建议。
+----- 说明 -----
+缠论笔盈亏比已注册为 **因子17**，本入口仅保留 CLI 兼容。
+Web 请到「因子说明 → 缠论」。
 """
     return head + "\n" + extra.strip()
 
@@ -48,10 +49,7 @@ def _bind() -> StrategySpec:
     return StrategySpec(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
-        description=(
-            "日线笔归因：因子1开盘突破费用后盈亏按买入笔记账，"
-            "跨笔卖点平移，输出盈亏比/让利/防守"
-        ),
+        description="兼容 CLI：等同因子17-缠论笔盈亏比；Web 策略栏不展示",
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy7,
         default_config=TIANTONG,
@@ -67,18 +65,20 @@ def _bind() -> StrategySpec:
             "缠论笔算盈亏比",
             "笔盈亏比",
             "策略七",
+            "factor17",
         ),
         implemented=True,
         meta={
             "default": False,
             "mode": "research_attribution",
-            "standalone_factor": "factor1",
+            "web_hide": True,
+            "canonical_factor": "factor17",
             "structure": "czsc_bi",
         },
     )
 
 
-register_strategy(_bind())
+register_strategy(_bind(), replace=True)
 
 __all__ = [
     "STRATEGY_ID",

@@ -147,7 +147,7 @@ _ws_hub: LocalWsHub | None = None
 _last_watch_snapshot: dict[str, Any] | None = None
 _last_snapshot_digest: str | None = None
 _strategies_api_cache: list[dict[str, Any]] | None = None
-_factors_api_cache: list[dict[str, Any]] | None = None
+_factors_api_cache: dict[str, Any] | None = None
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
 _REPLAY_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _MIN_WATCH_REFRESH_SEC = 1.0
@@ -294,7 +294,7 @@ WATCH_LIVE_TAB_IDS = frozenset({"strategy1", "strategy3", "strategy8"})
 _REGISTRY_KIND_ZH = {
     "watch": "盯盘",
     "production": "完整策略",
-    "factor_template": "因子模板",
+    "combo": "因子组合",
     "research": "研究",
 }
 
@@ -318,14 +318,16 @@ def _strategy_tab_label(strategy_id: str, name: str) -> str:
 
 
 def _strategy_registry_kind(strategy_id: str, meta: Mapping[str, Any] | None) -> str:
-    """Web 注册表分区：watch=盯盘 Tab；factor_template=因子持有模板；research=宏观/归因。"""
+    """Web 策略栏分区：watch / production / combo（因子组合）/ research。"""
     sid = str(strategy_id)
     m = dict(meta or {})
+    if m.get("web_hide"):
+        return "hidden"
     if sid in WATCH_LIVE_TAB_IDS:
         return "watch"
-    if m.get("standalone_factor"):
-        return "factor_template"
-    if sid in ("strategy7", "strategy9") or m.get("mode") == "market_emotion":
+    if sid in ("strategy5", "strategy6") or m.get("mode") == "weekly_equal_weight_hold":
+        return "combo"
+    if sid == "strategy9" or m.get("mode") == "market_emotion":
         return "research"
     return "production"
 
@@ -357,6 +359,9 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
                     "description": fdesc,
                 }
             )
+        kind = _strategy_registry_kind(spec.id, spec.meta)
+        if kind == "hidden":
+            continue
         tabs.append(
             {
                 "id": spec.id,
@@ -367,10 +372,8 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
                 "implemented": bool(spec.implemented),
                 "is_watch_default": spec.id == STRATEGY_ID,
                 "watch_tab": spec.id in WATCH_LIVE_TAB_IDS,
-                "registry_kind": _strategy_registry_kind(spec.id, spec.meta),
-                "registry_kind_label": _REGISTRY_KIND_ZH.get(
-                    _strategy_registry_kind(spec.id, spec.meta), "策略"
-                ),
+                "registry_kind": kind,
+                "registry_kind_label": _REGISTRY_KIND_ZH.get(kind, "策略"),
                 "factors": factors,
             }
         )
@@ -420,13 +423,18 @@ def _load_watch_factors_api() -> list[dict[str, Any]]:
                     "label": _strategy_tab_label(spec.id, spec.name),
                     "role": _FACTOR_ROLE_ZH.get(str(b.role), str(b.role)),
                     "filter_desc": str(b.filter_desc or "").strip(),
+                    "registry_kind": _strategy_registry_kind(spec.id, spec.meta),
                 }
             )
 
+    from strategy.factors.categories import category_label, category_of, list_category_catalog
+
+    catalog = list_category_catalog()
     rows: list[dict[str, Any]] = []
     for fspec in list_factors():
         bindings = used_by.get(str(fspec.id), [])
-        bindings.sort(key=lambda s: int(_strategy_tab_number(str(s["id"]))))
+        bindings.sort(key=lambda s: int(_strategy_tab_number(str(s["id"])) or 0) if str(s["id"]).startswith("strategy") else 99)
+        cat = category_of(str(fspec.id), fspec.meta)
         rows.append(
             {
                 "id": fspec.id,
@@ -435,13 +443,15 @@ def _load_watch_factors_api() -> list[dict[str, Any]]:
                 "rules_text": str(fspec.rules_text or "").strip(),
                 "implemented": bool(fspec.implemented),
                 "meta": _json_safe_meta(fspec.meta),
-                "used_by": bindings,
+                "category": cat,
+                "category_label": category_label(cat),
+                "used_by": [b for b in bindings if b.get("registry_kind") != "hidden"],
             }
         )
-    return rows
+    return {"categories": catalog, "factors": rows}
 
 
-def _get_factors_api_cache() -> list[dict[str, Any]]:
+def _get_factors_api_cache() -> dict[str, Any]:
     global _factors_api_cache
     if _factors_api_cache is None:
         _factors_api_cache = _load_watch_factors_api()

@@ -3,7 +3,7 @@
 > 研究用途，不构成投资建议。  
 > 注册表与 API 细节见 [`strategy/README.md`](../strategy/README.md)；凯盛单票审计见 [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md)。
 
-**最后更新**：2026-08-30
+**最后更新**：2026-08-31
 
 ---
 
@@ -55,9 +55,10 @@ python -c "from strategy import run_open_break; ..."
 | strategy4 | F4 止盈动量 | factor1+4+10 | 研究 |
 | strategy5 | 近高 Top5 等权 | factor11 | 研究 |
 | strategy6 | 反转池近高 | factor12 | 研究，未替换 strategy5 |
-| strategy7 | 策略七·缠论笔盈亏比 | factor1 | 研究 |
 | strategy8 | 题材联动 | factor14 + factor1 | 研究；见 §3.2 |
-| strategy9 | 低开跌停情绪 | — | 研究；见 §3.3 |
+| strategy9 | 低开跌停情绪 | factor18 | 研究；见 §3.3 |
+
+缠论笔盈亏比已归 **因子17**（原 strategy7 CLI 仍可用）。
 
 因子14：**当日**同题材涨停同伴数（通达信概念 offline 索引），见 [`FACTOR14.md`](FACTOR14.md)。
 

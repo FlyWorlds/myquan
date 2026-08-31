@@ -8,6 +8,13 @@ export interface FactorUsedBy {
   label: string
   role: string
   filter_desc?: string
+  registry_kind?: StrategyRegistryKind
+}
+
+export interface FactorCategory {
+  id: string
+  label: string
+  hint: string
 }
 
 export interface FactorEntry {
@@ -17,6 +24,8 @@ export interface FactorEntry {
   rules_text?: string
   implemented?: boolean
   meta?: Record<string, unknown>
+  category?: string
+  category_label?: string
   used_by?: FactorUsedBy[]
 }
 
@@ -29,7 +38,7 @@ export interface StrategyBacktestRow {
   n_trades?: number
 }
 
-export type StrategyRegistryKind = 'watch' | 'production' | 'factor_template' | 'research'
+export type StrategyRegistryKind = 'watch' | 'production' | 'combo' | 'research' | 'hidden'
 
 export type StrategyEntry = StrategyTab & {
   backtest?: StrategyBacktestRow[]
