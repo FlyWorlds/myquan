@@ -135,7 +135,7 @@ watch(conceptName, async () => {
           <div>
             <h3 class="text-sm font-semibold">因子龙头 Top5（2025至今）</h3>
             <p class="mt-1 text-xs text-ui-text-3">
-              因子13质量带 + 因子1盈亏比/胜率 + 缠论笔对照 · 排序同 ai_concept_f1_f13_report
+              因子16（F13质量带 + 因子1 + 缠论笔）· 排序见 docs/FACTOR16.md
             </p>
           </div>
           <span v-if="leaderScores?.updated_at" class="text-xs text-ui-text-3">
