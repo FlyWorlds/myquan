@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from .concept_leaders import build_concept_detail
+from .leader_score import get_concept_scored_leaders
 from .tdx import tdx_availability
 from .tdx_rotation import build_tdx_concept_rotation_payload
 
@@ -65,6 +66,17 @@ def get_rotation_payload(*, days: int = 20, top_n: int = 10, refresh: bool = Fal
 def get_concept_detail(concept_name: str, *, months: int = 6, refresh: bool = False) -> dict[str, Any]:
     name = unquote(str(concept_name or "").strip())
     return build_concept_detail(name, months=months, force=refresh)
+
+
+def get_concept_leader_scores(
+    concept_name: str,
+    *,
+    start: str = "2025-01-01",
+    refresh: bool = False,
+    top_n: int = 5,
+) -> dict[str, Any]:
+    name = unquote(str(concept_name or "").strip())
+    return get_concept_scored_leaders(name, start=start, force=refresh, top_n=top_n)
 
 
 def get_status() -> dict[str, Any]:

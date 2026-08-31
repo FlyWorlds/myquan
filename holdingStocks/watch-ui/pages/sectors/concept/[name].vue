@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import type { ConceptDetailPayload } from '~/types/sectors'
+import type { ConceptDetailPayload, ConceptLeaderScoresPayload } from '~/types/sectors'
 
 const route = useRoute()
-const { fetchConceptDetail } = useSectorsApi()
+const { fetchConceptDetail, fetchConceptLeaderScores } = useSectorsApi()
 const { sectors, liveAt, refreshSec, setFocus } = useSectorsLive()
 const store = useWatchStore()
 
 const conceptName = computed(() => decodeURIComponent(String(route.params.name || '')))
 const loading = ref(true)
+const scoreLoading = ref(true)
 const error = ref('')
+const scoreError = ref('')
 const detail = ref<ConceptDetailPayload | null>(null)
+const leaderScores = ref<ConceptLeaderScoresPayload | null>(null)
 
 const conceptLive = computed(() => {
   if (sectors.value?.conceptIndex?.name === conceptName.value) {
@@ -47,6 +50,21 @@ const wsLabel = computed(() => {
   return store.wsStatus
 })
 
+async function loadScores(refresh = false) {
+  scoreLoading.value = true
+  scoreError.value = ''
+  try {
+    leaderScores.value = await fetchConceptLeaderScores(conceptName.value, '2025-01-01', refresh)
+    if (leaderScores.value?.error && !leaderScores.value.leaders?.length) {
+      scoreError.value = leaderScores.value.error
+    }
+  } catch (e) {
+    scoreError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    scoreLoading.value = false
+  }
+}
+
 async function load(refresh = false) {
   loading.value = true
   error.value = ''
@@ -60,9 +78,13 @@ async function load(refresh = false) {
   }
 }
 
+async function reloadAll(refresh = false) {
+  await Promise.all([load(refresh), loadScores(refresh)])
+}
+
 onMounted(async () => {
   await setFocus(conceptName.value)
-  await load()
+  await Promise.all([load(), loadScores()])
 })
 
 onBeforeUnmount(() => {
@@ -71,7 +93,7 @@ onBeforeUnmount(() => {
 
 watch(conceptName, async () => {
   await setFocus(conceptName.value)
-  await load()
+  await Promise.all([load(), loadScores()])
 })
 </script>
 
@@ -96,7 +118,9 @@ watch(conceptName, async () => {
         </p>
         <p v-else class="mt-1 text-sm text-ui-text-2">通达信概念指数 · 近半年 K 线 · 波段龙头</p>
       </div>
-      <button class="btn btn-ghost" :disabled="loading" @click="load(true)">重载波段</button>
+      <button class="btn btn-ghost" :disabled="loading || scoreLoading" @click="reloadAll(true)">
+        重载
+      </button>
     </div>
 
     <div v-if="loading" class="rounded-xl border border-ui-hairline bg-ui-surface p-8 text-center text-ui-text-2">
@@ -106,6 +130,98 @@ watch(conceptName, async () => {
       {{ error }}
     </div>
     <template v-else-if="detail">
+      <section class="rounded-xl border border-ui-hairline bg-ui-surface p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-semibold">因子龙头 Top5（2025至今）</h3>
+            <p class="mt-1 text-xs text-ui-text-3">
+              因子13质量带 + 因子1盈亏比/胜率 + 缠论笔对照 · 排序同 ai_concept_f1_f13_report
+            </p>
+          </div>
+          <span v-if="leaderScores?.updated_at" class="text-xs text-ui-text-3">
+            {{ leaderScores.updated_at }}
+          </span>
+        </div>
+        <div
+          v-if="scoreLoading"
+          class="mt-4 rounded-lg border border-ui-hairline bg-ui-bg/50 p-6 text-center text-sm text-ui-text-2"
+        >
+          正在回测成分股（因子13+因子1+缠论，首次较慢）…
+        </div>
+        <div v-else-if="scoreError" class="mt-4 text-sm text-watch-up">{{ scoreError }}</div>
+        <div v-else-if="leaderScores?.leaders?.length" class="mt-4 overflow-x-auto">
+          <table class="w-full min-w-[720px] text-sm">
+            <thead>
+              <tr class="text-left text-ui-text-2">
+                <th class="pb-2 pr-2">#</th>
+                <th class="pb-2 pr-2">标的</th>
+                <th class="pb-2 pr-2 text-right">F13分</th>
+                <th class="pb-2 pr-2 text-center">过带</th>
+                <th class="pb-2 pr-2 text-right">盈亏比</th>
+                <th class="pb-2 pr-2 text-right">胜率%</th>
+                <th class="pb-2 pr-2 text-right">超额%</th>
+                <th class="pb-2 pr-2 text-right">回撤%</th>
+                <th class="pb-2 pr-2 text-right">收益%</th>
+                <th class="pb-2 pr-2 text-right">缠论比</th>
+                <th class="pb-2 text-right">现价</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="l in leaderScores.leaders"
+                :key="l.code"
+                class="border-t border-ui-hairline"
+              >
+                <td class="py-2 pr-2">{{ l.rank }}</td>
+                <td class="py-2 pr-2">
+                  {{ l.name }}
+                  <span class="text-ui-text-3">{{ l.code }}</span>
+                </td>
+                <td class="py-2 pr-2 text-right font-mono">
+                  {{ l.score_quality != null ? l.score_quality.toFixed(3) : '-' }}
+                </td>
+                <td class="py-2 pr-2 text-center">{{ l.f13_pass ? '✓' : '·' }}</td>
+                <td class="py-2 pr-2 text-right font-semibold">
+                  {{ l.pl_ratio != null ? l.pl_ratio.toFixed(2) : '-' }}
+                </td>
+                <td class="py-2 pr-2 text-right">
+                  {{ l.win_rate != null ? l.win_rate.toFixed(1) : '-' }}
+                </td>
+                <td
+                  class="py-2 pr-2 text-right"
+                  :class="(l.excess_pct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'"
+                >
+                  {{ l.excess_pct != null ? `${l.excess_pct >= 0 ? '+' : ''}${l.excess_pct.toFixed(2)}` : '-' }}
+                </td>
+                <td class="py-2 pr-2 text-right text-watch-down">
+                  {{ l.mdd_pct != null ? l.mdd_pct.toFixed(2) : '-' }}
+                </td>
+                <td
+                  class="py-2 pr-2 text-right"
+                  :class="(l.ret_pct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'"
+                >
+                  {{ l.ret_pct != null ? `${l.ret_pct >= 0 ? '+' : ''}${l.ret_pct.toFixed(2)}` : '-' }}
+                </td>
+                <td class="py-2 pr-2 text-right text-ui-text-2">
+                  {{ l.chan_pl_ratio != null ? l.chan_pl_ratio.toFixed(2) : '-' }}
+                </td>
+                <td class="py-2 text-right">
+                  {{
+                    sectors?.quotes?.[l.code]?.price != null
+                      ? sectors.quotes[l.code].price!.toFixed(2)
+                      : '-'
+                  }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="leaderScores.scoring?.rank" class="mt-2 text-xs text-ui-text-3">
+            {{ leaderScores.scoring.rank }} · 候选 {{ leaderScores.candidate_count ?? '-' }} 只
+          </p>
+        </div>
+        <p v-else class="mt-4 text-sm text-ui-text-2">暂无满足条件的评分龙头</p>
+      </section>
+
       <ConceptKlineChart :detail="detail" />
 
       <div class="grid gap-4 lg:grid-cols-2">

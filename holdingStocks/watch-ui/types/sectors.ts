@@ -77,3 +77,33 @@ export interface ConceptDetailPayload {
   members_preview: { code: string; name: string }[]
   error?: string
 }
+
+export interface ScoredLeaderRow {
+  rank: number
+  code: string
+  name: string
+  score_quality: number | null
+  f13_pass: boolean
+  pl_ratio: number | null
+  win_rate: number | null
+  profit_factor: number | null
+  excess_pct: number | null
+  mdd_pct: number | null
+  ret_pct: number | null
+  sharpe_fit: number | null
+  n_trades: number
+  chan_pl_ratio: number | null
+  chan_win_rate: number | null
+  chan_trades: number
+}
+
+export interface ConceptLeaderScoresPayload {
+  concept: string
+  start: string
+  end: string
+  updated_at?: string
+  scoring?: Record<string, string>
+  candidate_count?: number
+  leaders: ScoredLeaderRow[]
+  error?: string
+}

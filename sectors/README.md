@@ -38,6 +38,7 @@ python index.py --days 5 --no-members --no-open
 | `tdx.py` | 通达信行业/概念/成分股 + pytdx |
 | `tdx_rotation.py` | 通达信概念轮动 payload |
 | `concept_leaders.py` | 概念波段龙头统计 |
+| `leader_score.py` | 因子13+因子1+缠论龙头评分（复用 ai_concept_f1_f13） |
 | `api.py` | Web API 数据层 |
 | `snapshots/` | 按日快照 |
 | `cache/` | 同花顺代码映射、涨停缓存 |
@@ -48,6 +49,7 @@ python index.py --days 5 --no-members --no-open
 |------|------|
 | `GET /api/sectors/rotation?days=20&top_n=10` | 通达信概念轮动热力表数据 |
 | `GET /api/sectors/concept/{名称}?months=6` | 概念指数 K 线 + 近半年波段龙头 |
+| `GET /api/sectors/concept/{名称}/leaders?start=2025-01-01&top_n=5` | 因子13+因子1+缠论 Top5（2025至今） |
 | `GET /api/sectors/focus?concept=名称` | 订阅概念成分/龙头实时报价（随 WS 5s 推送） |
 | `GET /api/sectors/status` | 通达信链路可用性 |
 

@@ -446,7 +446,12 @@ def _api_bool(qs: dict[str, list[str]], key: str) -> bool:
 
 
 def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
-    from sectors.api import get_concept_detail, get_rotation_payload, get_status
+    from sectors.api import (
+        get_concept_detail,
+        get_concept_leader_scores,
+        get_rotation_payload,
+        get_status,
+    )
     from sectors_watch import set_focus_concept
 
     api_path, qs = _parse_api_query(path)
@@ -466,7 +471,22 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
         except Exception as e:
             return 500, {"error": str(e)}
     if api_path.startswith("/api/sectors/concept/"):
-        name = unquote(api_path.split("/api/sectors/concept/", 1)[1])
+        tail = api_path.split("/api/sectors/concept/", 1)[1]
+        if "/leaders" in tail:
+            name = unquote(tail.split("/leaders", 1)[0])
+            start = (qs.get("start") or ["2025-01-01"])[0]
+            top_n = max(1, min(_api_int(qs, "top_n", 5), 10))
+            refresh = _api_bool(qs, "refresh")
+            try:
+                data = get_concept_leader_scores(
+                    name, start=str(start), refresh=refresh, top_n=top_n
+                )
+                if data.get("error") and not data.get("leaders"):
+                    return 404, data
+                return 200, data
+            except Exception as e:
+                return 500, {"error": str(e)}
+        name = unquote(tail)
         months = max(3, min(_api_int(qs, "months", 6), 12))
         refresh = _api_bool(qs, "refresh")
         try:
