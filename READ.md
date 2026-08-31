@@ -104,6 +104,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
 | **strategy7** | 策略七·缠论笔算盈亏比 | factor1 | ✅ 研究 | 日线笔 vs 因子1 费用后盈亏比；别名 `s7` / `strategy11` / `bi_pl` |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
+| **strategy9** | 策略九·低开跌停情绪 | — | ✅ 研究 | 中证1000 低开开盘跌停家数 → 对照上证当日涨跌；见 `backtest/strategy9_limit_down_emotion/` |
 
 旧执行层研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。
 

@@ -57,6 +57,7 @@ python -c "from strategy import run_open_break; ..."
 | strategy6 | 反转池近高 | factor12 | 研究，未替换 strategy5 |
 | strategy7 | 策略七·缠论笔盈亏比 | factor1 | 研究 |
 | strategy8 | 题材联动 | factor14 + factor1 | 研究；见 §3.2 |
+| strategy9 | 低开跌停情绪 | — | 研究；见 §3.3 |
 
 因子14：**当日**同题材涨停同伴数（通达信概念 offline 索引），见 [`FACTOR14.md`](FACTOR14.md)。
 
@@ -103,6 +104,33 @@ python -c "from strategy import run_open_break; ..."
 | ±3.0% | +9.1% | 2.9% | 184 |
 
 真源：`strategy/strategies/strategy8/theme_linkage.py` · 报告：`backtest/strategy8_theme_linkage/REPORT.md`
+
+---
+
+### 3.3 策略九 · 低开跌停情绪（strategy9）
+
+**统计口径（2020→今，研究）**
+
+- 宇宙：中证1000（剔 ST / 北交），与策略三同源日线缓存
+- **低开开盘即跌停**：开盘 < 昨收，且开盘价落在跌停价容差内（主板 10% / 科创创业 20%）
+- 大盘参照：上证指数 `sh000001` 收盘相对昨收涨跌幅
+
+**情绪阶段（`mkt_ld_open` 家数）**
+
+- 平静：`0`（当日无低开跌停开盘）
+- 正常：`1～3`
+- 恐慌：`≥ 4`
+
+**方向研判（样本内规则，非投资建议）**
+
+- 恐慌 → 预判当日收跌；平静 → 预判当日收涨；正常 → 顺势偏空
+
+```bash
+python backtest/strategy9_limit_down_emotion/run.py --start 20200101
+python -c "from strategy import run_strategy9_emotion; run_strategy9_emotion()"
+```
+
+真源：`strategy/strategies/strategy9/` · 报告：`backtest/strategy9_limit_down_emotion/REPORT.md`
 
 ---
 

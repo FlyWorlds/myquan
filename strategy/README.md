@@ -99,11 +99,12 @@ for f in list_factors():
 | **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警；定盘池 13A→16 Top10；别名 `open_break3` / `s1` / `策略一` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
 | **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮展示+±阈值；回测：首板+gap/量比 · 别名 `s3` |
-| **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧号 `strategy9` / `s9` / `策略九` |
+| **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧 run 别名 `run_strategy9` / `s9` / `策略九` |
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
 | **strategy7** | 策略七·缠论笔算盈亏比 | factor1 | ✅ 研究 | 日线笔归因：因子1费用后闭环按买入笔记账，跨笔卖点平移；输出盈亏比/让利/防守；别名 `s7` / `s11` / `strategy11` / `bi_pl` / `笔盈亏比` |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
+| **strategy9** | 策略九·低开跌停情绪 | — | ✅ 研究 | 中证1000 **低开开盘跌停**家数 → 对照上证当日涨跌（2020→）；`backtest/strategy9_limit_down_emotion/` |
 
 旧执行层 3/4/5/6/8 的研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。现行 strategy6 是新注册的因子12 持有，不是旧动量混合。
 
@@ -118,7 +119,7 @@ for b in get_strategy_bindings("strategy3"):
 ```
 
 ```python
-from strategy import run_strategy3, run_strategy5, run_strategy7, run_strategy8
+from strategy import run_strategy3, run_strategy5, run_strategy7, run_strategy8, run_strategy9_emotion
 
 # 策略五：因子11 近高 Top5 等权持有（研究回测，不构成投资建议）
 run_strategy5(start="20200102")
@@ -151,6 +152,8 @@ python backtest/strategy3_first_board/run.py
 python backtest/strategy8_theme_linkage/run.py --start 20250101
 python -c "from strategy import run_strategy3; run_strategy3()"
 python -c "from strategy import run_strategy8; run_strategy8(start='20250101')"
+python backtest/strategy9_limit_down_emotion/run.py --start 20200101
+python -c "from strategy import run_strategy9_emotion; run_strategy9_emotion()"
 ```
 
 策略三：昨日涨停池 + T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示 + 因子1 ±阈值。策略八：题材联动（**当日涨停定题材** + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。

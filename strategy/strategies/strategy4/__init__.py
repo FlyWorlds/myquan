@@ -51,7 +51,7 @@ def _bind() -> StrategySpec:
         strategy_cls=OpenBreak3Strategy,
         print_rules=_print_rules,
         decision_factory=create_decision_engine,
-        aliases=("s4", "s9", "strategy9", "策略四", "策略九"),
+        aliases=("s4", "s9", "策略四", "策略九"),
         implemented=True,
         meta={
             "default": False,
