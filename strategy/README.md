@@ -222,6 +222,8 @@ cd backtest && python run.py kaicheng --no-open
 python -m strategy.etf_combo_momentum
 # 旧对照：因子3选股+因子1止损
 cd backtest && python compare_f3_select_f1_stop.py
+# 策略一拟合池：三种≥2×阈值不过门（2023→今，分年）
+cd backtest && python s1_gate_three.py
 # 策略三：五槽位、单主题一只、固定持有5日
 python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 --max-per-theme 1 --hold-days 5
 # 因子7（Python API；离线测试不拉行情）
