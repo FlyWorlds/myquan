@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import datetime as dt
+import threading
 from pathlib import Path
 
 import akshare as ak
 import pandas as pd
 import requests
+
+# akshare 部分接口经 py_mini_racer(V8)，多线程并发会 SIGTRAP；全进程串行调用
+AKSHARE_CALL_LOCK = threading.Lock()
 
 # 相邻两根日线日历间隔超过该值视为可疑缺口（含春节长假缓冲）
 _MAX_BAR_GAP_DAYS = 20
@@ -90,7 +94,8 @@ def _fetch_etf_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
     """ETF 前复权日线（东财 fund_etf_hist_em）。"""
     code = str(symbol).strip().lower()[2:]
     try:
-        raw = ak.fund_etf_hist_em(
+        with AKSHARE_CALL_LOCK:
+            raw = ak.fund_etf_hist_em(
             symbol=code,
             period="daily",
             start_date=start,
@@ -107,7 +112,8 @@ def _fetch_etf_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
 def _fetch_stock_daily_remote(symbol: str, start: str, end: str) -> pd.DataFrame:
     """A 股个股前复权日线。"""
     try:
-        raw = ak.stock_zh_a_daily(
+        with AKSHARE_CALL_LOCK:
+            raw = ak.stock_zh_a_daily(
             symbol=symbol, start_date=start, end_date=end, adjust="qfq"
         )
     except Exception as exc:

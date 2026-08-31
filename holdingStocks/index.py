@@ -81,7 +81,7 @@ from strategy.open_break import (
     strategy_levels,
     strategy_signal,
 )
-from strategy.data import fetch_daily
+from strategy.data import AKSHARE_CALL_LOCK, fetch_daily
 
 from factor2_watch import format_factor2_summary, sync_factor2
 from factor4_watch import (
@@ -852,7 +852,7 @@ def _reseed_live_batch(
 def _daily_cache_warm(watchlist: list[dict[str, Any]] | None = None) -> None:
     """并行预热日线缓存，避免首屏 collect_rows 串行等 IO。"""
     items = watchlist if watchlist is not None else WATCHLIST
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda w: _watch_daily(w["sina"]), items))
 
 
@@ -1919,7 +1919,8 @@ def pct_vs_open(open_px: float, px: float) -> float | None:
 def fetch_indices() -> list[dict[str, Any]]:
     """拉取上证指数 / 深证成指：最新点数、涨跌点数、涨跌幅。"""
     try:
-        spot = ak.stock_zh_index_spot_sina()
+        with AKSHARE_CALL_LOCK:
+            spot = ak.stock_zh_index_spot_sina()
     except Exception as e:  # noqa: BLE001
         return [
             {

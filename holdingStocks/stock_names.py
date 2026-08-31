@@ -73,11 +73,14 @@ def _cache_stale(data: dict[str, str]) -> bool:
 
 
 def _fetch_akshare_full_map() -> dict[str, str]:
+    """仅 CLI 刷新缓存时使用（akshare 非线程安全）。"""
     out: dict[str, str] = {}
     try:
+        from strategy.data import AKSHARE_CALL_LOCK
         import akshare as ak
 
-        df = ak.stock_info_a_code_name()
+        with AKSHARE_CALL_LOCK:
+            df = ak.stock_info_a_code_name()
         for _, r in df.iterrows():
             c = str(r.get("code", "")).zfill(6)
             n = str(r.get("name", "")).strip()
@@ -127,34 +130,15 @@ def _merge_refresh_name_cache(existing: dict[str, str]) -> dict[str, str]:
     return out
 
 
-def _univ_missing_codes(cached: dict[str, str]) -> set[str]:
-    p = _MYQUAN / "backtest/strategy3_first_board/zz1000_univ.parquet"
-    if not p.is_file():
-        return set()
-    try:
-        df = pd.read_parquet(p)
-    except Exception:  # noqa: BLE001
-        return set()
-    missing: set[str] = set()
-    for _, r in df.iterrows():
-        c = str(r.get("code", "")).zfill(6)
-        if c and c not in cached:
-            missing.add(c)
-    return missing
-
-
 @lru_cache(maxsize=1)
-def _akshare_name_map() -> dict[str, str]:
-    """A 股 code→name（本地 JSON；过期或偏旧时 akshare 增量刷新）。"""
-    out = _read_name_cache()
-    if _cache_stale(out) or _univ_missing_codes(out):
-        out = _merge_refresh_name_cache(out)
-    return out
+def _local_name_map() -> dict[str, str]:
+    """盯盘热路径：只读本地 JSON，不触发 akshare 网络。"""
+    return _read_name_cache()
 
 
 @lru_cache(maxsize=512)
 def _lookup_name_online(code: str) -> str:
-    """单票补查（东财 → akshare），命中后写入本地缓存。"""
+    """单票东财补查（不用 akshare，避免 py_mini_racer 崩溃）。"""
     c = str(code).zfill(6)
     if not c.isdigit() or len(c) != 6:
         return ""
@@ -175,14 +159,6 @@ def _lookup_name_online(code: str) -> str:
             return n
     except Exception:  # noqa: BLE001
         pass
-    try:
-        ak = _fetch_akshare_full_map()
-        hit = ak.get(c, "")
-        if hit:
-            _remember_name(c, hit)
-            return hit
-    except Exception:  # noqa: BLE001
-        pass
     return ""
 
 
@@ -196,13 +172,13 @@ def _remember_name(code: str, name: str) -> None:
         return
     data[c] = n
     _write_name_cache(data)
-    _akshare_name_map.cache_clear()
+    _local_name_map.cache_clear()
     name_by_code.cache_clear()
 
 
 @lru_cache(maxsize=1)
 def name_by_code() -> dict[str, str]:
-    """code → 中文名（results.csv 优先，其次宇宙表 / 定盘池 / 持仓登记）。"""
+    """code → 中文名（results.csv 优先，其次宇宙表 / 定盘池 / 持仓登记 / 本地 JSON）。"""
     out: dict[str, str] = {}
 
     def _put(code: Any, name: Any) -> None:
@@ -252,7 +228,7 @@ def name_by_code() -> dict[str, str]:
     except Exception:  # noqa: BLE001
         pass
 
-    for c, n in _akshare_name_map().items():
+    for c, n in _local_name_map().items():
         if c not in out:
             out[c] = n
 
@@ -289,29 +265,34 @@ def lookup_names_for_codes(codes: list[str]) -> dict[str, str]:
         c = str(raw).zfill(6)
         if not c.isdigit():
             continue
-        n = base.get(c) or ak.get(c) or resolve_stock_name(code=c)
+        n = base.get(c) or ak.get(c)
+        if not n:
+            n = resolve_stock_name(code=c)
         if n:
             out[c] = n
     return out
 
 
 def warm_name_cache() -> int:
-    """watch 启动时预热名称表，避免 LRU 未加载 akshare 缓存。"""
+    """watch 启动时预热名称表（仅本地 JSON，不拉 akshare）。"""
     invalidate_name_cache()
-    merged = _akshare_name_map()
     table = name_by_code()
-    return max(len(merged), len(table))
+    return len(table)
 
 
 def refresh_name_cache(*, force: bool = False) -> int:
-    """手动刷新全量名称缓存，返回条目数。"""
+    """手动刷新全量名称缓存（可走 akshare），返回条目数。"""
     existing = {} if force else _read_name_cache()
-    data = _merge_refresh_name_cache(existing)
+    stale = _cache_stale(existing)
+    if force or stale:
+        data = _merge_refresh_name_cache(existing)
+    else:
+        data = existing
     invalidate_name_cache()
     return len(data)
 
 
 def invalidate_name_cache() -> None:
     name_by_code.cache_clear()
-    _akshare_name_map.cache_clear()
+    _local_name_map.cache_clear()
     _lookup_name_online.cache_clear()
