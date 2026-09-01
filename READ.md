@@ -48,6 +48,7 @@ akshare DataFrame
 | **盯盘 / 默认回测** | **策略一 = 因子1 + 因子2 预警**（因子2 回测不注资） |
 | **因子1** | 开盘 ±2.5%（单票可 ±3% 等）；买突破、卖仅止损、T+1 |
 | **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top10**（宽宇宙主板，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
+| **ETF 卫星池（策略一）** | `watch_config.S1_ETF_WATCHLIST`（8只：宽基 WF Top5 + 科创板 Top10 去重）→ `strategy/strategies/strategy1/etf_select/pool_dedup.json` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
 
 因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md) · 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md)
@@ -55,6 +56,7 @@ akshare DataFrame
 ```bash
 cd backtest && python strategy1.py --rules
 python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
+python strategy/strategies/strategy13/run_etf_wf.py   # 策略13 纯因子1 ETF Top10
 python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）
 ```
 
@@ -109,6 +111,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2%；调参 2020–2024 +645%/夏普 1.23，盲测 +3.6%/回撤 55% |
+| **strategy13** | 策略十三·因子1ETF | factor1 | ✅ 研究 | 纯因子1 ETF walk-forward Top10；见 [`docs/STRATEGY13.md`](docs/STRATEGY13.md) |
 
 `run_strategy7` 已归入 **因子17-缠论笔盈亏比**（Web 策略栏不展示）。
 `run_strategy9_emotion` 已归入 **因子18-低开跌停情绪**（Web 策略栏不展示）。

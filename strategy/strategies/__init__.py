@@ -15,6 +15,7 @@
   strategy8 — 题材联动：涨停池同题材共振 + 联动补涨（因子14 + 因子1）
   strategy9 — CLI：低开跌停情绪统计（因子18 研究入口，Web 不展示）
   strategy12 — 涨停次日低开：因子18 恐慌空仓 + 因子21 选股
+  strategy13 — 纯因子1 ETF：walk-forward 选参 + OOS 综合分 Top10
 """
 
 # 策略注册前先确保因子已注册（多策略共用因子）
@@ -30,6 +31,7 @@ from strategy.strategies import strategy7 as _s7  # noqa: F401
 from strategy.strategies import strategy8 as _s8  # noqa: F401
 from strategy.strategies import strategy9 as _s9e  # noqa: F401
 from strategy.strategies import strategy12 as _s12  # noqa: F401
+from strategy.strategies import strategy13 as _s13  # noqa: F401
 from strategy.core.strategy_registry import (
     STRATEGY_REGISTRY,
     get_strategy_spec,

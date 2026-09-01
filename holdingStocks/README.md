@@ -20,6 +20,8 @@
 
 编辑 **`watch_config.py`** 的 `_FIT_WATCH` / `FIT_WATCHLIST`（`index.py` 从此导入 `WATCHLIST`）。
 
+**策略一 ETF 卫星池**（因子1 独立阈值，不走 13A/16）：`watch_config.S1_ETF_WATCHLIST`，由宽基 walk-forward Top5 + 科创板 Top10 去重合并（真源 `strategy/strategies/strategy1/etf_select/pool_dedup.json`）。盯盘经 `effective_watchlist()` 与股票池一并拉行情。
+
 **当前定盘池（10 只，2026-08-31 换池）：**
 
 | 代码 | 名称 | 因子1 阈值 |

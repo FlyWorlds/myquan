@@ -1,0 +1,422 @@
+{
+  "strategy": "strategy13",
+  "end": "2026-09-01",
+  "n_pool": 1648,
+  "n_finalists": 1277,
+  "n_skipped": 371,
+  "scoring": "oos: sharpe30% + excess30% + ret20% + win_rate20%",
+  "top10": [
+    {
+      "code": "588710",
+      "name": "科创半导体设备ETF华泰柏瑞",
+      "symbol": "sh588710",
+      "cohort": "B",
+      "label": "买2/止3",
+      "entry_pct": 0.02,
+      "stop_pct": 0.03,
+      "prev_entry_mode": "yin_or_small_yang",
+      "oos_rank": 1,
+      "composite_score": 0.962646828504307,
+      "oos": {
+        "ret_pct": 93.77327046907611,
+        "excess_pct": 130.18133399992524,
+        "sharpe": 3.366690748794647,
+        "mdd_pct": 29.050635949369287,
+        "n_days": 160
+      },
+      "is": {
+        "ret_pct": 64.60833111847045,
+        "excess_pct": 8.708331118470454,
+        "sharpe": 4.601459992766949,
+        "mdd_pct": 9.092170108573717,
+        "n_days": 145
+      }
+    },
+    {
+      "code": "159321",
+      "name": "黄金股ETF华安",
+      "symbol": "sz159321",
+      "cohort": "B",
+      "label": "买3/止4",
+      "entry_pct": 0.03,
+      "stop_pct": 0.04,
+      "prev_entry_mode": "yin_or_small_yang",
+      "oos_rank": 2,
+      "composite_score": 0.9607674236491777,
+      "oos": {
+        "ret_pct": 67.29206710374258,
+        "excess_pct": 61.8194302878222,
+        "sharpe": 2.761464837854448,
+        "mdd_pct": 17.046206449206082,
+        "n_days": 160
+      },
+      "is": {
+        "ret_pct": 89.49192768194834,
+        "excess_pct": 6.761472606102387,
+        "sharpe": 2.7578241904259606,
+        "mdd_pct": 12.82173895831875,
+        "n_days": 237
+      }
+    },
+    {
+      "code": "513300",
+      "name": "纳斯达克ETF华夏",
+      "symbol": "sh513300",
+      "cohort": "A",
+      "label": "sym±3%",
+      "entry_pct": 0.03,
+      "stop_pct": 0.03,
+      "prev_entry_mode": "yin_or_small_yang",
+      "oos_rank": 3,
+      "composite_score": 0.9549725920125294,
+      "oos": {
+        "ret_pct": 71.54235632344539,
+        "excess_pct": 43.56135869874227,
+        "sharpe": 2.1496702064887225,
+        "mdd_pct": 15.795704681781741,
+        "n_days": 403
+      },
+      "is": {
+        "ret_pct": 88.62078889980158,
+        "excess_pct": -40.773451417974016,
+        "sharpe": 1.3897300059338882,
+        "mdd_pct": 19.15702978130822,
+        "n_days": 727
+      }
+    },
+    {
+      "code": "588180",
+      "name": "科创50ETF国联安",
+      "symbol": "sh588180",
+      "cohort": "A",
+      "label": "sym±2.5%仅阴",
+      "entry_pct": 0.025,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_only",
+      "oos_rank": 4,
+      "composite_score": 0.9483163664839467,
+      "oos": {
+        "ret_pct": 119.61475589860773,
+        "excess_pct": 41.62122839051709,
+        "sharpe": 2.517764419103569,
+        "mdd_pct": 12.966711610970872,
+        "n_days": 403
+      },
+      "is": {
+        "ret_pct": 206.7560658928428,
+        "excess_pct": 168.781382348539,
+        "sharpe": 1.9700958413512704,
+        "mdd_pct": 12.738206992449497,
+        "n_days": 727
+      }
+    },
+    {
+      "code": "561330",
+      "name": "矿业ETF国泰",
+      "symbol": "sh561330",
+      "cohort": "A",
+      "label": "买2.5/止3.5",
+      "entry_pct": 0.025,
+      "stop_pct": 0.035,
+      "prev_entry_mode": "yin_or_small_yang",
+      "oos_rank": 5,
+      "composite_score": 0.9391542678151918,
+      "oos": {
+        "ret_pct": 151.80193959848287,
+        "excess_pct": 144.2179742680387,
+        "sharpe": 2.308002604141031,
+        "mdd_pct": 26.09188661904549,
+        "n_days": 403
+      },
+      "is": {
+        "ret_pct": 91.59211503095108,
+        "excess_pct": 3.7991462809511063,
+        "sharpe": 1.0363813236996335,
+        "mdd_pct": 31.362403430086218,
+        "n_days": 727
+      }
+    },
+    {
+      "code": "562950",
+      "name": "消费电子ETF易方达",
+      "symbol": "sh562950",
+      "cohort": "A",
+      "label": "买2/止2.5",
+      "entry_pct": 0.02,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_or_small_yang",
+      "oos_rank": 6,
+      "composite_score": 0.936335160532498,
+      "oos": {
+        "ret_pct": 171.27058840726232,
+        "excess_pct": 72.26685241722497,
+        "sharpe": 2.706644350114334,
+        "mdd_pct": 21.159805666953137,
+        "n_days": 403
+      },
+      "is": {
+        "ret_pct": 154.49108625723932,
+        "excess_pct": 66.17545651520592,
+        "sharpe": 1.6252129982281074,
+        "mdd_pct": 18.44797163041082,
+        "n_days": 727
+      }
+    },
+    {
+      "code": "588290",
+      "name": "科创芯片ETF华安",
+      "symbol": "sh588290",
+      "cohort": "A",
+      "label": "sym±3%",
+      "entry_pct": 0.03,
+      "stop_pct": 0.03,
+      "prev_entry_mode": "yin_or_small_yang",
+      "oos_rank": 7,
+      "composite_score": 0.9345340642129992,
+      "oos": {
+        "ret_pct": 163.53185960007767,
+        "excess_pct": 178.72081308844975,
+        "sharpe": 2.292806132659528,
+        "mdd_pct": 18.048210118165386,
+        "n_days": 403
+      },
+      "is": {
+        "ret_pct": 199.40864773659447,
+        "excess_pct": 76.49602637737115,
+        "sharpe": 1.3966249181439077,
+        "mdd_pct": 34.794969585414414,
+        "n_days": 727
+      }
+    },
+    {
+      "code": "159822",
+      "name": "新经济ETF银华",
+      "symbol": "sz159822",
+      "cohort": "A",
+      "label": "买3/止2.5",
+      "entry_pct": 0.03,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_or_small_yang",
+      "oos_rank": 8,
+      "composite_score": 0.9339075959279561,
+      "oos": {
+        "ret_pct": 57.4594452014956,
+        "excess_pct": 57.4594452014956,
+        "sharpe": 1.532383497964235,
+        "mdd_pct": 9.905733621551626,
+        "n_days": 403
+      },
+      "is": {
+        "ret_pct": 94.69747776843815,
+        "excess_pct": 86.80673421760356,
+        "sharpe": 1.4051044014778986,
+        "mdd_pct": 10.560781490434623,
+        "n_days": 727
+      }
+    },
+    {
+      "code": "159801",
+      "name": "芯片ETF广发",
+      "symbol": "sz159801",
+      "cohort": "A",
+      "label": "sym±3%",
+      "entry_pct": 0.03,
+      "stop_pct": 0.03,
+      "prev_entry_mode": "yin_or_small_yang",
+      "oos_rank": 9,
+      "composite_score": 0.9339075959279561,
+      "oos": {
+        "ret_pct": 147.8015719916001,
+        "excess_pct": 49.34531127118841,
+        "sharpe": 2.3115122678350106,
+        "mdd_pct": 22.0511628867035,
+        "n_days": 403
+      },
+      "is": {
+        "ret_pct": 4.237877543679813,
+        "excess_pct": 18.964245702883773,
+        "sharpe": 0.036468496048358987,
+        "mdd_pct": 67.76860825146264,
+        "n_days": 727
+      }
+    },
+    {
+      "code": "589990",
+      "name": "科创综指ETF华泰柏瑞",
+      "symbol": "sh589990",
+      "cohort": "B",
+      "label": "买2.5/止3.5",
+      "entry_pct": 0.025,
+      "stop_pct": 0.035,
+      "prev_entry_mode": "yin_or_small_yang",
+      "oos_rank": 10,
+      "composite_score": 0.9328112764291308,
+      "oos": {
+        "ret_pct": 54.423560214909415,
+        "excess_pct": 33.918145052454534,
+        "sharpe": 3.4912049111950956,
+        "mdd_pct": 12.459407955433765,
+        "n_days": 160
+      },
+      "is": {
+        "ret_pct": 32.053963115001594,
+        "excess_pct": -1.113367562289234,
+        "sharpe": 1.7912106991667283,
+        "mdd_pct": 15.830977309439998,
+        "n_days": 205
+      }
+    }
+  ],
+  "skipped_sample": [
+    {
+      "code": "159972",
+      "name": "5年地方债ETF鹏华",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159700",
+      "name": "科创债ETF南方",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159650",
+      "name": "国开债ETF博时",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159649",
+      "name": "国开债ETF华安",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159600",
+      "name": "科创债ETF嘉实",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159400",
+      "name": "科创债ETF景顺",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159398",
+      "name": "信用债ETF天弘",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159397",
+      "name": "信用债ETF广发",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159396",
+      "name": "信用债ETF博时",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159395",
+      "name": "信用债ETF大成",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159296",
+      "name": "A500红利低波ETF华宝",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159293",
+      "name": "创业板综增强ETF建信",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159281",
+      "name": "港股央企红利ETF天弘",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159266",
+      "name": "港股央企红利ETF永赢",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159253",
+      "name": "银行ETF博时",
+      "reason": "cohortB样本不足"
+    },
+    {
+      "code": "159247",
+      "name": "创业板ETF汇添富",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159243",
+      "name": "创业板人工智能ETF招商",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159200",
+      "name": "科创债ETF富国",
+      "reason": "IS无正超额参数"
+    },
+    {
+      "code": "159199",
+      "name": "石油ETF平安",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159198",
+      "name": "港股通信息技术ETF富国",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159197",
+      "name": "石油ETF招商",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159196",
+      "name": "港股通信息技术ETF易方达",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159195",
+      "name": "石油ETF华安",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159193",
+      "name": "新能源电池ETF银华",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159192",
+      "name": "家电ETF汇添富",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159191",
+      "name": "港股通科技ETF易方达",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159190",
+      "name": "创业板新能源ETF天弘",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159189",
+      "name": "石油ETF华夏",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159188",
+      "name": "红利100ETF景顺",
+      "reason": "2026年后上市"
+    },
+    {
+      "code": "159187",
+      "name": "创业板新能源ETF景顺",
+      "reason": "2026年后上市"
+    }
+  ]
+}
