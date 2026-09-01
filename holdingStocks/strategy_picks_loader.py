@@ -414,7 +414,11 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
         if sid == "strategy3":
             return _load_strategy3_signals(path)
         if sid == "strategy8":
-            return _load_strategy8_signals(path)
+            out = _load_strategy8_signals(path)
+            note = str(out.get("note") or "")
+            if "盯盘" not in note:
+                out["note"] = (note + " · 回测截面；盯盘 Tab 用当日涨停实时重算").strip(" ·")
+            return out
         if sid == "strategy12":
             return _load_s12_signals(path)
         if sid in ("strategy4", "strategy5"):

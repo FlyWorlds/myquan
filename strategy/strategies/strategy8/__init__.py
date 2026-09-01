@@ -19,8 +19,8 @@ def _print_rules() -> str:
     head = compose_rules(STRATEGY_NAME, bindings=FACTOR_BINDINGS)
     extra = """
 ----- 题材联动规则（v3 · 当日定题材）-----
-1. 题材：通达信概念成分（离线 tdx_members_index.json）
-2. 因子14：**当日**收盘涨停池 → 同题材同伴数 theme_lu_count ≥ 3
+1. 题材：通达信概念成分（tdx_members_index.json；盯盘随当日涨停实时重算）
+2. 因子14：**当日**涨停池 → 同题材同伴数 theme_lu_count ≥ 3
 3. 股池：默认 linkage = 热题材内**非当日涨停**联动票（排除龙头）
 4. 情绪：T-1 连板梯度（连板≥2、最高板 2～5），与策略三同源
 5. 买卖：**当日**因子1 ±阈值突破即买；T+1 止损或收盘清

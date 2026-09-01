@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
+import time
 from collections import defaultdict
 from collections.abc import Callable
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,7 @@ from stock_names import lookup_names_for_codes, resolve_stock_name
 from strategy.open_break import DEFAULT_PCT, TICK_SIZE, strategy_levels
 from strategy.strategies.strategy8.concept_index import (
     load_concept_maps,
+    members_index_mtime,
     theme_lu_stats,
 )
 from strategy3_watch import (
@@ -37,6 +38,8 @@ MIN_THEME_LU = 3
 POOL_MODE = "linkage"
 _POOL_CACHE: dict[str, dict[str, Any]] = {}
 _POOL_CACHE_VER = "names_v3"
+_LU_QUOTE_CACHE: dict[str, Any] = {"t": 0.0, "quotes": {}}
+_LU_QUOTE_TTL_SEC = 15.0
 
 
 def _display_stock_name(
@@ -56,13 +59,40 @@ def _display_stock_name(
     return resolve_stock_name(symbol=sym, code=c, name="") or c
 
 
-@lru_cache(maxsize=1)
+def resolve_theme_date(
+    session: str | None,
+    *,
+    live_quotes: bool,
+    now: pd.Timestamp | None = None,
+) -> str | None:
+    """盯盘题材日：9:15 起的交易日用「今天」，跟盘中涨停走；盘前/周末退回上一交易日。"""
+    ts = pd.Timestamp(now) if now is not None else pd.Timestamp.now()
+    ts = ts.tz_localize(None) if getattr(ts, "tzinfo", None) else ts
+    today = ts.normalize()
+    cal = _load_sentiment_df()
+    last = (
+        pd.Timestamp(cal["date"].iloc[-1]).normalize()
+        if cal is not None and not cal.empty
+        else today
+    )
+    minutes = int(ts.hour) * 60 + int(ts.minute)
+    trading_weekday = int(ts.weekday()) < 5
+    if live_quotes and trading_weekday and minutes >= 9 * 60 + 15:
+        return str(today.date())
+    if session:
+        return _normalize_trade_date(session) or str(last.date())
+    return str(last.date())
+
+
 def _concept_maps() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    from sectors.tdx import load_members_index
+
+    load_members_index()
     univ = _load_univ()
     if univ.empty or "code" not in univ.columns:
         return {}, {}
     codes = tuple(sorted(str(c).zfill(6) for c in univ["code"]))
-    return load_concept_maps(codes)
+    return load_concept_maps(codes, members_index_mtime())
 
 
 def load_backtest_summary() -> list[dict[str, Any]]:
@@ -104,8 +134,13 @@ def _scan_today_lu_codes(
     session: str,
     *,
     quotes: dict[str, dict[str, Any]] | None = None,
+    live: bool = False,
 ) -> tuple[set[str], dict[str, dict[str, Any]]]:
-    """当日涨停池：优先行情判断，否则用日线收盘涨停（盘后/历史）。"""
+    """当日涨停池。
+
+    盯盘有行情时：只信实时报价，有报价但未封板的不再回退昨收日线。
+    盘后/无行情：用日线收盘涨停。
+    """
     sess = pd.Timestamp(session).normalize()
     lu_codes: set[str] = set()
     lu_meta: dict[str, dict[str, Any]] = {}
@@ -119,16 +154,20 @@ def _scan_today_lu_codes(
         name = _display_stock_name(code=code, symbol=symbol, raw_name=str(row.name))
         sina = sina_of(code).lower()
         q = quotes.get(sina)
-        if _quote_is_limit_up(code, q):
-            lu_codes.add(code)
-            prev = float(q.get("prev_close") or q.get("preclose") or 0) if q else 0.0
-            lu_meta[code] = {
-                "code": code,
-                "symbol": symbol,
-                "name": name,
-                "涨停收": float(q.get("last") or 0) if q else None,
-                "昨收": prev if prev > 0 else None,
-            }
+        if q:
+            if _quote_is_limit_up(code, q):
+                lu_codes.add(code)
+                prev = float(q.get("prev_close") or q.get("preclose") or 0)
+                lu_meta[code] = {
+                    "code": code,
+                    "symbol": symbol,
+                    "name": name,
+                    "涨停收": float(q.get("last") or 0),
+                    "昨收": prev if prev > 0 else None,
+                }
+            continue
+
+        if live:
             continue
 
         daily = _load_symbol_daily(symbol)
@@ -163,27 +202,29 @@ def scan_theme_linkage_pool(
     *,
     quotes: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """当日涨停 → 热题材 → 题材成分/联动候选（当日阈值买）。"""
-    effective = _normalize_trade_date(session) if session else None
+    """当日涨停 → 热题材 → 题材成分/联动候选（当日阈值买）。涨停集合变了就重算。"""
+    live = bool(quotes)
+    effective = resolve_theme_date(session, live_quotes=live)
     if not effective:
         return {"themeDate": None, "hotThemes": [], "rows": []}
-    cache_key = f"{_POOL_CACHE_VER}:{effective}:{POOL_MODE}"
-    if cache_key in _POOL_CACHE and not quotes:
-        return _POOL_CACHE[cache_key]
 
     code_concepts, concept_codes = _concept_maps()
     univ = _load_univ()
     if univ.empty or "code" not in univ.columns:
-        out = {
+        return {
             "themeDate": effective,
             "luCount": 0,
             "hotThemes": [],
             "rows": [],
+            "live": live,
         }
-        if not quotes:
-            _POOL_CACHE[cache_key] = out
-        return out
-    lu_codes, lu_meta = _scan_today_lu_codes(univ, effective, quotes=quotes)
+    lu_codes, _lu_meta = _scan_today_lu_codes(univ, effective, quotes=quotes, live=live)
+    cache_key = (
+        f"{_POOL_CACHE_VER}:{effective}:{POOL_MODE}:"
+        f"{','.join(sorted(lu_codes))}:{members_index_mtime():.0f}"
+    )
+    if cache_key in _POOL_CACHE:
+        return _POOL_CACHE[cache_key]
 
     theme_lu_counts: dict[str, int] = defaultdict(int)
     for code in lu_codes:
@@ -222,13 +263,14 @@ def scan_theme_linkage_pool(
             "类型": pool_tag,
             "当日涨停": in_lu,
         }
-        daily = _load_symbol_daily(symbol)
-        if daily is not None:
-            idx_sess = daily.index[daily["date"] == sess]
-            if len(idx_sess) > 0:
-                j = int(idx_sess[0])
-                item["开盘"] = float(daily["open"].iloc[j])
-                item["现价"] = float(daily["close"].iloc[j])
+        if not live:
+            daily = _load_symbol_daily(symbol)
+            if daily is not None:
+                idx_sess = daily.index[daily["date"] == sess]
+                if len(idx_sess) > 0:
+                    j = int(idx_sess[0])
+                    item["开盘"] = float(daily["open"].iloc[j])
+                    item["现价"] = float(daily["close"].iloc[j])
         rows.append(item)
 
     rows.sort(key=lambda r: (-int(r["题材涨停数"]), r["类型"] != "题材联动", r["code"]))
@@ -237,9 +279,12 @@ def scan_theme_linkage_pool(
         "luCount": len(lu_codes),
         "hotThemes": hot_themes[:20],
         "rows": rows,
+        "live": live,
     }
-    if not quotes:
-        _POOL_CACHE[cache_key] = out
+    _POOL_CACHE[cache_key] = out
+    if len(_POOL_CACHE) > 8:
+        for old in list(_POOL_CACHE)[:-4]:
+            _POOL_CACHE.pop(old, None)
     return out
 
 
@@ -322,7 +367,6 @@ def build_strategy8_payload(
         df = _load_sentiment_df()
         trade_date = str(df["date"].iloc[-1].date()) if not df.empty else str(pd.Timestamp.now().date())
 
-    effective = _normalize_trade_date(trade_date) or trade_date
     sentiment = get_market_sentiment(trade_date)
     gate_ok = bool(sentiment.get("gateOk"))
 
@@ -336,7 +380,14 @@ def build_strategy8_payload(
     sinas = [sina_of(c).lower() for c in codes]
     quotes: dict[str, dict[str, Any]] = {}
     if batch_quote and sinas:
-        quotes = {k.lower(): v for k, v in batch_quote(sinas).items()}
+        now_m = time.monotonic()
+        cached = _LU_QUOTE_CACHE.get("quotes") or {}
+        if cached and (now_m - float(_LU_QUOTE_CACHE.get("t") or 0)) < _LU_QUOTE_TTL_SEC:
+            quotes = dict(cached)
+        else:
+            quotes = {k.lower(): v for k, v in batch_quote(sinas).items()}
+            _LU_QUOTE_CACHE["t"] = now_m
+            _LU_QUOTE_CACHE["quotes"] = quotes
     if get_quote:
         for s in sinas:
             if quotes.get(s):
@@ -348,7 +399,7 @@ def build_strategy8_payload(
             except Exception:  # noqa: BLE001
                 pass
 
-    scanned = scan_theme_linkage_pool(effective, quotes=quotes)
+    scanned = scan_theme_linkage_pool(trade_date, quotes=quotes)
     pool = scanned.get("rows") or []
 
     pool_sinas = [sina_of(str(p["code"])) for p in pool]
@@ -369,14 +420,54 @@ def build_strategy8_payload(
         if not row.get("名称") or str(row.get("名称")) == c:
             row["名称"] = name_map.get(c) or row.get("名称") or c
 
+    theme_date = scanned.get("themeDate")
+    live = bool(scanned.get("live"))
     return {
         "sentiment": sentiment,
         "hotThemes": scanned.get("hotThemes") or [],
-        "themeDate": scanned.get("themeDate"),
+        "themeDate": theme_date,
         "luCount": scanned.get("luCount"),
         "poolCount": len(rows),
         "rows": rows,
         "nameMap": name_map,
+        "live": live,
+        "themeUpdatedAt": str(pd.Timestamp.now())[:19],
         "backtest": load_backtest_summary(),
-        "rules": f"当日涨停定题材≥{MIN_THEME_LU} · 当日因子1 ±阈值 · {_gate_rules_text()}",
+        "rules": (
+            f"当日涨停定题材≥{MIN_THEME_LU}（盘中随涨停变化重算） · "
+            f"当日因子1 ±阈值 · {_gate_rules_text()}"
+        ),
+    }
+
+
+def live_picks_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """盯盘 Tab 用实时题材池，不读回测 parquet 末日。"""
+    theme_date = payload.get("themeDate")
+    rows = list(payload.get("rows") or [])
+    items = []
+    for i, r in enumerate(rows[:15]):
+        code = str(r.get("代码") or "").zfill(6)
+        items.append(
+            {
+                "rank": i + 1,
+                "symbol": "",
+                "code": code,
+                "name": r.get("名称"),
+                "theme": r.get("题材"),
+                "theme_lu": r.get("题材涨停数"),
+                "pool_tag": r.get("类型"),
+                "trade_date": theme_date,
+            }
+        )
+    lu = payload.get("luCount")
+    return {
+        "kind": "signals",
+        "live": True,
+        "asOf": theme_date,
+        "source": "live",
+        "note": (
+            f"当日涨停实时定题材（{theme_date or '—'}，涨停 {lu if lu is not None else '—'} 只，"
+            f"联动 {len(rows)} 只；涨停集合变则重算）"
+        ),
+        "items": items,
     }

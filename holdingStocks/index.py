@@ -674,12 +674,35 @@ def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
         "holdings": snapshot.get("holdings"),
         "strategy1": snapshot.get("strategy1"),
         "strategy3": snapshot.get("strategy3"),
-        "strategy8": snapshot.get("strategy8"),
+        "strategy8": (
+            {k: v for k, v in snapshot["strategy8"].items() if k != "themeUpdatedAt"}
+            if isinstance(snapshot.get("strategy8"), dict)
+            else snapshot.get("strategy8")
+        ),
         "phaseKey": snapshot.get("phaseKey"),
         "strategy": snapshot.get("strategy"),
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+_WATCH_TABS_CACHE: dict[str, Any] = {"t": 0.0, "tabs": []}
+
+
+def _watch_tabs_with_live_s8(strategy8: dict[str, Any]) -> list[dict[str, Any]]:
+    from strategy8_watch import live_picks_from_payload
+
+    now_m = time.monotonic()
+    cached = _WATCH_TABS_CACHE.get("tabs") or []
+    if (not cached) or (now_m - float(_WATCH_TABS_CACHE.get("t") or 0)) > 60.0:
+        cached = [dict(t) for t in _get_strategies_api_cache() if t.get("watch_tab")]
+        _WATCH_TABS_CACHE["t"] = now_m
+        _WATCH_TABS_CACHE["tabs"] = cached
+    tabs = [dict(t) for t in cached]
+    for t in tabs:
+        if t.get("id") == "strategy8":
+            t["picks"] = live_picks_from_payload(strategy8)
+    return tabs
 
 
 def publish_watch_snapshot(
@@ -751,7 +774,7 @@ def publish_watch_snapshot(
             "strategyName": STRATEGY_NAME,
             "factorsLabel": _STRATEGY_FACTORS_LABEL,
         },
-        strategies=[t for t in _get_strategies_api_cache() if t.get("watch_tab")],
+        strategies=_watch_tabs_with_live_s8(strategy8),
         strategy3=strategy3,
         strategy8=strategy8,
         sectors=sectors,

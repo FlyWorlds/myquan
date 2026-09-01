@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 SKIP_CONCEPTS = frozenset(
     {
@@ -19,9 +20,26 @@ SKIP_CONCEPTS = frozenset(
 )
 
 
-@lru_cache(maxsize=1)
-def load_concept_maps(codes_key: tuple[str, ...]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    """返回 (code→概念列表, 概念→成分代码列表)，仅保留宇宙内且成员≥3 的概念。"""
+def members_index_mtime() -> float:
+    from sectors.tdx import TDX_MEMBERS_INDEX
+
+    p = Path(TDX_MEMBERS_INDEX)
+    try:
+        return float(p.stat().st_mtime) if p.is_file() else 0.0
+    except OSError:
+        return 0.0
+
+
+@lru_cache(maxsize=4)
+def load_concept_maps(
+    codes_key: tuple[str, ...],
+    members_mtime: float = 0.0,
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """返回 (code→概念列表, 概念→成分代码列表)，仅保留宇宙内且成员≥3 的概念。
+
+    `members_mtime` 纳入缓存键：通达信成分文件更新后自动换图，不沿用进程内旧表。
+    """
+    del members_mtime
     from sectors.tdx import load_members_index
 
     universe = set(codes_key)

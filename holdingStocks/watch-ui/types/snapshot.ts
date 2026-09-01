@@ -101,6 +101,7 @@ export interface StrategyPicks {
   asOf?: string | null
   source?: string | null
   note?: string
+  live?: boolean
   items?: StrategyPickItem[]
 }
 
@@ -194,6 +195,8 @@ export interface Strategy8Payload {
   luCount?: number
   poolDate?: string | null
   poolCount?: number
+  live?: boolean
+  themeUpdatedAt?: string | null
   rules?: string
   nameMap?: Record<string, string>
 }

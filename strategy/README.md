@@ -79,7 +79,7 @@ strategy/
 | **factor13a** | 因子13A-质量带契合选股 | 选股质量 | 动态合格池 | `factor13_fit.py`：夏普/回撤甜区 walk-forward；见 [`docs/FACTOR13.md`](../docs/FACTOR13.md) |
 | **factor13b** | 因子13B-熊市盾牌 thr\* Top3 | 选股质量 | 熊年防守池（🔒锁定） | `factor13_bear_shield.py`：WF + thr\*；`LOCKED.json` |
 | **factor13** | 因子13-契合选股（别名→13A） | 选股质量 | 兼容 | 等同 factor13a；新代码请用 13a/13b |
-| **factor14** | 因子14-题材共振 | 情绪题材 | 题材联动选股 | **当日**同题材涨停同伴数 `theme_lu_count≥3`；见 [`docs/FACTOR14.md`](../docs/FACTOR14.md) |
+| **factor14** | 因子14-题材共振 | 情绪题材 | 题材联动选股 | **当日**同题材涨停同伴数 `theme_lu_count≥3`；盯盘随涨停实时重算；见 [`docs/FACTOR14.md`](../docs/FACTOR14.md) |
 | **factor15** | 因子15-题材晋级低开 | 情绪题材 | 题材联动过滤（可选） | gap ∈ [-4.5%, -0.3%]；默认关闭，需 `--gap-filter` |
 | **factor16** | 因子16-概念龙头评分 | 选股质量 | 概念/池内龙头排序 | `factor16_leader_score.py`：**13A** 质量带 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](../docs/FACTOR16.md) |
 | **factor17** | 因子17-缠论笔盈亏比 | 缠论 | 笔归因评估 | `bi_pl_ratio.py`：因子1 费用后按买入笔记账；原策略七入口，Web 在因子池 |
@@ -108,7 +108,7 @@ for f in list_factors():
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧 run 别名 `run_strategy9` / `s9` / `策略九` |
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
-| **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
+| **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**（盯盘实时重算）→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2% 空仓；调参 2020–2024 +645%/夏普 1.23，盲测 2025→ +3.6%/回撤 55%；`backtest/strategy12_emotion_gate/` |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
@@ -167,7 +167,7 @@ python backtest/strategy9_limit_down_emotion/run.py --start 20200101
 python -c "from strategy import run_strategy9_emotion; run_strategy9_emotion()"
 ```
 
-策略三：昨日涨停池 + T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示 + 因子1 ±阈值。策略八：题材联动（**当日涨停定题材** + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。策略十二：因子18 恐慌空仓 × 因子21 涨停次日低开（v6：昨开板 + 上证昨收≤−2% 空仓，开盘买 T+1 清），调参窗强、**盲测回撤未过关**，报告见 `backtest/strategy12_emotion_gate/REPORT.md`。
+策略三：昨日涨停池 + T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示 + 因子1 ±阈值。策略八：题材联动（**当日涨停定题材**，盯盘随涨停实时重算 + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。策略十二：因子18 恐慌空仓 × 因子21 涨停次日低开（v6：昨开板 + 上证昨收≤−2% 空仓，开盘买 T+1 清），调参窗强、**盲测回撤未过关**，报告见 `backtest/strategy12_emotion_gate/REPORT.md`。
 
 ### 因子13 · 熊市盾牌 thr\* Top3（🔒 锁定，研究）
 

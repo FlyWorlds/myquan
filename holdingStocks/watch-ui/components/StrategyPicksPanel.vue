@@ -20,7 +20,7 @@ const kindLabel: Record<string, string> = {
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h3 class="text-sm font-bold">选股 / 信号</h3>
       <span class="rounded-full bg-ui-surface-2 px-2 py-0.5 text-xs text-ui-text-2">
-        {{ kindLabel[picks.kind] || picks.kind }}
+        {{ picks.live ? '实时' : (kindLabel[picks.kind] || picks.kind) }}
       </span>
     </div>
     <p v-if="picks.note" class="mt-1 text-xs text-ui-text-3">{{ picks.note }}</p>

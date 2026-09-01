@@ -7,6 +7,8 @@
 cd holdingStocks && python start_watch.py --no-wechat
 # 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
 # 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
+# 策略8 Tab：当日涨停实时定题材（随涨停变化重算）
+# 持仓 Tab：实仓 + 定盘池（含协鑫能科等）+ 待买入
 # 板块轮动：http://127.0.0.1:3000/sectors （通达信优先，连不上回退东财概念）
 ```
 
@@ -87,7 +89,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **factor13a** | 因子13A-质量带契合选股 | 选股质量 | 动态合格池 | `factor13_fit.py`：夏普/回撤甜区 walk-forward |
 | **factor13b** | 因子13B-熊市盾牌 thr\* Top3 | 选股质量 | 熊年防守 Top3 | `factor13_bear_shield.py` · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
 | **factor13** | 因子13-契合选股（别名→13A） | 选股质量 | 兼容 | 等同 factor13a |
-| **factor14** | 因子14-题材共振 | 情绪题材 | 题材联动选股 | **当日**同题材涨停同伴数≥3；见 [`docs/FACTOR14.md`](docs/FACTOR14.md) |
+| **factor14** | 因子14-题材共振 | 情绪题材 | 题材联动选股 | **当日**同题材涨停同伴数≥3；盯盘随涨停实时重算；见 [`docs/FACTOR14.md`](docs/FACTOR14.md) |
 | **factor15** | 因子15-题材晋级低开 | 情绪题材 | 题材联动过滤（可选） | gap 低开带；策略八默认关闭 |
 | **factor16** | 因子16-概念龙头评分 | 选股质量 | 池内排序 | 13A 过门 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](docs/FACTOR16.md) |
 | **factor17** | 因子17-缠论笔盈亏比 | 缠论 | 笔归因评估 | `bi_pl_ratio.py`；原策略七，Web 在因子池 |
@@ -107,7 +109,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 突破 + 牛市放宽 + 20% 昨高全清 + 周频 Top5 |
 | **strategy5** | 策略五·近高 Top5 | factor11 | ✅ 研究 | 周频等权持有；别名 `near_high` |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
-| **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
+| **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材（盯盘实时重算）→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2%；调参 2020–2024 +645%/夏普 1.23，盲测 +3.6%/回撤 55% |
 
 `run_strategy7` 已归入 **因子17-缠论笔盈亏比**（Web 策略栏不展示）。

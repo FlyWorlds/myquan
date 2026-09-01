@@ -108,10 +108,23 @@ export function useWatchWs() {
     }
   }
 
+  function snapshotAgeMs(): number {
+    const raw = lastUpdatedAt || store.snapshot?.updatedAt || store.snapshot?.clock
+    if (!raw) return Number.POSITIVE_INFINITY
+    const t = Date.parse(String(raw).replace(/-/g, '/'))
+    if (Number.isNaN(t)) return Number.POSITIVE_INFINITY
+    return Date.now() - t
+  }
+
   function resetFallbackTimer(refreshSec = 5) {
     if (fallbackTimer) window.clearInterval(fallbackTimer)
     fallbackTimer = window.setInterval(() => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) void fallbackSync()
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        void fallbackSync()
+        return
+      }
+      // WS 假连接（热更新后常见）：超过 15s 没新快照则 HTTP 拉一次
+      if (snapshotAgeMs() > 15000) void fallbackSync()
     }, Math.max(5000, refreshSec * 1000))
   }
 
@@ -142,6 +155,12 @@ export function useWatchWs() {
     }
     ws?.close()
     ws = null
+  }
+
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      stop()
+    })
   }
 
   if (import.meta.client && !started) {

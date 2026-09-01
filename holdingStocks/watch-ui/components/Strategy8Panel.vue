@@ -49,7 +49,8 @@ const luPhaseClass = computed(() => {
         参照日 {{ sentiment.sentimentDate || '—' }} · {{ payload?.rules || sentiment.rules }}
       </p>
       <p class="mt-1 text-xs text-ui-text-2">
-        <strong>当日涨停</strong>定题材（{{ payload?.luCount ?? '—' }} 只涨停）→ 题材内<strong>直接</strong>因子1 ±阈值，不要求昨日涨停。
+        <strong>当日涨停</strong>定题材（{{ payload?.luCount ?? '—' }} 只涨停，随盘中涨停变化重算）→ 题材内<strong>直接</strong>因子1 ±阈值，不要求昨日涨停。
+        <span v-if="payload?.themeUpdatedAt"> · 刷新 {{ payload.themeUpdatedAt }}</span>
       </p>
       <div class="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
         <div class="rounded-lg border border-ui-hairline p-3">
@@ -82,7 +83,10 @@ const luPhaseClass = computed(() => {
 
     <div v-if="hotThemes.length" class="card p-4">
       <h3 class="text-base font-bold">热题材（当日涨停共振 ≥3）</h3>
-      <p class="mt-1 text-xs text-ui-text-3">题材日 {{ payload?.themeDate || poolDate || '—' }}</p>
+      <p class="mt-1 text-xs text-ui-text-3">
+        题材日 {{ payload?.themeDate || poolDate || '—' }}
+        <span v-if="payload?.live"> · 实时涨停集合</span>
+      </p>
       <div class="mt-3 flex flex-wrap gap-2">
         <span
           v-for="t in hotThemes"
