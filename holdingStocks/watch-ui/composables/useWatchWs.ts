@@ -1,6 +1,13 @@
 import type { WatchSnapshot } from '~/types/snapshot'
 
+/** 开发模式直连 Python :8765，绕过 Vite/Nuxt WS 代理（易 ECONNRESET 导致整站重启）。 */
 function wsUrl(): string {
+  const config = useRuntimeConfig()
+  if (import.meta.dev) {
+    const host = String(config.public.watchApiHost || '127.0.0.1')
+    const port = String(config.public.watchApiPort || '8765')
+    return `ws://${host}:${port}/ws`
+  }
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${proto}//${location.host}/ws`
 }
@@ -9,6 +16,7 @@ let ws: WebSocket | null = null
 let retry = 0
 let reconnectTimer: number | undefined
 let fallbackTimer: number | undefined
+let pingTimer: number | undefined
 let lastTs: number | null = null
 let lastUpdatedAt: string | null = null
 let started = false
@@ -31,7 +39,11 @@ export function useWatchWs() {
 
   async function fallbackSync() {
     try {
-      const data = await $fetch<WatchSnapshot>('/api/snapshot', {
+      const config = useRuntimeConfig()
+      const base = import.meta.dev
+        ? `http://${config.public.watchApiHost || '127.0.0.1'}:${config.public.watchApiPort || '8765'}`
+        : ''
+      const data = await $fetch<WatchSnapshot>(`${base}/api/snapshot`, {
         query: { t: Date.now() },
         cache: 'no-store',
       })
@@ -60,6 +72,17 @@ export function useWatchWs() {
     ws.onopen = () => {
       retry = 0
       store.setWsStatus('WebSocket 已连接')
+      if (pingTimer) window.clearInterval(pingTimer)
+      // 浏览器端不发帧时，部分代理/服务端会 idle 断连；轻量 ping 保活
+      pingTimer = window.setInterval(() => {
+        if (ws?.readyState === WebSocket.OPEN) {
+          try {
+            ws.send('ping')
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 25000)
     }
     ws.onmessage = (ev) => {
       try {
@@ -71,8 +94,13 @@ export function useWatchWs() {
     }
     ws.onclose = () => {
       ws = null
+      if (pingTimer) {
+        window.clearInterval(pingTimer)
+        pingTimer = undefined
+      }
       if (!started) return
-      store.setWsStatus('推送断开，重连中…')
+      store.setWsStatus('推送断开，HTTP 兜底中…')
+      void fallbackSync()
       scheduleReconnect()
     }
     ws.onerror = () => {
@@ -108,6 +136,10 @@ export function useWatchWs() {
     reconnectTimer = undefined
     if (fallbackTimer) window.clearInterval(fallbackTimer)
     fallbackTimer = undefined
+    if (pingTimer) {
+      window.clearInterval(pingTimer)
+      pingTimer = undefined
+    }
     ws?.close()
     ws = null
   }

@@ -37,9 +37,8 @@ export const useWatchStore = defineStore('watch', () => {
 
   const wsDisconnected = computed(
     () =>
-      wsStatus.value.includes('断开') ||
-      wsStatus.value.includes('重连') ||
-      wsStatus.value.includes('不可用'),
+      wsStatus.value.includes('不可用') ||
+      (wsStatus.value.includes('断开') && !wsStatus.value.includes('兜底')),
   )
 
   return {

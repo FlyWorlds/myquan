@@ -36,7 +36,7 @@ def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
 
 
 def filter_portfolio_holdings(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """持仓 Tab：仅置顶三只（凯盛/天通/珠峰）+ 实仓 + 当日已结算。"""
+    """持仓 Tab：实仓 + 当日已结算 + 置顶跟踪票（PORTFOLIO_PINNED_WATCHLIST）。"""
     from watch_config import PORTFOLIO_PINNED_WATCHLIST, code_key
 
     pinned_order = {code_key(w["code"]): i for i, w in enumerate(PORTFOLIO_PINNED_WATCHLIST)}
@@ -45,8 +45,6 @@ def filter_portfolio_holdings(rows: list[dict[str, Any]]) -> list[dict[str, Any]
         if r.get("error"):
             continue
         c = code_key(str(r.get("代码") or ""))
-        if c not in pinned_order:
-            continue
         qty = int(r.get("持仓") or 0)
         if qty > 0 or bool(r.get("已实现")) or c in pinned_order:
             picked.append(r)

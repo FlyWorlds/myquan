@@ -597,7 +597,8 @@ class LocalWsHub:
         """握手完成后读循环：处理 ping/close，忽略业务上行。"""
         self.add(sock)
         try:
-            sock.settimeout(60.0)
+            # 浏览器通常不发上行帧；有限超时会导致约 60s 被动断连
+            sock.settimeout(None)
             while True:
                 hdr = self._recv_exact(sock, 2)
                 if not hdr:

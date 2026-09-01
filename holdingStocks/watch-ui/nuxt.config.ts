@@ -44,19 +44,16 @@ export default defineNuxtConfig({
       ],
     },
   },
+  // HTTP 走 Nitro devProxy；WS 开发态由 useWatchWs 直连 :8765（避免 Vite WS 代理 ECONNRESET 重启）
+  nitro: {
+    devProxy: {
+      '/api': { target: `${watchApiOrigin}/api`, changeOrigin: true },
+      '/holdings_watch.json': { target: `${watchApiOrigin}/holdings_watch.json`, changeOrigin: true },
+    },
+  },
   vite: {
     server: {
       proxy: {
-        '/ws': {
-          target: watchApiOrigin,
-          ws: true,
-          changeOrigin: true,
-          timeout: 0,
-          proxyTimeout: 0,
-          configure(proxy) {
-            proxy.on('error', () => {})
-          },
-        },
         '/api': {
           target: watchApiOrigin,
           changeOrigin: true,

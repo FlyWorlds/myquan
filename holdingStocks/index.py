@@ -3961,8 +3961,27 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 return
             super().log_message(fmt, *log_args)
 
+        def _send_cors_if_dev(self) -> None:
+            origin = self.headers.get("Origin", "")
+            if origin in ("http://127.0.0.1:3000", "http://localhost:3000"):
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
+
+        def do_OPTIONS(self) -> None:
+            path = self.path.split("?", 1)[0]
+            if path.startswith("/api/") or path == f"/{WATCH_META_FILE.name}":
+                self.send_response(204)
+                self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self._send_cors_if_dev()
+                self.end_headers()
+                return
+            self.send_error(404)
+
         def end_headers(self) -> None:
             path = self.path.split("?", 1)[0]
+            if path.startswith("/api/") or path == f"/{WATCH_META_FILE.name}":
+                self._send_cors_if_dev()
             if path in (
                 f"/{WATCH_META_FILE.name}",
                 "/api/snapshot",

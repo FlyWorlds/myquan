@@ -176,6 +176,7 @@ def _loopback_env(base: dict[str, str] | None = None) -> dict[str, str]:
     env["WATCH_API_HOST"] = API_HOST
     env["WATCH_API_PORT"] = str(API_PORT)
     env["NUXT_PORT"] = str(UI_PORT)
+    env["NUXT_IGNORE_LOCK"] = "1"
     env["PYTHONUNBUFFERED"] = "1"
     return env
 
@@ -246,6 +247,9 @@ def main() -> int:
     ui_proc: subprocess.Popen | None = None
     try:
         api_proc = subprocess.Popen([py, *watch_args], cwd=str(ROOT), env=env, **_popen_kwargs())
+        api_ok = _wait_port(API_PORT, timeout=120, label="数据 API")
+        if not api_ok:
+            print("[start_watch] 数据 API 未起来，请看 Python 终端输出")
         ui_proc = subprocess.Popen(
             [npm, "run", "dev"],
             cwd=str(WATCH_UI),
@@ -253,11 +257,8 @@ def main() -> int:
             **_popen_kwargs(),
         )
         ui_ok = _wait_port(UI_PORT, timeout=60, label="Web 盯盘")
-        api_ok = _wait_port(API_PORT, timeout=90, label="数据 API")
         if not ui_ok:
             print("[start_watch] 前端未起来，请检查 Node/npm 与 watch-ui 依赖")
-        if not api_ok:
-            print("[start_watch] 数据 API 未起来，请看 Python 终端输出")
         if ui_ok and not args.no_open:
             webbrowser.open(UI_URL)
         print("[start_watch] Ctrl+C 同时停止数据后端与 Web 盯盘")
