@@ -1,0 +1,198 @@
+{
+  "protocol": {
+    "is": [
+      "2023-01-02",
+      "2025-12-31"
+    ],
+    "val": [
+      "2025-01-02",
+      "2026-12-31"
+    ],
+    "bt": [
+      "2026-01-02",
+      "2026-09-01"
+    ]
+  },
+  "n_universe": 38,
+  "n_tested": 36,
+  "n_skipped": 2,
+  "top": [
+    {
+      "label": "买3/止2.5",
+      "entry_pct": 0.03,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "is": {
+        "ret_pct": 179.46789565936848,
+        "excess_pct": 104.34827843448807,
+        "sharpe": 1.7679158946866262,
+        "mdd_pct": 18.314550393958694,
+        "n_days": 727
+      },
+      "val": {
+        "ret_pct": 117.69141327934322,
+        "excess_pct": 107.94037593494487,
+        "sharpe": 2.133009069687652,
+        "mdd_pct": 21.4644983549115,
+        "n_days": 403
+      },
+      "bt": {
+        "ret_pct": 39.736478039261705,
+        "excess_pct": 70.58615124187608,
+        "sharpe": 1.9408068226032213,
+        "mdd_pct": 21.4644983549115,
+        "n_days": 160
+      },
+      "closed_trades": 80,
+      "symbol": "sh512480",
+      "code": "512480",
+      "name": "半导体ETF",
+      "rank": 1
+    },
+    {
+      "label": "买2/止2.5",
+      "entry_pct": 0.02,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "is": {
+        "ret_pct": 57.112810938549785,
+        "excess_pct": 31.102709928448746,
+        "sharpe": 2.001077928391178,
+        "mdd_pct": 2.680202078513516,
+        "n_days": 727
+      },
+      "val": {
+        "ret_pct": 31.007234353276438,
+        "excess_pct": -1.8762012295456358,
+        "sharpe": 1.1302201834048897,
+        "mdd_pct": 12.495068143544819,
+        "n_days": 403
+      },
+      "bt": {
+        "ret_pct": 2.305055329272232,
+        "excess_pct": -3.0964045247423577,
+        "sharpe": 0.1687749041001557,
+        "mdd_pct": 12.495068143544819,
+        "n_days": 160
+      },
+      "closed_trades": 11,
+      "symbol": "sz159980",
+      "code": "159980",
+      "name": "有色期货ETF",
+      "rank": 2
+    },
+    {
+      "label": "买3/止2.5",
+      "entry_pct": 0.03,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "is": {
+        "ret_pct": 151.52374103271745,
+        "excess_pct": 80.84863554748537,
+        "sharpe": 1.5327808747976976,
+        "mdd_pct": 25.51777919741134,
+        "n_days": 727
+      },
+      "val": {
+        "ret_pct": 9.075970455076465,
+        "excess_pct": 4.88602632099826,
+        "sharpe": 0.11437874366185966,
+        "mdd_pct": 52.67196792879345,
+        "n_days": 403
+      },
+      "bt": {
+        "ret_pct": -29.914377154478412,
+        "excess_pct": 3.833402596853748,
+        "sharpe": -0.6112209924343269,
+        "mdd_pct": 52.67196792879345,
+        "n_days": 160
+      },
+      "closed_trades": 80,
+      "symbol": "sh512760",
+      "code": "512760",
+      "name": "芯片ETF",
+      "rank": 3
+    },
+    {
+      "label": "买2/止3",
+      "entry_pct": 0.02,
+      "stop_pct": 0.03,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "is": {
+        "ret_pct": 162.9904469636241,
+        "excess_pct": 42.55879228736511,
+        "sharpe": 1.298558216521441,
+        "mdd_pct": 43.479157591252935,
+        "n_days": 727
+      },
+      "val": {
+        "ret_pct": 105.63832674998994,
+        "excess_pct": 1.7437104842396707,
+        "sharpe": 1.7660594383235773,
+        "mdd_pct": 27.144433452335214,
+        "n_days": 403
+      },
+      "bt": {
+        "ret_pct": -5.413682226272865,
+        "excess_pct": -18.07191007437413,
+        "sharpe": -0.24252408733275183,
+        "mdd_pct": 27.144433452335214,
+        "n_days": 160
+      },
+      "closed_trades": 75,
+      "symbol": "sz159819",
+      "code": "159819",
+      "name": "人工智能ETF",
+      "rank": 4
+    },
+    {
+      "label": "买2/止2.5",
+      "entry_pct": 0.02,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "is": {
+        "ret_pct": 312.84120051122153,
+        "excess_pct": 126.94120051122152,
+        "sharpe": 0.4817101100544816,
+        "mdd_pct": 47.186513427512,
+        "n_days": 727
+      },
+      "val": {
+        "ret_pct": 72.82215310173908,
+        "excess_pct": 45.11381976840574,
+        "sharpe": 1.7109035741284233,
+        "mdd_pct": 12.015920211028098,
+        "n_days": 403
+      },
+      "bt": {
+        "ret_pct": 7.2879293791204836,
+        "excess_pct": 23.228964689370745,
+        "sharpe": 0.4945349922148294,
+        "mdd_pct": 10.09023873998215,
+        "n_days": 160
+      },
+      "closed_trades": 78,
+      "symbol": "sh516160",
+      "code": "516160",
+      "name": "新能源ETF",
+      "rank": 5
+    }
+  ],
+  "skipped": [
+    {
+      "code": "511220",
+      "name": "城投债ETF",
+      "reason": "全部参数组合失败或无正超额"
+    },
+    {
+      "code": "589680",
+      "name": "科创综指ETF鹏华",
+      "reason": "IS样本不足或上市晚于2023"
+    }
+  ]
+}
