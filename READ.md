@@ -56,6 +56,7 @@ akshare DataFrame
 ```bash
 cd backtest && python strategy1.py --rules
 python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
+python strategy/strategies/strategy13/run_etf_wf.py   # 策略13 纯因子1 ETF Top10
 python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）
 ```
 
@@ -110,6 +111,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2%；调参 2020–2024 +645%/夏普 1.23，盲测 +3.6%/回撤 55% |
+| **strategy13** | 策略十三·因子1ETF | factor1 | ✅ 研究 | 纯因子1 ETF walk-forward Top10；见 [`docs/STRATEGY13.md`](docs/STRATEGY13.md) |
 
 `run_strategy7` 已归入 **因子17-缠论笔盈亏比**（Web 策略栏不展示）。
 `run_strategy9_emotion` 已归入 **因子18-低开跌停情绪**（Web 策略栏不展示）。
