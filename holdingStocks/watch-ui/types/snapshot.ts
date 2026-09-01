@@ -34,6 +34,9 @@ export interface HoldingRow {
   现价?: number | null
   当日涨幅?: number | null
   较开盘涨幅?: number | null
+  策略收益?: number | null
+  '策略收益%'?: number | null
+  策略起算?: string
   持仓?: number
   成本?: number | null
   浮盈?: number | null

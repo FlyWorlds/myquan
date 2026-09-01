@@ -36,6 +36,9 @@ AUCTION_OPEN_MINUTE = 25  # 9:25 开盘价确定 → 算过门/买点/止损
 SIGNAL_ACTIVE_HOUR = 9
 SIGNAL_ACTIVE_MINUTE = 30  # 9:30 连续竞价 → 触发买卖/止损结算/微信
 
+# 策略一盯盘：单票策略收益统计起点（含费用、T+1；自该交易日起空仓起算）
+STRATEGY_PNL_START = "2026-09-01"
+
 # 开盘价强制刷新（与 9:25 对齐）
 OPEN_PRICE_REFRESH_HOUR = AUCTION_OPEN_HOUR
 OPEN_PRICE_REFRESH_MINUTE = AUCTION_OPEN_MINUTE
@@ -242,10 +245,12 @@ _FIT_WATCH: list[tuple[str, str]] = [
     ("002779", "中坚科技"),
     ("002015", "协鑫能科"),
     ("600967", "内蒙一机"),
+    ("002097", "山河智能"),
 ]
 
 _WATCH_PCT: dict[str, float] = {
     "002093": 0.03,
+    "002097": 0.03,
     "002779": 0.03,
     "600301": 0.03,
     "601020": 0.03,

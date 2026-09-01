@@ -425,6 +425,173 @@ def replay_last_factor_triggers(
     return out
 
 
+def _merge_live_daily_bar(
+    daily: pd.DataFrame,
+    *,
+    session: str,
+    open_px: float,
+    high_px: float,
+    low_px: float,
+    close_px: float,
+) -> pd.DataFrame:
+    """将盘中快照并入日线末 bar（用于当日策略收益 mark）。"""
+    if daily is None or daily.empty:
+        return pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp(str(session)[:10]),
+                    "open": open_px,
+                    "high": high_px,
+                    "low": low_px,
+                    "close": close_px,
+                }
+            ]
+        )
+    df = daily.copy()
+    df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None).dt.normalize()
+    sess = pd.Timestamp(str(session)[:10]).normalize()
+    bar = {
+        "date": sess,
+        "open": float(open_px),
+        "high": float(high_px),
+        "low": float(low_px),
+        "close": float(close_px),
+    }
+    if df.iloc[-1]["date"] == sess:
+        df.iloc[-1] = bar
+    elif sess > df.iloc[-1]["date"]:
+        df = pd.concat([df, pd.DataFrame([bar])], ignore_index=True)
+    return df
+
+
+def replay_strategy_return_since(
+    daily: pd.DataFrame,
+    *,
+    start_date: str = "2026-09-01",
+    entry_pct: float = DEFAULT_PCT,
+    stop_pct: float = DEFAULT_PCT,
+    tick: float = TICK_SIZE,
+    prev_entry_mode: str = "yin_or_small_yang",
+    limit_down_pct: float = 0.10,
+    initial_cash: float = 100_000.0,
+    code: str = "",
+    ban_double_yang: bool = DEFAULT_BAN_DOUBLE_YANG,
+    ban_single_yang: bool = DEFAULT_BAN_SINGLE_YANG,
+    double_yang_combined_min_pct: float | None = DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+    double_yang_combined_mode: str = DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+) -> dict[str, Any]:
+    """自 start_date 起空仓重放因子1，返回累计策略收益（含费用、整手、T+1）。"""
+    from strategy.costs import ENGINE_COMMISSION_RATE, SLIPPAGE_VALUE, stamp_tax_for_code
+
+    out: dict[str, Any] = {
+        "return_pct": None,
+        "pnl": None,
+        "trades": 0,
+        "holding": False,
+        "start_date": str(start_date)[:10],
+    }
+    if daily is None or daily.empty:
+        return out
+    df = daily.copy()
+    df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None).dt.normalize()
+    df = df.dropna(subset=["open", "high", "low", "close"]).sort_values("date")
+    if len(df) < 2:
+        return out
+
+    start = pd.Timestamp(str(start_date)[:10]).normalize()
+    idxs = [i for i in range(len(df)) if pd.Timestamp(df.iloc[i]["date"]).normalize() >= start]
+    if not idxs:
+        return out
+
+    stamp = stamp_tax_for_code(code)
+    lot = 100
+    target = 0.95
+    cash = float(initial_cash)
+    shares = 0.0
+    buy_day: pd.Timestamp | None = None
+    trades = 0
+
+    for i in idxs:
+        row = df.iloc[i]
+        prev = df.iloc[i - 1] if i >= 1 else None
+        prev2 = df.iloc[i - 2] if i >= 2 else None
+        if prev is None:
+            continue
+        day = pd.Timestamp(row["date"]).normalize()
+        o = float(row["open"])
+        h = float(row["high"])
+        l = float(row["low"])
+        c = float(row["close"])
+        if o <= 0 or c <= 0:
+            continue
+        buy_px = entry_trigger_price(o, entry_pct=entry_pct, tick=tick)
+        stop_px = stop_trigger_price(o, stop_pct=stop_pct, tick=tick)
+
+        if shares > 0:
+            if buy_day is not None and day == buy_day:
+                continue
+            if l <= stop_px + 1e-12:
+                lim = limit_down_state(
+                    prev_close=float(prev["close"]),
+                    open_px=o,
+                    high_px=h,
+                    low_px=l,
+                    close_px=c,
+                    limit_down_pct=limit_down_pct,
+                    tick=tick,
+                )
+                if bool(lim["locked"]):
+                    continue
+                sell_px = float(lim["limit_px"] if bool(lim["opened"]) else stop_px)
+                sell_px *= 1.0 - SLIPPAGE_VALUE
+                proceeds = shares * sell_px
+                fee = proceeds * ENGINE_COMMISSION_RATE + proceeds * stamp
+                cash += proceeds - fee
+                shares = 0.0
+                buy_day = None
+                trades += 1
+            continue
+
+        allows = prev_day_allows_entry(
+            float(prev["open"]),
+            float(prev["close"]),
+            prev_small_yang_pct=entry_pct,
+            prev_entry_mode=prev_entry_mode,
+        )
+        blocked = False
+        if prev2 is not None:
+            blocked = should_block_entry_by_yang(
+                float(prev2["open"]),
+                float(prev2["close"]),
+                float(prev["open"]),
+                float(prev["close"]),
+                tick=tick,
+                ban_double_yang=ban_double_yang,
+                ban_single_yang=ban_single_yang,
+                double_yang_combined_min_pct=double_yang_combined_min_pct,
+                double_yang_combined_mode=double_yang_combined_mode,
+            )
+        if allows and (not blocked) and (h + 1e-12 >= buy_px):
+            px = buy_px * (1.0 + SLIPPAGE_VALUE)
+            budget = cash * target
+            raw = math.floor(budget / (px * lot)) * lot
+            if raw >= lot:
+                cost = raw * px
+                fee = cost * ENGINE_COMMISSION_RATE
+                if cost + fee <= cash:
+                    cash -= cost + fee
+                    shares = float(raw)
+                    buy_day = day
+
+    mark = float(df.iloc[idxs[-1]]["close"])
+    equity = cash + shares * mark
+    out["holding"] = shares > 0
+    out["trades"] = trades
+    out["pnl"] = round(equity - float(initial_cash), 2)
+    out["return_pct"] = round((equity / float(initial_cash) - 1.0) * 100.0, 2)
+    return out
+
+
 def entry_filters_ok(
     prev_open: float | None,
     prev_close: float | None,

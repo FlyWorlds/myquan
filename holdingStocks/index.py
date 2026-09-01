@@ -77,6 +77,8 @@ from strategy.open_break import (
     limit_down_state,
     prev_day_allows_entry,
     replay_last_factor_triggers,
+    replay_strategy_return_since,
+    _merge_live_daily_bar,
     should_block_entry_by_yang,
     strategy_levels,
     strategy_signal,
@@ -99,6 +101,7 @@ from watch_config import (
     OPEN_PRICE_REFRESH_MINUTE,
     STRATEGY_ID,
     STRATEGY_NAME,
+    STRATEGY_PNL_START,
     USE_FACTOR4,
     WATCHLIST,
     effective_watchlist,
@@ -148,6 +151,7 @@ _last_watch_snapshot: dict[str, Any] | None = None
 _last_snapshot_digest: str | None = None
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
 _REPLAY_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
+_STRATEGY_PNL_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _MIN_WATCH_REFRESH_SEC = 1.0
 _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
 _INDEX_CACHE_TTL_SEC = 15.0
@@ -957,6 +961,95 @@ def _daily_frame_sig(daily: pd.DataFrame) -> str:
         return "empty"
     last = daily.iloc[-1]
     return f"{len(daily)}:{last.get('date', '')}"
+
+
+def _strategy_pnl_since_cached(
+    sina: str,
+    daily: pd.DataFrame,
+    *,
+    q: dict[str, Any],
+    code: str,
+    entry_pct: float,
+    stop_pct: float,
+    tick: float,
+    prev_entry_mode: str,
+    limit_down_pct: float,
+) -> dict[str, Any]:
+    """自 STRATEGY_PNL_START 起的单票策略收益（日线+盘中末 bar）。"""
+    today = str(pd.Timestamp.now().date())
+    live_sig = (
+        f"{q.get('session')}:{q.get('open')}:{q.get('high')}:"
+        f"{q.get('low')}:{q.get('last')}"
+    )
+    key = (
+        str(sina).lower(),
+        today,
+        STRATEGY_PNL_START,
+        _daily_frame_sig(daily),
+        live_sig,
+        float(entry_pct),
+        float(stop_pct),
+        float(tick),
+        str(prev_entry_mode),
+        float(limit_down_pct),
+    )
+    hit = _STRATEGY_PNL_CACHE.get(key)
+    if hit is not None:
+        return hit
+    merged = _merge_live_daily_bar(
+        daily,
+        session=str(q["session"]),
+        open_px=float(q["open"]),
+        high_px=float(q["high"]),
+        low_px=float(q["low"]),
+        close_px=float(q["last"]),
+    )
+    out = replay_strategy_return_since(
+        merged,
+        start_date=STRATEGY_PNL_START,
+        entry_pct=entry_pct,
+        stop_pct=stop_pct,
+        tick=tick,
+        prev_entry_mode=prev_entry_mode,
+        limit_down_pct=limit_down_pct,
+        code=code,
+    )
+    if len(_STRATEGY_PNL_CACHE) > 512:
+        _STRATEGY_PNL_CACHE.clear()
+    _STRATEGY_PNL_CACHE[key] = out
+    return out
+
+
+def _attach_strategy_pnl_fields(
+    row: dict[str, Any],
+    *,
+    w: dict[str, Any],
+    daily: pd.DataFrame,
+    q: dict[str, Any],
+    entry_pct: float,
+    stop_pct: float,
+    tick: float,
+    prev_entry_mode: str,
+    limit_down_pct: float,
+) -> None:
+    row["策略起算"] = STRATEGY_PNL_START
+    if row.get("error") or not q.get("session"):
+        row["策略收益%"] = None
+        row["策略收益"] = None
+        return
+    rec = _strategy_pnl_since_cached(
+        w["sina"],
+        daily,
+        q=q,
+        code=str(w["code"]),
+        entry_pct=entry_pct,
+        stop_pct=stop_pct,
+        tick=tick,
+        prev_entry_mode=prev_entry_mode,
+        limit_down_pct=limit_down_pct,
+    )
+    row["策略收益%"] = rec.get("return_pct")
+    row["策略收益"] = rec.get("pnl")
 
 
 def _replay_last_factor_triggers_cached(
@@ -2380,6 +2473,17 @@ def collect_rows(
                     code=code,
                     allow_entry=False,
                 )
+                _attach_strategy_pnl_fields(
+                    row0,
+                    w=w,
+                    daily=daily,
+                    q=q,
+                    entry_pct=entry_pct,
+                    stop_pct=base_stop_pct,
+                    tick=tick,
+                    prev_entry_mode=prev_entry_mode,
+                    limit_down_pct=limit_down_pct,
+                )
                 rows.append(row0)
                 continue
 
@@ -2634,6 +2738,17 @@ def collect_rows(
                 replay=replay,
                 code=code,
                 allow_entry=allow_entry,
+            )
+            _attach_strategy_pnl_fields(
+                row,
+                w=w,
+                daily=daily,
+                q=q,
+                entry_pct=entry_pct,
+                stop_pct=base_stop_pct,
+                tick=tick,
+                prev_entry_mode=prev_entry_mode,
+                limit_down_pct=limit_down_pct,
             )
             try:
                 from strategy3_watch import enrich_first_board_row

@@ -8,7 +8,7 @@ cd holdingStocks && python start_watch.py --no-wechat
 # 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
 # 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
 # 策略8 Tab：当日涨停实时定题材（随涨停变化重算）
-# 持仓 Tab：实仓 + 定盘池（含协鑫能科等）+ 待买入
+# 持仓 Tab：实仓 + 定盘池（含协鑫能科、山河智能等）+ 待买入
 # 板块轮动：http://127.0.0.1:3000/sectors （通达信优先，连不上回退东财概念）
 ```
 
@@ -260,6 +260,8 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 
 ## 盯盘要点
+
+**策略1 Tab**：除信号外展示**日内涨跌**（现价/昨收）与**策略收益**（自 2026-09-01 起因子1 回放、含费用；见 `watch_config.STRATEGY_PNL_START`）。
 
 **启动（推荐）**
 

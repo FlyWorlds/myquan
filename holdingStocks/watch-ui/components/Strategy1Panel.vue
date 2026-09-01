@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
-import { fmtNum, stockLabel } from '~/utils/format'
+import { fmtNum, fmtSignedMoney, fmtSignedPct, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 
@@ -31,6 +31,9 @@ const legend = [
         <span v-for="[t, l] in steps" :key="t" class="rounded-full bg-accent/10 px-2 py-1 text-accent">{{ t }} {{ l }}</span>
       </div>
       <div class="mt-2 text-sm">当前：<strong>{{ phase || '-' }}</strong></div>
+      <div class="mt-1 text-xs text-ui-text-3">
+        策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）
+      </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <span v-for="item in legend" :key="item.label" class="text-xs text-ui-text-3">
           <span :class="item.cls" class="mx-0.5">{{ item.label }}</span>
@@ -46,6 +49,8 @@ const legend = [
               <th class="min-w-[5.5rem] px-3 py-2.5">状态</th>
               <th class="px-3 py-2.5">竞价/开盘</th>
               <th class="px-3 py-2.5">现价</th>
+              <th class="px-3 py-2.5">日内涨跌</th>
+              <th class="px-3 py-2.5">策略收益</th>
               <th class="px-3 py-2.5">前日</th>
               <th class="px-3 py-2.5">过门</th>
               <th class="px-3 py-2.5">阈值</th>
@@ -79,6 +84,17 @@ const legend = [
               </td>
               <td class="sensitive px-3 py-2.5">{{ r.阈值就绪 ? fmtNum(r.开盘, r['价位小数'] ?? 2) : (r.竞价参考 != null ? fmtNum(r.竞价参考, r['价位小数'] ?? 2) : '待9:25') }}</td>
               <td class="sensitive px-3 py-2.5 font-semibold">{{ fmtNum(r.现价, r['价位小数'] ?? 2) }}</td>
+              <td class="sensitive px-3 py-2.5">
+                <ChgText :chg="r.当日涨幅">{{ fmtSignedPct(r.当日涨幅) }}</ChgText>
+              </td>
+              <td class="sensitive px-3 py-2.5">
+                <div>
+                  <ChgText :chg="r['策略收益%']">{{ fmtSignedPct(r['策略收益%']) }}</ChgText>
+                </div>
+                <div v-if="r.策略收益 != null" class="text-xs text-ui-text-3">
+                  <ChgText :chg="r.策略收益">{{ fmtSignedMoney(r.策略收益) }}</ChgText>
+                </div>
+              </td>
               <td class="px-3 py-2.5">{{ r.前日形态 || '-' }}</td>
               <td class="px-3 py-2.5 font-semibold" :class="r.过门OK ? 'text-up' : 'text-ui-text-2'">{{ r.过门 || '-' }}</td>
               <td class="px-3 py-2.5">{{ r['阈值%'] || '-' }}</td>
