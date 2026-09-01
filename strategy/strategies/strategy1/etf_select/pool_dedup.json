@@ -1,0 +1,104 @@
+{
+  "updated": "2026-09-01",
+  "strategy": "strategy1",
+  "pool_var": "holdingStocks.watch_config.S1_ETF_WATCHLIST",
+  "dedup_rules": "同跟踪指数/同主题只留研究排名最高的一只；宽基 walk-forward 与科创板全阶段分源去重后合并",
+  "kept": [
+    {
+      "code": "512480",
+      "name": "半导体ETF",
+      "group": "semi_broad",
+      "params": "买3%/止2.5%",
+      "source": "etf_select_wf rank#1"
+    },
+    {
+      "code": "159980",
+      "name": "有色期货ETF",
+      "group": "commodity_nonferrous",
+      "params": "买2%/止2.5%",
+      "source": "etf_select_wf rank#2"
+    },
+    {
+      "code": "159819",
+      "name": "人工智能ETF",
+      "group": "theme_ai",
+      "params": "买2%/止3%",
+      "source": "etf_select_wf rank#4"
+    },
+    {
+      "code": "516160",
+      "name": "新能源ETF",
+      "group": "theme_new_energy",
+      "params": "买2%/止2.5%",
+      "source": "etf_select_wf rank#5"
+    },
+    {
+      "code": "588710",
+      "name": "科创半导体设备ETF华泰柏瑞",
+      "group": "kcb_semi_equip",
+      "params": "买3%/止4%",
+      "source": "kcb_etf_select rank#1"
+    },
+    {
+      "code": "588180",
+      "name": "科创50ETF国联安",
+      "group": "kcb_kc50",
+      "params": "±2.5%仅阴",
+      "source": "kcb_etf_select rank#2"
+    },
+    {
+      "code": "588290",
+      "name": "科创芯片ETF华安",
+      "group": "kcb_chip",
+      "params": "买3%/止4%",
+      "source": "kcb_etf_select rank#3"
+    },
+    {
+      "code": "589860",
+      "name": "科创综指ETF天弘",
+      "group": "kcb_kczz",
+      "params": "买3%/止4%",
+      "source": "kcb_etf_select rank#8"
+    }
+  ],
+  "dropped_from_wf_top5": [
+    {
+      "code": "512760",
+      "name": "芯片ETF",
+      "reason": "与512480半导体主题重复，保留WF#1"
+    }
+  ],
+  "dropped_from_kcb_top10": [
+    {
+      "code": "589100",
+      "name": "科创芯片ETF国泰",
+      "reason": "科创芯片主题，保留#3华安"
+    },
+    {
+      "code": "589160",
+      "name": "科创芯片ETF广发",
+      "reason": "科创芯片主题，保留#3华安"
+    },
+    {
+      "code": "589190",
+      "name": "科创芯片ETF华宝",
+      "reason": "科创芯片主题，保留#3华安"
+    },
+    {
+      "code": "588200",
+      "name": "科创芯片ETF嘉实",
+      "reason": "科创芯片主题，保留#3华安"
+    },
+    {
+      "code": "588990",
+      "name": "科创芯片ETF博时",
+      "reason": "科创芯片主题，保留#3华安"
+    },
+    {
+      "code": "589900",
+      "name": "科创综指ETF博时",
+      "reason": "科创综指主题，保留#8天弘"
+    }
+  ],
+  "note": "研究用途；ETF 卫星池不走因子13A/16 股票换池，盯盘经 effective_watchlist 并入。"
+}

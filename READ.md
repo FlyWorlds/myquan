@@ -48,6 +48,7 @@ akshare DataFrame
 | **盯盘 / 默认回测** | **策略一 = 因子1 + 因子2 预警**（因子2 回测不注资） |
 | **因子1** | 开盘 ±2.5%（单票可 ±3% 等）；买突破、卖仅止损、T+1 |
 | **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top10**（宽宇宙主板，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
+| **ETF 卫星池（策略一）** | `watch_config.S1_ETF_WATCHLIST`（8只：宽基 WF Top5 + 科创板 Top10 去重）→ `strategy/strategies/strategy1/etf_select/pool_dedup.json` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
 
 因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md) · 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md)

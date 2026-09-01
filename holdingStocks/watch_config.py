@@ -264,8 +264,130 @@ FIT_WATCHLIST: list[dict[str, Any]] = [
     if is_mainboard_pool(c)
 ]
 
-# 现行盯盘：与契合池一致（无置顶；因子13 及格才入池）
+# 现行盯盘股票池：与契合池一致（无置顶；因子13 及格才入池）
 WATCHLIST: list[dict[str, Any]] = list(FIT_WATCHLIST)
+
+
+def is_etf_code(code: str) -> bool:
+    """场内 ETF / LOF（与 strategy.data._is_etf_symbol 口径一致）。"""
+    c = code_key(code)
+    return c.startswith(("51", "56", "58", "15", "16", "18"))
+
+
+def etf_watch_item(
+    code: str,
+    name: str,
+    *,
+    entry_pct: float,
+    stop_pct: float,
+    prev_entry_mode: str = "yin_or_small_yang",
+    dedup_group: str = "",
+    source: str = "",
+) -> dict[str, Any]:
+    """策略一 ETF 卫星池条目（因子1 独立阈值；不走 13A/16 股票换池）。"""
+    item = watch_item(
+        code,
+        name,
+        entry_pct=entry_pct,
+        stop_pct=stop_pct,
+        tick=0.001,
+        t0=False,
+        limit_down_pct=0.10,
+        prev_entry_mode=prev_entry_mode,
+    )
+    item["asset_class"] = "etf"
+    if dedup_group:
+        item["dedup_group"] = dedup_group
+    if source:
+        item["etf_source"] = source
+    return item
+
+
+# ---------------------------------------------------------------------------
+# 策略一 ETF 卫星池（研究选票去重真源；见 strategy/strategies/strategy1/etf_select/pool_dedup.json）
+# 宽基 walk-forward Top5 + 科创板全阶段 Top10，同类指数只留排名最高的一只。
+# ---------------------------------------------------------------------------
+_S1_ETF_DEFS: list[dict[str, Any]] = [
+    # walk-forward 2023-2025 选参 Top5（去重：512760 芯片并入 512480 半导体）
+    {
+        "code": "512480",
+        "name": "半导体ETF",
+        "entry_pct": 0.03,
+        "stop_pct": 0.025,
+        "prev_entry_mode": "yin_or_small_yang",
+        "dedup_group": "semi_broad",
+        "source": "etf_select_wf#1",
+    },
+    {
+        "code": "159980",
+        "name": "有色期货ETF",
+        "entry_pct": 0.02,
+        "stop_pct": 0.025,
+        "prev_entry_mode": "yin_or_small_yang",
+        "dedup_group": "commodity_nonferrous",
+        "source": "etf_select_wf#2",
+    },
+    {
+        "code": "159819",
+        "name": "人工智能ETF",
+        "entry_pct": 0.02,
+        "stop_pct": 0.03,
+        "prev_entry_mode": "yin_or_small_yang",
+        "dedup_group": "theme_ai",
+        "source": "etf_select_wf#4",
+    },
+    {
+        "code": "516160",
+        "name": "新能源ETF",
+        "entry_pct": 0.02,
+        "stop_pct": 0.025,
+        "prev_entry_mode": "yin_or_small_yang",
+        "dedup_group": "theme_new_energy",
+        "source": "etf_select_wf#5",
+    },
+    # 科创板全阶段 Top10 去重（芯片/综指各留一只）
+    {
+        "code": "588710",
+        "name": "科创半导体设备ETF华泰柏瑞",
+        "entry_pct": 0.03,
+        "stop_pct": 0.04,
+        "prev_entry_mode": "yin_or_small_yang",
+        "dedup_group": "kcb_semi_equip",
+        "source": "kcb_etf_select#1",
+    },
+    {
+        "code": "588180",
+        "name": "科创50ETF国联安",
+        "entry_pct": 0.025,
+        "stop_pct": 0.025,
+        "prev_entry_mode": "yin_only",
+        "dedup_group": "kcb_kc50",
+        "source": "kcb_etf_select#2",
+    },
+    {
+        "code": "588290",
+        "name": "科创芯片ETF华安",
+        "entry_pct": 0.03,
+        "stop_pct": 0.04,
+        "prev_entry_mode": "yin_or_small_yang",
+        "dedup_group": "kcb_chip",
+        "source": "kcb_etf_select#3",
+    },
+    {
+        "code": "589860",
+        "name": "科创综指ETF天弘",
+        "entry_pct": 0.03,
+        "stop_pct": 0.04,
+        "prev_entry_mode": "yin_or_small_yang",
+        "dedup_group": "kcb_kczz",
+        "source": "kcb_etf_select#8",
+    },
+]
+
+S1_ETF_WATCHLIST: list[dict[str, Any]] = [
+    etf_watch_item(**row) for row in _S1_ETF_DEFS
+]
+
 
 # 持仓 Tab 固定展示：实仓 + 已卖仍跟踪（因子13 熊盾研究票阈值）
 PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
@@ -278,10 +400,11 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
 
 
 def effective_watchlist() -> list[dict[str, Any]]:
-    """盯盘拉行情/算信号：持仓置顶 + 定盘池（去重，置顶在前）。"""
+    """盯盘拉行情/算信号：持仓置顶 + 定盘池 + 策略一 ETF 卫星池（去重）。"""
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
-    for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST):
+    etf_pool = S1_ETF_WATCHLIST if STRATEGY_ID == "strategy1" else ()
+    for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST, *etf_pool):
         c = code_key(w["code"])
         if c in seen:
             continue

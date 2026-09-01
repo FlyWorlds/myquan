@@ -102,7 +102,7 @@ for f in list_factors():
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警；定盘池 13A→16 Top10；别名 `open_break3` / `s1` / `策略一` |
+| **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警；股票池 13A→16 Top10；**ETF 卫星池** `S1_ETF_WATCHLIST`（8只，见 `etf_select/pool_dedup.json`）；别名 `open_break3` / `s1` / `策略一` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
 | **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮展示+±阈值；回测：首板+gap/量比 · 别名 `s3` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧 run 别名 `run_strategy9` / `s9` / `策略九` |

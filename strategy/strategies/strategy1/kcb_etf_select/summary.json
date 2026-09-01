@@ -1,0 +1,277 @@
+{
+  "mode": "full_period",
+  "end": "2026-09-01",
+  "min_bars": 60,
+  "n_pool": 130,
+  "n_ranked": 121,
+  "n_skipped": 9,
+  "top": [
+    {
+      "label": "买3/止4",
+      "entry_pct": 0.03,
+      "stop_pct": 0.04,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "full": {
+        "ret_pct": 254.3459287609216,
+        "excess_pct": 250.2459287609216,
+        "sharpe": 4.011437839715765,
+        "mdd_pct": 22.855828499981822,
+        "start": "2025-06-04",
+        "end": "2026-08-31",
+        "n_days": 305
+      },
+      "closed_trades": 18,
+      "win_rate": 50.0,
+      "symbol": "sh588710",
+      "code": "588710",
+      "name": "科创半导体设备ETF华泰柏瑞",
+      "rank": 1
+    },
+    {
+      "label": "sym±2.5%仅阴",
+      "entry_pct": 0.025,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_only",
+      "ban_double_yang": true,
+      "full": {
+        "ret_pct": 491.21750587304643,
+        "excess_pct": 482.41434069005925,
+        "sharpe": 1.8871533961059768,
+        "mdd_pct": 12.966344125353068,
+        "start": "2021-07-01",
+        "end": "2026-08-31",
+        "n_days": 1254
+      },
+      "closed_trades": 46,
+      "win_rate": 56.52173913043478,
+      "symbol": "sh588180",
+      "code": "588180",
+      "name": "科创50ETF国联安",
+      "rank": 2
+    },
+    {
+      "label": "买3/止4",
+      "entry_pct": 0.03,
+      "stop_pct": 0.04,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "full": {
+        "ret_pct": 449.44615629527993,
+        "excess_pct": 437.3424098975854,
+        "sharpe": 1.5286164332636085,
+        "mdd_pct": 45.2513421184854,
+        "start": "2022-10-26",
+        "end": "2026-08-31",
+        "n_days": 935
+      },
+      "closed_trades": 36,
+      "win_rate": 61.111111111111114,
+      "symbol": "sh588290",
+      "code": "588290",
+      "name": "科创芯片ETF华安",
+      "rank": 3
+    },
+    {
+      "label": "sym±2%",
+      "entry_pct": 0.02,
+      "stop_pct": 0.02,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "full": {
+        "ret_pct": 154.46758309991364,
+        "excess_pct": 150.65164595064314,
+        "sharpe": 2.8783424685203314,
+        "mdd_pct": 22.900350867147658,
+        "start": "2025-04-07",
+        "end": "2026-08-31",
+        "n_days": 343
+      },
+      "closed_trades": 57,
+      "win_rate": 54.385964912280706,
+      "symbol": "sh589100",
+      "code": "589100",
+      "name": "科创芯片ETF国泰",
+      "rank": 4
+    },
+    {
+      "label": "sym±2.5%",
+      "entry_pct": 0.025,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "full": {
+        "ret_pct": 62.039116226851185,
+        "excess_pct": 31.14643819274889,
+        "sharpe": 3.3371411930023136,
+        "mdd_pct": 28.65080739850143,
+        "start": "2026-01-30",
+        "end": "2026-08-31",
+        "n_days": 141
+      },
+      "closed_trades": 22,
+      "win_rate": 50.0,
+      "symbol": "sh589160",
+      "code": "589160",
+      "name": "科创芯片ETF广发",
+      "rank": 5
+    },
+    {
+      "label": "买2.5/止3.5",
+      "entry_pct": 0.025,
+      "stop_pct": 0.035,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "full": {
+        "ret_pct": 55.42620707271679,
+        "excess_pct": 91.70071687663837,
+        "sharpe": 2.766349348817399,
+        "mdd_pct": 27.58213318735111,
+        "start": "2026-01-27",
+        "end": "2026-08-31",
+        "n_days": 144
+      },
+      "closed_trades": 16,
+      "win_rate": 37.5,
+      "symbol": "sh589190",
+      "code": "589190",
+      "name": "科创芯片ETF华宝",
+      "rank": 6
+    },
+    {
+      "label": "sym±2.5%仅阴",
+      "entry_pct": 0.025,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_only",
+      "ban_double_yang": true,
+      "full": {
+        "ret_pct": 283.0976231973217,
+        "excess_pct": 270.34974784321406,
+        "sharpe": 1.4595572968683028,
+        "mdd_pct": 33.13164839986538,
+        "start": "2022-10-26",
+        "end": "2026-08-31",
+        "n_days": 935
+      },
+      "closed_trades": 77,
+      "win_rate": 49.35064935064935,
+      "symbol": "sh588200",
+      "code": "588200",
+      "name": "科创芯片ETF嘉实",
+      "rank": 7
+    },
+    {
+      "label": "买3/止4",
+      "entry_pct": 0.03,
+      "stop_pct": 0.04,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "full": {
+        "ret_pct": 124.72637401822091,
+        "excess_pct": 63.46876752734869,
+        "sharpe": 2.8240211933010553,
+        "mdd_pct": 16.7673192578647,
+        "start": "2025-03-05",
+        "end": "2026-08-31",
+        "n_days": 365
+      },
+      "closed_trades": 10,
+      "win_rate": 60.0,
+      "symbol": "sh589860",
+      "code": "589860",
+      "name": "科创综指ETF天弘",
+      "rank": 8
+    },
+    {
+      "label": "买3/止4",
+      "entry_pct": 0.03,
+      "stop_pct": 0.04,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": true,
+      "full": {
+        "ret_pct": 121.11136389684157,
+        "excess_pct": 60.64858723688181,
+        "sharpe": 2.8208705471097812,
+        "mdd_pct": 13.308083632681921,
+        "start": "2025-03-05",
+        "end": "2026-08-31",
+        "n_days": 365
+      },
+      "closed_trades": 9,
+      "win_rate": 66.66666666666666,
+      "symbol": "sh589900",
+      "code": "589900",
+      "name": "科创综指ETF博时",
+      "rank": 9
+    },
+    {
+      "label": "sym±2.5%不禁双阳",
+      "entry_pct": 0.025,
+      "stop_pct": 0.025,
+      "prev_entry_mode": "yin_or_small_yang",
+      "ban_double_yang": false,
+      "full": {
+        "ret_pct": 352.4471453482208,
+        "excess_pct": 76.6926181852429,
+        "sharpe": 2.7084897937713164,
+        "mdd_pct": 24.765333236630127,
+        "start": "2024-08-16",
+        "end": "2026-08-31",
+        "n_days": 494
+      },
+      "closed_trades": 51,
+      "win_rate": 64.70588235294117,
+      "symbol": "sh588990",
+      "code": "588990",
+      "name": "科创芯片ETF博时",
+      "rank": 10
+    }
+  ],
+  "skipped": [
+    {
+      "code": "589460",
+      "name": "科创200ETF华宝",
+      "reason": "样本<60日"
+    },
+    {
+      "code": "589420",
+      "name": "科创芯片设计ETF永赢",
+      "reason": "样本<60日"
+    },
+    {
+      "code": "589410",
+      "name": "科创人工智能ETF嘉实",
+      "reason": "样本<60日"
+    },
+    {
+      "code": "589400",
+      "name": "科创芯片设计ETF富国",
+      "reason": "样本<60日"
+    },
+    {
+      "code": "589390",
+      "name": "科创芯片设计ETF招商",
+      "reason": "样本<60日"
+    },
+    {
+      "code": "589360",
+      "name": "科创50ETF国泰",
+      "reason": "样本<60日"
+    },
+    {
+      "code": "589350",
+      "name": "科创芯片设计ETF银华",
+      "reason": "样本<60日"
+    },
+    {
+      "code": "589310",
+      "name": "科创人工智能ETF鑫元",
+      "reason": "样本<60日"
+    },
+    {
+      "code": "589290",
+      "name": "科创芯片设计ETF汇添富",
+      "reason": "样本<60日"
+    }
+  ]
+}
