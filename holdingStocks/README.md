@@ -103,6 +103,8 @@ pip install -r ../requirements.txt
 | `factor2_watch.py` | 账户回撤预警 |
 | `factor4_watch.py` | 牛市 regime（策略三 + 因子4 时） |
 | `index.py` | 盯盘主程序 / JSON 推送 / 微信 / 买卖记账 |
+| `start_watch.py` | 一键启动 API+Nuxt；`--stop` / `--force` 回收端口 |
+| `watch_process.py` | Windows 端口/PID 回收（Ctrl+C 孤儿进程） |
 | `quote_feed.py` | 行情聚合 |
 | `wechat_notify.py` | 微信推送 |
 
@@ -119,6 +121,10 @@ cd holdingStocks && python start_watch.py --no-wechat
 
 # Windows
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start_watch.ps1 --no-wechat
+# 端口占用 / Ctrl+C 后启不动：
+python start_watch.py --stop      # 停服务并释放 8765、3000
+python start_watch.py --force     # 强制停旧实例并启动
+# 或：python index.py watch-stop
 
 # macOS
 ./start_watch.sh --no-wechat

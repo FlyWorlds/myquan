@@ -3811,17 +3811,53 @@ def _acquire_watch_lock(
     host: str,
     port: int,
     ui_dev_port: int | None = None,
+    force: bool = False,
 ) -> None:
     """防止多个 watch 同时写快照，页面会来回跳变。"""
-    existing = _read_watch_lock()
+    from watch_process import (
+        clear_lock,
+        describe_listeners,
+        read_lock,
+        reclaim_ports,
+        stop_watch,
+    )
+
+    ports = [int(port)]
+    if ui_dev_port:
+        ports.append(int(ui_dev_port))
+    existing = read_lock()
+    blocked = describe_listeners(host, ports)
+
+    if force and (existing or blocked):
+        stop_watch(
+            api_port=int(port),
+            ui_port=int(ui_dev_port or WATCH_UI_DEV_PORT),
+            host=host,
+            force=True,
+        )
+        existing = None
+        blocked = describe_listeners(host, ports)
+
     if existing:
         old = int(existing.get("pid") or 0)
         if old and old != os.getpid():
             raise SystemExit(
                 f"盯盘已在运行 (pid={old})。\n"
-                f"请先在对应终端 Ctrl+C 停掉，再重新启动，"
-                f"否则新旧进程会抢写报告。"
+                f"请先运行: python start_watch.py --stop\n"
+                f"或强制: python index.py watch --force / python start_watch.py --force"
             )
+
+    clear_lock(only_if_stale=False)
+    if blocked:
+        reclaim_ports(list(blocked.keys()), host=host, force=True)
+        blocked = describe_listeners(host, ports)
+        if blocked:
+            parts = [f":{p}→pid{'/'.join(str(x) for x in ps)}" for p, ps in blocked.items()]
+            raise SystemExit(
+                "端口仍被占用: " + ", ".join(parts) + "\n"
+                "请运行: python start_watch.py --stop"
+            )
+
     payload: dict[str, Any] = {
         "pid": os.getpid(),
         "host": host,
@@ -4081,11 +4117,27 @@ def cmd_review_schedule(args: argparse.Namespace) -> None:
     raise SystemExit(proc.returncode)
 
 
+def cmd_watch_stop(_: argparse.Namespace) -> None:
+    from watch_process import format_stop_report, stop_watch
+
+    report = stop_watch(
+        api_port=8765,
+        ui_port=WATCH_UI_DEV_PORT,
+        force=True,
+    )
+    print(format_stop_report(report))
+    if report.get("remaining"):
+        raise SystemExit(1)
+
+
 def cmd_watch(args: argparse.Namespace) -> None:
     """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。
 
     默认与微信套件一体：先启动 OpenClaw Gateway → 微信自检 → 再盯盘。
     """
+    import atexit
+
+    atexit.register(_release_watch_lock)
     global _ws_hub
     interval = max(2, int(args.interval))
     host = str(args.host)
@@ -4124,6 +4176,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         host=host,
         port=port,
         ui_dev_port=ui_dev_port if use_ui_dev else None,
+        force=bool(getattr(args, "force", False)),
     )
     try:
         from stock_names import warm_name_cache
@@ -4551,7 +4604,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="启动套件里强制 restart OpenClaw Gateway",
     )
+    w.add_argument(
+        "--force",
+        action="store_true",
+        help="强制停止旧实例并回收端口后启动（Windows Ctrl+C 遗留进程时有用）",
+    )
     w.set_defaults(func=cmd_watch)
+
+    ws = sub.add_parser(
+        "watch-stop",
+        help="停止盯盘并释放 8765/3000 端口",
+    )
+    ws.set_defaults(func=cmd_watch_stop)
 
     b = sub.add_parser("buy", help="记录买入")
     b.add_argument("code")

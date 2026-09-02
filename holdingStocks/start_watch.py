@@ -6,6 +6,8 @@ Python 只提供行情/信号 JSON（HTTP /api + WebSocket /ws）。
 
 用法:
   python start_watch.py
+  python start_watch.py --stop          # 停止并释放 8765/3000 端口
+  python start_watch.py --force         # 强制停旧实例后启动
   python start_watch.py --no-wechat
   python start_watch.py --no-open
   python start_watch.py -- --skip-wechat-check
@@ -18,7 +20,6 @@ Python 只提供行情/信号 JSON（HTTP /api + WebSocket /ws）。
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import shutil
 import signal
@@ -39,65 +40,61 @@ UI_PORT = 3000
 UI_URL = f"http://{API_HOST}:{UI_PORT}/"
 
 
+def _import_watch_process():
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    import watch_process
+
+    return watch_process
+
+
 def _pid_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        if sys.platform == "win32":
-            import ctypes
-
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            STILL_ACTIVE = 259
-            handle = ctypes.windll.kernel32.OpenProcess(
-                PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid)
-            )
-            if not handle:
-                return False
-            code = ctypes.c_ulong()
-            ok = ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
-            ctypes.windll.kernel32.CloseHandle(handle)
-            return bool(ok) and int(code.value) == STILL_ACTIVE
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
+    return _import_watch_process().pid_alive(pid)
 
 
-def _read_lock() -> dict | None:
-    if not PID_FILE.exists():
-        return None
-    try:
-        raw = PID_FILE.read_text(encoding="utf-8").strip()
-        if raw.startswith("{"):
-            data = json.loads(raw)
-            pid = int(data.get("pid") or 0)
-        else:
-            pid = int(raw)
-            data = {"pid": pid}
-        if pid and _pid_alive(pid):
-            return data
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
-        return None
-    return None
+def _prepare_start(*, force: bool) -> None:
+    """启动前：处理 PID 锁与端口占用（Windows Ctrl+C 遗留孤儿进程）。"""
+    wp = _import_watch_process()
+    lock = wp.read_lock()
+    blocked = wp.describe_listeners(API_HOST, [API_PORT, UI_PORT])
 
-
-def _clear_stale_lock() -> None:
-    if not PID_FILE.exists():
+    if force:
+        if lock or blocked:
+            print("[start_watch] --force：正在停止旧实例并回收端口…")
+            report = wp.stop_watch(api_port=API_PORT, ui_port=UI_PORT, force=True)
+            print("[start_watch] " + wp.format_stop_report(report).replace("\n", "\n[start_watch] "))
         return
-    lock = _read_lock()
+
     if lock:
         print(
-            f"[start_watch] 数据后端已在运行 pid={lock.get('pid')} "
+            f"[start_watch] 盯盘已在运行 pid={lock.get('pid')} "
             f"API :{lock.get('port', API_PORT)}  Web {UI_URL}"
         )
-        print("[start_watch] 请先在该终端 Ctrl+C 停掉旧进程后再启动。")
+        print(
+            "[start_watch] 请先停止旧实例：\n"
+            "  python start_watch.py --stop\n"
+            "  或强制重启：python start_watch.py --force"
+        )
         raise SystemExit(1)
-    try:
-        PID_FILE.unlink()
-        print("[start_watch] 已清理失效锁文件 holdings_watch.pid")
-    except OSError as e:
-        print(f"[start_watch] 无法删除失效锁: {e}")
-        raise SystemExit(1) from e
+
+    wp.clear_lock(only_if_stale=False)
+    if blocked:
+        print("[start_watch] 检测到端口占用（多为 Ctrl+C 后子进程未退出），正在回收…")
+        for port, pids in blocked.items():
+            print(f"  :{port} → pid {', '.join(str(p) for p in pids)}")
+        wp.reclaim_ports([API_PORT, UI_PORT], host=API_HOST, force=True)
+        left = wp.describe_listeners(API_HOST, [API_PORT, UI_PORT])
+        if left:
+            print("[start_watch] 部分端口仍占用，请运行: python start_watch.py --stop")
+            raise SystemExit(1)
+        print("[start_watch] 端口已释放")
+
+
+def _cmd_stop() -> int:
+    wp = _import_watch_process()
+    report = wp.stop_watch(api_port=API_PORT, ui_port=UI_PORT, force=True)
+    print("[start_watch] " + wp.format_stop_report(report).replace("\n", "\n[start_watch] "))
+    return 0 if not report.get("remaining") else 1
 
 
 def _resolve_python() -> str:
@@ -105,6 +102,20 @@ def _resolve_python() -> str:
     if env_py and Path(env_py).is_file():
         return env_py
     return sys.executable
+
+
+def _install_shutdown_hooks(procs: dict[str, subprocess.Popen | None]) -> None:
+    import atexit
+
+    def _cleanup() -> None:
+        _stop_proc(procs.get("ui"))
+        _stop_proc(procs.get("api"))
+        try:
+            _import_watch_process().clear_lock(only_if_stale=False)
+        except Exception:  # noqa: BLE001
+            pass
+
+    atexit.register(_cleanup)
 
 
 def _resolve_npm() -> str:
@@ -204,6 +215,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="启动 Web 盯盘（Python 数据 API + Nuxt 页面）",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="强制停止旧实例并回收 8765/3000 端口后启动",
+    )
+    parser.add_argument(
+        "--stop",
+        action="store_true",
+        help="停止盯盘并释放端口（不启动新实例）",
+    )
     parser.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
     parser.add_argument(
         "--no-wechat",
@@ -216,12 +237,14 @@ def main() -> int:
         help="传给 index.py watch 的额外参数；可用 -- 分隔",
     )
     args, unknown = parser.parse_known_args()
+    if args.stop:
+        return _cmd_stop()
     extra = _split_passthrough(list(args.extra) + unknown)
 
     if not INDEX.is_file():
         raise SystemExit(f"[start_watch] 缺少 {INDEX}")
 
-    _clear_stale_lock()
+    _prepare_start(force=bool(args.force))
     py = _resolve_python()
     npm = _resolve_npm()
     _ensure_node_modules(npm)
@@ -236,6 +259,8 @@ def main() -> int:
         "--no-open",
         "--wechat-optional",
     ]
+    if args.force:
+        watch_args.append("--force")
     if args.no_wechat:
         watch_args.append("--no-wechat")
     watch_args.extend(extra)
@@ -245,8 +270,11 @@ def main() -> int:
     print(f"[start_watch] Web 盯盘: {UI_URL}")
     api_proc: subprocess.Popen | None = None
     ui_proc: subprocess.Popen | None = None
+    procs: dict[str, subprocess.Popen | None] = {"api": None, "ui": None}
+    _install_shutdown_hooks(procs)
     try:
         api_proc = subprocess.Popen([py, *watch_args], cwd=str(ROOT), env=env, **_popen_kwargs())
+        procs["api"] = api_proc
         api_ok = _wait_port(API_PORT, timeout=120, label="数据 API")
         if not api_ok:
             print("[start_watch] 数据 API 未起来，请看 Python 终端输出")
@@ -256,6 +284,7 @@ def main() -> int:
             env=env,
             **_popen_kwargs(),
         )
+        procs["ui"] = ui_proc
         ui_ok = _wait_port(UI_PORT, timeout=60, label="Web 盯盘")
         if not ui_ok:
             print("[start_watch] 前端未起来，请检查 Node/npm 与 watch-ui 依赖")
@@ -277,8 +306,11 @@ def main() -> int:
     finally:
         _stop_proc(ui_proc)
         _stop_proc(api_proc)
+        try:
+            _import_watch_process().clear_lock(only_if_stale=False)
+        except Exception:  # noqa: BLE001
+            pass
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
