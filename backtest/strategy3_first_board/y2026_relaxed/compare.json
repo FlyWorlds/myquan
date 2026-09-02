@@ -1,0 +1,98 @@
+[
+  {
+    "config": "default_lb2_h2_5",
+    "label": "默认·连板≥2·最高板2～5",
+    "entry_pct": 0.025,
+    "y2026_ret_pct": 13.05,
+    "y2026_mdd_pct": -11.91,
+    "aug_mom_pct": 0.74,
+    "aug_cal_pct": -0.07,
+    "n_trades_2026": 28,
+    "n_trades_aug": 2,
+    "win_rate_2026": 42.9
+  },
+  {
+    "config": "default_lb2_h2_5",
+    "label": "默认·连板≥2·最高板2～5",
+    "entry_pct": 0.03,
+    "y2026_ret_pct": -0.66,
+    "y2026_mdd_pct": -15.49,
+    "aug_mom_pct": 0.27,
+    "aug_cal_pct": -0.54,
+    "n_trades_2026": 26,
+    "n_trades_aug": 2,
+    "win_rate_2026": 42.3
+  },
+  {
+    "config": "relax_lb1_h2_8",
+    "label": "放宽·连板≥1·最高板2～8",
+    "entry_pct": 0.025,
+    "y2026_ret_pct": 2.91,
+    "y2026_mdd_pct": -18.95,
+    "aug_mom_pct": -0.04,
+    "aug_cal_pct": -0.84,
+    "n_trades_2026": 45,
+    "n_trades_aug": 3,
+    "win_rate_2026": 37.8
+  },
+  {
+    "config": "relax_lb1_h2_8",
+    "label": "放宽·连板≥1·最高板2～8",
+    "entry_pct": 0.03,
+    "y2026_ret_pct": -12.49,
+    "y2026_mdd_pct": -23.56,
+    "aug_mom_pct": -0.97,
+    "aug_cal_pct": -1.76,
+    "n_trades_2026": 40,
+    "n_trades_aug": 3,
+    "win_rate_2026": 37.5
+  },
+  {
+    "config": "relax_lb1_h2_10",
+    "label": "放宽·连板≥1·最高板2～10",
+    "entry_pct": 0.025,
+    "y2026_ret_pct": 2.91,
+    "y2026_mdd_pct": -18.95,
+    "aug_mom_pct": -0.04,
+    "aug_cal_pct": -0.84,
+    "n_trades_2026": 45,
+    "n_trades_aug": 3,
+    "win_rate_2026": 37.8
+  },
+  {
+    "config": "relax_lb1_h2_10",
+    "label": "放宽·连板≥1·最高板2～10",
+    "entry_pct": 0.03,
+    "y2026_ret_pct": -12.49,
+    "y2026_mdd_pct": -23.56,
+    "aug_mom_pct": -0.97,
+    "aug_cal_pct": -1.76,
+    "n_trades_2026": 40,
+    "n_trades_aug": 3,
+    "win_rate_2026": 37.5
+  },
+  {
+    "config": "relax_lb1_only",
+    "label": "更宽·仅连板≥1（不限最高板）",
+    "entry_pct": 0.025,
+    "y2026_ret_pct": 2.91,
+    "y2026_mdd_pct": -18.95,
+    "aug_mom_pct": -0.04,
+    "aug_cal_pct": -0.84,
+    "n_trades_2026": 45,
+    "n_trades_aug": 3,
+    "win_rate_2026": 37.8
+  },
+  {
+    "config": "relax_lb1_only",
+    "label": "更宽·仅连板≥1（不限最高板）",
+    "entry_pct": 0.03,
+    "y2026_ret_pct": -12.49,
+    "y2026_mdd_pct": -23.56,
+    "aug_mom_pct": -0.97,
+    "aug_cal_pct": -1.76,
+    "n_trades_2026": 40,
+    "n_trades_aug": 3,
+    "win_rate_2026": 37.5
+  }
+]
