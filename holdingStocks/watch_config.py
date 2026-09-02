@@ -282,8 +282,8 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
 # 切策略三：STRATEGY_ID="strategy3"; USE_FACTOR4=True; WATCHLIST=list(S7_WATCHLIST)
 
 
-def effective_watchlist() -> list[dict[str, Any]]:
-    """盯盘拉行情/算信号：持仓置顶 + 定盘池（去重，置顶在前）。"""
+def strategy_watchlist() -> list[dict[str, Any]]:
+    """策略1 定盘池（置顶 + WATCHLIST），与持仓池独立。"""
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
     for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST):
@@ -292,6 +292,92 @@ def effective_watchlist() -> list[dict[str, Any]]:
             continue
         seen.add(c)
         out.append(w)
+    return out
+
+
+def strategy_watchlist_codes() -> set[str]:
+    return {code_key(w["code"]) for w in strategy_watchlist()}
+
+
+def _position_user_designated(
+    pos: dict[str, Any],
+    explicit: set[str],
+    code: str,
+) -> bool:
+    """holdings.json 中由用户登记/指定的票（非策略池自动占位）。"""
+    c = code_key(code)
+    if c in explicit:
+        return True
+    if pos.get("pool"):
+        return True
+    if int(pos.get("qty") or 0) > 0:
+        return True
+    if pos.get("cost") is not None:
+        return True
+    if pos.get("buy_time"):
+        return True
+    return False
+
+
+def portfolio_pool_codes(holdings: dict[str, Any]) -> list[str]:
+    """持仓池代码：portfolio_pool 显式列表 + 用户登记仓位 + 当日已实现。"""
+    explicit_raw = holdings.get("portfolio_pool")
+    explicit = (
+        {code_key(str(c)) for c in explicit_raw}
+        if isinstance(explicit_raw, list)
+        else set()
+    )
+    codes = set(explicit)
+    for code, pos in (holdings.get("positions") or {}).items():
+        if isinstance(pos, dict) and _position_user_designated(pos, explicit, str(code)):
+            codes.add(code_key(str(code)))
+    for code, rec in (holdings.get("realized_today") or {}).items():
+        if rec:
+            codes.add(code_key(str(code)))
+    return sorted(codes)
+
+
+def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str, Any]:
+    """任意 A 股代码 → watch_item；名称优先 holdings.json。"""
+    c = code_key(code)
+    for w in strategy_watchlist():
+        if w["code"] == c:
+            return w
+    pos: dict[str, Any] = {}
+    if holdings:
+        pos = (holdings.get("positions") or {}).get(c) or {}
+    name = str(pos.get("name") or "").strip()
+    if not name:
+        try:
+            from stock_names import resolve_stock_name
+
+            name = resolve_stock_name(code=c) or c
+        except Exception:  # noqa: BLE001
+            name = c
+    market = str(
+        pos.get("market")
+        or ("上证" if c.startswith(("5", "6", "9")) else "深证")
+    )
+    pct = _WATCH_PCT.get(c, DEFAULT_PCT)
+    return watch_item(c, name, pct=pct, limit_down_pct=limit_down_pct_of(c))
+
+
+def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """盯盘拉行情/算信号：策略1 定盘池 + 用户持仓池（去重）。"""
+    if holdings is None:
+        try:
+            from index import load_holdings
+
+            holdings = load_holdings()
+        except Exception:  # noqa: BLE001
+            holdings = {}
+    seen = {code_key(w["code"]) for w in strategy_watchlist()}
+    out = list(strategy_watchlist())
+    for code in portfolio_pool_codes(holdings):
+        if code in seen:
+            continue
+        seen.add(code)
+        out.append(meta_for_code(code, holdings))
     return out
 
 
@@ -402,14 +488,21 @@ def calc_day_pnl(
 
 def find_meta(code: str, watchlist: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     key = code_key(code)
-    items = watchlist if watchlist is not None else WATCHLIST
+    items = watchlist if watchlist is not None else strategy_watchlist()
     for item in items:
         if item["code"] == key:
             return item
-    codes = "/".join(w["code"] for w in items)
-    raise KeyError(f"不在监控列表: {code}（仅支持 {codes}）")
+    if watchlist is not None:
+        codes = "/".join(w["code"] for w in items)
+        raise KeyError(f"不在监控列表: {code}（仅支持 {codes}）")
+    try:
+        from index import load_holdings
+
+        return meta_for_code(code, load_holdings())
+    except Exception:  # noqa: BLE001
+        return meta_for_code(code, {})
 
 
 def watchlist_codes_label(watchlist: list[dict[str, Any]] | None = None) -> str:
-    items = watchlist if watchlist is not None else WATCHLIST
+    items = watchlist if watchlist is not None else strategy_watchlist()
     return " / ".join(w["code"] for w in items)

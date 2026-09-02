@@ -5,10 +5,12 @@
 
 ```bash
 cd holdingStocks && python start_watch.py --no-wechat
+
+停止：删除holdingStocks/holdings_watch.pid
 # 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
 # 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
 # 策略8 Tab：当日涨停实时定题材（随涨停变化重算）
-# 持仓 Tab：实仓 + 定盘池（含协鑫能科、山河智能等）+ 待买入
+# 持仓 Tab：你定股票池 + 因子1自动算买卖；名称/数量/成本手填
 # 板块轮动：http://127.0.0.1:3000/sectors （通达信优先，连不上回退东财概念）
 ```
 

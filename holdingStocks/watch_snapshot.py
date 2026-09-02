@@ -35,24 +35,31 @@ def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def filter_portfolio_holdings(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """持仓 Tab：实仓 + 当日已结算 + 现行定盘池 + 置顶跟踪 + 待买入。"""
-    from watch_config import PORTFOLIO_PINNED_WATCHLIST, WATCHLIST, code_key
+def filter_portfolio_holdings(
+    rows: list[dict[str, Any]],
+    portfolio_codes: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """持仓 Tab：仅用户持仓池；因子1 自动算买卖/止损，名称数量成本取自 holdings.json。"""
+    from watch_config import code_key, portfolio_pool_codes
 
-    pinned_order = {code_key(w["code"]): i for i, w in enumerate(PORTFOLIO_PINNED_WATCHLIST)}
-    pool_order = {code_key(w["code"]): i for i, w in enumerate(WATCHLIST)}
+    if portfolio_codes is None:
+        try:
+            from index import load_holdings
+
+            portfolio_codes = set(portfolio_pool_codes(load_holdings()))
+        except Exception:  # noqa: BLE001
+            portfolio_codes = set()
+
     picked: list[dict[str, Any]] = []
     for r in rows:
         if r.get("error"):
             continue
         c = code_key(str(r.get("代码") or ""))
-        qty = int(r.get("持仓") or 0)
-        pos = str(r.get("持仓状态") or "")
-        if qty > 0 or bool(r.get("已实现")) or c in pinned_order or c in pool_order or pos == "待买入":
-            picked.append(r)
+        if c not in portfolio_codes:
+            continue
+        picked.append(r)
 
-    def _sort_key(r: dict[str, Any]) -> tuple[int, int]:
-        c = code_key(str(r.get("代码") or ""))
+    def _sort_key(r: dict[str, Any]) -> tuple[int, str]:
         qty = int(r.get("持仓") or 0)
         pos = str(r.get("持仓状态") or "")
         if qty > 0:
@@ -63,7 +70,7 @@ def filter_portfolio_holdings(rows: list[dict[str, Any]]) -> list[dict[str, Any]
             tier = 2
         else:
             tier = 3
-        return (tier, pool_order.get(c, pinned_order.get(c, 9999)))
+        return (tier, str(r.get("代码") or ""))
 
     return sorted(picked, key=_sort_key)
 
@@ -79,13 +86,22 @@ def build_watch_snapshot(
     strategy8: dict[str, Any] | None = None,
     sectors: dict[str, Any] | None = None,
     refresh_sec: int = 5,
+    portfolio_codes: set[str] | None = None,
+    strategy_codes: set[str] | None = None,
 ) -> dict[str, Any]:
     """构建 WatchSnapshot v1。"""
-    holdings = [_row_json(r) for r in filter_portfolio_holdings(rows)]
+    from watch_config import code_key, strategy_watchlist_codes
+
+    if strategy_codes is None:
+        strategy_codes = strategy_watchlist_codes()
+    holdings = [
+        _row_json(r)
+        for r in filter_portfolio_holdings(rows, portfolio_codes=portfolio_codes)
+    ]
     strategy1_rows = [
         _row_json(r)
         for r in rows
-        if not r.get("error")
+        if not r.get("error") and code_key(str(r.get("代码") or "")) in strategy_codes
     ]
     return {
         "v": SNAPSHOT_VERSION,

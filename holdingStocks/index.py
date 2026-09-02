@@ -725,7 +725,14 @@ def publish_watch_snapshot(
     clock_now = _now()
     phase_key = market_phase()
     phase_label = market_phase_label(phase_key)
-    account = _build_watch_account_summary(rows)
+    holdings_meta = load_holdings()
+    from watch_config import code_key, portfolio_pool_codes, strategy_watchlist_codes
+
+    portfolio_codes = set(portfolio_pool_codes(holdings_meta))
+    portfolio_rows = [
+        r for r in rows if code_key(str(r.get("代码") or "")) in portfolio_codes
+    ]
+    account = _build_watch_account_summary(portfolio_rows)
     session_today = next(
         (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
         "",
@@ -783,6 +790,8 @@ def publish_watch_snapshot(
         strategy8=strategy8,
         sectors=sectors,
         refresh_sec=refresh_sec,
+        portfolio_codes=portfolio_codes,
+        strategy_codes=strategy_watchlist_codes(),
     )
     digest = _snapshot_business_digest(snapshot)
     if digest == _last_snapshot_digest and _last_watch_snapshot is not None:
@@ -2157,7 +2166,7 @@ def collect_rows(
     threshold_ok = is_threshold_ready()
     signal_ok_global = is_signal_window()
 
-    for w in effective_watchlist():
+    for w in effective_watchlist(holdings):
         code = w["code"]
         entry_pct = _watch_pct(w)
         base_stop_pct = _watch_stop_pct(w)
@@ -2396,9 +2405,9 @@ def collect_rows(
                     allow_entry=False,
                 )
                 row0 = {
-                        "市场": w["market"],
+                        "市场": str(pos.get("market") or w["market"]),
                         "代码": code,
-                        "名称": w["name"],
+                        "名称": str(pos.get("name") or w["name"]),
                         "交易日": q["session"],
                         "开盘": round(q["open"], px_digits),
                         "最高": round(q["high"], px_digits),
@@ -2653,9 +2662,9 @@ def collect_rows(
                         day_pnl_pct = round(float(day_pnl) / float(day_base) * 100.0, 2)
 
             row = {
-                    "市场": w["market"],
+                    "市场": str(pos.get("market") or w["market"]),
                     "代码": code,
-                    "名称": w["name"],
+                    "名称": str(pos.get("name") or w["name"]),
                     "交易日": q["session"],
                     "开盘": round(q["open"], px_digits),
                     "最高": round(q["high"], px_digits),
@@ -2766,9 +2775,9 @@ def collect_rows(
             pos = positions.get(code, {})
             rows.append(
                 {
-                    "市场": w["market"],
+                    "市场": str(pos.get("market") or w["market"]),
                     "代码": code,
-                    "名称": w["name"],
+                    "名称": str(pos.get("name") or w["name"]),
                     "交易日": "-",
                     "开盘": None,
                     "最高": None,
