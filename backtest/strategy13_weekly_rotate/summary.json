@@ -1,0 +1,49 @@
+{
+  "generated": "2026-09-02T23:36:19",
+  "strategy": "strategy13 · S1质量带周频轮动",
+  "window": [
+    "20250102",
+    "20260831"
+  ],
+  "params": {
+    "top_k": 20,
+    "mom_n": 20,
+    "max_price": 100.0,
+    "candidate_pool": 80,
+    "start": "20250102",
+    "end": "20260831",
+    "apply_cost": true,
+    "factor13_rule": {
+      "thr_mode": "best",
+      "min_sharpe": 0.7,
+      "max_sharpe": 2.2,
+      "mdd_lo": 20.0,
+      "mdd_hi": 32.0,
+      "dd_ratio_max": 0.7,
+      "rank_col": "excess"
+    }
+  },
+  "stats": {
+    "ret_pct": 46.63458915982404,
+    "sharpe": 0.9608092704028495,
+    "mdd_pct": -27.199468950732886,
+    "vol_pct": 29.406106465775395,
+    "aug_2026_pct": 0.011859964980875937,
+    "avg_week_turn": 0.3342696629213483,
+    "avg_kept": 13.314606741573034
+  },
+  "fill_stats": {
+    "skipped_limit_up_buy": 6,
+    "filled_buy": 585,
+    "blocked_limit_down_sell": 0,
+    "realized_week_turn": 0.3298959608323134
+  },
+  "aug_2026": {
+    "ret_pct": 0.011859964980875937,
+    "n_days": 21,
+    "n_weeks": 5,
+    "avg_kept": 13.4,
+    "avg_turn": 0.32999999999999996
+  },
+  "note": "研究口径（含换手成本）；重叠票不强制换出；非投资建议"
+}
