@@ -54,6 +54,15 @@ export interface HoldingRow {
   挂单说明?: string
   买点?: number | null
   止损?: number | null
+  买入侧价?: number | null
+  卖出侧价?: number | null
+  已触买?: string
+  近买点?: boolean
+  近止损?: boolean
+  已触发因子侧?: string
+  已触发因子价?: number | null
+  未触发因子侧?: string
+  未触发因子价?: number | null
   '阈值%'?: string
   过门?: string
   过门OK?: boolean

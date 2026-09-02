@@ -37,6 +37,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
 
   const buyTriggered =
     alert === '已触买' ||
+    String(row.已触买 || '') === '是' ||
     (pos === '待买入' && (trig.startsWith('已触发') || trig.includes('已触发')))
   const sellTriggered =
     alert.includes('已触止损') ||
@@ -47,30 +48,40 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     bg === 'warn-buy' ||
     pos === '待买入' ||
     alert.includes('将买') ||
-    (side === '买入' && trig === '接近')
+    Boolean(row.近买点) ||
+    (side === '买入' && (trig === '接近' || trig.startsWith('已触发')))
 
   const sellWarn =
     bg === 'warn-sell' ||
     pos === '待卖出' ||
     alert.includes('将止损') ||
     alert.includes('将卖出') ||
+    Boolean(row.近止损) ||
+    (side === '卖出' && trig === '接近') ||
     (paperHold && trig === '接近') ||
     (realHold && trig === '接近' && bg === 'warn-sell')
 
-  // 1. 已触发（最强）
-  if (buyTriggered) {
-    return mk('trigger-buy', alert || '已触买')
+  // 1. 已触发（最强）— 持有/策略持有时触买仍优先红闪
+  if (buyTriggered && !sellTriggered) {
+    const tag = alert === '已触买' ? alert : alert.includes('已触买') ? alert : '已触买'
+    return mk('trigger-buy', tag)
   }
-  if (sellTriggered) {
+  if (sellTriggered && !buyTriggered) {
     return mk('trigger-sell', alert || '已触止损')
+  }
+  if (buyTriggered && sellTriggered) {
+    return mk('trigger-buy', alert.includes('已触买') ? alert : '已触买')
   }
 
   // 2. 预警带
-  if (buyWarn && !realHold && !paperHold) {
+  if (buyWarn && !sellWarn) {
     return mk('warn-buy', alert || '将买入')
   }
-  if (sellWarn && (realHold || paperHold || pos === '待卖出')) {
+  if (sellWarn && !buyWarn && (realHold || paperHold || pos === '待卖出')) {
     return mk('warn-sell', alert || '将止损')
+  }
+  if (buyWarn && sellWarn) {
+    return mk('warn-buy', alert || '将买入')
   }
 
   // 3. 持有（无卖出预警）

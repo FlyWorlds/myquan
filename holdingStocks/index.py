@@ -1581,6 +1581,117 @@ def _stabilize_sell_warn(
     return sig
 
 
+def _buy_signal_active(row: dict[str, Any]) -> bool:
+    """今日买入侧信号是否应优先于「持有/策略持有」展示。"""
+    alert = str(row.get("预警") or "")
+    pos = str(row.get("持仓状态") or "")
+    return (
+        alert in ("已触买", "将买入")
+        or pos == "待买入"
+        or bool(row.get("近买点"))
+        or str(row.get("已触买") or "") == "是"
+    )
+
+
+def _overlay_buy_signal_on_hold(
+    sig: dict[str, Any],
+    *,
+    hit_buy: bool,
+    allow_entry: bool,
+    paper_active: bool,
+    qty: int,
+    buy_time: str | None,
+    session: str,
+    buy_trigger: float,
+    stop_px: float,
+    last_px: float,
+    px_digits: int,
+    near_points: float = NEAR_FACTOR_PCT,
+) -> dict[str, Any]:
+    """持有/策略回放持有时，若今日仍触买或近买点，叠加买入信号（勿被「持有」吞掉）。"""
+    if not allow_entry:
+        return sig
+    buy_today = bool(buy_time and str(buy_time)[:10] == str(session)[:10])
+    if qty > 0 and not buy_today:
+        return sig
+    if not paper_active and not (qty > 0 and buy_today):
+        return sig
+
+    pf = f"{{:.{px_digits}f}}"
+    buy_fmt = pf.format(buy_trigger)
+    stop_fmt = pf.format(stop_px)
+    hold_tag = "策略回放持有" if paper_active else "实仓·今日买入"
+    sig = dict(sig)
+
+    dist_pct = None
+    if float(buy_trigger) > 0:
+        dist_pct = abs(float(last_px) / float(buy_trigger) - 1.0) * 100.0
+    near_buy = dist_pct is not None and dist_pct <= near_points + 1e-12
+
+    if hit_buy:
+        sig.update(
+            {
+                "alert": "已触买",
+                "bg_class": "warn-buy",
+                "pending_buy": True,
+                "near_buy": True,
+                "持仓状态": "待买入",
+                "因子侧": "买入",
+                "因子价": round(float(buy_trigger), px_digits),
+                "因子触发": "已触发",
+                "建议挂单": round(float(buy_trigger), px_digits),
+                "挂单说明": (
+                    f"{hold_tag}·买入侧@{buy_fmt}；"
+                    f"卖出侧(止损)@{stop_fmt}"
+                ),
+                "hit_buy": True,
+            }
+        )
+        return sig
+
+    if near_buy:
+        dist_txt = f"{dist_pct:+.2f}%" if dist_pct is not None else "-"
+        sig.update(
+            {
+                "alert": "将买入",
+                "bg_class": "warn-buy",
+                "pending_buy": True,
+                "near_buy": True,
+                "持仓状态": "待买入",
+                "因子侧": "买入",
+                "因子价": round(float(buy_trigger), px_digits),
+                "因子触发": "接近",
+                "建议挂单": round(float(buy_trigger), px_digits),
+                "挂单说明": (
+                    f"{hold_tag}·近买入侧@{buy_fmt}（现差{dist_txt}）；"
+                    f"卖出侧(止损)@{stop_fmt}"
+                ),
+            }
+        )
+    return sig
+
+
+def _enrich_side_price_fields(row: dict[str, Any]) -> None:
+    """写入买入侧/卖出侧展示价，并在说明中标注两侧挂单价。"""
+    if row.get("error") or not row.get("阈值就绪"):
+        return
+    pdg = int(row.get("价位小数") or 2)
+    pf = f"{{:.{pdg}f}}"
+    buy = row.get("买点")
+    stop = row.get("止损")
+    if buy is not None:
+        row["买入侧价"] = round(float(buy), pdg)
+    if stop is not None:
+        row["卖出侧价"] = round(float(stop), pdg)
+    note = str(row.get("挂单说明") or "")
+    if buy is None or stop is None:
+        return
+    if "买入侧" in note or "卖出侧" in note:
+        return
+    side_note = f"买入侧@{pf.format(float(buy))} · 卖出侧@{pf.format(float(stop))}"
+    row["挂单说明"] = f"{side_note}；{note}" if note else side_note
+
+
 def _account_cash(data: dict[str, Any] | None = None) -> float | None:
     data = data if data is not None else load_holdings()
     return _as_money(data.get("account_cash"))
@@ -2612,6 +2723,21 @@ def collect_rows(
                 stop_lvl=-stop_pct * 100.0,
                 sticky=sticky,
             )
+            entry_for_overlay = bool(allow_entry and preview_ok and not _sold_today_pre)
+            if not (_paper_hold and hit_stop):
+                sig = _overlay_buy_signal_on_hold(
+                    sig,
+                    hit_buy=hit_buy,
+                    allow_entry=entry_for_overlay,
+                    paper_active=paper_active,
+                    qty=qty,
+                    buy_time=buy_time,
+                    session=str(q["session"]),
+                    buy_trigger=float(lv["buy_trigger"]),
+                    stop_px=float(lv["stop"]),
+                    last_px=float(q["last"]),
+                    px_digits=px_digits,
+                )
             if qty > 0 and sellable > 0 and sellable < qty:
                 # 部分 T+1：状态标为持有·部分T+1
                 alert = str(sig.get("alert") or "")
@@ -2682,7 +2808,7 @@ def collect_rows(
                     "基础止损": lv_base["stop"],
                     "因子4": f4_tag,
                     "牛市": ("是" if bull else "否") if USE_FACTOR4 else "-",
-                    "已触买": "是" if (qty <= 0 and hit_buy) else "否",
+                    "已触买": "是" if sig.get("hit_buy") else "否",
                     "已触止损": "是" if hit_stop else (
                         "触基础·暂停"
                         if (USE_FACTOR4 and f4_mode == "suppressed" and hit_base_stop)
@@ -2841,6 +2967,7 @@ def collect_rows(
         _save_alert_sticky(session_today, sticky)
 
     for r in rows:
+        _enrich_side_price_fields(r)
         _finalize_position_row(r)
         _enrich_float_pnl(r)
 
@@ -2955,6 +3082,13 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
         return
 
     if paper and qty <= 0:
+        if _buy_signal_active(row):
+            row["可执行"] = str(row.get("预警") or "") == "已触买"
+            if str(row.get("bg_class") or "") in ("", "status-hold", "status-flat"):
+                row["bg_class"] = "warn-buy"
+            if row.get("买点") is not None:
+                row["因子价"] = row["买点"]
+            return
         row["持仓状态"] = "策略持有"
         row["因子侧"] = "持有"
         row["建议挂单"] = None

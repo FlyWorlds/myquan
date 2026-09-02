@@ -167,6 +167,19 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
 
     if holding:
         if (
+            hit_buy
+            or "已触买" in alert
+            or (pos == "待买入" and hit.startswith("已触发"))
+        ):
+            return _pack(
+                PRIORITY_P0,
+                KIND_P0,
+                "已触买",
+                row.get("买入侧价")
+                or row.get("买点")
+                or _factor_px_for_push(row, holding=False),
+            )
+        if (
             hit_stop
             or hit.startswith("策略止损")
             or "已触止损" in alert

@@ -49,6 +49,16 @@ const cardClass = computed(() => {
         <div><span class="text-ui-text-2">成本</span> <b class="sensitive">{{ row.成本 != null ? fmtNum(row.成本, pdg) : '-' }}</b></div>
         <div><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
         <div><span class="text-ui-text-2">因子触发</span> <b>{{ row.因子触发 || '-' }}</b></div>
+        <div v-if="row.阈值就绪" class="col-span-2 grid grid-cols-2 gap-x-3 text-sm">
+          <div>
+            <span class="text-ui-text-2">买入侧</span>
+            <b class="sensitive ml-1 text-up">{{ fmtNum(row.买入侧价 ?? row.买点, pdg) }}</b>
+          </div>
+          <div>
+            <span class="text-ui-text-2">卖出侧</span>
+            <b class="sensitive ml-1 text-down">{{ fmtNum(row.卖出侧价 ?? row.止损, pdg) }}</b>
+          </div>
+        </div>
         <div class="col-span-2 text-xs leading-relaxed text-ui-text-2">{{ row.挂单说明 || row.预警 }}</div>
         <footer class="col-span-2 text-xs text-ui-text-3">更新 {{ row.更新 || '-' }}</footer>
       </div>

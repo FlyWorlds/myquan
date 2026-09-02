@@ -17,7 +17,7 @@ const legend = [
   { cls: 'signal-badge signal-badge-hold-real', label: '实仓持有' },
   { cls: 'signal-badge signal-badge-hold-paper', label: '策略持有' },
   { cls: 'signal-badge signal-badge-warn-buy', label: '买入预警' },
-  { cls: 'signal-badge signal-badge-trigger-buy', label: '已触买' },
+  { cls: 'signal-badge signal-badge-trigger-buy', label: '已触买（含策略持有叠买）' },
   { cls: 'signal-badge signal-badge-warn-sell', label: '卖出预警' },
   { cls: 'signal-badge signal-badge-trigger-sell', label: '已触止损' },
   { cls: 'signal-badge signal-badge-flat', label: '空仓' },
@@ -54,8 +54,8 @@ const legend = [
               <th class="px-3 py-2.5">前日</th>
               <th class="px-3 py-2.5">过门</th>
               <th class="px-3 py-2.5">阈值</th>
-              <th class="px-3 py-2.5">买点</th>
-              <th class="px-3 py-2.5">止损</th>
+              <th class="px-3 py-2.5">买入侧</th>
+              <th class="px-3 py-2.5">卖出侧</th>
               <th class="px-3 py-2.5">因子侧</th>
               <th class="px-3 py-2.5">说明</th>
             </tr>
@@ -98,9 +98,31 @@ const legend = [
               <td class="px-3 py-2.5">{{ r.前日形态 || '-' }}</td>
               <td class="px-3 py-2.5 font-semibold" :class="r.过门OK ? 'text-up' : 'text-ui-text-2'">{{ r.过门 || '-' }}</td>
               <td class="px-3 py-2.5">{{ r['阈值%'] || '-' }}</td>
-              <td class="sensitive px-3 py-2.5">{{ r.阈值就绪 ? fmtNum(r.买点, r['价位小数'] ?? 2) : '-' }}</td>
-              <td class="sensitive px-3 py-2.5">{{ r.阈值就绪 ? fmtNum(r.止损, r['价位小数'] ?? 2) : '-' }}</td>
-              <td class="px-3 py-2.5">{{ r.因子侧 || '-' }}</td>
+              <td class="sensitive px-3 py-2.5 align-top">
+                <div v-if="r.阈值就绪" class="font-semibold text-up">
+                  {{ fmtNum(r.买入侧价 ?? r.买点, r['价位小数'] ?? 2) }}
+                </div>
+                <div v-else class="text-ui-text-3">-</div>
+                <div v-if="r.已触发因子侧 === '买入' && r.已触发因子价 != null" class="mt-0.5 text-[10px] text-up">
+                  已触 {{ fmtNum(r.已触发因子价, r['价位小数'] ?? 2) }}
+                </div>
+              </td>
+              <td class="sensitive px-3 py-2.5 align-top">
+                <div v-if="r.阈值就绪" class="font-semibold text-down">
+                  {{ fmtNum(r.卖出侧价 ?? r.止损, r['价位小数'] ?? 2) }}
+                </div>
+                <div v-else class="text-ui-text-3">-</div>
+                <div v-if="r.未触发因子侧 === '卖出' && r.未触发因子价 != null" class="mt-0.5 text-[10px] text-down">
+                  止损 {{ fmtNum(r.未触发因子价, r['价位小数'] ?? 2) }}
+                </div>
+              </td>
+              <td class="px-3 py-2.5 align-top">
+                <div class="font-semibold">{{ r.因子侧 || '-' }}</div>
+                <div v-if="r.因子价 != null" class="text-xs text-ui-text-2">
+                  {{ r.因子侧 === '卖出' ? '卖出侧' : r.因子侧 === '买入' ? '买入侧' : '参考' }}
+                  {{ fmtNum(r.因子价, r['价位小数'] ?? 2) }}
+                </div>
+              </td>
               <td class="max-w-[220px] px-3 py-2.5 text-xs leading-relaxed text-ui-text-2">{{ r.挂单说明 || r.预警 || '-' }}</td>
             </tr>
           </tbody>
