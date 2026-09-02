@@ -51,7 +51,7 @@ akshare DataFrame
 |------|------|
 | **盯盘 / 默认回测** | **策略一 = 因子1 + 因子2 预警**（因子2 回测不注资） |
 | **因子1** | 开盘 ±2.5%（单票可 ±3% 等）；买突破、卖仅止损、T+1 |
-| **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top10**（宽宇宙主板，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
+| **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top20**（宽宇宙主板，剔ST/百元股，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
 
 因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md) · 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md)
@@ -105,7 +105,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 | ✅ **默认** | 开盘±2.5% 一次打满 + 回撤预警；定盘池 13A→16 Top10；别名 `open_break3` / `s1` |
+| **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 | ✅ **默认** | 开盘±2.5% 一次打满 + 回撤预警；定盘池 13A→16 Top20（剔科创/创业/ST/≥100元）；别名 `open_break3` / `s1` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30 分小转大 + 日线二/三买卖；别名 `chan` |
 | **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮+±阈值；回测见 `backtest/strategy3_first_board/` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 突破 + 牛市放宽 + 20% 昨高全清 + 周频 Top5 |

@@ -36,7 +36,6 @@ import pandas as pd  # noqa: E402
 from backtest.universe_zz500_1000 import (  # noqa: E402
     CACHE_DIR as ZZ_CACHE,
     _is_mainboard,
-    load_universe_wide,
 )
 from holdingStocks.watch_config import limit_down_pct_of, sina_of  # noqa: E402
 from strategy import BacktestConfig, run_open_break_backtest  # noqa: E402
@@ -67,8 +66,9 @@ FIT_START, FIT_END = "20250101", "20261231"
 OOS_START = "20260101"
 THR_GRID = (0.02, 0.025, 0.03)
 INITIAL_CASH = 100_000.0
-POOL_SIZE = 10
-CANDIDATE_POOL = 40  # 13A 初选池 → 因子16 缩至 POOL_SIZE
+POOL_SIZE = 20
+CANDIDATE_POOL = 80  # 13A 初选池 → 因子16 缩至 POOL_SIZE
+MAX_PRICE = 100.0  # 百元股不选（最新收盘价）
 F13A_FIT_END = "20251231"
 MIN_OOS_TRADES = 3
 
@@ -173,6 +173,34 @@ def _patch_load_daily() -> None:
     f1m.load_daily = _wide_load_daily
 
 
+def load_universe_wide(
+    use_network: bool = True,
+    mainboard_only: bool = False,
+) -> pd.DataFrame:
+    """沪深300+500+1000+1500 并集；读 `universe_wide/results.csv`。"""
+    if not WIDE_META.exists():
+        if not use_network:
+            raise FileNotFoundError(f"缺少宽宇宙成分表：{WIDE_META}")
+        raise FileNotFoundError(
+            f"缺少 {WIDE_META}，请先准备宽宇宙成分 CSV"
+        )
+    df = pd.read_csv(WIDE_META, dtype=str)
+    df["code"] = (
+        df["code"].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(6)
+    )
+    if "name" not in df.columns:
+        df["name"] = df["code"]
+    if "symbol" not in df.columns:
+        from backtest.universe_zz500_1000 import _to_symbol
+
+        df["symbol"] = df["code"].map(_to_symbol)
+    else:
+        df["symbol"] = df["symbol"].astype(str).str.lower()
+    if mainboard_only:
+        df = df[df["code"].map(_is_mainboard)].copy()
+    return df.drop_duplicates("symbol").reset_index(drop=True)
+
+
 def _ensure_wide_meta() -> pd.DataFrame:
     WIDE_META.parent.mkdir(parents=True, exist_ok=True)
     if WIDE_META.exists():
@@ -236,10 +264,42 @@ def _ensure_wide_cache(meta: pd.DataFrame, end: str, *, fetch_missing: bool) -> 
     return still
 
 
+def _is_st_name(name: str) -> bool:
+    n = str(name).strip().upper()
+    return "ST" in n or n.startswith("*")
+
+
+def _filter_by_max_price(meta: pd.DataFrame) -> pd.DataFrame:
+    """按缓存最新收盘价过滤百元股。"""
+    rows: list[dict[str, Any]] = []
+    skipped_price = 0
+    skipped_data = 0
+    for row in meta.drop_duplicates("symbol").to_dict(orient="records"):
+        sym = str(row["symbol"]).lower()
+        daily = _wide_load_daily(sym)
+        if daily is None or daily.empty:
+            skipped_data += 1
+            continue
+        close = float(pd.to_numeric(daily["close"], errors="coerce").dropna().iloc[-1])
+        if not np.isfinite(close) or close >= MAX_PRICE:
+            skipped_price += 1
+            continue
+        rows.append(row)
+    print(
+        f"价格过滤(<{MAX_PRICE:.0f}元)：保留 {len(rows)} · "
+        f"剔高价 {skipped_price} · 无行情 {skipped_data}"
+    )
+    return pd.DataFrame(rows)
+
+
 def build_wide_panel(meta: pd.DataFrame, *, force: bool = False) -> pd.DataFrame:
+    csv_panel = OUT / "year_thr_panel_mainboard.csv"
     if WIDE_PANEL.exists() and not force:
         print(f"加载 {WIDE_PANEL}")
         return pd.read_parquet(WIDE_PANEL)
+    if csv_panel.exists() and not force:
+        print(f"加载 {csv_panel}")
+        return pd.read_csv(csv_panel)
     _patch_load_daily()
     name_map = meta.drop_duplicates("symbol").set_index("symbol")["name"].to_dict()
     tasks = []
@@ -530,6 +590,7 @@ def main() -> None:
     ap.add_argument("--apply-watch", action="store_true", help="写回 watch_config.py")
     ap.add_argument("--rebuild-panel", action="store_true")
     ap.add_argument("--fetch-missing", action="store_true", help="拉取宽宇宙缺行情")
+    ap.add_argument("--skip-grid", action="store_true", help="复用 summary.json 因子13 参数（跳网格）")
     args = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -540,18 +601,33 @@ def main() -> None:
     meta_all = _ensure_wide_meta()
     meta = meta_all[meta_all["code"].astype(str).map(_is_mainboard)].drop_duplicates("symbol").copy()
     print(f"主板可交易 {len(meta)} / 全成分 {len(meta_all)}")
-    _ensure_wide_cache(meta, oos_end, fetch_missing=args.fetch_missing or args.rebuild_panel)
+    n_st = int(meta["name"].astype(str).map(_is_st_name).sum())
+    meta = meta[~meta["name"].astype(str).map(_is_st_name)].copy()
+    print(f"剔ST {n_st} → 剩余 {len(meta)}")
+    fetch = args.fetch_missing or args.rebuild_panel
+    _ensure_wide_cache(meta, oos_end, fetch_missing=fetch)
     _patch_load_daily()
+    meta = _filter_by_max_price(meta)
+    allowed = set(meta["symbol"].astype(str).str.lower())
     panel = build_wide_panel(meta, force=args.rebuild_panel)
     panel = panel[panel["mainboard"] == 1].copy()
+    if allowed:
+        panel = panel[panel["symbol"].astype(str).str.lower().isin(allowed)].copy()
     panel.to_csv(OUT / "year_thr_panel_mainboard.csv", index=False)
 
     print(f"\n=== 2) 因子13A 网格调参 + 因子16 排序（Top{POOL_SIZE}） ===")
-    grid, best_cfg, train_wf = grid_search_fit(panel, FIT_YEARS)
-    best_cfg["top_k"] = POOL_SIZE
-    grid.to_csv(OUT / "grid_results.csv", index=False, float_format="%.4f")
-    wf = walk_forward(panel, best_cfg, FIT_YEARS)
-    wf.to_csv(OUT / "walkforward_fit.csv", index=False, float_format="%.4f")
+    if args.skip_grid and (OUT / "summary.json").exists():
+        prev = json.loads((OUT / "summary.json").read_text(encoding="utf-8"))
+        best_cfg = dict(prev.get("factor13_best", {}))
+        best_cfg["top_k"] = POOL_SIZE
+        wf = pd.read_csv(OUT / "walkforward_fit.csv")
+        print(f"复用 factor13 参数：{best_cfg}")
+    else:
+        grid, best_cfg, wf = grid_search_fit(panel, FIT_YEARS)
+        best_cfg["top_k"] = POOL_SIZE
+        grid.to_csv(OUT / "grid_results.csv", index=False, float_format="%.4f")
+        wf = walk_forward(panel, best_cfg, FIT_YEARS)
+        wf.to_csv(OUT / "walkforward_fit.csv", index=False, float_format="%.4f")
 
     picks_df = _select_pool_f13a_f16(panel, best_cfg, oos_end)
     picks_df.to_csv(OUT / "picks_2025_for_2026.csv", index=False, float_format="%.4f")
@@ -613,7 +689,10 @@ def main() -> None:
 
     summary = {
         "generated": dt.datetime.now().isoformat(timespec="seconds"),
-        "universe": "沪深300+中证500+1000+1500 并集 · 主板选股（剔科创/创业/北交）",
+        "universe": (
+            "沪深300+中证500+1000+1500 并集 · 主板（剔科创/创业/北交）"
+            f" · 剔ST · 收盘价<{MAX_PRICE:.0f}元"
+        ),
         "pool_size": POOL_SIZE,
         "strategy": "策略一 · 因子1 + 因子2(预警) + 因子13A + 因子16",
         "selection_chain": "factor13a_quality_band → factor16_pl_ratio_rank",

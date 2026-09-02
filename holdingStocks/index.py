@@ -4,7 +4,7 @@
   · 因子1 买：high≥ceil(open×(1+entry))；前日阴/小阳；禁双阳跨日≥5%；T+1
   · 因子1 卖：开盘−stop 止损全清（个股阈值见 watch_config）
   · 因子2：账户回撤加减仓预警（不自动改现金）
-  · 默认定盘宇宙：因子13A+16 宽宇宙换池 Top10（无置顶；见 watch_config.WATCHLIST）
+  · 默认定盘宇宙：因子13A+16 宽宇宙换池 Top20（剔ST/百元股；无置顶；见 watch_config.WATCHLIST）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
 功能：

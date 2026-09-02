@@ -20,9 +20,6 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from strategy import BacktestConfig, run_open_break_backtest
-from strategy.data import fetch_daily
-
 logging.disable(logging.CRITICAL)
 
 ROOT = Path(__file__).resolve().parent
@@ -168,6 +165,9 @@ def load_universe() -> pd.DataFrame:
 
 
 def backtest_one(row: dict, end_date: str) -> dict:
+    from strategy import BacktestConfig, run_open_break_backtest
+    from strategy.data import fetch_daily
+
     code = row["code"]
     name = row["name"]
     symbol = row["symbol"]
