@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from .tdx import fetch_tdx_board_members, fetch_tdx_index_kline, resolve_concept_by_name
+from .tdx import (
+    fetch_tdx_board_members,
+    fetch_tdx_index_kline,
+    fetch_tdx_stock_klines,
+    resolve_concept_by_name,
+    tdx_hq_available,
+)
 
 ROOT = Path(__file__).resolve().parent
 CACHE_DIR = ROOT / "cache"
@@ -27,6 +32,7 @@ def _clean(v: Any) -> float | None:
 
 
 _NAME_MAP: dict[str, str] | None = None
+_RET_CACHE: dict[tuple[str, str, str], float | None] = {}
 
 
 def _stock_name_map() -> dict[str, str]:
@@ -51,61 +57,131 @@ def _stock_name_map() -> dict[str, str]:
     return _NAME_MAP
 
 
+def _return_from_bars(
+    bars: list[dict[str, Any]], start: str, end: str
+) -> float | None:
+    start_s, end_s = str(start)[:10], str(end)[:10]
+    window = [b for b in bars if start_s <= str(b.get("date") or "")[:10] <= end_s]
+    if len(window) < 2:
+        return None
+    o = _clean(window[0].get("open")) or _clean(window[0].get("close"))
+    c = _clean(window[-1].get("close"))
+    if not o or not c or o <= 0:
+        return None
+    return (c / o - 1.0) * 100.0
+
+
 def _stock_return_pct(code: str, start: str, end: str) -> float | None:
     code = str(code).zfill(6)
-    try:
-        from .rotation import _http
+    key = (code, str(start)[:10], str(end)[:10])
+    if key in _RET_CACHE:
+        return _RET_CACHE[key]
+    ret: float | None = None
+    # 通达信优先（东财/akshare 常被墙导致详情空白）
+    if tdx_hq_available():
+        try:
+            series = fetch_tdx_stock_klines([code], count=180).get(code) or []
+            ret = _return_from_bars(series, start, end)
+        except Exception:
+            ret = None
+    if ret is None:
+        try:
+            from .rotation import _http
 
-        mkt = 1 if code.startswith("6") else 0
-        sess = _http()
-        r = sess.get(
-            "https://push2his.eastmoney.com/api/qt/stock/kline/get",
-            params={
-                "secid": f"{mkt}.{code}",
-                "fields1": "f1,f2,f3,f4,f5,f6",
-                "fields2": "f51,f52,f53,f54,f55,f56,f57",
-                "klt": 101,
-                "fqt": 1,
-                "beg": str(start).replace("-", "")[:8],
-                "end": str(end).replace("-", "")[:8],
-                "lmt": 800,
-            },
-            timeout=12,
-        )
-        r.raise_for_status()
-        klines = ((r.json() or {}).get("data") or {}).get("klines") or []
-        if len(klines) >= 2:
-            first = str(klines[0]).split(",")
-            last = str(klines[-1]).split(",")
-            o = _clean(first[1]) if len(first) > 1 else None
-            c = _clean(last[2]) if len(last) > 2 else None
-            if o and c and o > 0:
-                return (c / o - 1.0) * 100.0
-    except Exception:
-        pass
-    try:
-        import akshare as ak
+            mkt = 1 if code.startswith("6") else 0
+            sess = _http()
+            r = sess.get(
+                "https://push2his.eastmoney.com/api/qt/stock/kline/get",
+                params={
+                    "secid": f"{mkt}.{code}",
+                    "fields1": "f1,f2,f3,f4,f5,f6",
+                    "fields2": "f51,f52,f53,f54,f55,f56,f57",
+                    "klt": 101,
+                    "fqt": 1,
+                    "beg": str(start).replace("-", "")[:8],
+                    "end": str(end).replace("-", "")[:8],
+                    "lmt": 800,
+                },
+                timeout=12,
+            )
+            r.raise_for_status()
+            klines = ((r.json() or {}).get("data") or {}).get("klines") or []
+            if len(klines) >= 2:
+                first = str(klines[0]).split(",")
+                last = str(klines[-1]).split(",")
+                o = _clean(first[1]) if len(first) > 1 else None
+                c = _clean(last[2]) if len(last) > 2 else None
+                if o and c and o > 0:
+                    ret = (c / o - 1.0) * 100.0
+        except Exception:
+            pass
+    if ret is None:
+        try:
+            import akshare as ak
 
-        df = ak.stock_zh_a_hist(
-            symbol=code,
-            period="daily",
-            start_date=start.replace("-", ""),
-            end_date=end.replace("-", ""),
-            adjust="qfq",
-        )
-    except Exception:
-        return None
-    if df is None or df.empty:
-        return None
-    open_col = "开盘" if "开盘" in df.columns else None
-    close_col = "收盘" if "收盘" in df.columns else None
-    if not open_col or not close_col:
-        return None
-    first = _clean(df.iloc[0][open_col])
-    last = _clean(df.iloc[-1][close_col])
-    if not first or not last or first <= 0:
-        return None
-    return (last / first - 1.0) * 100.0
+            df = ak.stock_zh_a_hist(
+                symbol=code,
+                period="daily",
+                start_date=start.replace("-", ""),
+                end_date=end.replace("-", ""),
+                adjust="qfq",
+            )
+            if df is not None and not df.empty:
+                open_col = "开盘" if "开盘" in df.columns else None
+                close_col = "收盘" if "收盘" in df.columns else None
+                if open_col and close_col:
+                    first = _clean(df.iloc[0][open_col])
+                    last = _clean(df.iloc[-1][close_col])
+                    if first and last and first > 0:
+                        ret = (last / first - 1.0) * 100.0
+        except Exception:
+            ret = None
+    _RET_CACHE[key] = ret
+    return ret
+
+
+def _fill_segment_leaders(
+    segments: list[dict[str, Any]],
+    codes: list[str],
+    name_map: dict[str, str],
+    *,
+    top_n: int = 3,
+    codes_per_seg: int = 12,
+) -> list[dict[str, Any]]:
+    """一次批量拉通达信个股 K，再算各波段龙头（避免串行东财 HTTP）。"""
+    if not segments or not codes:
+        return [{**seg, "leaders": []} for seg in segments]
+
+    sample = [str(c).zfill(6) for c in codes[: max(codes_per_seg, 40)]]
+    bars_map: dict[str, list[dict[str, Any]]] = {}
+    if tdx_hq_available():
+        try:
+            bars_map = fetch_tdx_stock_klines(sample, count=180)
+        except Exception:
+            bars_map = {}
+
+    out: list[dict[str, Any]] = []
+    for seg in segments:
+        rows: list[dict[str, Any]] = []
+        for code in sample:
+            if code in bars_map:
+                ret = _return_from_bars(bars_map[code], seg["start_date"], seg["end_date"])
+            else:
+                ret = _stock_return_pct(code, seg["start_date"], seg["end_date"])
+            if ret is None:
+                continue
+            rows.append(
+                {
+                    "code": code,
+                    "name": name_map.get(code, code),
+                    "return_pct": round(ret, 2),
+                }
+            )
+        rows.sort(key=lambda x: float(x.get("return_pct") or 0), reverse=True)
+        for rank, row in enumerate(rows[:top_n], start=1):
+            row["rank"] = rank
+        out.append({**seg, "leaders": rows[:top_n]})
+    return out
 
 
 def find_rally_segments(
@@ -176,44 +252,42 @@ def find_rally_segments(
     return deduped
 
 
-def _leaders_for_segment(
-    codes: list[str],
-    start_date: str,
-    end_date: str,
-    *,
-    top_n: int = 3,
-    max_workers: int = 12,
-    name_map: dict[str, str] | None = None,
-) -> list[dict[str, Any]]:
-    names = name_map or {}
-    results: list[dict[str, Any]] = []
-
-    def _one(code: str) -> dict[str, Any] | None:
-        ret = _stock_return_pct(code, start_date, end_date)
-        if ret is None:
-            return None
-        return {
-            "code": code,
-            "name": names.get(code, code),
-            "return_pct": round(ret, 2),
-        }
-
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futs = [pool.submit(_one, c) for c in codes[:40]]
-        for fut in as_completed(futs):
-            row = fut.result()
-            if row is not None:
-                results.append(row)
-
-    results.sort(key=lambda x: float(x.get("return_pct") or 0), reverse=True)
-    for i, row in enumerate(results[:top_n], start=1):
-        row["rank"] = i
-    return results[:top_n]
-
-
 def _cache_path(concept: str) -> Path:
     safe = concept.replace("/", "_").replace("\\", "_")
     return CACHE_DIR / f"concept_leaders_{safe}.json"
+
+
+def _read_cached_detail(
+    concept_name: str,
+    *,
+    force: bool,
+    max_age_hours: float,
+    require_segments: bool = False,
+) -> dict[str, Any] | None:
+    cache = _cache_path(concept_name)
+    if force or not cache.is_file():
+        return None
+    try:
+        cached = json.loads(cache.read_text(encoding="utf-8"))
+        ts = str(cached.get("updated_at") or "")
+        if not ts or not cached.get("kline"):
+            return None
+        if require_segments and not cached.get("segments_ready", bool(cached.get("segments"))):
+            return None
+        age = datetime.now() - datetime.fromisoformat(ts)
+        if age <= timedelta(hours=max_age_hours):
+            return cached
+    except Exception:
+        return None
+    return None
+
+
+def _write_detail_cache(concept_name: str, resolved_name: str, payload: dict[str, Any]) -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(payload, ensure_ascii=False)
+    _cache_path(concept_name).write_text(text, encoding="utf-8")
+    if resolved_name and resolved_name != concept_name:
+        _cache_path(resolved_name).write_text(text, encoding="utf-8")
 
 
 def build_concept_detail(
@@ -221,67 +295,96 @@ def build_concept_detail(
     *,
     months: int = 6,
     force: bool = False,
+    lite: bool = False,
 ) -> dict[str, Any]:
-    """概念详情：近 N 月指数 K 线 + 波段龙头统计。通达信优先，失败回退东财。"""
+    """概念详情：近 N 月指数 K 线 + 波段龙头。通达信优先。
+
+    lite=True：只返回 K 线/成分预览（秒开）；完整波段龙头需再请求 lite=False。
+    """
     concept_name = str(concept_name or "").strip()
     if not concept_name:
         return {"error": "概念名为空"}
 
-    cache = _cache_path(concept_name)
-    if cache.is_file() and not force:
-        try:
-            cached = json.loads(cache.read_text(encoding="utf-8"))
-            ts = str(cached.get("updated_at") or "")
-            if ts and cached.get("kline"):
-                age = datetime.now() - datetime.fromisoformat(ts)
-                if age < timedelta(hours=6):
-                    return cached
-        except Exception:
-            pass
+    # 新鲜完整缓存 / lite 可用缓存
+    fresh = _read_cached_detail(
+        concept_name,
+        force=force,
+        max_age_hours=6.0,
+        require_segments=not lite,
+    )
+    if fresh is not None:
+        out = {**fresh, "lite": lite and not fresh.get("segments_ready")}
+        return out
+
+    # 过期但可用：非 force 时先返回，避免详情页卡住
+    stale = _read_cached_detail(
+        concept_name,
+        force=force,
+        max_age_hours=48.0,
+        require_segments=not lite,
+    )
+    if stale is not None and not force:
+        return {**stale, "stale": True, "lite": lite and not stale.get("segments_ready")}
+
+    # 完整请求可复用同名 lite 缓存里的 K 线（避免二次拉指数）
+    partial = None
+    if not lite:
+        partial = _read_cached_detail(
+            concept_name, force=force, max_age_hours=6.0, require_segments=False
+        )
 
     bar_count = max(60, int(months * 22))
     tdx_meta = resolve_concept_by_name(concept_name)
-    kline: list[dict[str, Any]] = []
-    source = "通达信概念"
-    code = str((tdx_meta or {}).get("code") or "")
+    kline: list[dict[str, Any]] = list((partial or {}).get("kline") or [])
+    source = str((partial or {}).get("source") or "通达信概念")
+    code = str((partial or {}).get("code") or (tdx_meta or {}).get("code") or "")
+    resolved_name = str(
+        (partial or {}).get("concept") or (tdx_meta or {}).get("name") or concept_name
+    )
+    member_rows: list[dict[str, Any]] = list((partial or {}).get("members_preview") or [])
+    member_count = int((partial or {}).get("member_count") or len(member_rows))
 
-    if tdx_meta:
+    if not kline and tdx_meta:
         try:
-            from .tdx import tdx_hq_available
-
             if tdx_hq_available():
                 kline = fetch_tdx_index_kline(tdx_meta["code"], count=bar_count)
+                code = str(tdx_meta.get("code") or code)
+                resolved_name = str(tdx_meta.get("name") or resolved_name)
+                source = "通达信概念"
         except Exception:
             kline = []
 
-    member_rows: list[dict[str, Any]] = []
-    if tdx_meta:
+    if len(member_rows) < 8 and (tdx_meta or resolved_name):
         try:
             members_df = fetch_tdx_board_members(
-                "概念", concept_name, with_quotes=False, limit=200
+                "概念", resolved_name, with_quotes=False, limit=200
             )
             if members_df is not None and not members_df.empty:
                 col = "纯代码" if "纯代码" in members_df.columns else "代码"
+                fetched: list[dict[str, Any]] = []
                 for _, m in members_df.iterrows():
                     c = str(m.get(col) or "").zfill(6)
                     if c.isdigit():
-                        member_rows.append(
-                            {
-                                "code": c,
-                                "name": str(m.get("名称") or c),
-                            }
-                        )
+                        fetched.append({"code": c, "name": str(m.get("名称") or c)})
+                if fetched:
+                    member_rows = fetched
+                    member_count = len(fetched)
+                    if not source.startswith("东财"):
+                        source = "通达信概念"
         except Exception:
-            member_rows = []
+            pass
 
-    if not kline or not member_rows:
-        from .rotation import (
-            em_concept_code_of,
-            fetch_em_concept_kline,
-            fetch_em_concept_members,
-        )
+    if not kline or len(member_rows) < 8:
+        try:
+            from .rotation import (
+                em_concept_code_of,
+                fetch_em_concept_kline,
+                fetch_em_concept_members,
+            )
 
-        bk = em_concept_code_of(concept_name)
+            bk = em_concept_code_of(concept_name) or em_concept_code_of(resolved_name)
+        except Exception:
+            bk = None
         if bk:
             if not kline:
                 try:
@@ -291,10 +394,10 @@ def build_concept_detail(
                         code = bk
                 except Exception:
                     pass
-            if not member_rows:
+            if len(member_rows) < 8:
                 try:
                     em_mem = fetch_em_concept_members(bk, limit=200)
-                    member_rows = [
+                    fetched = [
                         {
                             "code": str(m.get("纯代码") or m.get("代码") or "").zfill(6),
                             "name": str(m.get("名称") or ""),
@@ -302,9 +405,12 @@ def build_concept_detail(
                         for m in em_mem
                         if str(m.get("纯代码") or m.get("代码") or "").strip()
                     ]
-                    if member_rows and source != "通达信概念":
-                        source = "东财概念"
-                        code = code or bk
+                    if fetched:
+                        member_rows = fetched
+                        member_count = len(fetched)
+                        if source != "通达信概念":
+                            source = "东财概念"
+                            code = code or bk
                 except Exception:
                     pass
 
@@ -317,31 +423,53 @@ def build_concept_detail(
         for m in member_rows
         if m.get("code")
     }
-    segments = find_rally_segments(kline)
-    rally_leaders: list[dict[str, Any]] = []
-    for seg in segments:
-        leaders = _leaders_for_segment(
-            codes[:12], seg["start_date"], seg["end_date"], name_map=name_map
-        )
-        rally_leaders.append({**seg, "leaders": leaders})
-
     members = [
         {"code": m["code"], "name": m.get("name") or m["code"]}
         for m in member_rows[:50]
     ]
+    if not member_count:
+        member_count = len(codes)
 
-    payload: dict[str, Any] = {
-        "concept": concept_name,
+    if lite:
+        payload: dict[str, Any] = {
+            "concept": resolved_name or concept_name,
+            "code": code,
+            "source": source,
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+            "months": months,
+            "kline": kline,
+            "segments": [],
+            "segments_ready": False,
+            "member_count": member_count,
+            "members_preview": members,
+            "lite": True,
+        }
+        # 不覆盖已有完整缓存
+        existing = _read_cached_detail(
+            concept_name, force=False, max_age_hours=48.0, require_segments=True
+        )
+        if existing is None:
+            _write_detail_cache(concept_name, resolved_name, payload)
+        return payload
+
+    # 完整：波段数/成分抽样收紧，并发拉龙头
+    segments = find_rally_segments(kline, max_segments=5)
+    rally_leaders = _fill_segment_leaders(
+        segments, codes, name_map, top_n=3, codes_per_seg=8
+    )
+
+    payload = {
+        "concept": resolved_name or concept_name,
         "code": code,
         "source": source,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
         "months": months,
         "kline": kline,
         "segments": rally_leaders,
-        "member_count": len(codes),
+        "segments_ready": True,
+        "member_count": member_count or len(codes),
         "members_preview": members,
+        "lite": False,
     }
-
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    _write_detail_cache(concept_name, resolved_name, payload)
     return payload

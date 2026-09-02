@@ -84,6 +84,8 @@ export interface ConceptDetailPayload {
   segments: ConceptRallySegment[]
   member_count: number
   members_preview: { code: string; name: string }[]
+  lite?: boolean
+  stale?: boolean
   error?: string
 }
 

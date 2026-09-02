@@ -6,9 +6,18 @@ const { fetchConceptDetail, fetchConceptLeaderScores } = useSectorsApi()
 const { sectors, liveAt, refreshSec, setFocus } = useSectorsLive()
 const store = useWatchStore()
 
-const conceptName = computed(() => decodeURIComponent(String(route.params.name || '')))
+function safeDecode(raw: string) {
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
+}
+
+const conceptName = computed(() => safeDecode(String(route.params.name || '')))
 const loading = ref(true)
-const scoreLoading = ref(true)
+const segmentsLoading = ref(false)
+const scoreLoading = ref(false)
 const error = ref('')
 const scoreError = ref('')
 const detail = ref<ConceptDetailPayload | null>(null)
@@ -34,7 +43,7 @@ const liveSegments = computed(() => {
   if (!detail.value?.segments?.length) return []
   return detail.value.segments.map((seg) => ({
     ...seg,
-    leaders: seg.leaders.map((l) => {
+    leaders: (seg.leaders || []).map((l) => {
       const q = quotes[l.code]
       return {
         ...l,
@@ -48,6 +57,13 @@ const liveSegments = computed(() => {
 const wsLabel = computed(() => {
   if (liveAt.value) return `实时 ${liveAt.value} · ${refreshSec.value}s`
   return store.wsStatus
+})
+
+const sourceBadge = computed(() => {
+  const src = detail.value?.source || ''
+  if (src.includes('通达信')) return '通达信'
+  if (src.includes('东财')) return '东财'
+  return src || '—'
 })
 
 async function loadScores(refresh = false) {
@@ -65,26 +81,44 @@ async function loadScores(refresh = false) {
   }
 }
 
+/** 先 lite（K 线秒开），再补全波段龙头；因子评分最后拉，避免挡主内容。 */
 async function load(refresh = false) {
   loading.value = true
+  segmentsLoading.value = false
   error.value = ''
   try {
-    detail.value = await fetchConceptDetail(conceptName.value, 6, refresh)
-    if (detail.value?.error) error.value = detail.value.error
+    const lite = await fetchConceptDetail(conceptName.value, 6, refresh, { lite: true })
+    detail.value = lite
+    if (lite?.error) {
+      error.value = lite.error
+      return
+    }
+    loading.value = false
+
+    segmentsLoading.value = true
+    const full = await fetchConceptDetail(conceptName.value, 6, refresh, { lite: false })
+    if (full?.error && !full.kline?.length) {
+      error.value = full.error
+    } else if (full) {
+      detail.value = full
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
     loading.value = false
+    segmentsLoading.value = false
   }
 }
 
 async function reloadAll(refresh = false) {
-  await Promise.all([load(refresh), loadScores(refresh)])
+  await load(refresh)
+  void loadScores(refresh)
 }
 
 onMounted(async () => {
   await setFocus(conceptName.value)
-  await Promise.all([load(), loadScores()])
+  await load()
+  void loadScores()
 })
 
 onBeforeUnmount(() => {
@@ -93,7 +127,9 @@ onBeforeUnmount(() => {
 
 watch(conceptName, async () => {
   await setFocus(conceptName.value)
-  await Promise.all([load(), loadScores()])
+  leaderScores.value = null
+  await load()
+  void loadScores()
 })
 </script>
 
@@ -103,8 +139,19 @@ watch(conceptName, async () => {
       <div>
         <NuxtLink to="/sectors" class="text-sm text-ui-text-2 hover:text-ui-text">← 板块轮动</NuxtLink>
         <h1 class="mt-2 text-xl font-bold">
-          {{ conceptName }}
+          {{ detail?.concept || conceptName }}
           <span v-if="detail?.code" class="ml-2 text-sm font-normal text-ui-text-2">{{ detail.code }}</span>
+          <span
+            class="ml-2 rounded-md border border-ui-hairline px-1.5 py-0.5 text-xs font-normal text-ui-text-2"
+          >
+            {{ sourceBadge }}
+          </span>
+          <span
+            v-if="detail?.stale"
+            class="ml-1 rounded-md border border-ui-hairline px-1.5 py-0.5 text-xs font-normal text-ui-text-3"
+          >
+            缓存
+          </span>
         </h1>
         <p v-if="conceptLive" class="mt-1 text-sm">
           <span class="font-semibold">{{ conceptLive.price?.toFixed(2) ?? '-' }}</span>
@@ -120,18 +167,80 @@ watch(conceptName, async () => {
           {{ detail?.source || '概念' }}指数 · 近半年 K 线 · 波段龙头
         </p>
       </div>
-      <button class="btn btn-ghost" :disabled="loading || scoreLoading" @click="reloadAll(true)">
+      <button class="btn btn-ghost" :disabled="loading || segmentsLoading || scoreLoading" @click="reloadAll(true)">
         重载
       </button>
     </div>
 
     <div v-if="loading" class="rounded-xl border border-ui-hairline bg-ui-surface p-8 text-center text-ui-text-2">
-      正在加载概念详情…
+      正在加载 K 线…
     </div>
     <div v-else-if="error" class="rounded-xl border border-ui-hairline bg-ui-surface p-6 text-watch-up">
       {{ error }}
     </div>
     <template v-else-if="detail">
+      <ConceptKlineChart :detail="detail" />
+
+      <div v-if="segmentsLoading" class="rounded-xl border border-ui-hairline bg-ui-surface p-4 text-sm text-ui-text-2">
+        正在计算波段龙头…
+      </div>
+      <div v-else-if="liveSegments.length" class="grid gap-4 lg:grid-cols-2">
+        <section
+          v-for="seg in liveSegments"
+          :key="`${seg.start_date}-${seg.end_date}`"
+          class="rounded-xl border border-ui-hairline bg-ui-surface p-4"
+        >
+          <h3 class="text-sm font-semibold">
+            {{ seg.start_date }} ~ {{ seg.end_date }}
+            <span class="ml-2 text-ui-text-2">{{ seg.days }}日 · 指数 +{{ seg.gain_pct }}%</span>
+          </h3>
+          <table class="mt-3 w-full text-sm">
+            <thead>
+              <tr class="text-left text-ui-text-2">
+                <th class="pb-2">排名</th>
+                <th class="pb-2">龙头</th>
+                <th class="pb-2 text-right">区间涨幅</th>
+                <th class="pb-2 text-right">现价</th>
+                <th class="pb-2 text-right">今日</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="l in seg.leaders" :key="l.code" class="border-t border-ui-hairline">
+                <td class="py-2">{{ l.rank }}</td>
+                <td class="py-2">{{ l.name }} <span class="text-ui-text-3">{{ l.code }}</span></td>
+                <td class="py-2 text-right font-semibold text-watch-up">+{{ l.return_pct.toFixed(2) }}%</td>
+                <td class="py-2 text-right">{{ l.livePrice != null ? l.livePrice.toFixed(2) : '-' }}</td>
+                <td
+                  class="py-2 text-right font-semibold"
+                  :class="(l.liveChgPct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'"
+                >
+                  {{ l.liveChgPct != null ? `${l.liveChgPct >= 0 ? '+' : ''}${l.liveChgPct.toFixed(2)}%` : '-' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <section class="rounded-xl border border-ui-hairline bg-ui-surface p-4">
+        <h3 class="text-sm font-semibold">成分股预览（{{ detail.member_count }} 只）</h3>
+        <p class="mt-2 flex flex-wrap gap-2 text-xs text-ui-text-2">
+          <span
+            v-for="m in detail.members_preview"
+            :key="m.code"
+            class="rounded-md border border-ui-hairline px-2 py-1"
+          >
+            {{ m.name }} {{ m.code }}
+            <template v-if="sectors?.quotes?.[m.code]">
+              · {{ sectors.quotes[m.code].price?.toFixed(2) }}
+              <span :class="(sectors.quotes[m.code].chgPct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'">
+                {{ sectors.quotes[m.code].chgPct != null ? `${sectors.quotes[m.code].chgPct!.toFixed(2)}%` : '' }}
+              </span>
+            </template>
+          </span>
+        </p>
+      </section>
+
       <section class="rounded-xl border border-ui-hairline bg-ui-surface p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -222,65 +331,6 @@ watch(conceptName, async () => {
           </p>
         </div>
         <p v-else class="mt-4 text-sm text-ui-text-2">暂无满足条件的评分龙头</p>
-      </section>
-
-      <ConceptKlineChart :detail="detail" />
-
-      <div class="grid gap-4 lg:grid-cols-2">
-        <section
-          v-for="seg in liveSegments"
-          :key="`${seg.start_date}-${seg.end_date}`"
-          class="rounded-xl border border-ui-hairline bg-ui-surface p-4"
-        >
-          <h3 class="text-sm font-semibold">
-            {{ seg.start_date }} ~ {{ seg.end_date }}
-            <span class="ml-2 text-ui-text-2">{{ seg.days }}日 · 指数 +{{ seg.gain_pct }}%</span>
-          </h3>
-          <table class="mt-3 w-full text-sm">
-            <thead>
-              <tr class="text-left text-ui-text-2">
-                <th class="pb-2">排名</th>
-                <th class="pb-2">龙头</th>
-                <th class="pb-2 text-right">区间涨幅</th>
-                <th class="pb-2 text-right">现价</th>
-                <th class="pb-2 text-right">今日</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="l in seg.leaders" :key="l.code" class="border-t border-ui-hairline">
-                <td class="py-2">{{ l.rank }}</td>
-                <td class="py-2">{{ l.name }} <span class="text-ui-text-3">{{ l.code }}</span></td>
-                <td class="py-2 text-right font-semibold text-watch-up">+{{ l.return_pct.toFixed(2) }}%</td>
-                <td class="py-2 text-right">{{ l.livePrice != null ? l.livePrice.toFixed(2) : '-' }}</td>
-                <td
-                  class="py-2 text-right font-semibold"
-                  :class="(l.liveChgPct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'"
-                >
-                  {{ l.liveChgPct != null ? `${l.liveChgPct >= 0 ? '+' : ''}${l.liveChgPct.toFixed(2)}%` : '-' }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-      </div>
-
-      <section class="rounded-xl border border-ui-hairline bg-ui-surface p-4">
-        <h3 class="text-sm font-semibold">成分股预览（{{ detail.member_count }} 只）</h3>
-        <p class="mt-2 flex flex-wrap gap-2 text-xs text-ui-text-2">
-          <span
-            v-for="m in detail.members_preview"
-            :key="m.code"
-            class="rounded-md border border-ui-hairline px-2 py-1"
-          >
-            {{ m.name }} {{ m.code }}
-            <template v-if="sectors?.quotes?.[m.code]">
-              · {{ sectors.quotes[m.code].price?.toFixed(2) }}
-              <span :class="(sectors.quotes[m.code].chgPct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'">
-                {{ sectors.quotes[m.code].chgPct != null ? `${sectors.quotes[m.code].chgPct!.toFixed(2)}%` : '' }}
-              </span>
-            </template>
-          </span>
-        </p>
       </section>
 
       <p class="text-xs text-ui-text-3">

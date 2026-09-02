@@ -1,16 +1,19 @@
-"""通达信板块：本地 Mac 缓存 + pytdx 行情。
+"""通达信板块：本地 Mac/Windows 安装目录 + pytdx 行情。
 
 - 行业 I：`breedconst.xml` → ConstID=TdxHY（与 App「行业 I」一致）
 - 纯概念：`tdxzs.cfg` 类别 4（不含类别 5 风格）
 - 成分股：行业=tdxhy.cfg；概念=block_gn.dat（新格式）
 - 行情：pytdx `get_index_bars` / `get_security_quotes`
+- 跨平台：优先 `sectors/cache` 共享缓存；Mac/Windows 安装目录仅作同步源
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import struct
+import sys
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -49,7 +52,7 @@ TDX_SERVERS: tuple[tuple[str, int], ...] = (
 
 # 连不上时短路一段时间，避免盯盘每轮卡 30s+
 _TDX_FAIL_UNTIL = 0.0
-_TDX_RETRY_SEC = 90.0
+_TDX_RETRY_SEC = 45.0
 
 
 def tdx_hq_available() -> bool:
@@ -59,6 +62,127 @@ def tdx_hq_available() -> bool:
 def _mark_tdx_down() -> None:
     global _TDX_FAIL_UNTIL
     _TDX_FAIL_UNTIL = time.time() + _TDX_RETRY_SEC
+
+
+def _windows_tdx_homes() -> list[Path]:
+    homes: list[Path] = []
+    for env in ("TDX_HOME", "TONGDAXIN_HOME", "通达信"):
+        raw = os.environ.get(env) or ""
+        if raw.strip():
+            homes.append(Path(raw.strip()))
+    drive_letters = "CDEF"
+    names = ("new_tdx", "tdx", "通达信", "TdxW", "new_tdxw")
+    for drive in drive_letters:
+        for name in names:
+            homes.append(Path(f"{drive}:/{name}"))
+            homes.append(Path(f"{drive}:/Program Files/{name}"))
+            homes.append(Path(f"{drive}:/Program Files (x86)/{name}"))
+    # 去重保序
+    seen: set[str] = set()
+    out: list[Path] = []
+    for p in homes:
+        key = str(p).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
+def discover_tdx_homes() -> list[Path]:
+    """本机可能的通达信根目录（Mac Container / Windows 安装目录）。"""
+    found: list[Path] = []
+    if MAC_TDX_HOME.is_dir():
+        found.append(MAC_TDX_HOME)
+    if sys.platform.startswith("win"):
+        for p in _windows_tdx_homes():
+            if p.is_dir() and (
+                (p / "T0002").is_dir()
+                or (p / "vipdoc").is_dir()
+                or (p / "tdxw.exe").is_file()
+                or (p / "TdxW.exe").is_file()
+            ):
+                found.append(p)
+    return found
+
+
+def _sync_local_file(src: Path, dest: Path, meta_path: Path, *, source: str) -> bool:
+    if not src.is_file() or src.stat().st_size < 100:
+        return False
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.is_file() and dest.stat().st_size == src.stat().st_size:
+        # 已有同尺寸缓存则不覆盖（避免 Win/Mac 来回抖动）
+        return True
+    dest.write_bytes(src.read_bytes())
+    meta_path.write_text(
+        json.dumps(
+            {
+                "updated_at": datetime.now().isoformat(timespec="seconds"),
+                "source": source,
+                "src": str(src),
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return True
+
+
+def sync_local_tdx_into_cache() -> dict[str, str]:
+    """把本机通达信配置同步进 sectors/cache，保证 Mac/Win 共用同一份概念表。"""
+    synced: dict[str, str] = {}
+    for home in discover_tdx_homes():
+        # Mac: config/；Windows: T0002/hq_cache 或根目录
+        candidates = {
+            "tdxzs.cfg": [
+                home / "config" / "tdxzs.cfg",
+                home / "T0002" / "hq_cache" / "tdxzs.cfg",
+                home / "tdxzs.cfg",
+            ],
+            "block_gn.dat": [
+                home / "config" / "block_gn.dat",
+                home / "T0002" / "hq_cache" / "block_gn.dat",
+                home / "block_gn.dat",
+            ],
+            "tdxhy.cfg": [
+                home / "config" / "tdxhy.cfg",
+                home / "T0002" / "hq_cache" / "tdxhy.cfg",
+                home / "tdxhy.cfg",
+            ],
+            "breedconst.xml": [
+                home / "config" / "breedconst.xml",
+            ],
+        }
+        dest_map = {
+            "tdxzs.cfg": (TDX_ZS_CACHE, TDX_ZS_META),
+            "block_gn.dat": (TDX_BLOCK_GN_CACHE, TDX_BLOCK_GN_META),
+            "tdxhy.cfg": (TDX_HY_CACHE, TDX_HY_META),
+            "breedconst.xml": (CACHE_DIR / "breedconst.xml", CACHE_DIR / "breedconst_meta.json"),
+        }
+        for key, srcs in candidates.items():
+            dest, meta = dest_map[key]
+            for src in srcs:
+                if _sync_local_file(src, dest, meta, source=f"local:{home}"):
+                    synced[key] = str(src)
+                    break
+    return synced
+
+
+def mac_tdx_installed() -> bool:
+    return MAC_TDX_HOME.is_dir() and (
+        BREEDCONST_PATH.is_file() or (MAC_TDX_HOME / "config").is_dir()
+    )
+
+
+def local_tdx_installed() -> bool:
+    return bool(discover_tdx_homes())
+
+
+def _breedconst_path() -> Path:
+    cached = CACHE_DIR / "breedconst.xml"
+    if cached.is_file():
+        return cached
+    return BREEDCONST_PATH
 
 
 # tdxzs.cfg: 2=行业 3=地域 4=概念 5=风格；第5列 0=一级
@@ -75,12 +199,6 @@ def _clean(v: Any) -> float | None:
         return None if pd.isna(x) else x
     except (TypeError, ValueError):
         return None
-
-
-def mac_tdx_installed() -> bool:
-    return MAC_TDX_HOME.is_dir() and (
-        BREEDCONST_PATH.is_file() or (MAC_TDX_HOME / "config").is_dir()
-    )
 
 
 def _connect_api():
@@ -126,9 +244,10 @@ def _parse_breedconst(path: Path) -> dict[str, list[dict[str, str]]]:
 
 def load_industry_l1() -> list[dict[str, str]]:
     """通达信行业 I（TdxHY）。"""
-    if not BREEDCONST_PATH.is_file():
+    bc = _breedconst_path()
+    if not bc.is_file():
         return _load_industry_l1_from_tdxzs()
-    data = _parse_breedconst(BREEDCONST_PATH)
+    data = _parse_breedconst(bc)
     return data.get("TdxHY") or _load_industry_l1_from_tdxzs()
 
 
@@ -144,8 +263,9 @@ def _load_industry_l1_from_tdxzs() -> list[dict[str, str]]:
 
 
 def ensure_tdxzs_cfg(*, force: bool = False, max_age_days: int = 7) -> Path:
-    """确保本地有 tdxzs.cfg（优先 Mac 同步包，否则 pytdx 拉 zhb.zip）。"""
+    """确保本地有 tdxzs.cfg（优先共享 cache ← 本机安装，否则 pytdx 拉 zhb.zip）。"""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    sync_local_tdx_into_cache()
     if TDX_ZS_CACHE.is_file() and not force:
         try:
             meta = json.loads(TDX_ZS_META.read_text(encoding="utf-8"))
@@ -254,13 +374,66 @@ def fetch_tdx_index_kline(code: str, *, count: int = 130) -> list[dict[str, Any]
     return out
 
 
+def fetch_tdx_stock_klines(
+    codes: list[str],
+    *,
+    count: int = 160,
+) -> dict[str, list[dict[str, Any]]]:
+    """批量拉个股日 K（通达信优先，单连接）。返回 code → bars。"""
+    uniq = []
+    seen: set[str] = set()
+    for c in codes:
+        code = str(c or "").zfill(6)
+        if code.isdigit() and code not in seen:
+            seen.add(code)
+            uniq.append(code)
+    if not uniq:
+        return {}
+    api = _connect_api()
+    out: dict[str, list[dict[str, Any]]] = {}
+    try:
+        for code in uniq:
+            market = 1 if code.startswith(("5", "6", "9")) else 0
+            try:
+                bars = api.get_security_bars(9, market, code, 0, max(count, 2)) or []
+            except Exception:
+                bars = []
+            rows: list[dict[str, Any]] = []
+            for bar in bars:
+                row = _parse_index_bar(bar)
+                if row:
+                    rows.append(row)
+            if rows:
+                out[code] = rows
+    finally:
+        api.disconnect()
+    return out
+
+
 def resolve_concept_by_name(name: str) -> dict[str, str] | None:
+    """概念名 → 通达信指数项；支持去「概念」后缀与唯一子串模糊（对齐 Mac/Win 命名差）。"""
     target = str(name or "").strip()
     if not target:
         return None
-    for item in load_concepts():
-        if str(item.get("name") or "").strip() == target:
-            return item
+    concepts = load_concepts()
+    by_name = {str(item.get("name") or "").strip(): item for item in concepts}
+    if target in by_name:
+        return by_name[target]
+    stripped = target.replace("概念", "").strip()
+    if stripped and stripped in by_name:
+        return by_name[stripped]
+    if stripped and (stripped + "概念") in by_name:
+        return by_name[stripped + "概念"]
+    fuzzy: list[dict[str, str]] = []
+    for item in concepts:
+        key = str(item.get("name") or "").strip()
+        k2 = key.replace("概念", "").strip()
+        if not stripped:
+            continue
+        if stripped == k2 or stripped in key or k2 in target:
+            fuzzy.append(item)
+    if len(fuzzy) == 1:
+        return fuzzy[0]
     return None
 
 
@@ -506,9 +679,10 @@ def _load_tdxbk_short2full() -> dict[str, str]:
 
 def _load_tdxhy_l1_id_map() -> dict[str, tuple[str, str]]:
     """TdxHY 节点 ID → (名称, BKCode)。"""
-    if not BREEDCONST_PATH.is_file():
+    bc = _breedconst_path()
+    if not bc.is_file():
         return {}
-    data = _parse_breedconst(BREEDCONST_PATH)
+    data = _parse_breedconst(bc)
     out: dict[str, tuple[str, str]] = {}
     for row in data.get("TdxHY") or []:
         nid = str(row.get("id") or "").strip()
@@ -787,8 +961,16 @@ def fetch_tdx_board_members(
 def tdx_availability() -> dict[str, Any]:
     info: dict[str, Any] = {
         "mac_installed": mac_tdx_installed(),
-        "breedconst": str(BREEDCONST_PATH) if BREEDCONST_PATH.is_file() else None,
+        "local_installed": local_tdx_installed(),
+        "tdx_homes": [str(p) for p in discover_tdx_homes()],
+        "breedconst": str(_breedconst_path()) if _breedconst_path().is_file() else None,
     }
+    try:
+        synced = sync_local_tdx_into_cache()
+        if synced:
+            info["synced_from_local"] = synced
+    except Exception as e:
+        info["sync_error"] = str(e)
     try:
         ind = load_industry_l1()
         info["industry_l1_count"] = len(ind)
@@ -811,11 +993,14 @@ def tdx_availability() -> dict[str, Any]:
         info["pytdx_ok"] = False
         info["pytdx_error"] = str(e)
     try:
-        if info.get("pytdx_ok"):
+        # 有概念表即可建索引；不强制要求 pytdx 在线（Windows 常见）
+        if info.get("concept_count"):
             idx = load_members_index()
             info["members_industry"] = len(idx.get("行业") or {})
             info["members_concept"] = len(idx.get("概念") or {})
     except Exception as e:
         info["members_error"] = str(e)
-    info["ok"] = bool(info.get("industry_l1_count")) and bool(info.get("concept_count")) and info.get("pytdx_ok")
+    # 概念表就绪即视为可用；行情另看 pytdx_ok（热力实时列）
+    info["ok"] = bool(info.get("concept_count"))
+    info["prefer"] = "通达信"
     return info

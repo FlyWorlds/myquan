@@ -43,17 +43,18 @@ python index.py --days 5 --no-members --no-open
 | `snapshots/` | 按日快照 |
 | `cache/` | 同花顺代码映射、涨停缓存 |
 
-**Web 行情**：优先通达信概念指数（pytdx）；**连不上则回退东财概念**（今日列仍可用，历史列可能暂缺）。
+**Web 行情（盯盘 `/sectors`）**：**一律优先通达信概念**（本地 `tdxhy.cfg` / `block_gn` 同步进 `sectors/cache` + pytdx）。Mac/Win 展示不一致时，优先复用未过期太久的通达信轮动磁盘缓存（≤2 天），避免 Win 掉行情后整表切成东财名单。行情彻底失败才回退东财。
 
 `holdingStocks` watch 服务提供 API，Nuxt 前端 `/sectors` 热力表 + 概念 K 线龙头图。
 
 | 接口 | 说明 |
 |------|------|
 | `GET /api/sectors/members?name=` | 板块成分股（通达信索引优先，名称对不上则东财） |
-| `GET /api/sectors/concept/{名称}?months=6` | 概念指数 K 线 + 近半年波段龙头（通达信失败则东财） |
-| `GET /api/sectors/concept/{名称}/leaders?start=2025-01-01&top_n=5` | **因子16** 概念龙头 Top5（2025至今） |
+| `GET /api/sectors/concept/{名称}?months=6&lite=1` | **lite**：仅 K 线+成分预览（秒开）；不带 `lite` 再补波段龙头 |
+| `GET /api/sectors/concept/{名称}?months=6` | 完整：K 线 + 近半年波段龙头（通达信失败则东财；磁盘缓存 + stale-while-revalidate） |
+| `GET /api/sectors/concept/{名称}/leaders?start=2025-01-01&top_n=5` | **因子16** 概念龙头 Top5（2025至今；前端在 K 线之后再拉） |
 | `GET /api/sectors/focus?concept=名称` | 订阅概念成分/龙头实时报价（随 WS 5s 推送） |
-| `GET /api/sectors/status` | 通达信链路可用性 |
+| `GET /api/sectors/status` | 通达信链路可用性（概念表就绪优先于行情连通） |
 
 启动：`cd holdingStocks && python start_watch.py` → 浏览器打开 `http://127.0.0.1:3000/sectors`。点击热力表格子加载成分股。
 

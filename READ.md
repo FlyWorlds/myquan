@@ -11,7 +11,7 @@ cd holdingStocks && python start_watch.py --no-wechat
 # 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
 # 策略8 Tab：当日涨停实时定题材（随涨停变化重算）
 # 持仓 Tab：你定股票池 + 因子1自动算买卖；名称/数量/成本手填
-# 板块轮动：http://127.0.0.1:3000/sectors （通达信优先，连不上回退东财概念）
+# 板块轮动：http://127.0.0.1:3000/sectors （通达信优先；跨机复用缓存；概念详情 lite 秒开）
 ```
 
 本目录基于 [AKQuant](https://github.com/akfamily/akquant) 做 A 股策略回测与盯盘。

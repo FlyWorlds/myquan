@@ -26,6 +26,8 @@ _ROTATION_CACHE = CACHE_DIR / "tdx_rotation_api.json"
 _lock = threading.Lock()
 _rotation_mem: dict[str, Any] = {"payload": None, "ts": 0.0}
 _ROTATION_TTL_SEC = 3600.0
+# 通达信缓存即使过期，也优先于东财（避免 Mac/Win 因行情源切换导致板块名单不一致）
+_TDX_STALE_MAX_SEC = 86400.0 * 2
 
 
 def _load_rotation_disk() -> dict[str, Any] | None:
@@ -98,7 +100,19 @@ def get_rotation_payload(*, days: int = 20, top_n: int = 10, refresh: bool = Fal
             )
         except Exception:
             payload = None
+
+    disk = _load_rotation_disk()
+    # 行情失败：优先复用未过期太久的通达信磁盘缓存，保证跨机名单一致
     if not _rotation_has_data(payload):
+        if (
+            disk
+            and str(disk.get("source") or "").startswith("通达信")
+            and _payload_age_sec(disk) < _TDX_STALE_MAX_SEC
+        ):
+            with _lock:
+                _rotation_mem["payload"] = disk
+                _rotation_mem["ts"] = time.time()
+            return disk
         payload = build_em_concept_rotation_payload(days=days, top_n=top_n)
     if not _rotation_has_data(payload):
         raise RuntimeError("板块轮动无数据：通达信与东财均失败")
@@ -114,9 +128,15 @@ def get_concept_members(concept_name: str, *, limit: int = 80) -> dict[str, Any]
     return fetch_concept_member_rows(name, limit=limit)
 
 
-def get_concept_detail(concept_name: str, *, months: int = 6, refresh: bool = False) -> dict[str, Any]:
+def get_concept_detail(
+    concept_name: str,
+    *,
+    months: int = 6,
+    refresh: bool = False,
+    lite: bool = False,
+) -> dict[str, Any]:
     name = unquote(str(concept_name or "").strip())
-    return build_concept_detail(name, months=months, force=refresh)
+    return build_concept_detail(name, months=months, force=refresh, lite=lite)
 
 
 def get_concept_leader_scores(

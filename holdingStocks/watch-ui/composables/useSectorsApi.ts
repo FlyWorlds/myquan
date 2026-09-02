@@ -19,10 +19,16 @@ export function useSectorsApi() {
     return apiGet<SectorRotationPayload>(`/api/sectors/rotation?${qs}`)
   }
 
-  async function fetchConceptDetail(name: string, months = 6, refresh = false) {
+  async function fetchConceptDetail(
+    name: string,
+    months = 6,
+    refresh = false,
+    opts: { lite?: boolean } = {},
+  ) {
     const qs = new URLSearchParams({
       months: String(months),
       ...(refresh ? { refresh: '1' } : {}),
+      ...(opts.lite ? { lite: '1' } : {}),
     })
     const encoded = encodeURIComponent(name)
     return apiGet<ConceptDetailPayload>(`/api/sectors/concept/${encoded}?${qs}`)

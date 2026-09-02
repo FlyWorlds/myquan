@@ -559,8 +559,9 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
         name = unquote(tail)
         months = max(3, min(_api_int(qs, "months", 6), 12))
         refresh = _api_bool(qs, "refresh")
+        lite = _api_bool(qs, "lite")
         try:
-            data = get_concept_detail(name, months=months, refresh=refresh)
+            data = get_concept_detail(name, months=months, refresh=refresh, lite=lite)
             if data.get("error"):
                 return 404, data
             return 200, data

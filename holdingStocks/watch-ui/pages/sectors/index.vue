@@ -134,7 +134,7 @@ onMounted(() => load())
       <div>
         <h1 class="text-xl font-bold">板块轮动</h1>
         <p class="mt-1 text-sm text-ui-text-2">
-          {{ payload?.source || '概念' }} · 今日列随盯盘 {{ refreshSec }}s 推送刷新；点击格子看成分股，再点一次进波段龙头
+          {{ payload?.source || '通达信概念' }} · 今日列随盯盘 {{ refreshSec }}s 推送刷新；点击格子看成分股，再点一次进波段龙头
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
