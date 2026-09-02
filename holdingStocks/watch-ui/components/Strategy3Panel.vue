@@ -127,9 +127,9 @@ const luPhaseClass = computed(() => {
       </template>
     </div>
 
-    <div class="card overflow-x-auto">
-      <table class="min-w-full text-sm">
-        <thead class="bg-ui-surface text-left text-ui-text-2">
+    <div class="watch-table-wrap">
+      <table class="watch-sticky-table">
+        <thead>
           <tr>
             <th class="px-2 py-2">标的</th>
             <th class="px-2 py-2">连板</th>

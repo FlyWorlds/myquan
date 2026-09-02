@@ -23,6 +23,14 @@ def _row_json(row: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _strip_holdings_pnl(row: dict[str, Any]) -> dict[str, Any]:
+    """策略 Tab 用：去掉持仓口径浮盈/结算金额，仅保留信号与策略收益%。"""
+    out = _row_json(row)
+    for k in ("浮盈", "浮盈%", "盈亏状态", "盈亏说明", "策略收益", "市值", "成本额", "当日基数"):
+        out.pop(k, None)
+    return out
+
+
 def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
     return {
         "code": ix.get("code"),
@@ -99,7 +107,7 @@ def build_watch_snapshot(
         for r in filter_portfolio_holdings(rows, portfolio_codes=portfolio_codes)
     ]
     strategy1_rows = [
-        _row_json(r)
+        _strip_holdings_pnl(r)
         for r in rows
         if not r.get("error") and code_key(str(r.get("代码") or "")) in strategy_codes
     ]

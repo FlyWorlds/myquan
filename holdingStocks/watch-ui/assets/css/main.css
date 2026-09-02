@@ -107,6 +107,34 @@
     @apply bg-ui-fill-active text-accent;
   }
 
+  .watch-top-nav {
+    --watch-nav-h: 3.25rem;
+  }
+
+  /** 盯盘信号表：随页面纵向滚动，表头吸顶在 WatchNav 下方（勿包 overflow-auto） */
+  .watch-table-wrap {
+    @apply card overflow-visible;
+    max-width: 100%;
+  }
+
+  .watch-sticky-table {
+    @apply min-w-full text-sm;
+    border-collapse: separate;
+    border-spacing: 0;
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .watch-sticky-table thead th {
+    position: sticky;
+    top: var(--watch-nav-h, 3.25rem);
+    z-index: 15;
+    background-color: color-mix(in srgb, var(--ui-surface) 96%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 1px 0 var(--ui-hairline);
+    @apply text-left text-ui-text-2;
+  }
+
   /** 全站页面左右边距：略宽于 7xl，适度留白 */
   .page-shell {
     @apply mx-auto w-full max-w-[92rem] px-3 py-4 sm:px-3.5;

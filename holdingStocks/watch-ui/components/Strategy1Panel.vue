@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
-import { fmtNum, fmtSignedMoney, fmtSignedPct, stockLabel } from '~/utils/format'
+import { fmtNum, fmtSignedPct, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 
@@ -40,10 +40,9 @@ const legend = [
         </span>
       </div>
     </div>
-    <div class="card overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead class="sticky top-0 z-10 bg-ui-surface/95 text-left text-ui-text-2 backdrop-blur">
+    <div class="watch-table-wrap">
+        <table class="watch-sticky-table">
+          <thead>
             <tr>
               <th class="px-3 py-2.5">标的</th>
               <th class="min-w-[5.5rem] px-3 py-2.5">状态</th>
@@ -88,12 +87,7 @@ const legend = [
                 <ChgText :chg="r.当日涨幅">{{ fmtSignedPct(r.当日涨幅) }}</ChgText>
               </td>
               <td class="sensitive px-3 py-2.5">
-                <div>
-                  <ChgText :chg="r['策略收益%']">{{ fmtSignedPct(r['策略收益%']) }}</ChgText>
-                </div>
-                <div v-if="r.策略收益 != null" class="text-xs text-ui-text-3">
-                  <ChgText :chg="r.策略收益">{{ fmtSignedMoney(r.策略收益) }}</ChgText>
-                </div>
+                <ChgText :chg="r['策略收益%']">{{ fmtSignedPct(r['策略收益%']) }}</ChgText>
               </td>
               <td class="px-3 py-2.5">{{ r.前日形态 || '-' }}</td>
               <td class="px-3 py-2.5 font-semibold" :class="r.过门OK ? 'text-up' : 'text-ui-text-2'">{{ r.过门 || '-' }}</td>
@@ -127,7 +121,6 @@ const legend = [
             </tr>
           </tbody>
         </table>
-      </div>
     </div>
   </div>
 </template>

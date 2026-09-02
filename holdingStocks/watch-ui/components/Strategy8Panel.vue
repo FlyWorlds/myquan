@@ -129,13 +129,13 @@ const luPhaseClass = computed(() => {
       </div>
     </div>
 
-    <div class="card overflow-x-auto p-4">
+    <div class="watch-table-wrap p-4">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 class="text-base font-bold">题材联动候选池</h3>
         <span class="text-xs text-ui-text-3">{{ poolCount }} 只 · 题材日 {{ poolDate || '—' }}</span>
       </div>
-      <table class="min-w-full text-sm">
-        <thead class="text-left text-ui-text-2">
+      <table class="watch-sticky-table">
+        <thead>
           <tr>
             <th class="px-2 py-2">标的</th>
             <th class="px-2 py-2">题材</th>

@@ -2270,6 +2270,9 @@ def collect_rows(
     positions = holdings.get("positions", {})
     realized_map = holdings.get("realized_today", {})
     sticky = _alert_sticky_map(holdings)
+    from watch_config import portfolio_pool_codes
+
+    portfolio_codes = {_code_key(c) for c in portfolio_pool_codes(holdings)}
     rows: list[dict[str, Any]] = []
     session_today: str | None = None
     phase_now = market_phase()
@@ -2969,7 +2972,14 @@ def collect_rows(
     for r in rows:
         _enrich_side_price_fields(r)
         _finalize_position_row(r)
-        _enrich_float_pnl(r)
+        code = _code_key(str(r.get("代码") or ""))
+        if code in portfolio_codes:
+            _enrich_float_pnl(r)
+        else:
+            r["浮盈"] = None
+            r["浮盈%"] = None
+            r["盈亏状态"] = None
+            r["盈亏说明"] = None
 
     total_mv = sum(
         float(r["市值"])
