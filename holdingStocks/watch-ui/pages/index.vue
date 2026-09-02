@@ -44,7 +44,7 @@ const loading = computed(() => !snapshot.value && wsStatus.value.includes('连�
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl px-4 py-4" :class="{ 'privacy-hidden': privacyHidden }">
+  <div class="page-shell" :class="{ 'privacy-hidden': privacyHidden }">
     <header class="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-ui-hairline pb-4">
       <div>
         <h1 class="text-2xl font-bold text-ui-text">持仓盯盘</h1>

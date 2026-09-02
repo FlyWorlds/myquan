@@ -129,7 +129,7 @@ onMounted(() => load())
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl space-y-4 px-4 py-6">
+  <div class="page-shell space-y-4 py-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-xl font-bold">板块轮动</h1>

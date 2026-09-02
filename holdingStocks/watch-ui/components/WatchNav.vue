@@ -9,7 +9,7 @@ function linkClass(path: string) {
 
 <template>
   <nav class="watch-top-nav sticky top-0 z-30 border-b border-ui-hairline bg-ui-surface/90 backdrop-blur-md">
-    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+    <div class="page-shell flex flex-wrap items-center justify-between gap-3 py-3">
       <div class="flex flex-wrap items-center gap-1">
         <NuxtLink to="/" :class="linkClass('/')">持仓盯盘</NuxtLink>
         <NuxtLink to="/sectors" :class="linkClass('/sectors')">板块轮动</NuxtLink>

@@ -40,7 +40,7 @@ const hasAny = computed(() => REGISTRY_SECTIONS.some((sec) => sectionItems(sec.k
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl px-4 py-4">
+  <div class="page-shell">
     <header class="mb-6">
       <h1 class="text-2xl font-bold">策略说明</h1>
       <p class="mt-1 text-sm text-ui-text-2">

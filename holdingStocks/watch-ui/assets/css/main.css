@@ -107,7 +107,15 @@
     @apply bg-ui-fill-active text-accent;
   }
 
-  /* 因子说明页：分类 chip */
+  /** 全站页面左右边距：略宽于 7xl，适度留白 */
+  .page-shell {
+    @apply mx-auto w-full max-w-[92rem] px-3 py-4 sm:px-3.5;
+  }
+
+  .page-shell .registry-sticky-nav {
+    @apply -mx-3 px-3 sm:-mx-3.5 sm:px-3.5;
+  }
+
   .factor-cat-nav {
     @apply mb-5 flex flex-wrap gap-2;
   }

@@ -98,7 +98,7 @@ watch(conceptName, async () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl space-y-4 px-4 py-6">
+  <div class="page-shell space-y-4 py-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <NuxtLink to="/sectors" class="text-sm text-ui-text-2 hover:text-ui-text">← 板块轮动</NuxtLink>

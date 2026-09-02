@@ -35,7 +35,7 @@ function itemsOf(catId: string): FactorEntry[] {
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl px-4 py-4">
+  <div class="page-shell">
     <header class="mb-5">
       <h1 class="text-2xl font-bold">因子说明</h1>
       <p class="mt-1 text-sm text-ui-text-2">
