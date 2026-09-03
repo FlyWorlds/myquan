@@ -119,7 +119,7 @@ pip install -r ../requirements.txt
 
 ## 前端 watch-ui（Nuxt 3 + Vue 3 + Pinia + Tailwind）
 
-浏览器 **http://127.0.0.1:3000/sectors** 为板块轮动热力表。**优先通达信概念**（本地配置同步 + pytdx）；行情失败时优先复用通达信磁盘缓存（≤2 天）以对齐 Mac/Win 名单，再回退东财。**点击格子加载成分股**；再点一次进概念详情（先 lite 出 K 线，再补波段龙头；因子16 评分后置）。
+浏览器 **http://127.0.0.1:3000/sectors** 为板块轮动热力表。**优先通达信概念**（本地配置同步 + pytdx）；行情失败时仅复用**同一交易日且今日列已有排名**的通达信磁盘缓存（≤2 天）。**隔日缓存作废**；通达信只拉到 1 日时拼回磁盘历史，禁止整表覆盖。前端用盯盘 `conceptToday` 写入最左「今日」列（以服务器 `clock` 为准）。**点击格子加载成分股**；再点一次进概念详情（先 lite 出 K 线，再补波段龙头；因子16 评分后置）。
 
 栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（HTTP `/api` + WebSocket `/ws`），不生成 HTML、不托管页面。
 

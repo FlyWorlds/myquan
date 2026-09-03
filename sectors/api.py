@@ -14,6 +14,13 @@ from .concept_leaders import build_concept_detail
 from .leader_score import get_concept_scored_leaders
 from .live import fetch_concept_member_rows
 from .tdx import tdx_availability, tdx_hq_available
+from .rotation_cache import (
+    date_columns,
+    payload_has_today_column,
+    payload_session_fresh,
+    resolve_rotation_payload,
+    today_ymd,
+)
 from .tdx_rotation import (
     build_em_concept_rotation_payload,
     build_tdx_concept_rotation_payload,
@@ -74,52 +81,71 @@ def _payload_age_sec(payload: dict[str, Any] | None) -> float:
 
 
 def get_rotation_payload(*, days: int = 20, top_n: int = 10, refresh: bool = False) -> dict[str, Any]:
-    """通达信概念轮动 payload（内存 + 磁盘缓存）；空结果不缓存，行情失败回退东财。"""
+    """通达信概念轮动 payload（内存 + 磁盘缓存）；空结果不缓存，行情失败回退东财。
+
+    隔日缓存不得直接返回；通达信只拉到 1 日时必须拼回磁盘历史，禁止整表覆盖。
+    """
+    today = today_ymd()
     now = time.time()
     with _lock:
         mem = _rotation_mem.get("payload")
         if (
             not refresh
             and _rotation_has_data(mem)
+            and payload_session_fresh(mem, today=today)
             and now - float(_rotation_mem.get("ts") or 0) < _ROTATION_TTL_SEC
         ):
             return mem
 
         if not refresh:
             disk = _load_rotation_disk()
-            if _rotation_has_data(disk) and _payload_age_sec(disk) < _ROTATION_TTL_SEC:
+            if (
+                _rotation_has_data(disk)
+                and payload_session_fresh(disk, today=today)
+                and _payload_age_sec(disk) < _ROTATION_TTL_SEC
+            ):
                 _rotation_mem["payload"] = disk
                 _rotation_mem["ts"] = now
                 return disk
 
-    payload: dict[str, Any] | None = None
+    disk = _load_rotation_disk()
+    fresh: dict[str, Any] | None = None
     if tdx_hq_available():
         try:
-            payload = build_tdx_concept_rotation_payload(
+            fresh = build_tdx_concept_rotation_payload(
                 days=days, top_n=top_n, with_members=True
             )
         except Exception:
-            payload = None
+            fresh = None
 
-    disk = _load_rotation_disk()
-    # 行情失败：优先复用未过期太久的通达信磁盘缓存，保证跨机名单一致
+    if not payload_has_today_column(fresh, today=today):
+        try:
+            em = build_em_concept_rotation_payload(days=days, top_n=top_n)
+        except Exception:
+            em = None
+        if _rotation_has_data(em):
+            fresh = em
+
+    payload = resolve_rotation_payload(
+        fresh=fresh, disk=disk, today=today, days=days
+    )
     if not _rotation_has_data(payload):
         if (
             disk
             and str(disk.get("source") or "").startswith("通达信")
+            and payload_session_fresh(disk, today=today)
             and _payload_age_sec(disk) < _TDX_STALE_MAX_SEC
         ):
-            with _lock:
-                _rotation_mem["payload"] = disk
-                _rotation_mem["ts"] = time.time()
-            return disk
-        payload = build_em_concept_rotation_payload(days=days, top_n=top_n)
+            payload = disk
     if not _rotation_has_data(payload):
         raise RuntimeError("板块轮动无数据：通达信与东财均失败")
     with _lock:
         _rotation_mem["payload"] = payload
         _rotation_mem["ts"] = time.time()
-    _save_rotation_disk(payload)
+    if payload_has_today_column(payload, today=today) and len(date_columns(payload)) >= len(
+        date_columns(disk)
+    ):
+        _save_rotation_disk(payload)
     return payload
 
 
