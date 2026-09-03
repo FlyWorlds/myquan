@@ -1,0 +1,198 @@
+{
+  "symbol": "sh600330",
+  "name": "天通股份",
+  "pct": 0.03,
+  "start": "2026-08-14",
+  "end": "2026-09-03",
+  "fee_slip": 0.0025,
+  "note": "样本内研究；非投资建议；30m 确认止损+trail半仓+止损回补",
+  "buy_hold_pct": 9.85,
+  "factor25": {
+    "return_pct": 12.34,
+    "excess_vs_bh_pct": 2.49,
+    "max_dd_pct": 8.04,
+    "end_equity": 112340.36,
+    "n_trades": 8,
+    "params": {
+      "stop_confirm_bars": 2,
+      "reclaim_band": 0.015,
+      "reclaim_premium_max": 0.015,
+      "reclaim_horizon": 8,
+      "reclaim_require_yang": true,
+      "reclaim_break_prior_high": true,
+      "reclaim_require_above_day_stop": true,
+      "reclaim_enabled": true,
+      "trail_arm_pct": 0.12,
+      "trail_giveback_pct": 0.05,
+      "trail_reduce_ratio": 0.5,
+      "suppress_f1_during_reclaim": true,
+      "no_f1_if_day_low_hit_stop": true
+    },
+    "trades": [
+      {
+        "date": "2026-08-14",
+        "time": "10:30",
+        "kind": "F1买",
+        "price": 24.94,
+        "qty": 3800,
+        "reason": "open_break"
+      },
+      {
+        "date": "2026-08-19",
+        "time": "10:00",
+        "kind": "trail半仓",
+        "price": 28.02,
+        "qty": 1900,
+        "reason": "trail arm≥12% giveback≥5%"
+      },
+      {
+        "date": "2026-08-24",
+        "time": "11:30",
+        "kind": "止损",
+        "price": 25.96,
+        "qty": 1900,
+        "reason": "m30_close×2≤stop"
+      },
+      {
+        "date": "2026-08-25",
+        "time": "11:30",
+        "kind": "F1买",
+        "price": 26.25,
+        "qty": 3800,
+        "reason": "open_break"
+      },
+      {
+        "date": "2026-08-28",
+        "time": "11:00",
+        "kind": "trail半仓",
+        "price": 28.7,
+        "qty": 1900,
+        "reason": "trail arm≥12% giveback≥5%"
+      },
+      {
+        "date": "2026-08-28",
+        "time": "11:30",
+        "kind": "止损",
+        "price": 28.74,
+        "qty": 1900,
+        "reason": "m30_close×2≤stop"
+      },
+      {
+        "date": "2026-08-28",
+        "time": "13:30",
+        "kind": "回补",
+        "price": 29.05,
+        "qty": 1900,
+        "reason": "reclaim near±1.5% prem≤1.5%"
+      },
+      {
+        "date": "2026-09-01",
+        "time": "10:30",
+        "kind": "止损",
+        "price": 27.18,
+        "qty": 1900,
+        "reason": "m30_close×2≤stop"
+      }
+    ]
+  },
+  "pure_f1_daily_approx": {
+    "name": "pure_f1_daily_approx",
+    "return_pct": -3.04,
+    "buy_hold_pct": 9.85,
+    "excess_pct": -12.89,
+    "trades": 11,
+    "end_equity": 96956.2
+  },
+  "eod": [
+    {
+      "date": "2026-08-14",
+      "equity": 99915.07,
+      "pos": 3800,
+      "close": 24.98
+    },
+    {
+      "date": "2026-08-17",
+      "equity": 109415.07,
+      "pos": 3800,
+      "close": 27.48
+    },
+    {
+      "date": "2026-08-18",
+      "equity": 116673.07,
+      "pos": 3800,
+      "close": 29.39
+    },
+    {
+      "date": "2026-08-19",
+      "equity": 108730.98,
+      "pos": 1900,
+      "close": 26.65
+    },
+    {
+      "date": "2026-08-20",
+      "equity": 111086.98,
+      "pos": 1900,
+      "close": 27.89
+    },
+    {
+      "date": "2026-08-21",
+      "equity": 109908.98,
+      "pos": 1900,
+      "close": 27.27
+    },
+    {
+      "date": "2026-08-24",
+      "equity": 107296.67,
+      "pos": 0,
+      "close": 26.07
+    },
+    {
+      "date": "2026-08-25",
+      "equity": 111455.29,
+      "pos": 3800,
+      "close": 27.41
+    },
+    {
+      "date": "2026-08-26",
+      "equity": 107997.29,
+      "pos": 3800,
+      "close": 26.5
+    },
+    {
+      "date": "2026-08-27",
+      "equity": 118067.29,
+      "pos": 3800,
+      "close": 29.15
+    },
+    {
+      "date": "2026-08-28",
+      "equity": 115813.46,
+      "pos": 1900,
+      "close": 28.94
+    },
+    {
+      "date": "2026-08-31",
+      "equity": 114825.46,
+      "pos": 1900,
+      "close": 28.42
+    },
+    {
+      "date": "2026-09-01",
+      "equity": 112340.36,
+      "pos": 0,
+      "close": 26.98
+    },
+    {
+      "date": "2026-09-02",
+      "equity": 112340.36,
+      "pos": 0,
+      "close": 26.46
+    },
+    {
+      "date": "2026-09-03",
+      "equity": 112340.36,
+      "pos": 0,
+      "close": 27.44
+    }
+  ]
+}

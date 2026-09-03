@@ -120,6 +120,7 @@ from strategy.strategies.strategy7 import run_strategy7, run_strategy11  # noqa:
 from strategy.strategies.strategy8 import run_strategy8  # noqa: E402
 from strategy.strategies.strategy9 import run_strategy9_emotion  # noqa: E402
 from strategy.strategies.strategy12 import run_strategy12  # noqa: E402
+from strategy.strategies.strategy15 import run_strategy15  # noqa: E402
 
 __all__ = [
     "DEFAULT_PCT",
@@ -205,6 +206,7 @@ __all__ = [
     "run_strategy10",
     "run_strategy11",
     "run_strategy12",
+    "run_strategy15",
     "apply_strategy_config",
     "build_open_break_strategy",
     "metric",

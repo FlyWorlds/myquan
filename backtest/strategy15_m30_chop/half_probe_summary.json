@@ -1,0 +1,474 @@
+{
+  "symbol": "sh600330",
+  "name": "天通股份",
+  "pct": 0.03,
+  "notes": [
+    "半仓试探：细周期触日线止损→卖一半；其后连续2根30m收盘>止损→接回半仓；连续2根30m收盘≤止损→剩余清完。含费+滑点。研究样本内，非投资建议。",
+    "1分钟线来源东财/新浪，通常仅近数日；完整窗用5分钟触价。",
+    "真1分钟覆盖：2026-08-24～2026-09-03（共 1970 根）"
+  ],
+  "results": [
+    {
+      "label": "half_probe",
+      "fine_period": "5m",
+      "start": "2026-08-14",
+      "end": "2026-09-03",
+      "return_pct": 4.05,
+      "buy_hold_pct": 9.85,
+      "excess_pct": -5.8,
+      "max_dd_pct": 12.31,
+      "n_trades": 22,
+      "params": {
+        "stop_confirm_bars": 2,
+        "reclaim_band": 0.015,
+        "reclaim_premium_max": 0.015,
+        "reclaim_horizon": 8,
+        "reclaim_require_yang": true,
+        "reclaim_break_prior_high": true,
+        "reclaim_require_above_day_stop": true,
+        "reclaim_enabled": true,
+        "trail_arm_pct": 0.12,
+        "trail_giveback_pct": 0.05,
+        "trail_reduce_ratio": 0.5,
+        "suppress_f1_during_reclaim": true,
+        "no_f1_if_day_low_hit_stop": true,
+        "stop_mode": "half_probe",
+        "confirm_bars": 2,
+        "touch_fill": "stop"
+      },
+      "trades": [
+        {
+          "date": "2026-08-14",
+          "time": "10:15",
+          "kind": "F1买",
+          "price": 24.94,
+          "qty": 3800,
+          "reason": "open_break"
+        },
+        {
+          "date": "2026-08-19",
+          "time": "09:35",
+          "kind": "trail半仓",
+          "price": 27.56,
+          "qty": 1900,
+          "reason": "trail arm≥12% giveback≥5%"
+        },
+        {
+          "date": "2026-08-19",
+          "time": "09:35",
+          "kind": "触损半仓",
+          "price": 26.67,
+          "qty": 900,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-19",
+          "time": "10:30",
+          "kind": "假破接回",
+          "price": 27.79,
+          "qty": 900,
+          "reason": "m30×2>stop"
+        },
+        {
+          "date": "2026-08-19",
+          "time": "14:20",
+          "kind": "触损半仓",
+          "price": 26.67,
+          "qty": 900,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-20",
+          "time": "10:30",
+          "kind": "假破接回",
+          "price": 28.32,
+          "qty": 900,
+          "reason": "m30×2>stop"
+        },
+        {
+          "date": "2026-08-21",
+          "time": "09:40",
+          "kind": "触损半仓",
+          "price": 27.0,
+          "qty": 900,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-21",
+          "time": "10:30",
+          "kind": "假破接回",
+          "price": 27.64,
+          "qty": 900,
+          "reason": "m30×2>stop"
+        },
+        {
+          "date": "2026-08-21",
+          "time": "14:05",
+          "kind": "触损半仓",
+          "price": 27.0,
+          "qty": 900,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-21",
+          "time": "15:00",
+          "kind": "假破接回",
+          "price": 27.27,
+          "qty": 900,
+          "reason": "m30×2>stop"
+        },
+        {
+          "date": "2026-08-24",
+          "time": "09:45",
+          "kind": "触损半仓",
+          "price": 26.45,
+          "qty": 900,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-24",
+          "time": "10:30",
+          "kind": "假破接回",
+          "price": 26.58,
+          "qty": 900,
+          "reason": "m30×2>stop"
+        },
+        {
+          "date": "2026-08-24",
+          "time": "10:45",
+          "kind": "触损半仓",
+          "price": 26.45,
+          "qty": 900,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-24",
+          "time": "11:30",
+          "kind": "止损清完",
+          "price": 25.96,
+          "qty": 1000,
+          "reason": "m30×2≤stop"
+        },
+        {
+          "date": "2026-08-25",
+          "time": "09:35",
+          "kind": "F1买",
+          "price": 26.25,
+          "qty": 3700,
+          "reason": "open_break"
+        },
+        {
+          "date": "2026-08-26",
+          "time": "10:00",
+          "kind": "触损半仓",
+          "price": 26.07,
+          "qty": 1800,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-26",
+          "time": "11:00",
+          "kind": "假破接回",
+          "price": 26.6,
+          "qty": 1800,
+          "reason": "m30×2>stop"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "10:10",
+          "kind": "触损半仓",
+          "price": 28.9,
+          "qty": 1800,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "11:30",
+          "kind": "止损清完",
+          "price": 28.74,
+          "qty": 1900,
+          "reason": "m30×2≤stop"
+        },
+        {
+          "date": "2026-08-31",
+          "time": "09:35",
+          "kind": "F1买",
+          "price": 29.05,
+          "qty": 3600,
+          "reason": "open_break"
+        },
+        {
+          "date": "2026-09-01",
+          "time": "09:35",
+          "kind": "触损半仓",
+          "price": 27.55,
+          "qty": 1800,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-09-01",
+          "time": "10:30",
+          "kind": "止损清完",
+          "price": 27.18,
+          "qty": 1800,
+          "reason": "m30×2≤stop"
+        }
+      ]
+    },
+    {
+      "label": "confirm2_m30",
+      "fine_period": "30m",
+      "start": "2026-08-14",
+      "end": "2026-09-03",
+      "return_pct": 12.34,
+      "buy_hold_pct": 9.85,
+      "excess_pct": 2.49,
+      "max_dd_pct": 8.04,
+      "n_trades": 8,
+      "params": {
+        "stop_confirm_bars": 2,
+        "reclaim_band": 0.015,
+        "reclaim_premium_max": 0.015,
+        "reclaim_horizon": 8,
+        "reclaim_require_yang": true,
+        "reclaim_break_prior_high": true,
+        "reclaim_require_above_day_stop": true,
+        "reclaim_enabled": true,
+        "trail_arm_pct": 0.12,
+        "trail_giveback_pct": 0.05,
+        "trail_reduce_ratio": 0.5,
+        "suppress_f1_during_reclaim": true,
+        "no_f1_if_day_low_hit_stop": true
+      },
+      "trades": [
+        {
+          "date": "2026-08-14",
+          "time": "10:30",
+          "kind": "F1买",
+          "price": 24.94,
+          "qty": 3800,
+          "reason": "open_break"
+        },
+        {
+          "date": "2026-08-19",
+          "time": "10:00",
+          "kind": "trail半仓",
+          "price": 28.02,
+          "qty": 1900,
+          "reason": "trail arm≥12% giveback≥5%"
+        },
+        {
+          "date": "2026-08-24",
+          "time": "11:30",
+          "kind": "止损",
+          "price": 25.96,
+          "qty": 1900,
+          "reason": "m30_close×2≤stop"
+        },
+        {
+          "date": "2026-08-25",
+          "time": "11:30",
+          "kind": "F1买",
+          "price": 26.25,
+          "qty": 3800,
+          "reason": "open_break"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "11:00",
+          "kind": "trail半仓",
+          "price": 28.7,
+          "qty": 1900,
+          "reason": "trail arm≥12% giveback≥5%"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "11:30",
+          "kind": "止损",
+          "price": 28.74,
+          "qty": 1900,
+          "reason": "m30_close×2≤stop"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "13:30",
+          "kind": "回补",
+          "price": 29.05,
+          "qty": 1900,
+          "reason": "reclaim near±1.5% prem≤1.5%"
+        },
+        {
+          "date": "2026-09-01",
+          "time": "10:30",
+          "kind": "止损",
+          "price": 27.18,
+          "qty": 1900,
+          "reason": "m30_close×2≤stop"
+        }
+      ]
+    },
+    {
+      "label": "half_probe",
+      "fine_period": "1m",
+      "start": "2026-08-24",
+      "end": "2026-09-03",
+      "return_pct": 1.16,
+      "buy_hold_pct": 5.26,
+      "excess_pct": -4.1,
+      "max_dd_pct": 7.21,
+      "n_trades": 8,
+      "params": {
+        "stop_confirm_bars": 2,
+        "reclaim_band": 0.015,
+        "reclaim_premium_max": 0.015,
+        "reclaim_horizon": 8,
+        "reclaim_require_yang": true,
+        "reclaim_break_prior_high": true,
+        "reclaim_require_above_day_stop": true,
+        "reclaim_enabled": true,
+        "trail_arm_pct": 0.12,
+        "trail_giveback_pct": 0.05,
+        "trail_reduce_ratio": 0.5,
+        "suppress_f1_during_reclaim": true,
+        "no_f1_if_day_low_hit_stop": true,
+        "stop_mode": "half_probe",
+        "confirm_bars": 2,
+        "touch_fill": "stop"
+      },
+      "trades": [
+        {
+          "date": "2026-08-25",
+          "time": "09:34",
+          "kind": "F1买",
+          "price": 26.25,
+          "qty": 3600,
+          "reason": "open_break"
+        },
+        {
+          "date": "2026-08-26",
+          "time": "09:58",
+          "kind": "触损半仓",
+          "price": 26.07,
+          "qty": 1800,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-26",
+          "time": "11:00",
+          "kind": "假破接回",
+          "price": 26.6,
+          "qty": 1800,
+          "reason": "m30×2>stop"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "10:09",
+          "kind": "触损半仓",
+          "price": 28.9,
+          "qty": 1800,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "11:30",
+          "kind": "止损清完",
+          "price": 28.74,
+          "qty": 1800,
+          "reason": "m30×2≤stop"
+        },
+        {
+          "date": "2026-08-31",
+          "time": "09:31",
+          "kind": "F1买",
+          "price": 29.05,
+          "qty": 3500,
+          "reason": "open_break"
+        },
+        {
+          "date": "2026-09-01",
+          "time": "09:34",
+          "kind": "触损半仓",
+          "price": 27.55,
+          "qty": 1700,
+          "reason": "touch→half"
+        },
+        {
+          "date": "2026-09-01",
+          "time": "10:30",
+          "kind": "止损清完",
+          "price": 27.18,
+          "qty": 1800,
+          "reason": "m30×2≤stop"
+        }
+      ]
+    },
+    {
+      "label": "confirm2_m30",
+      "fine_period": "30m",
+      "start": "2026-08-24",
+      "end": "2026-09-03",
+      "return_pct": 4.78,
+      "buy_hold_pct": 5.26,
+      "excess_pct": -0.48,
+      "max_dd_pct": 4.92,
+      "n_trades": 5,
+      "params": {
+        "stop_confirm_bars": 2,
+        "reclaim_band": 0.015,
+        "reclaim_premium_max": 0.015,
+        "reclaim_horizon": 8,
+        "reclaim_require_yang": true,
+        "reclaim_break_prior_high": true,
+        "reclaim_require_above_day_stop": true,
+        "reclaim_enabled": true,
+        "trail_arm_pct": 0.12,
+        "trail_giveback_pct": 0.05,
+        "trail_reduce_ratio": 0.5,
+        "suppress_f1_during_reclaim": true,
+        "no_f1_if_day_low_hit_stop": true
+      },
+      "trades": [
+        {
+          "date": "2026-08-25",
+          "time": "10:00",
+          "kind": "F1买",
+          "price": 26.25,
+          "qty": 3600,
+          "reason": "open_break"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "11:00",
+          "kind": "trail半仓",
+          "price": 28.7,
+          "qty": 1800,
+          "reason": "trail arm≥12% giveback≥5%"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "11:30",
+          "kind": "止损",
+          "price": 28.74,
+          "qty": 1800,
+          "reason": "m30_close×2≤stop"
+        },
+        {
+          "date": "2026-08-28",
+          "time": "13:30",
+          "kind": "回补",
+          "price": 29.05,
+          "qty": 1800,
+          "reason": "reclaim near±1.5% prem≤1.5%"
+        },
+        {
+          "date": "2026-09-01",
+          "time": "10:30",
+          "kind": "止损",
+          "price": 27.18,
+          "qty": 1800,
+          "reason": "m30_close×2≤stop"
+        }
+      ]
+    }
+  ]
+}

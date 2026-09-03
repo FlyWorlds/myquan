@@ -1,0 +1,298 @@
+{
+  "symbol": "sh600552",
+  "name": "凯盛科技",
+  "pct": 0.025,
+  "start": "2026-07-21",
+  "end": "2026-09-04",
+  "fee_slip": 0.0025,
+  "note": "研究用途，非投资建议；凯盛±2.5%；F25先确认再卖",
+  "buy_hold_pct": 7.53,
+  "factor25_confirm": {
+    "return_pct": 3.25,
+    "excess_vs_bh_pct": -4.28,
+    "max_dd_pct": 12.23,
+    "end_equity": 103246.95,
+    "n_trades": 9,
+    "trades": [
+      {
+        "date": "2026-07-23",
+        "time": "10:00",
+        "kind": "F1买",
+        "price": 17.03,
+        "qty": 5500,
+        "reason": "open_break"
+      },
+      {
+        "date": "2026-07-28",
+        "time": "15:00",
+        "kind": "止损",
+        "price": 16.03,
+        "qty": 5500,
+        "reason": "m30_close×2≤stop"
+      },
+      {
+        "date": "2026-07-31",
+        "time": "10:00",
+        "kind": "F1买",
+        "price": 15.89,
+        "qty": 5600,
+        "reason": "open_break"
+      },
+      {
+        "date": "2026-08-10",
+        "time": "10:30",
+        "kind": "止损",
+        "price": 17.64,
+        "qty": 5600,
+        "reason": "m30_close×2≤stop"
+      },
+      {
+        "date": "2026-08-10",
+        "time": "14:30",
+        "kind": "回补",
+        "price": 17.85,
+        "qty": 5500,
+        "reason": "reclaim near±1.5% prem≤1.5%"
+      },
+      {
+        "date": "2026-08-19",
+        "time": "10:00",
+        "kind": "trail半仓",
+        "price": 18.96,
+        "qty": 2700,
+        "reason": "trail arm≥12% giveback≥5%"
+      },
+      {
+        "date": "2026-08-19",
+        "time": "14:30",
+        "kind": "止损",
+        "price": 18.05,
+        "qty": 2800,
+        "reason": "m30_close×2≤stop"
+      },
+      {
+        "date": "2026-08-27",
+        "time": "10:30",
+        "kind": "F1买",
+        "price": 18.11,
+        "qty": 5500,
+        "reason": "open_break"
+      },
+      {
+        "date": "2026-09-01",
+        "time": "10:30",
+        "kind": "止损",
+        "price": 17.62,
+        "qty": 5500,
+        "reason": "m30_close×2≤stop"
+      }
+    ]
+  },
+  "pure_f1_daily_approx": {
+    "return_pct": -7.0,
+    "buy_hold_pct": 7.53,
+    "excess_pct": -14.53,
+    "trades": 18,
+    "end_equity": 93000.27
+  },
+  "half_probe_5m": {
+    "return_pct": 15.8,
+    "excess_vs_bh_pct": 8.27,
+    "max_dd_pct": 8.27,
+    "n_trades": 24,
+    "trades": [
+      {
+        "date": "2026-07-21",
+        "time": "09:40",
+        "kind": "F1买",
+        "price": 15.16,
+        "qty": 6200,
+        "reason": "open_break"
+      },
+      {
+        "date": "2026-07-22",
+        "time": "13:55",
+        "kind": "trail半仓",
+        "price": 16.36,
+        "qty": 3100,
+        "reason": "trail arm≥12% giveback≥5%"
+      },
+      {
+        "date": "2026-07-23",
+        "time": "11:00",
+        "kind": "触损半仓",
+        "price": 16.19,
+        "qty": 1500,
+        "reason": "touch→half"
+      },
+      {
+        "date": "2026-07-23",
+        "time": "15:00",
+        "kind": "假破接回",
+        "price": 16.23,
+        "qty": 1500,
+        "reason": "m30×2>stop"
+      },
+      {
+        "date": "2026-07-24",
+        "time": "09:35",
+        "kind": "触损半仓",
+        "price": 15.5,
+        "qty": 1500,
+        "reason": "touch→half"
+      },
+      {
+        "date": "2026-07-24",
+        "time": "10:30",
+        "kind": "假破接回",
+        "price": 15.74,
+        "qty": 1500,
+        "reason": "m30×2>stop"
+      },
+      {
+        "date": "2026-07-24",
+        "time": "10:40",
+        "kind": "触损半仓",
+        "price": 15.5,
+        "qty": 1500,
+        "reason": "touch→half"
+      },
+      {
+        "date": "2026-07-24",
+        "time": "11:30",
+        "kind": "假破接回",
+        "price": 15.52,
+        "qty": 1500,
+        "reason": "m30×2>stop"
+      },
+      {
+        "date": "2026-07-24",
+        "time": "11:30",
+        "kind": "触损半仓",
+        "price": 15.5,
+        "qty": 1500,
+        "reason": "touch→half"
+      },
+      {
+        "date": "2026-07-24",
+        "time": "14:00",
+        "kind": "假破接回",
+        "price": 15.6,
+        "qty": 1500,
+        "reason": "m30×2>stop"
+      },
+      {
+        "date": "2026-07-28",
+        "time": "14:05",
+        "kind": "触损半仓",
+        "price": 16.08,
+        "qty": 1500,
+        "reason": "touch→half"
+      },
+      {
+        "date": "2026-07-28",
+        "time": "15:00",
+        "kind": "止损清完",
+        "price": 16.03,
+        "qty": 1600,
+        "reason": "m30×2≤stop"
+      },
+      {
+        "date": "2026-07-31",
+        "time": "09:35",
+        "kind": "F1买",
+        "price": 15.89,
+        "qty": 6200,
+        "reason": "open_break"
+      },
+      {
+        "date": "2026-08-10",
+        "time": "09:40",
+        "kind": "触损半仓",
+        "price": 17.75,
+        "qty": 3100,
+        "reason": "touch→half"
+      },
+      {
+        "date": "2026-08-10",
+        "time": "10:30",
+        "kind": "止损清完",
+        "price": 17.64,
+        "qty": 3100,
+        "reason": "m30×2≤stop"
+      },
+      {
+        "date": "2026-08-11",
+        "time": "09:45",
+        "kind": "F1买",
+        "price": 18.02,
+        "qty": 6000,
+        "reason": "open_break"
+      },
+      {
+        "date": "2026-08-13",
+        "time": "14:50",
+        "kind": "触损半仓",
+        "price": 17.85,
+        "qty": 3000,
+        "reason": "touch→half"
+      },
+      {
+        "date": "2026-08-14",
+        "time": "10:30",
+        "kind": "假破接回",
+        "price": 17.89,
+        "qty": 3000,
+        "reason": "m30×2>stop"
+      },
+      {
+        "date": "2026-08-18",
+        "time": "11:10",
+        "kind": "trail半仓",
+        "price": 19.18,
+        "qty": 3000,
+        "reason": "trail arm≥12% giveback≥5%"
+      },
+      {
+        "date": "2026-08-19",
+        "time": "13:10",
+        "kind": "触损半仓",
+        "price": 18.16,
+        "qty": 1500,
+        "reason": "touch→half"
+      },
+      {
+        "date": "2026-08-19",
+        "time": "14:30",
+        "kind": "止损清完",
+        "price": 18.05,
+        "qty": 1500,
+        "reason": "m30×2≤stop"
+      },
+      {
+        "date": "2026-08-27",
+        "time": "10:30",
+        "kind": "F1买",
+        "price": 18.11,
+        "qty": 6200,
+        "reason": "open_break"
+      },
+      {
+        "date": "2026-09-01",
+        "time": "09:40",
+        "kind": "触损半仓",
+        "price": 17.94,
+        "qty": 3100,
+        "reason": "touch→half"
+      },
+      {
+        "date": "2026-09-01",
+        "time": "10:30",
+        "kind": "止损清完",
+        "price": 17.62,
+        "qty": 3100,
+        "reason": "m30×2≤stop"
+      }
+    ]
+  }
+}

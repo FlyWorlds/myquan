@@ -8,7 +8,7 @@ if (import.meta.client) {
   activeTab.value = localStorage.getItem('holdings_active_tab') || 'holdings'
 }
 
-/** 盯盘首页 Tab：后端 snapshot 仅含 watch_tab=true（strategy1/3/8） */
+/** 盯盘首页 Tab：后端 snapshot 仅含 watch_tab=true（strategy1/3/8/15） */
 const strategyTabs = computed(() => {
   if (strategies.value.length) return strategies.value
   return snapshot.value?.strategies || []
@@ -40,6 +40,7 @@ function tabLabel(id: string) {
 const strategy1Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy1'))
 const strategy3Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy3'))
 const strategy8Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy8'))
+const strategy15Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy15'))
 const loading = computed(() => !snapshot.value && wsStatus.value.includes('连接'))
 </script>
 
@@ -138,10 +139,20 @@ const loading = computed(() => !snapshot.value && wsStatus.value.includes('连�
           :phase="snapshot.phase"
         />
       </section>
+      <section v-show="activeTab === 'strategy15'">
+        <StrategyInfoPanel v-if="strategy15Tab" :tab="strategy15Tab" class="mb-4" />
+        <StrategyPicksPanel :picks="strategy15Tab?.picks" />
+        <Strategy15Panel
+          v-if="snapshot"
+          class="mt-4"
+          :payload="snapshot.strategy15"
+          :phase="snapshot.phase"
+        />
+      </section>
     </template>
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘 Tab 仅展示有实时面板的策略（策略1 / 3 / 8）。因子持有模板、研究型条目见
+      盯盘 Tab 仅展示有实时面板的策略（策略1 / 3 / 8 / 15）。因子持有模板、研究型条目见
       <NuxtLink to="/strategies" class="text-accent hover:underline">策略说明</NuxtLink>
       、
       <NuxtLink to="/factors" class="text-accent hover:underline">因子说明</NuxtLink>

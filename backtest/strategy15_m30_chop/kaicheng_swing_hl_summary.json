@@ -1,0 +1,97 @@
+{
+  "symbol": "sh600552",
+  "start": "2026-07-21",
+  "end": "2026-09-04",
+  "pct": 0.025,
+  "buy_hold_pct": 7.53,
+  "f25_confirm": {
+    "return_pct": 3.25,
+    "excess_pct": -4.28
+  },
+  "best_swing": {
+    "name": "lb80|stop=prior_low|tp=trail_from_ph",
+    "return_pct": 4.59,
+    "excess_pct": -16.17,
+    "mdd": 13.16,
+    "n": 5,
+    "trades": [
+      {
+        "d": "2026-07-23",
+        "t": "10:00",
+        "k": "F1买",
+        "px": 17.03,
+        "qty": 5500,
+        "why": "open_break"
+      },
+      {
+        "d": "2026-08-19",
+        "t": "10:00",
+        "k": "前高/trail半仓",
+        "px": 18.96,
+        "qty": 2700,
+        "why": "前高后回撤半仓"
+      },
+      {
+        "d": "2026-08-24",
+        "t": "11:30",
+        "k": "止损",
+        "px": 17.23,
+        "qty": 2800,
+        "why": "×2≤prior_low:17.25"
+      },
+      {
+        "d": "2026-08-24",
+        "t": "15:00",
+        "k": "前低接回",
+        "px": 17.49,
+        "qty": 2800,
+        "why": "站稳前低/卖价"
+      },
+      {
+        "d": "2026-09-02",
+        "t": "13:30",
+        "k": "前高/trail半仓",
+        "px": 17.33,
+        "qty": 1400,
+        "why": "前高后回撤半仓"
+      }
+    ]
+  },
+  "top5": [
+    {
+      "name": "lb80|stop=prior_low|tp=trail_from_ph",
+      "ret": 4.59,
+      "xs": -16.17,
+      "mdd": 13.16,
+      "n": 5
+    },
+    {
+      "name": "lb80|stop=min_f1_pl|tp=trail_from_ph",
+      "ret": 4.59,
+      "xs": -16.17,
+      "mdd": 13.16,
+      "n": 5
+    },
+    {
+      "name": "lb80|stop=prior_low|tp=f25_trail",
+      "ret": 4.58,
+      "xs": -16.18,
+      "mdd": 13.16,
+      "n": 4
+    },
+    {
+      "name": "lb80|stop=min_f1_pl|tp=f25_trail",
+      "ret": 4.58,
+      "xs": -16.18,
+      "mdd": 13.16,
+      "n": 4
+    },
+    {
+      "name": "lb40|stop=max_f1_pl|tp=trail_from_ph",
+      "ret": 3.31,
+      "xs": -17.45,
+      "mdd": 12.51,
+      "n": 17
+    }
+  ]
+}

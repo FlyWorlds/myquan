@@ -147,7 +147,20 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 
 - **静态合格池**：中证500∪1000 主板，夏普等筛选 → `backtest/universe_zz500_1000/`。
 - **动态池（锁定）**：因子13 WF 每年 `T←≤T−1` 重算 Top3，见 `LOCKED.json`。
-- **盯盘**：`holdingStocks/`，规则与因子1 同源；WebSocket + 微信预警（P0 已完成）。
+- **盯盘**：`holdingStocks/`，规则与因子1 同源；首页 Tab：策略1 / 3 / 8 / **15**。
+
+---
+
+## 4.5 策略十五 · 连板减磨损（strategy15）
+
+> 研究用途，不构成投资建议。盯盘有实时面板；**持仓 Tab 仍按策略一自动结算**，本策略为减磨损对照。
+
+- **建仓**：因子1 开盘突破（过门与策略一相同）。
+- **止损 / 震荡减磨损**：因子24 判定震荡/常规时启用 **因子25（30m）**：连续 2 根 30m 收盘确认止损、涨约 12% 后回撤 5% 半仓、止损后 ±1.5% 卖飞回补（回补窗禁新 F1）。完整路径见 `backtest/strategy15_m30_chop/`。
+- **止盈减半（高潮/无 F25）**：因子23×24 日线固定 % 减半。
+- **卖飞接回（无 30m）**：因子22 收盘动量；与 F25 同由因子24 门控，高潮关掉接回。
+
+情绪口径与策略三相同：盯盘读 T-1 `mkt_max_height` / `mkt_ladder_score` / `mkt_lianban`。
 
 ---
 
@@ -170,6 +183,9 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 | [`FACTOR18.md`](FACTOR18.md) | 因子18 低开跌停情绪（策略十二择时） |
 | [`FACTOR19.md`](FACTOR19.md) | 因子19 低开反包（旧假设，未过关） |
 | [`FACTOR20.md`](FACTOR20.md) | 因子20 跌停次日开板（已否决） |
-| [`FACTOR21.md`](FACTOR21.md) | 因子21 涨停次日低开（策略十二，盲测回撤未过关） |
+| [`FACTOR22.md`](FACTOR22.md) | 因子22 收盘动量 |
+| [`FACTOR23.md`](FACTOR23.md) | 因子23 最高连板止盈 |
+| [`FACTOR24.md`](FACTOR24.md) | 因子24 连板梯度情绪 |
+| [`FACTOR25.md`](FACTOR25.md) | 因子25 30m 震荡减磨损 |
 | [`TODO.MD`](../TODO.MD) | 任务优先级 |
 | [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak 审计底稿 |

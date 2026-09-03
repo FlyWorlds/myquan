@@ -92,6 +92,7 @@ def build_watch_snapshot(
     strategies: list[dict[str, Any]] | None = None,
     strategy3: dict[str, Any] | None = None,
     strategy8: dict[str, Any] | None = None,
+    strategy15: dict[str, Any] | None = None,
     sectors: dict[str, Any] | None = None,
     refresh_sec: int = 5,
     portfolio_codes: set[str] | None = None,
@@ -131,6 +132,7 @@ def build_watch_snapshot(
         "strategy1": strategy1_rows,
         "strategy3": strategy3 or {},
         "strategy8": strategy8 or {},
+        "strategy15": strategy15 or {},
         "sectors": sectors or {},
         "strategies": strategies or [],
     }
