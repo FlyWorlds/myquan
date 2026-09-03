@@ -24,6 +24,7 @@
   · factor19 — 低开反包（压力日 gap 带；策略十二旧假设，未过关）
   · factor20 — 跌停次日开板（昨收跌停今开未封；已否决）
   · factor21 — 涨停次日低开（昨收涨停今低开；策略十二选股）
+  · factor22 — 收盘动量（因子1 止损后，收盘站上最低点×(1+pct) 同日再买；已挂策略一）
   · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
   分类见 strategy.factors.categories
 """
@@ -51,6 +52,7 @@ from strategy.factors import factor18 as _factor18  # noqa: F401
 from strategy.factors import factor19 as _factor19  # noqa: F401
 from strategy.factors import factor20 as _factor20  # noqa: F401
 from strategy.factors import factor21 as _factor21  # noqa: F401
+from strategy.factors import factor22 as _factor22  # noqa: F401
 from strategy.factors import factor_cf1 as _factor_cf1  # noqa: F401
 from strategy.core.factor_registry import FACTOR_REGISTRY, get_factor, list_factors
 from strategy.factors.categories import list_category_catalog

@@ -78,6 +78,7 @@ FACTOR_CATEGORY: dict[str, str] = {
     "factor19": "reversal",
     "factor20": "reversal",
     "factor21": "reversal",
+    "factor22": "momentum",
     "cf1": "reversal",
 }
 

@@ -1,8 +1,9 @@
-"""援军战法（strategy1，默认）：因子1（买卖）+ 因子2（回撤加减仓预警）。
+"""援军战法（strategy1，默认）：因子1（买卖）+ 因子2（回撤预警）+ 因子22（收盘动量再买）。
 
 调参（开闭，勿改算法本体）：
   · 因子1 阈值/过滤 → open_break.DEFAULT_* 或 bindings / BacktestConfig
   · 因子2 预警阈值 → dd_alert.DEFAULT_* / derive_thresholds(equity)
+  · 因子22 再买阈值 → bindings bounce_pct / candle / mode；真源 close_momentum
   · 旧版权益注资叠加已默认关闭；若需可用 apply_factor2_overlay=True 临时启用 dd_topup
 """
 

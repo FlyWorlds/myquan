@@ -1,17 +1,18 @@
 # 持仓盯盘
 # 浏览器打开：http://127.0.0.1:3000/
 
-本地持仓记录 + 盘中盯盘：**与核心策略一（因子1 + 因子2）同步**。
+本地持仓记录 + 盘中盯盘：**与核心策略一（因子1 + 因子2 + 因子22）同步**。
 
 **Python 只提供数据**（行情、信号、JSON/WebSocket）；**盯盘页面只用 Web**（`watch-ui`）。Mac / Windows 同一套启动方式。
 
 可插拔架构见 `../strategy/README.md`。
 
-## 策略锁定 · 策略一（因子1 + 因子2）
+## 策略锁定 · 策略一（因子1 + 因子2 + 因子22）
 
 - **因子1 买**：`high ≥ ceil(open×(1+entry))`；前日阴线或小阳；禁双阳跨日≥5%；T+1
 - **因子1 卖**：`low ≤ floor(open×(1−stop))` 全清；个股阈值见 `watch_config`
 - **因子2**：账户回撤加减仓**预警**（**不自动改现金**）
+- **因子22**：当日止损后，`收盘 ≥ 当日最低×(1+1%)` 可同日再买（默认 1%）
 - 参数与 `strategy1` / `open_break` 同源；`USE_FACTOR4=False`（不叠牛市止损）
 
 完整规则：`from strategy import get_strategy; print(get_strategy("strategy1").print_rules())`

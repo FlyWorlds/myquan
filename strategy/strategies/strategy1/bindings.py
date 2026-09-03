@@ -106,4 +106,14 @@ FACTOR_BINDINGS = (
         filter_desc="f13_pass → OOS 闭环盈亏比/利润因子排序 → Top10 定盘池",
         enabled=True,
     ),
+    bind_factor(
+        "factor22",
+        label="收盘动量",
+        role="entry",
+        bounce_pct=0.01,
+        candle="any",
+        mode="close",
+        filter_desc="因子1 止损后：收盘≥当日最低价×(1+1%) 同日再买；默认 1%、不限阴阳",
+        enabled=True,
+    ),
 )
