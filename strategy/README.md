@@ -3,7 +3,7 @@
 > 项目总览：[`READ.md`](../READ.md) · 策略专题：[`docs/STRATEGY.md`](../docs/STRATEGY.md) · 因子13：[`docs/FACTOR13.md`](../docs/FACTOR13.md) · 因子14：[`docs/FACTOR14.md`](../docs/FACTOR14.md) · 任务：[`TODO.MD`](../TODO.MD)  
 > **文档同步规则**见本文 [§ 文档维护规则](#文档维护规则)；Cursor 规则：`.cursor/rules/docs-sync.mdc`
 
-默认生效：**援军战法（strategy1）= 因子1（开盘±2.5% 一次打满）+ 因子2（回撤加减仓预警）**。
+默认生效：**援军战法（strategy1）= 因子1（开盘±2.5% 一次打满）+ 因子2（回撤加减仓预警）+ 因子22（止损后收盘动量再买）**。
 
 动态选股（研究）：**因子13A 质量带 → 因子16 龙头排序 Top20**（[`backtest/s1_f13_refit_2025/`](../backtest/s1_f13_refit_2025/) · 主板剔ST/百元股 · 无置顶）
 
@@ -87,6 +87,7 @@ strategy/
 | **factor19** | 因子19-低开反包 | 反转 | 旧假设 | 压力日低开开盘买；组合**未过关** |
 | **factor20** | 因子20-跌停次日开板 | 反转 | 已否决 | 昨收跌停今开未封；全样本约 −42% |
 | **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停且曾开板、今低开；上证昨收≤−2% 空仓；调参窗强、盲测回撤未过关 |
+| **factor22** | 因子22-收盘动量 | 动量 | 策略一止损后再买 | 因子1 止损后收盘≥low×(1+pct) 同日再买；默认 1%；见 [`docs/FACTOR22.md`](../docs/FACTOR22.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
@@ -102,7 +103,7 @@ for f in list_factors():
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警；定盘池 13A→16 Top20（剔科创/创业/ST/≥100元）；别名 `open_break3` / `s1` / `策略一` |
+| **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 + factor22 | ✅ 默认 | 开盘±2.5% 一次打满、仅止损 + 回撤预警 + 止损后收盘动量再买；定盘池 13A→16 Top20；别名 `open_break3` / `s1` / `策略一` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
 | **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮展示+±阈值；回测：首板+gap/量比 · 别名 `s3` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧 run 别名 `run_strategy9` / `s9` / `策略九` |
@@ -236,6 +237,8 @@ cd backtest && python strategy1.py --rules
 cd backtest && python strategy1.py --no-open
 cd backtest && python strategy1.py --no-factor2 --no-open   # 仅因子1
 cd backtest && python run.py kaicheng --no-open
+# 天通 2026：止损后同日再买 / 因子22 收盘动量对照
+python backtest/tiantong_stop_rebuy_2026/run.py
 # 因子6：宽基 ETF 组合动量
 python -m strategy.etf_combo_momentum
 # 旧对照：因子3选股+因子1止损

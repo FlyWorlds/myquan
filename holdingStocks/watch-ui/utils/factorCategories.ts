@@ -36,6 +36,7 @@ const FACTOR_CATEGORY_BY_ID: Record<string, string> = {
   factor19: 'reversal',
   factor20: 'reversal',
   factor21: 'reversal',
+  factor22: 'momentum',
   cf1: 'reversal',
 }
 
@@ -131,6 +132,26 @@ export const FALLBACK_FACTORS: FactorEntry[] = [
         name: '策略十二·涨停次日低开',
         label: '策略12-涨停次日低开',
         role: '选股',
+        registry_kind: 'combo',
+      },
+    ],
+  },
+  {
+    id: 'factor22',
+    name: '因子22-收盘动量',
+    category: 'momentum',
+    category_label: '动量',
+    implemented: true,
+    description:
+      '因子1 止损后，收盘≥当日最低价×(1+pct) 则同日再买；默认 pct=1%；已挂策略一。',
+    rules_text:
+      '因子22-收盘动量\n  · 前置：因子1 当日已止损\n  · 收盘≥low×(1+pct) 再买\n  · 默认 pct=1%，可选收阳/收阴\n已挂策略一。',
+    used_by: [
+      {
+        id: 'strategy1',
+        name: '援军战法',
+        label: '策略一',
+        role: '止损后再买',
         registry_kind: 'combo',
       },
     ],

@@ -1,17 +1,18 @@
 # 持仓盯盘
 # 浏览器打开：http://127.0.0.1:3000/
 
-本地持仓记录 + 盘中盯盘：**与核心策略一（因子1 + 因子2）同步**。
+本地持仓记录 + 盘中盯盘：**与核心策略一（因子1 + 因子2 + 因子22）同步**。
 
 **Python 只提供数据**（行情、信号、JSON/WebSocket）；**盯盘页面只用 Web**（`watch-ui`）。Mac / Windows 同一套启动方式。
 
 可插拔架构见 `../strategy/README.md`。
 
-## 策略锁定 · 策略一（因子1 + 因子2）
+## 策略锁定 · 策略一（因子1 + 因子2 + 因子22）
 
 - **因子1 买**：`high ≥ ceil(open×(1+entry))`；前日阴线或小阳；禁双阳跨日≥5%；T+1
 - **因子1 卖**：`low ≤ floor(open×(1−stop))` 全清；个股阈值见 `watch_config`
 - **因子2**：账户回撤加减仓**预警**（**不自动改现金**）
+- **因子22**：当日止损后，`收盘 ≥ 当日最低×(1+1%)` 可同日再买（默认 1%）
 - 参数与 `strategy1` / `open_break` 同源；`USE_FACTOR4=False`（不叠牛市止损）
 
 完整规则：`from strategy import get_strategy; print(get_strategy("strategy1").print_rules())`
@@ -119,7 +120,7 @@ pip install -r ../requirements.txt
 
 ## 前端 watch-ui（Nuxt 3 + Vue 3 + Pinia + Tailwind）
 
-浏览器 **http://127.0.0.1:3000/sectors** 为板块轮动热力表。**优先通达信概念**（本地配置同步 + pytdx）；行情失败时优先复用通达信磁盘缓存（≤2 天）以对齐 Mac/Win 名单，再回退东财。**点击格子加载成分股**；再点一次进概念详情（先 lite 出 K 线，再补波段龙头；因子16 评分后置）。
+浏览器 **http://127.0.0.1:3000/sectors** 为板块轮动热力表。**优先通达信概念**（本地配置同步 + pytdx）；行情失败时仅复用**同一交易日且今日列已有排名**的通达信磁盘缓存（≤2 天）。**隔日缓存作废**；通达信只拉到 1 日时拼回磁盘历史，禁止整表覆盖。前端用盯盘 `conceptToday` 写入最左「今日」列（以服务器 `clock` 为准）。**点击格子加载成分股**；再点一次进概念详情（先 lite 出 K 线，再补波段龙头；因子16 评分后置）。
 
 栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（HTTP `/api` + WebSocket `/ws`），不生成 HTML、不托管页面。
 

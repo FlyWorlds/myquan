@@ -73,29 +73,66 @@ function rankDay(
   return [top, bottom]
 }
 
-/** 用 WS 推送的 conceptToday 覆盖热力表最后一列（今日）并重新排名。 */
+export function todaySessionLabel(now = new Date()): string {
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${m}月${d}日`
+}
+
+/** 优先用盯盘 clock（服务器本地日），避免浏览器时区把「今日」算错。 */
+export function sessionLabelFromClock(clock?: string, fallback = new Date()): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(clock || '').trim())
+  if (m) return `${m[2]}月${m[3]}日`
+  return todaySessionLabel(fallback)
+}
+
+function moveColToFront<T>(cols: T[][], fromIdx: number): T[][] {
+  if (fromIdx <= 0 || fromIdx >= cols.length) return cols
+  const next = cols.map((col) => [...col])
+  const [picked] = next.splice(fromIdx, 1)
+  next.unshift(picked)
+  return next
+}
+
+/** 用 WS 推送的 conceptToday 写入热力表最左「今日」列并重新排名。dates[0] 必须是当日。 */
 export function mergeLiveTodayColumn(
   base: SectorKindPayload,
   conceptToday: Record<string, SectorsConceptToday> | undefined,
   topN: number,
   metrics: string[] = [...ROTATION_METRICS],
+  opts?: { clock?: string },
 ): SectorKindPayload {
   if (!conceptToday || !Object.keys(conceptToday).length) return base
 
   const boards = Object.entries(conceptToday).map(([name, live]) => boardRowFromLive(name, live))
-  const byMetric = { ...base.by_metric }
+  const todayLabel = sessionLabelFromClock(opts?.clock)
+  const baseDates = [...(base.dates || [])]
+  const foundIdx = baseDates.indexOf(todayLabel)
+  let dates = baseDates
+  if (foundIdx < 0) dates = [todayLabel, ...baseDates]
+  else if (foundIdx > 0) dates = [todayLabel, ...baseDates.filter((_, i) => i !== foundIdx)]
 
+  const byMetric = { ...base.by_metric }
   for (const metric of metrics) {
     const [top, bottom] = rankDay(boards, metric, topN)
-    const tops = (byMetric[metric]?.top || []).map((col) => [...col])
-    const bottoms = (byMetric[metric]?.bottom || []).map((col) => [...col])
-    const last = Math.max(tops.length - 1, 0)
-    tops[last] = top
-    bottoms[last] = bottom
+    let tops = (byMetric[metric]?.top || []).map((col) => [...col])
+    let bottoms = (byMetric[metric]?.bottom || []).map((col) => [...col])
+    if (foundIdx < 0) {
+      tops.unshift(top)
+      bottoms.unshift(bottom)
+    } else if (foundIdx === 0) {
+      tops[0] = top
+      bottoms[0] = bottom
+    } else {
+      tops = moveColToFront(tops, foundIdx)
+      bottoms = moveColToFront(bottoms, foundIdx)
+      tops[0] = top
+      bottoms[0] = bottom
+    }
     byMetric[metric] = { top: tops, bottom: bottoms }
   }
 
-  return { ...base, by_metric: byMetric }
+  return { ...base, dates, by_metric: byMetric }
 }
 
 export function useSectorsLive() {
@@ -116,7 +153,9 @@ export function useSectorsLive() {
     metrics?: string[],
   ): SectorKindPayload | null {
     if (!base) return null
-    return mergeLiveTodayColumn(base, sectors.value?.conceptToday, topN, metrics)
+    return mergeLiveTodayColumn(base, sectors.value?.conceptToday, topN, metrics, {
+      clock: store.snapshot?.clock || store.snapshot?.updatedAt,
+    })
   }
 
   return { sectors, liveAt, memberStatsAt, refreshSec, setFocus, mergedKind, formatMetricValue }
