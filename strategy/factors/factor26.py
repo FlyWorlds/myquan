@@ -37,8 +37,8 @@ SPEC = FactorSpec(
     id=FACTOR_ID,
     name=FACTOR_NAME,
     description=(
-        "回落波阈值止损：买=开盘+pct；卖=分时最高回落 pct 全清；"
-        "默认 ±2.5%；已替因子1挂策略一"
+        "回落波阈值止损：买=开盘突破或攻击波；卖=分时最高回落；"
+        "成交触达按 1 分钟顺序；选股/回撤用日线；池回测近 7 日 1m；默认 ±2.5%"
     ),
     rules_text=_rules(),
     implemented=True,
@@ -53,6 +53,7 @@ SPEC = FactorSpec(
         "default_pullback_pct": DEFAULT_PULLBACK_PCT,
         "replaces": "factor1_stop",
         "status": "production_watch",
+        "buy_modes": ("open_break", "attack_wave"),
     },
 )
 

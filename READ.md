@@ -51,7 +51,7 @@ akshare DataFrame
 | 场景 | 配置 |
 |------|------|
 | **盯盘 / 默认回测** | **策略一 = 因子26 回落波止损 + 因子2 预警 + 因子22 收盘动量再买**（因子2 回测不注资） |
-| **因子26** | 买=开盘+2.5%；卖=`floor(分时最高×(1−2.5%))`；最高抬升止损上移；T+1 |
+| **因子26** | 买=开盘突破或攻击波；卖=分时最高回落；**选股日线 / 成交 1m**；池回测近 7 日；T+1 |
 | **因子1（复用）** | 开盘±锚定止损；策略三/四/八等仍用；已非策略一主因子 |
 | **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top20**（宽宇宙主板，剔ST/百元股，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
@@ -60,6 +60,7 @@ akshare DataFrame
 
 ```bash
 cd backtest && python strategy1.py --rules
+PYTHONPATH=. python backtest/strategy1_pool_1m/run.py   # 定盘池近7日1m
 python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
 python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）
 ```
@@ -105,14 +106,14 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **factor23** | 因子23-最高连板止盈 | 止盈持股 | 策略十五 | 最高板定 7%/10%/15% 减半止盈 |
 | **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五 | 低中梯度开 F22/F25；高潮关接回 |
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡 | 30m 确认止损+动态半仓+卖飞回补；见 [`docs/FACTOR25.md`](docs/FACTOR25.md) |
-| **factor26** | 因子26-回落波阈值止损 | 开盘执行 | 策略一主因子 | 买同因子1；卖=分时最高回落 pct；见 [`docs/FACTOR26.md`](docs/FACTOR26.md) |
+| **factor26** | 因子26-回落波阈值止损 | 开盘执行 | 策略一主因子 | 日线选过滤；成交 1m path-dependent；池近 7 日；见 [`docs/FACTOR26.md`](docs/FACTOR26.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor26 + factor2 + factor13a + factor16 + factor22 | ✅ **默认** | 开盘+2.5%买、分时最高回落止损 + 回撤预警 + 收盘动量再买；定盘池 13A→16 Top20；别名 `open_break3` / `s1` |
+| **strategy1** | 援军战法 | factor26 + factor2 + factor13a + factor16 + factor22 | ✅ **默认** | 开盘/攻击波买、分时最高回落止损 + 回撤预警 + 收盘动量再买；定盘池 13A→16 Top20；别名 `open_break3` / `s1` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30 分小转大 + 日线二/三买卖；别名 `chan` |
 | **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮+±阈值；回测见 `backtest/strategy3_first_board/` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 突破 + 牛市放宽 + 20% 昨高全清 + 周频 Top5 |
@@ -176,6 +177,8 @@ myquan/
 # 策略一回测
 cd myquan/backtest && python run.py kaicheng
 cd myquan/backtest && python strategy1.py --rules
+# 定盘池近 7 日 1 分钟路径（选股日线 / 成交 1m）
+cd myquan && PYTHONPATH=. python backtest/strategy1_pool_1m/run.py
 
 # 因子13 熊市盾牌 WF（thr* Top3，锁定配置）
 cd myquan && python strategy/run_factor13_bear_shield_wf.py
@@ -246,7 +249,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 
 - 规则与 **因子1** 同源（`strategy/open_break.py`）；盯盘首页 Tab 为 **策略1 / 3 / 8 / 15**；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。策略十二在 `/strategies` 因子组合栏。
-- 早盘节点：9:15 竞价 → 9:20 不可撤 → 9:25 算阈值/过门 → 9:30 触发信号（`watch_config.py`）。
+- 早盘节点：9:15 竞价+**全日状态重置**（sticky/缓存/微信防抖，只留实仓；启动过点补跑）→ 9:20 不可撤 → 9:25 算阈值/过门 → 9:30 触发信号（`watch_config.py`）。因子26 止损触达按 **1 分钟 path-dependent**（禁止全日 low×抬高后止损假触）。
 - 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
 - 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。一键启动：`python start_watch.py`。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
 - 股票名/代码外链：百度财经 `finance.baidu.com/stock/ab-{code}`。

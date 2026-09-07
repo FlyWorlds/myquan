@@ -18,7 +18,7 @@ _PRIMARY = "factor26"
 class Strategy1Decision(BaseDecisionEngine):
     """
     决策规则：
-    - 空仓 + 因子允许 + high 触买点 → buy（因子26，买同开盘突破）
+    - 空仓 + 因子允许 + high 触开盘买点或攻击波买点 → buy（因子26）
     - 有仓 + 非 T+1 + low 触回落波止损（分时最高×(1−pct)）→ sell；
       若同日收盘动量成立 → buy（因子22，隐含先止损再买）
     - 空仓 + 当日已止损（meta.stop_sold_today）+ 收盘动量 → buy（因子22）
@@ -44,6 +44,7 @@ class Strategy1Decision(BaseDecisionEngine):
             stop_pct=pullback,
             pullback_pct=pullback,
             high_px=float(ctx.high),
+            low_px=float(ctx.low),
             tick=tick,
         )
         out = dict(raw or {})
@@ -157,14 +158,26 @@ class Strategy1Decision(BaseDecisionEngine):
                 stop_price=stop_px,
                 tags=("filter",),
             )
-        if high + 1e-12 >= buy_px:
+        open_buy = float(levels.get("open_buy") or buy_px)
+        attack_buy = float(levels.get("attack_buy") or 0)
+        hit_open = high + 1e-12 >= open_buy
+        hit_attack = attack_buy > 0 and (high + 1e-12 >= attack_buy)
+        if hit_open or hit_attack:
+            if hit_attack and (not hit_open or attack_buy <= open_buy + 1e-12):
+                fill = attack_buy
+                reason = f"攻击波买点 {fill:.2f}（低{low:.2f}）"
+                tags = ("entry", fid, "attack_wave")
+            else:
+                fill = open_buy
+                reason = f"开盘突破买点 {fill:.2f}"
+                tags = ("entry", fid, "open_break")
             return Decision.buy(
-                buy_px,
-                reason=f"触买点 {buy_px:.2f}",
+                fill,
+                reason=reason,
                 factor_id=fid,
-                buy_price=buy_px,
+                buy_price=fill,
                 stop_price=stop_px,
-                tags=("entry", fid),
+                tags=tags,
             )
         return Decision.hold(
             "空仓观望",

@@ -40,6 +40,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
       alert === '持有' ||
       alert === '已经买入' ||
       alert.includes('T+1'))
+  const t1Locked = qty > 0 && (alert.includes('T+1') || pos === '已经买入') && Number(row.可用 || 0) <= 0
   const paperHold = pos === '策略持有'
   const empty =
     pos === '空仓' ||
@@ -77,19 +78,28 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     (realHold && trig === '接近' && bg === 'warn-sell')
 
   // 实仓：底色固定持仓青绿 #5eead4；止损/预警只改角标，不换整卡绿底
+  // T+1 当日不可卖：角标优先「持有·T+1」，不因误触止损刷成卖出绿标
   if (qty > 0) {
-    const sellHit = sellTriggered || sellWarn || pos === '待卖出'
-    const badgeText = sellHit
-      ? alert || '已触止损'
-      : alert && alert !== '-'
+    const sellHit =
+      !t1Locked && (sellTriggered || sellWarn || pos === '待卖出')
+    const softNote =
+      t1Locked && (alert.includes('止损已记') || alert.includes('已触止损'))
+    const badgeText = t1Locked
+      ? alert && alert !== '-'
         ? alert
-        : '已经买入'
+        : '持有·T+1'
+      : sellHit
+        ? alert || '已触止损'
+        : alert && alert !== '-'
+          ? alert
+          : '已经买入'
     return {
       tier: 'hold',
       rowClass: 'signal-row signal-hold-real',
-      badgeClass: sellHit
-        ? 'signal-badge signal-badge-trigger-sell'
-        : 'signal-badge signal-badge-hold-real',
+      badgeClass:
+        sellHit || softNote
+          ? 'signal-badge signal-badge-trigger-sell'
+          : 'signal-badge signal-badge-hold-real',
       badgeText,
     }
   }

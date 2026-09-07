@@ -80,8 +80,9 @@ def filter_portfolio_holdings(
     """持仓 Tab：实仓/当日留痕 + 当日预警票（预警仅展示，不登记 qty/成本）。
 
     排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=3）→ 当日留痕 → 预警/候选 → 其余。
+    9:15–9:30（非 continuous）：只展示实仓 qty>0，其它状态清空不进持仓 Tab。
     """
-    from watch_config import MAX_PORTFOLIO_SLOTS, code_key, portfolio_pool_codes
+    from watch_config import MAX_PORTFOLIO_SLOTS, code_key, market_phase, portfolio_pool_codes
 
     if portfolio_codes is None:
         try:
@@ -91,15 +92,24 @@ def filter_portfolio_holdings(
         except Exception:  # noqa: BLE001
             portfolio_codes = set()
 
+    # 竞价阶段：持仓 Tab 只留实仓
+    phase = market_phase()
+    holdings_only = phase != "continuous"
+
     picked: list[dict[str, Any]] = []
     seen: set[str] = set()
     for r in rows:
         if r.get("error"):
             continue
         c = code_key(str(r.get("代码") or ""))
+        qty = int(r.get("持仓") or 0)
+        if holdings_only and qty <= 0:
+            continue
         in_pool = c in portfolio_codes
         alert_only = (not in_pool) and _is_today_alert_row(r)
-        if not in_pool and not alert_only:
+        if holdings_only:
+            alert_only = False
+        if not in_pool and not alert_only and qty <= 0:
             continue
         if c in seen:
             continue
@@ -118,6 +128,10 @@ def filter_portfolio_holdings(
             out["仓位%"] = None
         else:
             out.setdefault("当日预警", False)
+        # 竞价阶段：非实仓不展示策略持有/预警态
+        if holdings_only and qty > 0:
+            out["当日预警"] = False
+            out["槽位候选"] = False
         picked.append(out)
 
     def _pos_rank(pos: str) -> int:

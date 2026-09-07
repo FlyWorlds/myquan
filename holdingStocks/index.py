@@ -1,15 +1,19 @@
 """持仓记录与盯盘：与核心策略一（因子26 + 因子2 + 因子22）同步。
 
 策略锁定 · 策略一：
-  · 买（同因子1）：high≥ceil(open×(1+entry))；前日阴/小阳；禁双阳跨日≥5%；T+1
-  · 卖（因子26）：low≤floor(当日分时最高×(1−pullback))；最高抬升则止损上移
+  · 买（因子26）：开盘突破 或 攻击波(当日最低+entry)；前日阴/小阳；禁双阳；T+1
+  · 卖（因子26）：1 分钟顺序抬高最高再判回落止损；禁止全日 low×抬高后止损
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：止损后收盘动量可同日再买
+  · 9:15 清空非实仓盯盘状态；9:30 起触发买卖/止损
+  · 策略回放触止损 → 已止损（不再「策略持有」）
   · 默认定盘宇宙：因子13A+16 宽宇宙换池 Top20（剔ST/百元股；无置顶；见 watch_config.WATCHLIST）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
 功能：
-  · 拉取当日实时行情（东财 SSE + 新浪批量；盯盘不拉历史分钟 K）
+  · 拉取当日实时行情（东财 SSE + 新浪批量；全池不串行拉历史分钟）
+  · 因子26 实仓/近止损：缓存拉当日 1 分钟 K，按时间顺序判止损触达
+  · 阈值与信号：因子26 回落波止损（开盘突破或攻击波买；止损跟分时最高回落）
   · 因子26 与 strategy1 bindings / pullback_wave_stop 同源
   · 因子2 与 strategy/dd_alert 同源
   · 有仓：回落波止损自动结算（全清）；空仓：已触买/将买入建议限价
@@ -85,6 +89,8 @@ from strategy.open_break import (
     strategy_signal as _signal_f1,
 )
 from strategy.pullback_wave_stop import (
+    path_dependent_pullback_hit,
+    replay_factor26_1m,
     replay_last_factor_triggers as _replay_f26,
     strategy_levels as _levels_f26,
     strategy_signal as _signal_f26,
@@ -177,6 +183,7 @@ def strategy_levels(
 def strategy_signal(**kw: Any) -> dict[str, Any]:
     if str(FACTOR_ID) == "factor26":
         return _signal_f26(**kw)
+    kw.pop("hit_stop", None)  # 因子1 无此覆盖参
     return _signal_f1(**kw)
 
 
@@ -184,6 +191,44 @@ def replay_last_factor_triggers(*args: Any, **kw: Any) -> dict[str, Any]:
     if str(FACTOR_ID) == "factor26":
         return _replay_f26(*args, **kw)
     return _replay_f1(*args, **kw)
+
+
+# 策略回放：因子26 近 N 交易日用 1m（与定盘池短窗回测一致）
+_REPLAY_1M_DAYS = 7
+
+
+def _m1_lookback_bars(sina: str, *, session: str) -> pd.DataFrame:
+    """近若干日 1 分钟（东财一次返回约 5～8 日），供 7 日回放。"""
+    key = f"lookback:{str(sina).lower()}"
+    now = time.monotonic()
+    hit = _M1_CACHE.get(key)
+    if (
+        hit
+        and hit[1] == session
+        and (now - hit[0]) < _M1_CACHE_TTL_SEC
+        and hit[2] is not None
+        and not hit[2].empty
+    ):
+        return hit[2]
+    sk = str(sina).lower()
+    em_code = sk[2:] if len(sk) >= 8 and sk[:2] in ("sh", "sz") else sk
+    try:
+        df = pull_akshare_1m(em_symbol=em_code, sina_symbol=sk, adjust="")
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 1m lookback 失败 {sk}: {e}")
+        df = pd.DataFrame()
+    if df is None or df.empty:
+        _M1_CACHE[key] = (now, str(session), pd.DataFrame())
+        return pd.DataFrame()
+    out = df.dropna(subset=["open", "high", "low", "close"]).copy()
+    out = out[
+        (out["open"] > 0) & (out["high"] > 0) & (out["low"] > 0) & (out["close"] > 0)
+    ]
+    if "ts" in out.columns:
+        out = out.sort_values("ts")
+    _M1_CACHE[key] = (now, str(session), out)
+    return out
+
 
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
@@ -1053,6 +1098,103 @@ def _daily_cache_warm(watchlist: list[dict[str, Any]] | None = None) -> None:
 
 # 日线缓存：当日只拉一次，供前日过滤与最近因子触发
 _DAILY_CACHE: dict[str, tuple[str, pd.DataFrame]] = {}
+# 1 分钟缓存：实仓/近止损触达判定（path-dependent）；ttl 秒
+_M1_CACHE: dict[str, tuple[float, str, pd.DataFrame]] = {}
+_M1_CACHE_TTL_SEC = 45.0
+_M1_EMPTY_TTL_SEC = 15.0  # 拉空/失败：短负缓存，避免每轮狂打接口
+
+
+def _today_1m_bars(sina: str, session: str, *, force: bool = False) -> pd.DataFrame:
+    """拉取并缓存当日 1 分钟 K（未复权），供回落波止损 path-dependent 判定。"""
+    key = str(sina).lower()
+    now = time.monotonic()
+    hit = _M1_CACHE.get(key)
+    if (not force) and hit and hit[1] == session and hit[2] is not None:
+        ttl = _M1_CACHE_TTL_SEC if not hit[2].empty else _M1_EMPTY_TTL_SEC
+        if (now - hit[0]) < ttl:
+            return hit[2]
+    em_code = key[2:] if len(key) >= 8 and key[:2] in ("sh", "sz") else key
+    try:
+        df = pull_akshare_1m(em_symbol=em_code, sina_symbol=key, adjust="")
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 1m 拉取失败 {key}: {e}")
+        df = pd.DataFrame()
+    day = pd.DataFrame()
+    if df is not None and not df.empty and "ts" in df.columns:
+        day_keys = _day_key_series(df["ts"])
+        day = df[day_keys == str(session)].copy()
+        if not day.empty:
+            day = day.dropna(subset=["open", "high", "low", "close"]).sort_values("ts")
+            day = day[
+                (day["open"] > 0)
+                & (day["high"] > 0)
+                & (day["low"] > 0)
+                & (day["close"] > 0)
+            ]
+    _M1_CACHE[key] = (now, str(session), day)
+    return day
+
+
+def _resolve_hit_stop_path_dependent(
+    *,
+    sina: str,
+    session: str,
+    quote: dict[str, Any],
+    pullback_pct: float,
+    tick: float,
+    need_accurate: bool,
+    stop_px: float,
+    since_ts: str | None = None,
+    seed_high: float | None = None,
+) -> dict[str, Any]:
+    """止损触达：优先 1 分钟顺序；无分钟时仅 last≤当前止损（禁止全日 low 假触）。
+
+    since_ts / seed_high：实仓从买入时刻起算（避免买入前路径误报已触止损）。
+    """
+    bars = quote.get("_day_bars")
+    if not isinstance(bars, pd.DataFrame) or bars.empty:
+        bars = pd.DataFrame()
+    if need_accurate and bars.empty:
+        bars = _today_1m_bars(sina, session)
+        quote["_day_bars"] = bars
+
+    try:
+        last = float(quote["last"])
+        high = float(quote.get("high") or 0)
+    except (TypeError, ValueError, KeyError):
+        last, high = 0.0, 0.0
+
+    if bars is not None and not bars.empty:
+        pd_hit = path_dependent_pullback_hit(
+            bars,
+            pullback_pct=pullback_pct,
+            tick=tick,
+            live_high=high if high > 0 else None,
+            live_low=last if last > 0 else None,
+            since_ts=since_ts,
+            seed_high=seed_high,
+        )
+        touch = float(pd_hit.get("touch_stop") or 0)
+        if bool(pd_hit.get("hit_stop")) and touch <= 0:
+            touch = float(pd_hit.get("stop_px") or 0)
+        return {
+            "hit_stop": bool(pd_hit.get("hit_stop")),
+            "bars": bars,
+            "touch_stop": touch,
+            "stop_px": float(pd_hit.get("stop_px") or stop_px or 0),
+            "source": str(pd_hit.get("source") or "1m"),
+        }
+
+    stop_now = float(stop_px or 0)
+    # 无分钟：T+1/有 since 时仅现价破止损才算（更严，防误报）
+    hit = bool(stop_now > 0 and last <= stop_now + 1e-12)
+    return {
+        "hit_stop": hit,
+        "bars": bars,
+        "touch_stop": stop_now if hit else 0.0,
+        "stop_px": stop_now,
+        "source": "last_vs_stop",
+    }
 
 
 def _watch_daily(sina: str, *, lookback_days: int | None = None) -> pd.DataFrame:
@@ -1178,7 +1320,7 @@ def _replay_last_factor_triggers_cached(
     prev_entry_mode: str,
     limit_down_pct: float,
 ) -> dict[str, Any]:
-    """日线回放缓存：同一交易日、同一日线签名与阈值参数不重复算。"""
+    """因子26：近 7 日 1m 路径回放；失败则退回日线（有同 bar 偏差）。"""
     today = str(pd.Timestamp.now().date())
     key = (
         str(sina).lower(),
@@ -1189,18 +1331,45 @@ def _replay_last_factor_triggers_cached(
         float(tick),
         str(prev_entry_mode),
         float(limit_down_pct),
+        "1m" if str(FACTOR_ID) == "factor26" else "daily",
+        int(_REPLAY_1M_DAYS),
     )
     hit = _REPLAY_CACHE.get(key)
     if hit is not None:
         return hit
-    out = replay_last_factor_triggers(
-        daily,
-        entry_pct=entry_pct,
-        stop_pct=stop_pct,
-        tick=tick,
-        prev_entry_mode=prev_entry_mode,
-        limit_down_pct=limit_down_pct,
-    )
+    if str(FACTOR_ID) == "factor26":
+        mins_all = _m1_lookback_bars(str(sina), session=today)
+        if mins_all is not None and not mins_all.empty:
+            out = replay_factor26_1m(
+                daily,
+                mins_all,
+                entry_pct=entry_pct,
+                pullback_pct=stop_pct,
+                tick=tick,
+                prev_entry_mode=prev_entry_mode,
+                last_n_days=int(_REPLAY_1M_DAYS),
+            )
+        else:
+            out = dict(
+                replay_last_factor_triggers(
+                    daily,
+                    entry_pct=entry_pct,
+                    stop_pct=stop_pct,
+                    tick=tick,
+                    prev_entry_mode=prev_entry_mode,
+                    limit_down_pct=limit_down_pct,
+                )
+            )
+            out["source"] = "daily_fallback"
+    else:
+        out = replay_last_factor_triggers(
+            daily,
+            entry_pct=entry_pct,
+            stop_pct=stop_pct,
+            tick=tick,
+            prev_entry_mode=prev_entry_mode,
+            limit_down_pct=limit_down_pct,
+        )
     if len(_REPLAY_CACHE) > 512:
         _REPLAY_CACHE.clear()
     _REPLAY_CACHE[key] = out
@@ -1352,14 +1521,23 @@ def _apply_trigger_date_fields(
     )
     mem = _factor_memory(code) if code else {}
     # 日线回放仍处「买入未平」：本地未登记仓位时，双距按策略持有展示（勿用更早的卖出因子）
-    paper_holding = bool(replay.get("holding")) and qty <= 0
+    # 回放已触止损 → 不当策略持有
+    paper_holding = bool(replay.get("holding")) and qty <= 0 and not hit_stop
     row["策略回放持有"] = bool(paper_holding)
     # 实仓触止损但仍持有（含 T+1 暂不可卖）≠ 已平仓；仅已卖出/纸面触止损算「当日退出」
     hit_stop_while_held = bool(qty > 0 and hit_stop)
-    stop_exit_today = bool(sold_today or (paper_holding and hit_stop))
+    paper_stopped = bool(replay.get("holding")) and qty <= 0 and hit_stop
+    stop_exit_today = bool(sold_today or paper_stopped)
     if allow_entry and qty <= 0 and sold_today:
         stop_exit_today = False
+    # 纸面已止损：一律当日禁买（除非因子22放行 allow_entry）
+    if paper_stopped and not allow_entry:
+        stop_exit_today = True
     row["当日禁买"] = bool(stop_exit_today) and not allow_entry
+    if paper_stopped and not allow_entry:
+        row["持仓状态"] = "已止损"
+        if str(row.get("预警") or "") in ("", "-", "空仓", "待买入", "策略持有"):
+            row["预警"] = "策略回放·今日已止损"
 
     def _last_buy_px() -> tuple[float | None, str]:
         buy_day = str(buy_time or "")[:10]
@@ -1625,6 +1803,57 @@ def _save_alert_sticky(session: str, sticky: dict[str, Any]) -> None:
     save_holdings(data)
 
 
+def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, Any]:
+    """每日 9:15：清空非实仓盯盘状态，只保留 qty>0 持仓。
+
+    · 清 alert_sticky / 非当日 realized / 回放与策略收益缓存
+    · 清微信预警防抖状态（当日重新推）
+    · 标记 watch_status_reset_session，持仓 Tab 在 9:30 前仅展示实仓
+    """
+    global _REPLAY_CACHE, _STRATEGY_PNL_CACHE, _M1_CACHE
+    data = load_holdings()
+    sess = str(session or pd.Timestamp.now().date())
+    _purge_stale_realized(data, sess)
+    data["alert_sticky"] = {}
+    data["watch_status_reset_session"] = sess
+    # 非实仓仓位：清掉策略展示用粘滞字段（不改 qty>0）
+    for code, pos in list((data.get("positions") or {}).items()):
+        if not isinstance(pos, dict):
+            continue
+        if int(pos.get("qty") or 0) > 0:
+            continue
+        pos["available"] = None
+        pos["today_cost"] = None
+    save_holdings(data)
+    _REPLAY_CACHE.clear()
+    _STRATEGY_PNL_CACHE.clear()
+    _M1_CACHE.clear()
+    # 微信防抖：跨日/早盘重置，避免旧「已触止损」键挡住新信号
+    try:
+        from wechat_notify import STATE_FILE
+
+        if STATE_FILE.exists():
+            STATE_FILE.unlink()
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 清微信预警状态失败（继续）: {e}")
+    print(f"[{_now()}] 9:15 状态重置 · 仅保留实仓 · session={sess}")
+    return data
+
+
+def ensure_watch_status_reset_today(*, session: str | None = None) -> None:
+    """启动时若已过 9:15 且本日未重置，则补跑一次。"""
+    from watch_config import AUCTION_START_HOUR, AUCTION_START_MINUTE, _clock_minutes
+
+    sess = str(session or pd.Timestamp.now().date())
+    data = load_holdings()
+    if str(data.get("watch_status_reset_session") or "") == sess:
+        return
+    a15 = int(AUCTION_START_HOUR) * 60 + int(AUCTION_START_MINUTE)
+    if _clock_minutes() < a15:
+        return
+    reset_watch_status_at_auction(session=sess)
+
+
 def _stabilize_sell_warn(
     *,
     code: str,
@@ -1663,6 +1892,10 @@ def _stabilize_sell_warn(
     if prev and prev.get("bg_class") == "warn-sell":
         keep = False
         prev_alert = str(prev.get("alert") or "")
+        # 现价已明显高于止损：立即解除粘滞（涨停/强反弹）
+        if stop_px > 0 and float(last_px) > float(stop_px) * 1.005:
+            sticky.pop(code, None)
+            return sig
         # 将止损：距止损因子价仍在 near+0.5% 内则保持
         if "将止损" in prev_alert or prev.get("near_stop"):
             if stop_px > 0:
@@ -2714,6 +2947,7 @@ def collect_rows(
                 stop_pct=stop_pct_for_levels,
                 tick=tick,
                 high_px=float(q["high"]),
+                low_px=float(q["low"]),
             )
             lv_base = strategy_levels(
                 q["open"],
@@ -2721,6 +2955,7 @@ def collect_rows(
                 stop_pct=base_stop_pct,
                 tick=tick,
                 high_px=float(q["high"]),
+                low_px=float(q["low"]),
             )
             vs = points_vs_open(q["open"], q["last"])
             vs_pct = pct_vs_open(q["open"], q["last"])
@@ -2747,15 +2982,93 @@ def collect_rows(
                 prev_entry_mode=prev_entry_mode,
                 limit_down_pct=limit_down_pct,
             )
-            hit_buy_raw = q["high"] + 1e-12 >= lv["buy_trigger"]
+            open_buy = float(lv.get("open_buy") or lv["buy_trigger"])
+            attack_buy = float(lv.get("attack_buy") or 0)
+            hit_open = q["high"] + 1e-12 >= open_buy
+            hit_attack = attack_buy > 0 and (q["high"] + 1e-12 >= attack_buy)
+            hit_buy_raw = hit_open or hit_attack
             hit_buy = bool(allow_entry) and hit_buy_raw
-            hit_base_stop = q["low"] <= lv_base["stop"] + 1e-12
-            hit_eff_stop = q["low"] <= lv["stop"] + 1e-12
+            pos_early = positions.get(code, {})
+            qty_early = int(pos_early.get("qty") or 0)
+            _replay_holding_early = bool(replay.get("holding")) and qty_early <= 0
+            # 因子26：止损必须 1 分钟 path-dependent；禁止全日 low × 抬高后止损
+            path_touch_stop = 0.0
+            buy_time_early = pos_early.get("buy_time")
+            cost_early = pos_early.get("cost")
+            since_stop = None
+            seed_h = None
+            if qty_early > 0:
+                # 实仓：只认买入之后的路径；锚定成本避免「买入前假触」
+                since_stop = str(buy_time_early) if buy_time_early else None
+                try:
+                    seed_h = float(cost_early) if cost_early is not None else None
+                except (TypeError, ValueError):
+                    seed_h = None
+            if str(FACTOR_ID).lower() in ("factor26", "f26", "26"):
+                need_m1 = bool(
+                    qty_early > 0
+                    or _replay_holding_early
+                    or (
+                        float(lv["stop"]) > 0
+                        and float(q["last"]) <= float(lv["stop"]) * 1.02
+                    )
+                )
+                path_res = _resolve_hit_stop_path_dependent(
+                    sina=str(w["sina"]),
+                    session=str(q["session"]),
+                    quote=q,
+                    pullback_pct=float(stop_pct),
+                    tick=tick,
+                    need_accurate=need_m1,
+                    stop_px=float(lv["stop"]),
+                    since_ts=since_stop,
+                    seed_high=seed_h,
+                )
+                hit_eff_stop = bool(path_res.get("hit_stop"))
+                path_touch_stop = float(path_res.get("touch_stop") or 0)
+                if USE_FACTOR4:
+                    base_res = _resolve_hit_stop_path_dependent(
+                        sina=str(w["sina"]),
+                        session=str(q["session"]),
+                        quote=q,
+                        pullback_pct=float(base_stop_pct),
+                        tick=tick,
+                        need_accurate=need_m1,
+                        stop_px=float(lv_base["stop"]),
+                        since_ts=since_stop,
+                        seed_high=seed_h,
+                    )
+                    hit_base_stop = bool(base_res.get("hit_stop"))
+                else:
+                    hit_base_stop = hit_eff_stop
+            else:
+                hit_base_stop = q["low"] <= lv_base["stop"] + 1e-12
+                hit_eff_stop = q["low"] <= lv["stop"] + 1e-12
+                path_touch_stop = float(lv["stop"]) if hit_eff_stop else 0.0
             # 因子4（可选）：牛市暂停止损 → 不自动结算；放宽 → 仅触放宽价才结算
             if USE_FACTOR4 and f4_mode == "suppressed":
                 hit_stop = False
             else:
                 hit_stop = hit_eff_stop
+            # 今日买入 T+1：仅买入后路径可标止损；现价已明显高于止损则不当止损
+            if (
+                qty_early > 0
+                and hit_stop
+                and buy_time_early
+                and (not bool(w.get("t0")))
+                and is_t1_buy_day(buy_time_early, str(q["session"]))
+            ):
+                try:
+                    last_n = float(q["last"])
+                    stop_n = float(lv["stop"] or 0)
+                except (TypeError, ValueError):
+                    last_n, stop_n = 0.0, 0.0
+                if stop_n > 0 and last_n > stop_n * 1.005:
+                    hit_stop = False
+                    hit_eff_stop = False
+                    path_touch_stop = 0.0
+                    if isinstance(sticky, dict):
+                        sticky.pop(code, None)
             f4_tag = (
                 format_factor4_tag(bull=bull, mode=f4_mode, widen_mult=f4_widen)
                 if USE_FACTOR4
@@ -2778,11 +3091,13 @@ def collect_rows(
                 and str(_realized_pre.get("session") or "") == q["session"]
                 and _realized_pre.get("reason") in EXIT_REASONS
             )
-            _paper_hold = bool(replay.get("holding")) and int(
+            _replay_holding = bool(replay.get("holding")) and int(
                 (positions.get(code) or {}).get("qty") or 0
             ) <= 0
+            # 回放触止损：不再当策略持有（避免「策略持有+已触止损」）
+            _paper_hold = bool(_replay_holding and not (hit_stop and signal_ok))
             _f22_pre = None
-            if _sold_today_pre or (_paper_hold and hit_stop):
+            if _sold_today_pre or (_replay_holding and hit_stop):
                 _f22_pre = _factor22_rebuy_ok(
                     open_px=float(q["open"]),
                     high_px=float(q["high"]),
@@ -2817,11 +3132,13 @@ def collect_rows(
             sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
             # 一字跌停封单不可卖；触及跌停后开板则按跌停价成交。
             stop_locked = bool(limit_state["locked"])
-            stop_base_px = float(
-                limit_state["limit_px"]
-                if bool(limit_state["opened"])
-                else lv["stop"]
-            )
+            # 结算价：优先 path 触达当时止损；跌停开板则用跌停价
+            if bool(limit_state["opened"]):
+                stop_base_px = float(limit_state["limit_px"])
+            elif path_touch_stop > 0 and hit_stop:
+                stop_base_px = float(path_touch_stop)
+            else:
+                stop_base_px = float(lv["stop"])
             # 盯盘按人工/云条件单的触发价记录，不对买卖触发价额外加滑点。
             stop_fill_px = stop_base_px
             # 已触止损且可卖 → 视为成交，锁定收益（只卖可用）
@@ -2940,6 +3257,7 @@ def collect_rows(
                     px_digits=px_digits,
                     t0=t0,
                     allow_entry=bool(f22) and signal_ok,
+                    hit_stop=False,
                 )
                 if not signal_ok:
                     sig0 = _demote_pre_signal_window(sig0)
@@ -3073,6 +3391,7 @@ def collect_rows(
                 t0=t0,
                 # 纸面仓禁止买入预警；9:30 前允许接近预警，已触买由下方 demote
                 allow_entry=False if paper_active else (allow_entry and preview_ok),
+                hit_stop=bool(hit_stop),
             )
             if not signal_ok:
                 sig = _demote_pre_signal_window(sig)
@@ -3095,28 +3414,67 @@ def collect_rows(
                     }
                 )
             elif qty > 0 and hit_stop and sellable <= 0 and not stop_locked:
-                # 典型：买入当日 T+1，止损已触但不可卖
+                # 典型：买入当日 T+1；持仓状态仍「已经买入」，预警提示明日可卖
                 sig = dict(sig)
                 t1_today = (not t0) and is_t1_buy_day(buy_time, q["session"])
-                sig.update(
-                    {
-                        "alert": (
-                            "已触止损·T+1暂不可卖"
-                            if t1_today
-                            else "已触止损·暂不可卖"
-                        ),
-                        "bg_class": "warn-sell",
-                        "pending_sell": True,
-                        "持仓状态": "待卖出",
-                        "建议挂单": None,
-                        "挂单说明": (
-                            "今日买入不可卖，止损触发后下一交易日可卖"
-                            if t1_today
-                            else "无可卖数量，请核对 available / 买入日"
-                        ),
-                        "因子触发": "已触发",
-                    }
+                touch_show = (
+                    float(path_touch_stop)
+                    if path_touch_stop > 0
+                    else float(lv["stop"])
                 )
+                if t1_today:
+                    # 三槽：当日不可卖 → 不进「待卖出」，避免槽位状态乱
+                    sig.update(
+                        {
+                            "alert": "持有·T+1·止损已记",
+                            "bg_class": "status-hold",
+                            "pending_sell": False,
+                            "持仓状态": "已经买入",
+                            "建议挂单": None,
+                            "挂单说明": (
+                                f"今日买入不可卖；买入后曾触止损"
+                                f"@{touch_show:.{px_digits}f}，下一交易日再执行"
+                            ),
+                            "因子触发": format_trigger_md(buy_time)
+                            or format_trigger_md(q["session"])
+                            or "持有",
+                            "hit_stop": True,
+                        }
+                    )
+                else:
+                    sig.update(
+                        {
+                            "alert": "已触止损·暂不可卖",
+                            "bg_class": "warn-sell",
+                            "pending_sell": True,
+                            "持仓状态": "待卖出",
+                            "建议挂单": None,
+                            "挂单说明": "无可卖数量，请核对 available / 买入日",
+                            "因子触发": "已触发",
+                        }
+                    )
+            # T+1 实仓未触止损：强制持有态并清卖出粘滞
+            elif (
+                qty > 0
+                and sellable <= 0
+                and (not t0)
+                and is_t1_buy_day(buy_time, q["session"])
+                and not hit_stop
+            ):
+                sig = dict(sig)
+                alert0 = str(sig.get("alert") or "")
+                if (
+                    not alert0.startswith("持有")
+                    and "已触买" not in alert0
+                    and "将买入" not in alert0
+                ):
+                    sig["alert"] = "持有·T+1"
+                sig["bg_class"] = "status-hold"
+                sig["pending_sell"] = False
+                sig["持仓状态"] = "已经买入"
+                sig["hit_stop"] = False
+                if isinstance(sticky, dict):
+                    sticky.pop(code, None)
             elif (
                 USE_FACTOR4
                 and qty > 0
@@ -3289,6 +3647,7 @@ def collect_rows(
                     "持仓": qty,
                     "可用": sellable if qty > 0 else 0,
                     "成本": None if cost is None else float(cost),
+                    "买入时间": buy_time,
                     "浮盈": None if pnl is None else round(float(pnl), 2),
                     "浮盈%": None if pnl_pct is None else round(float(pnl_pct), 2),
                     "当日盈亏": None if day_pnl is None else round(float(day_pnl), 2),
@@ -3574,6 +3933,23 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
         return
 
     if paper and qty <= 0:
+        # 已触止损：禁止再标策略持有
+        if (
+            str(row.get("已触止损") or "") == "是"
+            or "已触止损" in alert
+            or "今日已止损" in alert
+            or "策略回放·今日已止损" in alert
+        ):
+            row["策略回放持有"] = False
+            row["持仓状态"] = "已止损"
+            row["因子侧"] = "空仓"
+            row["建议挂单"] = None
+            row["近买点"] = False
+            row["可执行"] = False
+            row["bg_class"] = "status-flat"
+            if alert in ("", "-", "空仓", "待买入", "策略持有", "已触止损"):
+                row["预警"] = "策略回放·今日已止损"
+            return
         if _buy_signal_active(row):
             row["可执行"] = str(row.get("预警") or "") == "已触买"
             if str(row.get("bg_class") or "") in ("", "status-hold", "status-flat"):
@@ -3611,16 +3987,40 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
     if qty > 0:
         sellable = int(row.get("可用") or 0)
         hit_stop = str(row.get("已触止损") or "") == "是"
-        # 实仓统一「已经买入」；触止损可卖则「待卖出」
-        if pos == "待卖出" or (
-            hit_stop and sellable > 0 and "不可卖" not in alert and not t1
-        ):
+        buy_time = row.get("买入时间")
+        session = str(row.get("交易日") or "")
+        t1_day = bool(
+            session
+            and buy_time
+            and is_t1_buy_day(buy_time, session)
+            and not bool(row.get("t0"))
+        )
+        # T+1 当日不可卖：三槽状态固定「已经买入」，不进待卖出/已止损
+        if t1_day and sellable <= 0:
+            row["持仓状态"] = "已经买入"
+            row["可执行"] = False
+            row["因子侧"] = "持有"
+            if hit_stop:
+                if "止损已记" not in alert and "持有·T+1" not in alert:
+                    row["预警"] = "持有·T+1·止损已记"
+                row["bg_class"] = "status-hold"
+            else:
+                if (
+                    alert in ("", "-", "空仓", "待买入", "待卖出", "已触止损", "将止损", "已经买入")
+                    or "已触止损" in alert
+                    or alert.startswith("将止损")
+                ):
+                    row["预警"] = "持有·T+1"
+                row["已触止损"] = "否"
+                row["bg_class"] = "status-hold"
+            return
+        # 实仓：仅可卖且触止损 → 待卖出；否则已经买入
+        if hit_stop and sellable > 0 and "不可卖" not in alert and not t1:
             row["持仓状态"] = "待卖出"
             pos = "待卖出"
-        elif pos in ("", "空仓", "待买入", "持有", "持有·T+1", "已经买入"):
+        else:
             row["持仓状态"] = "已经买入"
             pos = "已经买入"
-        # 可执行=待卖出且真正有可卖股；T+1 / 可卖0 / 跌停封单 均不可执行
         row["可执行"] = (
             pos == "待卖出"
             and (not t1)
@@ -4722,6 +5122,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
     print("冷启动：新浪批量实时快照 + 预热日线…")
     try:
+        # 若启动已过 9:15 且本日未重置，补跑状态清空（避免旧「已触止损」粘住）
+        ensure_watch_status_reset_today()
         t0 = time.perf_counter()
         n_fast = reseed_live()
         _daily_cache_warm()
@@ -4771,6 +5173,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 break
             try:
                 if action == "reseed":
+                    reset_watch_status_at_auction()
                     reseed_live()
                     safe_refresh()
                 elif action == "open":
@@ -4971,7 +5374,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         f"策略同步: {STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL}"
     )
     print(
-        "行情: 东财 SSE + 新浪批量实时（不拉历史分钟 K）· "
+        "行情: 东财 SSE + 新浪批量；因子26 实仓 1m path-dependent 止损 · "
         f"刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · "
         f"快照日志每 {_WATCH_SNAPSHOT_LOG_EVERY} 次 · Ctrl+C 停止"
     )

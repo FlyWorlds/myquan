@@ -136,6 +136,27 @@ def test_buy_distance_and_sort_helpers():
     assert ordered[2]["代码"] == "600301"
 
 
+def test_finalize_t1_never_pending_sell():
+    """今日买入 T+1：即使已触止损字段为是，持仓状态仍已经买入。"""
+    from index import _finalize_position_row
+
+    row = {
+        "持仓": 1000,
+        "可用": 0,
+        "持仓状态": "待卖出",
+        "预警": "已触止损·T+1暂不可卖",
+        "已触止损": "是",
+        "当日禁买": False,
+        "策略回放持有": False,
+        "买入时间": "2026-09-07 13:00:00",
+        "交易日": "2026-09-07",
+    }
+    _finalize_position_row(row)
+    assert row["持仓状态"] == "已经买入"
+    assert row["可执行"] is False
+    assert "T+1" in row["预警"] or "止损已记" in row["预警"]
+
+
 def test_finalize_real_hold_not_empty_on_hit_stop():
     """实仓触止损但未平仓：状态已经买入，勿写成空仓。"""
     from index import _finalize_position_row

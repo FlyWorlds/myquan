@@ -5,27 +5,27 @@
 /* PandaAI 风格 design tokens + 盯盘涨跌色 */
 :root,
 :root[data-ui-scheme='dark'] {
-  --bg-color: #000;
-  --ui-page: #000;
-  --ui-surface: #141414;
-  --ui-ink: #0a0a0a;
-  --ui-hairline: hsla(0, 0%, 100%, 0.1);
-  --ui-hairline-strong: hsla(0, 0%, 100%, 0.18);
-  --ui-text: #fff;
-  --ui-text-2: hsla(0, 0%, 100%, 0.55);
-  --ui-text-3: hsla(0, 0%, 100%, 0.4);
-  --ui-fill-hover: hsla(0, 0%, 100%, 0.06);
-  --ui-fill-active: hsla(0, 0%, 100%, 0.12);
+  --bg-color: #16181d;
+  --ui-page: #16181d;
+  --ui-surface: #22262e;
+  --ui-ink: #0f1115;
+  --ui-hairline: hsla(0, 0%, 100%, 0.12);
+  --ui-hairline-strong: hsla(0, 0%, 100%, 0.22);
+  --ui-text: #f3f4f6;
+  --ui-text-2: hsla(0, 0%, 100%, 0.62);
+  --ui-text-3: hsla(0, 0%, 100%, 0.45);
+  --ui-fill-hover: hsla(0, 0%, 100%, 0.07);
+  --ui-fill-active: hsla(0, 0%, 100%, 0.14);
   --ui-danger: #e5484d;
-  --ui-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
-  --ui-shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.45);
+  --ui-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  --ui-shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.4);
   --ui-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --watch-accent: #5eead4;
   --watch-up: #ff4d4f;
   --watch-down: #22c55e;
   --watch-hold: #5eead4;
   --watch-hold-paper: #c4b5fd;
-  --ui-scrollbar: #3c3c3c;
+  --ui-scrollbar: #4b5563;
 }
 
 :root[data-ui-scheme='light'] {
