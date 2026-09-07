@@ -34,6 +34,8 @@
 
 再买后几乎都会再次止损；结果路径敏感、样本窄。扩样本前保持默认 1%。
 
+**门槛专项（天通+凯盛，含止损日反弹分布）**：[`backtest/factor22_threshold/REPORT.md`](../backtest/factor22_threshold/REPORT.md)。
+
 ## 真源
 
 - 逻辑：`strategy/close_momentum.py`

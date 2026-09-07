@@ -336,7 +336,7 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
 }
 
 # 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
-WATCH_LIVE_TAB_IDS = frozenset({"strategy1", "strategy3", "strategy8"})
+WATCH_LIVE_TAB_IDS = frozenset({"strategy1", "strategy3", "strategy8", "strategy15"})
 
 _REGISTRY_KIND_ZH = {
     "watch": "盯盘",
@@ -452,6 +452,8 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
                 except Exception:  # noqa: BLE001
                     tabs[-1]["backtest"] = []
             tabs[-1]["reportPath"] = "backtest/strategy12_emotion_gate/REPORT.md"
+        if spec.id == "strategy15":
+            tabs[-1]["reportPath"] = "docs/STRATEGY.md"
         from strategy_picks_loader import load_strategy_picks
 
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
@@ -728,6 +730,7 @@ def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
             if isinstance(snapshot.get("strategy8"), dict)
             else snapshot.get("strategy8")
         ),
+        "strategy15": snapshot.get("strategy15"),
         "phaseKey": snapshot.get("phaseKey"),
         "strategy": snapshot.get("strategy"),
     }
@@ -818,6 +821,20 @@ def publish_watch_snapshot(
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 板块快照失败（继续盯盘）: {e}")
         sectors = {"error": str(e), "rows": []}
+    try:
+        from strategy15_watch import build_strategy15_payload
+
+        strategy15 = build_strategy15_payload(
+            session=session_today or None,
+            strategy1_rows=[
+                r
+                for r in rows
+                if not r.get("error")
+            ],
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 策略十五快照失败（继续盯盘）: {e}")
+        strategy15 = {"error": str(e), "rows": []}
     snapshot = build_watch_snapshot(
         rows=rows,
         indices=indices,
@@ -833,6 +850,7 @@ def publish_watch_snapshot(
         strategies=_watch_tabs_with_live_s8(strategy8),
         strategy3=strategy3,
         strategy8=strategy8,
+        strategy15=strategy15,
         sectors=sectors,
         refresh_sec=refresh_sec,
         portfolio_codes=portfolio_codes,

@@ -208,6 +208,28 @@ export interface Strategy8Row {
   开盘?: number | null
 }
 
+export interface Strategy15Policy {
+  regime?: string
+  max_height?: number
+  ladder_score?: number
+  lianban?: number
+  tp_pct?: number
+  reduce_ratio?: number
+  use_factor22?: boolean
+  use_factor25?: boolean
+  tp_style?: string
+  reason?: string
+  factor25?: Record<string, unknown>
+}
+
+export interface Strategy15Payload {
+  sentiment?: Strategy3Sentiment
+  policy?: Strategy15Policy
+  rules?: string
+  rows?: HoldingRow[]
+  error?: string
+}
+
 export interface Strategy8Payload {
   sentiment?: Strategy3Sentiment
   hotThemes?: Strategy8HotTheme[]
@@ -231,7 +253,7 @@ export interface StrategyTab {
   aliases?: string[]
   implemented?: boolean
   is_watch_default?: boolean
-  /** 是否在盯盘首页 Tab 展示（仅 strategy1/3/8） */
+  /** 是否在盯盘首页 Tab 展示（strategy1/3/8/15） */
   watch_tab?: boolean
   /** watch | production | factor_template | research */
   registry_kind?: string
@@ -304,6 +326,7 @@ export interface WatchSnapshot {
   strategy1: HoldingRow[]
   strategy3?: Strategy3Payload
   strategy8?: Strategy8Payload
+  strategy15?: Strategy15Payload
   sectors?: SectorsLivePayload
   strategies: StrategyTab[]
 }

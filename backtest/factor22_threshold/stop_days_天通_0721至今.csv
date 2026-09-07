@@ -1,0 +1,8 @@
+date,open,high,low,close,stop_px,bounce_close_pct,bounce_high_pct,close_vs_stop_pct,yang,yin,hit_5‰,hit_10‰,hit_15‰,hit_20‰,hit_25‰,hit_30‰,hit_40‰,hit_50‰
+2026-07-23,19.53,19.95,18.64,18.95,18.94,1.663,7.028,0.053,False,True,True,True,True,False,False,False,False,False
+2026-07-27,18.65,19.6,18.04,19.6,18.09,8.647,8.647,8.347,True,False,True,True,True,True,True,True,True,True
+2026-08-19,27.5,28.54,26.45,26.65,26.67,0.756,7.902,-0.075,False,True,True,False,False,False,False,False,False,False
+2026-08-21,27.84,28.47,26.86,27.27,27.0,1.526,5.994,1.0,False,True,True,True,True,False,False,False,False,False
+2026-08-26,26.88,27.59,25.8,26.5,26.07,2.713,6.938,1.649,False,True,True,True,True,True,True,False,False,False
+2026-08-28,29.8,30.23,28.56,28.94,28.9,1.331,5.847,0.138,False,True,True,True,False,False,False,False,False,False
+2026-09-01,28.41,28.41,26.98,26.98,27.55,0.0,5.3,-2.069,False,True,False,False,False,False,False,False,False,False

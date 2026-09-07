@@ -61,7 +61,7 @@ WATCHLIST = list(S7_WATCHLIST)
 
 ## 信号触发规则（盘中对齐回测）
 
-**盯盘 Tab**：仅 **策略1 / 策略3 / 策略8**（有实时面板）。**策略说明**按盯盘 / 完整 / 因子组合 / 研究分区；缠论笔盈亏比在 **`/factors` → 缠论**。
+**盯盘 Tab**：仅 **策略1 / 策略3 / 策略8 / 策略15**（有实时面板）。**策略说明**按盯盘 / 完整 / 因子组合 / 研究分区；缠论笔盈亏比在 **`/factors` → 缠论**。
 
 | 时刻 | 行为 |
 |------|------|
@@ -186,4 +186,5 @@ python index.py sell 600552 16.20 400
 1. **改定盘池/阈值**：改 `watch_config._FIT_WATCH` / `_WATCH_PCT`，或跑 `python backtest/s1_f13_refit_2025.py --apply-watch`
 2. **策略三 Tab**：股池=中证1000 **昨日收盘涨停全池**；**T-1 情绪**（涨停家数→冰点/正常/高潮 + 连板梯度）决定今日可否做；因子1 ±阈值、**不过阴/小阳过门**。回测另含首板/gap 等见 `backtest/strategy3_first_board/`
 3. **策略八 Tab**：**当日涨停**定热题材（≥3），盘中随涨停变化重算（不读回测末日名单）→ 题材内联动候选；T-1 情绪 + **当日**因子1 ±阈值（不要求昨日涨停）。回测见 `backtest/strategy8_theme_linkage/`
-4. **新因子叠加入口**：在 `index.py` 信号环对齐对应 `get_strategy_bindings` / decision
+4. **策略十五 Tab**：同策略一池叠加；T-1 连板梯度定 F22/F25；震荡启用因子25（30m 确认止损/动态半仓/卖飞回补提示）；回测 `backtest/strategy15_m30_chop/`
+5. **新因子叠加入口**：在 `index.py` 信号环对齐对应 `get_strategy_bindings` / decision
