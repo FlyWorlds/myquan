@@ -3,7 +3,33 @@
     "window_days": 7,
     "n_pool": 22,
     "n_with_rounds": 18,
-    "equal_weight_pnl_pct": 1.0566666666666664,
+    "equal_weight_pnl_pct": 1.06,
+    "portfolio": {
+      "window_days": 7,
+      "calendar": [
+        "2026-08-28",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07"
+      ],
+      "max_slots": 3,
+      "slot_weight": 0.3,
+      "initial_cash": 100000.0,
+      "final_equity": 104082.0,
+      "return_pct": 4.08,
+      "n_buys": 13,
+      "n_sells": 10,
+      "n_closed": 10,
+      "avg_closed_pnl_pct": 1.07,
+      "n_open": 3,
+      "n_skipped_or_queued": 43
+    },
+    "max_slots": 3,
+    "slot_weight": 0.3,
+    "priority": "first_trigger_first_buy",
     "factor2_alert": {
       "hist_max_dd": 0.26,
       "avg_yearly_max_dd": 0.19,
@@ -14,7 +40,7 @@
     "factor2_label": "加仓≥20% / 减仓≤10% / 年均值19.0% / 历史最大26.0%",
     "factor2_rules": "================================================================================\n  因子2 — 回撤预警（加仓/减仓提示，回测不介入权益）\n================================================================================\n\n【作用】\n  用策略历史回撤统计标定阈值；盯盘触发加仓/减仓预警。\n  不改变买卖点，回测默认不注资、不叠加权益。\n\n【当前阈值】\n  · 历史最大回撤: 26.00%\n  · 年最大回撤均值: 19.00%\n  · 加仓预警线: ≥20%  (历史最大向10%下取整，且距极值≥5%)\n  · 减仓预警线: ≤10%  (由年均值推导；须曾进入加仓区后收窄才触发)\n  · 接近历史最大: 不宜继续加仓\n\n【说明】\n  · 可用策略权益曲线 derive_thresholds(equity) 重标定\n  · 半仓天通+凯盛默认见 DEFAULT_HIST_MAX_DD / DEFAULT_AVG_YEARLY_MAX_DD\n================================================================================",
     "factor2_note": "样本过短，回撤预警仅作阈值展示",
-    "disclaimer": "研究用途，非投资建议；1m 约近数日；未计费/滑点。"
+    "disclaimer": "研究用途，非投资建议；1m 约近数日；未计费/滑点；三槽先触发先买。"
   },
   "rows": [
     {
@@ -883,6 +909,841 @@
           "ts": "2026-08-31 14:05:00"
         }
       ]
+    }
+  ],
+  "portfolio_trades": [
+    {
+      "date": "2026-08-28",
+      "ts": "2026-08-28 09:31:00",
+      "side": "buy",
+      "code": "002922",
+      "name": "伊戈尔",
+      "px": 24.91,
+      "shares": 1200,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-08-28",
+      "ts": "2026-08-28 09:31:00",
+      "side": "buy",
+      "code": "601609",
+      "name": "金田股份",
+      "px": 13.25,
+      "shares": 2200,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-08-28",
+      "ts": "2026-08-28 09:32:00",
+      "side": "buy",
+      "code": "600552",
+      "name": "凯盛科技",
+      "px": 18.53,
+      "shares": 1600,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:32:00",
+      "side": "sell",
+      "code": "601609",
+      "name": "金田股份",
+      "px": 13.58,
+      "shares": 2200,
+      "pnl_pct": 0.0249,
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:33:00",
+      "side": "buy",
+      "code": "002015",
+      "name": "协鑫能科",
+      "px": 16.11,
+      "shares": 1800,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:36:00",
+      "side": "sell",
+      "code": "600552",
+      "name": "凯盛科技",
+      "px": 17.96,
+      "shares": 1600,
+      "pnl_pct": -0.0308,
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:36:00",
+      "trigger_ts": "2026-09-01 09:33:00",
+      "side": "buy",
+      "code": "002104",
+      "name": "恒宝股份",
+      "px": 11.51,
+      "shares": 2500,
+      "kind": "attack",
+      "source": "queue_fill",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 10:03:00",
+      "side": "sell",
+      "code": "002922",
+      "name": "伊戈尔",
+      "px": 24.34,
+      "shares": 1200,
+      "pnl_pct": -0.0229,
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 10:03:00",
+      "trigger_ts": "2026-09-01 09:46:00",
+      "side": "buy",
+      "code": "601519",
+      "name": "大智慧",
+      "px": 9.05,
+      "shares": 3300,
+      "kind": "attack",
+      "source": "queue_fill",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:32:00",
+      "side": "sell",
+      "code": "002104",
+      "name": "恒宝股份",
+      "px": 12.22,
+      "shares": 2500,
+      "pnl_pct": 0.0617,
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:32:00",
+      "side": "buy",
+      "code": "603301",
+      "name": "振德医疗",
+      "px": 81.43,
+      "shares": 300,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:38:00",
+      "side": "sell",
+      "code": "002015",
+      "name": "协鑫能科",
+      "px": 17.29,
+      "shares": 1800,
+      "pnl_pct": 0.0732,
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:54:00",
+      "side": "buy",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 27.07,
+      "shares": 1100,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:43:00",
+      "side": "sell",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 26.33,
+      "shares": 1100,
+      "pnl_pct": -0.0273,
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:43:00",
+      "trigger_ts": "2026-09-03 09:32:00",
+      "side": "buy",
+      "code": "002922",
+      "name": "伊戈尔",
+      "px": 24.18,
+      "shares": 1200,
+      "kind": "attack",
+      "source": "queue_fill",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 09:43:00",
+      "side": "sell",
+      "code": "002922",
+      "name": "伊戈尔",
+      "px": 26.5,
+      "shares": 1200,
+      "pnl_pct": 0.0959,
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 09:43:00",
+      "trigger_ts": "2026-09-04 09:31:00",
+      "side": "buy",
+      "code": "002104",
+      "name": "恒宝股份",
+      "px": 14.08,
+      "shares": 2200,
+      "kind": "attack",
+      "source": "queue_fill",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 14:33:00",
+      "side": "sell",
+      "code": "601519",
+      "name": "大智慧",
+      "px": 8.97,
+      "shares": 3300,
+      "pnl_pct": -0.0088,
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 14:33:00",
+      "trigger_ts": "2026-09-04 09:32:00",
+      "side": "buy",
+      "code": "600967",
+      "name": "内蒙一机",
+      "px": 13.66,
+      "shares": 2300,
+      "kind": "attack",
+      "source": "queue_fill",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:32:00",
+      "side": "sell",
+      "code": "002104",
+      "name": "恒宝股份",
+      "px": 13.51,
+      "shares": 2200,
+      "pnl_pct": -0.0405,
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:32:00",
+      "side": "sell",
+      "code": "600967",
+      "name": "内蒙一机",
+      "px": 13.41,
+      "shares": 2300,
+      "pnl_pct": -0.0183,
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:32:00",
+      "side": "buy",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 27.93,
+      "shares": 1100,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:32:00",
+      "side": "buy",
+      "code": "600353",
+      "name": "旭光电子",
+      "px": 32.46,
+      "shares": 900,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 3
+    }
+  ],
+  "portfolio_equity": [
+    {
+      "date": "2026-08-28",
+      "equity": 98066.0,
+      "cash": 11310.0,
+      "n_pos": 3,
+      "codes": "002922,600552,601609",
+      "ret_pct": -1.93
+    },
+    {
+      "date": "2026-08-31",
+      "equity": 100004.0,
+      "cash": 11310.0,
+      "n_pos": 3,
+      "codes": "002922,600552,601609",
+      "ret_pct": 0.0
+    },
+    {
+      "date": "2026-09-01",
+      "equity": 103248.0,
+      "cash": 11492.0,
+      "n_pos": 3,
+      "codes": "002015,002104,601519",
+      "ret_pct": 3.25
+    },
+    {
+      "date": "2026-09-02",
+      "equity": 100765.0,
+      "cash": 18958.0,
+      "n_pos": 3,
+      "codes": "600330,601519,603301",
+      "ret_pct": 0.76
+    },
+    {
+      "date": "2026-09-03",
+      "equity": 101843.0,
+      "cash": 18905.0,
+      "n_pos": 3,
+      "codes": "002922,601519,603301",
+      "ret_pct": 1.84
+    },
+    {
+      "date": "2026-09-04",
+      "equity": 104609.0,
+      "cash": 17912.0,
+      "n_pos": 3,
+      "codes": "002104,600967,603301",
+      "ret_pct": 4.61
+    },
+    {
+      "date": "2026-09-07",
+      "equity": 104082.0,
+      "cash": 18540.0,
+      "n_pos": 3,
+      "codes": "600330,600353,603301",
+      "ret_pct": 4.08
+    }
+  ],
+  "open_positions": [
+    {
+      "code": "603301",
+      "name": "振德医疗",
+      "buy_day": "2026-09-02",
+      "buy_px": 81.43,
+      "last_px": 79.94,
+      "shares": 300,
+      "pnl_pct": -0.0183
+    },
+    {
+      "code": "600330",
+      "name": "天通股份",
+      "buy_day": "2026-09-07",
+      "buy_px": 27.93,
+      "last_px": 28.89,
+      "shares": 1100,
+      "pnl_pct": 0.0344
+    },
+    {
+      "code": "600353",
+      "name": "旭光电子",
+      "buy_day": "2026-09-07",
+      "buy_px": 32.46,
+      "last_px": 33.09,
+      "shares": 900,
+      "pnl_pct": 0.0194
+    }
+  ],
+  "skipped_buys": [
+    {
+      "day": "2026-08-28",
+      "ts": "2026-08-28 10:33:00",
+      "code": "600338",
+      "name": "西藏珠峰",
+      "px": 14.15,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-28 10:33:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-28",
+      "ts": "2026-08-28 11:27:00",
+      "code": "600301",
+      "name": "华锡有色",
+      "px": 48.62,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-28 11:27:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-28",
+      "ts": "2026-08-28 13:16:00",
+      "code": "601068",
+      "name": "中铝国际",
+      "px": 4.71,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-28 13:16:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 09:31:00",
+      "code": "002779",
+      "name": "中坚科技",
+      "px": 76.69,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 09:31:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 09:31:00",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 29.05,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 09:31:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 09:31:00",
+      "code": "600353",
+      "name": "旭光电子",
+      "px": 34.41,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 09:31:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 09:34:00",
+      "code": "002929",
+      "name": "润建股份",
+      "px": 51.85,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 09:34:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 09:37:00",
+      "code": "603920",
+      "name": "世运电路",
+      "px": 38.02,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 09:37:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 09:42:00",
+      "code": "002273",
+      "name": "水晶光电",
+      "px": 26.01,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 09:42:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 10:27:00",
+      "code": "002015",
+      "name": "协鑫能科",
+      "px": 15.9,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 10:27:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 13:18:00",
+      "code": "600301",
+      "name": "华锡有色",
+      "px": 47.18,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 13:18:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 14:05:00",
+      "code": "002065",
+      "name": "东华软件",
+      "px": 6.97,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 14:05:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-08-31",
+      "ts": "2026-08-31 14:14:00",
+      "code": "002152",
+      "name": "广电运通",
+      "px": 9.72,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-08-31 14:14:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-01",
+      "ts": "2026-09-01 09:51:00",
+      "code": "600967",
+      "name": "内蒙一机",
+      "px": 11.29,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-01 09:51:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-01",
+      "ts": "2026-09-01 11:05:00",
+      "code": "002152",
+      "name": "广电运通",
+      "px": 9.9,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-01 11:05:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-01",
+      "ts": "2026-09-01 11:25:00",
+      "code": "000581",
+      "name": "威孚高科",
+      "px": 18.39,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-01 11:25:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 09:57:00",
+      "code": "002922",
+      "name": "伊戈尔",
+      "px": 23.87,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-02 09:57:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 10:33:00",
+      "code": "601609",
+      "name": "金田股份",
+      "px": 13.34,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-02 10:33:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 10:47:00",
+      "code": "601020",
+      "name": "华钰矿业",
+      "px": 22.06,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-02 10:47:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 11:10:00",
+      "code": "603920",
+      "name": "世运电路",
+      "px": 38.13,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-02 11:10:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 11:23:00",
+      "code": "002929",
+      "name": "润建股份",
+      "px": 51.9,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-02 11:23:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 11:26:00",
+      "code": "600353",
+      "name": "旭光电子",
+      "px": 33.17,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-02 11:26:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 13:30:00",
+      "code": "600338",
+      "name": "西藏珠峰",
+      "px": 13.72,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-02 13:30:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 14:05:00",
+      "code": "002093",
+      "name": "国脉科技",
+      "px": 7.07,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-02 14:05:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 09:32:00",
+      "code": "600338",
+      "name": "西藏珠峰",
+      "px": 14.23,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-03 09:32:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 09:44:00",
+      "code": "002015",
+      "name": "协鑫能科",
+      "px": 17.52,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-03 09:44:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 09:45:00",
+      "code": "601020",
+      "name": "华钰矿业",
+      "px": 23.18,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-03 09:45:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 10:18:00",
+      "code": "601609",
+      "name": "金田股份",
+      "px": 13.63,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-03 10:18:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 10:37:00",
+      "code": "600353",
+      "name": "旭光电子",
+      "px": 33.32,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-03 10:37:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 11:08:00",
+      "code": "002779",
+      "name": "中坚科技",
+      "px": 76.21,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-03 11:08:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 14:01:00",
+      "code": "002273",
+      "name": "水晶光电",
+      "px": 25.79,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-03 14:01:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 14:03:00",
+      "code": "600552",
+      "name": "凯盛科技",
+      "px": 17.41,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-03 14:03:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-04",
+      "ts": "2026-09-04 09:36:00",
+      "code": "601609",
+      "name": "金田股份",
+      "px": 13.73,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-04 09:36:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-04",
+      "ts": "2026-09-04 09:41:00",
+      "code": "002152",
+      "name": "广电运通",
+      "px": 10.03,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-04 09:41:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-04",
+      "ts": "2026-09-04 09:43:00",
+      "code": "002015",
+      "name": "协鑫能科",
+      "px": 17.44,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-04 09:43:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-04",
+      "ts": "2026-09-04 10:04:00",
+      "code": "002929",
+      "name": "润建股份",
+      "px": 52.29,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-04 10:04:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-04",
+      "ts": "2026-09-04 10:04:00",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 27.39,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-04 10:04:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 09:46:00",
+      "code": "603920",
+      "name": "世运电路",
+      "px": 37.22,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-07 09:46:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 09:47:00",
+      "code": "002273",
+      "name": "水晶光电",
+      "px": 25.43,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-07 09:47:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 09:53:00",
+      "code": "002929",
+      "name": "润建股份",
+      "px": 51.86,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-07 09:53:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 13:26:00",
+      "code": "600552",
+      "name": "凯盛科技",
+      "px": 17.13,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-07 13:26:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 13:32:00",
+      "code": "601609",
+      "name": "金田股份",
+      "px": 13.28,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-07 13:32:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 13:41:00",
+      "code": "002015",
+      "name": "协鑫能科",
+      "px": 17.03,
+      "kind": "attack",
+      "source": "trigger",
+      "queued_at": "2026-09-07 13:41:00",
+      "reason": "slots_full_unfilled_eod"
     }
   ]
 }

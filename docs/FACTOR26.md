@@ -28,7 +28,7 @@
 
 - `strategy/strategies/strategy1/bindings.py` → `factor26`
 - 盯盘：实仓止损 + 策略回放近 7 日 1m
-- 池回测：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py`
+- 池回测：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py`（近7日1m；三槽；先触发先买）
 
 ## 真源
 
