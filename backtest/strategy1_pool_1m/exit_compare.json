@@ -1,0 +1,995 @@
+{
+  "window_days": 7,
+  "max_slots": 3,
+  "better_by_return": "half_gain",
+  "modes": [
+    {
+      "mode": "peak_pct",
+      "label": "峰值回落阈值",
+      "desc": "卖价=floor(当日分时最高×(1−阈值))，默认 2.5%（因子26）",
+      "return_pct": 4.08,
+      "final_equity": 104082.0,
+      "n_buys": 13,
+      "n_sells": 10,
+      "n_closed": 10,
+      "avg_closed_pnl_pct": 1.07,
+      "win_rate_pct": 40.0,
+      "avg_win_pct": 6.39,
+      "avg_loss_pct": -2.48,
+      "max_dd_pct": -2.4,
+      "n_open": 3,
+      "exit_reasons": {
+        "peak_pct": 10
+      }
+    },
+    {
+      "mode": "half_gain",
+      "label": "浮盈回落一半",
+      "desc": "卖价=floor(成本+0.5×(持仓最高−成本))；未浮盈时用成本×(1−阈值)保护",
+      "return_pct": 10.81,
+      "final_equity": 110807.0,
+      "n_buys": 20,
+      "n_sells": 17,
+      "n_closed": 17,
+      "avg_closed_pnl_pct": 1.62,
+      "win_rate_pct": 100.0,
+      "avg_win_pct": 1.62,
+      "avg_loss_pct": null,
+      "max_dd_pct": -2.3,
+      "n_open": 3,
+      "exit_reasons": {
+        "half_gain": 17
+      }
+    }
+  ],
+  "disclaimer": "研究用途，非投资建议；近7日样本极短，结论不可外推。",
+  "details": {
+    "peak_pct": {
+      "summary": {
+        "mode": "peak_pct",
+        "label": "峰值回落阈值",
+        "desc": "卖价=floor(当日分时最高×(1−阈值))，默认 2.5%（因子26）",
+        "return_pct": 4.08,
+        "final_equity": 104082.0,
+        "n_buys": 13,
+        "n_sells": 10,
+        "n_closed": 10,
+        "avg_closed_pnl_pct": 1.07,
+        "win_rate_pct": 40.0,
+        "avg_win_pct": 6.39,
+        "avg_loss_pct": -2.48,
+        "max_dd_pct": -2.4,
+        "n_open": 3,
+        "exit_reasons": {
+          "peak_pct": 10
+        },
+        "equity": [
+          {
+            "date": "2026-08-28",
+            "equity": 98066.0,
+            "cash": 11310.0,
+            "n_pos": 3,
+            "codes": "002922,600552,601609",
+            "ret_pct": -1.93
+          },
+          {
+            "date": "2026-08-31",
+            "equity": 100004.0,
+            "cash": 11310.0,
+            "n_pos": 3,
+            "codes": "002922,600552,601609",
+            "ret_pct": 0.0
+          },
+          {
+            "date": "2026-09-01",
+            "equity": 103248.0,
+            "cash": 11492.0,
+            "n_pos": 3,
+            "codes": "002015,002104,601519",
+            "ret_pct": 3.25
+          },
+          {
+            "date": "2026-09-02",
+            "equity": 100765.0,
+            "cash": 18958.0,
+            "n_pos": 3,
+            "codes": "600330,601519,603301",
+            "ret_pct": 0.76
+          },
+          {
+            "date": "2026-09-03",
+            "equity": 101843.0,
+            "cash": 18905.0,
+            "n_pos": 3,
+            "codes": "002922,601519,603301",
+            "ret_pct": 1.84
+          },
+          {
+            "date": "2026-09-04",
+            "equity": 104609.0,
+            "cash": 17912.0,
+            "n_pos": 3,
+            "codes": "002104,600967,603301",
+            "ret_pct": 4.61
+          },
+          {
+            "date": "2026-09-07",
+            "equity": 104082.0,
+            "cash": 18540.0,
+            "n_pos": 3,
+            "codes": "600330,600353,603301",
+            "ret_pct": 4.08
+          }
+        ],
+        "open_positions": [
+          {
+            "code": "603301",
+            "name": "振德医疗",
+            "buy_day": "2026-09-02",
+            "buy_px": 81.43,
+            "last_px": 79.94,
+            "shares": 300,
+            "pnl_pct": -0.0183
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_day": "2026-09-07",
+            "buy_px": 27.93,
+            "last_px": 28.89,
+            "shares": 1100,
+            "pnl_pct": 0.0344
+          },
+          {
+            "code": "600353",
+            "name": "旭光电子",
+            "buy_day": "2026-09-07",
+            "buy_px": 32.46,
+            "last_px": 33.09,
+            "shares": 900,
+            "pnl_pct": 0.0194
+          }
+        ]
+      },
+      "trades": [
+        {
+          "date": "2026-08-28",
+          "ts": "2026-08-28 09:31:00",
+          "side": "buy",
+          "code": "002922",
+          "name": "伊戈尔",
+          "px": 24.91,
+          "shares": 1200,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-08-28",
+          "ts": "2026-08-28 09:31:00",
+          "side": "buy",
+          "code": "601609",
+          "name": "金田股份",
+          "px": 13.25,
+          "shares": 2200,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-08-28",
+          "ts": "2026-08-28 09:32:00",
+          "side": "buy",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 18.53,
+          "shares": 1600,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:32:00",
+          "side": "sell",
+          "code": "601609",
+          "name": "金田股份",
+          "px": 13.58,
+          "shares": 2200,
+          "pnl_pct": 0.0249,
+          "exit_reason": "peak_pct",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:33:00",
+          "side": "buy",
+          "code": "002015",
+          "name": "协鑫能科",
+          "px": 16.11,
+          "shares": 1800,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:36:00",
+          "side": "sell",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 17.96,
+          "shares": 1600,
+          "pnl_pct": -0.0308,
+          "exit_reason": "peak_pct",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:36:00",
+          "trigger_ts": "2026-09-01 09:33:00",
+          "side": "buy",
+          "code": "002104",
+          "name": "恒宝股份",
+          "px": 11.51,
+          "shares": 2500,
+          "kind": "attack",
+          "source": "queue_fill",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 10:03:00",
+          "side": "sell",
+          "code": "002922",
+          "name": "伊戈尔",
+          "px": 24.34,
+          "shares": 1200,
+          "pnl_pct": -0.0229,
+          "exit_reason": "peak_pct",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 10:03:00",
+          "trigger_ts": "2026-09-01 09:46:00",
+          "side": "buy",
+          "code": "601519",
+          "name": "大智慧",
+          "px": 9.05,
+          "shares": 3300,
+          "kind": "attack",
+          "source": "queue_fill",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-02",
+          "ts": "2026-09-02 09:32:00",
+          "side": "sell",
+          "code": "002104",
+          "name": "恒宝股份",
+          "px": 12.22,
+          "shares": 2500,
+          "pnl_pct": 0.0617,
+          "exit_reason": "peak_pct",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-02",
+          "ts": "2026-09-02 09:32:00",
+          "side": "buy",
+          "code": "603301",
+          "name": "振德医疗",
+          "px": 81.43,
+          "shares": 300,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-02",
+          "ts": "2026-09-02 09:38:00",
+          "side": "sell",
+          "code": "002015",
+          "name": "协鑫能科",
+          "px": 17.29,
+          "shares": 1800,
+          "pnl_pct": 0.0732,
+          "exit_reason": "peak_pct",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-02",
+          "ts": "2026-09-02 09:54:00",
+          "side": "buy",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 27.07,
+          "shares": 1100,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 09:43:00",
+          "side": "sell",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 26.33,
+          "shares": 1100,
+          "pnl_pct": -0.0273,
+          "exit_reason": "peak_pct",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 09:43:00",
+          "trigger_ts": "2026-09-03 09:32:00",
+          "side": "buy",
+          "code": "002922",
+          "name": "伊戈尔",
+          "px": 24.18,
+          "shares": 1200,
+          "kind": "attack",
+          "source": "queue_fill",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:43:00",
+          "side": "sell",
+          "code": "002922",
+          "name": "伊戈尔",
+          "px": 26.5,
+          "shares": 1200,
+          "pnl_pct": 0.0959,
+          "exit_reason": "peak_pct",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:43:00",
+          "trigger_ts": "2026-09-04 09:31:00",
+          "side": "buy",
+          "code": "002104",
+          "name": "恒宝股份",
+          "px": 14.08,
+          "shares": 2200,
+          "kind": "attack",
+          "source": "queue_fill",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 14:33:00",
+          "side": "sell",
+          "code": "601519",
+          "name": "大智慧",
+          "px": 8.97,
+          "shares": 3300,
+          "pnl_pct": -0.0088,
+          "exit_reason": "peak_pct",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 14:33:00",
+          "trigger_ts": "2026-09-04 09:32:00",
+          "side": "buy",
+          "code": "600967",
+          "name": "内蒙一机",
+          "px": 13.66,
+          "shares": 2300,
+          "kind": "attack",
+          "source": "queue_fill",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:32:00",
+          "side": "sell",
+          "code": "002104",
+          "name": "恒宝股份",
+          "px": 13.51,
+          "shares": 2200,
+          "pnl_pct": -0.0405,
+          "exit_reason": "peak_pct",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:32:00",
+          "side": "sell",
+          "code": "600967",
+          "name": "内蒙一机",
+          "px": 13.41,
+          "shares": 2300,
+          "pnl_pct": -0.0183,
+          "exit_reason": "peak_pct",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:32:00",
+          "side": "buy",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 27.93,
+          "shares": 1100,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:32:00",
+          "side": "buy",
+          "code": "600353",
+          "name": "旭光电子",
+          "px": 32.46,
+          "shares": 900,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        }
+      ]
+    },
+    "half_gain": {
+      "summary": {
+        "mode": "half_gain",
+        "label": "浮盈回落一半",
+        "desc": "卖价=floor(成本+0.5×(持仓最高−成本))；未浮盈时用成本×(1−阈值)保护",
+        "return_pct": 10.81,
+        "final_equity": 110807.0,
+        "n_buys": 20,
+        "n_sells": 17,
+        "n_closed": 17,
+        "avg_closed_pnl_pct": 1.62,
+        "win_rate_pct": 100.0,
+        "avg_win_pct": 1.62,
+        "avg_loss_pct": null,
+        "max_dd_pct": -2.3,
+        "n_open": 3,
+        "exit_reasons": {
+          "half_gain": 17
+        },
+        "equity": [
+          {
+            "date": "2026-08-28",
+            "equity": 98066.0,
+            "cash": 11310.0,
+            "n_pos": 3,
+            "codes": "002922,600552,601609",
+            "ret_pct": -1.93
+          },
+          {
+            "date": "2026-08-31",
+            "equity": 101758.0,
+            "cash": 20715.0,
+            "n_pos": 3,
+            "codes": "002779,600330,600353",
+            "ret_pct": 1.76
+          },
+          {
+            "date": "2026-09-01",
+            "equity": 106009.0,
+            "cash": 12125.0,
+            "n_pos": 3,
+            "codes": "002015,002104,601519",
+            "ret_pct": 6.01
+          },
+          {
+            "date": "2026-09-02",
+            "equity": 103567.0,
+            "cash": 20077.0,
+            "n_pos": 3,
+            "codes": "002015,600330,603301",
+            "ret_pct": 3.57
+          },
+          {
+            "date": "2026-09-03",
+            "equity": 104962.0,
+            "cash": 11911.0,
+            "n_pos": 3,
+            "codes": "002922,600338,601020",
+            "ret_pct": 4.96
+          },
+          {
+            "date": "2026-09-04",
+            "equity": 106050.0,
+            "cash": 13040.0,
+            "n_pos": 3,
+            "codes": "002104,600967,601609",
+            "ret_pct": 6.05
+          },
+          {
+            "date": "2026-09-07",
+            "equity": 110807.0,
+            "cash": 18367.0,
+            "n_pos": 3,
+            "codes": "600330,600353,603920",
+            "ret_pct": 10.81
+          }
+        ],
+        "open_positions": [
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_day": "2026-09-07",
+            "buy_px": 27.93,
+            "last_px": 28.89,
+            "shares": 1100,
+            "pnl_pct": 0.0344
+          },
+          {
+            "code": "600353",
+            "name": "旭光电子",
+            "buy_day": "2026-09-07",
+            "buy_px": 32.46,
+            "last_px": 33.09,
+            "shares": 900,
+            "pnl_pct": 0.0194
+          },
+          {
+            "code": "603920",
+            "name": "世运电路",
+            "buy_day": "2026-09-07",
+            "buy_px": 37.22,
+            "last_px": 38.6,
+            "shares": 800,
+            "pnl_pct": 0.0371
+          }
+        ]
+      },
+      "trades": [
+        {
+          "date": "2026-08-28",
+          "ts": "2026-08-28 09:31:00",
+          "side": "buy",
+          "code": "002922",
+          "name": "伊戈尔",
+          "px": 24.91,
+          "shares": 1200,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-08-28",
+          "ts": "2026-08-28 09:31:00",
+          "side": "buy",
+          "code": "601609",
+          "name": "金田股份",
+          "px": 13.25,
+          "shares": 2200,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-08-28",
+          "ts": "2026-08-28 09:32:00",
+          "side": "buy",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 18.53,
+          "shares": 1600,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-08-31",
+          "ts": "2026-08-31 09:31:00",
+          "side": "sell",
+          "code": "002922",
+          "name": "伊戈尔",
+          "px": 25.06,
+          "shares": 1200,
+          "pnl_pct": 0.006,
+          "exit_reason": "half_gain",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-08-31",
+          "ts": "2026-08-31 09:31:00",
+          "side": "sell",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 18.55,
+          "shares": 1600,
+          "pnl_pct": 0.0011,
+          "exit_reason": "half_gain",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-08-31",
+          "ts": "2026-08-31 09:31:00",
+          "side": "sell",
+          "code": "601609",
+          "name": "金田股份",
+          "px": 13.29,
+          "shares": 2200,
+          "pnl_pct": 0.003,
+          "exit_reason": "half_gain",
+          "slots_after": 0
+        },
+        {
+          "date": "2026-08-31",
+          "ts": "2026-08-31 09:31:00",
+          "side": "buy",
+          "code": "002779",
+          "name": "中坚科技",
+          "px": 76.69,
+          "shares": 300,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-08-31",
+          "ts": "2026-08-31 09:31:00",
+          "side": "buy",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 29.05,
+          "shares": 1000,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-08-31",
+          "ts": "2026-08-31 09:31:00",
+          "side": "buy",
+          "code": "600353",
+          "name": "旭光电子",
+          "px": 34.41,
+          "shares": 800,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:31:00",
+          "side": "sell",
+          "code": "002779",
+          "name": "中坚科技",
+          "px": 78.34,
+          "shares": 300,
+          "pnl_pct": 0.0215,
+          "exit_reason": "half_gain",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:31:00",
+          "side": "sell",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 29.13,
+          "shares": 1000,
+          "pnl_pct": 0.0028,
+          "exit_reason": "half_gain",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:33:00",
+          "side": "sell",
+          "code": "600353",
+          "name": "旭光电子",
+          "px": 35.59,
+          "shares": 800,
+          "pnl_pct": 0.0343,
+          "exit_reason": "half_gain",
+          "slots_after": 0
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:33:00",
+          "side": "buy",
+          "code": "002015",
+          "name": "协鑫能科",
+          "px": 16.11,
+          "shares": 1800,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:33:00",
+          "side": "buy",
+          "code": "002104",
+          "name": "恒宝股份",
+          "px": 11.51,
+          "shares": 2600,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-01",
+          "ts": "2026-09-01 09:46:00",
+          "side": "buy",
+          "code": "601519",
+          "name": "大智慧",
+          "px": 9.05,
+          "shares": 3400,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-02",
+          "ts": "2026-09-02 09:31:00",
+          "side": "sell",
+          "code": "601519",
+          "name": "大智慧",
+          "px": 9.09,
+          "shares": 3400,
+          "pnl_pct": 0.0044,
+          "exit_reason": "half_gain",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-02",
+          "ts": "2026-09-02 09:32:00",
+          "side": "sell",
+          "code": "002104",
+          "name": "恒宝股份",
+          "px": 12.02,
+          "shares": 2600,
+          "pnl_pct": 0.0443,
+          "exit_reason": "half_gain",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-02",
+          "ts": "2026-09-02 09:32:00",
+          "side": "buy",
+          "code": "603301",
+          "name": "振德医疗",
+          "px": 81.43,
+          "shares": 300,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-02",
+          "ts": "2026-09-02 09:54:00",
+          "side": "buy",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 27.07,
+          "shares": 1100,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 09:31:00",
+          "side": "sell",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 27.09,
+          "shares": 1100,
+          "pnl_pct": 0.0007,
+          "exit_reason": "half_gain",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 09:31:00",
+          "side": "sell",
+          "code": "603301",
+          "name": "振德医疗",
+          "px": 81.51,
+          "shares": 300,
+          "pnl_pct": 0.001,
+          "exit_reason": "half_gain",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 09:32:00",
+          "side": "buy",
+          "code": "002922",
+          "name": "伊戈尔",
+          "px": 24.18,
+          "shares": 1300,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 09:32:00",
+          "side": "buy",
+          "code": "600338",
+          "name": "西藏珠峰",
+          "px": 14.23,
+          "shares": 2200,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 10:51:00",
+          "side": "sell",
+          "code": "002015",
+          "name": "协鑫能科",
+          "px": 16.92,
+          "shares": 1800,
+          "pnl_pct": 0.0503,
+          "exit_reason": "half_gain",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 10:51:00",
+          "trigger_ts": "2026-09-03 09:45:00",
+          "side": "buy",
+          "code": "601020",
+          "name": "华钰矿业",
+          "px": 23.18,
+          "shares": 1300,
+          "kind": "attack",
+          "source": "queue_fill",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:31:00",
+          "side": "sell",
+          "code": "600338",
+          "name": "西藏珠峰",
+          "px": 14.25,
+          "shares": 2200,
+          "pnl_pct": 0.0014,
+          "exit_reason": "half_gain",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:31:00",
+          "side": "sell",
+          "code": "601020",
+          "name": "华钰矿业",
+          "px": 23.43,
+          "shares": 1300,
+          "pnl_pct": 0.0108,
+          "exit_reason": "half_gain",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:31:00",
+          "side": "buy",
+          "code": "002104",
+          "name": "恒宝股份",
+          "px": 14.08,
+          "shares": 2200,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:32:00",
+          "side": "buy",
+          "code": "600967",
+          "name": "内蒙一机",
+          "px": 13.66,
+          "shares": 2300,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:48:00",
+          "side": "sell",
+          "code": "002922",
+          "name": "伊戈尔",
+          "px": 25.61,
+          "shares": 1300,
+          "pnl_pct": 0.0591,
+          "exit_reason": "half_gain",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:48:00",
+          "trigger_ts": "2026-09-04 09:36:00",
+          "side": "buy",
+          "code": "601609",
+          "name": "金田股份",
+          "px": 13.73,
+          "shares": 2300,
+          "kind": "attack",
+          "source": "queue_fill",
+          "slots_after": 3
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:31:00",
+          "side": "sell",
+          "code": "002104",
+          "name": "恒宝股份",
+          "px": 14.22,
+          "shares": 2200,
+          "pnl_pct": 0.0099,
+          "exit_reason": "half_gain",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:31:00",
+          "side": "sell",
+          "code": "600967",
+          "name": "内蒙一机",
+          "px": 13.95,
+          "shares": 2300,
+          "pnl_pct": 0.0212,
+          "exit_reason": "half_gain",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:31:00",
+          "side": "sell",
+          "code": "601609",
+          "name": "金田股份",
+          "px": 13.77,
+          "shares": 2300,
+          "pnl_pct": 0.0029,
+          "exit_reason": "half_gain",
+          "slots_after": 0
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:32:00",
+          "side": "buy",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 27.93,
+          "shares": 1100,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:32:00",
+          "side": "buy",
+          "code": "600353",
+          "name": "旭光电子",
+          "px": 32.46,
+          "shares": 900,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:46:00",
+          "side": "buy",
+          "code": "603920",
+          "name": "世运电路",
+          "px": 37.22,
+          "shares": 800,
+          "kind": "attack",
+          "source": "trigger",
+          "slots_after": 3
+        }
+      ]
+    }
+  }
+}

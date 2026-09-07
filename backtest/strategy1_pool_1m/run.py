@@ -161,6 +161,39 @@ class _Pos:
     shares: int
     cost: float
     kind: str | None = None
+    peak_high: float = 0.0  # 持仓以来最高（用于收益回落一半）
+
+
+def _exit_stop_px(
+    *,
+    mode: str,
+    running_high: float,
+    buy_px: float,
+    peak_high: float,
+    pullback_pct: float,
+) -> tuple[float, str]:
+    """计算出场价。返回 (止盈/止损价, 原因标签)。
+
+    - peak_pct：峰值回落阈值（因子26）= floor(当日分时最高×(1−pb))
+    - half_gain：浮盈回落一半 = floor(成本 + 0.5×(持仓最高−成本))；
+      尚未浮盈时退化为成本回撤阈值保护 floor(成本×(1−pb))
+    """
+    from strategy.open_break import floor_to_tick
+
+    pb = float(pullback_pct)
+    mode = str(mode or "peak_pct")
+    rh = float(running_high)
+    bp = float(buy_px)
+    ph = max(float(peak_high), rh, bp)
+
+    if mode == "half_gain":
+        if ph <= bp + 1e-12:
+            return floor_to_tick(bp * (1.0 - pb)), "hard_from_cost"
+        return floor_to_tick(bp + 0.5 * (ph - bp)), "half_gain"
+    # default: peak_pct（当日波）
+    if rh <= 0:
+        return 0.0, "peak_pct"
+    return pullback_stop_price(rh, pullback_pct=pb), "peak_pct"
 
 
 @dataclass
@@ -209,9 +242,16 @@ def simulate_portfolio_3slots(
     max_slots: int = MAX_PORTFOLIO_SLOTS,
     initial_cash: float = DEFAULT_ACCOUNT_TOTAL,
     slot_weight: float = SLOT_WEIGHT,
+    exit_mode: str = "peak_pct",
 ) -> dict[str, Any]:
-    """三槽组合：1m 路径，先触发买点先买，最多同时持有 max_slots 只。"""
+    """三槽组合：1m 路径，先触发买点先买，最多同时持有 max_slots 只。
+
+    exit_mode:
+      - peak_pct：峰值回落阈值（因子26 默认）
+      - half_gain：浮盈相对持仓最高回落一半止盈（未浮盈用成本回撤保护）
+    """
     max_slots = max(1, int(max_slots))
+    exit_mode = str(exit_mode or "peak_pct")
     prepared: list[dict[str, Any]] = []
     all_days: set[str] = set()
 
@@ -303,6 +343,7 @@ def simulate_portfolio_3slots(
                 shares=shares,
                 cost=cost,
                 kind=cand.get("kind"),
+                peak_high=px,
             )
             trades.append(
                 {
@@ -437,36 +478,48 @@ def simulate_portfolio_3slots(
                 pos = positions[code]
                 st.running_low = min(st.running_low, lo)
                 can_sell = not is_t1_buy_day(pos.buy_day, sess)
-                if can_sell and (not st.sold_today) and st.running_high > 0:
-                    stop = pullback_stop_price(
-                        st.running_high, pullback_pct=sd.pullback_pct
+                rh = float(st.running_high or 0.0)
+                ph = max(float(pos.peak_high or 0.0), rh)
+                if can_sell and (not st.sold_today):
+                    can_eval = (exit_mode == "half_gain" and ph > 0) or (
+                        exit_mode != "half_gain" and rh > 0
                     )
-                    if lo <= stop + 1e-12:
-                        proceeds = float(stop) * int(pos.shares)
-                        cash += proceeds
-                        trades.append(
-                            {
-                                "date": sess,
-                                "ts": str(ts),
-                                "side": "sell",
-                                "code": code,
-                                "name": pos.name,
-                                "px": float(stop),
-                                "shares": int(pos.shares),
-                                "pnl_pct": round(float(stop) / pos.buy_px - 1.0, 4)
-                                if pos.buy_px
-                                else None,
-                                "slots_after": len(positions) - 1,
-                            }
+                    if can_eval:
+                        stop, reason = _exit_stop_px(
+                            mode=exit_mode,
+                            running_high=rh if rh > 0 else ph,
+                            buy_px=float(pos.buy_px),
+                            peak_high=ph,
+                            pullback_pct=sd.pullback_pct,
                         )
-                        del positions[code]
-                        st.sold_today = True
-                        st.buy_armed = False  # 因子26：当日止损后不再买（无因子22）
-                        st.running_high = max(st.running_high, h)
-                        last_px[code] = float(stop)
-                        _try_fill_from_queue(sess, str(ts))
-                        continue
+                        if stop > 0 and lo <= stop + 1e-12:
+                            proceeds = float(stop) * int(pos.shares)
+                            cash += proceeds
+                            trades.append(
+                                {
+                                    "date": sess,
+                                    "ts": str(ts),
+                                    "side": "sell",
+                                    "code": code,
+                                    "name": pos.name,
+                                    "px": float(stop),
+                                    "shares": int(pos.shares),
+                                    "pnl_pct": round(float(stop) / pos.buy_px - 1.0, 4)
+                                    if pos.buy_px
+                                    else None,
+                                    "exit_reason": reason,
+                                    "slots_after": len(positions) - 1,
+                                }
+                            )
+                            del positions[code]
+                            st.sold_today = True
+                            st.buy_armed = False
+                            st.running_high = max(st.running_high, h)
+                            last_px[code] = float(stop)
+                            _try_fill_from_queue(sess, str(ts))
+                            continue
                 st.running_high = max(st.running_high, h)
+                pos.peak_high = max(float(pos.peak_high or 0.0), float(st.running_high))
                 last_px[code] = (h + lo) / 2.0
 
             # —— 买：本分钟新触达 ——
@@ -540,6 +593,7 @@ def simulate_portfolio_3slots(
                         shares=shares,
                         cost=cost,
                         kind=cand.get("kind"),
+                        peak_high=px,
                     )
                     trades.append(
                         {
@@ -619,6 +673,7 @@ def simulate_portfolio_3slots(
             "avg_closed_pnl_pct": avg_closed,
             "n_open": len(positions),
             "n_skipped_or_queued": len(skipped),
+            "exit_mode": exit_mode,
         },
     }
 
