@@ -1,0 +1,85 @@
+"""三槽持仓辅助函数单测。"""
+
+from __future__ import annotations
+
+from watch_config import (
+    MAX_PORTFOLIO_SLOTS,
+    SLOT_WEIGHT,
+    free_slot_count,
+    occupied_slot_codes,
+    slot_meta,
+)
+
+
+def test_occupied_ignores_realized_and_zero_qty():
+    holdings = {
+        "positions": {
+            "600552": {"qty": 400, "name": "凯盛科技"},
+            "600338": {"qty": 0, "name": "西藏珠峰", "pool": True},
+        },
+        "realized_today": {
+            "600330": {"session": "2026-09-07", "qty": 100, "reason": "止损"},
+        },
+        "portfolio_pool": ["600552", "600338"],
+    }
+    assert occupied_slot_codes(holdings) == ["600552"]
+    assert free_slot_count(holdings) == MAX_PORTFOLIO_SLOTS - 1
+    meta = slot_meta(holdings)
+    assert meta["max"] == 3
+    assert meta["weight"] == SLOT_WEIGHT
+    assert meta["free"] == 2
+    assert meta["occupiedCount"] == 1
+
+
+def test_full_slots():
+    holdings = {
+        "positions": {
+            "600552": {"qty": 100},
+            "600301": {"qty": 200},
+            "002104": {"qty": 300},
+        }
+    }
+    assert free_slot_count(holdings) == 0
+    assert len(occupied_slot_codes(holdings)) == 3
+
+
+def test_filter_includes_alert_without_pool():
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {"代码": "600552", "名称": "凯盛", "持仓": 400, "持仓状态": "持有", "距买点%": 0},
+        {
+            "代码": "002104",
+            "名称": "恒宝",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "将买入",
+            "近买点": True,
+            "距买点%": 0.5,
+        },
+        {"代码": "600301", "名称": "华锡", "持仓": 0, "持仓状态": "空仓", "预警": "空仓", "距买点%": 5},
+    ]
+    picked = filter_portfolio_holdings(rows, portfolio_codes={"600552"})
+    codes = [str(r["代码"]) for r in picked]
+    assert "600552" in codes
+    assert "002104" in codes
+    assert "600301" not in codes
+    alert = next(r for r in picked if r["代码"] == "002104")
+    assert alert.get("当日预警") is True
+    assert int(alert.get("持仓") or 0) == 0
+    assert alert.get("盈亏说明") == "当日预警·未登记持仓"
+
+
+def test_buy_distance_and_sort_helpers():
+    from index import _buy_distance_pct, sort_watch_rows
+
+    near = {"代码": "002104", "现价": 10.0, "买点": 10.2, "持仓": 0, "距买点%": None}
+    far = {"代码": "600301", "现价": 10.0, "买点": 11.0, "持仓": 0, "距买点%": None}
+    held = {"代码": "600552", "现价": 20.0, "买点": 19.0, "持仓": 400, "距买点%": 0.0}
+    near["距买点%"] = _buy_distance_pct(near)
+    far["距买点%"] = _buy_distance_pct(far)
+    assert near["距买点%"] < far["距买点%"]
+    ordered = sort_watch_rows([far, near, held])
+    assert ordered[0]["代码"] == "600552"
+    assert ordered[1]["代码"] == "002104"
+    assert ordered[2]["代码"] == "600301"

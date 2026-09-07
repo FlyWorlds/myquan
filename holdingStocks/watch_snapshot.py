@@ -13,6 +13,8 @@ def _row_json(row: dict[str, Any]) -> dict[str, Any]:
     """collect_rows 行 → JSON 可序列化 dict（保留中文键，与现有逻辑一致）。"""
     out: dict[str, Any] = {}
     for k, v in row.items():
+        if str(k).startswith("_"):
+            continue
         if k == "bg_class":
             out["bgClass"] = v
             continue
@@ -43,11 +45,39 @@ def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _is_today_alert_row(row: dict[str, Any]) -> bool:
+    """当日预警（买入/卖出接近或已触、槽位候选等）— 仅展示，不登记持仓。"""
+    if row.get("error"):
+        return False
+    if int(row.get("持仓") or 0) > 0:
+        return False
+    if bool(row.get("已实现")):
+        return False
+    if bool(row.get("槽位候选")):
+        return True
+    alert = str(row.get("预警") or "").strip()
+    pos = str(row.get("持仓状态") or "")
+    if alert in ("已触买", "将买入", "已触止损") or alert.startswith("已触"):
+        return True
+    if "将买入" in alert or "将卖出" in alert or "近买入" in alert:
+        return True
+    if pos in ("待买入", "待卖出"):
+        return True
+    if bool(row.get("近买点")) or bool(row.get("近止损")):
+        return True
+    if bool(row.get("可执行")):
+        return True
+    hit = str(row.get("因子触发") or "")
+    if hit.startswith("已触发") or hit == "接近":
+        return True
+    return False
+
+
 def filter_portfolio_holdings(
     rows: list[dict[str, Any]],
     portfolio_codes: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """持仓 Tab：仅用户持仓池；因子1 自动算买卖/止损，名称数量成本取自 holdings.json。"""
+    """持仓 Tab：实仓/当日留痕 + 当日预警票（预警仅展示，不登记 qty/成本）。"""
     from watch_config import code_key, portfolio_pool_codes
 
     if portfolio_codes is None:
@@ -59,26 +89,50 @@ def filter_portfolio_holdings(
             portfolio_codes = set()
 
     picked: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for r in rows:
         if r.get("error"):
             continue
         c = code_key(str(r.get("代码") or ""))
-        if c not in portfolio_codes:
+        in_pool = c in portfolio_codes
+        alert_only = (not in_pool) and _is_today_alert_row(r)
+        if not in_pool and not alert_only:
             continue
-        picked.append(r)
+        if c in seen:
+            continue
+        seen.add(c)
+        out = dict(r)
+        if alert_only:
+            out["当日预警"] = True
+            out["持仓"] = 0
+            # 不展示持仓口径浮盈（未登记）
+            out["浮盈"] = None
+            out["浮盈%"] = None
+            out["盈亏状态"] = None
+            out["盈亏说明"] = "当日预警·未登记持仓"
+            out["市值"] = None
+            out["成本额"] = None
+            out["仓位%"] = None
+        else:
+            out.setdefault("当日预警", False)
+        picked.append(out)
 
-    def _sort_key(r: dict[str, Any]) -> tuple[int, str]:
+    def _sort_key(r: dict[str, Any]) -> tuple[int, float, str]:
         qty = int(r.get("持仓") or 0)
         pos = str(r.get("持仓状态") or "")
         if qty > 0:
             tier = 0
         elif bool(r.get("已实现")):
             tier = 1
-        elif pos == "待买入":
+        elif bool(r.get("当日预警")) or bool(r.get("槽位候选")) or pos == "待买入":
             tier = 2
         else:
             tier = 3
-        return (tier, str(r.get("代码") or ""))
+        try:
+            dist = float(r.get("距买点%") if r.get("距买点%") is not None else 9_999.0)
+        except (TypeError, ValueError):
+            dist = 9_999.0
+        return (tier, dist, str(r.get("代码") or ""))
 
     return sorted(picked, key=_sort_key)
 
@@ -111,6 +165,19 @@ def build_watch_snapshot(
         for r in rows
         if not r.get("error") and code_key(str(r.get("代码") or "")) in strategy_codes
     ]
+    slot_meta = None
+    for r in rows:
+        if isinstance(r.get("_slot_meta"), dict):
+            slot_meta = r["_slot_meta"]
+            break
+    if slot_meta is None:
+        try:
+            from watch_config import slot_meta as _sm
+            from index import load_holdings
+
+            slot_meta = _sm(load_holdings())
+        except Exception:  # noqa: BLE001
+            slot_meta = {"max": 3, "weight": 0.3, "occupied": [], "occupiedCount": 0, "free": 3}
     return {
         "v": SNAPSHOT_VERSION,
         "type": "snapshot",
@@ -126,6 +193,7 @@ def build_watch_snapshot(
             "factorsLabel": meta.get("factorsLabel") or "",
         },
         "account": account,
+        "slotMeta": slot_meta,
         "indices": [_index_json(ix) for ix in indices],
         "holdings": holdings,
         "strategy1": strategy1_rows,

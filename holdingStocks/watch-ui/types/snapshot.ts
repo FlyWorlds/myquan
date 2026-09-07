@@ -76,6 +76,16 @@ export interface HoldingRow {
   [key: string]: unknown
 }
 
+export interface SlotMeta {
+  max?: number
+  weight?: number
+  occupied?: string[]
+  occupiedCount?: number
+  free?: number
+  candidates?: string[]
+  bought?: string[]
+}
+
 export interface StrategyFactor {
   id: string
   name: string
@@ -288,6 +298,7 @@ export interface WatchSnapshot {
     factorsLabel?: string
   }
   account: WatchAccount
+  slotMeta?: SlotMeta
   indices: IndexQuote[]
   holdings: HoldingRow[]
   strategy1: HoldingRow[]

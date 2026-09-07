@@ -4,7 +4,7 @@ import { fmtNum, fmtSignedPct, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 
-defineProps<{ rows: HoldingRow[]; phase?: string }>()
+defineProps<{ rows: HoldingRow[]; phase?: string; slotMeta?: { max?: number; occupiedCount?: number; free?: number; weight?: number } }>()
 
 const steps = [
   ['9:15', '竞价·可撤'],
@@ -31,6 +31,12 @@ const legend = [
         <span v-for="[t, l] in steps" :key="t" class="rounded-full bg-accent/10 px-2 py-1 text-accent">{{ t }} {{ l }}</span>
       </div>
       <div class="mt-2 text-sm">当前：<strong>{{ phase || '-' }}</strong></div>
+      <div v-if="slotMeta" class="mt-1 text-xs text-ui-text-2">
+        三槽持仓 {{ slotMeta.occupiedCount ?? 0 }}/{{ slotMeta.max ?? 3 }}
+        · 空槽 {{ slotMeta.free ?? '-' }}
+        · 每槽约 {{ Math.round((slotMeta.weight ?? 0.3) * 100) }}%
+        · 列表按距买点升序
+      </div>
       <div class="mt-1 text-xs text-ui-text-3">
         策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）
       </div>
@@ -46,6 +52,7 @@ const legend = [
             <tr>
               <th class="px-3 py-2.5">标的</th>
               <th class="min-w-[5.5rem] px-3 py-2.5">状态</th>
+              <th class="px-3 py-2.5">距买点</th>
               <th class="px-3 py-2.5">竞价/开盘</th>
               <th class="px-3 py-2.5">现价</th>
               <th class="px-3 py-2.5">日内涨跌</th>
@@ -79,7 +86,14 @@ const legend = [
                 >
                   {{ resolveSignalVisual(r).badgeText }}
                 </span>
+                <div v-if="r.槽位候选" class="mt-1 text-[10px] text-accent">槽位候选</div>
                 <div v-if="r.因子触发" class="mt-1 text-[10px] text-ui-text-3">{{ r.因子触发 }}</div>
+              </td>
+              <td class="sensitive px-3 py-2.5 tabular-nums">
+                <span v-if="r['距买点%'] != null && Number(r['距买点%']) < 9000">
+                  {{ Number(r['距买点%']).toFixed(2) }}%
+                </span>
+                <span v-else class="text-ui-text-3">-</span>
               </td>
               <td class="sensitive px-3 py-2.5">{{ r.阈值就绪 ? fmtNum(r.开盘, r['价位小数'] ?? 2) : (r.竞价参考 != null ? fmtNum(r.竞价参考, r['价位小数'] ?? 2) : '待9:25') }}</td>
               <td class="sensitive px-3 py-2.5 font-semibold">{{ fmtNum(r.现价, r['价位小数'] ?? 2) }}</td>

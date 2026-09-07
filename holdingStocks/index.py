@@ -118,6 +118,11 @@ from watch_config import (
     sellable_qty as _sellable_qty,
     sina_of as _sina_of,
     watchlist_codes_label as _watchlist_codes_label,
+    MAX_PORTFOLIO_SLOTS,
+    SLOT_WEIGHT,
+    free_slot_count,
+    occupied_slot_codes,
+    slot_meta as _slot_meta_from_holdings,
 )
 from watch_snapshot import build_watch_snapshot
 
@@ -1867,6 +1872,223 @@ def update_high_after_stop(
     return rec
 
 
+def apply_paper_slot_buy(
+    *,
+    code: str,
+    meta: dict[str, Any],
+    price: float,
+    qty: int,
+    note: str = "槽位触买(自动)",
+) -> dict[str, Any]:
+    """纸面自动入仓：写 qty/成本/buy_time；扣减 account_cash（若有）。"""
+    price = float(price)
+    qty = int(qty)
+    if qty <= 0 or price <= 0:
+        raise ValueError("价格/数量必须 > 0")
+    data = load_holdings()
+    pos = data["positions"].setdefault(code, _empty_position(meta))
+    old_qty = int(pos.get("qty") or 0)
+    if old_qty > 0:
+        return pos
+    pos["qty"] = qty
+    pos["cost"] = round(price, 4)
+    pos["today_cost"] = round(price, 4)
+    pos["available"] = 0
+    pos["buy_time"] = _now()
+    pos["note"] = note
+    pos["name"] = meta["name"]
+    pos["market"] = meta["market"]
+    cash = _account_cash(data)
+    if cash is not None:
+        data["account_cash"] = round(cash - price * qty, 2)
+    pool = data.get("portfolio_pool")
+    if isinstance(pool, list):
+        ck = _code_key(code)
+        if ck not in {_code_key(str(c)) for c in pool}:
+            pool.append(ck)
+            data["portfolio_pool"] = pool
+    save_holdings(data)
+    append_trade(
+        {
+            "time": _now(),
+            "side": "buy",
+            "code": code,
+            "name": meta["name"],
+            "price": price,
+            "qty": qty,
+            "after_qty": qty,
+            "avg_cost": pos["cost"],
+            "note": note,
+        }
+    )
+    return pos
+
+
+def _buy_distance_pct(row: dict[str, Any]) -> float:
+    """距买点还差多少%（0=已到/越过）；无法计算返回很大值。"""
+    buy = row.get("买点")
+    if buy is None:
+        buy = row.get("买入侧价")
+    last = row.get("现价")
+    try:
+        buy_f = float(buy) if buy is not None else 0.0
+        last_f = float(last) if last is not None else 0.0
+    except (TypeError, ValueError):
+        return 9_999.0
+    if buy_f <= 0 or last_f <= 0:
+        return 9_999.0
+    if last_f >= buy_f:
+        return 0.0
+    return round((buy_f - last_f) / buy_f * 100.0, 4)
+
+
+def _slot_notional_budget(
+    account_total: float | None,
+    rows: list[dict[str, Any]],
+    occupied: list[str],
+) -> float | None:
+    """单槽目标金额：总权益×30%；无总权益时用现有实仓市值/占槽数近似。"""
+    if account_total is not None and float(account_total) > 0:
+        return round(float(account_total) * float(SLOT_WEIGHT), 2)
+    mv = _holdings_market_value(rows)
+    n = len(occupied)
+    if n > 0 and mv > 0:
+        return round(mv / float(n), 2)
+    return None
+
+
+def _row_hit_buy(row: dict[str, Any]) -> bool:
+    if str(row.get("已触买") or "") == "是":
+        return True
+    if str(row.get("预警") or "") == "已触买":
+        return True
+    if str(row.get("持仓状态") or "") == "待买入" and str(
+        row.get("因子触发") or ""
+    ).startswith("已触发"):
+        return True
+    return False
+
+
+def _apply_portfolio_slots(
+    rows: list[dict[str, Any]],
+    *,
+    account_total: float | None,
+    phase_now: str,
+) -> dict[str, Any]:
+    """标记空槽候选；连续竞价下触买则纸面自动入仓（约 3 成整手）。"""
+    data = load_holdings()
+    occupied = occupied_slot_codes(data)
+    free = free_slot_count(data)
+    occupied_set = set(occupied)
+
+    for r in rows:
+        code = _code_key(str(r.get("代码") or ""))
+        r["槽位占用"] = code in occupied_set and int(r.get("持仓") or 0) > 0
+        r["槽位候选"] = False
+        r["距买点%"] = _buy_distance_pct(r)
+
+    candidates: list[tuple[float, str, dict[str, Any]]] = []
+    for r in rows:
+        if r.get("error"):
+            continue
+        code = _code_key(str(r.get("代码") or ""))
+        if int(r.get("持仓") or 0) > 0 or code in occupied_set:
+            continue
+        if str(r.get("持仓状态") or "") == "当日禁买" and not _row_hit_buy(r):
+            continue
+        if r.get("过门OK") is False:
+            continue
+        dist = float(r.get("距买点%") if r.get("距买点%") is not None else 9_999.0)
+        if dist >= 9_000:
+            continue
+        candidates.append((dist, code, r))
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    selected = candidates[: max(0, free)]
+    selected_codes = {c for _, c, _ in selected}
+    for _, _c, r in selected:
+        r["槽位候选"] = True
+
+    bought_codes: list[str] = []
+    if phase_now == "continuous" and free > 0 and selected:
+        budget = _slot_notional_budget(account_total, rows, occupied)
+        for dist, code, r in selected:
+            data = load_holdings()
+            if free_slot_count(data) <= 0:
+                break
+            if int((data.get("positions") or {}).get(code, {}).get("qty") or 0) > 0:
+                continue
+            if not _row_hit_buy(r):
+                continue
+            if budget is None or budget <= 0:
+                break
+            try:
+                price = float(
+                    r.get("已触发因子价")
+                    or r.get("买点")
+                    or r.get("买入侧价")
+                    or r.get("现价")
+                    or 0
+                )
+            except (TypeError, ValueError):
+                continue
+            if price <= 0:
+                continue
+            qty = int(budget // (price * 100.0)) * 100
+            if qty < 100:
+                continue
+            meta = {
+                "code": code,
+                "name": str(r.get("名称") or code),
+                "market": str(r.get("市场") or ""),
+            }
+            try:
+                pos = apply_paper_slot_buy(
+                    code=code,
+                    meta=meta,
+                    price=price,
+                    qty=qty,
+                    note="槽位触买(自动·3成)",
+                )
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 槽位自动买入失败 {code}: {e}")
+                continue
+            bought_codes.append(code)
+            r["持仓"] = int(pos.get("qty") or qty)
+            r["成本"] = pos.get("cost")
+            r["可用"] = int(pos.get("available") or 0)
+            r["槽位占用"] = True
+            r["槽位候选"] = False
+            r["已实现"] = False
+            r["持仓状态"] = "持有"
+            r["预警"] = "已触买·已入槽"
+            px_digits = int(r.get("价位小数") or 2)
+            last = r.get("现价")
+            if last is not None and pos.get("cost") is not None:
+                try:
+                    last_f = float(last)
+                    cost_f = float(pos["cost"])
+                    r["浮盈"] = round((last_f - cost_f) * qty, 2)
+                    r["浮盈%"] = round((last_f / cost_f - 1.0) * 100.0, 2)
+                    r["市值"] = round(last_f * qty, 2)
+                    r["成本额"] = round(cost_f * qty, 2)
+                except (TypeError, ValueError):
+                    pass
+            note = str(r.get("挂单说明") or "")
+            fill_note = f"槽位自动买入{qty}股@{price:.{px_digits}f}"
+            r["挂单说明"] = f"{fill_note}；{note}" if note else fill_note
+            remember_factor_trigger(
+                code,
+                side="buy",
+                px=price,
+                session=str(r.get("交易日") or pd.Timestamp.now().date()),
+            )
+
+    meta = _slot_meta_from_holdings(load_holdings())
+    meta["candidates"] = sorted(selected_codes)
+    meta["bought"] = bought_codes
+    return meta
+
+
 def apply_exit_fill(
     *,
     code: str,
@@ -3091,6 +3313,41 @@ def collect_rows(
         r["因子2建议额"] = f2_status.get("suggest_amount")
         r["因子2回撤%"] = f2_status.get("dd_pct")
         r["因子2档位"] = f2_status.get("layers")
+
+    slot_info = _apply_portfolio_slots(
+        rows, account_total=account_total, phase_now=phase_now
+    )
+    # 自动入仓后重算仓位%
+    if slot_info.get("bought"):
+        holdings = load_holdings()
+        portfolio_codes.update(occupied_slot_codes(holdings))
+        total_mv = sum(
+            float(r["市值"])
+            for r in rows
+            if r.get("市值") is not None and int(r.get("持仓") or 0) > 0
+        )
+        account_total = _sync_account_total(rows)
+        pos_base = account_total if account_total and account_total > 0 else (
+            total_mv if total_mv > 0 else None
+        )
+        for r in rows:
+            qty = int(r.get("持仓") or 0)
+            mv = r.get("市值")
+            if qty > 0 and mv is not None and pos_base and pos_base > 0:
+                r["仓位%"] = round(float(mv) / pos_base * 100.0, 1)
+            else:
+                r["仓位%"] = 0.0 if r.get("已实现") else None
+            code = _code_key(str(r.get("代码") or ""))
+            if code in portfolio_codes:
+                _enrich_float_pnl(r)
+
+    for r in rows:
+        r["槽位信息"] = (
+            f"{slot_info.get('occupiedCount', 0)}/{slot_info.get('max', MAX_PORTFOLIO_SLOTS)}"
+        )
+    # 挂在首行便于快照读取（build_watch_snapshot 取 meta）
+    if rows:
+        rows[0]["_slot_meta"] = slot_info
     return sort_watch_rows(rows)
 
 
@@ -3260,50 +3517,39 @@ def _ever_held_codes() -> set[str]:
 
 
 def sort_watch_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """排序：实仓 → 曾经持仓 → 待买入 → 策略持有 → 空仓；同档 WATCHLIST 序。"""
-    order = {_code_key(w["code"]): i for i, w in enumerate(WATCHLIST)}
-    former = _ever_held_codes()
+    """策略一排序：实仓 → 当日留痕 → 槽位候选 → 其余按距买点升序（最近在前）。"""
 
     def _tier(r: dict[str, Any]) -> int:
-        pos = str(r.get("持仓状态") or "")
         qty = int(r.get("持仓") or 0)
-        code = _code_key(str(r.get("代码") or ""))
-        if qty > 0 and pos == "待卖出":
-            return 0
         if qty > 0:
+            return 0
+        if bool(r.get("已实现")):
             return 1
-        # 曾经持仓（含当日禁买）排实仓之后
-        if pos == "当日禁买" or code in former:
+        if bool(r.get("槽位候选")):
             return 2
-        if pos == "待买入":
-            return 3
-        if pos == "策略持有":
-            return 4
-        if str(r.get("因子2动作") or "") in (
-            "inject",
-            "withdraw",
-            "add_alert",
-            "reduce_alert",
-            "near_max",
-        ):
-            return 5
-        return 6
+        return 3
 
     def _urgency(r: dict[str, Any]) -> int:
         hit = str(r.get("因子触发") or "")
         pos = str(r.get("持仓状态") or "")
         if pos == "待卖出" or hit.startswith("已触发") or hit.startswith("策略止损"):
             return 0
-        if pos == "当日禁买":
+        if _row_hit_buy(r) or pos == "待买入":
             return 1
-        if pos == "待买入" or hit == "接近" or r.get("近止损") or r.get("近买点"):
+        if r.get("近买点") or r.get("近止损") or hit == "接近":
             return 2
         return 3
 
-    def key(r: dict[str, Any]) -> tuple[int, int, int]:
+    def key(r: dict[str, Any]) -> tuple[int, int, float, str]:
         code = _code_key(str(r.get("代码") or ""))
-        idx = order.get(code, 10_000)
-        return (_tier(r), _urgency(r), idx)
+        dist = r.get("距买点%")
+        if dist is None:
+            dist = _buy_distance_pct(r)
+        try:
+            dist_f = float(dist)
+        except (TypeError, ValueError):
+            dist_f = 9_999.0
+        return (_tier(r), _urgency(r), dist_f, code)
 
     return sorted(rows, key=key)
 

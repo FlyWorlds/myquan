@@ -103,7 +103,7 @@ const loading = computed(() => !snapshot.value && wsStatus.value.includes('连�
       <section v-show="activeTab === 'holdings'" class="space-y-4">
         <IndexBar v-if="snapshot" :indices="snapshot.indices" />
         <AccountSummary v-if="snapshot" :account="snapshot.account" />
-        <p v-if="snapshot && !snapshot.holdings?.length" class="text-sm text-ui-text-2">暂无持仓池标的；在 holdings.json 登记或 set-cost 后，系统按因子1自动算买卖/止损。</p>
+        <p v-if="snapshot && !snapshot.holdings?.length" class="text-sm text-ui-text-2">暂无持仓/当日预警；实仓登记或定盘池出现买入预警后显示于此。</p>
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <HoldingCard v-for="row in snapshot?.holdings || []" :key="String(row.代码)" :row="row" />
         </div>
@@ -112,7 +112,7 @@ const loading = computed(() => !snapshot.value && wsStatus.value.includes('连�
       <section v-show="activeTab === 'strategy1'">
         <StrategyInfoPanel v-if="strategy1Tab" :tab="strategy1Tab" class="mb-4" />
         <StrategyPicksPanel :picks="strategy1Tab?.picks" />
-        <Strategy1Panel v-if="snapshot" :rows="snapshot.strategy1" :phase="snapshot.phase" class="mt-4" />
+        <Strategy1Panel v-if="snapshot" :rows="snapshot.strategy1" :phase="snapshot.phase" :slot-meta="snapshot.slotMeta" class="mt-4" />
       </section>
 
       <section v-show="activeTab === 'strategy3'">

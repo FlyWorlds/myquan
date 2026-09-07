@@ -43,6 +43,7 @@ const cardClass = computed(() => {
         </div>
         <span :class="visual.badgeClass" :title="visual.badgeText">{{ visual.badgeText }}</span>
       </header>
+      <p v-if="row.当日预警 && !(row.持仓)" class="mb-2 text-xs text-accent">当日预警 · 未登记持仓</p>
       <p v-if="row.error" class="text-sm text-up">{{ row.error }}</p>
       <div v-else class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
         <div><span class="text-ui-text-2">持仓</span> <b class="sensitive">{{ row.持仓 ?? 0 }}</b></div>
@@ -58,6 +59,12 @@ const cardClass = computed(() => {
             <span class="text-ui-text-2">卖出侧</span>
             <b class="sensitive ml-1 text-down">{{ fmtNum(row.卖出侧价 ?? row.止损, pdg) }}</b>
           </div>
+        </div>
+        <div v-if="row['距买点%'] != null && Number(row['距买点%']) < 9000" class="col-span-2 text-sm">
+          <span class="text-ui-text-2">距买点</span>
+          <b class="ml-1 tabular-nums">{{ Number(row['距买点%']).toFixed(2) }}%</b>
+          <span v-if="row.槽位候选" class="ml-2 text-xs text-accent">槽位候选</span>
+          <span v-if="row.已实现" class="ml-2 text-xs text-ui-text-3">当日留痕</span>
         </div>
         <div class="col-span-2 text-xs leading-relaxed text-ui-text-2">{{ row.挂单说明 || row.预警 }}</div>
         <footer class="col-span-2 text-xs text-ui-text-3">更新 {{ row.更新 || '-' }}</footer>

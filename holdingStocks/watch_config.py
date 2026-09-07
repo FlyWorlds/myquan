@@ -522,3 +522,34 @@ def find_meta(code: str, watchlist: list[dict[str, Any]] | None = None) -> dict[
 def watchlist_codes_label(watchlist: list[dict[str, Any]] | None = None) -> str:
     items = watchlist if watchlist is not None else strategy_watchlist()
     return " / ".join(w["code"] for w in items)
+
+
+# ── 三槽持仓（策略一实盘）──────────────────────────────────────────
+MAX_PORTFOLIO_SLOTS = 3
+SLOT_WEIGHT = 0.30  # 每槽约 3 成仓
+
+
+def occupied_slot_codes(holdings: dict[str, Any]) -> list[str]:
+    """仅 qty>0 占槽；当日已清仓（realized_today）不占槽。"""
+    out: list[str] = []
+    for code, pos in (holdings.get("positions") or {}).items():
+        if not isinstance(pos, dict):
+            continue
+        if int(pos.get("qty") or 0) > 0:
+            out.append(code_key(str(code)))
+    return sorted(set(out))
+
+
+def free_slot_count(holdings: dict[str, Any]) -> int:
+    return max(0, int(MAX_PORTFOLIO_SLOTS) - len(occupied_slot_codes(holdings)))
+
+
+def slot_meta(holdings: dict[str, Any]) -> dict[str, Any]:
+    occupied = occupied_slot_codes(holdings)
+    return {
+        "max": int(MAX_PORTFOLIO_SLOTS),
+        "weight": float(SLOT_WEIGHT),
+        "occupied": occupied,
+        "occupiedCount": len(occupied),
+        "free": max(0, int(MAX_PORTFOLIO_SLOTS) - len(occupied)),
+    }
