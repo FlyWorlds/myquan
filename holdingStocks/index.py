@@ -1354,12 +1354,9 @@ def _apply_trigger_date_fields(
     # 日线回放仍处「买入未平」：本地未登记仓位时，双距按策略持有展示（勿用更早的卖出因子）
     paper_holding = bool(replay.get("holding")) and qty <= 0
     row["策略回放持有"] = bool(paper_holding)
-    # 当日已止损/卖出：默认禁止再算买入侧；allow_entry=True 时（因子22）放行
-    stop_exit_today = bool(
-        sold_today
-        or (paper_holding and hit_stop)
-        or (qty > 0 and hit_stop)
-    )
+    # 实仓触止损但仍持有（含 T+1 暂不可卖）≠ 已平仓；仅已卖出/纸面触止损算「当日退出」
+    hit_stop_while_held = bool(qty > 0 and hit_stop)
+    stop_exit_today = bool(sold_today or (paper_holding and hit_stop))
     if allow_entry and qty <= 0 and sold_today:
         stop_exit_today = False
     row["当日禁买"] = bool(stop_exit_today) and not allow_entry
@@ -1383,11 +1380,14 @@ def _apply_trigger_date_fields(
 
     # 触发瞬间
     just_sold = bool(
-        stop_exit_today or (pos_st == "待卖出" and hit_txt == "已触发")
+        stop_exit_today
+        or hit_stop_while_held
+        or (pos_st == "待卖出" and hit_txt == "已触发")
     )
     just_bought = bool(
         allow_entry
         and (not stop_exit_today)
+        and (not hit_stop_while_held)
         and (hit_buy or (pos_st == "待买入" and hit_txt == "已触发"))
     )
 
@@ -1499,10 +1499,19 @@ def _apply_trigger_date_fields(
             # 强制不挂买单（因子22 放行时 stop_exit_today 已为 False，不会进此支）
             row["建议挂单"] = None
             row["近买点"] = False
-            if str(row.get("持仓状态") or "") == "待买入":
+            # 已真实平仓 → 已止损；纸面触止损仍空仓观望
+            if sold_today:
+                row["持仓状态"] = "已止损"
+            elif str(row.get("持仓状态") or "") == "待买入":
                 row["持仓状态"] = "空仓"
             if str(row.get("因子侧") or "") == "买入":
                 row["因子侧"] = "空仓"
+        elif hit_stop_while_held and today_md and qty > 0:
+            # 仍持仓：保留买入日；止损仅在预警/待卖出侧体现，勿写成空仓
+            if md:
+                row["因子触发"] = md
+            if str(row.get("持仓状态") or "") in ("", "空仓", "待买入", "持有"):
+                row["持仓状态"] = "已经买入"
         elif hit_txt == "未触发" and md:
             row["因子触发"] = md
         elif hit_txt == "不可用" and md:
@@ -1753,19 +1762,22 @@ def _overlay_buy_signal_on_hold(
     px_digits: int,
     near_points: float = NEAR_FACTOR_PCT,
 ) -> dict[str, Any]:
-    """持有/策略回放持有时，若今日仍触买或近买点，叠加买入信号（勿被「持有」吞掉）。"""
+    """策略回放持有时，若今日仍触买或近买点，叠加买入信号（防漏单）。
+
+    实仓 qty>0 已入槽：保持「已经买入/待卖出」，绝不改回「待买入」。
+    """
     if not allow_entry:
         return sig
-    buy_today = bool(buy_time and str(buy_time)[:10] == str(session)[:10])
-    if qty > 0 and not buy_today:
+    # 真仓已占用槽位：不再叠「待买入」文案
+    if qty > 0:
         return sig
-    if not paper_active and not (qty > 0 and buy_today):
+    if not paper_active:
         return sig
 
     pf = f"{{:.{px_digits}f}}"
     buy_fmt = pf.format(buy_trigger)
     stop_fmt = pf.format(stop_px)
-    hold_tag = "策略回放持有" if paper_active else "实仓·今日买入"
+    hold_tag = "策略回放持有"
     sig = dict(sig)
 
     dist_pct = None
@@ -2075,7 +2087,12 @@ def _apply_portfolio_slots(
     account_total: float | None,
     phase_now: str,
 ) -> dict[str, Any]:
-    """标记空槽候选；连续竞价下触买则纸面自动入仓（约 3 成整手）。"""
+    """三槽：已有持仓 + 新触买 ≤ 3。
+
+    · 空槽候选：按距买点升序标记（展示用）
+    · 连续竞价：在「已触买」里按距买点升序填满空槽 → 状态「已经买入」
+    · 止损平仓后释放槽位（occupied = qty>0）
+    """
     data = load_holdings()
     occupied = occupied_slot_codes(data)
     free = free_slot_count(data)
@@ -2094,7 +2111,8 @@ def _apply_portfolio_slots(
         code = _code_key(str(r.get("代码") or ""))
         if int(r.get("持仓") or 0) > 0 or code in occupied_set:
             continue
-        if str(r.get("持仓状态") or "") == "当日禁买" and not _row_hit_buy(r):
+        pos = str(r.get("持仓状态") or "")
+        if pos in ("当日禁买", "已止损") and not _row_hit_buy(r):
             continue
         if r.get("过门OK") is False:
             continue
@@ -2103,21 +2121,27 @@ def _apply_portfolio_slots(
             continue
         candidates.append((dist, code, r))
     candidates.sort(key=lambda x: (x[0], x[1]))
+    # 展示：空槽附近票标候选
     selected = candidates[: max(0, free)]
     selected_codes = {c for _, c, _ in selected}
     for _, _c, r in selected:
         r["槽位候选"] = True
 
     bought_codes: list[str] = []
-    if phase_now == "continuous" and free > 0 and selected:
+    if phase_now == "continuous" and free > 0:
+        # 入槽：只吃「已触买」，按距买点升序（最先/最近触的优先），最多 free 只
+        hit_queue = [
+            (dist, code, r)
+            for dist, code, r in candidates
+            if _row_hit_buy(r)
+        ]
+        hit_queue.sort(key=lambda x: (x[0], x[1]))
         budget = _slot_notional_budget(account_total, rows, occupied)
-        for dist, code, r in selected:
+        for dist, code, r in hit_queue:
             data = load_holdings()
             if free_slot_count(data) <= 0:
                 break
             if int((data.get("positions") or {}).get(code, {}).get("qty") or 0) > 0:
-                continue
-            if not _row_hit_buy(r):
                 continue
             if budget is None or budget <= 0:
                 break
@@ -2159,8 +2183,9 @@ def _apply_portfolio_slots(
             r["槽位占用"] = True
             r["槽位候选"] = False
             r["已实现"] = False
-            r["持仓状态"] = "持有"
+            r["持仓状态"] = "已经买入"
             r["预警"] = "已触买·已入槽"
+            r["因子侧"] = "持有"
             px_digits = int(r.get("价位小数") or 2)
             last = r.get("现价")
             if last is not None and pos.get("cost") is not None:
@@ -2954,7 +2979,7 @@ def collect_rows(
                             if f22 and len(str(q["session"])) >= 10
                             else sig0.get("因子触发")
                         ),
-                        "持仓状态": "待买入" if f22 else "空仓",
+                        "持仓状态": "待买入" if f22 else "已止损",
                         "已触发因子侧": "买入" if f22 else sig0.get("已触发因子侧"),
                         "已触发因子价": f22_px if f22 else sig0.get("已触发因子价"),
                         "未触发因子侧": sig0.get("未触发因子侧"),
@@ -3104,10 +3129,10 @@ def collect_rows(
                 sig = dict(sig)
                 sig.update(
                     {
-                        "alert": "持有·因子4牛市暂停止损",
+                        "alert": "已经买入·因子4牛市暂停止损",
                         "bg_class": "status-hold",
                         "pending_sell": False,
-                        "持仓状态": "持有",
+                        "持仓状态": "已经买入",
                         "建议挂单": None,
                         "挂单说明": (
                             f"{f4_tag}；基础止损{lv_base['stop']:.{px_digits}f}"
@@ -3242,7 +3267,7 @@ def collect_rows(
                     "因子价": sig.get("因子价"),
                     "因子触发": sig.get("因子触发"),
                     "持仓状态": sig.get("持仓状态") or (
-                        "持有" if qty > 0 else "空仓"
+                        "已经买入" if qty > 0 else "空仓"
                     ),
                     "已触发因子侧": sig.get("已触发因子侧"),
                     "已触发因子价": sig.get("已触发因子价"),
@@ -3522,7 +3547,7 @@ def _enrich_float_pnl(row: dict[str, Any]) -> None:
 
 
 def _finalize_position_row(row: dict[str, Any]) -> None:
-    """收敛持仓状态：T+1 / 当日禁买 / 策略回放持有 / 可执行。"""
+    """收敛持仓状态：已经买入 / 待卖出 / 已止损 / 策略回放 / 可执行。"""
     if row.get("error"):
         row["可执行"] = False
         return
@@ -3534,13 +3559,14 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
     t1 = "T+1" in alert
 
     if no_buy and qty <= 0:
-        row["持仓状态"] = "当日禁买"
+        # 今日已平仓：统一「已止损」（兼容旧「当日禁买」）
+        row["持仓状态"] = "已止损"
         row["因子侧"] = "空仓"
         row["建议挂单"] = None
         row["近买点"] = False
         row["可执行"] = False
         row["bg_class"] = "status-flat"
-        if alert in ("", "-", "空仓", "待买入"):
+        if alert in ("", "-", "空仓", "待买入", "当日禁买"):
             row["预警"] = "今日已止损·当日不买"
         # 主展示价：保留上次买入触发价
         if row.get("已触发因子侧") == "买入" and row.get("已触发因子价") is not None:
@@ -3585,6 +3611,15 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
     if qty > 0:
         sellable = int(row.get("可用") or 0)
         hit_stop = str(row.get("已触止损") or "") == "是"
+        # 实仓统一「已经买入」；触止损可卖则「待卖出」
+        if pos == "待卖出" or (
+            hit_stop and sellable > 0 and "不可卖" not in alert and not t1
+        ):
+            row["持仓状态"] = "待卖出"
+            pos = "待卖出"
+        elif pos in ("", "空仓", "待买入", "持有", "持有·T+1", "已经买入"):
+            row["持仓状态"] = "已经买入"
+            pos = "已经买入"
         # 可执行=待卖出且真正有可卖股；T+1 / 可卖0 / 跌停封单 均不可执行
         row["可执行"] = (
             pos == "待卖出"
@@ -3594,8 +3629,23 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
         )
         if hit_stop and sellable <= 0 and "不可卖" not in alert and not t1:
             row["可执行"] = False
-            if alert in ("", "-", "待卖出", "已触止损"):
+            if alert in (
+                "",
+                "-",
+                "待卖出",
+                "已触止损",
+                "已经买入",
+                "持有",
+                "已触买",
+                "已触买·已入槽",
+            ) or alert.startswith("已触买"):
                 row["预警"] = "已触止损·暂不可卖"
+        elif (
+            alert in ("", "-", "空仓", "待买入", "已触买", "已触买·已入槽")
+            or alert.startswith("已触买")
+        ) and pos == "已经买入":
+            row["预警"] = "已经买入"
+        row["因子侧"] = "持有" if pos == "已经买入" else row.get("因子侧") or "卖出"
         return
 
     # 真·空仓

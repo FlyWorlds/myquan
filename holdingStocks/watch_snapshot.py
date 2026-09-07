@@ -77,8 +77,11 @@ def filter_portfolio_holdings(
     rows: list[dict[str, Any]],
     portfolio_codes: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """持仓 Tab：实仓/当日留痕 + 当日预警票（预警仅展示，不登记 qty/成本）。"""
-    from watch_config import code_key, portfolio_pool_codes
+    """持仓 Tab：实仓/当日留痕 + 当日预警票（预警仅展示，不登记 qty/成本）。
+
+    排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=3）→ 当日留痕 → 预警/候选 → 其余。
+    """
+    from watch_config import MAX_PORTFOLIO_SLOTS, code_key, portfolio_pool_codes
 
     if portfolio_codes is None:
         try:
@@ -117,10 +120,22 @@ def filter_portfolio_holdings(
             out.setdefault("当日预警", False)
         picked.append(out)
 
-    def _sort_key(r: dict[str, Any]) -> tuple[int, float, str]:
+    def _pos_rank(pos: str) -> int:
+        # 待卖出最前，再已经买入/持有，其余靠后
+        if pos == "待卖出":
+            return 0
+        if pos in ("已经买入", "持有", "持有·T+1"):
+            return 1
+        if pos == "策略持有":
+            return 2
+        if pos in ("已止损", "当日禁买"):
+            return 3
+        return 4
+
+    def _sort_key(r: dict[str, Any]) -> tuple[int, int, float, str]:
         qty = int(r.get("持仓") or 0)
         pos = str(r.get("持仓状态") or "")
-        if qty > 0:
+        if qty > 0 or bool(r.get("槽位占用")):
             tier = 0
         elif bool(r.get("已实现")):
             tier = 1
@@ -132,9 +147,20 @@ def filter_portfolio_holdings(
             dist = float(r.get("距买点%") if r.get("距买点%") is not None else 9_999.0)
         except (TypeError, ValueError):
             dist = 9_999.0
-        return (tier, dist, str(r.get("代码") or ""))
+        return (tier, _pos_rank(pos), dist, str(r.get("代码") or ""))
 
-    return sorted(picked, key=_sort_key)
+    ordered = sorted(picked, key=_sort_key)
+    # 实仓前 N 只标置顶（三槽）
+    pinned = 0
+    max_pin = int(MAX_PORTFOLIO_SLOTS)
+    for r in ordered:
+        qty = int(r.get("持仓") or 0)
+        if qty > 0 and pinned < max_pin:
+            r["置顶"] = True
+            pinned += 1
+        else:
+            r["置顶"] = False
+    return ordered
 
 
 def build_watch_snapshot(

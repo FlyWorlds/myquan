@@ -26,6 +26,8 @@ export default {
         accent: 'var(--watch-accent)',
         up: 'var(--watch-up)',
         down: 'var(--watch-down)',
+        hold: 'var(--watch-hold)',
+        'hold-paper': 'var(--watch-hold-paper)',
         line: 'var(--ui-hairline-strong)',
         muted: 'var(--ui-text-2)',
       },

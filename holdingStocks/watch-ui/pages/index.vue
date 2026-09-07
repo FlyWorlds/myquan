@@ -42,6 +42,14 @@ const strategy3Tab = computed(() => strategyTabs.value.find((t) => t.id === 'str
 const strategy8Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy8'))
 const strategy15Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy15'))
 const loading = computed(() => !snapshot.value && wsStatus.value.includes('连接'))
+
+const pinnedHoldings = computed(() =>
+  (snapshot.value?.holdings || []).filter((r) => Boolean(r.置顶) && Number(r.持仓) > 0),
+)
+const otherHoldings = computed(() =>
+  (snapshot.value?.holdings || []).filter((r) => !(Boolean(r.置顶) && Number(r.持仓) > 0)),
+)
+const slotMeta = computed(() => snapshot.value?.slotMeta)
 </script>
 
 <template>
@@ -105,9 +113,30 @@ const loading = computed(() => !snapshot.value && wsStatus.value.includes('连�
         <IndexBar v-if="snapshot" :indices="snapshot.indices" />
         <AccountSummary v-if="snapshot" :account="snapshot.account" />
         <p v-if="snapshot && !snapshot.holdings?.length" class="text-sm text-ui-text-2">暂无持仓/当日预警；实仓登记或定盘池出现买入预警后显示于此。</p>
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <HoldingCard v-for="row in snapshot?.holdings || []" :key="String(row.代码)" :row="row" />
-        </div>
+        <template v-else>
+          <div v-if="pinnedHoldings.length" class="space-y-2">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="text-sm font-semibold text-ui-text">
+                三槽持仓（置顶）
+                <span class="ml-1 font-normal text-ui-text-2">
+                  {{ slotMeta?.occupiedCount ?? pinnedHoldings.length }}/{{ slotMeta?.max ?? 3 }}
+                </span>
+              </h2>
+              <p class="text-xs text-ui-text-3">持仓状态 · 已经买入 / 待卖出 / 已止损</p>
+            </div>
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <HoldingCard v-for="row in pinnedHoldings" :key="'pin-' + String(row.代码)" :row="row" />
+            </div>
+          </div>
+          <div v-if="otherHoldings.length" class="space-y-2">
+            <h2 class="text-sm font-semibold text-ui-text-2">
+              {{ pinnedHoldings.length ? '预警 / 留痕' : '持仓列表' }}
+            </h2>
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <HoldingCard v-for="row in otherHoldings" :key="'other-' + String(row.代码)" :row="row" />
+            </div>
+          </div>
+        </template>
       </section>
 
       <section v-show="activeTab === 'strategy1'">

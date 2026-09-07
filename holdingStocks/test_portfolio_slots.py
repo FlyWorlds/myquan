@@ -47,7 +47,7 @@ def test_filter_includes_alert_without_pool():
     from watch_snapshot import filter_portfolio_holdings
 
     rows = [
-        {"代码": "600552", "名称": "凯盛", "持仓": 400, "持仓状态": "持有", "距买点%": 0},
+        {"代码": "600552", "名称": "凯盛", "持仓": 400, "持仓状态": "已经买入", "距买点%": 0},
         {
             "代码": "002104",
             "名称": "恒宝",
@@ -64,10 +64,35 @@ def test_filter_includes_alert_without_pool():
     assert "600552" in codes
     assert "002104" in codes
     assert "600301" not in codes
+    assert codes[0] == "600552"
+    assert picked[0].get("置顶") is True
+    assert picked[0].get("持仓状态") == "已经买入"
     alert = next(r for r in picked if r["代码"] == "002104")
     assert alert.get("当日预警") is True
     assert int(alert.get("持仓") or 0) == 0
     assert alert.get("盈亏说明") == "当日预警·未登记持仓"
+    assert alert.get("置顶") is False
+
+
+def test_pin_top3_slots():
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {"代码": "600301", "名称": "华锡", "持仓": 100, "持仓状态": "已经买入", "距买点%": 3},
+        {"代码": "600552", "名称": "凯盛", "持仓": 200, "持仓状态": "待卖出", "距买点%": 1},
+        {"代码": "600330", "名称": "天通", "持仓": 300, "持仓状态": "已经买入", "距买点%": 2},
+        {"代码": "002104", "名称": "恒宝", "持仓": 0, "持仓状态": "待买入", "预警": "已触买", "距买点%": 0},
+    ]
+    picked = filter_portfolio_holdings(
+        rows, portfolio_codes={"600301", "600552", "600330", "002104"}
+    )
+    pinned = [r for r in picked if r.get("置顶")]
+    assert len(pinned) == 3
+    assert all(int(r.get("持仓") or 0) > 0 for r in pinned)
+    # 待卖出优先于已经买入
+    assert pinned[0]["代码"] == "600552"
+    assert picked[3]["代码"] == "002104"
+    assert picked[3].get("置顶") is False
 
 
 def test_demote_pre_signal_window():
@@ -109,3 +134,57 @@ def test_buy_distance_and_sort_helpers():
     assert ordered[0]["代码"] == "600552"
     assert ordered[1]["代码"] == "002104"
     assert ordered[2]["代码"] == "600301"
+
+
+def test_finalize_real_hold_not_empty_on_hit_stop():
+    """实仓触止损但未平仓：状态已经买入，勿写成空仓。"""
+    from index import _finalize_position_row
+
+    row = {
+        "持仓": 1000,
+        "可用": 0,
+        "持仓状态": "空仓",
+        "预警": "已触买",
+        "已触止损": "是",
+        "当日禁买": False,
+        "策略回放持有": False,
+    }
+    _finalize_position_row(row)
+    assert row["持仓状态"] == "已经买入"
+    assert row["预警"] == "已触止损·暂不可卖"
+
+
+def test_finalize_sold_today_is_stopped():
+    from index import _finalize_position_row
+
+    row = {
+        "持仓": 0,
+        "可用": 0,
+        "持仓状态": "空仓",
+        "预警": "止损",
+        "当日禁买": True,
+        "策略回放持有": False,
+    }
+    _finalize_position_row(row)
+    assert row["持仓状态"] == "已止损"
+
+
+def test_overlay_does_not_rewrite_real_qty():
+    from index import _overlay_buy_signal_on_hold
+
+    sig = {"持仓状态": "已经买入", "alert": "已经买入", "因子触发": "9/7"}
+    out = _overlay_buy_signal_on_hold(
+        sig,
+        hit_buy=True,
+        allow_entry=True,
+        paper_active=False,
+        qty=1000,
+        buy_time="2026-09-07 12:58:35",
+        session="2026-09-07",
+        buy_trigger=25.48,
+        stop_px=25.3,
+        last_px=25.6,
+        px_digits=2,
+    )
+    assert out["持仓状态"] == "已经买入"
+    assert out.get("alert") == "已经买入"

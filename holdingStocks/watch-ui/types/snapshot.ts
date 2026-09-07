@@ -47,6 +47,10 @@ export interface HoldingRow {
   当日盈亏?: number | null
   '当日盈亏%'?: number | null
   持仓状态?: string
+  置顶?: boolean
+  槽位占用?: boolean
+  槽位候选?: boolean
+  当日预警?: boolean
   因子侧?: string
   因子价?: number | null
   因子触发?: string

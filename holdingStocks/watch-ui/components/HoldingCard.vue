@@ -9,20 +9,60 @@ const props = defineProps<{ row: HoldingRow }>()
 const pdg = props.row['价位小数'] ?? 2
 const visual = computed(() => resolveSignalVisual(props.row))
 
+const posStatus = computed(() => String(props.row.持仓状态 || '').trim() || '-')
+const pinned = computed(() => Boolean(props.row.置顶) && Number(props.row.持仓) > 0)
+
+const posChipStyle = computed(() => {
+  const s = posStatus.value
+  if (s === '已经买入' || s === '持有' || s === '持有·T+1') {
+    return {
+      color: 'var(--watch-hold)',
+      borderColor: 'color-mix(in srgb, var(--watch-hold) 45%, transparent)',
+      background: 'color-mix(in srgb, var(--watch-hold) 14%, transparent)',
+    }
+  }
+  if (s === '待卖出') {
+    return {
+      color: 'var(--watch-down)',
+      borderColor: 'color-mix(in srgb, var(--watch-down) 45%, transparent)',
+      background: 'color-mix(in srgb, var(--watch-down) 12%, transparent)',
+    }
+  }
+  if (s === '待买入') {
+    return {
+      color: 'var(--watch-up)',
+      borderColor: 'color-mix(in srgb, var(--watch-up) 45%, transparent)',
+      background: 'color-mix(in srgb, var(--watch-up) 12%, transparent)',
+    }
+  }
+  if (s === '策略持有') {
+    return {
+      color: 'var(--watch-hold-paper)',
+      borderColor: 'color-mix(in srgb, var(--watch-hold-paper) 40%, transparent)',
+      background: 'color-mix(in srgb, var(--watch-hold-paper) 12%, transparent)',
+    }
+  }
+  return {
+    color: 'var(--ui-text-2)',
+    borderColor: 'var(--ui-hairline)',
+    background: 'transparent',
+  }
+})
+
 const cardClass = computed(() => {
   const map: Record<string, string> = {
     'trigger-buy': 'signal-trigger-buy border-up/50',
     'warn-buy': 'signal-warn-buy border-up/40',
     'trigger-sell': 'signal-trigger-sell border-down/50',
     'warn-sell': 'signal-warn-sell border-down/40',
-    hold: 'signal-hold-real border-sky-400/30',
-    'paper-hold': 'signal-hold-paper border-violet-400/30',
-    'ban-buy': 'signal-ban-buy border-up/25',
+    hold: 'signal-hold-real border-hold/40',
+    'paper-hold': 'signal-hold-paper border-hold-paper/40',
+    'ban-buy': 'signal-ban-buy border-ui-hairline',
     flat: 'signal-flat border-ui-hairline',
   }
   const tier = visual.value.tier
   if (tier && map[tier]) return map[tier]
-  if (Number(props.row.持仓) > 0) return 'signal-hold-real border-sky-400/30'
+  if (Number(props.row.持仓) > 0) return 'signal-hold-real border-hold/40'
   return 'signal-flat border-ui-hairline'
 })
 </script>
@@ -32,7 +72,18 @@ const cardClass = computed(() => {
     <div class="p-3">
       <header class="mb-2 flex items-start justify-between gap-2">
         <div>
-          <span class="rounded-full border border-ui-hairline px-2 py-0.5 text-xs text-accent">{{ row.市场 }}</span>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="rounded-full border border-ui-hairline px-2 py-0.5 text-xs text-accent">{{ row.市场 }}</span>
+            <span
+              v-if="pinned"
+              class="rounded-full px-2 py-0.5 text-xs font-medium"
+              style="color: var(--watch-hold); border: 1px solid color-mix(in srgb, var(--watch-hold) 50%, transparent); background: color-mix(in srgb, var(--watch-hold) 16%, transparent)"
+            >置顶·三槽</span>
+            <span
+              class="rounded-full border px-2 py-0.5 text-xs font-medium"
+              :style="posChipStyle"
+            >{{ posStatus }}</span>
+          </div>
           <h2 class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-bold">
             <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ row.名称 }}</a>
             <b class="sensitive tabular-nums">{{ fmtNum(row.现价, pdg) }}</b>
@@ -46,6 +97,7 @@ const cardClass = computed(() => {
       <p v-if="row.当日预警 && !(row.持仓)" class="mb-2 text-xs text-accent">当日预警 · 未登记持仓</p>
       <p v-if="row.error" class="text-sm text-up">{{ row.error }}</p>
       <div v-else class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+        <div><span class="text-ui-text-2">持仓状态</span> <b>{{ posStatus }}</b></div>
         <div><span class="text-ui-text-2">持仓</span> <b class="sensitive">{{ row.持仓 ?? 0 }}</b></div>
         <div><span class="text-ui-text-2">成本</span> <b class="sensitive">{{ row.成本 != null ? fmtNum(row.成本, pdg) : '-' }}</b></div>
         <div><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>

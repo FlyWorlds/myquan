@@ -22,7 +22,7 @@ function qtyOf(row: HoldingRow): number {
   return Number(row.持仓) || 0
 }
 
-/** 策略1/持仓：买=红、卖=绿；持有=蓝；空仓=灰。预警闪、触发强高亮。 */
+/** 策略1/持仓：买=红、卖=绿、持仓=琥珀、策略持有=紫。预警闪、触发强高亮。 */
 export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   const bg = String(row.bgClass || '')
   const pos = String(row.持仓状态 || '')
@@ -31,14 +31,28 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   const side = String(row.因子侧 || '')
   const qty = qtyOf(row)
 
-  const realHold = qty > 0 && (pos === '持有' || pos === '待卖出' || pos === '持有·T+1' || alert === '持有')
+  const realHold =
+    qty > 0 &&
+    (pos === '持有' ||
+      pos === '已经买入' ||
+      pos === '待卖出' ||
+      pos === '持有·T+1' ||
+      alert === '持有' ||
+      alert === '已经买入')
   const paperHold = pos === '策略持有'
-  const empty = pos === '空仓' || (!qty && !paperHold && pos !== '待买入' && pos !== '当日禁买')
+  const empty =
+    pos === '空仓' ||
+    (!qty &&
+      !paperHold &&
+      pos !== '待买入' &&
+      pos !== '当日禁买' &&
+      pos !== '已止损')
 
   const buyTriggered =
-    alert === '已触买' ||
-    String(row.已触买 || '') === '是' ||
-    (pos === '待买入' && (trig.startsWith('已触发') || trig.includes('已触发')))
+    qty <= 0 &&
+    (alert === '已触买' ||
+      String(row.已触买 || '') === '是' ||
+      (pos === '待买入' && (trig.startsWith('已触发') || trig.includes('已触发'))))
   const sellTriggered =
     alert.includes('已触止损') ||
     trig.startsWith('策略止损') ||
@@ -85,11 +99,11 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   }
 
   // 3. 持有（无卖出预警）
-  if (pos === '当日禁买' || alert.includes('今日已止损')) {
-    return mk('ban-buy', alert || '当日禁买')
+  if (pos === '当日禁买' || pos === '已止损' || alert.includes('今日已止损')) {
+    return mk('ban-buy', alert || (pos === '已止损' ? '已止损' : '当日禁买'))
   }
   if (realHold || (qty > 0 && bg === 'status-hold')) {
-    return mk('hold', alert || '持有')
+    return mk('hold', alert || '已经买入')
   }
   if (paperHold || bg === 'status-hold') {
     return mk('paper-hold', alert || '策略持有')

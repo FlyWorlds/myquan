@@ -21,8 +21,10 @@
   --ui-shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.45);
   --ui-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --watch-accent: #5eead4;
-  --watch-up: #f87171;
-  --watch-down: #34d399;
+  --watch-up: #ff4d4f;
+  --watch-down: #22c55e;
+  --watch-hold: #5eead4;
+  --watch-hold-paper: #c4b5fd;
   --ui-scrollbar: #3c3c3c;
 }
 
@@ -42,8 +44,10 @@
   --ui-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   --ui-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
   --watch-accent: #1f6b4a;
-  --watch-up: #b42318;
-  --watch-down: #027a48;
+  --watch-up: #e11d48;
+  --watch-down: #059669;
+  --watch-hold: #0d9488;
+  --watch-hold-paper: #7c3aed;
   --ui-scrollbar: #d4d4d4;
 }
 
@@ -300,17 +304,17 @@
   user-select: none;
 }
 
-/* —— 策略1 / 持仓：买卖信号渐变与闪烁（A股：买=红 卖=绿） —— */
+/* —— 策略1 / 持仓：买=红 卖=绿 持仓=琥珀 策略持有=紫 —— */
 @keyframes signal-warn-buy-pulse {
   0%,
   100% {
     background-position: 0% 50%;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-up) 28%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-up) 32%, transparent);
   }
   50% {
     background-position: 100% 50%;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-up) 55%, transparent),
-      0 0 18px color-mix(in srgb, var(--watch-up) 22%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-up) 62%, transparent),
+      0 0 20px color-mix(in srgb, var(--watch-up) 28%, transparent);
   }
 }
 
@@ -331,9 +335,13 @@
   0%,
   100% {
     filter: brightness(1);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--watch-up) 75%, transparent),
+      0 0 18px color-mix(in srgb, var(--watch-up) 32%, transparent);
   }
   50% {
-    filter: brightness(1.08);
+    filter: brightness(1.06);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--watch-up) 90%, transparent),
+      0 0 28px color-mix(in srgb, var(--watch-up) 48%, transparent);
   }
 }
 
@@ -344,9 +352,9 @@
 .signal-warn-buy {
   background: linear-gradient(
     120deg,
-    color-mix(in srgb, var(--watch-up) 26%, transparent) 0%,
-    color-mix(in srgb, var(--watch-up) 8%, var(--ui-surface)) 45%,
-    color-mix(in srgb, var(--watch-up) 22%, transparent) 100%
+    color-mix(in srgb, var(--watch-up) 28%, transparent) 0%,
+    color-mix(in srgb, var(--watch-up) 10%, var(--ui-surface)) 45%,
+    color-mix(in srgb, var(--watch-up) 24%, transparent) 100%
   );
   background-size: 220% 220%;
   animation: signal-warn-buy-pulse 2.2s ease-in-out infinite;
@@ -363,45 +371,45 @@
   animation: signal-warn-sell-pulse 2.2s ease-in-out infinite;
 }
 
+/* 已触买：纯红高亮（勿混深绿/棕，避免看成卖出） */
 .signal-trigger-buy {
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--watch-up) 52%, #450a0a) 0%,
-    color-mix(in srgb, var(--watch-up) 38%, var(--ui-surface)) 55%,
-    color-mix(in srgb, var(--watch-up) 48%, #7f1d1d) 100%
+    color-mix(in srgb, var(--watch-up) 55%, var(--ui-surface)) 0%,
+    color-mix(in srgb, var(--watch-up) 28%, var(--ui-surface)) 50%,
+    color-mix(in srgb, var(--watch-up) 48%, var(--ui-surface)) 100%
   );
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--watch-up) 70%, transparent),
-    0 0 24px color-mix(in srgb, var(--watch-up) 35%, transparent);
-  animation: signal-trigger-buy-glow 1.6s ease-in-out infinite;
+  animation: signal-trigger-buy-glow 1.5s ease-in-out infinite;
 }
 
 .signal-trigger-sell {
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--watch-down) 48%, #052e16) 0%,
-    color-mix(in srgb, var(--watch-down) 32%, var(--ui-surface)) 55%,
-    color-mix(in srgb, var(--watch-down) 44%, #14532d) 100%
+    color-mix(in srgb, var(--watch-down) 42%, var(--ui-surface)) 0%,
+    color-mix(in srgb, var(--watch-down) 22%, var(--ui-surface)) 55%,
+    color-mix(in srgb, var(--watch-down) 38%, var(--ui-surface)) 100%
   );
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--watch-down) 65%, transparent),
     0 0 22px color-mix(in srgb, var(--watch-down) 32%, transparent);
 }
 
+/* 已经买入 / 实仓：背景 #5eead4（--watch-hold） */
 .signal-hold-real {
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, #38bdf8 14%, var(--ui-surface)),
-    var(--ui-surface)
+    color-mix(in srgb, var(--watch-hold) 42%, var(--ui-surface)) 0%,
+    color-mix(in srgb, var(--watch-hold) 22%, var(--ui-surface)) 100%
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #38bdf8 35%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-hold) 55%, transparent);
 }
 
 .signal-hold-paper {
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, #a78bfa 12%, var(--ui-surface)),
+    color-mix(in srgb, var(--watch-hold-paper) 16%, var(--ui-surface)),
     var(--ui-surface)
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #a78bfa 30%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-hold-paper) 35%, transparent);
 }
 
 .signal-flat {
@@ -409,23 +417,24 @@
   box-shadow: inset 0 0 0 1px var(--ui-hairline);
 }
 
+/* 已止损：中性灰，勿用买入红 */
 .signal-ban-buy {
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--watch-up) 10%, var(--ui-surface)),
+    color-mix(in srgb, var(--ui-text-3) 12%, var(--ui-surface)),
     var(--ui-surface)
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-up) 22%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-text-3) 28%, transparent);
   opacity: 0.92;
 }
 
 .signal-hold {
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--watch-accent) 12%, var(--ui-surface)),
+    color-mix(in srgb, var(--watch-hold) 14%, var(--ui-surface)),
     var(--ui-surface)
   );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-accent) 25%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-hold) 30%, transparent);
 }
 
 .signal-badge {
@@ -435,14 +444,14 @@
 .signal-badge-warn-buy {
   color: var(--watch-up);
   background: color-mix(in srgb, var(--watch-up) 18%, transparent);
-  border: 1px solid color-mix(in srgb, var(--watch-up) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--watch-up) 40%, transparent);
 }
 
 .signal-badge-trigger-buy {
   color: #fff;
-  background: linear-gradient(135deg, var(--watch-up), color-mix(in srgb, var(--watch-up) 70%, #000));
-  border: 1px solid color-mix(in srgb, var(--watch-up) 80%, #fff);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--watch-up) 45%, transparent);
+  background: var(--watch-up);
+  border: 1px solid color-mix(in srgb, var(--watch-up) 85%, #fff);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--watch-up) 50%, transparent);
 }
 
 .signal-badge-warn-sell {
@@ -453,33 +462,33 @@
 
 .signal-badge-trigger-sell {
   color: #fff;
-  background: linear-gradient(135deg, var(--watch-down), color-mix(in srgb, var(--watch-down) 70%, #000));
-  border: 1px solid color-mix(in srgb, var(--watch-down) 75%, #fff);
+  background: var(--watch-down);
+  border: 1px solid color-mix(in srgb, var(--watch-down) 80%, #fff);
   box-shadow: 0 0 12px color-mix(in srgb, var(--watch-down) 40%, transparent);
 }
 
 .signal-badge-hold-real {
-  color: #38bdf8;
-  background: color-mix(in srgb, #38bdf8 16%, transparent);
-  border: 1px solid color-mix(in srgb, #38bdf8 40%, transparent);
+  color: var(--watch-hold);
+  background: color-mix(in srgb, var(--watch-hold) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--watch-hold) 45%, transparent);
 }
 
 .signal-badge-hold-paper {
-  color: #a78bfa;
-  background: color-mix(in srgb, #a78bfa 14%, transparent);
-  border: 1px solid color-mix(in srgb, #a78bfa 35%, transparent);
+  color: var(--watch-hold-paper);
+  background: color-mix(in srgb, var(--watch-hold-paper) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--watch-hold-paper) 40%, transparent);
 }
 
 .signal-badge-ban-buy {
-  color: var(--watch-up);
-  background: color-mix(in srgb, var(--watch-up) 12%, transparent);
-  border: 1px dashed color-mix(in srgb, var(--watch-up) 35%, transparent);
+  color: var(--ui-text-2);
+  background: color-mix(in srgb, var(--ui-text-3) 14%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--ui-text-3) 40%, transparent);
 }
 
 .signal-badge-hold {
-  @apply text-accent;
-  background: color-mix(in srgb, var(--watch-accent) 15%, transparent);
-  border: 1px solid color-mix(in srgb, var(--watch-accent) 30%, transparent);
+  color: var(--watch-hold);
+  background: color-mix(in srgb, var(--watch-hold) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--watch-hold) 35%, transparent);
 }
 
 .signal-badge-flat {

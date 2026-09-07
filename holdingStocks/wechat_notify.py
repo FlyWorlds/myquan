@@ -105,9 +105,9 @@ def _has_holding(row: dict[str, Any]) -> bool:
     """有仓：实仓，或策略回放仍持有（未登记也按有仓盯止损）。"""
     qty = int(row.get("持仓") or 0)
     pos = str(row.get("持仓状态") or "")
-    if qty > 0 or pos in ("持有", "待卖出", "策略持有"):
+    if qty > 0 or pos in ("持有", "已经买入", "待卖出", "策略持有"):
         return True
-    return bool(row.get("策略回放持有")) and pos != "当日禁买"
+    return bool(row.get("策略回放持有")) and pos not in ("当日禁买", "已止损")
 
 
 def _factor_px_for_push(row: dict[str, Any], *, holding: bool) -> Any:
@@ -136,7 +136,7 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
     pos = str(row.get("持仓状态") or "")
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
-    no_buy = bool(row.get("当日禁买")) or pos == "当日禁买"
+    no_buy = bool(row.get("当日禁买")) or pos in ("当日禁买", "已止损")
     holding = _has_holding(row)
 
     hit_buy = str(row.get("已触买") or "") == "是"
