@@ -22,7 +22,7 @@ function qtyOf(row: HoldingRow): number {
   return Number(row.持仓) || 0
 }
 
-/** 策略1/持仓：买=红、卖=绿、持仓=琥珀、策略持有=紫。预警闪、触发强高亮。 */
+/** 策略1/持仓：买=红、卖=绿、实仓底=#5eead4、策略持有=紫。 */
 export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   const bg = String(row.bgClass || '')
   const pos = String(row.持仓状态 || '')
@@ -38,7 +38,8 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
       pos === '待卖出' ||
       pos === '持有·T+1' ||
       alert === '持有' ||
-      alert === '已经买入')
+      alert === '已经买入' ||
+      alert.includes('T+1'))
   const paperHold = pos === '策略持有'
   const empty =
     pos === '空仓' ||
@@ -56,7 +57,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   const sellTriggered =
     alert.includes('已触止损') ||
     trig.startsWith('策略止损') ||
-    (pos === '待卖出' && trig.startsWith('已触发'))
+    (pos === '待卖出' && (trig.startsWith('已触发') || alert.includes('止损')))
 
   const buyWarn =
     bg === 'warn-buy' ||
@@ -75,7 +76,25 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     (paperHold && trig === '接近') ||
     (realHold && trig === '接近' && bg === 'warn-sell')
 
-  // 1. 已触发（最强）— 持有/策略持有时触买仍优先红闪
+  // 实仓：底色固定持仓青绿 #5eead4；止损/预警只改角标，不换整卡绿底
+  if (qty > 0) {
+    const sellHit = sellTriggered || sellWarn || pos === '待卖出'
+    const badgeText = sellHit
+      ? alert || '已触止损'
+      : alert && alert !== '-'
+        ? alert
+        : '已经买入'
+    return {
+      tier: 'hold',
+      rowClass: 'signal-row signal-hold-real',
+      badgeClass: sellHit
+        ? 'signal-badge signal-badge-trigger-sell'
+        : 'signal-badge signal-badge-hold-real',
+      badgeText,
+    }
+  }
+
+  // 1. 已触发（空仓侧）
   if (buyTriggered && !sellTriggered) {
     const tag = alert === '已触买' ? alert : alert.includes('已触买') ? alert : '已触买'
     return mk('trigger-buy', tag)
@@ -91,25 +110,21 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   if (buyWarn && !sellWarn) {
     return mk('warn-buy', alert || '将买入')
   }
-  if (sellWarn && !buyWarn && (realHold || paperHold || pos === '待卖出')) {
+  if (sellWarn && !buyWarn && (paperHold || pos === '待卖出')) {
     return mk('warn-sell', alert || '将止损')
   }
   if (buyWarn && sellWarn) {
     return mk('warn-buy', alert || '将买入')
   }
 
-  // 3. 持有（无卖出预警）
+  // 3. 已止损 / 策略持有 / 空仓
   if (pos === '当日禁买' || pos === '已止损' || alert.includes('今日已止损')) {
     return mk('ban-buy', alert || (pos === '已止损' ? '已止损' : '当日禁买'))
-  }
-  if (realHold || (qty > 0 && bg === 'status-hold')) {
-    return mk('hold', alert || '已经买入')
   }
   if (paperHold || bg === 'status-hold') {
     return mk('paper-hold', alert || '策略持有')
   }
 
-  // 4. 空仓观望
   if (empty || bg === 'status-flat' || pos === '空仓') {
     return mk('flat', alert || '空仓')
   }
