@@ -126,6 +126,7 @@ from watch_config import (
     watchlist_codes_label as _watchlist_codes_label,
     MAX_PORTFOLIO_SLOTS,
     SLOT_WEIGHT,
+    DEFAULT_ACCOUNT_TOTAL,
     free_slot_count,
     occupied_slot_codes,
     slot_meta as _slot_meta_from_holdings,
@@ -2044,9 +2045,11 @@ def _slot_notional_budget(
     rows: list[dict[str, Any]],
     occupied: list[str],
 ) -> float | None:
-    """单槽目标金额：总权益×30%；无总权益时用现有实仓市值/占槽数近似。"""
+    """单槽目标金额：总权益×30%；无总权益时默认按 10 万×30%。"""
     if account_total is not None and float(account_total) > 0:
         return round(float(account_total) * float(SLOT_WEIGHT), 2)
+    if DEFAULT_ACCOUNT_TOTAL and float(DEFAULT_ACCOUNT_TOTAL) > 0:
+        return round(float(DEFAULT_ACCOUNT_TOTAL) * float(SLOT_WEIGHT), 2)
     mv = _holdings_market_value(rows)
     n = len(occupied)
     if n > 0 and mv > 0:

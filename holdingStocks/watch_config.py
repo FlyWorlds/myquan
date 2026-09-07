@@ -527,6 +527,7 @@ def watchlist_codes_label(watchlist: list[dict[str, Any]] | None = None) -> str:
 # ── 三槽持仓（策略一实盘）──────────────────────────────────────────
 MAX_PORTFOLIO_SLOTS = 3
 SLOT_WEIGHT = 0.30  # 每槽约 3 成仓
+DEFAULT_ACCOUNT_TOTAL = 100_000.0  # 无登记总资产时按 10 万估槽金额
 
 
 def occupied_slot_codes(holdings: dict[str, Any]) -> list[str]:
