@@ -3,7 +3,7 @@
 > 研究用途，不构成投资建议。  
 > 注册表与 API 细节见 [`strategy/README.md`](../strategy/README.md)；凯盛单票审计见 [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md)。
 
-**最后更新**：2026-08-31
+**最后更新**：2026-09-07
 
 ---
 
@@ -16,20 +16,23 @@
 | 决策 | `decision.py` | `MarketContext` → buy/sell/hold |
 | 执行 | `runner.py` / `backtest.py` / 盯盘 | 回测、下单模拟、预警 |
 
-**实盘盯盘默认**：**策略一 = 因子1 + 因子2 预警 + 因子22 收盘动量再买**（因子2 回测不注资）。
+**实盘盯盘默认**：**策略一 = 因子26 回落波止损 + 因子2 预警 + 因子22 收盘动量再买**（因子2 回测不注资）。
 
 **动态选股（研究，已锁定）**：**因子13 · 熊市盾牌 thr\* Top3**，见 [`FACTOR13.md`](FACTOR13.md)。
+
+因子26：[`FACTOR26.md`](FACTOR26.md)。
 
 ---
 
 ## 2. 策略一 · 援军战法（strategy1）
 
-### 因子1 · 开盘突破
+### 因子26 · 回落波阈值止损（主执行）
 
-- 买：空仓；前日阴/小阳；禁双阳跨日≥5%；`high ≥ ceil(open×(1+pct))` 限价买；目标仓位约 95%。
-- 卖：仅止损 `low ≤ floor(open×(1−pct))`；T+1 当日新仓不可卖；一字跌停不卖。
-- 默认 pct：**±2.5%**（单票可非对称，如天通 ±3% / 凯盛 ±2.5%）。
-- 真源：`strategy/open_break.py`、`strategy/factors/factor1.py`。
+- 买：同因子1；前日阴/小阳；禁双阳跨日≥5%；`high ≥ ceil(open×(1+pct))` 限价买；目标仓位约 95%。
+- 卖：`low ≤ floor(当日分时最高×(1−pct))`；最高抬升则止损上移；T+1；一字跌停不卖。
+- 默认 pct：**±2.5%**（单票可非对称 entry/pullback）。
+- 真源：`strategy/pullback_wave_stop.py`、`strategy/factors/factor26.py`。
+- 因子1（`open_break.py`）仍供策略三/四/八等复用，已非策略一主因子。
 
 ### 因子2 · 回撤预警
 
@@ -38,7 +41,7 @@
 
 ### 因子22 · 收盘动量（已绑策略一）
 
-- 因子1 当日止损后：若 `收盘 ≥ 当日最低价 × (1+pct)` 则同日再买；默认 pct=1%，可选收阳/收阴。
+- 因子26 当日止损后：若 `收盘 ≥ 当日最低价 × (1+pct)` 则同日再买；默认 pct=1%，可选收阳/收阴。
 - 绑定：`strategy1/bindings`；决策见 `Strategy1Decision`；说明：[`FACTOR22.md`](FACTOR22.md)。
 - 天通 2026 日线对照见 `backtest/tiantong_stop_rebuy_2026/`；扩样本前勿调默认 pct。
 

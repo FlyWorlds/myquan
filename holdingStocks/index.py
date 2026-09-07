@@ -1,17 +1,18 @@
-"""持仓记录与盯盘：与核心策略一（因子1 + 因子2）同步。
+"""持仓记录与盯盘：与核心策略一（因子26 + 因子2 + 因子22）同步。
 
 策略锁定 · 策略一：
-  · 因子1 买：high≥ceil(open×(1+entry))；前日阴/小阳；禁双阳跨日≥5%；T+1
-  · 因子1 卖：开盘−stop 止损全清（个股阈值见 watch_config）
+  · 买（同因子1）：high≥ceil(open×(1+entry))；前日阴/小阳；禁双阳跨日≥5%；T+1
+  · 卖（因子26）：low≤floor(当日分时最高×(1−pullback))；最高抬升则止损上移
   · 因子2：账户回撤加减仓预警（不自动改现金）
+  · 因子22：止损后收盘动量可同日再买
   · 默认定盘宇宙：因子13A+16 宽宇宙换池 Top20（剔ST/百元股；无置顶；见 watch_config.WATCHLIST）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
 功能：
   · 拉取当日实时行情（东财 SSE + 新浪批量；盯盘不拉历史分钟 K）
-  · 因子1 与 strategy1 bindings / open_break 同源
+  · 因子26 与 strategy1 bindings / pullback_wave_stop 同源
   · 因子2 与 strategy/dd_alert 同源
-  · 有仓：止损自动结算（全清）；空仓：已触买/将买入建议限价
+  · 有仓：回落波止损自动结算（全清）；空仓：已触买/将买入建议限价
   · 本地 JSON 记录持仓；T+1 买入日不可卖
 
 用法：
@@ -76,12 +77,17 @@ from strategy.open_break import (
     is_yang,
     limit_down_state,
     prev_day_allows_entry,
-    replay_last_factor_triggers,
+    replay_last_factor_triggers as _replay_f1,
     replay_strategy_return_since,
     _merge_live_daily_bar,
     should_block_entry_by_yang,
-    strategy_levels,
-    strategy_signal,
+    strategy_levels as _levels_f1,
+    strategy_signal as _signal_f1,
+)
+from strategy.pullback_wave_stop import (
+    replay_last_factor_triggers as _replay_f26,
+    strategy_levels as _levels_f26,
+    strategy_signal as _signal_f26,
 )
 from strategy.data import AKSHARE_CALL_LOCK, fetch_daily
 
@@ -126,20 +132,57 @@ from watch_config import (
 )
 from watch_snapshot import build_watch_snapshot
 
-# 盯盘与回测共用：默认策略一 = 因子1（买卖）+ 因子2（回撤预警）
+# 盯盘与回测共用：默认策略一 = 因子26（回落波止损）+ 因子2 + 因子22
 # 标的池唯一真源：watch_config.WATCHLIST
 FACTOR2_ID = "factor2"
 
 _STRATEGY_FACTORS_LABEL = (
     "因子1买卖 + 因子4牛市持股"
     if USE_FACTOR4
-    else "因子1买卖 + 因子2回撤预警 + 因子22收盘动量 · 13A+16池"
+    else "因子26回落波止损 + 因子2回撤预警 + 因子22收盘动量 · 13A+16池"
 )
 _STRATEGY_SYNC_NOTE = (
     "与 strategy3/strategy4 bindings / bull_regime 同源"
     if USE_FACTOR4
-    else "与 strategy1 bindings / open_break 同源"
+    else "与 strategy1 bindings / pullback_wave_stop 同源"
 )
+
+
+def strategy_levels(
+    open_px: float,
+    *,
+    entry_pct: float = DEFAULT_PCT,
+    stop_pct: float = DEFAULT_PCT,
+    tick: float = TICK_SIZE,
+    high_px: float | None = None,
+    **kw: Any,
+) -> dict[str, Any]:
+    """策略一默认因子26：止损跟分时最高；其它仍用开盘±。"""
+    if str(FACTOR_ID) == "factor26":
+        return _levels_f26(
+            open_px,
+            entry_pct=entry_pct,
+            stop_pct=stop_pct,
+            pullback_pct=stop_pct,
+            high_px=high_px,
+            tick=tick,
+            **kw,
+        )
+    return _levels_f1(
+        open_px, entry_pct=entry_pct, stop_pct=stop_pct, tick=tick
+    )
+
+
+def strategy_signal(**kw: Any) -> dict[str, Any]:
+    if str(FACTOR_ID) == "factor26":
+        return _signal_f26(**kw)
+    return _signal_f1(**kw)
+
+
+def replay_last_factor_triggers(*args: Any, **kw: Any) -> dict[str, Any]:
+    if str(FACTOR_ID) == "factor26":
+        return _replay_f26(*args, **kw)
+    return _replay_f1(*args, **kw)
 
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
@@ -1646,6 +1689,42 @@ def _stabilize_sell_warn(
     return sig
 
 
+def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
+    """9:30 连续竞价前：可展示阈值/接近，禁止『已触发』买卖信号。"""
+    out = dict(sig)
+    out["hit_buy"] = False
+    out["hit_stop"] = False
+    alert = str(out.get("alert") or "").strip()
+    trig = str(out.get("因子触发") or "").strip()
+    if alert == "已触买" or alert.startswith("已触买"):
+        out["alert"] = "将买入"
+        out["pending_buy"] = True
+        out["near_buy"] = True
+        out["bg_class"] = out.get("bg_class") or "warn-buy"
+        out["持仓状态"] = "待买入"
+        out["因子触发"] = "接近"
+        note = str(out.get("挂单说明") or "")
+        if "9:30" not in note:
+            out["挂单说明"] = (
+                (note + "；" if note else "") + "9:30 连续竞价起才计已触发"
+            )
+    elif alert == "已触止损" or alert.startswith("已触止损"):
+        out["alert"] = "将止损"
+        out["pending_sell"] = True
+        out["near_stop"] = True
+        out["bg_class"] = out.get("bg_class") or "warn-sell"
+        out["持仓状态"] = "待卖出"
+        out["因子触发"] = "接近"
+        note = str(out.get("挂单说明") or "")
+        if "9:30" not in note:
+            out["挂单说明"] = (
+                (note + "；" if note else "") + "9:30 连续竞价起才结算止损"
+            )
+    elif trig == "已触发" or trig.startswith("已触发"):
+        out["因子触发"] = "接近"
+    return out
+
+
 def _buy_signal_active(row: dict[str, Any]) -> bool:
     """今日买入侧信号是否应优先于「持有/策略持有」展示。"""
     alert = str(row.get("预警") or "")
@@ -2606,12 +2685,14 @@ def collect_rows(
                 entry_pct=entry_pct,
                 stop_pct=stop_pct_for_levels,
                 tick=tick,
+                high_px=float(q["high"]),
             )
             lv_base = strategy_levels(
                 q["open"],
                 entry_pct=entry_pct,
                 stop_pct=base_stop_pct,
                 tick=tick,
+                high_px=float(q["high"]),
             )
             vs = points_vs_open(q["open"], q["last"])
             vs_pct = pct_vs_open(q["open"], q["last"])
@@ -2652,13 +2733,15 @@ def collect_rows(
                 if USE_FACTOR4
                 else "-"
             )
-            # 9:25 前：仅竞价参考；9:25–9:30：算阈值/过门但不结算；9:30 起全触发
+            # 9:25 前：仅竞价参考；9:25–9:30：算阈值/过门/接近预警，不触发；
+            # 9:30 起才「已触发」买卖与止损结算
             preview_ok = threshold_ok
             signal_ok = signal_ok_global
             if not preview_ok:
                 hit_buy = False
                 hit_stop = False
             elif not signal_ok:
+                hit_buy = False
                 hit_stop = False
             # 当日止损/已结算卖出 → 默认禁止因子1再买；因子22 收盘动量可放行
             _realized_pre = realized_map.get(code)
@@ -2682,9 +2765,13 @@ def collect_rows(
                 if not _f22_pre:
                     allow_entry = False
                     hit_buy = False
-                else:
+                elif signal_ok:
                     allow_entry = True
                     hit_buy = True
+                else:
+                    # 9:30 前仅预览收盘动量，不算已触发
+                    allow_entry = True
+                    hit_buy = False
             limit_state = limit_down_state(
                 prev_close=q.get("prev_close"),
                 open_px=float(q["open"]),
@@ -2824,8 +2911,11 @@ def collect_rows(
                     stop_pct=stop_pct,
                     px_digits=px_digits,
                     t0=t0,
-                    allow_entry=bool(f22),
+                    allow_entry=bool(f22) and signal_ok,
                 )
+                if not signal_ok:
+                    sig0 = _demote_pre_signal_window(sig0)
+                    hit_buy = False
                 row0 = {
                         "市场": str(pos.get("market") or w["market"]),
                         "代码": code,
@@ -2953,9 +3043,13 @@ def collect_rows(
                 stop_pct=stop_pct,
                 px_digits=px_digits,
                 t0=t0,
-                # 纸面仓禁止买入预警
+                # 纸面仓禁止买入预警；9:30 前允许接近预警，已触买由下方 demote
                 allow_entry=False if paper_active else (allow_entry and preview_ok),
             )
+            if not signal_ok:
+                sig = _demote_pre_signal_window(sig)
+                hit_buy = False
+                hit_stop = False
             if qty > 0 and hit_stop and stop_locked:
                 limit_px = float(limit_state["limit_px"])
                 sig = dict(sig)
@@ -3046,11 +3140,13 @@ def collect_rows(
                 stop_lvl=-stop_pct * 100.0,
                 sticky=sticky,
             )
-            entry_for_overlay = bool(allow_entry and preview_ok and not _sold_today_pre)
+            entry_for_overlay = bool(
+                allow_entry and preview_ok and signal_ok and not _sold_today_pre
+            )
             if not (_paper_hold and hit_stop):
                 sig = _overlay_buy_signal_on_hold(
                     sig,
-                    hit_buy=hit_buy,
+                    hit_buy=hit_buy if signal_ok else False,
                     allow_entry=entry_for_overlay,
                     paper_active=paper_active,
                     qty=qty,
@@ -3061,6 +3157,8 @@ def collect_rows(
                     last_px=float(q["last"]),
                     px_digits=px_digits,
                 )
+                if not signal_ok:
+                    sig = _demote_pre_signal_window(sig)
             if qty > 0 and sellable > 0 and sellable < qty:
                 # 部分 T+1：状态标为持有·部分T+1
                 alert = str(sig.get("alert") or "")
@@ -3754,8 +3852,8 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(f"策略: {STRATEGY_NAME}（{_STRATEGY_SYNC_NOTE}）")
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
     print("     当日盈亏(现价盈亏): 隔夜=(现价-昨收)×持股；今买=(现价-今买成交价)×今买股数")
-    print("     因子1卖出: 仅止损；已触止损=视为成交并锁定盈亏")
-    print("     因子1买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
+    print("     因子26卖出: 分时最高回落阈值止损；已触止损=视为成交并锁定盈亏")
+    print("     买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
     _f2 = load_holdings().get("factor2")
     print(f"     {format_factor2_summary(_f2 if isinstance(_f2, dict) else None)}")
 

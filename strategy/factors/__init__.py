@@ -1,7 +1,7 @@
 """因子模块（可插拔）。
 
 导入本包即完成注册：
-  · factor1 — 开盘±pct（默认 ±2.5%），策略一买卖真源
+  · factor1 — 开盘±pct（默认 ±2.5%）；策略一已改挂 factor26，本因子仍可复用
   · factor2 — 回撤阶梯补仓（叠在权益曲线上的资金管理）
   · factor3 — 动量（策略五·动量因子组合 / 亦可单票时序）
   · factor4 — 牛市持股 regime
@@ -24,10 +24,11 @@
   · factor19 — 低开反包（压力日 gap 带；策略十二旧假设，未过关）
   · factor20 — 跌停次日开板（昨收跌停今开未封；已否决）
   · factor21 — 涨停次日低开（昨收涨停今低开；策略十二选股）
-  · factor22 — 收盘动量（因子1 止损后，收盘站上最低点×(1+pct) 同日再买；已挂策略一）
+  · factor22 — 收盘动量（止损后再买；已挂策略一）
   · factor23 — 最高连板止盈（弱板早止盈 / 3～4 板 10% 减半 / 高潮放宽）
   · factor24 — 连板梯度情绪（定止盈目标 + 是否启用因子22）
   · factor25 — 30m 震荡减磨损（确认止损 + 动态半仓止盈 + 卖飞回补）
+  · factor26 — 回落波阈值止损（买同开盘突破；止损=分时最高回落；策略一主因子）
   · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
   分类见 strategy.factors.categories
 """
@@ -59,6 +60,7 @@ from strategy.factors import factor22 as _factor22  # noqa: F401
 from strategy.factors import factor23 as _factor23  # noqa: F401
 from strategy.factors import factor24 as _factor24  # noqa: F401
 from strategy.factors import factor25 as _factor25  # noqa: F401
+from strategy.factors import factor26 as _factor26  # noqa: F401
 from strategy.factors import factor_cf1 as _factor_cf1  # noqa: F401
 from strategy.core.factor_registry import FACTOR_REGISTRY, get_factor, list_factors
 from strategy.factors.categories import list_category_catalog

@@ -25,6 +25,7 @@ from strategy.open_break import (
     should_block_entry_by_yang,
     stop_trigger_price,
 )
+from strategy.pullback_wave_stop import pullback_stop_price
 
 
 class OpenBreak3Strategy(Strategy):
@@ -42,6 +43,8 @@ class OpenBreak3Strategy(Strategy):
     stamp_tax_rate: float = STAMP_TAX_RATE
     entry_pct: float = ENTRY_PCT
     stop_pct: float = STOP_PCT
+    # open | day_high（因子26 回落波）
+    stop_anchor: str = "open"
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT
     tick: float = TICK_SIZE
     limit_down_pct: float = 0.10
@@ -620,16 +623,27 @@ class OpenBreak3Strategy(Strategy):
             entry_px = entry_trigger_price(
                 entry_base, entry_pct=self.entry_pct, tick=self.tick
             )
-            stop_px = stop_trigger_price(o, stop_pct=self.stop_pct, tick=self.tick)
+            anchor = str(getattr(self, "stop_anchor", "open") or "open")
+            if anchor == "day_high":
+                stop_px = pullback_stop_price(
+                    h, pullback_pct=self.stop_pct, tick=self.tick
+                )
+            else:
+                stop_px = stop_trigger_price(o, stop_pct=self.stop_pct, tick=self.tick)
             if self.stop_floor is not None:
                 stop_px = max(float(stop_px), float(self.stop_floor))
             bull_today = self._is_bull_today(day)
             widen = float(getattr(self, "factor4_stop_widen_mult", 0.0) or 0.0)
             if bull_today and widen > 1.0 and bool(self.factor4_enabled):
                 wide_pct = float(self.stop_pct) * widen
-                stop_px_wide = stop_trigger_price(
-                    o, stop_pct=wide_pct, tick=self.tick
-                )
+                if anchor == "day_high":
+                    stop_px_wide = pullback_stop_price(
+                        h, pullback_pct=wide_pct, tick=self.tick
+                    )
+                else:
+                    stop_px_wide = stop_trigger_price(
+                        o, stop_pct=wide_pct, tick=self.tick
+                    )
                 if self.stop_floor is not None:
                     stop_px_wide = max(float(stop_px_wide), float(self.stop_floor))
                 stop_px = min(float(stop_px), float(stop_px_wide))
@@ -740,8 +754,16 @@ class OpenBreak3Strategy(Strategy):
                     f"(limit={exit_px:.2f} open={o:.2f} low={low:.2f})"
                     if bool(limit_state["opened"])
                     else (
-                        f"开盘-{self.stop_pct*100:.1f}%止损"
-                        f"(open={o:.2f} low={low:.2f})"
+                        (
+                            f"最高回落-{self.stop_pct*100:.1f}%止损"
+                            f"(high={h:.2f} low={low:.2f})"
+                        )
+                        if str(getattr(self, "stop_anchor", "open") or "open")
+                        == "day_high"
+                        else (
+                            f"开盘-{self.stop_pct*100:.1f}%止损"
+                            f"(open={o:.2f} low={low:.2f})"
+                        )
                     )
                 )
                 self._exit_all(

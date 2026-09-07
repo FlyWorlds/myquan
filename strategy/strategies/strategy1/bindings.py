@@ -62,11 +62,12 @@ def strategy1_factor_filter(
 
 FACTOR_BINDINGS = (
     bind_factor(
-        "factor1",
-        label="开盘突破主因子",
+        "factor26",
+        label="回落波阈值止损",
         role="both",
         entry_pct=DEFAULT_PCT,
         stop_pct=DEFAULT_PCT,
+        pullback_pct=DEFAULT_PCT,
         prev_small_yang_pct=DEFAULT_PCT,
         prev_entry_mode="yin_or_small_yang",
         ban_double_yang=DEFAULT_BAN_DOUBLE_YANG,
@@ -74,7 +75,7 @@ FACTOR_BINDINGS = (
         double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
         double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
         filter=strategy1_factor_filter,
-        filter_desc="前日阴/小阳 + 禁双阳跨日≥5%",
+        filter_desc="买同因子1；止损=分时最高回落±阈值（默认2.5%）",
     ),
     bind_factor(
         "factor2",
@@ -113,7 +114,7 @@ FACTOR_BINDINGS = (
         bounce_pct=0.01,
         candle="any",
         mode="close",
-        filter_desc="因子1 止损后：收盘≥当日最低价×(1+1%) 同日再买；默认 1%、不限阴阳",
+        filter_desc="因子26 止损后：收盘≥当日最低价×(1+1%) 同日再买；默认 1%、不限阴阳",
         enabled=True,
     ),
 )

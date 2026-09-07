@@ -50,12 +50,13 @@ akshare DataFrame
 
 | 场景 | 配置 |
 |------|------|
-| **盯盘 / 默认回测** | **策略一 = 因子1 + 因子2 预警 + 因子22 收盘动量再买**（因子2 回测不注资） |
-| **因子1** | 开盘 ±2.5%（单票可 ±3% 等）；买突破、卖仅止损、T+1 |
+| **盯盘 / 默认回测** | **策略一 = 因子26 回落波止损 + 因子2 预警 + 因子22 收盘动量再买**（因子2 回测不注资） |
+| **因子26** | 买=开盘+2.5%；卖=`floor(分时最高×(1−2.5%))`；最高抬升止损上移；T+1 |
+| **因子1（复用）** | 开盘±锚定止损；策略三/四/八等仍用；已非策略一主因子 |
 | **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top20**（宽宇宙主板，剔ST/百元股，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
 
-因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md) · 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md)
+因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md) · 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md) · 因子26：[`docs/FACTOR26.md`](docs/FACTOR26.md)
 
 ```bash
 cd backtest && python strategy1.py --rules
@@ -77,7 +78,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 
 | ID | 名称 | 分类 | 作用 | 模块 / 要点 |
 |----|------|------|------|-------------|
-| **factor1** | 因子1-开盘突破 | 开盘执行 | 开盘突破买卖 | `open_break.py`：买突破、卖止损、T+1；单票可非对称 entry/stop |
+| **factor1** | 因子1-开盘突破 | 开盘执行 | 开盘突破买卖 | `open_break.py`：买突破、卖开盘锚定止损、T+1；策略三/四等复用 |
 | **factor2** | 因子2-回撤预警 | 回撤补仓 | 回撤加减仓**预警** | `dd_alert.py`：默认加仓≥20% / 减仓≤10%；**回测不注资** |
 | **factor3** | 因子3-动量 | 动量 | 截面选股 / 单票择时 | `momentum.py`：组合截面反转；单票 dist_hl 等 |
 | **factor4** | 因子4-牛市持股 | 止盈持股 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1 止损 |
@@ -100,17 +101,18 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **factor19** | 因子19-低开反包 | 反转 | 旧假设 | 压力日低开；未过关 |
 | **factor20** | 因子20-跌停次日开板 | 反转 | 已否决 | 昨收跌停今开未封 |
 | **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停且曾开板、今低开；上证昨收≤−2% 空仓；调参窗强、盲测回撤未过关 |
-| **factor22** | 因子22-收盘动量 | 动量 | 策略一止损后再买 | 因子1 止损后收盘≥low×(1+pct) 同日再买；默认 1%；见 [`docs/FACTOR22.md`](docs/FACTOR22.md) |
+| **factor22** | 因子22-收盘动量 | 动量 | 策略一止损后再买 | 因子26 止损后收盘≥low×(1+pct) 同日再买；默认 1%；见 [`docs/FACTOR22.md`](docs/FACTOR22.md) |
 | **factor23** | 因子23-最高连板止盈 | 止盈持股 | 策略十五 | 最高板定 7%/10%/15% 减半止盈 |
 | **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五 | 低中梯度开 F22/F25；高潮关接回 |
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡 | 30m 确认止损+动态半仓+卖飞回补；见 [`docs/FACTOR25.md`](docs/FACTOR25.md) |
+| **factor26** | 因子26-回落波阈值止损 | 开盘执行 | 策略一主因子 | 买同因子1；卖=分时最高回落 pct；见 [`docs/FACTOR26.md`](docs/FACTOR26.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor1 + factor2 + factor13a + factor16 + factor22 | ✅ **默认** | 开盘±2.5% 一次打满 + 回撤预警 + 止损后收盘动量再买；定盘池 13A→16 Top20；别名 `open_break3` / `s1` |
+| **strategy1** | 援军战法 | factor26 + factor2 + factor13a + factor16 + factor22 | ✅ **默认** | 开盘+2.5%买、分时最高回落止损 + 回撤预警 + 收盘动量再买；定盘池 13A→16 Top20；别名 `open_break3` / `s1` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30 分小转大 + 日线二/三买卖；别名 `chan` |
 | **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮+±阈值；回测见 `backtest/strategy3_first_board/` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 突破 + 牛市放宽 + 20% 昨高全清 + 周频 Top5 |

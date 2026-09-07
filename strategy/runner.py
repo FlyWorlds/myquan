@@ -35,6 +35,7 @@ def apply_strategy_config(
     strategy.stamp_tax_rate = cfg.stamp_tax_rate
     strategy.entry_pct = cfg.resolved_entry_pct()
     strategy.stop_pct = cfg.resolved_stop_pct()
+    strategy.stop_anchor = str(getattr(cfg, "stop_anchor", "open") or "open")
     strategy.prev_small_yang_pct = cfg.resolved_entry_pct()
     strategy.tick = cfg.tick
     strategy.limit_down_pct = cfg.limit_down_pct

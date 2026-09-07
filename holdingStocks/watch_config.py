@@ -1,6 +1,6 @@
 """盯盘标的池与代码工具（唯一真源；index 从此处导入）。
 
-当前锁定：**策略一 = 因子1 + 因子2（回撤预警）+ 因子22（收盘动量再买）**。
+当前锁定：**策略一 = 因子26（回落波止损）+ 因子2（回撤预警）+ 因子22（收盘动量再买）**。
 定案宇宙：因子13 宽宇宙换池（无置顶；及格才入池）。
 策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
 """
@@ -17,13 +17,13 @@ if str(_MYQUAN_ROOT) not in sys.path:
 
 from strategy.open_break import DEFAULT_PCT, TICK_SIZE, is_t1_buy_day
 
-# 默认定盘：策略一 + 因子1/因子2/因子22
+# 默认定盘：策略一 + 因子26/因子2/因子22
 STRATEGY_ID = "strategy1"
-FACTOR_ID = "factor1"
+FACTOR_ID = "factor26"
 FACTOR2_ID = "factor2"
 FACTOR22_ID = "factor22"
 FACTOR4_ID = "factor4"
-STRATEGY_NAME = "策略一·因子1+因子2+因子22"
+STRATEGY_NAME = "策略一·因子26回落波+因子2+因子22"
 # 策略三（旧号策略七）才叠因子4；策略一关闭
 USE_FACTOR4 = False
 

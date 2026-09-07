@@ -70,6 +70,32 @@ def test_filter_includes_alert_without_pool():
     assert alert.get("盈亏说明") == "当日预警·未登记持仓"
 
 
+def test_demote_pre_signal_window():
+    from index import _demote_pre_signal_window
+
+    buy = _demote_pre_signal_window(
+        {
+            "alert": "已触买",
+            "hit_buy": True,
+            "hit_stop": False,
+            "因子触发": "已触发",
+            "持仓状态": "待买入",
+            "挂单说明": "限价买@10",
+        }
+    )
+    assert buy["hit_buy"] is False
+    assert buy["alert"] == "将买入"
+    assert buy["因子触发"] == "接近"
+    assert "9:30" in str(buy.get("挂单说明") or "")
+
+    sell = _demote_pre_signal_window(
+        {"alert": "已触止损", "hit_buy": False, "hit_stop": True, "因子触发": "已触发"}
+    )
+    assert sell["hit_stop"] is False
+    assert sell["alert"] == "将止损"
+    assert sell["因子触发"] == "接近"
+
+
 def test_buy_distance_and_sort_helpers():
     from index import _buy_distance_pct, sort_watch_rows
 

@@ -1,27 +1,55 @@
-"""援军战法 · 决策层：因子1信号 → 买 / 卖 / 持有；因子22 止损后收盘动量再买。"""
+"""援军战法 · 决策层：因子26（回落波止损）买卖；因子22 止损后收盘动量再买。"""
 
 from __future__ import annotations
+
+from typing import Any
 
 from strategy.close_momentum import rebuy_signal
 from strategy.core.context import Decision, MarketContext
 from strategy.core.decision import BaseDecisionEngine
-from strategy.core.protocols import StrategySpec
+from strategy.core.factor_registry import get_factor
+from strategy.core.protocols import FactorBinding
 from strategy.open_break import TICK_SIZE, ceil_to_tick
 from strategy.strategies.strategy1.bindings import FACTOR_BINDINGS, STRATEGY_ID, STRATEGY_NAME
+
+_PRIMARY = "factor26"
 
 
 class Strategy1Decision(BaseDecisionEngine):
     """
-    决策规则（与 open_break / OpenBreak3 一致）：
-    - 空仓 + 因子允许 + high 触买点 → buy（因子1）
-    - 有仓 + 非 T+1 + low 触止损 → sell（因子1）；若同日收盘动量成立 → buy（因子22，隐含先止损再买）
+    决策规则：
+    - 空仓 + 因子允许 + high 触买点 → buy（因子26，买同开盘突破）
+    - 有仓 + 非 T+1 + low 触回落波止损（分时最高×(1−pct)）→ sell；
+      若同日收盘动量成立 → buy（因子22，隐含先止损再买）
     - 空仓 + 当日已止损（meta.stop_sold_today）+ 收盘动量 → buy（因子22）
     - 其余 → hold
-    触发用 high/low，不用现价（避免漏触发）。
     """
 
     strategy_id = STRATEGY_ID
     strategy_name = STRATEGY_NAME
+
+    def levels_for(self, binding: FactorBinding, ctx: MarketContext) -> dict[str, Any]:
+        factor = get_factor(binding.factor_id)
+        if factor.levels is None:
+            return {}
+        params = binding.merged_params()
+        entry_pct = float(params.get("entry_pct", params.get("threshold_pct", 0.025)))
+        pullback = float(
+            params.get("pullback_pct", params.get("stop_pct", entry_pct))
+        )
+        tick = float(params.get("tick", 0.01))
+        raw = factor.levels(
+            ctx.open,
+            entry_pct=entry_pct,
+            stop_pct=pullback,
+            pullback_pct=pullback,
+            high_px=float(ctx.high),
+            tick=tick,
+        )
+        out = dict(raw or {})
+        if "buy" not in out and "buy_trigger" in out:
+            out["buy"] = out["buy_trigger"]
+        return out
 
     def _factor22_rebuy(self, ctx: MarketContext, *, stop_px: float, buy_px: float) -> Decision | None:
         binding = self.binding("factor22")
@@ -54,9 +82,9 @@ class Strategy1Decision(BaseDecisionEngine):
         )
 
     def decide(self, ctx: MarketContext) -> Decision:
-        binding = self.binding("factor1")
+        binding = self.binding(_PRIMARY) or self.binding("factor1")
         if binding is None:
-            return Decision.hold("援军战法未绑定因子1")
+            return Decision.hold("援军战法未绑定因子26/因子1")
 
         levels = self.levels_for(binding, ctx)
         buy_px = float(levels.get("buy") or 0)
@@ -66,6 +94,7 @@ class Strategy1Decision(BaseDecisionEngine):
 
         high = float(ctx.high)
         low = float(ctx.low)
+        fid = binding.factor_id
 
         if ctx.has_position:
             if ctx.t_plus_one:
@@ -78,7 +107,6 @@ class Strategy1Decision(BaseDecisionEngine):
             if low <= stop_px + 1e-12:
                 rebuy = self._factor22_rebuy(ctx, stop_px=stop_px, buy_px=buy_px)
                 if rebuy is not None:
-                    # 同 bar：先止损再买；调用方见 tags 含 rebuy 时先清仓再按 fill 开仓
                     meta = dict(rebuy.meta)
                     meta["implied_stop_then_rebuy"] = True
                     meta["stop_px"] = stop_px
@@ -93,33 +121,38 @@ class Strategy1Decision(BaseDecisionEngine):
                     )
                 return Decision.sell(
                     stop_px,
-                    reason=f"触止损 {stop_px:.2f}",
-                    factor_id="factor1",
+                    reason=f"回落波止损 {stop_px:.2f}（高{high:.2f}）",
+                    factor_id=fid,
                     buy_price=buy_px,
                     stop_price=stop_px,
-                    tags=("stop", "factor1"),
+                    tags=("stop", fid, "pullback_wave"),
                 )
             return Decision.hold(
-                "持仓未触止损",
+                "持有",
                 buy_price=buy_px,
                 stop_price=stop_px,
+                tags=("hold",),
             )
 
         # 空仓：当日已止损 → 优先因子22
-        if bool(ctx.meta.get("stop_sold_today")):
+        if bool((ctx.meta or {}).get("stop_sold_today")):
             rebuy = self._factor22_rebuy(ctx, stop_px=stop_px, buy_px=buy_px)
             if rebuy is not None:
-                return rebuy
-            return Decision.hold(
-                "今日已止损·收盘动量未触发",
-                buy_price=buy_px,
-                stop_price=stop_px,
-                tags=("stop_sold", "factor22"),
-            )
+                meta = dict(rebuy.meta)
+                meta["stop_sold"] = True
+                return Decision(
+                    action="buy",
+                    reason=rebuy.reason,
+                    price=rebuy.price,
+                    size_mode=rebuy.size_mode,
+                    size_value=rebuy.size_value,
+                    factor_id="factor22",
+                    meta=meta,
+                )
 
         if not self.factor_allowed(binding, ctx):
             return Decision.hold(
-                "因子过滤未通过（前日/前前日条件）",
+                "前日过滤未过",
                 buy_price=buy_px,
                 stop_price=stop_px,
                 tags=("filter",),
@@ -128,18 +161,19 @@ class Strategy1Decision(BaseDecisionEngine):
             return Decision.buy(
                 buy_px,
                 reason=f"触买点 {buy_px:.2f}",
-                factor_id="factor1",
+                factor_id=fid,
                 buy_price=buy_px,
                 stop_price=stop_px,
-                tags=("entry", "factor1"),
+                tags=("entry", fid),
             )
         return Decision.hold(
-            "空仓未触买点",
+            "空仓观望",
             buy_price=buy_px,
             stop_price=stop_px,
+            tags=("flat",),
         )
 
 
-def create_decision_engine(spec: StrategySpec | None = None) -> Strategy1Decision:
-    bindings = spec.factor_bindings if spec is not None else FACTOR_BINDINGS
-    return Strategy1Decision(bindings=bindings)
+def create_decision_engine(spec=None) -> Strategy1Decision:  # noqa: ANN001
+    del spec
+    return Strategy1Decision(FACTOR_BINDINGS)

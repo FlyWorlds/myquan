@@ -1,7 +1,7 @@
-"""援军战法（strategy1，默认）：因子1（买卖）+ 因子2（回撤预警）+ 因子22（收盘动量再买）。
+"""援军战法（strategy1，默认）：因子26（回落波止损）+ 因子2（回撤预警）+ 因子22（收盘动量再买）。
 
 调参（开闭，勿改算法本体）：
-  · 因子1 阈值/过滤 → open_break.DEFAULT_* 或 bindings / BacktestConfig
+  · 因子26 阈值/过滤 → pullback_wave_stop / bindings（买同 open_break；止损跟分时最高）
   · 因子2 预警阈值 → dd_alert.DEFAULT_* / derive_thresholds(equity)
   · 因子22 再买阈值 → bindings bounce_pct / candle / mode；真源 close_momentum
   · 旧版权益注资叠加已默认关闭；若需可用 apply_factor2_overlay=True 临时启用 dd_topup
@@ -186,7 +186,7 @@ def run_strategy1(
     factor2_levels: Sequence[float] | None = None,
     factor2_max_inject_pct: float | None = None,
 ) -> tuple[Any, Any]:
-    """援军战法回测：因子1 阈值一次打满；因子2 默认只挂预警阈值（不注资）。
+    """援军战法回测：因子26 回落波止损；因子2 默认只挂预警阈值（不注资）。
 
     apply_factor2_overlay=True 时可启用旧版 dd_topup 权益叠加。
     """
@@ -197,6 +197,9 @@ def run_strategy1(
 
     if cfg is None:
         cfg = KAICHENG
+    # 策略一默认分时最高回落止损（因子26）
+    if str(getattr(cfg, "stop_anchor", "open") or "open") == "open":
+        cfg = replace(cfg, stop_anchor="day_high")
     kw: dict[str, Any] = {}
     if factor2_add_pct is not None:
         kw["factor2_add_pct"] = factor2_add_pct
@@ -241,9 +244,10 @@ def _bind() -> StrategySpec:
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
         description=(
-            "援军战法：因子1 开盘±2.5%一次打满/阴小阳/禁双阳跨日≥5%/仅止损"
+            "援军战法：因子26 开盘+突破买/分时最高回落止损"
             " + 因子2 回撤加减仓预警（回测不注资）"
-            " + 因子13A 质量带合格池 + 因子16 龙头排序（定盘池 Top10，研究）"
+            " + 因子22 收盘动量再买"
+            " + 因子13A 质量带合格池 + 因子16 龙头排序（定盘池，研究）"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy1,
@@ -256,9 +260,10 @@ def _bind() -> StrategySpec:
         meta={
             "default": True,
             "legacy_id": "open_break3",
-            "factors": ("factor1", "factor2", "factor13a", "factor16"),
+            "factors": ("factor26", "factor2", "factor13a", "factor16", "factor22"),
             "pool_chain": "factor13a_quality_band → factor16_pl_ratio_rank",
             "pool_size": 10,
+            "stop_anchor": "day_high",
             "factor2_overlay": False,
             "factor2_alert_only": True,
         },

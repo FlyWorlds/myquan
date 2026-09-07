@@ -39,6 +39,8 @@ const FACTOR_CATEGORY_BY_ID: Record<string, string> = {
   factor22: 'momentum',
   factor23: 'take_profit',
   factor24: 'sentiment',
+  factor25: 'take_profit',
+  factor26: 'execution',
   cf1: 'reversal',
 }
 
