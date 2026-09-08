@@ -5,7 +5,7 @@
   · 卖（因子26）：浮盈回落一半（持仓最高相对成本）；未浮盈成本硬保护；1 分钟 path-dependent
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：止损后收盘动量可同日再买
-  · 9:15 清空非实仓盯盘状态；9:30 起触发买卖/止损
+  · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值；9:30 起触发结算
   · 策略回放触止损 → 已止损（不再「策略持有」）
   · 默认定盘宇宙：因子13A+16 宽宇宙换池 Top20（剔ST/百元股；无置顶；见 watch_config.WATCHLIST）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
@@ -2969,27 +2969,39 @@ def collect_rows(
                     seed_h = cost_h
                     if peak_h and peak_h > 0:
                         seed_h = max(seed_h, peak_h)
-                    try:
-                        seed_h = max(float(seed_h), float(q.get("high") or 0))
-                    except (TypeError, ValueError):
-                        pass
+                    # 9:25 前竞价 high/low 不可靠，不并入峰值、不算动态止盈
+                    if threshold_ok:
+                        try:
+                            seed_h = max(float(seed_h), float(q.get("high") or 0))
+                        except (TypeError, ValueError):
+                            pass
+            # 9:25 前：有仓卖价只用成本+已记峰值；空仓不拿竞价虚高算买点展示锚
+            high_for_lv = float(q["high"]) if threshold_ok else float(
+                seed_h or cost_h or q.get("prev_close") or 0
+            )
+            low_for_lv = float(q["low"]) if threshold_ok else float(
+                cost_h or q.get("prev_close") or 0
+            )
+            open_for_lv = float(q["open"]) if threshold_ok else float(
+                q.get("prev_close") or q.get("open") or 0
+            )
             lv = strategy_levels(
-                q["open"],
+                open_for_lv if open_for_lv > 0 else float(q["open"]),
                 entry_pct=entry_pct,
                 stop_pct=stop_pct_for_levels,
                 tick=tick,
-                high_px=float(q["high"]),
-                low_px=float(q["low"]),
+                high_px=high_for_lv if high_for_lv > 0 else None,
+                low_px=low_for_lv if low_for_lv > 0 else None,
                 cost_px=cost_h,
                 peak_high=seed_h,
             )
             lv_base = strategy_levels(
-                q["open"],
+                open_for_lv if open_for_lv > 0 else float(q["open"]),
                 entry_pct=entry_pct,
                 stop_pct=base_stop_pct,
                 tick=tick,
-                high_px=float(q["high"]),
-                low_px=float(q["low"]),
+                high_px=high_for_lv if high_for_lv > 0 else None,
+                low_px=low_for_lv if low_for_lv > 0 else None,
                 cost_px=cost_h,
                 peak_high=seed_h,
             )
@@ -3028,73 +3040,84 @@ def collect_rows(
             # 因子26：止损必须 1 分钟 path-dependent；禁止全日 low × 抬高后止损
             path_touch_stop = 0.0
             if str(FACTOR_ID).lower() in ("factor26", "f26", "26"):
-                need_m1 = bool(
-                    qty_early > 0
-                    or _replay_holding_early
-                    or (
-                        float(lv["stop"]) > 0
-                        and float(q["last"]) <= float(lv["stop"]) * 1.02
+                # 9:15–9:25 竞价：不拉分钟、不判触达、不回写峰值（开盘价未定）
+                if not threshold_ok:
+                    hit_eff_stop = False
+                    hit_base_stop = False
+                    path_touch_stop = 0.0
+                else:
+                    need_m1 = bool(
+                        qty_early > 0
+                        or _replay_holding_early
+                        or (
+                            float(lv["stop"]) > 0
+                            and float(q["last"]) <= float(lv["stop"]) * 1.02
+                        )
                     )
-                )
-                path_res = _resolve_hit_stop_path_dependent(
-                    sina=str(w["sina"]),
-                    session=str(q["session"]),
-                    quote=q,
-                    pullback_pct=float(stop_pct),
-                    tick=tick,
-                    need_accurate=need_m1,
-                    stop_px=float(lv["stop"]),
-                    since_ts=since_stop,
-                    seed_high=seed_h,
-                    cost_px=cost_h,
-                )
-                hit_eff_stop = bool(path_res.get("hit_stop"))
-                path_touch_stop = float(path_res.get("touch_stop") or 0)
-                # 有仓：展示卖价与 path 一致（1m 峰值可能高于快照 high）
-                if qty_early > 0:
-                    try:
-                        path_stop = float(path_res.get("stop_px") or 0)
-                        if path_stop > 0:
-                            lv["stop"] = path_stop
-                            lv_base["stop"] = path_stop
-                    except (TypeError, ValueError):
-                        pass
-                # 刷新持仓峰值（供次日浮盈回落一半）
-                if qty_early > 0:
-                    try:
-                        rh = float(path_res.get("running_high") or 0)
-                        qh = float(q.get("high") or 0)
-                        new_peak = max(float(seed_h or 0), rh, qh)
-                        old_peak = float(pos_early.get("peak_high") or 0)
-                        if new_peak > old_peak + 1e-9:
-                            pos_early["peak_high"] = round(new_peak, 4)
-                            _holdings_data = load_holdings()
-                            _p = (_holdings_data.get("positions") or {}).get(code)
-                            if isinstance(_p, dict):
-                                _p["peak_high"] = round(new_peak, 4)
-                                save_holdings(_holdings_data)
-                    except (TypeError, ValueError, KeyError):
-                        pass
-                if USE_FACTOR4:
-                    base_res = _resolve_hit_stop_path_dependent(
+                    path_res = _resolve_hit_stop_path_dependent(
                         sina=str(w["sina"]),
                         session=str(q["session"]),
                         quote=q,
-                        pullback_pct=float(base_stop_pct),
+                        pullback_pct=float(stop_pct),
                         tick=tick,
                         need_accurate=need_m1,
-                        stop_px=float(lv_base["stop"]),
+                        stop_px=float(lv["stop"]),
                         since_ts=since_stop,
                         seed_high=seed_h,
                         cost_px=cost_h,
                     )
-                    hit_base_stop = bool(base_res.get("hit_stop"))
-                else:
-                    hit_base_stop = hit_eff_stop
+                    hit_eff_stop = bool(path_res.get("hit_stop"))
+                    path_touch_stop = float(path_res.get("touch_stop") or 0)
+                    # 有仓：展示卖价与 path 一致（1m 峰值可能高于快照 high）
+                    if qty_early > 0:
+                        try:
+                            path_stop = float(path_res.get("stop_px") or 0)
+                            if path_stop > 0:
+                                lv["stop"] = path_stop
+                                lv_base["stop"] = path_stop
+                        except (TypeError, ValueError):
+                            pass
+                    # 刷新持仓峰值（供次日浮盈回落一半）；仅 9:25 后
+                    if qty_early > 0:
+                        try:
+                            rh = float(path_res.get("running_high") or 0)
+                            qh = float(q.get("high") or 0)
+                            new_peak = max(float(seed_h or 0), rh, qh)
+                            old_peak = float(pos_early.get("peak_high") or 0)
+                            if new_peak > old_peak + 1e-9:
+                                pos_early["peak_high"] = round(new_peak, 4)
+                                _holdings_data = load_holdings()
+                                _p = (_holdings_data.get("positions") or {}).get(code)
+                                if isinstance(_p, dict):
+                                    _p["peak_high"] = round(new_peak, 4)
+                                    save_holdings(_holdings_data)
+                        except (TypeError, ValueError, KeyError):
+                            pass
+                    if USE_FACTOR4:
+                        base_res = _resolve_hit_stop_path_dependent(
+                            sina=str(w["sina"]),
+                            session=str(q["session"]),
+                            quote=q,
+                            pullback_pct=float(base_stop_pct),
+                            tick=tick,
+                            need_accurate=need_m1,
+                            stop_px=float(lv_base["stop"]),
+                            since_ts=since_stop,
+                            seed_high=seed_h,
+                            cost_px=cost_h,
+                        )
+                        hit_base_stop = bool(base_res.get("hit_stop"))
+                    else:
+                        hit_base_stop = hit_eff_stop
             else:
-                hit_base_stop = q["low"] <= lv_base["stop"] + 1e-12
-                hit_eff_stop = q["low"] <= lv["stop"] + 1e-12
-                path_touch_stop = float(lv["stop"]) if hit_eff_stop else 0.0
+                if not threshold_ok:
+                    hit_base_stop = False
+                    hit_eff_stop = False
+                    path_touch_stop = 0.0
+                else:
+                    hit_base_stop = q["low"] <= lv_base["stop"] + 1e-12
+                    hit_eff_stop = q["low"] <= lv["stop"] + 1e-12
+                    path_touch_stop = float(lv["stop"]) if hit_eff_stop else 0.0
             # 因子4（可选）：牛市暂停止损 → 不自动结算；放宽 → 仅触放宽价才结算
             if USE_FACTOR4 and f4_mode == "suppressed":
                 hit_stop = False
