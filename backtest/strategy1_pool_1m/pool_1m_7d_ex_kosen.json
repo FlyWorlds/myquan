@@ -1,0 +1,407 @@
+{
+  "exclude": [
+    "603626"
+  ],
+  "n_pool": 24,
+  "calendar": [
+    "2026-08-31",
+    "2026-09-01",
+    "2026-09-02",
+    "2026-09-03",
+    "2026-09-04",
+    "2026-09-07",
+    "2026-09-08"
+  ],
+  "init": 100000.0,
+  "cash_end": 41950.0,
+  "equity_eod": 99930.0,
+  "ret_eod_pct": -0.07,
+  "equity_spot": 99930.0,
+  "ret_spot_pct": -0.07,
+  "n_buys": 14,
+  "n_sells": 12,
+  "closed_pnl_amt": 814.23,
+  "open_float_amt": -883.0,
+  "total_pnl_amt": -70.0,
+  "open_mark": [
+    {
+      "code": "002104",
+      "name": "恒宝股份",
+      "shares": 2200,
+      "buy_day": "2026-09-08",
+      "buy_px": 13.38,
+      "spot": 13.28,
+      "pnl": -220.0,
+      "pnl_pct": -0.75
+    },
+    {
+      "code": "002015",
+      "name": "协鑫能科",
+      "shares": 1700,
+      "buy_day": "2026-09-08",
+      "buy_px": 17.31,
+      "spot": 16.92,
+      "pnl": -663.0,
+      "pnl_pct": -2.25
+    }
+  ],
+  "equity_curve": [
+    {
+      "date": "2026-08-31",
+      "equity": 99706.0,
+      "ret_pct": -0.29,
+      "codes": "002779,600330"
+    },
+    {
+      "date": "2026-09-01",
+      "equity": 103436.0,
+      "ret_pct": 3.44,
+      "codes": "002015,002104"
+    },
+    {
+      "date": "2026-09-02",
+      "equity": 101200.0,
+      "ret_pct": 1.2,
+      "codes": "002636,603301"
+    },
+    {
+      "date": "2026-09-03",
+      "equity": 101790.0,
+      "ret_pct": 1.79,
+      "codes": "002922,600338"
+    },
+    {
+      "date": "2026-09-04",
+      "equity": 100361.0,
+      "ret_pct": 0.36,
+      "codes": "002104,002636"
+    },
+    {
+      "date": "2026-09-07",
+      "equity": 100134.0,
+      "ret_pct": 0.13,
+      "codes": "600330,600967"
+    },
+    {
+      "date": "2026-09-08",
+      "equity": 99930.0,
+      "ret_pct": -0.07,
+      "codes": "002015,002104"
+    }
+  ],
+  "trades": [
+    {
+      "date": "2026-08-31",
+      "ts": "2026-08-31 09:31:00",
+      "side": "buy",
+      "code": "002779",
+      "name": "中坚科技",
+      "px": 76.69,
+      "shares": 300,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-08-31",
+      "ts": "2026-08-31 09:31:00",
+      "side": "buy",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 29.05,
+      "shares": 1000,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:31:00",
+      "side": "sell",
+      "code": "002779",
+      "name": "中坚科技",
+      "px": 76.0,
+      "shares": 300,
+      "pnl_pct": -0.009,
+      "exit_reason": "noted_gap_open",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:31:00",
+      "side": "sell",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 28.41,
+      "shares": 1000,
+      "pnl_pct": -0.022,
+      "exit_reason": "noted_gap_open",
+      "slots_after": 0
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:33:00",
+      "side": "buy",
+      "code": "002015",
+      "name": "协鑫能科",
+      "px": 16.11,
+      "shares": 1800,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:33:00",
+      "side": "buy",
+      "code": "002104",
+      "name": "恒宝股份",
+      "px": 11.51,
+      "shares": 2500,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:31:00",
+      "side": "sell",
+      "code": "002104",
+      "name": "恒宝股份",
+      "px": 12.19,
+      "shares": 2500,
+      "pnl_pct": 0.0591,
+      "exit_reason": "noted_open_dump",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:32:00",
+      "side": "buy",
+      "code": "603301",
+      "name": "振德医疗",
+      "px": 81.43,
+      "shares": 300,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:37:00",
+      "side": "buy",
+      "code": "002636",
+      "name": "金安国纪",
+      "px": 72.78,
+      "shares": 400,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:38:00",
+      "side": "sell",
+      "code": "002015",
+      "name": "协鑫能科",
+      "px": 17.24,
+      "shares": 1800,
+      "pnl_pct": 0.0701,
+      "exit_reason": "noted_open_dump",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:31:00",
+      "side": "sell",
+      "code": "002636",
+      "name": "金安国纪",
+      "px": 71.5,
+      "shares": 400,
+      "pnl_pct": -0.0176,
+      "exit_reason": "noted_gap_open",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:31:00",
+      "side": "sell",
+      "code": "603301",
+      "name": "振德医疗",
+      "px": 79.8,
+      "shares": 300,
+      "pnl_pct": -0.02,
+      "exit_reason": "noted_gap_open",
+      "slots_after": 0
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:32:00",
+      "side": "buy",
+      "code": "002922",
+      "name": "伊戈尔",
+      "px": 24.18,
+      "shares": 1200,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:32:00",
+      "side": "buy",
+      "code": "600338",
+      "name": "西藏珠峰",
+      "px": 14.23,
+      "shares": 2100,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 09:31:00",
+      "side": "sell",
+      "code": "600338",
+      "name": "西藏珠峰",
+      "px": 14.05,
+      "shares": 2100,
+      "pnl_pct": -0.0126,
+      "exit_reason": "noted_gap_open",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 09:31:00",
+      "side": "buy",
+      "code": "002104",
+      "name": "恒宝股份",
+      "px": 14.08,
+      "shares": 2100,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 09:32:00",
+      "side": "buy",
+      "code": "002636",
+      "name": "金安国纪",
+      "px": 71.61,
+      "shares": 400,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 09:48:00",
+      "side": "sell",
+      "code": "002922",
+      "name": "伊戈尔",
+      "px": 25.61,
+      "shares": 1200,
+      "pnl_pct": 0.0591,
+      "exit_reason": "half_gain",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:31:00",
+      "side": "sell",
+      "code": "002104",
+      "name": "恒宝股份",
+      "px": 13.63,
+      "shares": 2100,
+      "pnl_pct": -0.032,
+      "exit_reason": "noted_gap_open",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:31:00",
+      "side": "sell",
+      "code": "002636",
+      "name": "金安国纪",
+      "px": 66.0,
+      "shares": 400,
+      "pnl_pct": -0.0783,
+      "exit_reason": "noted_gap_open",
+      "slots_after": 0
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:31:00",
+      "side": "buy",
+      "code": "600967",
+      "name": "内蒙一机",
+      "px": 13.75,
+      "shares": 2100,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:32:00",
+      "side": "buy",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 27.93,
+      "shares": 1000,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-08",
+      "ts": "2026-09-08 09:31:00",
+      "side": "sell",
+      "code": "600967",
+      "name": "内蒙一机",
+      "px": 13.33,
+      "shares": 2100,
+      "pnl_pct": -0.0305,
+      "exit_reason": "noted_gap_open",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-08",
+      "ts": "2026-09-08 09:32:00",
+      "side": "buy",
+      "code": "002104",
+      "name": "恒宝股份",
+      "px": 13.38,
+      "shares": 2200,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-08",
+      "ts": "2026-09-08 09:33:00",
+      "side": "sell",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 29.59,
+      "shares": 1000,
+      "pnl_pct": 0.0594,
+      "exit_reason": "noted_open_dump",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-08",
+      "ts": "2026-09-08 09:34:00",
+      "side": "buy",
+      "code": "002015",
+      "name": "协鑫能科",
+      "px": 17.31,
+      "shares": 1700,
+      "kind": "attack",
+      "source": "trigger",
+      "slots_after": 2
+    }
+  ],
+  "disclaimer": "研究用途，非投资建议。已剔科森；未平仓按现价结算。"
+}

@@ -240,8 +240,8 @@ def test_finalize_sold_today_is_stopped():
     assert row["持仓状态"] == "已止损"
 
 
-def test_finalize_sold_today_rebuy_not_banned():
-    """当日卖出后再触买：不当作禁买，保持待买入。"""
+def test_finalize_sold_today_rebuy_banned():
+    """当日卖出后再触买：仍记当日禁买（三槽规则）。"""
     from index import _finalize_position_row
 
     row = {
@@ -249,18 +249,18 @@ def test_finalize_sold_today_rebuy_not_banned():
         "可用": 0,
         "持仓状态": "待买入",
         "预警": "卖出后再触买",
-        "当日禁买": False,
+        "当日禁买": True,
         "已触买": "是",
         "策略回放持有": False,
         "已实现": True,
     }
     _finalize_position_row(row)
-    assert row["持仓状态"] == "待买入"
-    assert row.get("当日禁买") is False
+    # 禁买优先于待买入
+    assert row.get("当日禁买") is True
 
 
-def test_apply_trigger_sold_today_allows_rebuy():
-    """过门通过时，当日卖出不设当日禁买。"""
+def test_apply_trigger_sold_today_bans_rebuy():
+    """过门通过时，当日卖出仍设当日禁买。"""
     from index import _apply_trigger_date_fields
 
     row = {
@@ -284,7 +284,7 @@ def test_apply_trigger_sold_today_allows_rebuy():
         code="600330",
         allow_entry=True,
     )
-    assert row.get("当日禁买") is False
+    assert row.get("当日禁买") is True
 
 
 def test_overlay_does_not_rewrite_real_qty():

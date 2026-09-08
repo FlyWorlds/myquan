@@ -1030,9 +1030,9 @@ def simulate_factor26_day_1m(
         h, lo = float(row["high"]), float(row["low"])
 
         if holding and can_sell and (not bought_today) and (running_high > 0 or cost > 0 or noted > 0):
+            bar_o = float(row.get("open") or o or h)
             # 止损已记：T+1 推迟市价离场。一字封死等开板；否则按开盘价（低开不是已记价）
             if noted > 0:
-                bar_o = float(row.get("open") or o or h)
                 locked = False
                 if prev_c > 0:
                     limit_px = floor_to_tick(prev_c * (1.0 - ld_pct), tick)
@@ -1069,7 +1069,12 @@ def simulate_factor26_day_1m(
                     peak, cost, giveback_ratio=gb, hard_pct=pb, tick=tick
                 )
                 if lo <= stop + 1e-12:
-                    sell_px = stop
+                    # 本分钟开盘已跌破止损 → 开盘价（缺口穿透），否则止损价
+                    sell_px = (
+                        float(bar_o)
+                        if bar_o > 0 and bar_o <= stop + 1e-12
+                        else float(stop)
+                    )
                     sell_ts = row.get("ts")
                     sell_reason = "half_gain"
                     holding = False

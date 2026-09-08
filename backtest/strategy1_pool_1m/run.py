@@ -4,10 +4,12 @@
 成交：池内票近 7 日用 1 分钟 path-dependent（开盘突破/攻击波买 + 回落波止损）。
 
 组合约束（对齐盯盘三槽）：
-  · 每天最多同时持有 max_slots 只（默认 3）
-  · 先触发买点的先买；槽满后触买进入等待队列，止损释放槽后再按触发先后补仓
+  · 物理槽 max_slots=3：盘中可同时持仓 3
+  · 当日最多买入 2 次（MAX_BUYS_PER_DAY）
+  · 尾盘/隔夜预留 1 空槽 → 隔夜最多持仓 2（MAX_OVERNIGHT_SLOTS）；日末若仍满 3 则强制卖出可卖仓中最弱一只
+  · 先触发买点的先买；槽满后触买进入等待队列，释放后再按触发先后补仓
   · T+1：买入当日不可卖；每槽约 3 成仓（权益×slot_weight）
-  · 当日卖出后仍可再买（重新武装开盘/攻击波买点）
+  · 当日止损/已记卖出的标的：当日禁止再买
 
 用法：
   PYTHONPATH=. python3 backtest/strategy1_pool_1m/run.py
@@ -33,7 +35,12 @@ if str(_ROOT) not in sys.path:
 
 from holdingStocks.watch_config import (  # noqa: E402
     DEFAULT_ACCOUNT_TOTAL,
+    MAX_BUYS_PER_DAY,
+    MAX_OVERNIGHT_SLOTS,
     MAX_PORTFOLIO_SLOTS,
+    RESERVE_EMPTY_SLOTS,
+    RESERVE_SLOT_HOUR,
+    RESERVE_SLOT_MINUTE,
     SLOT_WEIGHT,
     strategy_watchlist,
 )
@@ -321,6 +328,8 @@ def simulate_portfolio_3slots(
     exit_mode: str = "half_gain",
     noted_mode: str = NOTED_MODE_GAP_DUMP,
     noted_dump_pct: float | None = None,
+    reserve_empty: int = RESERVE_EMPTY_SLOTS,
+    max_buys_per_day: int = MAX_BUYS_PER_DAY,
 ) -> dict[str, Any]:
     """三槽组合：1m 路径，先触发买点先买，最多同时持有 max_slots 只。
 
@@ -330,6 +339,9 @@ def simulate_portfolio_3slots(
     noted_mode / noted_dump_pct：T+1 止损已记后的次日规则
     """
     max_slots = max(1, int(max_slots))
+    reserve = max(0, min(int(reserve_empty), max_slots - 1))
+    max_overnight = max(1, max_slots - reserve)
+    max_buys = max(1, int(max_buys_per_day))
     exit_mode = str(exit_mode or "half_gain")
     nmode = str(noted_mode or NOTED_MODE_GAP_DUMP)
     prepared: list[dict[str, Any]] = []
@@ -378,26 +390,41 @@ def simulate_portfolio_3slots(
     skipped: list[dict[str, Any]] = []
     equity_rows: list[dict[str, Any]] = []
     wait_q: list[dict[str, Any]] = []  # 触买但当时无槽：按触发时间排队
+    buys_today = 0
 
     def _equity_now() -> float:
         return _mark_equity(cash, positions, last_px)
 
+    def _buy_cap_at(ts: pd.Timestamp | None = None) -> int:
+        """盘中最多 max_slots；尾盘窗口起按隔夜上限。"""
+        if ts is None:
+            return max_slots
+        try:
+            mins = int(ts.hour) * 60 + int(ts.minute)
+        except Exception:
+            return max_slots
+        reserve_mins = int(RESERVE_SLOT_HOUR) * 60 + int(RESERVE_SLOT_MINUTE)
+        if mins >= reserve_mins:
+            return max_overnight
+        return max_slots
+
+    def _can_open_buy(ts: pd.Timestamp | None = None) -> bool:
+        return len(positions) < _buy_cap_at(ts) and buys_today < max_buys
+
     def _try_fill_from_queue(sess: str, at_ts: str) -> None:
-        nonlocal cash
+        nonlocal cash, buys_today
         wait_q.sort(key=lambda x: (str(x["ts"]), str(x["code"])))
-        while wait_q and len(positions) < max_slots:
+        while wait_q and _can_open_buy(pd.Timestamp(at_ts)):
             cand = wait_q.pop(0)
             code = cand["code"]
             if code in positions:
                 continue
+            st_q = states.get(code)
+            if st_q is not None and st_q.sold_today:
+                skipped.append({**cand, "reason": "sold_today_no_rebuy"})
+                continue
             if cand.get("day") != sess:
-                # 隔日失效（当日未排到则作废，避免用过期触发价）
-                skipped.append(
-                    {
-                        **cand,
-                        "reason": "queue_expired_next_day",
-                    }
-                )
+                skipped.append({**cand, "reason": "queue_expired_next_day"})
                 continue
             px = float(cand["px"])
             eq = _equity_now()
@@ -414,6 +441,7 @@ def simulate_portfolio_3slots(
                 skipped.append({**cand, "reason": "cash_too_small"})
                 continue
             cash -= cost
+            buys_today += 1
             positions[code] = _Pos(
                 code=code,
                 name=str(cand["name"]),
@@ -512,6 +540,7 @@ def simulate_portfolio_3slots(
             wait_q.clear()
 
         states: dict[str, _DayState] = {c: _DayState() for c in day_map}
+        buys_today = 0
         # 已持仓：分时最高从今日开盘路径起算；买入当日 T+1 不可卖
         for code, pos in positions.items():
             if code not in states:
@@ -627,7 +656,7 @@ def simulate_portfolio_3slots(
                             )
                             del positions[code]
                             st.sold_today = True
-                            st.buy_armed = True
+                            st.buy_armed = False  # 当日已记/止损卖出：禁再买
                             st.pending_buy = None
                             last_px[code] = float(fill)
                             _try_fill_from_queue(sess, str(ts))
@@ -644,7 +673,13 @@ def simulate_portfolio_3slots(
                             pullback_pct=sd.pullback_pct,
                         )
                         if stop > 0 and lo <= stop + 1e-12:
-                            proceeds = float(stop) * int(pos.shares)
+                            # 缺口/开盘已跌破止损价 → 按开盘价成交，禁止虚高用止损价
+                            fill = (
+                                float(bar_o)
+                                if bar_o > 0 and bar_o <= stop + 1e-12
+                                else float(stop)
+                            )
+                            proceeds = float(fill) * int(pos.shares)
                             cash += proceeds
                             trades.append(
                                 {
@@ -653,9 +688,9 @@ def simulate_portfolio_3slots(
                                     "side": "sell",
                                     "code": code,
                                     "name": pos.name,
-                                    "px": float(stop),
+                                    "px": float(fill),
                                     "shares": int(pos.shares),
-                                    "pnl_pct": round(float(stop) / pos.buy_px - 1.0, 4)
+                                    "pnl_pct": round(float(fill) / pos.buy_px - 1.0, 4)
                                     if pos.buy_px
                                     else None,
                                     "exit_reason": reason,
@@ -664,14 +699,16 @@ def simulate_portfolio_3slots(
                             )
                             del positions[code]
                             st.sold_today = True
-                            # 当日卖出后仍可再买：重新武装买点扫描
-                            st.buy_armed = True
+                            # 当日止损/已记卖出：禁再买该票
+                            st.buy_armed = False
                             st.pending_buy = None
-                            last_px[code] = float(stop)
+                            last_px[code] = float(fill)
                             _try_fill_from_queue(sess, str(ts))
                             continue
-                elif (not can_sell) and (not st.sold_today):
-                    # T+1：触止损只记，不卖
+                elif not can_sell:
+                    # T+1：触止损只记，不卖。
+                    # 注意：同日曾卖出再开新仓时 sold_today=True，仍须给新仓记止损
+                    # （可卖仍由 buy_day 约束，不会当日卖掉新仓）
                     stop, _reason = _exit_stop_px(
                         mode=exit_mode,
                         running_high=max(rh, ph, float(pos.buy_px)),
@@ -697,7 +734,7 @@ def simulate_portfolio_3slots(
                 sd = day_map.get(code)
                 if st is None or sd is None:
                     continue
-                if (not st.buy_armed) or (not sd.allow_entry):
+                if (not st.buy_armed) or (not sd.allow_entry) or st.sold_today:
                     continue
                 if st.pending_buy is not None:
                     continue
@@ -734,7 +771,11 @@ def simulate_portfolio_3slots(
                 code = cand["code"]
                 if code in positions:
                     continue
-                if len(positions) < max_slots:
+                st_c = states.get(code)
+                if st_c is not None and st_c.sold_today:
+                    skipped.append({**cand, "reason": "sold_today_no_rebuy"})
+                    continue
+                if _can_open_buy(ts):
                     px = float(cand["px"])
                     eq = _equity_now()
                     budget = eq * float(slot_weight)
@@ -750,6 +791,7 @@ def simulate_portfolio_3slots(
                         skipped.append({**cand, "reason": "cash_too_small"})
                         continue
                     cash -= cost
+                    buys_today += 1
                     positions[code] = _Pos(
                         code=code,
                         name=str(cand["name"]),
@@ -776,9 +818,51 @@ def simulate_portfolio_3slots(
                         }
                     )
                 else:
-                    wait_q.append({**cand, "queued_at": str(ts)})
+                    if buys_today >= max_buys:
+                        skipped.append({**cand, "reason": "max_buys_per_day"})
+                    else:
+                        wait_q.append({**cand, "queued_at": str(ts)})
 
         # 日末：未成交等待作废；持仓市值按收盘
+        # 尾盘空槽：隔夜最多 max_overnight；超出则强制卖出可卖仓中浮盈最差一只
+        while len(positions) > max_overnight:
+            cands: list[tuple[float, str, float]] = []
+            for code, pos in list(positions.items()):
+                if is_t1_buy_day(pos.buy_day, sess):
+                    continue
+                sd = day_map.get(code)
+                px = float(last_px.get(code) or (sd.close_px if sd and sd.close_px else pos.buy_px))
+                if px <= 0 or not pos.buy_px:
+                    continue
+                cands.append((float(px) / float(pos.buy_px) - 1.0, code, px))
+            if not cands:
+                break
+            cands.sort(key=lambda x: x[0])
+            _pnl, code, fill = cands[0]
+            pos = positions[code]
+            proceeds = float(fill) * int(pos.shares)
+            cash += proceeds
+            trades.append(
+                {
+                    "date": sess,
+                    "ts": f"{sess} 14:57:00",
+                    "side": "sell",
+                    "code": code,
+                    "name": pos.name,
+                    "px": float(fill),
+                    "shares": int(pos.shares),
+                    "pnl_pct": round(float(fill) / pos.buy_px - 1.0, 4) if pos.buy_px else None,
+                    "exit_reason": "eod_reserve_slot",
+                    "slots_after": len(positions) - 1,
+                }
+            )
+            del positions[code]
+            st = states.get(code)
+            if st is not None:
+                st.sold_today = True
+                st.buy_armed = False
+            last_px[code] = float(fill)
+
         for cand in wait_q:
             skipped.append({**cand, "reason": "slots_full_unfilled_eod"})
         wait_q.clear()
@@ -840,6 +924,10 @@ def simulate_portfolio_3slots(
             "n_open": len(positions),
             "n_skipped_or_queued": len(skipped),
             "exit_mode": exit_mode,
+            "max_slots": max_slots,
+            "reserve_empty": reserve,
+            "max_overnight": max_overnight,
+            "max_buys_per_day": max_buys,
         },
     }
 
@@ -980,9 +1068,10 @@ def run(
         "",
         "- **选股/过滤**：日线（前日阴/小阳、双阳禁买）；因子2 回撤仅预警阈值，不注资",
         "- **成交**：池内票近 N 交易日 **1 分钟** path-dependent（买=开盘突破或攻击波；卖=分时最高回落）",
-        f"- **组合**：最多同时持有 **{max_slots}** 只；**先触发买点的先买**；"
+        f"- **组合**：物理 **{max_slots}** 槽（盘中可持 {max_slots}）；当日最多买 **{MAX_BUYS_PER_DAY}**；"
+        f"尾盘空 **{RESERVE_EMPTY_SLOTS}**（隔夜最多 {MAX_OVERNIGHT_SLOTS}）；**先触发买点的先买**；"
         f"每槽约 {SLOT_WEIGHT*100:.0f}% 仓；T+1；槽满触买入队，释放后再按触发先后补；"
-        f"**当日卖出后仍可再买**",
+        f"**当日止损/已记卖出禁再买**",
         f"- 窗长：{days} 交易日；日历：{', '.join(cal) if cal else '—'}",
         f"- 默认阈值 ±{entry*100:.1f}%（个股可覆盖）",
         "",
@@ -1005,7 +1094,8 @@ def run(
         if t.get("source") == "queue_fill" and t.get("trigger_ts"):
             note = f"排队补仓(触{str(t['trigger_ts'])[11:16]})"
         if t.get("pnl_pct") is not None:
-            note = f"pnl {float(t['pnl_pct'])*100:.2f}%"
+            er = t.get("exit_reason") or ""
+            note = f"{er} pnl {float(t['pnl_pct'])*100:.2f}%".strip()
         lines.append(
             f"| {t.get('ts', '')} | {t.get('side')} | {t.get('code')} | {t.get('name')} | "
             f"{t.get('px')} | {t.get('shares')} | {note} |"

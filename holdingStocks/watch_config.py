@@ -542,7 +542,14 @@ def watchlist_codes_label(watchlist: list[dict[str, Any]] | None = None) -> str:
 
 
 # ── 三槽持仓（策略一实盘）──────────────────────────────────────────
-MAX_PORTFOLIO_SLOTS = 3
+MAX_PORTFOLIO_SLOTS = 3  # 盘中物理上限（可同时持 3）
+RESERVE_EMPTY_SLOTS = 1  # 尾盘/隔夜必须空出的槽
+MAX_OVERNIGHT_SLOTS = MAX_PORTFOLIO_SLOTS - RESERVE_EMPTY_SLOTS  # 隔夜最多 2
+# 兼容旧名：曾误作「盘中也最多2」；现仅表示隔夜上限
+MAX_ACTIVE_SLOTS = MAX_OVERNIGHT_SLOTS
+MAX_BUYS_PER_DAY = 2  # 当日最多买入次数（与尾盘预留配套）
+RESERVE_SLOT_HOUR = 14
+RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓；日末强制空槽
 SLOT_WEIGHT = 0.30  # 每槽约 3 成仓
 DEFAULT_ACCOUNT_TOTAL = 100_000.0  # 无登记总资产时按 10 万估槽金额
 
@@ -559,15 +566,48 @@ def occupied_slot_codes(holdings: dict[str, Any]) -> list[str]:
 
 
 def free_slot_count(holdings: dict[str, Any]) -> int:
+    """物理空槽数（相对 MAX_PORTFOLIO_SLOTS）。"""
     return max(0, int(MAX_PORTFOLIO_SLOTS) - len(occupied_slot_codes(holdings)))
 
 
-def slot_meta(holdings: dict[str, Any]) -> dict[str, Any]:
+def is_reserve_slot_window(now: Any | None = None) -> bool:
+    """尾盘预留空槽窗口：此后新开仓按隔夜上限，日末须空出 RESERVE_EMPTY_SLOTS。"""
+    return _clock_minutes(now) >= (
+        int(RESERVE_SLOT_HOUR) * 60 + int(RESERVE_SLOT_MINUTE)
+    )
+
+
+def free_buy_slot_count(
+    holdings: dict[str, Any],
+    *,
+    reserve_for_close: bool | None = None,
+    now: Any | None = None,
+) -> int:
+    """可买入空槽。
+
+    · 盘中：最多占满 MAX_PORTFOLIO_SLOTS（3）
+    · 尾盘窗口（默认 14:50 后）或 reserve_for_close=True：按隔夜上限 MAX_OVERNIGHT_SLOTS（2）
+    """
+    if reserve_for_close is None:
+        reserve_for_close = is_reserve_slot_window(now)
+    cap = int(MAX_OVERNIGHT_SLOTS if reserve_for_close else MAX_PORTFOLIO_SLOTS)
+    return max(0, cap - len(occupied_slot_codes(holdings)))
+
+
+def slot_meta(holdings: dict[str, Any], *, now: Any | None = None) -> dict[str, Any]:
     occupied = occupied_slot_codes(holdings)
+    n = len(occupied)
+    reserve_mode = is_reserve_slot_window(now)
     return {
         "max": int(MAX_PORTFOLIO_SLOTS),
+        "reserve": int(RESERVE_EMPTY_SLOTS),
+        "overnightMax": int(MAX_OVERNIGHT_SLOTS),
+        "activeMax": int(MAX_OVERNIGHT_SLOTS),  # 兼容旧字段=隔夜上限
+        "maxBuysPerDay": int(MAX_BUYS_PER_DAY),
+        "reserveWindow": bool(reserve_mode),
         "weight": float(SLOT_WEIGHT),
         "occupied": occupied,
-        "occupiedCount": len(occupied),
-        "free": max(0, int(MAX_PORTFOLIO_SLOTS) - len(occupied)),
+        "occupiedCount": n,
+        "free": max(0, int(MAX_PORTFOLIO_SLOTS) - n),
+        "freeBuy": free_buy_slot_count(holdings, now=now),
     }

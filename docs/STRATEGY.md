@@ -41,8 +41,9 @@
 
 ### 因子22 · 收盘动量（已绑策略一）
 
-- 因子26 当日止损后：若 `收盘 ≥ 当日最低价 × (1+pct)` 则同日再买；默认 pct=1%，可选收阳/收阴。
-- **另**：当日卖出后也允许按因子26 开盘/攻击波再买（不设「卖出当日禁买」）；因子22 为额外收盘动量路径。
+- 因子26 当日止损后：三槽执行下**当日禁再买该票**（因子22 研究路径不覆盖槽位禁买）。
+- **仓位**：物理 3 槽（盘中可持 3）；当日最多买 2；尾盘空 1 槽（隔夜最多 2）。
+- 对照见 `holdingStocks/watch_config.py`：`MAX_PORTFOLIO_SLOTS` / `MAX_OVERNIGHT_SLOTS` / `MAX_BUYS_PER_DAY` / `RESERVE_EMPTY_SLOTS`（`MAX_ACTIVE_SLOTS` 兼容旧名=隔夜上限）。
 - 绑定：`strategy1/bindings`；决策见 `Strategy1Decision`；说明：[`FACTOR22.md`](FACTOR22.md)。
 - 天通 2026 日线对照见 `backtest/tiantong_stop_rebuy_2026/`；扩样本前勿调默认 pct。
 

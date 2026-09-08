@@ -65,7 +65,8 @@ NEAR_POINTS = 1.0
 NEAR_FACTOR_PCT = NEAR_POINTS
 
 REASON_STOP = "止损成交"
-EXIT_REASONS = (REASON_STOP,)
+REASON_EOD_RESERVE = "尾盘空槽"
+EXIT_REASONS = (REASON_STOP, REASON_EOD_RESERVE)
 
 
 def ceil_to_tick(px: float, tick: float = TICK_SIZE) -> float:

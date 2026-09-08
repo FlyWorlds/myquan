@@ -51,7 +51,7 @@ akshare DataFrame
 | 场景 | 配置 |
 |------|------|
 | **盯盘 / 默认回测** | **策略一 = 因子26 浮盈回落一半止盈 + 因子2 预警 + 因子22 收盘动量再买**（因子2 回测不注资） |
-| **因子26** | 选股日线 / 成交 1m；池回测近 7 日；T+1；卖=持仓最高浮盈回落一半；峰值种子不含当日快照 high；同根 K 不自造攻击波 |
+| **因子26** | 选股日线 / 成交 1m；池回测近 7 日；T+1；卖=持仓最高浮盈回落一半；三槽（盘中可持3、日最多买2、尾盘空1隔夜最多2、当日卖出禁再买） |
 | **因子1（复用）** | 开盘±锚定止损；策略三/四/八等仍用；已非策略一主因子 |
 | **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top20**（宽宇宙主板，剔ST/百元股，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
@@ -61,6 +61,7 @@ akshare DataFrame
 ```bash
 cd backtest && python strategy1.py --rules
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py   # 定盘池近7日1m·三槽·先触发先买；T+1已记次日开盘市价离场
+# 交割注释：backtest/strategy1_pool_1m/TRADE_LEDGER.md（剔科森 TRADE_LEDGER_EX_KOSEN.md）
 python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
 python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）
 ```
@@ -277,7 +278,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 **策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略收益**（自 2026-09-01 起因子1 回放、含费用；见 `watch_config.STRATEGY_PNL_START`）。额外盯盘（非 Top20）见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含科森 603626、金安国纪 002636、东材科技 601208）。
 
-**持仓三槽**：最多 3 只实仓（各约 30%）；空槽数=3−已持仓。连续竞价（9:30–11:30 / 13:00–15:00）才自动成交；买入/卖出触达按 1 分钟顺序（同根 K 不自造攻击波；未走完分钟不用现价撞抬高后卖价）；同一轮止损不立刻补仓。因子22 14:57 后收盘确认。止损若记了 `account_cash` 会加回现金。
+**持仓三槽**：盘中最多 3 只实仓（各约 30%）；当日最多买 2；14:50 起按隔夜上限，尾盘须空 1 → 隔夜最多 2。连续竞价（9:30–11:30 / 13:00–15:00）才自动成交；买入/卖出触达按 1 分钟顺序（同根 K 不自造攻击波；未走完分钟不用现价撞抬高后卖价）；同一轮止损不立刻补仓。因子22 14:57 后收盘确认。止损若记了 `account_cash` 会加回现金。
 
 **启动（推荐）**
 
