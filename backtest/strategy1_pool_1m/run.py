@@ -7,6 +7,7 @@
   · 每天最多同时持有 max_slots 只（默认 3）
   · 先触发买点的先买；槽满后触买进入等待队列，止损释放槽后再按触发先后补仓
   · T+1：买入当日不可卖；每槽约 3 成仓（权益×slot_weight）
+  · 当日卖出后仍可再买（重新武装开盘/攻击波买点）
 
 用法：
   PYTHONPATH=. python3 backtest/strategy1_pool_1m/run.py
@@ -513,7 +514,9 @@ def simulate_portfolio_3slots(
                             )
                             del positions[code]
                             st.sold_today = True
-                            st.buy_armed = False
+                            # 当日卖出后仍可再买：重新武装买点扫描
+                            st.buy_armed = True
+                            st.pending_buy = None
                             st.running_high = max(st.running_high, h)
                             last_px[code] = float(stop)
                             _try_fill_from_queue(sess, str(ts))
@@ -531,7 +534,7 @@ def simulate_portfolio_3slots(
                 sd = day_map.get(code)
                 if st is None or sd is None:
                     continue
-                if st.sold_today or (not st.buy_armed) or (not sd.allow_entry):
+                if (not st.buy_armed) or (not sd.allow_entry):
                     continue
                 if st.pending_buy is not None:
                     continue
@@ -814,7 +817,8 @@ def run(
         "- **选股/过滤**：日线（前日阴/小阳、双阳禁买）；因子2 回撤仅预警阈值，不注资",
         "- **成交**：池内票近 N 交易日 **1 分钟** path-dependent（买=开盘突破或攻击波；卖=分时最高回落）",
         f"- **组合**：最多同时持有 **{max_slots}** 只；**先触发买点的先买**；"
-        f"每槽约 {SLOT_WEIGHT*100:.0f}% 仓；T+1；槽满触买入队，释放后再按触发先后补",
+        f"每槽约 {SLOT_WEIGHT*100:.0f}% 仓；T+1；槽满触买入队，释放后再按触发先后补；"
+        f"**当日卖出后仍可再买**",
         f"- 窗长：{days} 交易日；日历：{', '.join(cal) if cal else '—'}",
         f"- 默认阈值 ±{entry*100:.1f}%（个股可覆盖）",
         "",

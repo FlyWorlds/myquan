@@ -4,9 +4,10 @@
   · 买（因子26）：开盘突破 或 攻击波(当日最低+entry)；前日阴/小阳；禁双阳；T+1
   · 卖（因子26）：浮盈回落一半（持仓最高相对成本）；未浮盈成本硬保护；1 分钟 path-dependent
   · 因子2：账户回撤加减仓预警（不自动改现金）
-  · 因子22：止损后收盘动量可同日再买
+  · 因子22：止损后收盘动量可同日再买（额外路径）
+  · **当日卖出后仍可再买**：因子26 开盘/攻击波买点可再次触发；不设「卖出当日禁买」
   · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值；9:30 起触发结算
-  · 策略回放触止损 → 已止损（不再「策略持有」）
+  · 策略回放触止损 → 已止损（不再「策略持有」）；若再触买点仍可待买入
   · 默认定盘宇宙：因子13A+16 宽宇宙换池 Top20（剔ST/百元股；无置顶；见 watch_config.WATCHLIST）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
@@ -1533,9 +1534,9 @@ def _apply_trigger_date_fields(
     hit_stop_while_held = bool(qty > 0 and hit_stop)
     paper_stopped = bool(replay.get("holding")) and qty <= 0 and hit_stop
     stop_exit_today = bool(sold_today or paper_stopped)
-    if allow_entry and qty <= 0 and sold_today:
+    # 门禁打开：过门通过则当日卖出/纸面止损后仍可再买（不设当日禁买）
+    if allow_entry and qty <= 0 and (sold_today or paper_stopped):
         stop_exit_today = False
-    # 纸面已止损：一律当日禁买（除非因子22放行 allow_entry）
     if paper_stopped and not allow_entry:
         stop_exit_today = True
     row["当日禁买"] = bool(stop_exit_today) and not allow_entry
@@ -1633,7 +1634,7 @@ def _apply_trigger_date_fields(
             trig_px = None
         next_px = float(buy_lv) if buy_lv is not None else None
 
-    # 当日禁买：未触发侧若是买入则清空（不展示下一买点）
+    # 当日禁买（过门未过）：未触发侧若是买入则清空（不展示下一买点）
     if stop_exit_today and next_side == "买入":
         next_side = "卖出"
         next_px = float(stop_lv) if stop_lv is not None else next_px
@@ -1652,7 +1653,7 @@ def _apply_trigger_date_fields(
         next_px=next_px,
     )
 
-    # 盘中预警：已触发/接近 + 今日日期（当日禁买不再进待买入文案）
+    # 盘中预警：已触发/接近 + 今日日期（过门未过的禁买不进待买入文案）
     if (
         pos_st in ("待买入", "待卖出")
         and hit_txt in ("已触发", "接近")
@@ -1664,7 +1665,7 @@ def _apply_trigger_date_fields(
             row["因子触发"] = hit_txt
         return
 
-    # 有仓 / 策略回放持有 / 当日止损后：展示买入日，止损日单独标注
+    # 有仓 / 策略回放持有 / 当日止损后（且过门未过禁买）：展示买入日，止损日单独标注
     if qty > 0 or paper_holding or stop_exit_today:
         md = (
             format_trigger_md(buy_time)
@@ -1675,11 +1676,11 @@ def _apply_trigger_date_fields(
             row["因子触发"] = f"策略止损 {today_md}"
             if str(row.get("预警") or "") in ("", "-", "空仓", "待买入"):
                 row["预警"] = (
-                    "今日已止损·当日不买"
+                    "今日已止损·过门未过"
                     if sold_today
-                    else "策略持有·今日触止损·当日不买"
+                    else "策略持有·今日触止损·过门未过"
                 )
-            # 强制不挂买单（因子22 放行时 stop_exit_today 已为 False，不会进此支）
+            # 强制不挂买单
             row["建议挂单"] = None
             row["近买点"] = False
             # 已真实平仓 → 已止损；纸面触止损仍空仓观望
@@ -3157,7 +3158,7 @@ def collect_rows(
             elif not signal_ok:
                 hit_buy = False
                 hit_stop = False
-            # 当日止损/已结算卖出 → 默认禁止因子1再买；因子22 收盘动量可放行
+            # 当日止损/已结算卖出 → 仍可按因子26再买；因子22 收盘动量为额外放行
             _realized_pre = realized_map.get(code)
             _sold_today_pre = bool(
                 _realized_pre
@@ -3178,16 +3179,12 @@ def collect_rows(
                     close_px=float(q["last"]),
                     tick=tick,
                 )
-                if not _f22_pre:
-                    allow_entry = False
-                    hit_buy = False
-                elif signal_ok:
+                if _f22_pre:
                     allow_entry = True
-                    hit_buy = True
-                else:
+                    if signal_ok:
+                        hit_buy = True
                     # 9:30 前仅预览收盘动量，不算已触发
-                    allow_entry = True
-                    hit_buy = False
+                # 不再因「当日已卖」清空 allow_entry / hit_buy（门禁打开）
             limit_state = limit_down_state(
                 prev_close=q.get("prev_close"),
                 open_px=float(q["open"]),
@@ -3303,24 +3300,31 @@ def collect_rows(
                     close_px=float(q["last"]),
                     tick=tick,
                 )
-                # 当日已卖出：默认禁止因子1再买；因子22 收盘动量成立则可信号再买
-                if f22:
-                    allow_entry = True
-                    hit_buy = True
-                    f22_px = round(float(f22["fill_px"]), px_digits)
-                    note += f"；收盘动量可再买@{f22_px:.{px_digits}f}"
+                # 当日已卖出：仍可按因子26 开盘/攻击波再买；因子22 为额外收盘动量路径
+                f26_rebuy = bool(allow_entry and hit_buy)
+                rebuy_ok = bool(allow_entry and (f26_rebuy or f22))
+                f22_px = (
+                    round(float(f22["fill_px"]), px_digits)
+                    if f22 and f22.get("fill_px") is not None
+                    else None
+                )
+                if f22 and not f26_rebuy:
+                    buy_show = f22_px if f22_px is not None else lv["buy_trigger"]
+                    note += f"；收盘动量可再买@{buy_show:.{px_digits}f}"
+                elif f26_rebuy:
+                    buy_show = lv["buy_trigger"]
+                    note += f"；卖出后再触买点@{buy_show:.{px_digits}f}"
                 else:
-                    allow_entry = False
-                    hit_buy = False
-                    f22_px = None
-                # 已清仓：因子侧/持仓状态按空仓规则重算
+                    buy_show = lv["buy_trigger"]
+                rebuy_hit = bool(rebuy_ok and signal_ok)
+                # 已清仓：因子侧/持仓状态按空仓规则重算（可再进待买入）
                 sig0 = strategy_signal(
                     open_px=q["open"],
                     high_px=q["high"],
                     low_px=q["low"],
                     last_px=q["last"],
                     session=q["session"],
-                    buy_trigger=lv["buy_trigger"] if not f22 else float(f22["fill_px"]),
+                    buy_trigger=float(buy_show),
                     stop_px=lv["stop"],
                     qty=0,
                     buy_time=None,
@@ -3329,12 +3333,28 @@ def collect_rows(
                     stop_pct=stop_pct,
                     px_digits=px_digits,
                     t0=t0,
-                    allow_entry=bool(f22) and signal_ok,
+                    allow_entry=bool(rebuy_ok) and preview_ok,
                     hit_stop=False,
                 )
                 if not signal_ok:
                     sig0 = _demote_pre_signal_window(sig0)
-                    hit_buy = False
+                    rebuy_hit = False
+                if rebuy_hit:
+                    pos_st0 = "待买入"
+                    alert0 = (
+                        "止损后·收盘动量可再买"
+                        if (f22 and not f26_rebuy)
+                        else "卖出后再触买"
+                    )
+                    bg0 = "status-buy"
+                    hang0 = float(buy_show) if buy_show is not None else None
+                    note0 = note
+                else:
+                    pos_st0 = "已止损"
+                    alert0 = reason
+                    bg0 = sig0.get("bg_class") or "status-flat"
+                    hang0 = None
+                    note0 = note + "；可再买·待触买点" if allow_entry else note
                 row0 = {
                         "市场": str(pos.get("market") or w["market"]),
                         "代码": code,
@@ -3356,23 +3376,27 @@ def collect_rows(
                         "较开盘点": vs,
                         "较开盘涨幅": vs_pct,
                         "阈值%": pct_pct,
-                        "买点": f22_px if f22_px is not None else lv["buy_trigger"],
+                        "买点": buy_show,
                         "止损": lv["stop"],
                         "基础止损": lv_base["stop"],
                         "因子4": f4_tag,
                         "牛市": ("是" if bull else "否") if USE_FACTOR4 else "-",
-                        "已触买": "是" if f22 else "否",
+                        "已触买": "是" if rebuy_hit else "否",
                         "已触止损": "是" if hit_stop or reason == REASON_STOP else "否",
-                        "因子侧": "买入" if f22 else "空仓",
-                        "因子价": f22_px if f22_px is not None else sig0.get("因子价"),
+                        "因子侧": "买入" if rebuy_hit else "空仓",
+                        "因子价": buy_show if rebuy_hit else sig0.get("因子价"),
                         "因子触发": (
-                            f"收盘动量 {q['session'][5:7]}月{q['session'][8:10]}日"
-                            if f22 and len(str(q["session"])) >= 10
+                            (
+                                f"收盘动量 {q['session'][5:7]}月{q['session'][8:10]}日"
+                                if (f22 and not f26_rebuy)
+                                else f"再触买 {q['session'][5:7]}月{q['session'][8:10]}日"
+                            )
+                            if rebuy_hit and len(str(q["session"])) >= 10
                             else sig0.get("因子触发")
                         ),
-                        "持仓状态": "待买入" if f22 else "已止损",
-                        "已触发因子侧": "买入" if f22 else sig0.get("已触发因子侧"),
-                        "已触发因子价": f22_px if f22 else sig0.get("已触发因子价"),
+                        "持仓状态": pos_st0,
+                        "已触发因子侧": "买入" if rebuy_hit else sig0.get("已触发因子侧"),
+                        "已触发因子价": buy_show if rebuy_hit else sig0.get("已触发因子价"),
                         "未触发因子侧": sig0.get("未触发因子侧"),
                         "未触发因子价": sig0.get("未触发因子价"),
                         "距已触发价差": sig0.get("距已触发价差"),
@@ -3382,20 +3406,13 @@ def collect_rows(
                         "距因子价差": sig0.get("距因子价差"),
                         "距因子%": sig0.get("距因子%"),
                         "形态": sig0.get("形态") or bar_shape(q["open"], q["last"]),
-                        "预警": "止损后·收盘动量可再买" if f22 else reason,
-                        "建议挂单": f22_px if f22 else None,
-                        "挂单说明": (
-                            note
-                            if f22
-                            else note + "；当日已卖出不再买"
-                        ),
-                        "近买点": bool(f22),
+                        "预警": alert0,
+                        "建议挂单": hang0,
+                        "挂单说明": note0,
+                        "近买点": bool(rebuy_ok and not rebuy_hit and preview_ok)
+                        or bool(rebuy_hit),
                         "近止损": False,
-                        "bg_class": (
-                            "status-buy"
-                            if f22
-                            else (sig0.get("bg_class") or "status-flat")
-                        ),
+                        "bg_class": bg0,
                         "持仓": 0,
                         "卖出数量": sold_qty,
                         "成本": realized.get("cost"),
@@ -3423,8 +3440,21 @@ def collect_rows(
                     qty=0,
                     replay=replay,
                     code=code,
-                    allow_entry=bool(f22),
+                    allow_entry=bool(allow_entry),
                 )
+                # 再买信号优先：勿被「策略止损」文案盖住
+                if rebuy_hit:
+                    row0["持仓状态"] = "待买入"
+                    row0["当日禁买"] = False
+                    row0["预警"] = alert0
+                    row0["建议挂单"] = hang0
+                    row0["近买点"] = True
+                    row0["已触买"] = "是"
+                    row0["bg_class"] = "status-buy"
+                elif allow_entry:
+                    row0["当日禁买"] = False
+                    if str(row0.get("持仓状态") or "") == "已止损":
+                        row0["挂单说明"] = note + "；可再买·待触买点"
                 _attach_strategy_pnl_fields(
                     row0,
                     w=w,
@@ -3599,9 +3629,7 @@ def collect_rows(
                 stop_lvl=-stop_pct * 100.0,
                 sticky=sticky,
             )
-            entry_for_overlay = bool(
-                allow_entry and preview_ok and signal_ok and not _sold_today_pre
-            )
+            entry_for_overlay = bool(allow_entry and preview_ok and signal_ok)
             if not (_paper_hold and hit_stop):
                 sig = _overlay_buy_signal_on_hold(
                     sig,
@@ -3991,7 +4019,7 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
     t1 = "T+1" in alert
 
     if no_buy and qty <= 0:
-        # 今日已平仓：统一「已止损」（兼容旧「当日禁买」）
+        # 过门未过等禁买：统一「已止损」（兼容旧「当日禁买」）
         row["持仓状态"] = "已止损"
         row["因子侧"] = "空仓"
         row["建议挂单"] = None
@@ -3999,7 +4027,7 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
         row["可执行"] = False
         row["bg_class"] = "status-flat"
         if alert in ("", "-", "空仓", "待买入", "当日禁买"):
-            row["预警"] = "今日已止损·当日不买"
+            row["预警"] = "今日已止损·过门未过"
         # 主展示价：保留上次买入触发价
         if row.get("已触发因子侧") == "买入" and row.get("已触发因子价") is not None:
             row["因子价"] = row["已触发因子价"]

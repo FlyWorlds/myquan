@@ -53,8 +53,14 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   const buyTriggered =
     qty <= 0 &&
     (alert === '已触买' ||
+      alert.includes('再触买') ||
+      alert.includes('收盘动量可再买') ||
       String(row.已触买 || '') === '是' ||
-      (pos === '待买入' && (trig.startsWith('已触发') || trig.includes('已触发'))))
+      (pos === '待买入' &&
+        (trig.startsWith('已触发') ||
+          trig.includes('已触发') ||
+          trig.includes('再触买') ||
+          trig.includes('收盘动量'))))
   const sellTriggered =
     alert.includes('已触止损') ||
     trig.startsWith('策略止损') ||
@@ -64,6 +70,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     bg === 'warn-buy' ||
     pos === '待买入' ||
     alert.includes('将买') ||
+    alert.includes('可再买') ||
     Boolean(row.近买点) ||
     (side === '买入' && (trig === '接近' || trig.startsWith('已触发')))
 
@@ -127,8 +134,12 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     return mk('warn-buy', alert || '将买入')
   }
 
-  // 3. 已止损 / 策略持有 / 空仓
-  if (pos === '当日禁买' || pos === '已止损' || alert.includes('今日已止损')) {
+  // 3. 已止损 / 策略持有 / 空仓（再触买已在上方 buy 分支处理）
+  if (
+    (pos === '当日禁买' || pos === '已止损' || alert.includes('今日已止损')) &&
+    !buyTriggered &&
+    !buyWarn
+  ) {
     return mk('ban-buy', alert || (pos === '已止损' ? '已止损' : '当日禁买'))
   }
   if (paperHold || bg === 'status-hold') {

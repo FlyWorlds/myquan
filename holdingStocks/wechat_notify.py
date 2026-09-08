@@ -128,7 +128,7 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
 
     - 有持仓：仅止损侧（P0 因子已触发 / P1 触发预警带）
     - 无持仓：仅买入侧（P0 / P1）
-    - 当日禁买空仓：不再推买入
+    - 过门未过禁买空仓：不推买入；当日卖出后再触买仍推
     返回 None 表示不推；否则含 level/kind/type/factor_px。
     """
     if row.get("error"):
@@ -136,7 +136,8 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
     pos = str(row.get("持仓状态") or "")
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
-    no_buy = bool(row.get("当日禁买")) or pos in ("当日禁买", "已止损")
+    # 仅「当日禁买」挡买入；已止损但再触买（待买入）仍可推
+    no_buy = bool(row.get("当日禁买")) or pos == "当日禁买"
     holding = _has_holding(row)
 
     hit_buy = str(row.get("已触买") or "") == "是"
@@ -155,6 +156,8 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
     # 有仓刚结算：P0 止损因子一次
     if row.get("已实现") and (
         hit_stop or "止损" in alert or hit.startswith("策略止损")
+    ) and not (
+        hit_buy or pos == "待买入" or "再触买" in alert or "可再买" in alert
     ):
         return _pack(
             PRIORITY_P0,
@@ -206,13 +209,15 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
             )
         return None
 
-    # 无持仓：当日已止损禁买 → 不推买入
+    # 无持仓：过门禁买 → 不推买入；当日卖出后再触买仍推
     if no_buy:
         return None
     if (
         hit_buy
         or (pos == "待买入" and hit.startswith("已触发"))
         or "已触买" in alert
+        or "再触买" in alert
+        or "收盘动量可再买" in alert
     ):
         return _pack(
             PRIORITY_P0,

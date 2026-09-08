@@ -21,7 +21,7 @@ class Strategy1Decision(BaseDecisionEngine):
     - 空仓 + 因子允许 + high 触开盘买点或攻击波买点 → buy（因子26）
     - 有仓 + 非 T+1 + low 触浮盈回落一半卖价 → sell；
       若同日收盘动量成立 → buy（因子22，隐含先止损再买）
-    - 空仓 + 当日已止损（meta.stop_sold_today）+ 收盘动量 → buy（因子22）
+    - 空仓 + 当日已卖出：仍可按因子26 再买；因子22 收盘动量为额外路径
     - 其余 → hold
     """
 
@@ -151,7 +151,7 @@ class Strategy1Decision(BaseDecisionEngine):
                 tags=("hold",),
             )
 
-        # 空仓：当日已止损 → 优先因子22
+        # 空仓：当日已卖出 → 优先尝试因子22；未成立则继续走因子26 开盘/攻击波再买
         if bool((ctx.meta or {}).get("stop_sold_today")):
             rebuy = self._factor22_rebuy(ctx, stop_px=stop_px, buy_px=buy_px)
             if rebuy is not None:
@@ -166,6 +166,7 @@ class Strategy1Decision(BaseDecisionEngine):
                     factor_id="factor22",
                     meta=meta,
                 )
+            # 门禁打开：不 return，落入下方因子26 再买
 
         if not self.factor_allowed(binding, ctx):
             return Decision.hold(
