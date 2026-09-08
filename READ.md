@@ -51,7 +51,7 @@ akshare DataFrame
 | 场景 | 配置 |
 |------|------|
 | **盯盘 / 默认回测** | **策略一 = 因子26 浮盈回落一半止盈 + 因子2 预警 + 因子22 收盘动量再买**（因子2 回测不注资） |
-| **因子26** | 选股日线 / 成交 1m；池回测近 7 日；T+1；卖=持仓最高浮盈回落一半 |
+| **因子26** | 选股日线 / 成交 1m；池回测近 7 日；T+1；卖=持仓最高浮盈回落一半；峰值种子不含当日快照 high；同根 K 不自造攻击波 |
 | **因子1（复用）** | 开盘±锚定止损；策略三/四/八等仍用；已非策略一主因子 |
 | **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top20**（宽宇宙主板，剔ST/百元股，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
@@ -60,7 +60,7 @@ akshare DataFrame
 
 ```bash
 cd backtest && python strategy1.py --rules
-PYTHONPATH=. python backtest/strategy1_pool_1m/run.py   # 定盘池近7日1m·三槽·先触发先买
+PYTHONPATH=. python backtest/strategy1_pool_1m/run.py   # 定盘池近7日1m·三槽·先触发先买；T+1已记次日开盘市价离场
 python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
 python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）
 ```
@@ -102,11 +102,11 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **factor19** | 因子19-低开反包 | 反转 | 旧假设 | 压力日低开；未过关 |
 | **factor20** | 因子20-跌停次日开板 | 反转 | 已否决 | 昨收跌停今开未封 |
 | **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停且曾开板、今低开；上证昨收≤−2% 空仓；调参窗强、盲测回撤未过关 |
-| **factor22** | 因子22-收盘动量 | 动量 | 策略一止损后再买 | 因子26 止损后收盘≥low×(1+pct) 同日再买；默认 1%；见 [`docs/FACTOR22.md`](docs/FACTOR22.md) |
+| **factor22** | 因子22-收盘动量 | 动量 | 策略一止损后再买 | 因子26 止损后收盘≥low×(1+pct) 同日再买；默认 1%；盯盘 14:57 后确认；见 [`docs/FACTOR22.md`](docs/FACTOR22.md) |
 | **factor23** | 因子23-最高连板止盈 | 止盈持股 | 策略十五 | 最高板定 7%/10%/15% 减半止盈 |
 | **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五 | 低中梯度开 F22/F25；高潮关接回 |
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡 | 30m 确认止损+动态半仓+卖飞回补；见 [`docs/FACTOR25.md`](docs/FACTOR25.md) |
-| **factor26** | 因子26-浮盈回落一半止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；成交 1m path-dependent；卖=浮盈回落一半；池近 7 日；见 [`docs/FACTOR26.md`](docs/FACTOR26.md) |
+| **factor26** | 因子26-浮盈回落一半止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买/卖 1m path-dependent（同根 K 先判后更新高低）；卖=浮盈回落一半；T+1 已记：低开开盘卖、高开等从开盘下杀 1%；峰值种子不含当日快照 high；池近 7 日；见 [`docs/FACTOR26.md`](docs/FACTOR26.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
@@ -177,8 +177,9 @@ myquan/
 # 策略一回测
 cd myquan/backtest && python run.py kaicheng
 cd myquan/backtest && python strategy1.py --rules
-# 定盘池近 7 日 1 分钟路径（选股日线 / 成交 1m）
-cd myquan && PYTHONPATH=. python backtest/strategy1_pool_1m/run.py
+# 定盘池 1m 三槽（对齐实盘 T+1：止损已记次日开盘市价离场；长窗用 panda）
+cd myquan && PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 7 --source auto
+PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 20 --source panda --refresh
 
 # 因子13 熊市盾牌 WF（thr* Top3，锁定配置）
 cd myquan && python strategy/run_factor13_bear_shield_wf.py
@@ -274,9 +275,9 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 ## 盯盘要点
 
-**策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略收益**（自 2026-09-01 起因子1 回放、含费用；见 `watch_config.STRATEGY_PNL_START`）。
+**策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略收益**（自 2026-09-01 起因子1 回放、含费用；见 `watch_config.STRATEGY_PNL_START`）。额外盯盘（非 Top20）见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含科森 603626、金安国纪 002636、东材科技 601208）。
 
-**持仓三槽**：最多 3 只实仓（各约 30%）；空槽数=3−已持仓；9:30 后已触买按距买点填槽→状态「已经买入」；止损平仓→「已止损」并释放槽位。持仓 Tab **置顶前 3 实仓**并展示持仓状态；**当日预警票**在其后（槽满不登记 qty）。
+**持仓三槽**：最多 3 只实仓（各约 30%）；空槽数=3−已持仓。连续竞价（9:30–11:30 / 13:00–15:00）才自动成交；买入/卖出触达按 1 分钟顺序（同根 K 不自造攻击波；未走完分钟不用现价撞抬高后卖价）；同一轮止损不立刻补仓。因子22 14:57 后收盘确认。止损若记了 `account_cash` 会加回现金。
 
 **启动（推荐）**
 

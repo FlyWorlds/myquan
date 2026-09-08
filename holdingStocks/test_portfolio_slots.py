@@ -31,6 +31,56 @@ def test_occupied_ignores_realized_and_zero_qty():
     assert meta["occupiedCount"] == 1
 
 
+def test_today_slot_buy_ranks_first_touch_wins():
+    from index import today_slot_buy_ranks
+
+    text = "\n".join(
+        [
+            '{"time": "2026-09-08 09:47:34", "side": "buy", "code": "002093", "note": "槽位触买(自动·3成)"}',
+            '{"time": "2026-09-08 09:47:34", "side": "buy", "code": "002104", "note": "槽位触买(自动·3成)"}',
+            '{"time": "2026-09-08 09:47:34", "side": "buy", "code": "002015", "note": "槽位触买(自动·3成)"}',
+            '{"time": "2026-09-08 11:11:57", "side": "buy", "code": "002093", "note": "槽位触买(自动·3成)"}',
+            '{"time": "2026-09-08 10:00:00", "side": "buy", "code": "603626", "note": "用户确认持有"}',
+        ]
+    )
+    ranks = today_slot_buy_ranks("2026-09-08", text=text)
+    assert ranks == {"002093": 0, "002104": 1, "002015": 2}
+
+
+def test_sellable_overnight_available_zero_not_fallback():
+    from watch_config import sellable_qty
+
+    pos = {"qty": 1000, "available": 0, "buy_time": "2026-09-07 09:31:00"}
+    assert sellable_qty(pos, 1000, pos["buy_time"], "2026-09-08") == 0
+    pos_na = {"qty": 1000, "available": None, "buy_time": "2026-09-07 09:31:00"}
+    assert sellable_qty(pos_na, 1000, pos_na["buy_time"], "2026-09-08") == 1000
+
+
+def test_market_phase_lunch_and_close():
+    from datetime import datetime
+
+    from watch_config import is_close_confirmed, is_signal_window, market_phase
+
+    assert market_phase(datetime(2026, 9, 8, 10, 0)) == "continuous"
+    assert market_phase(datetime(2026, 9, 8, 11, 45)) == "lunch"
+    assert is_signal_window(datetime(2026, 9, 8, 11, 45)) is False
+    assert market_phase(datetime(2026, 9, 8, 13, 10)) == "continuous"
+    assert market_phase(datetime(2026, 9, 8, 15, 1)) == "closed"
+    assert is_signal_window(datetime(2026, 9, 8, 15, 1)) is False
+    assert is_close_confirmed(datetime(2026, 9, 8, 14, 56)) is False
+    assert is_close_confirmed(datetime(2026, 9, 8, 14, 57)) is True
+
+
+def test_forming_minute_skips_live_low_against_raised_peak():
+    import pandas as pd
+    from index import _bars_cover_current_minute
+
+    ts = pd.Timestamp("2026-09-08 11:20:00")
+    bars = pd.DataFrame([{"ts": ts, "high": 31.0, "low": 29.7}])
+    assert _bars_cover_current_minute(bars, now=pd.Timestamp("2026-09-08 11:20:40")) is True
+    assert _bars_cover_current_minute(bars, now=pd.Timestamp("2026-09-08 11:21:05")) is False
+
+
 def test_full_slots():
     holdings = {
         "positions": {

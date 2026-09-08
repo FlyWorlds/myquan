@@ -45,6 +45,7 @@ from strategy.open_break import (  # noqa: E402
     DEFAULT_BAN_SINGLE_YANG,
     DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+    floor_to_tick,
     is_t1_buy_day,
     prev_day_allows_entry,
     should_block_entry_by_yang,
@@ -52,8 +53,13 @@ from strategy.open_break import (  # noqa: E402
 from strategy.pullback_wave_stop import (  # noqa: E402
     DEFAULT_ENTRY_PCT,
     DEFAULT_PULLBACK_PCT,
+    DEFAULT_NOTED_DUMP_PCT,
+    NOTED_MODE_GAP_DUMP,
     attack_buy_trigger_price,
+    delayed_t1_stop_fill_px,
     entry_trigger_price,
+    is_one_word_bar,
+    noted_next_day_fill,
     pullback_stop_price,
     replay_factor26_1m,
 )
@@ -88,27 +94,92 @@ def _daily(sina: str, lookback_cal_days: int = 40) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def _minutes(sina: str, *, refresh: bool) -> pd.DataFrame:
+def _minutes(sina: str, *, refresh: bool, days: int = 7, source: str = "auto") -> pd.DataFrame:
+    """拉 1m：优先本地缓存；akshare 约近 5 日；source=panda/auto 时用 Pandadata 拉长窗实盘分钟。"""
     path = CACHE / f"{sina}_1m.parquet"
+    cached = pd.DataFrame()
     if path.exists() and not refresh:
         try:
-            df = pd.read_parquet(path)
-            if not df.empty and "ts" in df.columns:
-                return df
+            cached = pd.read_parquet(path)
         except Exception:  # noqa: BLE001
-            pass
-    em = _em(sina[2:] if len(sina) >= 8 else sina)
-    try:
-        df = pull_akshare_1m(em_symbol=em, sina_symbol=sina, adjust="")
-    except Exception as e:  # noqa: BLE001
-        print(f"  1m 失败 {sina}: {e}")
-        df = pd.DataFrame()
-    if not df.empty:
+            cached = pd.DataFrame()
+
+    need_days = max(1, int(days))
+    src = str(source or "auto").lower()
+    frames: list[pd.DataFrame] = []
+    if not cached.empty and "ts" in cached.columns:
+        frames.append(cached)
+
+    # Pandadata 长历史（实盘库）；失败则退回 akshare
+    use_panda = src in ("panda", "pandadata", "auto") and need_days > 5
+    if use_panda or src in ("panda", "pandadata"):
         try:
-            df.to_parquet(path, index=False)
-        except Exception:  # noqa: BLE001
-            pass
-    return df
+            import os
+            from pathlib import Path as _P
+
+            env = _P.home() / ".pandadata" / "pandadata.env"
+            if env.exists():
+                for raw in env.read_text(encoding="utf-8").splitlines():
+                    line = raw.strip()
+                    if line.startswith("export "):
+                        line = line[len("export ") :]
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+            import panda_data
+
+            panda_data.init_token()
+            code = sina[2:] if len(sina) >= 8 else sina
+            market = "SH" if str(sina).lower().startswith("sh") else "SZ"
+            symbol = f"{code}.{market}"
+            end = pd.Timestamp.today().strftime("%Y%m%d")
+            start = (pd.Timestamp.today() - pd.Timedelta(days=max(need_days * 2, 20))).strftime(
+                "%Y%m%d"
+            )
+            raw = panda_data.get_stock_min(
+                symbol=symbol,
+                start_date=start,
+                end_date=end,
+                frequency="1m",
+            )
+            if raw is not None and not getattr(raw, "empty", True):
+                pdf = raw.copy()
+                if "datetime" in pdf.columns:
+                    pdf["ts"] = pd.to_datetime(pdf["datetime"])
+                elif "date" in pdf.columns and "minute" in pdf.columns:
+                    pdf["ts"] = pd.to_datetime(
+                        pdf["date"].astype(str) + " " + pdf["minute"].astype(str)
+                    )
+                for c in ("open", "high", "low", "close"):
+                    if c in pdf.columns:
+                        pdf[c] = pd.to_numeric(pdf[c], errors="coerce")
+                pdf = pdf.dropna(subset=["ts", "open", "high", "low", "close"])
+                frames.append(pdf[["ts", "open", "high", "low", "close"]].copy())
+                print(f"  [panda] {sina} 1m rows={len(pdf)}")
+        except Exception as e:  # noqa: BLE001
+            if src in ("panda", "pandadata"):
+                print(f"  [panda] {sina} 失败: {e}")
+
+    if src in ("auto", "ak", "akshare") and (not frames or need_days <= 7):
+        em = _em(sina[2:] if len(sina) >= 8 else sina)
+        try:
+            df = pull_akshare_1m(em_symbol=em, sina_symbol=sina, adjust="")
+            if df is not None and not df.empty:
+                frames.append(df)
+        except Exception as e:  # noqa: BLE001
+            print(f"  1m 失败 {sina}: {e}")
+
+    if not frames:
+        return pd.DataFrame()
+    out = pd.concat(frames, ignore_index=True)
+    out["ts"] = pd.to_datetime(out["ts"])
+    out = out.sort_values("ts").drop_duplicates(subset=["ts"], keep="last")
+    try:
+        CACHE.mkdir(parents=True, exist_ok=True)
+        out.to_parquet(path, index=False)
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 def _prep_minutes(minutes: pd.DataFrame) -> pd.DataFrame:
@@ -163,6 +234,7 @@ class _Pos:
     cost: float
     kind: str | None = None
     peak_high: float = 0.0  # 持仓以来最高（用于收益回落一半）
+    stop_noted_px: float | None = None  # T+1 止损已触发（次日市价离场，不是按该价成交）
 
 
 def _exit_stop_px(
@@ -207,6 +279,7 @@ class _StockDay:
     allow_entry: bool
     bars: pd.DataFrame
     close_px: float | None = None
+    prev_close: float | None = None
 
 
 @dataclass
@@ -216,6 +289,8 @@ class _DayState:
     buy_armed: bool = True  # 当日尚未错过/成交买点前可持续扫描
     pending_buy: dict[str, Any] | None = None
     sold_today: bool = False
+    noted_lock_wait: bool = False
+    noted_first_exec: bool = True
 
 
 def _lot_shares(budget: float, price: float) -> int:
@@ -244,15 +319,19 @@ def simulate_portfolio_3slots(
     initial_cash: float = DEFAULT_ACCOUNT_TOTAL,
     slot_weight: float = SLOT_WEIGHT,
     exit_mode: str = "half_gain",
+    noted_mode: str = NOTED_MODE_GAP_DUMP,
+    noted_dump_pct: float | None = None,
 ) -> dict[str, Any]:
     """三槽组合：1m 路径，先触发买点先买，最多同时持有 max_slots 只。
 
     exit_mode:
       - half_gain：浮盈相对持仓最高回落一半止盈（因子26 默认；未浮盈用成本回撤保护）
       - peak_pct：旧版峰值回落阈值（对照）
+    noted_mode / noted_dump_pct：T+1 止损已记后的次日规则
     """
     max_slots = max(1, int(max_slots))
     exit_mode = str(exit_mode or "half_gain")
+    nmode = str(noted_mode or NOTED_MODE_GAP_DUMP)
     prepared: list[dict[str, Any]] = []
     all_days: set[str] = set()
 
@@ -374,6 +453,7 @@ def simulate_portfolio_3slots(
             if day_bars.empty:
                 continue
             day_list = list(daily["day"].astype(str))
+            prev_c: float | None = None
             if sess not in day_list:
                 # 无日线时仍可用分钟开盘，但缺前日过滤 → 仅允许已持仓卖出
                 allow = False
@@ -386,6 +466,7 @@ def simulate_portfolio_3slots(
                 else:
                     prev = daily.iloc[i - 1]
                     prev2 = daily.iloc[i - 2] if i >= 2 else None
+                    prev_c = float(prev["close"])
                     allow = prev_day_allows_entry(
                         float(prev["open"]),
                         float(prev["close"]),
@@ -420,6 +501,7 @@ def simulate_portfolio_3slots(
                 allow_entry=bool(allow),
                 bars=day_bars,
                 close_px=close_px,
+                prev_close=prev_c,
             )
             last_px[s["code"]] = float(close_px)
 
@@ -438,15 +520,20 @@ def simulate_portfolio_3slots(
             states[code].buy_armed = False
 
         # 合并时间线
-        timeline: list[tuple[pd.Timestamp, str, float, float]] = []
+        timeline: list[tuple[pd.Timestamp, str, float, float, float]] = []
         for code, sd in day_map.items():
             for _, row in sd.bars.iterrows():
+                try:
+                    bar_o = float(row["open"]) if "open" in sd.bars.columns else float(sd.open_px)
+                except (TypeError, ValueError):
+                    bar_o = float(sd.open_px)
                 timeline.append(
                     (
                         pd.Timestamp(row["ts"]),
                         code,
                         float(row["high"]),
                         float(row["low"]),
+                        bar_o if bar_o > 0 else float(sd.open_px),
                     )
                 )
         timeline.sort(key=lambda x: (x[0], x[1]))
@@ -456,13 +543,13 @@ def simulate_portfolio_3slots(
         while i < n:
             ts = timeline[i][0]
             # 同一分钟内：先处理全部卖，再处理全部新触发买（先触发=时间戳相同则按代码稳定序，已按 code 排）
-            bucket: list[tuple[pd.Timestamp, str, float, float]] = []
+            bucket: list[tuple[pd.Timestamp, str, float, float, float]] = []
             while i < n and timeline[i][0] == ts:
                 bucket.append(timeline[i])
                 i += 1
 
             # —— 卖 ——
-            for _, code, h, lo in bucket:
+            for _, code, h, lo, bar_o in bucket:
                 if code not in positions:
                     # 更新空仓扫描用的高低
                     st = states.get(code)
@@ -481,7 +568,70 @@ def simulate_portfolio_3slots(
                 can_sell = not is_t1_buy_day(pos.buy_day, sess)
                 rh = float(st.running_high or 0.0)
                 ph = max(float(pos.peak_high or 0.0), rh)
+                noted = float(pos.stop_noted_px or 0.0) if pos.stop_noted_px else 0.0
                 if can_sell and (not st.sold_today):
+                    # 先兑现「止损已记」：T+1 推迟市价离场（低开按开盘，不是已记价）
+                    if noted > 0:
+                        locked = False
+                        pc = float(sd.prev_close or 0)
+                        if pc > 0:
+                            limit_px = floor_to_tick(pc * 0.9, 0.01)
+                            locked = is_one_word_bar(bar_o, h, lo) and (
+                                abs(float(bar_o) - limit_px) <= 0.01 + 1e-9
+                            )
+                        if locked:
+                            st.noted_lock_wait = True
+                            st.running_low = min(st.running_low, lo)
+                            st.running_high = max(st.running_high, h)
+                            last_px[code] = (h + lo) / 2.0
+                            continue
+                        day_o = (
+                            float(bar_o)
+                            if st.noted_lock_wait
+                            else float(sd.open_px)
+                        )
+                        dump = (
+                            float(noted_dump_pct)
+                            if noted_dump_pct is not None
+                            else DEFAULT_NOTED_DUMP_PCT
+                        )
+                        nxt = noted_next_day_fill(
+                            mode=nmode,
+                            noted_px=noted,
+                            day_open=day_o,
+                            bar_low=lo,
+                            dump_pct=dump,
+                            tick=0.01,
+                            first_executable=bool(st.noted_first_exec),
+                        )
+                        st.noted_first_exec = False
+                        if nxt.get("hit") and float(nxt.get("fill_px") or 0) > 0:
+                            fill = float(nxt["fill_px"])
+                            proceeds = float(fill) * int(pos.shares)
+                            cash += proceeds
+                            trades.append(
+                                {
+                                    "date": sess,
+                                    "ts": str(ts),
+                                    "side": "sell",
+                                    "code": code,
+                                    "name": pos.name,
+                                    "px": float(fill),
+                                    "shares": int(pos.shares),
+                                    "pnl_pct": round(float(fill) / pos.buy_px - 1.0, 4)
+                                    if pos.buy_px
+                                    else None,
+                                    "exit_reason": str(nxt.get("reason") or "stop_noted"),
+                                    "slots_after": len(positions) - 1,
+                                }
+                            )
+                            del positions[code]
+                            st.sold_today = True
+                            st.buy_armed = True
+                            st.pending_buy = None
+                            last_px[code] = float(fill)
+                            _try_fill_from_queue(sess, str(ts))
+                            continue
                     can_eval = (exit_mode == "half_gain" and ph > 0) or (
                         exit_mode != "half_gain" and rh > 0
                     )
@@ -517,17 +667,30 @@ def simulate_portfolio_3slots(
                             # 当日卖出后仍可再买：重新武装买点扫描
                             st.buy_armed = True
                             st.pending_buy = None
-                            st.running_high = max(st.running_high, h)
                             last_px[code] = float(stop)
                             _try_fill_from_queue(sess, str(ts))
                             continue
-                st.running_high = max(st.running_high, h)
-                pos.peak_high = max(float(pos.peak_high or 0.0), float(st.running_high))
-                last_px[code] = (h + lo) / 2.0
+                elif (not can_sell) and (not st.sold_today):
+                    # T+1：触止损只记，不卖
+                    stop, _reason = _exit_stop_px(
+                        mode=exit_mode,
+                        running_high=max(rh, ph, float(pos.buy_px)),
+                        buy_px=float(pos.buy_px),
+                        peak_high=max(ph, float(pos.buy_px)),
+                        pullback_pct=sd.pullback_pct,
+                    )
+                    if stop > 0 and lo <= stop + 1e-12:
+                        prev_n = float(pos.stop_noted_px or 0) if pos.stop_noted_px else 0.0
+                        pos.stop_noted_px = stop if prev_n <= 0 else min(prev_n, stop)
+                # 更新持仓峰值
+                if code in positions:
+                    positions[code].peak_high = max(ph, h)
+                    st.running_high = max(rh, h)
+                    last_px[code] = (h + lo) / 2.0
 
             # —— 买：本分钟新触达 ——
             new_hits: list[dict[str, Any]] = []
-            for _, code, h, lo in bucket:
+            for _, code, h, lo, bar_o in bucket:
                 if code in positions:
                     continue
                 st = states.get(code)
@@ -687,6 +850,7 @@ def run(
     refresh: bool = False,
     entry_pct: float | None = None,
     max_slots: int = MAX_PORTFOLIO_SLOTS,
+    source: str = "auto",
 ) -> dict:
     entry = float(entry_pct if entry_pct is not None else DEFAULT_ENTRY_PCT)
     pb = float(DEFAULT_PULLBACK_PCT)
@@ -694,7 +858,7 @@ def run(
     rows: list[dict] = []
     stock_payload: list[dict[str, Any]] = []
     print(
-        f"定盘池 {len(pool)} 只 · 近 {days} 交易日 1m · "
+        f"定盘池 {len(pool)} 只 · 近 {days} 交易日 1m · source={source} · "
         f"三槽≤{max_slots} · 先触发先买 · entry/pb={entry*100:.1f}%"
     )
 
@@ -706,7 +870,7 @@ def run(
         sp = float(w.get("stop_pct") or w.get("pct") or pb)
         print(f"· {code} {name} …", flush=True)
         daily = _daily(sina)
-        mins = _minutes(sina, refresh=refresh)
+        mins = _minutes(sina, refresh=refresh, days=int(days), source=source)
         rep = replay_factor26_1m(
             daily,
             mins,
@@ -923,9 +1087,15 @@ def run(
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="策略一定盘池 7 日 1m 三槽回测")
-    ap.add_argument("--days", type=int, default=7, help="近 N 个有 1m 的交易日")
+    ap = argparse.ArgumentParser(description="策略一定盘池 1m 三槽回测（对齐实盘 T+1 止损已记）")
+    ap.add_argument("--days", type=int, default=7, help="近 N 个有 1m 的交易日（长窗请 --source panda）")
     ap.add_argument("--refresh", action="store_true", help="强制重拉 1m")
+    ap.add_argument(
+        "--source",
+        default="auto",
+        choices=("auto", "panda", "ak"),
+        help="1m 数据源：auto=长窗优先 Pandadata；ak=仅东财/新浪近约5日",
+    )
     ap.add_argument("--entry-pct", type=float, default=None)
     ap.add_argument(
         "--max-slots",
@@ -939,6 +1109,7 @@ def main() -> None:
         refresh=bool(args.refresh),
         entry_pct=args.entry_pct,
         max_slots=int(args.max_slots),
+        source=str(args.source),
     )
 
 

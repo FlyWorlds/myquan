@@ -66,12 +66,15 @@ def _clock_minutes(now: Any | None = None) -> int:
 
 
 def market_phase(now: Any | None = None) -> str:
-    """盘前 / 竞价可撤 / 竞价不可撤 / 阈值盯盘 / 连续竞价。"""
+    """盘前 / 竞价 / 连续竞价 / 午休 / 收盘。连续竞价仅 9:30–11:30、13:00–15:00。"""
     m = _clock_minutes(now)
     a15 = AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
     a20 = AUCTION_NO_CANCEL_HOUR * 60 + AUCTION_NO_CANCEL_MINUTE
     a25 = AUCTION_OPEN_HOUR * 60 + AUCTION_OPEN_MINUTE
     a30 = SIGNAL_ACTIVE_HOUR * 60 + SIGNAL_ACTIVE_MINUTE
+    lunch_start = 11 * 60 + 30
+    lunch_end = 13 * 60
+    close_m = 15 * 60
     if m < a15:
         return "pre_auction"
     if m < a20:
@@ -80,7 +83,13 @@ def market_phase(now: Any | None = None) -> str:
         return "auction_locked"
     if m < a30:
         return "open_set"
-    return "continuous"
+    if m < lunch_start:
+        return "continuous"
+    if m < lunch_end:
+        return "lunch"
+    if m < close_m:
+        return "continuous"
+    return "closed"
 
 
 def market_phase_label(phase: str | None = None, *, now: Any | None = None) -> str:
@@ -90,7 +99,9 @@ def market_phase_label(phase: str | None = None, *, now: Any | None = None) -> s
         "auction_cancel": "集合竞价·可撤单（9:15–9:20）",
         "auction_locked": "集合竞价·不可撤单（9:20–9:25）",
         "open_set": "开盘价已出·阈值盯盘（9:25–9:30）",
-        "continuous": "连续竞价·信号触发（9:30 起）",
+        "continuous": "连续竞价·信号触发（9:30–11:30 / 13:00–15:00）",
+        "lunch": "午休（11:30–13:00）",
+        "closed": "收盘（15:00 后）",
     }
     return labels.get(ph, ph)
 
@@ -110,10 +121,13 @@ def is_threshold_ready(now: Any | None = None) -> bool:
 
 
 def is_signal_window(now: Any | None = None) -> bool:
-    """9:30 起才允许因子触发/止损结算/微信预警。"""
-    return _clock_minutes(now) >= (
-        SIGNAL_ACTIVE_HOUR * 60 + SIGNAL_ACTIVE_MINUTE
-    )
+    """仅连续竞价时段允许因子触发/止损结算/微信预警（不含午休、收盘后）。"""
+    return market_phase(now) == "continuous"
+
+
+def is_close_confirmed(now: Any | None = None) -> bool:
+    """尾盘集合竞价后视为收盘确认（因子22 mode=close）。"""
+    return _clock_minutes(now) >= 14 * 60 + 57
 
 
 def is_auction_window(now: Any | None = None) -> bool:
@@ -293,6 +307,9 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
     watch_item("600552", "凯盛科技", pct=0.025),
     watch_item("600330", "天通股份", pct=0.03),
     watch_item("600338", "西藏珠峰", pct=0.025),
+    watch_item("603626", "科森科技", pct=0.025),
+    watch_item("002636", "金安国纪", pct=0.025),
+    watch_item("601208", "东材科技", pct=0.025),
 ]
 
 # 切策略三：STRATEGY_ID="strategy3"; USE_FACTOR4=True; WATCHLIST=list(S7_WATCHLIST)
@@ -423,7 +440,7 @@ def sellable_qty(
     - T+0：整仓可卖
     - 买入当日（T+1）：以 available 为准（通常 0）；未填则整仓不可卖
     - 非买入日（隔夜仓）：available>0 取其与 qty 较小值；
-      available 缺失或为 0 视为未维护，回退整仓可卖（避免卡死止损结算）
+      available 为 0 视为不可卖（对齐券商）；未填 available 才回退整仓
     """
     if qty <= 0:
         return 0
@@ -441,9 +458,9 @@ def sellable_qty(
             return 0
         return max(0, min(avail, int(qty)))
 
-    if avail is not None and avail > 0:
-        return max(0, min(avail, int(qty)))
-    return int(qty)
+    if avail is None:
+        return int(qty)
+    return max(0, min(avail, int(qty)))
 
 
 def calc_day_pnl(

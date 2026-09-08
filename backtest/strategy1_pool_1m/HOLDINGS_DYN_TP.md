@@ -5,13 +5,14 @@
 ## 结论
 
 1. **是动态止盈**：卖价 = `floor(成本 + 0.5×(持仓最高−成本))`；未浮盈用成本×(1−个股阈值) 硬保护。
-2. **持仓走同一套**：盯盘实仓用 `holdings.json` 的 `cost` + `peak_high`（并与今日 high / 1m running_high 取 max）算卖价；触达仍按 1 分钟顺序。
+2. **持仓走同一套**：盯盘实仓用 `holdings.json` 的 `cost` + 隔夜 `peak_high`，再按买入后 **1m 顺序**抬升峰值算卖价；**禁止**把当日快照 high 提前种进卖价。
 3. **已修 bug**：path 判定曾把 `seed_high`（含峰值）误传为 `cost_px`，会导致「未浮盈硬保护」误用峰值；现已改为 **成本与峰值分传**。
+4. **T+1 止损已记**：当日触止损卖不出只记触发；次日低开跌破已记→开盘卖；高开则等从开盘下杀 1%。
 
 ## 公式（有仓）
 
 ```
-peak = max(cost, peak_high记录, 今日high, 买入后1m最高)
+peak = max(cost, 隔夜peak_high记录, 买入后已走完的1m最高)  # 不含当日快照 high
 若 peak > cost:  动态止盈 = floor(cost + 0.5*(peak - cost))
 否则:            硬保护   = floor(cost * (1 - hard_pct))
 ```
@@ -33,6 +34,6 @@ peak = max(cost, peak_high记录, 今日high, 买入后1m最高)
 | 字段 | 来源 |
 |------|------|
 | 成本 | `positions[code].cost` |
-| 峰值 | `positions[code].peak_high`，扫描中用 1m/今日 high 抬升并回写 |
+| 峰值 | `positions[code].peak_high`，扫描中只用 1m `running_high` 抬升并回写（不含快照 high） |
 | 止损/卖出侧价 | `strategy_levels(..., cost_px, peak_high)` → 浮盈回落一半 |
 | 触达 | `path_dependent_pullback_hit(..., cost_px=成本, seed_high=峰值)` |

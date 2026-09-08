@@ -35,6 +35,7 @@ _m = _load(
     inject={"strategy.open_break": _ob},
 )
 path_dependent_pullback_hit = _m.path_dependent_pullback_hit
+path_dependent_buy_hit = _m.path_dependent_buy_hit
 half_gain_stop_price = _m.half_gain_stop_price
 pullback_stop_price = _m.pullback_stop_price
 
@@ -56,7 +57,39 @@ def test_half_gain_formula():
     assert abs(half_gain_stop_price(100.0, 100.0, hard_pct=0.025) - 97.5) < 1e-9
 
 
+def test_snapshot_high_must_not_seed_before_morning_low():
+    """隔夜成本 28.2；早盘低 29.5、午后才到 31。若把 31 种进 seed 会误触 29.6。"""
+    bars = _bars([(29.8, 29.5), (31.0, 30.5), (30.8, 29.7)])
+    ok = path_dependent_pullback_hit(
+        bars, pullback_pct=0.025, seed_high=28.2, cost_px=28.2
+    )
+    assert ok["hit_stop"] is False, ok
+    bad = path_dependent_pullback_hit(
+        bars, pullback_pct=0.025, seed_high=31.0, cost_px=28.2
+    )
+    assert bad["hit_stop"] is True, bad
+
+
+def test_attack_buy_same_bar_low_and_high_rejected():
+    """同一根 1m：低 90、高 94。须先有更早低点，不能本分钟自造攻击波。"""
+    bars = _bars([(94.0, 90.0)])
+    out = path_dependent_buy_hit(bars, open_px=100.0, entry_pct=0.025)
+    assert out["hit_buy"] is False, out
+    bars2 = _bars([(91.0, 90.0), (94.0, 93.0)])
+    out2 = path_dependent_buy_hit(bars2, open_px=100.0, entry_pct=0.025)
+    assert out2["hit_buy"] is True, out2
+    assert out2["buy_kind"] == "attack"
+
+
+def test_attack_buy_snapshot_lookahead_rejected():
+    """早盘高 101、午后低 90：全日 OHLC 会假触发攻击波；1m 顺序不应买。"""
+    bars = _bars([(101.0, 100.0), (91.0, 90.0)])
+    out = path_dependent_buy_hit(bars, open_px=100.0, entry_pct=0.025)
+    assert out["hit_buy"] is False, out
+
+
 def test_daily_ohlc_false_positive_avoided():
+    """早盘低、午后高：全日 OHLC 会假触发止损；1m 顺序不应卖。"""
     bars = _bars([(100.0, 98.0), (110.0, 108.0)])
     out = path_dependent_pullback_hit(
         bars, pullback_pct=0.025, seed_high=100.0, cost_px=100.0
@@ -171,6 +204,9 @@ def test_since_buy_ignores_pre_entry_dip():
 
 if __name__ == "__main__":
     test_half_gain_formula()
+    test_snapshot_high_must_not_seed_before_morning_low()
+    test_attack_buy_same_bar_low_and_high_rejected()
+    test_attack_buy_snapshot_lookahead_rejected()
     test_daily_ohlc_false_positive_avoided()
     test_hard_protect_path_hit()
     test_half_gain_after_peak()

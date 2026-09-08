@@ -40,7 +40,7 @@ SPEC = FactorSpec(
     description=(
         "浮盈回落一半止盈：买=开盘突破或攻击波；"
         "卖=持仓最高相对成本浮盈回落一半（未浮盈成本硬保护）；"
-        "成交触达按 1 分钟顺序；选股/回撤用日线；池回测近 7 日 1m；"
+        "成交触达按 1 分钟顺序（同根 K 先判后更新高低）；选股/回撤用日线；池回测近 7 日 1m；"
         f"默认 entry ±{DEFAULT_ENTRY_PCT*100:.1f}% / giveback {DEFAULT_GIVEBACK_RATIO*100:.0f}%"
     ),
     rules_text=_rules(),

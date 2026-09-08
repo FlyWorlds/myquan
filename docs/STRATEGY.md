@@ -3,7 +3,7 @@
 > 研究用途，不构成投资建议。  
 > 注册表与 API 细节见 [`strategy/README.md`](../strategy/README.md)；凯盛单票审计见 [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md)。
 
-**最后更新**：2026-09-07
+**最后更新**：2026-09-08
 
 ---
 
@@ -28,10 +28,10 @@
 
 ### 因子26 · 浮盈回落一半止盈（主执行）
 
-- 买：同因子1；前日阴/小阳；禁双阳跨日≥5%；开盘突破或攻击波限价买；目标仓位约 95%。
-- 卖：已浮盈 `floor(成本+0.5×(持仓最高−成本))`；未浮盈 `floor(成本×(1−2.5%))` 硬保护；T+1；一字跌停不卖。
+- 买：同因子1；前日阴/小阳；禁双阳跨日≥5%；开盘突破或攻击波限价买；目标仓位约 95%。盘中触达以 `holdingStocks/index.py` 的 **1 分钟路径**为准（禁止全日 OHLC 假触）。
+- 卖：已浮盈 `floor(成本+0.5×(持仓最高−成本))`；未浮盈 `floor(成本×(1−2.5%))` 硬保护；T+1（当日触止损只记；次日低开跌破已记则开盘卖，高开则等从开盘下杀 1%）；一字跌停不卖。有仓峰值不用当日快照 high。
 - 默认 entry **±2.5%**，giveback **50%**（单票可非对称 entry/hard）。
-- 真源：`strategy/pullback_wave_stop.py`、`strategy/factors/factor26.py`。
+- 真源：`strategy/pullback_wave_stop.py`、`strategy/factors/factor26.py`；决策层 `decision.py` 日线粗算，可经 `meta.path_hit_*` 接入分钟路径。
 - 因子1（`open_break.py`）仍供策略三/四/八等复用，已非策略一主因子。
 
 ### 因子2 · 回撤预警

@@ -1,0 +1,5068 @@
+{
+  "days": 60,
+  "source": "auto",
+  "n_pool": 25,
+  "events": {
+    "n_events": 60,
+    "n_gap_down": 36,
+    "n_open_above_noted": 24,
+    "n_open_above_cost": 28,
+    "policies": {
+      "sell_open": {
+        "desc": "次日开盘市价（现行）",
+        "n": 60,
+        "n_sold": 60,
+        "sell_rate": 1.0,
+        "mean_pnl_vs_cost_pct": 0.904,
+        "mean_fly_pct": 2.3,
+        "n_sold_then_up_1pct": 38,
+        "bounce_n": 24,
+        "bounce_sold": 24,
+        "bounce_mean_pnl_pct": 3.918,
+        "bounce_n_fly_1pct": 15
+      },
+      "continue_f26": {
+        "desc": "仅低开跌破已记才开盘卖，否则走因子26",
+        "n": 60,
+        "n_sold": 56,
+        "sell_rate": 0.9333,
+        "mean_pnl_vs_cost_pct": 0.898,
+        "mean_fly_pct": 2.454,
+        "n_sold_then_up_1pct": 41,
+        "bounce_n": 24,
+        "bounce_sold": 20,
+        "bounce_mean_pnl_pct": 3.904,
+        "bounce_n_fly_1pct": 18
+      },
+      "wait_noted": {
+        "desc": "仅低开跌破已记才开盘卖，否则等再碰已记价",
+        "n": 60,
+        "n_sold": 56,
+        "sell_rate": 0.9333,
+        "mean_pnl_vs_cost_pct": 0.893,
+        "mean_fly_pct": 2.459,
+        "n_sold_then_up_1pct": 41,
+        "bounce_n": 24,
+        "bounce_sold": 20,
+        "bounce_mean_pnl_pct": 3.891,
+        "bounce_n_fly_1pct": 18
+      },
+      "gap_dump_0.5pct": {
+        "desc": "低开跌破已记→开盘卖；否则从开盘下杀 0.5%",
+        "n": 60,
+        "n_sold": 58,
+        "sell_rate": 0.9667,
+        "mean_pnl_vs_cost_pct": 0.937,
+        "mean_fly_pct": 2.335,
+        "n_sold_then_up_1pct": 41,
+        "bounce_n": 24,
+        "bounce_sold": 22,
+        "bounce_mean_pnl_pct": 4.001,
+        "bounce_n_fly_1pct": 18
+      },
+      "gap_dump_1.0pct": {
+        "desc": "低开跌破已记→开盘卖；否则从开盘下杀 1.0%",
+        "n": 60,
+        "n_sold": 56,
+        "sell_rate": 0.9333,
+        "mean_pnl_vs_cost_pct": 1.016,
+        "mean_fly_pct": 2.326,
+        "n_sold_then_up_1pct": 41,
+        "bounce_n": 24,
+        "bounce_sold": 20,
+        "bounce_mean_pnl_pct": 4.199,
+        "bounce_n_fly_1pct": 18
+      },
+      "gap_dump_1.5pct": {
+        "desc": "低开跌破已记→开盘卖；否则从开盘下杀 1.5%",
+        "n": 60,
+        "n_sold": 56,
+        "sell_rate": 0.9333,
+        "mean_pnl_vs_cost_pct": 0.933,
+        "mean_fly_pct": 2.415,
+        "n_sold_then_up_1pct": 41,
+        "bounce_n": 24,
+        "bounce_sold": 20,
+        "bounce_mean_pnl_pct": 3.991,
+        "bounce_n_fly_1pct": 18
+      },
+      "gap_dump_2.5pct": {
+        "desc": "低开跌破已记→开盘卖；否则从开盘下杀 2.5%",
+        "n": 60,
+        "n_sold": 56,
+        "sell_rate": 0.9333,
+        "mean_pnl_vs_cost_pct": 0.856,
+        "mean_fly_pct": 2.499,
+        "n_sold_then_up_1pct": 41,
+        "bounce_n": 24,
+        "bounce_sold": 20,
+        "bounce_mean_pnl_pct": 3.799,
+        "bounce_n_fly_1pct": 18
+      }
+    }
+  },
+  "portfolio": [
+    {
+      "key": "sell_open",
+      "desc": "次日开盘市价（现行）",
+      "return_pct": 5.3,
+      "n_buys": 23,
+      "n_sells": 23,
+      "n_open": 0,
+      "avg_closed_pnl_pct": 0.8,
+      "win_rate_pct": 39.1,
+      "mean_win_pct": 5.39,
+      "mean_loss_pct": -2.15,
+      "max_dd_pct": -3.84,
+      "exit_reasons": {
+        "noted_open": 20,
+        "half_gain": 3
+      },
+      "window_days": 9,
+      "calendar": [
+        "2026-08-27",
+        "2026-08-28",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07",
+        "2026-09-08"
+      ]
+    },
+    {
+      "key": "continue_f26",
+      "desc": "仅低开跌破已记才开盘卖，否则走因子26",
+      "return_pct": 5.1,
+      "n_buys": 22,
+      "n_sells": 21,
+      "n_open": 1,
+      "avg_closed_pnl_pct": 0.13,
+      "win_rate_pct": 38.1,
+      "mean_win_pct": 3.88,
+      "mean_loss_pct": -2.18,
+      "max_dd_pct": -4.01,
+      "exit_reasons": {
+        "half_gain": 9,
+        "noted_gap_open": 12
+      },
+      "window_days": 9,
+      "calendar": [
+        "2026-08-27",
+        "2026-08-28",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07",
+        "2026-09-08"
+      ]
+    },
+    {
+      "key": "wait_noted",
+      "desc": "仅低开跌破已记才开盘卖，否则等再碰已记价",
+      "return_pct": 5.1,
+      "n_buys": 22,
+      "n_sells": 21,
+      "n_open": 1,
+      "avg_closed_pnl_pct": 0.13,
+      "win_rate_pct": 38.1,
+      "mean_win_pct": 3.88,
+      "mean_loss_pct": -2.18,
+      "max_dd_pct": -4.01,
+      "exit_reasons": {
+        "half_gain": 9,
+        "noted_gap_open": 12
+      },
+      "window_days": 9,
+      "calendar": [
+        "2026-08-27",
+        "2026-08-28",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07",
+        "2026-09-08"
+      ]
+    },
+    {
+      "key": "gap_dump_0.5pct",
+      "desc": "低开跌破已记→开盘卖；否则从开盘下杀 0.5%",
+      "return_pct": 5.51,
+      "n_buys": 23,
+      "n_sells": 23,
+      "n_open": 0,
+      "avg_closed_pnl_pct": 0.83,
+      "win_rate_pct": 39.1,
+      "mean_win_pct": 5.47,
+      "mean_loss_pct": -2.15,
+      "max_dd_pct": -3.21,
+      "exit_reasons": {
+        "noted_open_dump": 5,
+        "noted_gap_open": 13,
+        "half_gain": 5
+      },
+      "window_days": 9,
+      "calendar": [
+        "2026-08-27",
+        "2026-08-28",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07",
+        "2026-09-08"
+      ]
+    },
+    {
+      "key": "gap_dump_1.0pct",
+      "desc": "低开跌破已记→开盘卖；否则从开盘下杀 1.0%",
+      "return_pct": 6.46,
+      "n_buys": 23,
+      "n_sells": 22,
+      "n_open": 1,
+      "avg_closed_pnl_pct": 0.3,
+      "win_rate_pct": 36.4,
+      "mean_win_pct": 4.58,
+      "mean_loss_pct": -2.15,
+      "max_dd_pct": -3.52,
+      "exit_reasons": {
+        "noted_open_dump": 4,
+        "noted_gap_open": 13,
+        "half_gain": 5
+      },
+      "window_days": 9,
+      "calendar": [
+        "2026-08-27",
+        "2026-08-28",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07",
+        "2026-09-08"
+      ]
+    },
+    {
+      "key": "gap_dump_1.5pct",
+      "desc": "低开跌破已记→开盘卖；否则从开盘下杀 1.5%",
+      "return_pct": 5.86,
+      "n_buys": 23,
+      "n_sells": 22,
+      "n_open": 1,
+      "avg_closed_pnl_pct": 0.2,
+      "win_rate_pct": 36.4,
+      "mean_win_pct": 4.31,
+      "mean_loss_pct": -2.15,
+      "max_dd_pct": -3.79,
+      "exit_reasons": {
+        "noted_open_dump": 4,
+        "noted_gap_open": 13,
+        "half_gain": 5
+      },
+      "window_days": 9,
+      "calendar": [
+        "2026-08-27",
+        "2026-08-28",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07",
+        "2026-09-08"
+      ]
+    },
+    {
+      "key": "gap_dump_2.5pct",
+      "desc": "低开跌破已记→开盘卖；否则从开盘下杀 2.5%",
+      "return_pct": 4.66,
+      "n_buys": 23,
+      "n_sells": 22,
+      "n_open": 1,
+      "avg_closed_pnl_pct": 0.06,
+      "win_rate_pct": 36.4,
+      "mean_win_pct": 3.91,
+      "mean_loss_pct": -2.15,
+      "max_dd_pct": -4.43,
+      "exit_reasons": {
+        "half_gain": 6,
+        "noted_gap_open": 13,
+        "noted_open_dump": 3
+      },
+      "window_days": 9,
+      "calendar": [
+        "2026-08-27",
+        "2026-08-28",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07",
+        "2026-09-08"
+      ]
+    }
+  ],
+  "pick": {
+    "recommended": "sell_open",
+    "score_order": [
+      "sell_open",
+      "gap_dump_1.0pct",
+      "gap_dump_1.5pct",
+      "gap_dump_0.5pct",
+      "continue_f26",
+      "wait_noted",
+      "gap_dump_2.5pct"
+    ]
+  },
+  "disclaimer": "研究用途，非投资建议。结论仅对本窗 1m 样本。",
+  "event_rows": [
+    {
+      "code": "600552",
+      "name": "凯盛科技",
+      "note_date": "2026-08-27",
+      "next_date": "2026-08-28",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.441,
+      "open_vs_cost_pct": -0.331,
+      "d_open": 18.07,
+      "d_high": 18.58,
+      "d_low": 17.83,
+      "d_close": 17.88,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 18.07,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.331,
+          "fly_pct": 2.822,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 18.07,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.331,
+          "fly_pct": 2.822,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 18.07,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.331,
+          "fly_pct": 2.822,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 18.07,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.331,
+          "fly_pct": 2.822,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 18.07,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.331,
+          "fly_pct": 2.822,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 18.07,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.331,
+          "fly_pct": 2.822,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 18.07,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.331,
+          "fly_pct": 2.822,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600552",
+      "name": "凯盛科技",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 3.253,
+      "open_vs_cost_pct": 3.253,
+      "d_open": 18.41,
+      "d_high": 18.43,
+      "d_low": 17.5,
+      "d_close": 17.64,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 18.41,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.253,
+          "fly_pct": 0.109,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 18.16,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.851,
+          "fly_pct": 1.487,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 18.16,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.851,
+          "fly_pct": 1.487,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 18.31,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.692,
+          "fly_pct": 0.655,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 18.22,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.187,
+          "fly_pct": 1.153,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 18.13,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.683,
+          "fly_pct": 1.655,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 18.16,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.851,
+          "fly_pct": 1.487,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600552",
+      "name": "凯盛科技",
+      "note_date": "2026-09-03",
+      "next_date": "2026-09-04",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.855,
+      "open_vs_cost_pct": -0.115,
+      "d_open": 17.39,
+      "d_high": 17.69,
+      "d_low": 16.46,
+      "d_close": 16.62,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 17.39,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.115,
+          "fly_pct": 1.725,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 17.39,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.115,
+          "fly_pct": 1.725,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 17.39,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.115,
+          "fly_pct": 1.725,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 17.39,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.115,
+          "fly_pct": 1.725,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 17.39,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.115,
+          "fly_pct": 1.725,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 17.39,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.115,
+          "fly_pct": 1.725,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 17.39,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.115,
+          "fly_pct": 1.725,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600552",
+      "name": "凯盛科技",
+      "note_date": "2026-09-07",
+      "next_date": "2026-09-08",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.117,
+      "open_vs_cost_pct": -0.058,
+      "d_open": 17.12,
+      "d_high": 17.38,
+      "d_low": 16.81,
+      "d_close": 16.96,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 17.12,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.058,
+          "fly_pct": 1.519,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 17.12,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.058,
+          "fly_pct": 1.519,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 17.12,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.058,
+          "fly_pct": 1.519,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 17.12,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.058,
+          "fly_pct": 1.519,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 17.12,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.058,
+          "fly_pct": 1.519,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 17.12,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.058,
+          "fly_pct": 1.519,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 17.12,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.058,
+          "fly_pct": 1.519,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600330",
+      "name": "天通股份",
+      "note_date": "2026-08-27",
+      "next_date": "2026-08-28",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 4.05,
+      "open_vs_cost_pct": 4.05,
+      "d_open": 29.8,
+      "d_high": 30.23,
+      "d_low": 28.56,
+      "d_close": 28.94,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 29.8,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.05,
+          "fly_pct": 1.443,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 29.43,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.758,
+          "fly_pct": 2.718,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 29.43,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.758,
+          "fly_pct": 2.718,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 29.65,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.527,
+          "fly_pct": 1.956,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 29.5,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.003,
+          "fly_pct": 2.475,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 29.35,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.479,
+          "fly_pct": 2.998,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 29.43,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.758,
+          "fly_pct": 2.718,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600330",
+      "name": "天通股份",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -2.237,
+      "open_vs_cost_pct": -2.203,
+      "d_open": 28.41,
+      "d_high": 28.41,
+      "d_low": 26.98,
+      "d_close": 26.98,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 28.41,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.203,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 28.41,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.203,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 28.41,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.203,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 28.41,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.203,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 28.41,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.203,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 28.41,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.203,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 28.41,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.203,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "600330",
+      "name": "天通股份",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.296,
+      "open_vs_cost_pct": -0.296,
+      "d_open": 26.99,
+      "d_high": 27.85,
+      "d_low": 25.7,
+      "d_close": 27.44,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 26.99,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.296,
+          "fly_pct": 3.186,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 26.99,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.296,
+          "fly_pct": 3.186,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 26.99,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.296,
+          "fly_pct": 3.186,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 26.99,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.296,
+          "fly_pct": 3.186,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 26.99,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.296,
+          "fly_pct": 3.186,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 26.99,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.296,
+          "fly_pct": 3.186,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 26.99,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.296,
+          "fly_pct": 3.186,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600330",
+      "name": "天通股份",
+      "note_date": "2026-09-04",
+      "next_date": "2026-09-07",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -1.618,
+      "open_vs_cost_pct": -0.073,
+      "d_open": 27.37,
+      "d_high": 28.89,
+      "d_low": 27.11,
+      "d_close": 28.89,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 27.37,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.073,
+          "fly_pct": 5.554,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 27.37,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.073,
+          "fly_pct": 5.554,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 27.37,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.073,
+          "fly_pct": 5.554,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 27.37,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.073,
+          "fly_pct": 5.554,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 27.37,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.073,
+          "fly_pct": 5.554,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 27.37,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.073,
+          "fly_pct": 5.554,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 27.37,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.073,
+          "fly_pct": 5.554,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600338",
+      "name": "西藏珠峰",
+      "note_date": "2026-08-28",
+      "next_date": "2026-08-31",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.495,
+      "open_vs_cost_pct": -0.495,
+      "d_open": 14.08,
+      "d_high": 14.14,
+      "d_low": 13.75,
+      "d_close": 14.11,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 14.08,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.495,
+          "fly_pct": 0.426,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 14.08,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.495,
+          "fly_pct": 0.426,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 14.08,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.495,
+          "fly_pct": 0.426,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 14.08,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.495,
+          "fly_pct": 0.426,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 14.08,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.495,
+          "fly_pct": 0.426,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 14.08,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.495,
+          "fly_pct": 0.426,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 14.08,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.495,
+          "fly_pct": 0.426,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "600338",
+      "name": "西藏珠峰",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 0.945,
+      "open_vs_cost_pct": 1.166,
+      "d_open": 13.88,
+      "d_high": 14.27,
+      "d_low": 13.86,
+      "d_close": 13.95,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 13.88,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.166,
+          "fly_pct": 2.81,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 13.99,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.968,
+          "fly_pct": 2.001,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 13.99,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.968,
+          "fly_pct": 2.001,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 13.99,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.968,
+          "fly_pct": 2.001,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 13.99,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.968,
+          "fly_pct": 2.001,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 13.99,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.968,
+          "fly_pct": 2.001,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 13.99,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.968,
+          "fly_pct": 2.001,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "603626",
+      "name": "科森科技",
+      "note_date": "2026-08-27",
+      "next_date": "2026-08-28",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -1.258,
+      "open_vs_cost_pct": -1.009,
+      "d_open": 19.62,
+      "d_high": 20.8,
+      "d_low": 19.29,
+      "d_close": 19.29,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 19.62,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.009,
+          "fly_pct": 6.014,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 19.62,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.009,
+          "fly_pct": 6.014,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 19.62,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.009,
+          "fly_pct": 6.014,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 19.62,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.009,
+          "fly_pct": 6.014,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 19.62,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.009,
+          "fly_pct": 6.014,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 19.62,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.009,
+          "fly_pct": 6.014,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 19.62,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.009,
+          "fly_pct": 6.014,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "603626",
+      "name": "科森科技",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 5.312,
+      "open_vs_cost_pct": 5.639,
+      "d_open": 20.42,
+      "d_high": 20.92,
+      "d_low": 19.87,
+      "d_close": 19.93,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 20.42,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 5.639,
+          "fly_pct": 2.449,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 20.16,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.294,
+          "fly_pct": 3.77,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 20.16,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.294,
+          "fly_pct": 3.77,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 20.31,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 5.07,
+          "fly_pct": 3.003,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 20.21,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.553,
+          "fly_pct": 3.513,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 20.16,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.294,
+          "fly_pct": 3.77,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 20.16,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.294,
+          "fly_pct": 3.77,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "603626",
+      "name": "科森科技",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -2.257,
+      "open_vs_cost_pct": -2.159,
+      "d_open": 19.49,
+      "d_high": 19.85,
+      "d_low": 19.0,
+      "d_close": 19.73,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 19.49,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.159,
+          "fly_pct": 1.847,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 19.49,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.159,
+          "fly_pct": 1.847,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 19.49,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.159,
+          "fly_pct": 1.847,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 19.49,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.159,
+          "fly_pct": 1.847,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 19.49,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.159,
+          "fly_pct": 1.847,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 19.49,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.159,
+          "fly_pct": 1.847,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 19.49,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.159,
+          "fly_pct": 1.847,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "603626",
+      "name": "科森科技",
+      "note_date": "2026-09-07",
+      "next_date": "2026-09-08",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 10.922,
+      "open_vs_cost_pct": 10.981,
+      "d_open": 20.82,
+      "d_high": 21.69,
+      "d_low": 20.7,
+      "d_close": 21.69,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 20.82,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 10.981,
+          "fly_pct": 4.179,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 15.618,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 15.618,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 20.71,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 10.394,
+          "fly_pct": 4.732,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 15.618,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 15.618,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 15.618,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "002636",
+      "name": "金安国纪",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -1.759,
+      "open_vs_cost_pct": -1.759,
+      "d_open": 71.5,
+      "d_high": 71.98,
+      "d_low": 67.67,
+      "d_close": 68.57,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 71.5,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.759,
+          "fly_pct": 0.671,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 71.5,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.759,
+          "fly_pct": 0.671,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 71.5,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.759,
+          "fly_pct": 0.671,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 71.5,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.759,
+          "fly_pct": 0.671,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 71.5,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.759,
+          "fly_pct": 0.671,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 71.5,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.759,
+          "fly_pct": 0.671,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 71.5,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.759,
+          "fly_pct": 0.671,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "002636",
+      "name": "金安国纪",
+      "note_date": "2026-09-04",
+      "next_date": "2026-09-07",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -7.886,
+      "open_vs_cost_pct": -7.834,
+      "d_open": 66.0,
+      "d_high": 68.84,
+      "d_low": 64.71,
+      "d_close": 68.05,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 66.0,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -7.834,
+          "fly_pct": 4.303,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 66.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -7.834,
+          "fly_pct": 4.303,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 66.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -7.834,
+          "fly_pct": 4.303,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 66.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -7.834,
+          "fly_pct": 4.303,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 66.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -7.834,
+          "fly_pct": 4.303,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 66.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -7.834,
+          "fly_pct": 4.303,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 66.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -7.834,
+          "fly_pct": 4.303,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "601208",
+      "name": "东材科技",
+      "note_date": "2026-08-27",
+      "next_date": "2026-08-28",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 4.362,
+      "open_vs_cost_pct": 4.45,
+      "d_open": 50.0,
+      "d_high": 52.36,
+      "d_low": 49.73,
+      "d_close": 51.28,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 50.0,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.45,
+          "fly_pct": 4.72,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 49.77,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.969,
+          "fly_pct": 5.204,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 49.77,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.969,
+          "fly_pct": 5.204,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 49.75,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.927,
+          "fly_pct": 5.246,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 49.77,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.969,
+          "fly_pct": 5.204,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 49.77,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.969,
+          "fly_pct": 5.204,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 49.77,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.969,
+          "fly_pct": 5.204,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "601208",
+      "name": "东材科技",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": true,
+      "recovered": true,
+      "open_vs_noted_pct": -0.166,
+      "open_vs_cost_pct": 0.021,
+      "d_open": 48.2,
+      "d_high": 48.3,
+      "d_low": 45.77,
+      "d_close": 46.36,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 48.2,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.021,
+          "fly_pct": 0.207,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 48.2,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.021,
+          "fly_pct": 0.207,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 48.2,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.021,
+          "fly_pct": 0.207,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 48.2,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.021,
+          "fly_pct": 0.207,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 48.2,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.021,
+          "fly_pct": 0.207,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 48.2,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.021,
+          "fly_pct": 0.207,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 48.2,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.021,
+          "fly_pct": 0.207,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "601208",
+      "name": "东材科技",
+      "note_date": "2026-09-04",
+      "next_date": "2026-09-07",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -2.697,
+      "open_vs_cost_pct": -1.542,
+      "d_open": 47.26,
+      "d_high": 49.74,
+      "d_low": 46.8,
+      "d_close": 49.18,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 47.26,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.542,
+          "fly_pct": 5.248,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 47.26,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.542,
+          "fly_pct": 5.248,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 47.26,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.542,
+          "fly_pct": 5.248,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 47.26,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.542,
+          "fly_pct": 5.248,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 47.26,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.542,
+          "fly_pct": 5.248,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 47.26,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.542,
+          "fly_pct": 5.248,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 47.26,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.542,
+          "fly_pct": 5.248,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002104",
+      "name": "恒宝股份",
+      "note_date": "2026-09-01",
+      "next_date": "2026-09-02",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 5.119,
+      "open_vs_cost_pct": 7.037,
+      "d_open": 12.32,
+      "d_high": 13.51,
+      "d_low": 11.93,
+      "d_close": 13.51,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 12.32,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 7.037,
+          "fly_pct": 9.659,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 12.02,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.431,
+          "fly_pct": 12.396,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 12.02,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.431,
+          "fly_pct": 12.396,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 12.25,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 6.429,
+          "fly_pct": 10.286,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 12.19,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 5.908,
+          "fly_pct": 10.829,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 12.13,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 5.387,
+          "fly_pct": 11.377,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 12.01,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.344,
+          "fly_pct": 12.49,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002104",
+      "name": "恒宝股份",
+      "note_date": "2026-09-04",
+      "next_date": "2026-09-07",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -4.752,
+      "open_vs_cost_pct": -4.552,
+      "d_open": 13.63,
+      "d_high": 14.18,
+      "d_low": 13.34,
+      "d_close": 13.53,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 13.63,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -4.552,
+          "fly_pct": 4.035,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 13.63,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -4.552,
+          "fly_pct": 4.035,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 13.63,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -4.552,
+          "fly_pct": 4.035,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 13.63,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -4.552,
+          "fly_pct": 4.035,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 13.63,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -4.552,
+          "fly_pct": 4.035,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 13.63,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -4.552,
+          "fly_pct": 4.035,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 13.63,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -4.552,
+          "fly_pct": 4.035,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "603301",
+      "name": "振德医疗",
+      "note_date": "2026-09-03",
+      "next_date": "2026-09-04",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 0.319,
+      "open_vs_cost_pct": 0.381,
+      "d_open": 81.7,
+      "d_high": 82.49,
+      "d_low": 80.3,
+      "d_close": 81.23,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 81.7,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.381,
+          "fly_pct": 0.967,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 81.44,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.061,
+          "fly_pct": 1.289,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 81.44,
+          "reason": "noted_rehit",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.061,
+          "fly_pct": 1.289,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 81.29,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.123,
+          "fly_pct": 1.476,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 81.44,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.061,
+          "fly_pct": 1.289,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 81.44,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.061,
+          "fly_pct": 1.289,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 81.44,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.061,
+          "fly_pct": 1.289,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600301",
+      "name": "华锡有色",
+      "note_date": "2026-08-28",
+      "next_date": "2026-08-31",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -2.372,
+      "open_vs_cost_pct": -1.81,
+      "d_open": 47.74,
+      "d_high": 47.97,
+      "d_low": 45.8,
+      "d_close": 47.82,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 47.74,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.81,
+          "fly_pct": 0.482,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 47.74,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.81,
+          "fly_pct": 0.482,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 47.74,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.81,
+          "fly_pct": 0.482,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 47.74,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.81,
+          "fly_pct": 0.482,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 47.74,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.81,
+          "fly_pct": 0.482,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 47.74,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.81,
+          "fly_pct": 0.482,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 47.74,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.81,
+          "fly_pct": 0.482,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "002093",
+      "name": "国脉科技",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.424,
+      "open_vs_cost_pct": -0.283,
+      "d_open": 7.05,
+      "d_high": 7.14,
+      "d_low": 6.92,
+      "d_close": 6.93,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 7.05,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.283,
+          "fly_pct": 1.277,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 7.05,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.283,
+          "fly_pct": 1.277,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 7.05,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.283,
+          "fly_pct": 1.277,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 7.05,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.283,
+          "fly_pct": 1.277,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 7.05,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.283,
+          "fly_pct": 1.277,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 7.05,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.283,
+          "fly_pct": 1.277,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 7.05,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.283,
+          "fly_pct": 1.277,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "601020",
+      "name": "华钰矿业",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 1.941,
+      "open_vs_cost_pct": 2.357,
+      "d_open": 22.58,
+      "d_high": 23.68,
+      "d_low": 22.5,
+      "d_close": 23.38,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 22.58,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.357,
+          "fly_pct": 4.872,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 5.984,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 5.984,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 5.984,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 5.984,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 5.984,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 5.984,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "601609",
+      "name": "金田股份",
+      "note_date": "2026-08-27",
+      "next_date": "2026-08-28",
+      "gap_down": true,
+      "recovered": true,
+      "open_vs_noted_pct": 0.0,
+      "open_vs_cost_pct": 0.075,
+      "d_open": 13.3,
+      "d_high": 13.34,
+      "d_low": 12.92,
+      "d_close": 12.98,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 13.3,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.075,
+          "fly_pct": 0.301,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 13.3,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.075,
+          "fly_pct": 0.301,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 13.3,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.075,
+          "fly_pct": 0.301,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 13.3,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.075,
+          "fly_pct": 0.301,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 13.3,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.075,
+          "fly_pct": 0.301,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 13.3,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.075,
+          "fly_pct": 0.301,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 13.3,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.075,
+          "fly_pct": 0.301,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "601609",
+      "name": "金田股份",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 6.002,
+      "open_vs_cost_pct": 6.084,
+      "d_open": 13.6,
+      "d_high": 13.86,
+      "d_low": 13.34,
+      "d_close": 13.46,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 13.6,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 6.084,
+          "fly_pct": 1.912,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.056,
+          "fly_pct": 3.898,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.056,
+          "fly_pct": 3.898,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 13.53,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 5.538,
+          "fly_pct": 2.439,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 13.46,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.992,
+          "fly_pct": 2.972,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 13.39,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.446,
+          "fly_pct": 3.51,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.056,
+          "fly_pct": 3.898,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "601609",
+      "name": "金田股份",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 1.72,
+      "open_vs_cost_pct": 1.949,
+      "d_open": 13.6,
+      "d_high": 13.92,
+      "d_low": 13.36,
+      "d_close": 13.81,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 13.6,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.949,
+          "fly_pct": 2.353,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 13.5,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.199,
+          "fly_pct": 3.111,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 13.5,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.199,
+          "fly_pct": 3.111,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 13.53,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.424,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 13.5,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.199,
+          "fly_pct": 3.111,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 13.5,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.199,
+          "fly_pct": 3.111,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 13.5,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.199,
+          "fly_pct": 3.111,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "601609",
+      "name": "金田股份",
+      "note_date": "2026-09-04",
+      "next_date": "2026-09-07",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -3.123,
+      "open_vs_cost_pct": -2.84,
+      "d_open": 13.34,
+      "d_high": 13.48,
+      "d_low": 13.01,
+      "d_close": 13.31,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.84,
+          "fly_pct": 1.049,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.84,
+          "fly_pct": 1.049,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.84,
+          "fly_pct": 1.049,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.84,
+          "fly_pct": 1.049,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.84,
+          "fly_pct": 1.049,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.84,
+          "fly_pct": 1.049,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 13.34,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.84,
+          "fly_pct": 1.049,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600353",
+      "name": "旭光电子",
+      "note_date": "2026-08-27",
+      "next_date": "2026-08-28",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 4.533,
+      "open_vs_cost_pct": 5.095,
+      "d_open": 37.13,
+      "d_high": 37.49,
+      "d_low": 34.56,
+      "d_close": 34.63,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 37.13,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 5.095,
+          "fly_pct": 0.97,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 36.56,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.481,
+          "fly_pct": 2.544,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 36.56,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.481,
+          "fly_pct": 2.544,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 36.94,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.557,
+          "fly_pct": 1.489,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 36.75,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.019,
+          "fly_pct": 2.014,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 36.57,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.51,
+          "fly_pct": 2.516,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 36.56,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.481,
+          "fly_pct": 2.544,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600353",
+      "name": "旭光电子",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 5.675,
+      "open_vs_cost_pct": 6.074,
+      "d_open": 36.5,
+      "d_high": 36.78,
+      "d_low": 33.5,
+      "d_close": 33.68,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 36.5,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 6.074,
+          "fly_pct": 0.767,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 35.59,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.429,
+          "fly_pct": 3.344,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 35.59,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.429,
+          "fly_pct": 3.344,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 36.31,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 5.522,
+          "fly_pct": 1.294,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 36.13,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.999,
+          "fly_pct": 1.799,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 35.95,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.475,
+          "fly_pct": 2.309,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 35.58,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.4,
+          "fly_pct": 3.373,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600353",
+      "name": "旭光电子",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 2.972,
+      "open_vs_cost_pct": 3.407,
+      "d_open": 34.3,
+      "d_high": 34.59,
+      "d_low": 32.34,
+      "d_close": 33.93,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 34.3,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.407,
+          "fly_pct": 0.845,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 33.81,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.929,
+          "fly_pct": 2.307,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 33.81,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.929,
+          "fly_pct": 2.307,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 34.12,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.864,
+          "fly_pct": 1.377,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 33.95,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.352,
+          "fly_pct": 1.885,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 33.78,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.839,
+          "fly_pct": 2.398,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 33.44,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.814,
+          "fly_pct": 3.439,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "600353",
+      "name": "旭光电子",
+      "note_date": "2026-09-07",
+      "next_date": "2026-09-08",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 3.015,
+      "open_vs_cost_pct": 3.142,
+      "d_open": 33.48,
+      "d_high": 33.5,
+      "d_low": 31.41,
+      "d_close": 32.17,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 33.48,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.142,
+          "fly_pct": 0.06,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 33.06,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.848,
+          "fly_pct": 1.331,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 33.06,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.848,
+          "fly_pct": 1.331,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 33.31,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.619,
+          "fly_pct": 0.57,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 33.14,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.095,
+          "fly_pct": 1.086,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 32.97,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.571,
+          "fly_pct": 1.608,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 32.64,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.555,
+          "fly_pct": 2.635,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002779",
+      "name": "中坚科技",
+      "note_date": "2026-08-27",
+      "next_date": "2026-08-28",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -1.016,
+      "open_vs_cost_pct": -0.697,
+      "d_open": 76.95,
+      "d_high": 76.95,
+      "d_low": 74.18,
+      "d_close": 74.21,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 76.95,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.697,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 76.95,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.697,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 76.95,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.697,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 76.95,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.697,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 76.95,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.697,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 76.95,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.697,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 76.95,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.697,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "002779",
+      "name": "中坚科技",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -3.074,
+      "open_vs_cost_pct": -1.093,
+      "d_open": 76.0,
+      "d_high": 78.19,
+      "d_low": 75.2,
+      "d_close": 76.75,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 76.0,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.093,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 76.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.093,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 76.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.093,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 76.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.093,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 76.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.093,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 76.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.093,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 76.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.093,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002779",
+      "name": "中坚科技",
+      "note_date": "2026-09-03",
+      "next_date": "2026-09-04",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 2.007,
+      "open_vs_cost_pct": 5.367,
+      "d_open": 80.3,
+      "d_high": 83.18,
+      "d_low": 78.02,
+      "d_close": 80.72,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 80.3,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 5.367,
+          "fly_pct": 3.587,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 78.72,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.294,
+          "fly_pct": 5.666,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 78.72,
+          "reason": "noted_rehit",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.294,
+          "fly_pct": 5.666,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 79.89,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.829,
+          "fly_pct": 4.118,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 79.49,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.304,
+          "fly_pct": 4.642,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 79.09,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.779,
+          "fly_pct": 5.171,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 78.72,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.294,
+          "fly_pct": 5.666,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "601068",
+      "name": "中铝国际",
+      "note_date": "2026-08-28",
+      "next_date": "2026-08-31",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.425,
+      "open_vs_cost_pct": -0.425,
+      "d_open": 4.69,
+      "d_high": 4.69,
+      "d_low": 4.57,
+      "d_close": 4.61,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 4.69,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.425,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 4.69,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.425,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 4.69,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.425,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 4.69,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.425,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 4.69,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.425,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 4.69,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.425,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 4.69,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.425,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "600967",
+      "name": "内蒙一机",
+      "note_date": "2026-09-01",
+      "next_date": "2026-09-02",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 9.745,
+      "open_vs_cost_pct": 10.717,
+      "d_open": 12.5,
+      "d_high": 13.41,
+      "d_low": 12.5,
+      "d_close": 13.41,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 12.5,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 10.717,
+          "fly_pct": 7.28,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 18.778,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 18.778,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 18.778,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 18.778,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 18.778,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 18.778,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "600967",
+      "name": "内蒙一机",
+      "note_date": "2026-09-04",
+      "next_date": "2026-09-07",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.292,
+      "open_vs_cost_pct": 0.0,
+      "d_open": 13.66,
+      "d_high": 13.76,
+      "d_low": 13.24,
+      "d_close": 13.34,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 13.66,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.0,
+          "fly_pct": 0.732,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 13.66,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.0,
+          "fly_pct": 0.732,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 13.66,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.0,
+          "fly_pct": 0.732,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 13.66,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.0,
+          "fly_pct": 0.732,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 13.66,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.0,
+          "fly_pct": 0.732,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 13.66,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.0,
+          "fly_pct": 0.732,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 13.66,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.0,
+          "fly_pct": 0.732,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "002273",
+      "name": "水晶光电",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 2.574,
+      "open_vs_cost_pct": 2.653,
+      "d_open": 26.7,
+      "d_high": 26.86,
+      "d_low": 25.98,
+      "d_close": 26.0,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 26.7,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.653,
+          "fly_pct": 0.599,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 26.43,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.615,
+          "fly_pct": 1.627,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 26.43,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.615,
+          "fly_pct": 1.627,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 26.56,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.115,
+          "fly_pct": 1.13,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 26.43,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.615,
+          "fly_pct": 1.627,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 26.43,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.615,
+          "fly_pct": 1.627,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 26.43,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.615,
+          "fly_pct": 1.627,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002273",
+      "name": "水晶光电",
+      "note_date": "2026-09-03",
+      "next_date": "2026-09-04",
+      "gap_down": true,
+      "recovered": true,
+      "open_vs_noted_pct": -0.769,
+      "open_vs_cost_pct": 0.078,
+      "d_open": 25.81,
+      "d_high": 26.14,
+      "d_low": 24.67,
+      "d_close": 24.89,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 25.81,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.078,
+          "fly_pct": 1.279,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 25.81,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.078,
+          "fly_pct": 1.279,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 25.81,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.078,
+          "fly_pct": 1.279,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 25.81,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.078,
+          "fly_pct": 1.279,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 25.81,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.078,
+          "fly_pct": 1.279,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 25.81,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.078,
+          "fly_pct": 1.279,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 25.81,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.078,
+          "fly_pct": 1.279,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002273",
+      "name": "水晶光电",
+      "note_date": "2026-09-07",
+      "next_date": "2026-09-08",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 0.983,
+      "open_vs_cost_pct": 1.022,
+      "d_open": 25.69,
+      "d_high": 25.79,
+      "d_low": 25.3,
+      "d_close": 25.38,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 25.69,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.022,
+          "fly_pct": 0.389,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 25.78,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.376,
+          "fly_pct": 0.039,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 25.78,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.376,
+          "fly_pct": 0.039,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 25.56,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.511,
+          "fly_pct": 0.9,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 25.78,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.376,
+          "fly_pct": 0.039,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 25.78,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.376,
+          "fly_pct": 0.039,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 25.78,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.376,
+          "fly_pct": 0.039,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "002015",
+      "name": "协鑫能科",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": false,
+      "recovered": false,
+      "open_vs_noted_pct": 2.194,
+      "open_vs_cost_pct": -0.377,
+      "d_open": 15.84,
+      "d_high": 17.42,
+      "d_low": 15.71,
+      "d_close": 17.42,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 15.84,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.377,
+          "fly_pct": 9.975,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 16.09,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.195,
+          "fly_pct": 8.266,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 16.09,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.195,
+          "fly_pct": 8.266,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 15.76,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.881,
+          "fly_pct": 10.533,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 16.09,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.195,
+          "fly_pct": 8.266,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 16.09,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.195,
+          "fly_pct": 8.266,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 16.09,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.195,
+          "fly_pct": 8.266,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002015",
+      "name": "协鑫能科",
+      "note_date": "2026-09-03",
+      "next_date": "2026-09-04",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -2.454,
+      "open_vs_cost_pct": -2.454,
+      "d_open": 17.09,
+      "d_high": 17.86,
+      "d_low": 16.97,
+      "d_close": 17.17,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 17.09,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.454,
+          "fly_pct": 4.506,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 17.09,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.454,
+          "fly_pct": 4.506,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 17.09,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.454,
+          "fly_pct": 4.506,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 17.09,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.454,
+          "fly_pct": 4.506,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 17.09,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.454,
+          "fly_pct": 4.506,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 17.09,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.454,
+          "fly_pct": 4.506,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 17.09,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.454,
+          "fly_pct": 4.506,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002015",
+      "name": "协鑫能科",
+      "note_date": "2026-09-07",
+      "next_date": "2026-09-08",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -1.105,
+      "open_vs_cost_pct": -0.176,
+      "d_open": 17.0,
+      "d_high": 17.49,
+      "d_low": 16.88,
+      "d_close": 17.06,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 17.0,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.176,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 17.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.176,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 17.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.176,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 17.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.176,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 17.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.176,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 17.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.176,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 17.0,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.176,
+          "fly_pct": 2.882,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002929",
+      "name": "润建股份",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 3.297,
+      "open_vs_cost_pct": 3.337,
+      "d_open": 53.58,
+      "d_high": 54.2,
+      "d_low": 51.9,
+      "d_close": 52.18,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 53.58,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.337,
+          "fly_pct": 1.157,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 53.02,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.257,
+          "fly_pct": 2.226,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 53.02,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.257,
+          "fly_pct": 2.226,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 53.31,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.816,
+          "fly_pct": 1.669,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 53.04,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.295,
+          "fly_pct": 2.187,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 53.02,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.257,
+          "fly_pct": 2.226,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 53.02,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 2.257,
+          "fly_pct": 2.226,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002929",
+      "name": "润建股份",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 0.038,
+      "open_vs_cost_pct": 0.193,
+      "d_open": 52.0,
+      "d_high": 52.92,
+      "d_low": 51.57,
+      "d_close": 52.27,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 52.0,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.193,
+          "fly_pct": 1.769,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 52.14,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.462,
+          "fly_pct": 1.496,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 51.98,
+          "reason": "noted_rehit",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.154,
+          "fly_pct": 1.808,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 52.14,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.462,
+          "fly_pct": 1.496,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 52.14,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.462,
+          "fly_pct": 1.496,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 52.14,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.462,
+          "fly_pct": 1.496,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 52.14,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.462,
+          "fly_pct": 1.496,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002929",
+      "name": "润建股份",
+      "note_date": "2026-09-04",
+      "next_date": "2026-09-07",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -3.49,
+      "open_vs_cost_pct": -2.697,
+      "d_open": 50.88,
+      "d_high": 52.36,
+      "d_low": 50.59,
+      "d_close": 51.95,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 50.88,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.697,
+          "fly_pct": 2.909,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 50.88,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.697,
+          "fly_pct": 2.909,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 50.88,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.697,
+          "fly_pct": 2.909,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 50.88,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.697,
+          "fly_pct": 2.909,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 50.88,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.697,
+          "fly_pct": 2.909,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 50.88,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.697,
+          "fly_pct": 2.909,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 50.88,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.697,
+          "fly_pct": 2.909,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "000581",
+      "name": "威孚高科",
+      "note_date": "2026-09-01",
+      "next_date": "2026-09-02",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.218,
+      "open_vs_cost_pct": -0.218,
+      "d_open": 18.35,
+      "d_high": 18.35,
+      "d_low": 18.1,
+      "d_close": 18.17,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 18.35,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.218,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 18.35,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.218,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 18.35,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.218,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 18.35,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.218,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 18.35,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.218,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 18.35,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.218,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 18.35,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.218,
+          "fly_pct": 0.0,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "601519",
+      "name": "大智慧",
+      "note_date": "2026-09-01",
+      "next_date": "2026-09-02",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -1.436,
+      "open_vs_cost_pct": -1.436,
+      "d_open": 8.92,
+      "d_high": 8.99,
+      "d_low": 8.73,
+      "d_close": 8.79,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 8.92,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.436,
+          "fly_pct": 0.785,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 8.92,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.436,
+          "fly_pct": 0.785,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 8.92,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.436,
+          "fly_pct": 0.785,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 8.92,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.436,
+          "fly_pct": 0.785,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 8.92,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.436,
+          "fly_pct": 0.785,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 8.92,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.436,
+          "fly_pct": 0.785,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 8.92,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -1.436,
+          "fly_pct": 0.785,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "002922",
+      "name": "伊戈尔",
+      "note_date": "2026-08-27",
+      "next_date": "2026-08-28",
+      "gap_down": true,
+      "recovered": true,
+      "open_vs_noted_pct": -0.081,
+      "open_vs_cost_pct": 0.204,
+      "d_open": 24.56,
+      "d_high": 25.21,
+      "d_low": 24.42,
+      "d_close": 24.66,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 24.56,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.204,
+          "fly_pct": 2.647,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 24.56,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.204,
+          "fly_pct": 2.647,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 24.56,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.204,
+          "fly_pct": 2.647,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 24.56,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.204,
+          "fly_pct": 2.647,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 24.56,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.204,
+          "fly_pct": 2.647,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 24.56,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.204,
+          "fly_pct": 2.647,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 24.56,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.204,
+          "fly_pct": 2.647,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002922",
+      "name": "伊戈尔",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.366,
+      "open_vs_cost_pct": -0.326,
+      "d_open": 24.47,
+      "d_high": 24.84,
+      "d_low": 23.95,
+      "d_close": 24.04,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 24.47,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.326,
+          "fly_pct": 1.512,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 24.47,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.326,
+          "fly_pct": 1.512,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 24.47,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.326,
+          "fly_pct": 1.512,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 24.47,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.326,
+          "fly_pct": 1.512,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 24.47,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.326,
+          "fly_pct": 1.512,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 24.47,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.326,
+          "fly_pct": 1.512,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 24.47,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.326,
+          "fly_pct": 1.512,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002922",
+      "name": "伊戈尔",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.293,
+      "open_vs_cost_pct": -0.293,
+      "d_open": 23.8,
+      "d_high": 25.05,
+      "d_low": 23.58,
+      "d_close": 24.59,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 23.8,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.293,
+          "fly_pct": 5.252,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 23.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.293,
+          "fly_pct": 5.252,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 23.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.293,
+          "fly_pct": 5.252,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 23.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.293,
+          "fly_pct": 5.252,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 23.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.293,
+          "fly_pct": 5.252,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 23.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.293,
+          "fly_pct": 5.252,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 23.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.293,
+          "fly_pct": 5.252,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002152",
+      "name": "广电运通",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.412,
+      "open_vs_cost_pct": -0.412,
+      "d_open": 9.68,
+      "d_high": 9.91,
+      "d_low": 9.65,
+      "d_close": 9.89,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 9.68,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.412,
+          "fly_pct": 2.376,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 9.68,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.412,
+          "fly_pct": 2.376,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 9.68,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.412,
+          "fly_pct": 2.376,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 9.68,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.412,
+          "fly_pct": 2.376,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 9.68,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.412,
+          "fly_pct": 2.376,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 9.68,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.412,
+          "fly_pct": 2.376,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 9.68,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.412,
+          "fly_pct": 2.376,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "002152",
+      "name": "广电运通",
+      "note_date": "2026-09-04",
+      "next_date": "2026-09-07",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -2.293,
+      "open_vs_cost_pct": -2.293,
+      "d_open": 9.8,
+      "d_high": 9.84,
+      "d_low": 9.59,
+      "d_close": 9.63,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 9.8,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.293,
+          "fly_pct": 0.408,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 9.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.293,
+          "fly_pct": 0.408,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 9.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.293,
+          "fly_pct": 0.408,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 9.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.293,
+          "fly_pct": 0.408,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 9.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.293,
+          "fly_pct": 0.408,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 9.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.293,
+          "fly_pct": 0.408,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 9.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -2.293,
+          "fly_pct": 0.408,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "603920",
+      "name": "世运电路",
+      "note_date": "2026-08-27",
+      "next_date": "2026-08-28",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.436,
+      "open_vs_cost_pct": -0.411,
+      "d_open": 38.8,
+      "d_high": 39.2,
+      "d_low": 37.67,
+      "d_close": 37.68,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 38.8,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.411,
+          "fly_pct": 1.031,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 38.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.411,
+          "fly_pct": 1.031,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 38.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.411,
+          "fly_pct": 1.031,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 38.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.411,
+          "fly_pct": 1.031,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 38.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.411,
+          "fly_pct": 1.031,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 38.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.411,
+          "fly_pct": 1.031,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 38.8,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.411,
+          "fly_pct": 1.031,
+          "sold_then_up_1pct": true
+        }
+      }
+    },
+    {
+      "code": "603920",
+      "name": "世运电路",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 1.498,
+      "open_vs_cost_pct": 1.604,
+      "d_open": 38.63,
+      "d_high": 38.77,
+      "d_low": 37.35,
+      "d_close": 37.62,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 38.63,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.604,
+          "fly_pct": 0.362,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 38.46,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.157,
+          "fly_pct": 0.806,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 38.46,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.157,
+          "fly_pct": 0.806,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 38.43,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.078,
+          "fly_pct": 0.885,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 38.46,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.157,
+          "fly_pct": 0.806,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 38.46,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.157,
+          "fly_pct": 0.806,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 38.46,
+          "reason": "half_gain",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 1.157,
+          "fly_pct": 0.806,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "603920",
+      "name": "世运电路",
+      "note_date": "2026-09-02",
+      "next_date": "2026-09-03",
+      "gap_down": true,
+      "recovered": false,
+      "open_vs_noted_pct": -0.629,
+      "open_vs_cost_pct": -0.603,
+      "d_open": 37.9,
+      "d_high": 38.12,
+      "d_low": 36.81,
+      "d_close": 37.46,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 37.9,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.603,
+          "fly_pct": 0.58,
+          "sold_then_up_1pct": false
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 37.9,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.603,
+          "fly_pct": 0.58,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 37.9,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.603,
+          "fly_pct": 0.58,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 37.9,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.603,
+          "fly_pct": 0.58,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 37.9,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.603,
+          "fly_pct": 0.58,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 37.9,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.603,
+          "fly_pct": 0.58,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 37.9,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": -0.603,
+          "fly_pct": 0.58,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "603920",
+      "name": "世运电路",
+      "note_date": "2026-09-07",
+      "next_date": "2026-09-08",
+      "gap_down": false,
+      "recovered": true,
+      "open_vs_noted_pct": 3.57,
+      "open_vs_cost_pct": 4.46,
+      "d_open": 38.88,
+      "d_high": 40.0,
+      "d_low": 38.5,
+      "d_close": 39.71,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 38.88,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 4.46,
+          "fly_pct": 2.881,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 6.69,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "wait_noted": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 6.69,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 38.68,
+          "reason": "noted_open_dump",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 3.923,
+          "fly_pct": 3.413,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 6.69,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_1.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 6.69,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        },
+        "gap_dump_2.5pct": {
+          "sold": false,
+          "fill": null,
+          "reason": null,
+          "holding_out": true,
+          "pnl_vs_cost_pct": 6.69,
+          "fly_pct": null,
+          "sold_then_up_1pct": false
+        }
+      }
+    },
+    {
+      "code": "002065",
+      "name": "东华软件",
+      "note_date": "2026-08-31",
+      "next_date": "2026-09-01",
+      "gap_down": true,
+      "recovered": true,
+      "open_vs_noted_pct": -0.284,
+      "open_vs_cost_pct": 0.717,
+      "d_open": 7.02,
+      "d_high": 7.12,
+      "d_low": 6.98,
+      "d_close": 7.1,
+      "policies": {
+        "sell_open": {
+          "sold": true,
+          "fill": 7.02,
+          "reason": "noted_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.717,
+          "fly_pct": 1.425,
+          "sold_then_up_1pct": true
+        },
+        "continue_f26": {
+          "sold": true,
+          "fill": 7.02,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.717,
+          "fly_pct": 1.425,
+          "sold_then_up_1pct": true
+        },
+        "wait_noted": {
+          "sold": true,
+          "fill": 7.02,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.717,
+          "fly_pct": 1.425,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_0.5pct": {
+          "sold": true,
+          "fill": 7.02,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.717,
+          "fly_pct": 1.425,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.0pct": {
+          "sold": true,
+          "fill": 7.02,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.717,
+          "fly_pct": 1.425,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_1.5pct": {
+          "sold": true,
+          "fill": 7.02,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.717,
+          "fly_pct": 1.425,
+          "sold_then_up_1pct": true
+        },
+        "gap_dump_2.5pct": {
+          "sold": true,
+          "fill": 7.02,
+          "reason": "noted_gap_open",
+          "holding_out": false,
+          "pnl_vs_cost_pct": 0.717,
+          "fly_pct": 1.425,
+          "sold_then_up_1pct": true
+        }
+      }
+    }
+  ]
+}

@@ -1,4 +1,9 @@
-"""援军战法 · 决策层：因子26（浮盈回落一半）买卖；因子22 止损后收盘动量再买。"""
+"""援军战法 · 决策层：因子26（浮盈回落一半）买卖；因子22 止损后收盘动量再买。
+
+盘中实盘对齐以 `holdingStocks/index.py` 的 1 分钟路径为准（买/卖均 path-dependent）。
+本引擎默认用日线/快照 OHLC，仅供回测粗算；若 ctx.meta 带 path_hit_buy / path_hit_stop
+则尊重分钟路径，避免全日高低假触。
+"""
 
 from __future__ import annotations
 
@@ -42,25 +47,44 @@ class Strategy1Decision(BaseDecisionEngine):
         cost = None
         if ctx.entry_price is not None and float(ctx.entry_price) > 0:
             cost = float(ctx.entry_price)
-        peak = float(ctx.high)
-        meta_peak = (ctx.meta or {}).get("peak_high")
-        if meta_peak is not None:
+        meta = ctx.meta or {}
+        peak = 0.0
+        path_peak = meta.get("path_peak_high")
+        meta_peak = meta.get("peak_high")
+        if path_peak is not None:
             try:
-                peak = max(peak, float(meta_peak))
+                peak = float(path_peak)
             except (TypeError, ValueError):
-                pass
+                peak = 0.0
+        elif ctx.has_position:
+            # 有仓卖价：禁止用当日快照 high 当峰值（与盯盘 seed 规则一致）
+            if cost is not None:
+                peak = cost
+            if meta_peak is not None:
+                try:
+                    peak = max(peak, float(meta_peak))
+                except (TypeError, ValueError):
+                    pass
+        else:
+            peak = float(ctx.high)
+            if meta_peak is not None:
+                try:
+                    peak = max(peak, float(meta_peak))
+                except (TypeError, ValueError):
+                    pass
         if cost is not None:
             peak = max(peak, cost)
+        high_for_lv = peak if (ctx.has_position and peak > 0) else float(ctx.high)
         raw = factor.levels(
             ctx.open,
             entry_pct=entry_pct,
             stop_pct=pullback,
             pullback_pct=pullback,
             giveback_ratio=giveback,
-            high_px=float(ctx.high),
+            high_px=high_for_lv,
             low_px=float(ctx.low),
             cost_px=cost,
-            peak_high=peak,
+            peak_high=peak if peak > 0 else None,
             tick=tick,
         )
         out = dict(raw or {})
@@ -112,6 +136,15 @@ class Strategy1Decision(BaseDecisionEngine):
         high = float(ctx.high)
         low = float(ctx.low)
         fid = binding.factor_id
+        meta = ctx.meta or {}
+        if meta.get("path_hit_stop") is not None:
+            path_stop = bool(meta.get("path_hit_stop"))
+        else:
+            path_stop = low <= stop_px + 1e-12
+        if meta.get("path_hit_buy") is not None:
+            path_buy = bool(meta.get("path_hit_buy"))
+        else:
+            path_buy = None
 
         if ctx.has_position:
             if ctx.t_plus_one:
@@ -121,8 +154,10 @@ class Strategy1Decision(BaseDecisionEngine):
                     stop_price=stop_px,
                     tags=("t1",),
                 )
-            if low <= stop_px + 1e-12:
-                rebuy = self._factor22_rebuy(ctx, stop_px=stop_px, buy_px=buy_px)
+            if path_stop:
+                rebuy = None
+                if (ctx.meta or {}).get("close_confirmed") is not False:
+                    rebuy = self._factor22_rebuy(ctx, stop_px=stop_px, buy_px=buy_px)
                 if rebuy is not None:
                     meta = dict(rebuy.meta)
                     meta["implied_stop_then_rebuy"] = True
@@ -153,7 +188,9 @@ class Strategy1Decision(BaseDecisionEngine):
 
         # 空仓：当日已卖出 → 优先尝试因子22；未成立则继续走因子26 开盘/攻击波再买
         if bool((ctx.meta or {}).get("stop_sold_today")):
-            rebuy = self._factor22_rebuy(ctx, stop_px=stop_px, buy_px=buy_px)
+            rebuy = None
+            if (ctx.meta or {}).get("close_confirmed") is not False:
+                rebuy = self._factor22_rebuy(ctx, stop_px=stop_px, buy_px=buy_px)
             if rebuy is not None:
                 meta = dict(rebuy.meta)
                 meta["stop_sold"] = True
@@ -179,8 +216,26 @@ class Strategy1Decision(BaseDecisionEngine):
         attack_buy = float(levels.get("attack_buy") or 0)
         hit_open = high + 1e-12 >= open_buy
         hit_attack = attack_buy > 0 and (high + 1e-12 >= attack_buy)
-        if hit_open or hit_attack:
-            if hit_attack and (not hit_open or attack_buy <= open_buy + 1e-12):
+        if path_buy is False:
+            return Decision.hold(
+                "空仓观望",
+                buy_price=buy_px,
+                stop_price=stop_px,
+                tags=("flat", "path"),
+            )
+        hit_entry = bool(path_buy) if path_buy is not None else (hit_open or hit_attack)
+        if hit_entry:
+            fill_meta = meta.get("path_buy_px")
+            if fill_meta is not None:
+                fill = float(fill_meta)
+                kind = str(meta.get("path_buy_kind") or "")
+                reason = (
+                    f"攻击波买点 {fill:.2f}"
+                    if kind == "attack"
+                    else f"开盘突破买点 {fill:.2f}"
+                )
+                tags = ("entry", fid, kind or "path")
+            elif hit_attack and (not hit_open or attack_buy <= open_buy + 1e-12):
                 fill = attack_buy
                 reason = f"攻击波买点 {fill:.2f}（低{low:.2f}）"
                 tags = ("entry", fid, "attack_wave")

@@ -2,7 +2,7 @@
 
 买入：
   1) 开盘突破：最高 ≥ ceil(open×(1+entry_pct))
-  2) 攻击波：最高 ≥ ceil(当日最低×(1+entry_pct))（自最低点向上攻击阈值）
+  2) 攻击波：先用此前分钟最低算买点，再更新本分钟最低；最高 ≥ ceil(running_low×(1+entry_pct))
   过滤同因子1。
 卖出（止盈/保护）：
   · 已浮盈：floor(成本 + (1−giveback)×(持仓最高−成本))，默认 giveback=0.5（回落一半）
@@ -49,7 +49,7 @@ STRATEGY_RULES = """
 
 【空仓 · 买入】两条任一触发（过滤同因子1：前日阴/小阳；禁双阳；T+1）
   A) 开盘突破：当日最高 >= ceil(开盘 × (1+阈值))，按该触发价限价买
-  B) 攻击波：  当日最高 >= ceil(当日最低 × (1+阈值))，自最低点向上攻击阈值
+  B) 攻击波：  须先有更早分钟低点，再 high >= ceil(此前最低 × (1+阈值))（禁止同根 K 自造）
 
 【有仓 · 卖出】
   卖价 = 浮盈回落一半（持仓以来最高相对成本）：
@@ -57,7 +57,9 @@ STRATEGY_RULES = """
     · 未浮盈：floor(成本 × (1 − 硬保护阈值))，默认硬保护 2.5%
   · 触达判定：按 1 分钟 K 顺序 —— 先用「此前最高」算卖价，再看该分钟最低是否跌破；
     然后才用本分钟最高抬升 peak（禁止全日 low 对抬高后卖价）
-  · 买入当日不可卖（除非 t0）
+  · 买入当日不可卖（除非 t0）。若当日已触止损：只「止损已记」；
+    次日低开跌破已记→开盘市价卖；高开则等从开盘下杀 1%，未下杀继续浮盈回落一半
+    （一字跌停封死则等开板）
 
 【默认】entry 2.5%；giveback 50%；未浮盈硬保护 2.5%。
 【说明】选股/过滤用日线；成交触达用 1 分钟 path-dependent（定盘池短窗约 7 日）。
@@ -353,6 +355,7 @@ def strategy_signal(
     allow_entry: bool = True,
     tick: float = TICK_SIZE,
     hit_stop: bool | None = None,
+    hit_buy: bool | None = None,
     cost_px: float | None = None,
     peak_high: float | None = None,
     giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
@@ -361,6 +364,7 @@ def strategy_signal(
 
     hit_stop：若传入则尊重调用方（应用 1 分钟 path-dependent 结果）；
     否则退回 low≤stop（日线/无分钟时有次序偏差）。
+    hit_buy：若传入则尊重调用方（应用 1 分钟买入路径）；否则用全日 high/low。
     """
     pb = float(pullback_pct if pullback_pct is not None else stop_pct)
     lv = strategy_levels(
@@ -380,7 +384,10 @@ def strategy_signal(
 
     hit_open = high_px + 1e-12 >= open_buy
     hit_attack = attack_buy > 0 and (high_px + 1e-12 >= attack_buy)
-    hit_buy = bool(allow_entry) and (hit_open or hit_attack)
+    if hit_buy is None:
+        hit_buy = bool(allow_entry) and (hit_open or hit_attack)
+    else:
+        hit_buy = bool(allow_entry) and bool(hit_buy)
 
     if hit_attack and (not hit_open or attack_buy <= open_buy + 1e-12):
         eff_buy = attack_buy
@@ -791,8 +798,9 @@ def path_dependent_buy_hit(
             continue
         if h <= 0 or lo <= 0:
             continue
-        running_low = min(running_low, lo)
-        attack = attack_buy_trigger_price(running_low, entry_pct=entry_pct, tick=tick)
+        # 先用 *此前* running_low 算攻击买点，再更新本分钟最低（防同根 K 先高后低假买）
+        prior_low = running_low if running_low < float("inf") else 0.0
+        attack = attack_buy_trigger_price(prior_low, entry_pct=entry_pct, tick=tick)
         hit_open = h + 1e-12 >= open_buy
         hit_attack = attack > 0 and (h + 1e-12 >= attack)
         if hit_open or hit_attack:
@@ -813,6 +821,7 @@ def path_dependent_buy_hit(
                 "open_buy": open_buy,
                 "attack_buy": attack,
             }
+        running_low = min(running_low, lo)
         running_high = max(running_high, h)
     attack_now = (
         attack_buy_trigger_price(running_low, entry_pct=entry_pct, tick=tick)
@@ -829,6 +838,109 @@ def path_dependent_buy_hit(
     }
 
 
+def is_one_word_bar(
+    open_px: float,
+    high: float,
+    low: float,
+    *,
+    eps: float = 1e-9,
+) -> bool:
+    """开=高=低：一字板，该分钟通常无法主动成交。"""
+    o = float(open_px or 0)
+    h = float(high or 0)
+    lo = float(low or 0)
+    if o <= 0 or h <= 0 or lo <= 0:
+        return False
+    return abs(h - lo) <= eps and abs(o - h) <= eps
+
+
+def delayed_t1_stop_fill_px(
+    *,
+    open_px: float,
+    last_px: float | None = None,
+    prefer_open: bool = True,
+) -> float:
+    """T 日止损已触发、T+1 才可卖：按市价离场，不以「已记价」成交。
+
+    · prefer_open：开盘附近用竞价开盘价（低开下杀 = 开盘成交，不是昨日止损价）
+    · 错过开盘（午后才看到）则用现价
+    """
+    o = float(open_px or 0)
+    last = float(last_px or 0) if last_px is not None else 0.0
+    if prefer_open and o > 0:
+        return o
+    if last > 0:
+        return last
+    return o
+
+
+NOTED_MODE_SELL_OPEN = "sell_open"
+NOTED_MODE_GAP_DUMP = "gap_dump"
+NOTED_MODE_CONTINUE = "continue_f26"
+NOTED_MODE_WAIT_NOTED = "wait_noted"
+DEFAULT_NOTED_DUMP_PCT = 0.01
+
+
+def open_dump_stop_price(
+    open_px: float,
+    *,
+    dump_pct: float,
+    tick: float = TICK_SIZE,
+) -> float:
+    """次日开盘后再给一段下杀：卖价 = floor(开盘 × (1 − dump_pct))。"""
+    o = float(open_px or 0)
+    if o <= 0:
+        return 0.0
+    return floor_to_tick(o * (1.0 - float(dump_pct)), tick)
+
+
+def noted_next_day_fill(
+    *,
+    mode: str,
+    noted_px: float,
+    day_open: float,
+    bar_low: float,
+    dump_pct: float,
+    tick: float = TICK_SIZE,
+    first_executable: bool = True,
+) -> dict[str, Any]:
+    """止损已记后的次日：本根 1m 是否离场。
+
+    · sell_open：可卖后立刻开盘市价（低开吃开盘，高开也可能卖飞）
+    · gap_dump：开盘已跌破已记价 → 开盘卖；否则等从开盘下杀 dump_pct
+    · continue_f26：仅缺口跌破已记价才开盘卖，否则交给浮盈回落一半
+    · wait_noted：缺口跌破则开盘卖，否则等价格再碰到已记价
+    """
+    out = {"hit": False, "fill_px": 0.0, "reason": ""}
+    noted = float(noted_px or 0)
+    o = float(day_open or 0)
+    lo = float(bar_low or 0)
+    if noted <= 0 or o <= 0:
+        return out
+    m = str(mode or NOTED_MODE_SELL_OPEN)
+    if m == NOTED_MODE_SELL_OPEN:
+        if first_executable:
+            return {"hit": True, "fill_px": o, "reason": "noted_open"}
+        return out
+    gapped = o <= noted + 1e-12
+    if gapped:
+        if first_executable:
+            return {"hit": True, "fill_px": o, "reason": "noted_gap_open"}
+        return out
+    if m == NOTED_MODE_CONTINUE:
+        return out
+    if m == NOTED_MODE_WAIT_NOTED:
+        if lo > 0 and lo <= noted + 1e-12:
+            return {"hit": True, "fill_px": noted, "reason": "noted_rehit"}
+        return out
+    # gap_dump
+    dump_stop = open_dump_stop_price(o, dump_pct=dump_pct, tick=tick)
+    if dump_stop > 0 and lo > 0 and lo <= dump_stop + 1e-12:
+        fill = o if o <= dump_stop + 1e-12 else dump_stop
+        return {"hit": True, "fill_px": fill, "reason": "noted_open_dump"}
+    return out
+
+
 def simulate_factor26_day_1m(
     bars: pd.DataFrame | None,
     *,
@@ -842,13 +954,19 @@ def simulate_factor26_day_1m(
     cost_px: float | None = None,
     peak_high_in: float | None = None,
     giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    stop_noted_px_in: float | None = None,
+    prev_close: float | None = None,
+    limit_down_pct: float = 0.1,
+    noted_mode: str = NOTED_MODE_GAP_DUMP,
+    noted_dump_pct: float | None = None,
 ) -> dict[str, Any]:
     """单日 1 分钟路径：买入（开盘突破/攻击波）+ 浮盈回落一半卖出。
 
     · holding_in：昨收仍持仓
     · can_sell：非 T+1（买入当日 False）
-    · cost_px / peak_high_in：隔夜持仓成本与持仓以来最高
-    · 同分钟先按「此前最高」判卖，再抬高；空仓才判买入
+    · stop_noted_px_in：昨日 T+1 止损已触发；次日规则见 noted_mode
+    · noted_mode：sell_open / gap_dump / continue_f26 / wait_noted
+    · noted_dump_pct：gap_dump 从开盘下杀比例，默认用 pullback_pct
     """
     pb = float(pullback_pct)
     gb = float(giveback_ratio)
@@ -859,6 +977,7 @@ def simulate_factor26_day_1m(
     buy_ts: Any = None
     sell_px: float | None = None
     sell_ts: Any = None
+    sell_reason: str | None = None
     cost = float(cost_px) if cost_px is not None and float(cost_px) > 0 else 0.0
     if holding and cost <= 0:
         cost = float(o)  # 隔夜未传成本时退回开盘价作保护锚
@@ -870,6 +989,18 @@ def simulate_factor26_day_1m(
     running_low = float("inf")
     open_buy = entry_trigger_price(o, entry_pct=entry_pct, tick=tick)
     bought_today = False
+    noted = (
+        float(stop_noted_px_in)
+        if stop_noted_px_in is not None and float(stop_noted_px_in) > 0
+        else 0.0
+    )
+    stop_noted_out: float | None = None
+    waited_one_word = False
+    first_exec = True
+    nmode = str(noted_mode or NOTED_MODE_GAP_DUMP)
+    ndump = float(noted_dump_pct) if noted_dump_pct is not None else DEFAULT_NOTED_DUMP_PCT
+    prev_c = float(prev_close) if prev_close is not None and float(prev_close) > 0 else 0.0
+    ld_pct = float(limit_down_pct) if limit_down_pct is not None else 0.1
 
     rows: list[dict[str, Any]] = []
     if bars is not None and not getattr(bars, "empty", True):
@@ -882,19 +1013,56 @@ def simulate_factor26_day_1m(
                 continue
             if h <= 0 or lo <= 0:
                 continue
+            try:
+                o_bar = float(row["open"]) if "open" in getattr(df, "columns", []) else o
+            except (TypeError, ValueError):
+                o_bar = o
             rows.append(
                 {
                     "high": h,
                     "low": lo,
+                    "open": o_bar if o_bar > 0 else o,
                     "ts": row["ts"] if "ts" in df.columns else None,
                 }
             )
 
     for row in rows:
         h, lo = float(row["high"]), float(row["low"])
-        running_low = min(running_low, lo)
 
-        if holding and can_sell and (not bought_today) and (running_high > 0 or cost > 0):
+        if holding and can_sell and (not bought_today) and (running_high > 0 or cost > 0 or noted > 0):
+            # 止损已记：T+1 推迟市价离场。一字封死等开板；否则按开盘价（低开不是已记价）
+            if noted > 0:
+                bar_o = float(row.get("open") or o or h)
+                locked = False
+                if prev_c > 0:
+                    limit_px = floor_to_tick(prev_c * (1.0 - ld_pct), tick)
+                    locked = is_one_word_bar(bar_o, h, lo) and (
+                        abs(bar_o - limit_px) <= tick + 1e-9
+                    )
+                if locked:
+                    waited_one_word = True
+                    running_low = min(running_low, lo)
+                    running_high = max(running_high, h)
+                    continue
+                day_o = bar_o if waited_one_word else (o if o > 0 else bar_o)
+                nxt = noted_next_day_fill(
+                    mode=nmode,
+                    noted_px=noted,
+                    day_open=day_o,
+                    bar_low=lo,
+                    dump_pct=ndump,
+                    tick=tick,
+                    first_executable=first_exec,
+                )
+                first_exec = False
+                if nxt.get("hit") and float(nxt.get("fill_px") or 0) > 0:
+                    sell_px = float(nxt["fill_px"])
+                    sell_ts = row.get("ts")
+                    sell_reason = str(nxt.get("reason") or "stop_noted")
+                    holding = False
+                    running_high = max(running_high, h)
+                    noted = 0.0
+                    break
             peak = max(running_high, cost) if cost > 0 else running_high
             if peak > 0 and cost > 0:
                 stop = half_gain_stop_price(
@@ -903,13 +1071,15 @@ def simulate_factor26_day_1m(
                 if lo <= stop + 1e-12:
                     sell_px = stop
                     sell_ts = row.get("ts")
+                    sell_reason = "half_gain"
                     holding = False
                     running_high = max(running_high, h)
                     break
 
         if (not holding) and allow_entry and (not bought_today):
+            prior_low = running_low if running_low < float("inf") else 0.0
             attack = attack_buy_trigger_price(
-                running_low, entry_pct=entry_pct, tick=tick
+                prior_low, entry_pct=entry_pct, tick=tick
             )
             hit_open = h + 1e-12 >= open_buy
             hit_attack = attack > 0 and (h + 1e-12 >= attack)
@@ -923,9 +1093,21 @@ def simulate_factor26_day_1m(
                 bought_today = True
                 cost = float(buy_px)
                 running_high = max(running_high, float(buy_px), h)
-                # T+1：买入当日不再卖
+                running_low = min(running_low, lo)
+                # T+1：买入当日不可卖；若随后触止损则「止损已记」
                 continue
 
+        # T+1 当日：持仓且不可卖时，仍累计最高，触止损则记价
+        if holding and (not can_sell) and bought_today and cost > 0:
+            peak = max(running_high, cost)
+            stop = half_gain_stop_price(
+                peak, cost, giveback_ratio=gb, hard_pct=pb, tick=tick
+            )
+            if lo <= stop + 1e-12:
+                if stop_noted_out is None or stop < stop_noted_out:
+                    stop_noted_out = float(stop)
+
+        running_low = min(running_low, lo)
         running_high = max(running_high, h)
 
     peak_out = max(running_high, cost) if cost > 0 else running_high
@@ -946,12 +1128,14 @@ def simulate_factor26_day_1m(
         "buy_ts": buy_ts,
         "sell_px": sell_px,
         "sell_ts": sell_ts,
+        "sell_reason": sell_reason,
         "running_high": running_high,
         "peak_high_out": peak_out if holding else 0.0,
         "cost_px": cost if holding else None,
         "stop_px": stop_now,
         "open_buy": open_buy,
         "day_low": running_low if running_low < float("inf") else None,
+        "stop_noted_out": stop_noted_out,
     }
 
 
@@ -1016,6 +1200,7 @@ def replay_factor26_1m(
     buy_day: pd.Timestamp | None = None
     cost_px: float | None = None
     peak_high: float | None = None
+    stop_noted_px: float | None = None
     trades: list[dict[str, Any]] = []
 
     for i in range(1, len(df)):
@@ -1075,6 +1260,7 @@ def replay_factor26_1m(
             allow_entry=allow_entry,
             cost_px=cost_px if holding else None,
             peak_high_in=peak_high if holding else None,
+            stop_noted_px_in=stop_noted_px if holding else None,
         )
 
         if sim.get("sell_px") is not None:
@@ -1089,38 +1275,47 @@ def replay_factor26_1m(
                     "side": "sell",
                     "px": float(sim["sell_px"]),
                     "ts": str(sim.get("sell_ts") or ""),
+                    "note": "stop_noted" if stop_noted_px else "path_stop",
                 }
             )
             holding = False
             buy_day = None
             cost_px = None
             peak_high = None
+            stop_noted_px = None
 
         if sim.get("buy_px") is not None:
+            holding = True
+            buy_day = day
+            cost_px = float(sim["buy_px"])
+            peak_high = float(sim.get("peak_high_out") or cost_px)
+            stop_noted_px = None
             out["last_buy_date"] = day
-            out["last_buy_px"] = float(sim["buy_px"])
+            out["last_buy_px"] = cost_px
             out["last_trigger_date"] = day
-            out["last_trigger_px"] = float(sim["buy_px"])
+            out["last_trigger_px"] = cost_px
             out["last_trigger_side"] = "buy"
             trades.append(
                 {
                     "date": sess,
                     "side": "buy",
-                    "px": float(sim["buy_px"]),
-                    "kind": sim.get("buy_kind"),
+                    "px": cost_px,
                     "ts": str(sim.get("buy_ts") or ""),
+                    "kind": sim.get("buy_kind"),
                 }
             )
-            holding = True
-            buy_day = day
-            cost_px = float(sim["buy_px"])
-            peak_high = float(sim.get("peak_high_out") or sim["buy_px"])
-        else:
+
+        if holding:
+            peak_high = float(sim.get("peak_high_out") or peak_high or 0)
+            if sim.get("cost_px") is not None:
+                cost_px = float(sim["cost_px"])
+            # T+1 当日触止损 → 止损已记
+            noted = sim.get("stop_noted_out")
+            if noted is not None and float(noted) > 0:
+                stop_noted_px = float(noted)
+
+        elif not sim.get("buy_px"):
             holding = bool(sim.get("holding_out"))
-            if holding:
-                if sim.get("cost_px") is not None:
-                    cost_px = float(sim["cost_px"])
-                peak_high = float(sim.get("peak_high_out") or peak_high or 0) or peak_high
 
     out["holding"] = holding
     out["trades"] = trades
@@ -1145,4 +1340,13 @@ __all__ = [
     "replay_factor26_1m",
     "rules_text",
     "entry_filters_ok",
+    "delayed_t1_stop_fill_px",
+    "is_one_word_bar",
+    "noted_next_day_fill",
+    "open_dump_stop_price",
+    "NOTED_MODE_SELL_OPEN",
+    "NOTED_MODE_GAP_DUMP",
+    "NOTED_MODE_CONTINUE",
+    "NOTED_MODE_WAIT_NOTED",
+    "DEFAULT_NOTED_DUMP_PCT",
 ]
