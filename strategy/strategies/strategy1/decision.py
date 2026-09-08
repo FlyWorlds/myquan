@@ -186,7 +186,7 @@ class Strategy1Decision(BaseDecisionEngine):
                 tags=("hold",),
             )
 
-        # 空仓：当日已卖出 → 优先尝试因子22；未成立则继续走因子26 开盘/攻击波再买
+        # 空仓：当日已卖出 → 优先尝试因子22；未成立则继续走因子26 开盘阈值再买
         if bool((ctx.meta or {}).get("stop_sold_today")):
             rebuy = None
             if (ctx.meta or {}).get("close_confirmed") is not False:

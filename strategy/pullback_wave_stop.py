@@ -1,12 +1,13 @@
-"""因子26 · 浮盈回落一半止盈：买=开盘突破或攻击波，卖=持仓最高浮盈回落一半。
+"""因子26 · 多层止盈：买=开盘阈值突破；卖按浮盈分三段。
 
-买入：
-  1) 开盘突破：最高 ≥ ceil(open×(1+entry_pct))
-  2) 攻击波：先用此前分钟最低算买点，再更新本分钟最低；最高 ≥ ceil(running_low×(1+entry_pct))
-  过滤同因子1。
+买入：当日最高 ≥ ceil(open×(1+entry_pct))（过滤同因子1）。
+攻击波（研究对照 `--buy-mode open_or_attack`）：先用此前分钟最低算买点，再更新本分钟最低。
 卖出（止盈/保护）：
-  · 已浮盈：floor(成本 + (1−giveback)×(持仓最高−成本))，默认 giveback=0.5（回落一半）
-  · 未浮盈：floor(成本×(1−hard_pct)) 成本回撤保护，默认 hard_pct=2.5%
+  · 盈利 >10%：分段止盈（10% 半仓 / 15% 全清；过 10% 后峰值回落 2% 清）
+  · 盈利 3%～10%：动态高点回落「近 20 日日频波动率的一半」全清
+  · 买入日收盘盈利 <3%：次日按当日动态峰值回落 2.5% 立即止损；
+    盘中浮盈到 3% 改走中段，到 10% 改走分段
+  · 任何时候亏到 2.5%：成本硬保护
 触达判定：按 **1 分钟 K 时间顺序**——先用此前最高算卖价，再抬升 peak。
 默认 entry ±2.5%。
 
@@ -16,6 +17,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pandas as pd
@@ -34,38 +36,48 @@ from strategy.open_break import (
     entry_trigger_price,
     floor_to_tick,
     is_t1_buy_day,
+    limit_up_price,
     prev_day_allows_entry,
     should_block_entry_by_yang,
 )
 
 DEFAULT_ENTRY_PCT = DEFAULT_PCT
 DEFAULT_PULLBACK_PCT = DEFAULT_PCT  # 未浮盈时的成本硬保护
-DEFAULT_GIVEBACK_RATIO = 0.5  # 浮盈回落一半
-DEFAULT_LADDER_HALF_PCT = 0.10  # 规则1：浮盈 10% 卖一半
-DEFAULT_LADDER_FULL_PCT = 0.15  # 规则1：浮盈 15% 全清
-DEFAULT_PEAK_PULLBACK_X = 0.03  # 规则3：峰值回落 3% 清一半
-DEFAULT_NOTED_DUMP_PCT = 0.01  # 规则4 / 已记：开盘下杀 1%
+DEFAULT_GIVEBACK_RATIO = 0.5  # 兼容旧公式（中段已改波动回落）
+DEFAULT_LADDER_HALF_PCT = 0.10  # 大赚：浮盈 10% 卖一半
+DEFAULT_LADDER_FULL_PCT = 0.15  # 大赚：浮盈 15% 全清
+DEFAULT_PEAK_PULLBACK_X = 0.02  # 大赚后：峰值回落 2% 清仓
+DEFAULT_NOTED_DUMP_PCT = 0.01  # 研究对照：开盘下杀（生产已不用）
+DEFAULT_T1_NOTE_PROFIT_LT_PCT = 0.03  # 买入日收盘盈利 ≥3% 不记；其余走次日峰值回落
+DEFAULT_ALLOW_ATTACK = False  # 生产默认：只买开盘阈值；攻击波仅研究对照
+DEFAULT_GIVEBACK_ARM_PCT = 0.03  # 浮盈 >3% 才启用波动回落止盈
+DEFAULT_T1_PEAK_TRAIL_PCT = 0.025  # 未到 3%：次日动态峰值回落 2.5%
+DEFAULT_VOL_GIVEBACK_RATIO = 0.5  # 中段：回落距离 = 近 20 日日频波动 × 该比例
+DEFAULT_VOL20_WINDOW = 20
+DEFAULT_VOL_GIVEBACK_CAP = 0.15  # 回落距离上限，避免极端波动把卖价打到 0
 
 STRATEGY_RULES = """
 ================================================================================
-  因子26 · 多层止盈（买=开盘突破或攻击波）
+  因子26 · 多层止盈（买=开盘阈值）
 ================================================================================
 
-【空仓 · 买入】两条任一触发（过滤同因子1：前日阴/小阳；禁双阳；T+1）
-  A) 开盘突破：当日最高 >= ceil(开盘 × (1+阈值))，按该触发价限价买
-  B) 攻击波：  须先有更早分钟低点，再 high >= ceil(此前最低 × (1+阈值))（禁止同根 K 自造）
+【空仓 · 买入】开盘阈值（过滤同因子1：前日阴/小阳；禁双阳；T+1）
+  当日最高 >= ceil(开盘 × (1+阈值))，按该触发价限价买
+  （攻击波仅研究对照，默认关闭）
 
 【有仓 · 卖出】同分钟优先级（全清优先于半仓；半仓同分钟只减一次）：
-  1) 隔夜武装（昨亏 / 昨止盈标记 / 止损已记）→ 开盘下杀 1% 全清
+  1) 买入日收盘盈利 <3%（已记）且当日尚未 >3% → 次日动态峰值回落 2.5% 全清
   2) 阶梯：浮盈 ≥15% → 可卖全清
-  3) T+1 后利润回吐一半（相对峰值）→ 全清；未浮盈成本硬保护 2.5%
-  4) 阶梯 10% 半仓 与 峰值回落 3% 半仓：同分钟只减一次
-     （已半仓后再触半仓条件 → 剩余全清）
-  5) 抬升持仓最高 peak
-  · 买入当日不可卖：只记 tp_marked / stop_noted；次日走隔夜规则
+  3) 中赚（浮盈 >3% 且 <10%）：动态高点回落「近20日日频波动的一半」全清
+  4) 硬保护：亏损达 2.5%
+  5) 大赚：阶梯 10% 半仓；≥10% 后峰值回落 2% 清仓
+     （已半仓后再触 10% / 回落 → 剩余全清）
+  · 买入当日不可卖；次日未过 3% 走峰值回落 2.5%；过 3% 走波动回落；过 10% 走分段
+  · 峰值只从买入之后算，未卖出前创新高则抬升；T1 回落峰值从次日开盘起算
   · 半仓不足 200 股则改为全清
 
-【默认】entry 2.5%；阶梯 10%/15%；峰值回落 3%；giveback 50%；硬保护 2.5%。
+【默认】entry 2.5%；中段门槛 3%；阶梯 10%/15%；大赚回落 2%；波动回落 50%×20日日频σ；
+       T1 峰值回落 2.5%；硬保护 2.5%。
 【说明】选股/过滤用日线；成交触达用 1 分钟 path-dependent（定盘池短窗约 7 日）。
 ================================================================================
 """
@@ -84,6 +96,78 @@ def pullback_stop_price(
     return floor_to_tick(h * (1.0 - float(pullback_pct)), tick)
 
 
+def pnl_exceeds(px: float, cost_px: float, thresh: float) -> bool:
+    """现价相对成本是否严格超过 thresh（默认用来判断浮盈 >3%）。"""
+    c = float(cost_px or 0)
+    p = float(px or 0)
+    if c <= 0 or p <= 0:
+        return False
+    return p / c - 1.0 > float(thresh) + 1e-12
+
+
+def realized_vol_daily(
+    closes: Any,
+    *,
+    window: int = DEFAULT_VOL20_WINDOW,
+) -> float | None:
+    """近 window 根日对数收益样本标准差（日频，不年化）。至少 window+1 个正收盘价。"""
+    vals: list[float] = []
+    for x in list(closes or []):
+        try:
+            v = float(x)
+        except (TypeError, ValueError):
+            continue
+        if v > 0:
+            vals.append(v)
+    w = max(2, int(window))
+    if len(vals) < w + 1:
+        return None
+    vals = vals[-(w + 1) :]
+    rets: list[float] = []
+    for a, b in zip(vals, vals[1:]):
+        if a > 0 and b > 0:
+            rets.append(math.log(b / a))
+    if len(rets) < w:
+        return None
+    mean = sum(rets) / float(len(rets))
+    var = sum((r - mean) ** 2 for r in rets) / float(len(rets) - 1)
+    if var <= 0:
+        return 0.0
+    return math.sqrt(var)
+
+
+def vol_giveback_distance(
+    vol20_daily: float | None,
+    *,
+    ratio: float = DEFAULT_VOL_GIVEBACK_RATIO,
+    cap: float = DEFAULT_VOL_GIVEBACK_CAP,
+) -> float:
+    """中段回落距离：ratio × 近20日日频波动，截到 [0, cap]。"""
+    try:
+        v = float(vol20_daily or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if v <= 0:
+        return 0.0
+    dist = float(ratio) * v
+    return min(max(dist, 0.0), float(cap))
+
+
+def vol_giveback_stop_price(
+    peak_high: float,
+    vol20_daily: float | None,
+    *,
+    ratio: float = DEFAULT_VOL_GIVEBACK_RATIO,
+    tick: float = TICK_SIZE,
+) -> float:
+    """动态高点回落「日频波动 × ratio」的卖价。"""
+    peak = float(peak_high or 0)
+    dist = vol_giveback_distance(vol20_daily, ratio=ratio)
+    if peak <= 0 or dist <= 0:
+        return 0.0
+    return floor_to_tick(peak * (1.0 - dist), tick)
+
+
 def half_gain_stop_price(
     peak_high: float,
     cost_px: float,
@@ -94,7 +178,8 @@ def half_gain_stop_price(
 ) -> float:
     """浮盈回落一半卖价；未浮盈时用成本硬保护。
 
-    giveback_ratio=0.5 → 卖价 = 成本 + 0.5×(最高−成本)（峰值浮盈回吐一半出场）。
+    giveback_ratio=0.5 → 卖价 = 成本 + 0.5×(买入后最高−成本)。
+    峰值从买入价之后起算，未卖出前创新高则抬升。
     """
     cost = float(cost_px)
     peak = float(peak_high)
@@ -104,6 +189,70 @@ def half_gain_stop_price(
         return floor_to_tick(cost * (1.0 - float(hard_pct)), tick)
     gb = min(max(float(giveback_ratio), 0.0), 1.0)
     return floor_to_tick(cost + (1.0 - gb) * (peak - cost), tick)
+
+
+def resolve_t1_overnight_note(
+    *,
+    cost_px: float,
+    peak_high: float,
+    close_px: float,
+    hard_pct: float = DEFAULT_PULLBACK_PCT,
+    note_profit_lt: float = DEFAULT_T1_NOTE_PROFIT_LT_PCT,
+    giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    tick: float = TICK_SIZE,
+    bar_low: float | None = None,
+) -> dict[str, Any]:
+    """买入当日日末：是否把已记带到次日。
+
+    · 收盘盈利 ≥ 3%：不记（次日走波动回落 / 分段）
+    · 收盘盈利 < 3%（含小亏）：记 T1 峰值回落，次日按当日动态峰值回落 2.5%
+    · 收盘/最低亏损 ≥ hard_pct（默认 2.5%）：记硬保护
+    """
+    cost = float(cost_px or 0)
+    close = float(close_px or 0)
+    empty = {"noted_px": None, "reason": ""}
+    if cost <= 0 or close <= 0:
+        return empty
+    lo = float(bar_low) if bar_low is not None and float(bar_low) > 0 else close
+    hard_px = floor_to_tick(cost * (1.0 - float(hard_pct)), tick)
+    if lo <= hard_px + 1e-12 or close <= hard_px + 1e-12:
+        return {"noted_px": float(hard_px), "reason": "hard_from_cost"}
+    pnl = close / cost - 1.0
+    if pnl >= float(note_profit_lt) - 1e-12:
+        return {"noted_px": None, "reason": "profit_ge_3pct"}
+    # 哨兵价=成本：只作「已记」开关，次日不按该价成交，改走峰值回落 2.5%
+    arm_px = floor_to_tick(cost, tick)
+    return {
+        "noted_px": float(arm_px) if arm_px > 0 else float(cost),
+        "reason": "t1_trail",
+    }
+
+
+def stop_note_invalidated_by_recovery(
+    *,
+    last_px: float,
+    noted_px: float | None,
+    prev_close: float | None = None,
+    recover_mult: float = 1.005,
+    limit_up_pct: float = 0.10,
+    tick: float = TICK_SIZE,
+) -> bool:
+    """T+1 已记后若现价已远离卖价（含收盘涨停），作废已记。
+
+    盯盘注释「现价已明显高于止损则不当止损」应对落库已记同样生效。
+    """
+    last = float(last_px or 0)
+    if last <= 0:
+        return False
+    noted = float(noted_px or 0)
+    if noted > 0 and last > noted * float(recover_mult) + 1e-12:
+        return True
+    pc = float(prev_close or 0)
+    if pc > 0:
+        lim = limit_up_price(pc, limit_up_pct=float(limit_up_pct), tick=tick)
+        if lim is not None and last + 1e-12 >= float(lim):
+            return True
+    return False
 
 
 def exit_stop_price(
@@ -156,7 +305,7 @@ def peak_pullback_half_price(
     pullback_x: float = DEFAULT_PEAK_PULLBACK_X,
     tick: float = TICK_SIZE,
 ) -> float:
-    """规则3：峰值回落 X 的半仓线。"""
+    """大赚后：峰值回落 X 的清仓线。"""
     return pullback_stop_price(peak_high, pullback_pct=pullback_x, tick=tick)
 
 
@@ -198,15 +347,21 @@ def eval_multi_tp_bar(
     ladder_full_pct: float = DEFAULT_LADDER_FULL_PCT,
     peak_pullback_x: float = DEFAULT_PEAK_PULLBACK_X,
     dump_pct: float = DEFAULT_NOTED_DUMP_PCT,
+    giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
+    t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
+    vol20_daily: float | None = None,
+    vol_giveback_ratio: float = DEFAULT_VOL_GIVEBACK_RATIO,
+    session_peak_before: float = 0.0,
     tick: float = TICK_SIZE,
 ) -> dict[str, Any]:
-    """单根 1m：多层止盈判定（不含「止损已记」专用缺口逻辑）。
+    """单根 1m：多层止盈判定。
 
     返回：
       action: None | {kind: full|half, reason, fill_px, shares}
       tp_marked: 当日应触止盈但因 T+1 未卖
       noted_px: 建议记入的止损/止盈价（T+1）
-      peak_after: 本 bar 结束后峰值
+      peak_after: 本 bar 结束后持仓峰值
+      session_peak_after: 本 bar 结束后的当日峰值
     """
     cost = float(cost_px)
     h = float(bar_high)
@@ -214,13 +369,18 @@ def eval_multi_tp_bar(
     bar_o = float(bar_open or 0)
     day_o = float(day_open) if day_open is not None and float(day_open) > 0 else bar_o
     peak = max(float(peak_before or 0), cost) if cost > 0 else float(peak_before or 0)
+    sess = float(session_peak_before or 0)
+    if sess <= 0 and day_o > 0:
+        sess = day_o
     stage = max(0, int(tp_stage))
     sh = max(0, int(shares))
+    sess_after = max(sess, h) if h > 0 else sess
     empty = {
         "action": None,
         "tp_marked": False,
         "noted_px": None,
         "peak_after": max(peak, h) if h > 0 else peak,
+        "session_peak_after": sess_after,
     }
     if cost <= 0 or sh <= 0 or h <= 0 or lo <= 0:
         return empty
@@ -239,6 +399,7 @@ def eval_multi_tp_bar(
             "tp_marked": True,
             "noted_px": float(px),
             "peak_after": max(peak, h),
+            "session_peak_after": sess_after,
         }
 
     def _half(reason: str, px: float, *, downside: bool = True) -> dict[str, Any]:
@@ -258,6 +419,7 @@ def eval_multi_tp_bar(
             "tp_marked": True,
             "noted_px": float(px),
             "peak_after": max(peak, h),
+            "session_peak_after": sess_after,
         }
 
     def _mark(px: float) -> dict[str, Any]:
@@ -266,17 +428,24 @@ def eval_multi_tp_bar(
             "tp_marked": True,
             "noted_px": float(px),
             "peak_after": max(peak, h),
+            "session_peak_after": sess_after,
         }
 
-    # 1) 隔夜武装：开盘下杀
-    if overnight_armed:
-        od = overnight_open_dump_fill(
-            day_open=day_o, bar_low=lo, dump_pct=dump_pct, tick=tick
+    live_hi = max(h, day_o, bar_o)
+    live_ok = pnl_exceeds(live_hi, cost, giveback_arm_pct)
+    peak_incl = max(peak, h)
+    peak_gain = (peak_incl / cost - 1.0) if cost > 0 and peak_incl > 0 else 0.0
+
+    # 1) 未到 3%：次日动态峰值回落 2.5%
+    if overnight_armed and (not live_ok):
+        sess_ref = sess if sess > 0 else (day_o if day_o > 0 else bar_o)
+        trail_px = pullback_stop_price(
+            sess_ref, pullback_pct=t1_trail_pct, tick=tick
         )
-        if od.get("hit"):
+        if trail_px > 0 and lo <= trail_px + 1e-12:
             if can_sell:
-                return _full(str(od["reason"]), float(od["fill_px"]))
-            return _mark(float(od["fill_px"]))
+                return _full("t1_peak_trail", trail_px, downside=True)
+            return _mark(trail_px)
 
     ladder15 = ladder_target_price(cost, gain_pct=ladder_full_pct, tick=tick)
     ladder10 = ladder_target_price(cost, gain_pct=ladder_half_pct, tick=tick)
@@ -285,34 +454,47 @@ def eval_multi_tp_bar(
     if ladder15 > 0 and h + 1e-12 >= ladder15:
         if can_sell:
             return _full("ladder_full_15", ladder15, downside=False)
-        return _mark(ladder15)
+        return {**empty, "peak_after": max(peak, h)}
 
-    # 3) 利润回吐一半 / 硬保护（下破）
-    giveback = half_gain_stop_price(
-        peak, cost, giveback_ratio=giveback_ratio, hard_pct=hard_pct, tick=tick
+    # 3) 中赚 3%～10%：动态高点回落 0.5×20日日频波动
+    mid_gain = (
+        live_ok
+        and peak_gain > float(giveback_arm_pct) + 1e-12
+        and peak_gain < float(ladder_half_pct) - 1e-12
     )
-    if giveback > 0 and lo <= giveback + 1e-12:
-        reason = "half_gain" if peak > cost + 1e-12 else "hard_from_cost"
+    gb_px = vol_giveback_stop_price(
+        peak, vol20_daily, ratio=vol_giveback_ratio, tick=tick
+    )
+    if mid_gain and gb_px > 0 and lo <= gb_px + 1e-12:
         if can_sell:
-            return _full(reason, giveback, downside=True)
-        return _mark(giveback)
+            return _full("vol_giveback", gb_px, downside=True)
+        return {**empty, "peak_after": max(peak, h)}
+    hard_px = floor_to_tick(cost * (1.0 - float(hard_pct)), tick)
+    if hard_px > 0 and lo <= hard_px + 1e-12:
+        if can_sell:
+            return _full("hard_from_cost", hard_px, downside=True)
+        return _mark(hard_px)
 
-    # 4) 半仓：10% 阶梯 或 峰值回落 X（同分钟只一次）
+    # 4) 大赚：10% 半仓优先；≥10% 后峰值回落 X 清仓
     peak_line = peak_pullback_half_price(peak, pullback_x=peak_pullback_x, tick=tick)
     hit_ladder10 = ladder10 > 0 and h + 1e-12 >= ladder10
-    hit_peak_half = peak > cost + 1e-12 and peak_line > 0 and lo <= peak_line + 1e-12
-    if hit_ladder10 or hit_peak_half:
-        reason = "ladder_half_10" if hit_ladder10 else "peak_pullback_half"
-        px = ladder10 if hit_ladder10 else peak_line
-        downside = not hit_ladder10
+    hit_peak_trail = (
+        live_ok
+        and peak_gain + 1e-12 >= float(ladder_half_pct)
+        and peak_incl > cost + 1e-12
+        and peak_line > 0
+        and lo <= peak_line + 1e-12
+    )
+    if hit_ladder10:
+        if not can_sell:
+            return {**empty, "peak_after": max(peak, h)}
         if stage >= 1:
-            # 已半仓后再触 → 剩余全清
-            if can_sell:
-                return _full(reason + "_clear", px, downside=downside)
-            return _mark(px)
-        if can_sell:
-            return _half(reason, px, downside=downside)
-        return _mark(px)
+            return _full("ladder_half_10_clear", ladder10, downside=False)
+        return _half("ladder_half_10", ladder10, downside=False)
+    if hit_peak_trail:
+        if not can_sell:
+            return {**empty, "peak_after": max(peak, h)}
+        return _full("peak_pullback_clear", peak_line, downside=True)
 
     return empty
 
@@ -331,19 +513,20 @@ def path_dependent_pullback_hit(
     seed_high: float | None = None,
     cost_px: float | None = None,
     giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    vol20_daily: float | None = None,
+    overnight_armed: bool = False,
+    day_open: float | None = None,
+    giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
+    t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
 ) -> dict[str, Any]:
-    """按分钟 K 时间顺序判定浮盈回落一半（或硬保护）是否曾触达。
+    """按分钟 K 时间顺序判定多层止盈是否曾触达。
 
-    每根 bar：
-      1) 用 *此前* running_high 算卖价，若 bar.low ≤ 卖价 → 触达
-      2) 再 running_high = max(running_high, bar.high)
-
+    每根 bar：先用此前峰值算卖价，再抬升 peak。
     since_ts：只统计该时刻之后的触达（实仓用买入时间）。
     seed_high：持仓峰值初值（成本或已记录 peak）。
-    cost_px：成本；默认用 seed_high。
+    overnight_armed：买入日收盘未到 3% → 次日峰值回落 2.5%。
     """
     pb = float(pullback_pct)
-    gb = float(giveback_ratio)
     running_high = float(seed_high) if seed_high is not None and float(seed_high) > 0 else 0.0
     cost = float(cost_px) if cost_px is not None and float(cost_px) > 0 else (
         float(seed_high) if seed_high is not None and float(seed_high) > 0 else 0.0
@@ -358,6 +541,8 @@ def path_dependent_pullback_hit(
                 since = since.tz_convert("Asia/Shanghai").tz_localize(None)
         except Exception:  # noqa: BLE001
             since = None
+    day_o = float(day_open) if day_open is not None and float(day_open) > 0 else 0.0
+    session_peak = 0.0
 
     def _iter_rows() -> list[dict[str, Any]]:
         if bars is None or getattr(bars, "empty", True):
@@ -386,56 +571,104 @@ def path_dependent_pullback_hit(
                         continue
                 except Exception:  # noqa: BLE001
                     pass
-            out_rows.append({"high": h, "low": lo, "ts": ts})
+            try:
+                o_bar = float(row["open"]) if "open" in df.columns else 0.0
+            except (TypeError, ValueError):
+                o_bar = 0.0
+            out_rows.append({"high": h, "low": lo, "open": o_bar, "ts": ts})
         return out_rows
 
-    def _stop(peak: float) -> float:
-        return exit_stop_price(
-            peak,
-            cost_px=cost if cost > 0 else None,
-            giveback_ratio=gb,
+    def _eval(bar_o: float, bar_h: float, bar_lo: float) -> dict[str, Any]:
+        peak = max(running_high, cost) if cost > 0 else running_high
+        return eval_multi_tp_bar(
+            bar_open=bar_o,
+            bar_high=bar_h,
+            bar_low=bar_lo,
+            cost_px=cost if cost > 0 else peak,
+            peak_before=peak,
+            shares=1000,
+            can_sell=True,
+            overnight_armed=bool(overnight_armed),
+            day_open=day_o if day_o > 0 else (bar_o if bar_o > 0 else None),
             hard_pct=pb,
+            giveback_arm_pct=giveback_arm_pct,
+            t1_trail_pct=t1_trail_pct,
+            vol20_daily=vol20_daily,
+            session_peak_before=session_peak,
             tick=tick,
         )
 
+    def _hit(ev: dict[str, Any], ts: Any, source: str) -> dict[str, Any] | None:
+        act = ev.get("action") or {}
+        fill = float(act.get("fill_px") or 0)
+        if str(act.get("kind") or "") not in ("full", "half") or fill <= 0:
+            return None
+        peak = float(ev.get("peak_after") or running_high)
+        return {
+            "hit_stop": True,
+            "running_high": peak,
+            "stop_px": fill,
+            "touch_ts": ts,
+            "touch_stop": fill,
+            "source": source,
+            "stop_kind": str(act.get("reason") or "vol_giveback"),
+            "cost_px": cost,
+        }
+
     for row in _iter_rows():
-        if running_high > 0 or cost > 0:
-            peak = max(running_high, cost) if cost > 0 else running_high
-            if peak > 0:
-                stop = _stop(peak)
-                if row["low"] <= stop + 1e-12:
-                    return {
-                        "hit_stop": True,
-                        "running_high": peak,
-                        "stop_px": stop,
-                        "touch_ts": row.get("ts"),
-                        "touch_stop": stop,
-                        "source": "1m",
-                        "stop_kind": "half_gain",
-                        "cost_px": cost,
-                    }
-        running_high = max(running_high, float(row["high"]))
+        ev = _eval(float(row.get("open") or 0), float(row["high"]), float(row["low"]))
+        hit = _hit(ev, row.get("ts"), "1m")
+        running_high = float(ev.get("peak_after") or running_high)
+        session_peak = float(ev.get("session_peak_after") or session_peak)
+        if hit:
+            return hit
 
     if live_low is not None and float(live_low) > 0:
-        peak = max(running_high, cost) if cost > 0 else running_high
-        if peak > 0:
-            stop = _stop(peak)
-            if float(live_low) <= stop + 1e-12:
-                return {
-                    "hit_stop": True,
-                    "running_high": peak,
-                    "stop_px": stop,
-                    "touch_ts": touch_ts,
-                    "touch_stop": stop,
-                    "source": "1m+live",
-                    "stop_kind": "half_gain",
-                    "cost_px": cost,
-                }
+        live_h = (
+            float(live_high)
+            if live_high is not None and float(live_high) > 0
+            else (running_high if running_high > 0 else cost)
+        )
+        if live_h > 0:
+            ev = _eval(0.0, live_h, float(live_low))
+            hit = _hit(ev, touch_ts, "1m+live")
+            running_high = float(ev.get("peak_after") or running_high)
+            session_peak = float(ev.get("session_peak_after") or session_peak)
+            if hit:
+                return hit
     if live_high is not None and float(live_high) > 0:
         running_high = max(running_high, float(live_high))
 
     peak_now = max(running_high, cost) if cost > 0 else running_high
-    stop_now = _stop(peak_now) if peak_now > 0 else 0.0
+    stop_now = 0.0
+    kind_now = ""
+    if peak_now > 0 and cost > 0:
+        dummy = _eval(
+            peak_now,
+            peak_now,
+            peak_now,
+        )
+        stop_now = float((dummy.get("action") or {}).get("fill_px") or 0)
+        kind_now = str((dummy.get("action") or {}).get("reason") or "")
+        if stop_now <= 0:
+            if overnight_armed and not pnl_exceeds(peak_now, cost, giveback_arm_pct):
+                stop_now = pullback_stop_price(
+                    session_peak if session_peak > 0 else peak_now,
+                    pullback_pct=t1_trail_pct,
+                    tick=tick,
+                )
+                kind_now = "t1_peak_trail"
+            elif pnl_exceeds(peak_now, cost, giveback_arm_pct) and (
+                peak_now / cost - 1.0 < DEFAULT_LADDER_HALF_PCT
+            ):
+                stop_now = vol_giveback_stop_price(peak_now, vol20_daily, tick=tick)
+                kind_now = "vol_giveback"
+            elif peak_now / cost - 1.0 + 1e-12 >= DEFAULT_LADDER_HALF_PCT:
+                stop_now = peak_pullback_half_price(peak_now, tick=tick)
+                kind_now = "peak_pullback"
+            else:
+                stop_now = floor_to_tick(cost * (1.0 - pb), tick)
+                kind_now = "hard_from_cost"
     return {
         "hit_stop": False,
         "running_high": peak_now,
@@ -443,7 +676,7 @@ def path_dependent_pullback_hit(
         "touch_ts": None,
         "touch_stop": touch_stop,
         "source": "1m" if peak_now > 0 else "empty",
-        "stop_kind": "half_gain",
+        "stop_kind": kind_now or "vol_giveback",
         "cost_px": cost,
     }
 
@@ -475,7 +708,7 @@ def strategy_levels(
     tick: float = TICK_SIZE,
     **_extra: Any,
 ) -> dict[str, float]:
-    """buy：开盘突破与攻击波取更易触发者；stop=浮盈回落一半（相对成本/峰值）。"""
+    """buy：默认开盘阈值；stop=浮盈回落一半（相对成本/峰值）。"""
     pb = float(
         pullback_pct
         if pullback_pct is not None
@@ -491,13 +724,23 @@ def strategy_levels(
     cost = float(cost_px) if cost_px is not None and float(cost_px) > 0 else float(open_px)
     peak = float(peak_high) if peak_high is not None and float(peak_high) > 0 else anchor
     peak = max(peak, cost, anchor)
-    stop = half_gain_stop_price(
-        peak,
-        cost,
-        giveback_ratio=giveback_ratio,
-        hard_pct=pb,
-        tick=tick,
-    )
+    vol20 = _extra.get("vol20_daily")
+    t1_armed = bool(_extra.get("overnight_armed"))
+    trail = float(_extra.get("t1_trail_pct") or DEFAULT_T1_PEAK_TRAIL_PCT)
+    arm = float(_extra.get("giveback_arm_pct") or DEFAULT_GIVEBACK_ARM_PCT)
+    peak_gain = peak / cost - 1.0 if cost > 0 else 0.0
+    live_ok = pnl_exceeds(peak, cost, arm)
+    if t1_armed and (not live_ok):
+        sess = float(_extra.get("session_peak") or open_px or peak)
+        stop = pullback_stop_price(sess, pullback_pct=trail, tick=tick)
+    elif live_ok and peak_gain < DEFAULT_LADDER_HALF_PCT - 1e-12:
+        stop = vol_giveback_stop_price(peak, vol20, tick=tick)
+        if stop <= 0:
+            stop = floor_to_tick(cost * (1.0 - pb), tick)
+    elif live_ok and peak_gain + 1e-12 >= DEFAULT_LADDER_HALF_PCT:
+        stop = peak_pullback_half_price(peak, tick=tick)
+    else:
+        stop = floor_to_tick(cost * (1.0 - pb), tick)
     return {
         "buy_trigger": buy,
         "buy": buy,
@@ -521,12 +764,12 @@ def rules_text(
 ) -> str:
     return (
         f"因子26-多层止盈\n"
-        f"  · 买A：开盘+{entry_pct*100:.1f}%\n"
-        f"  · 买B：攻击波=当日最低+{entry_pct*100:.1f}%\n"
-        f"  · 卖：阶梯{DEFAULT_LADDER_HALF_PCT*100:.0f}%半/"
-        f"{DEFAULT_LADDER_FULL_PCT*100:.0f}%全 + 回吐{giveback_ratio*100:.0f}% + "
-        f"峰值回落{DEFAULT_PEAK_PULLBACK_X*100:.0f}%半仓 + 隔夜下杀1%\n"
-        f"  · 未浮盈硬保护 {pullback_pct*100:.1f}%；默认绑策略一"
+        f"  · 买：开盘+{entry_pct*100:.1f}%（默认关攻击波）\n"
+        f"  · 卖：>10% 分段{DEFAULT_LADDER_HALF_PCT*100:.0f}%半/"
+        f"{DEFAULT_LADDER_FULL_PCT*100:.0f}%全 + 回落{DEFAULT_PEAK_PULLBACK_X*100:.0f}%；"
+        f"3–10% 动态高点回落 0.5×20日日频σ；未到3% 次日峰值回落"
+        f"{DEFAULT_T1_PEAK_TRAIL_PCT*100:.1f}%\n"
+        f"  · 中段门槛 {DEFAULT_GIVEBACK_ARM_PCT*100:.0f}%；硬保护 {pullback_pct*100:.1f}%；默认绑策略一"
     )
 
 
@@ -555,8 +798,9 @@ def strategy_signal(
     cost_px: float | None = None,
     peak_high: float | None = None,
     giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    allow_attack: bool = DEFAULT_ALLOW_ATTACK,
 ) -> dict[str, Any]:
-    """盯盘信号：开盘突破或攻击波买入；卖出=浮盈回落一半。
+    """盯盘信号：默认开盘阈值买入；卖出=浮盈回落一半。
 
     hit_stop：若传入则尊重调用方（应用 1 分钟 path-dependent 结果）；
     否则退回 low≤stop（日线/无分钟时有次序偏差）。
@@ -579,7 +823,7 @@ def strategy_signal(
     stop_px = float(stop_px if stop_px is not None else lv["stop"])
 
     hit_open = high_px + 1e-12 >= open_buy
-    hit_attack = attack_buy > 0 and (high_px + 1e-12 >= attack_buy)
+    hit_attack = bool(allow_attack) and attack_buy > 0 and (high_px + 1e-12 >= attack_buy)
     if hit_buy is None:
         hit_buy = bool(allow_entry) and (hit_open or hit_attack)
     else:
@@ -593,12 +837,7 @@ def strategy_signal(
         buy_kind = "open"
     elif buy_trigger is not None and float(buy_trigger) > 0:
         eff_buy = float(buy_trigger)
-        buy_kind = (
-            "open" if abs(eff_buy - open_buy) <= abs(eff_buy - attack_buy) else "attack"
-        )
-    elif attack_buy > 0 and attack_buy < open_buy:
-        eff_buy = attack_buy
-        buy_kind = "attack"
+        buy_kind = "open"
     else:
         eff_buy = open_buy
         buy_kind = "open"
@@ -877,7 +1116,7 @@ def replay_last_factor_triggers(
     prev_entry_mode: str = "yin_or_small_yang",
     limit_down_pct: float = 0.10,
 ) -> dict[str, Any]:
-    """日线简化重放（止损用全日 high；买入含攻击波；同 bar 有次序偏差）。"""
+    """日线简化重放（止损用全日 high；买入只认开盘阈值；同 bar 有次序偏差）。"""
     del limit_down_pct  # 接口兼容
     pb = float(pullback_pct if pullback_pct is not None else stop_pct)
     out: dict[str, Any] = {
@@ -911,7 +1150,6 @@ def replay_last_factor_triggers(
         if o <= 0:
             continue
         open_buy = entry_trigger_price(o, entry_pct=entry_pct, tick=tick)
-        attack_buy = attack_buy_trigger_price(l, entry_pct=entry_pct, tick=tick)
         stop_px = pullback_stop_price(h, pullback_pct=pb, tick=tick)
         allows = prev_day_allows_entry(
             float(prev["open"]),
@@ -944,12 +1182,8 @@ def replay_last_factor_triggers(
                 buy_day = None
             continue
         hit_open = h + 1e-12 >= open_buy
-        hit_attack = attack_buy > 0 and (h + 1e-12 >= attack_buy)
-        if allows and (not blocked) and (hit_open or hit_attack):
-            if hit_attack and (not hit_open or attack_buy <= open_buy + 1e-12):
-                buy_px = attack_buy
-            else:
-                buy_px = open_buy
+        if allows and (not blocked) and hit_open:
+            buy_px = open_buy
             out["last_buy_date"] = day
             out["last_buy_px"] = buy_px
             out["last_trigger_date"] = day
@@ -968,8 +1202,9 @@ def path_dependent_buy_hit(
     open_px: float,
     entry_pct: float = DEFAULT_ENTRY_PCT,
     tick: float = TICK_SIZE,
+    allow_attack: bool = DEFAULT_ALLOW_ATTACK,
 ) -> dict[str, Any]:
-    """按 1 分钟顺序判定开盘突破 / 攻击波买入（running_low 抬升攻击阈值）。"""
+    """按 1 分钟顺序判定买入。默认只认开盘阈值；allow_attack 才启用攻击波。"""
     o = float(open_px)
     open_buy = entry_trigger_price(o, entry_pct=entry_pct, tick=tick)
     running_low = float("inf")
@@ -998,7 +1233,9 @@ def path_dependent_buy_hit(
         prior_low = running_low if running_low < float("inf") else 0.0
         attack = attack_buy_trigger_price(prior_low, entry_pct=entry_pct, tick=tick)
         hit_open = h + 1e-12 >= open_buy
-        hit_attack = attack > 0 and (h + 1e-12 >= attack)
+        hit_attack = (
+            bool(allow_attack) and attack > 0 and (h + 1e-12 >= attack)
+        )
         if hit_open or hit_attack:
             if hit_attack and (not hit_open or attack <= open_buy + 1e-12):
                 return {
@@ -1098,11 +1335,15 @@ def noted_next_day_fill(
     dump_pct: float,
     tick: float = TICK_SIZE,
     first_executable: bool = True,
+    cost_px: float | None = None,
+    bar_high: float | None = None,
+    giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
 ) -> dict[str, Any]:
     """止损已记后的次日：本根 1m 是否离场。
 
     · sell_open：可卖后立刻开盘市价（低开吃开盘，高开也可能卖飞）
-    · gap_dump：开盘已跌破已记价 → 开盘卖；否则等从开盘下杀 dump_pct
+    · gap_dump：浮盈尚未 >2% 时，基于开盘价下杀 dump_pct 全清（不再因低开立刻卖）
+      浮盈 >2% 则交给回吐/档位
     · continue_f26：仅缺口跌破已记价才开盘卖，否则交给浮盈回落一半
     · wait_noted：缺口跌破则开盘卖，否则等价格再碰到已记价
     """
@@ -1118,17 +1359,20 @@ def noted_next_day_fill(
             return {"hit": True, "fill_px": o, "reason": "noted_open"}
         return out
     gapped = o <= noted + 1e-12
-    if gapped:
-        if first_executable:
+    if m == NOTED_MODE_CONTINUE:
+        if gapped and first_executable:
             return {"hit": True, "fill_px": o, "reason": "noted_gap_open"}
         return out
-    if m == NOTED_MODE_CONTINUE:
-        return out
     if m == NOTED_MODE_WAIT_NOTED:
+        if gapped and first_executable:
+            return {"hit": True, "fill_px": o, "reason": "noted_gap_open"}
         if lo > 0 and lo <= noted + 1e-12:
             return {"hit": True, "fill_px": noted, "reason": "noted_rehit"}
         return out
-    # gap_dump
+    # gap_dump：小亏小赚走开放盘−1%；浮盈>2% 不强制下杀
+    hi = float(bar_high) if bar_high is not None and float(bar_high) > 0 else 0.0
+    if pnl_exceeds(max(o, hi), float(cost_px or 0), giveback_arm_pct):
+        return out
     dump_stop = open_dump_stop_price(o, dump_pct=dump_pct, tick=tick)
     if dump_stop > 0 and lo > 0 and lo <= dump_stop + 1e-12:
         fill = o if o <= dump_stop + 1e-12 else dump_stop
@@ -1154,14 +1398,16 @@ def simulate_factor26_day_1m(
     limit_down_pct: float = 0.1,
     noted_mode: str = NOTED_MODE_GAP_DUMP,
     noted_dump_pct: float | None = None,
+    allow_attack: bool = DEFAULT_ALLOW_ATTACK,
+    vol20_daily: float | None = None,
 ) -> dict[str, Any]:
-    """单日 1 分钟路径：买入（开盘突破/攻击波）+ 浮盈回落一半卖出。
+    """单日 1 分钟路径：买入（默认开盘阈值）+ 多层止盈卖出。
 
     · holding_in：昨收仍持仓
     · can_sell：非 T+1（买入当日 False）
-    · stop_noted_px_in：昨日 T+1 止损已触发；次日规则见 noted_mode
-    · noted_mode：sell_open / gap_dump / continue_f26 / wait_noted
-    · noted_dump_pct：gap_dump 从开盘下杀比例，默认用 pullback_pct
+    · stop_noted_px_in：昨日 T+1 已记；默认次日走峰值回落 2.5%（gap_dump 生产口径）
+    · noted_mode：sell_open / gap_dump / continue_f26 / wait_noted（后三者为研究对照）
+    · vol20_daily：近 20 日日频实现波动（中段回落距离 = 其一半）
     """
     pb = float(pullback_pct)
     gb = float(giveback_ratio)
@@ -1182,6 +1428,7 @@ def simulate_factor26_day_1m(
         else (cost if holding and cost > 0 else 0.0)
     )
     running_low = float("inf")
+    held_low = float("inf")
     open_buy = entry_trigger_price(o, entry_pct=entry_pct, tick=tick)
     bought_today = False
     noted = (
@@ -1196,6 +1443,9 @@ def simulate_factor26_day_1m(
     ndump = float(noted_dump_pct) if noted_dump_pct is not None else DEFAULT_NOTED_DUMP_PCT
     prev_c = float(prev_close) if prev_close is not None and float(prev_close) > 0 else 0.0
     ld_pct = float(limit_down_pct) if limit_down_pct is not None else 0.1
+    use_legacy_noted = nmode != NOTED_MODE_GAP_DUMP
+    t1_armed = bool(noted > 0 and (not use_legacy_noted))
+    session_peak = 0.0
 
     rows: list[dict[str, Any]] = []
     if bars is not None and not getattr(bars, "empty", True):
@@ -1212,11 +1462,20 @@ def simulate_factor26_day_1m(
                 o_bar = float(row["open"]) if "open" in getattr(df, "columns", []) else o
             except (TypeError, ValueError):
                 o_bar = o
+            try:
+                c_bar = (
+                    float(row["close"])
+                    if "close" in getattr(df, "columns", [])
+                    else h
+                )
+            except (TypeError, ValueError):
+                c_bar = h
             rows.append(
                 {
                     "high": h,
                     "low": lo,
                     "open": o_bar if o_bar > 0 else o,
+                    "close": c_bar if c_bar > 0 else h,
                     "ts": row["ts"] if "ts" in df.columns else None,
                 }
             )
@@ -1227,7 +1486,7 @@ def simulate_factor26_day_1m(
         if holding and can_sell and (not bought_today) and (running_high > 0 or cost > 0 or noted > 0):
             bar_o = float(row.get("open") or o or h)
             # 止损已记：T+1 推迟市价离场。一字封死等开板；否则按开盘价（低开不是已记价）
-            if noted > 0:
+            if noted > 0 and use_legacy_noted:
                 locked = False
                 if prev_c > 0:
                     limit_px = floor_to_tick(prev_c * (1.0 - ld_pct), tick)
@@ -1248,6 +1507,8 @@ def simulate_factor26_day_1m(
                     dump_pct=ndump,
                     tick=tick,
                     first_executable=first_exec,
+                    cost_px=cost,
+                    bar_high=h,
                 )
                 first_exec = False
                 if nxt.get("hit") and float(nxt.get("fill_px") or 0) > 0:
@@ -1260,18 +1521,33 @@ def simulate_factor26_day_1m(
                     break
             peak = max(running_high, cost) if cost > 0 else running_high
             if peak > 0 and cost > 0:
-                stop = half_gain_stop_price(
-                    peak, cost, giveback_ratio=gb, hard_pct=pb, tick=tick
+                ev = eval_multi_tp_bar(
+                    bar_open=bar_o,
+                    bar_high=h,
+                    bar_low=lo,
+                    cost_px=cost,
+                    peak_before=peak,
+                    shares=1000,
+                    can_sell=True,
+                    overnight_armed=bool(t1_armed),
+                    day_open=o if o > 0 else bar_o,
+                    giveback_ratio=gb,
+                    hard_pct=pb,
+                    dump_pct=ndump,
+                    vol20_daily=vol20_daily,
+                    session_peak_before=session_peak,
+                    tick=tick,
                 )
-                if lo <= stop + 1e-12:
-                    # 本分钟开盘已跌破止损 → 开盘价（缺口穿透），否则止损价
-                    sell_px = (
-                        float(bar_o)
-                        if bar_o > 0 and bar_o <= stop + 1e-12
-                        else float(stop)
-                    )
+                session_peak = float(ev.get("session_peak_after") or session_peak)
+                if t1_armed and pnl_exceeds(max(h, o, bar_o), cost, DEFAULT_GIVEBACK_ARM_PCT):
+                    t1_armed = False
+                    noted = 0.0
+                act = ev.get("action") or {}
+                fill = float(act.get("fill_px") or 0)
+                if str(act.get("kind") or "") == "full" and fill > 0:
+                    sell_px = fill
                     sell_ts = row.get("ts")
-                    sell_reason = "half_gain"
+                    sell_reason = str(act.get("reason") or "half_gain")
                     holding = False
                     running_high = max(running_high, h)
                     break
@@ -1282,7 +1558,9 @@ def simulate_factor26_day_1m(
                 prior_low, entry_pct=entry_pct, tick=tick
             )
             hit_open = h + 1e-12 >= open_buy
-            hit_attack = attack > 0 and (h + 1e-12 >= attack)
+            hit_attack = (
+                bool(allow_attack) and attack > 0 and (h + 1e-12 >= attack)
+            )
             if hit_open or hit_attack:
                 if hit_attack and (not hit_open or attack <= open_buy + 1e-12):
                     buy_px, buy_kind = attack, "attack"
@@ -1294,21 +1572,35 @@ def simulate_factor26_day_1m(
                 cost = float(buy_px)
                 running_high = max(running_high, float(buy_px), h)
                 running_low = min(running_low, lo)
+                held_low = float(buy_px)
                 # T+1：买入当日不可卖；若随后触止损则「止损已记」
                 continue
 
-        # T+1 当日：持仓且不可卖时，仍累计最高，触止损则记价
+        # T+1 当日：持仓且不可卖时，仍累计最高；盘中只记硬亏损
         if holding and (not can_sell) and bought_today and cost > 0:
-            peak = max(running_high, cost)
-            stop = half_gain_stop_price(
-                peak, cost, giveback_ratio=gb, hard_pct=pb, tick=tick
-            )
-            if lo <= stop + 1e-12:
-                if stop_noted_out is None or stop < stop_noted_out:
-                    stop_noted_out = float(stop)
+            hard = floor_to_tick(cost * (1.0 - pb), tick)
+            if hard > 0 and lo <= hard + 1e-12:
+                if stop_noted_out is None or hard < stop_noted_out:
+                    stop_noted_out = float(hard)
 
         running_low = min(running_low, lo)
         running_high = max(running_high, h)
+        if holding and cost > 0:
+            held_low = min(held_low, lo)
+
+    if holding and (not can_sell) and bought_today and cost > 0 and rows:
+        last_c = float(rows[-1].get("close") or rows[-1]["high"] or 0)
+        day_lo = held_low if held_low < float("inf") else last_c
+        dec = resolve_t1_overnight_note(
+            cost_px=cost,
+            peak_high=max(running_high, cost),
+            close_px=last_c,
+            hard_pct=pb,
+            giveback_ratio=gb,
+            tick=tick,
+            bar_low=day_lo if day_lo > 0 else None,
+        )
+        stop_noted_out = dec.get("noted_px")
 
     peak_out = max(running_high, cost) if cost > 0 else running_high
     stop_now = (
@@ -1349,11 +1641,13 @@ def replay_factor26_1m(
     tick: float = TICK_SIZE,
     prev_entry_mode: str = "yin_or_small_yang",
     last_n_days: int = 7,
+    allow_attack: bool = DEFAULT_ALLOW_ATTACK,
 ) -> dict[str, Any]:
     """定盘池短窗回测：日线过滤选买卖日，近 last_n_days 用 1 分钟路径成交。
 
     日线：前日阴/小阳、双阳禁买；回撤预警仍在组合层（本函数只做个股路径）。
     分钟：触买/触止损按时间顺序，避免全日 OHLC 假触。
+    allow_attack：默认 False（只买开盘阈值）；True 才开攻击波。
     """
     pb = float(pullback_pct if pullback_pct is not None else stop_pct)
     out: dict[str, Any] = {
@@ -1449,6 +1743,9 @@ def replay_factor26_1m(
         except (TypeError, ValueError, IndexError):
             pass
 
+        prior_closes = df.iloc[:i]["close"].tolist()
+        vol20 = realized_vol_daily(prior_closes)
+
         sim = simulate_factor26_day_1m(
             day_bars,
             open_px=o,
@@ -1461,6 +1758,8 @@ def replay_factor26_1m(
             cost_px=cost_px if holding else None,
             peak_high_in=peak_high if holding else None,
             stop_noted_px_in=stop_noted_px if holding else None,
+            allow_attack=allow_attack,
+            vol20_daily=vol20,
         )
 
         if sim.get("sell_px") is not None:
@@ -1475,7 +1774,9 @@ def replay_factor26_1m(
                     "side": "sell",
                     "px": float(sim["sell_px"]),
                     "ts": str(sim.get("sell_ts") or ""),
-                    "note": "stop_noted" if stop_noted_px else "path_stop",
+                    "note": str(sim.get("sell_reason") or (
+                        "stop_noted" if stop_noted_px else "path_stop"
+                    )),
                 }
             )
             holding = False
@@ -1525,14 +1826,26 @@ def replay_factor26_1m(
 __all__ = [
     "DEFAULT_ENTRY_PCT",
     "DEFAULT_PULLBACK_PCT",
+    "DEFAULT_ALLOW_ATTACK",
     "DEFAULT_GIVEBACK_RATIO",
     "DEFAULT_LADDER_HALF_PCT",
     "DEFAULT_LADDER_FULL_PCT",
     "DEFAULT_PEAK_PULLBACK_X",
     "DEFAULT_NOTED_DUMP_PCT",
+    "DEFAULT_T1_NOTE_PROFIT_LT_PCT",
+    "DEFAULT_GIVEBACK_ARM_PCT",
+    "DEFAULT_T1_PEAK_TRAIL_PCT",
+    "DEFAULT_VOL_GIVEBACK_RATIO",
+    "DEFAULT_VOL20_WINDOW",
     "STRATEGY_RULES",
     "pullback_stop_price",
     "half_gain_stop_price",
+    "pnl_exceeds",
+    "realized_vol_daily",
+    "vol_giveback_stop_price",
+    "vol_giveback_distance",
+    "resolve_t1_overnight_note",
+    "stop_note_invalidated_by_recovery",
     "exit_stop_price",
     "lot_half_shares",
     "ladder_target_price",

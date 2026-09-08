@@ -307,7 +307,6 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
     watch_item("600552", "凯盛科技", pct=0.025),
     watch_item("600330", "天通股份", pct=0.03),
     watch_item("600338", "西藏珠峰", pct=0.025),
-    watch_item("002636", "金安国纪", pct=0.025),
     watch_item("601208", "东材科技", pct=0.025),
 ]
 
@@ -541,14 +540,14 @@ def watchlist_codes_label(watchlist: list[dict[str, Any]] | None = None) -> str:
 
 
 # ── 三槽持仓（策略一实盘）──────────────────────────────────────────
-MAX_PORTFOLIO_SLOTS = 3  # 盘中物理上限（可同时持 3）
-RESERVE_EMPTY_SLOTS = 1  # 尾盘/隔夜必须空出的槽
-MAX_OVERNIGHT_SLOTS = MAX_PORTFOLIO_SLOTS - RESERVE_EMPTY_SLOTS  # 隔夜最多 2
+MAX_PORTFOLIO_SLOTS = 3  # 盘中/隔夜均可同时持 3
+RESERVE_EMPTY_SLOTS = 0  # 不再尾盘强制空槽
+MAX_OVERNIGHT_SLOTS = MAX_PORTFOLIO_SLOTS - RESERVE_EMPTY_SLOTS  # 隔夜最多 3
 # 兼容旧名：曾误作「盘中也最多2」；现仅表示隔夜上限
 MAX_ACTIVE_SLOTS = MAX_OVERNIGHT_SLOTS
-MAX_BUYS_PER_DAY = 2  # 当日最多买入次数（与尾盘预留配套）
+MAX_BUYS_PER_DAY = 2  # 当日最多买入次数
 RESERVE_SLOT_HOUR = 14
-RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓；日末强制空槽
+RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓（现与盘中同为 3）
 SLOT_WEIGHT = 0.30  # 每槽约 3 成仓
 DEFAULT_ACCOUNT_TOTAL = 100_000.0  # 无登记总资产时按 10 万估槽金额
 
@@ -585,7 +584,7 @@ def free_buy_slot_count(
     """可买入空槽。
 
     · 盘中：最多占满 MAX_PORTFOLIO_SLOTS（3）
-    · 尾盘窗口（默认 14:50 后）或 reserve_for_close=True：按隔夜上限 MAX_OVERNIGHT_SLOTS（2）
+    · 尾盘窗口（默认 14:50 后）或 reserve_for_close=True：按隔夜上限 MAX_OVERNIGHT_SLOTS（现为 3）
     """
     if reserve_for_close is None:
         reserve_for_close = is_reserve_slot_window(now)

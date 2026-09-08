@@ -1,11 +1,11 @@
 """持仓记录与盯盘：与核心策略一（因子26 + 因子2 + 因子22）同步。
 
 策略锁定 · 策略一：
-  · 买（因子26）：开盘突破 或 攻击波(当日最低+entry)；前日阴/小阳；禁双阳；T+1
+  · 买（因子26）：开盘阈值 ceil(open×(1+entry))；前日阴/小阳；禁双阳；T+1
   · 卖（因子26）：浮盈回落一半（持仓最高相对成本）；未浮盈成本硬保护；1 分钟 path-dependent
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
-  · **仓位**：物理 3 槽（盘中可持 3）；当日最多买 2；尾盘空 1 槽（隔夜最多 2）
+  · **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 2
   · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值；9:30 起触发结算
   · 策略回放触止损 → 已止损（不再「策略持有」）；当日已卖出该票不可再待买入
   · 默认定盘宇宙：因子13A+16 宽宇宙换池 Top20（剔ST/百元股；无置顶；见 watch_config.WATCHLIST）
@@ -91,13 +91,18 @@ from strategy.open_break import (
     strategy_signal as _signal_f1,
 )
 from strategy.pullback_wave_stop import (
-    delayed_t1_stop_fill_px,
-    DEFAULT_NOTED_DUMP_PCT,
-    open_dump_stop_price,
+    DEFAULT_ALLOW_ATTACK,
+    DEFAULT_GIVEBACK_ARM_PCT,
+    DEFAULT_T1_PEAK_TRAIL_PCT,
     path_dependent_buy_hit,
     path_dependent_pullback_hit,
+    pnl_exceeds,
+    pullback_stop_price,
+    realized_vol_daily,
     replay_factor26_1m,
     replay_last_factor_triggers as _replay_f26,
+    resolve_t1_overnight_note,
+    stop_note_invalidated_by_recovery,
     strategy_levels as _levels_f26,
     strategy_signal as _signal_f26,
 )
@@ -1117,6 +1122,7 @@ _DAILY_CACHE: dict[str, tuple[str, pd.DataFrame]] = {}
 # 1 分钟缓存：实仓/近止损触达判定（path-dependent）；ttl 秒
 _M1_CACHE: dict[str, tuple[float, str, pd.DataFrame]] = {}
 _M1_CACHE_TTL_SEC = 45.0
+_VOL20_CACHE: dict[str, tuple[str, float | None]] = {}
 _M1_EMPTY_TTL_SEC = 15.0  # 拉空/失败：短负缓存，避免每轮狂打接口
 
 
@@ -1167,6 +1173,27 @@ def _bars_cover_current_minute(bars: pd.DataFrame, *, now: Any | None = None) ->
         return False
 
 
+def _vol20_daily_for(sina: str, session: str) -> float | None:
+    """截至 session 前一交易日的近 20 日日频实现波动（点时点）。"""
+    key = str(sina).lower()
+    hit = _VOL20_CACHE.get(key)
+    if hit and hit[0] == str(session):
+        return hit[1]
+    vol: float | None = None
+    try:
+        end = pd.Timestamp(str(session))
+        start = (end - pd.Timedelta(days=80)).strftime("%Y%m%d")
+        end_excl = (end - pd.Timedelta(days=1)).strftime("%Y%m%d")
+        df = fetch_daily(key, start, end_excl)
+        if df is not None and not df.empty and "close" in df.columns:
+            closes = pd.to_numeric(df["close"], errors="coerce").dropna().tolist()
+            vol = realized_vol_daily(closes)
+    except Exception:  # noqa: BLE001
+        vol = None
+    _VOL20_CACHE[key] = (str(session), vol)
+    return vol
+
+
 def _resolve_hit_stop_path_dependent(
     *,
     sina: str,
@@ -1179,6 +1206,9 @@ def _resolve_hit_stop_path_dependent(
     since_ts: str | None = None,
     seed_high: float | None = None,
     cost_px: float | None = None,
+    vol20_daily: float | None = None,
+    overnight_armed: bool = False,
+    day_open: float | None = None,
 ) -> dict[str, Any]:
     """动态止盈触达：优先 1 分钟顺序；无分钟时仅 last≤当前卖价。
 
@@ -1205,14 +1235,14 @@ def _resolve_hit_stop_path_dependent(
             bars,
             pullback_pct=pullback_pct,
             tick=tick,
-            # 快照 high 只用于走完 1m 后抬升展示峰值，不参与「用未来高点算卖价」
             live_high=None,
-            # 末根已是当前分钟时，低点已在循环里用「此前峰值」判过；
-            # 再用 last 去撞含本分钟 high 的卖价 = 同根 K 假止损
             live_low=(None if forming else (last if last > 0 else None)),
             since_ts=since_ts,
             seed_high=seed_high,
             cost_px=cost_px if cost_px is not None else None,
+            vol20_daily=vol20_daily,
+            overnight_armed=bool(overnight_armed),
+            day_open=day_open,
         )
         touch = float(pd_hit.get("touch_stop") or 0)
         if bool(pd_hit.get("hit_stop")) and touch <= 0:
@@ -2441,7 +2471,7 @@ def _apply_portfolio_slots(
 ) -> dict[str, Any]:
     """三槽：盘中可持 3；当日最多买 2；尾盘窗口按隔夜上限 2。
 
-    · 用户实仓 qty>0 占槽；可买空槽见 free_buy_slot_count（盘中 3、尾盘 2）
+    · 用户实仓 qty>0 占槽；可买空槽见 free_buy_slot_count（盘中/隔夜均为 3）
     · 入槽顺序：当日「槽位触买」先后；当日止损/已记卖出禁再买
     · 止损平仓后释放槽位，但该票当日不可再买
     """
@@ -2858,6 +2888,20 @@ def persist_stop_noted(
     save_holdings(data)
 
 
+def clear_stop_noted(code: str) -> None:
+    """现价已收回/涨停：作废 T+1 落库已记，避免次日仍隔夜武装。"""
+    data = load_holdings()
+    pos = data.get("positions", {}).get(code)
+    if not pos:
+        return
+    if not (pos.get("stop_noted") or pos.get("stop_noted_px")):
+        return
+    pos["stop_noted"] = False
+    pos["stop_noted_px"] = None
+    pos["stop_noted_session"] = None
+    save_holdings(data)
+
+
 def resolve_stop_noted_hit(
     pos: dict[str, Any],
     *,
@@ -2869,11 +2913,14 @@ def resolve_stop_noted_hit(
     locked: bool = False,
     now: Any | None = None,
     dump_pct: float | None = None,
+    cost_px: float | None = None,
+    high_px: float | None = None,
+    giveback_arm_pct: float | None = None,
 ) -> dict[str, Any]:
-    """隔夜仓：昨日 T+1 已记止损 → 次日可卖后的离场。
+    """隔夜仓：昨日 T+1 已记 → 次日可卖后的离场。
 
-    · 开盘已跌破已记价：按开盘市价（低开下杀吃开盘，不是已记价）
-    · 开盘高于已记：不立刻卖，等从开盘下杀 dump_pct（默认 1%）；未下杀则继续因子26
+    · 浮盈尚未 >3%：次日动态峰值回落 2.5% 全清
+    · 浮盈 >3%：不强制峰值回落 2.5%，交给波动回落 / 档位
     · 一字跌停封死：locked=True 则等开板
     """
     out = {"hit": False, "fill_px": 0.0, "kind": ""}
@@ -2894,19 +2941,31 @@ def resolve_stop_noted_hit(
     lo = float(low_px or 0)
     if o <= 0:
         return out
-    open_end = int(SIGNAL_ACTIVE_HOUR) * 60 + int(SIGNAL_ACTIVE_MINUTE) + 5
-    prefer_open = _clock_minutes(now) <= open_end
-    if o <= noted + 1e-12:
-        fill = delayed_t1_stop_fill_px(open_px=o, last_px=last, prefer_open=prefer_open)
-        if fill <= 0:
-            return out
-        return {"hit": True, "fill_px": fill, "kind": "gap_open"}
-    k = float(dump_pct) if dump_pct is not None else DEFAULT_NOTED_DUMP_PCT
-    dump_stop = open_dump_stop_price(o, dump_pct=k)
-    if dump_stop <= 0:
+    try:
+        cost = float(
+            cost_px if cost_px is not None else (pos.get("cost") or 0)
+        )
+    except (TypeError, ValueError):
+        cost = 0.0
+    try:
+        hi = float(high_px or 0)
+    except (TypeError, ValueError):
+        hi = 0.0
+    arm = (
+        float(giveback_arm_pct)
+        if giveback_arm_pct is not None
+        else DEFAULT_GIVEBACK_ARM_PCT
+    )
+    if pnl_exceeds(max(o, hi, last), cost, arm):
         return out
-    if (lo > 0 and lo <= dump_stop + 1e-12) or (last > 0 and last <= dump_stop + 1e-12):
-        return {"hit": True, "fill_px": dump_stop, "kind": "open_dump"}
+    sess_peak = max(x for x in (o, hi, last) if x > 0)
+    k = float(dump_pct) if dump_pct is not None else DEFAULT_T1_PEAK_TRAIL_PCT
+    trail_stop = pullback_stop_price(sess_peak, pullback_pct=k)
+    if trail_stop <= 0:
+        return out
+    if (lo > 0 and lo <= trail_stop + 1e-12) or (last > 0 and last <= trail_stop + 1e-12):
+        fill = o if o <= trail_stop + 1e-12 else trail_stop
+        return {"hit": True, "fill_px": fill, "kind": "t1_peak_trail"}
     return out
 
 
@@ -3305,6 +3364,10 @@ def collect_rows(
                 low_px=low_for_lv if low_for_lv > 0 else None,
                 cost_px=cost_h,
                 peak_high=seed_h,
+                vol20_daily=_vol20_daily_for(str(w["sina"]), str(q["session"]))
+                if qty_early > 0
+                else None,
+                overnight_armed=bool(pos_early.get("stop_noted")),
             )
             lv_base = strategy_levels(
                 open_for_lv if open_for_lv > 0 else float(q["open"]),
@@ -3342,10 +3405,8 @@ def collect_rows(
                 limit_down_pct=limit_down_pct,
             )
             open_buy = float(lv.get("open_buy") or lv["buy_trigger"])
-            attack_buy = float(lv.get("attack_buy") or 0)
             hit_open = q["high"] + 1e-12 >= open_buy
-            hit_attack = attack_buy > 0 and (q["high"] + 1e-12 >= attack_buy)
-            hit_buy_raw = hit_open or hit_attack
+            hit_buy_raw = hit_open
             path_buy_px = None
             if (
                 str(FACTOR_ID).lower() in ("factor26", "f26", "26")
@@ -3362,6 +3423,7 @@ def collect_rows(
                     open_px=float(q["open"]),
                     entry_pct=float(entry_pct),
                     tick=tick,
+                    allow_attack=DEFAULT_ALLOW_ATTACK,
                 )
                 hit_buy_raw = bool(buy_path.get("hit_buy"))
                 if hit_buy_raw and buy_path.get("buy_px"):
@@ -3396,6 +3458,9 @@ def collect_rows(
                         since_ts=since_stop,
                         seed_high=seed_h,
                         cost_px=cost_h,
+                        vol20_daily=_vol20_daily_for(str(w["sina"]), str(q["session"])),
+                        overnight_armed=bool(pos_early.get("stop_noted")),
+                        day_open=float(q.get("open") or 0) or None,
                     )
                     hit_eff_stop = bool(path_res.get("hit_stop"))
                     path_touch_stop = float(path_res.get("touch_stop") or 0)
@@ -3453,10 +3518,9 @@ def collect_rows(
                 hit_stop = False
             else:
                 hit_stop = hit_eff_stop
-            # 今日买入 T+1：仅买入后路径可标止损；现价已明显高于止损则不当止损
+            # 今日买入 T+1：盈利≥3%不记；其余走次日峰值回落 2.5%
             if (
                 qty_early > 0
-                and hit_stop
                 and buy_time_early
                 and (not bool(w.get("t0")))
                 and is_t1_buy_day(buy_time_early, str(q["session"]))
@@ -3466,7 +3530,59 @@ def collect_rows(
                     stop_n = float(lv["stop"] or 0)
                 except (TypeError, ValueError):
                     last_n, stop_n = 0.0, 0.0
-                if stop_n > 0 and last_n > stop_n * 1.005:
+                try:
+                    low_n = float(q.get("low") or 0)
+                except (TypeError, ValueError):
+                    low_n = 0.0
+                peak_n = float(seed_h or cost_h or 0)
+                try:
+                    rh_n = float(path_res.get("running_high") or 0) if (
+                        str(FACTOR_ID).lower() in ("factor26", "f26", "26")
+                        and threshold_ok
+                    ) else 0.0
+                    peak_n = max(peak_n, rh_n)
+                except (TypeError, ValueError, NameError):
+                    pass
+                dec = resolve_t1_overnight_note(
+                    cost_px=float(cost_h or 0),
+                    peak_high=peak_n,
+                    close_px=last_n,
+                    hard_pct=float(stop_pct),
+                    bar_low=low_n if low_n > 0 else None,
+                )
+                allow_note = dec.get("noted_px") is not None
+                if allow_note:
+                    persist_stop_noted(
+                        code,
+                        stop_px=float(dec["noted_px"]),
+                        session=str(q["session"]),
+                        px_digits=px_digits,
+                    )
+                    path_touch_stop = float(dec["noted_px"])
+                    hit_stop = True
+                    hit_eff_stop = True
+                else:
+                    clear_stop_noted(code)
+                    if isinstance(sticky, dict):
+                        sticky.pop(code, None)
+                    if hit_stop and str(dec.get("reason") or "") in (
+                        "profit_ge_3pct",
+                    ):
+                        hit_stop = False
+                        hit_eff_stop = False
+                        path_touch_stop = 0.0
+                try:
+                    prev_c_n = float(q.get("prev_close") or 0)
+                except (TypeError, ValueError):
+                    prev_c_n = 0.0
+                sealed_limit_up = stop_note_invalidated_by_recovery(
+                    last_px=last_n,
+                    noted_px=None,
+                    prev_close=prev_c_n if prev_c_n > 0 else None,
+                    limit_up_pct=float(limit_down_pct or 0.10),
+                )
+                if sealed_limit_up:
+                    clear_stop_noted(code)
                     hit_stop = False
                     hit_eff_stop = False
                     path_touch_stop = 0.0
@@ -3539,18 +3655,28 @@ def collect_rows(
             sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
             # 一字跌停封单不可卖；触及跌停后开板则按跌停价成交。
             stop_locked = bool(limit_state["locked"])
-            # 隔夜：昨日 T+1「止损已记」→ 次日可卖后市价离场（低开按开盘，不是已记价）
+            # 隔夜：昨日 T+1 已记 → 次日浮盈未过 3% 则峰值回落 2.5%；过 3% 走波动回落/档位
             t1_today = bool(
                 qty > 0
                 and buy_time
                 and (not t0)
                 and is_t1_buy_day(buy_time, str(q["session"]))
             )
+            try:
+                hi_q = float(q.get("high") or 0)
+            except (TypeError, ValueError):
+                hi_q = 0.0
+            try:
+                cost_q = float(cost or 0)
+            except (TypeError, ValueError):
+                cost_q = 0.0
             noted_hit = resolve_stop_noted_hit(
                 pos,
                 open_px=float(q["open"]),
                 low_px=float(q["low"]),
                 last_px=float(q["last"]),
+                high_px=hi_q,
+                cost_px=cost_q,
                 sellable=sellable,
                 t1_buy_day=t1_today,
                 locked=stop_locked,
@@ -3916,8 +4042,8 @@ def collect_rows(
                             "挂单说明": (
                                 f"今日买入不可卖；买入后曾触止损"
                                 f"@{touch_show:.{px_digits}f}。"
-                                "下一交易日：低开跌破已记则开盘市价卖；"
-                                "高开则等从开盘下杀1%，未下杀则继续持有"
+                                "下一交易日：浮盈未过3%则动态峰值回落2.5%全清；"
+                                "过3%走波动回落，过10%走档位/回落2个点"
                             ),
                             "因子触发": format_trigger_md(buy_time)
                             or format_trigger_md(q["session"])

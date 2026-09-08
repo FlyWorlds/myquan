@@ -1,4 +1,4 @@
-"""因子26：浮盈多层止盈（买同开盘突破；卖=阶梯10/15 + 回吐一半 + 峰值回落3%半仓 + 隔夜下杀）。"""
+"""因子26：浮盈多层止盈（买同开盘突破；卖=阶梯10/15 + 中赚波动回落 + 大赚回落2% + 未到3%次日峰值回落2.5%）。"""
 
 from __future__ import annotations
 
@@ -9,11 +9,14 @@ from strategy.core.protocols import FactorSpec
 from strategy.open_break import entry_filters_ok
 from strategy.pullback_wave_stop import (
     DEFAULT_ENTRY_PCT,
+    DEFAULT_GIVEBACK_ARM_PCT,
     DEFAULT_GIVEBACK_RATIO,
     DEFAULT_LADDER_FULL_PCT,
     DEFAULT_LADDER_HALF_PCT,
     DEFAULT_PEAK_PULLBACK_X,
     DEFAULT_PULLBACK_PCT,
+    DEFAULT_T1_PEAK_TRAIL_PCT,
+    DEFAULT_VOL_GIVEBACK_RATIO,
     STRATEGY_RULES,
     replay_last_factor_triggers,
     rules_text,
@@ -41,12 +44,13 @@ SPEC = FactorSpec(
     id=FACTOR_ID,
     name=FACTOR_NAME,
     description=(
-        "多层止盈：买=开盘突破或攻击波；"
+        "多层止盈：买=开盘阈值 ceil(open×(1+entry))；"
         f"卖=阶梯{DEFAULT_LADDER_HALF_PCT*100:.0f}%半仓/"
-        f"{DEFAULT_LADDER_FULL_PCT*100:.0f}%全清 + 浮盈回吐一半 + "
-        f"峰值回落{DEFAULT_PEAK_PULLBACK_X*100:.0f}%半仓 + 昨亏/止盈标记次日开盘下杀1%；"
+        f"{DEFAULT_LADDER_FULL_PCT*100:.0f}%全清 + 中赚3–10%动态高点回落0.5×20日日频σ + "
+        f"大赚后峰值回落{DEFAULT_PEAK_PULLBACK_X*100:.0f}%清仓 + 买入日未到3%则次日峰值回落2.5%；"
+        "买入日盈利≥3%不记、其余都记；"
         "成交触达按 1 分钟顺序；选股/回撤用日线；池回测近 7 日 1m；"
-        f"默认 entry ±{DEFAULT_ENTRY_PCT*100:.1f}% / giveback {DEFAULT_GIVEBACK_RATIO*100:.0f}%"
+        f"默认 entry ±{DEFAULT_ENTRY_PCT*100:.1f}% / 波动回落 {DEFAULT_VOL_GIVEBACK_RATIO*100:.0f}%×20日日频σ"
     ),
     rules_text=_rules(),
     implemented=True,
@@ -63,9 +67,13 @@ SPEC = FactorSpec(
         "ladder_half_pct": DEFAULT_LADDER_HALF_PCT,
         "ladder_full_pct": DEFAULT_LADDER_FULL_PCT,
         "peak_pullback_x": DEFAULT_PEAK_PULLBACK_X,
+        "giveback_arm_pct": DEFAULT_GIVEBACK_ARM_PCT,
+        "t1_peak_trail_pct": DEFAULT_T1_PEAK_TRAIL_PCT,
+        "vol_giveback_ratio": DEFAULT_VOL_GIVEBACK_RATIO,
         "replaces": "factor1_stop",
         "status": "production_watch",
-        "buy_modes": ("open_break", "attack_wave"),
+        "buy_modes": ("open_break",),
+        "buy_mode_research": "open_or_attack",
         "exit": "multi_tp",
     },
 )

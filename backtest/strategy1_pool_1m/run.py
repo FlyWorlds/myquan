@@ -1,12 +1,12 @@
 """策略一定盘池 · 近 7 交易日 1 分钟路径回测（三槽组合）。
 
 选股/过滤：日线（前日阴/小阳、双阳禁买）；组合回撤看因子2 预警（不注资）。
-成交：池内票近 7 日用 1 分钟 path-dependent（开盘突破/攻击波买 + 回落波止损）。
+成交：池内票近 7 日用 1 分钟 path-dependent（开盘阈值买 + 多层止盈）。
 
 组合约束（对齐盯盘三槽）：
-  · 物理槽 max_slots=3：盘中可同时持仓 3
+  · 物理槽 max_slots=3：盘中/隔夜均可同时持仓 3
   · 当日最多买入 2 次（MAX_BUYS_PER_DAY）
-  · 尾盘/隔夜预留 1 空槽 → 隔夜最多持仓 2（MAX_OVERNIGHT_SLOTS）；日末若仍满 3 则强制卖出可卖仓中最弱一只
+  · 尾盘不再强制空槽（RESERVE_EMPTY_SLOTS=0 → 隔夜最多 3）
   · 先触发买点的先买；槽满后触买进入等待队列，释放后再按触发先后补仓
   · T+1：买入当日不可卖；每槽约 3 成仓（权益×slot_weight）
   · 当日止损/已记卖出的标的：当日禁止再买
@@ -14,6 +14,7 @@
 用法：
   PYTHONPATH=. python3 backtest/strategy1_pool_1m/run.py
   PYTHONPATH=. python3 backtest/strategy1_pool_1m/run.py --days 7 --refresh --max-slots 3
+  PYTHONPATH=. python3 backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack   # 研究：加回攻击波
 
 研究用途，非投资建议。
 """
@@ -61,6 +62,7 @@ from strategy.pullback_wave_stop import (  # noqa: E402
     DEFAULT_ENTRY_PCT,
     DEFAULT_PULLBACK_PCT,
     DEFAULT_NOTED_DUMP_PCT,
+    DEFAULT_GIVEBACK_ARM_PCT,
     NOTED_MODE_GAP_DUMP,
     attack_buy_trigger_price,
     delayed_t1_stop_fill_px,
@@ -68,13 +70,22 @@ from strategy.pullback_wave_stop import (  # noqa: E402
     eval_multi_tp_bar,
     is_one_word_bar,
     noted_next_day_fill,
+    pnl_exceeds,
     pullback_stop_price,
+    realized_vol_daily,
     replay_factor26_1m,
+    resolve_t1_overnight_note,
+    stop_note_invalidated_by_recovery,
 )
 
 OUT = Path(__file__).resolve().parent
 CACHE = OUT / "cache_1m"
 CACHE.mkdir(parents=True, exist_ok=True)
+
+BUY_MODE_OPEN_OR_ATTACK = "open_or_attack"
+BUY_MODE_OPEN = "open"
+BUY_MODE_DEFAULT = BUY_MODE_OPEN
+BUY_MODES = (BUY_MODE_OPEN, BUY_MODE_OPEN_OR_ATTACK)
 
 
 def _sina(code: str) -> str:
@@ -246,6 +257,7 @@ class _Pos:
     tp_stage: int = 0  # 0=未半仓；1=已阶梯/峰值半仓
     tp_marked: bool = False  # 当日触止盈条件（含 T+1 未卖）
     yday_loss: bool = False  # 昨收相对成本亏损 → 次日隔夜武装
+    held_low: float = field(default_factory=lambda: float("inf"))  # 买入后最低（不含买前）
 
 
 def _exit_stop_px(
@@ -291,6 +303,7 @@ class _StockDay:
     bars: pd.DataFrame
     close_px: float | None = None
     prev_close: float | None = None
+    vol20_daily: float | None = None
 
 
 @dataclass
@@ -302,8 +315,9 @@ class _DayState:
     sold_today: bool = False
     noted_lock_wait: bool = False
     noted_first_exec: bool = True
-    overnight_armed: bool = False  # 昨亏/昨止盈标记/已记 → 开盘下杀
+    overnight_armed: bool = False  # 买入日收盘未到 3% → 次日峰值回落 2.5%
     overnight_first: bool = True
+    session_high: float = 0.0
 
 
 def _lot_shares(budget: float, price: float) -> int:
@@ -336,6 +350,7 @@ def simulate_portfolio_3slots(
     noted_dump_pct: float | None = None,
     reserve_empty: int = RESERVE_EMPTY_SLOTS,
     max_buys_per_day: int = MAX_BUYS_PER_DAY,
+    buy_mode: str = BUY_MODE_DEFAULT,
 ) -> dict[str, Any]:
     """三槽组合：1m 路径，先触发买点先买，最多同时持有 max_slots 只。
 
@@ -343,6 +358,7 @@ def simulate_portfolio_3slots(
       - half_gain：浮盈相对持仓最高回落一半止盈（因子26 默认；未浮盈用成本回撤保护）
       - peak_pct：旧版峰值回落阈值（对照）
     noted_mode / noted_dump_pct：T+1 止损已记后的次日规则
+    buy_mode：open=只认开盘涨到阈值（默认）；open_or_attack=开盘突破或攻击波（对照）
     """
     max_slots = max(1, int(max_slots))
     reserve = max(0, min(int(reserve_empty), max_slots - 1))
@@ -350,6 +366,10 @@ def simulate_portfolio_3slots(
     max_buys = max(1, int(max_buys_per_day))
     exit_mode = str(exit_mode or "half_gain")
     nmode = str(noted_mode or NOTED_MODE_GAP_DUMP)
+    bmode = str(buy_mode or BUY_MODE_DEFAULT).strip().lower()
+    if bmode not in BUY_MODES:
+        bmode = BUY_MODE_DEFAULT
+    allow_attack = bmode == BUY_MODE_OPEN_OR_ATTACK
     prepared: list[dict[str, Any]] = []
     all_days: set[str] = set()
 
@@ -458,6 +478,7 @@ def simulate_portfolio_3slots(
                 cost=cost,
                 kind=cand.get("kind"),
                 peak_high=px,
+                held_low=px,
             )
             trades.append(
                 {
@@ -526,6 +547,12 @@ def simulate_portfolio_3slots(
                         o = o1
                 except (TypeError, ValueError, IndexError):
                     pass
+            vol20 = None
+            try:
+                prior = daily[daily["day"].astype(str) < str(sess)]
+                vol20 = realized_vol_daily(prior["close"].tolist())
+            except Exception:  # noqa: BLE001
+                vol20 = None
             day_map[s["code"]] = _StockDay(
                 code=s["code"],
                 name=s["name"],
@@ -536,6 +563,7 @@ def simulate_portfolio_3slots(
                 bars=day_bars,
                 close_px=close_px,
                 prev_close=prev_c,
+                vol20_daily=vol20,
             )
             last_px[s["code"]] = float(close_px)
 
@@ -553,11 +581,9 @@ def simulate_portfolio_3slots(
                 continue
             # 持仓票不再找新买点
             states[code].buy_armed = False
-            # 规则4：昨亏 / 昨止盈标记 / 止损已记 → 隔夜武装开盘下杀
+            # 买入日收盘未到 3% 已记 → 次日峰值回落 2.5%；不再用昨亏武装开盘−1%
             noted0 = float(pos.stop_noted_px or 0) if pos.stop_noted_px else 0.0
-            states[code].overnight_armed = bool(
-                noted0 > 0 or pos.tp_marked or pos.yday_loss
-            )
+            states[code].overnight_armed = bool(noted0 > 0)
             pos.tp_marked = False  # 当日重新累计；武装已吃进 overnight_armed
 
         # 合并时间线
@@ -610,7 +636,7 @@ def simulate_portfolio_3slots(
                 rh = float(st.running_high or 0.0)
                 ph = max(float(pos.peak_high or 0.0), rh)
                 noted = float(pos.stop_noted_px or 0.0) if pos.stop_noted_px else 0.0
-                # 先兑现「止损已记」（可卖日）
+                # 一字跌停封死等开板；生产不再走开盘−1%，改由 eval T1 峰值回落
                 if can_sell and (not st.sold_today) and noted > 0:
                     locked = False
                     pc = float(sd.prev_close or 0)
@@ -625,51 +651,54 @@ def simulate_portfolio_3slots(
                         st.running_high = max(st.running_high, h)
                         last_px[code] = (h + lo) / 2.0
                         continue
-                    day_o = (
-                        float(bar_o) if st.noted_lock_wait else float(sd.open_px)
-                    )
-                    dump = (
-                        float(noted_dump_pct)
-                        if noted_dump_pct is not None
-                        else DEFAULT_NOTED_DUMP_PCT
-                    )
-                    nxt = noted_next_day_fill(
-                        mode=nmode,
-                        noted_px=noted,
-                        day_open=day_o,
-                        bar_low=lo,
-                        dump_pct=dump,
-                        tick=0.01,
-                        first_executable=bool(st.noted_first_exec),
-                    )
-                    st.noted_first_exec = False
-                    if nxt.get("hit") and float(nxt.get("fill_px") or 0) > 0:
-                        fill = float(nxt["fill_px"])
-                        proceeds = float(fill) * int(pos.shares)
-                        cash += proceeds
-                        trades.append(
-                            {
-                                "date": sess,
-                                "ts": str(ts),
-                                "side": "sell",
-                                "code": code,
-                                "name": pos.name,
-                                "px": float(fill),
-                                "shares": int(pos.shares),
-                                "pnl_pct": round(float(fill) / pos.buy_px - 1.0, 4)
-                                if pos.buy_px
-                                else None,
-                                "exit_reason": str(nxt.get("reason") or "stop_noted"),
-                                "slots_after": len(positions) - 1,
-                            }
+                    if nmode != NOTED_MODE_GAP_DUMP:
+                        day_o = (
+                            float(bar_o) if st.noted_lock_wait else float(sd.open_px)
                         )
-                        del positions[code]
-                        st.sold_today = True
-                        st.buy_armed = False
-                        st.pending_buy = None
-                        last_px[code] = float(fill)
-                        _try_fill_from_queue(sess, str(ts))
-                        continue
+                        dump = (
+                            float(noted_dump_pct)
+                            if noted_dump_pct is not None
+                            else DEFAULT_NOTED_DUMP_PCT
+                        )
+                        nxt = noted_next_day_fill(
+                            mode=nmode,
+                            noted_px=noted,
+                            day_open=day_o,
+                            bar_low=lo,
+                            dump_pct=dump,
+                            tick=0.01,
+                            first_executable=bool(st.noted_first_exec),
+                            cost_px=float(pos.buy_px),
+                            bar_high=float(h),
+                        )
+                        st.noted_first_exec = False
+                        if nxt.get("hit") and float(nxt.get("fill_px") or 0) > 0:
+                            fill = float(nxt["fill_px"])
+                            proceeds = float(fill) * int(pos.shares)
+                            cash += proceeds
+                            trades.append(
+                                {
+                                    "date": sess,
+                                    "ts": str(ts),
+                                    "side": "sell",
+                                    "code": code,
+                                    "name": pos.name,
+                                    "px": float(fill),
+                                    "shares": int(pos.shares),
+                                    "pnl_pct": round(float(fill) / pos.buy_px - 1.0, 4)
+                                    if pos.buy_px
+                                    else None,
+                                    "exit_reason": str(nxt.get("reason") or "stop_noted"),
+                                    "slots_after": len(positions) - 1,
+                                }
+                            )
+                            del positions[code]
+                            st.sold_today = True
+                            st.buy_armed = False
+                            st.pending_buy = None
+                            last_px[code] = float(fill)
+                            _try_fill_from_queue(sess, str(ts))
+                            continue
 
                 # 多层止盈：可卖则成交；T+1 只记 tp_marked / stop_noted
                 if code in positions and exit_mode in ("half_gain", "multi_tp"):
@@ -678,12 +707,7 @@ def simulate_portfolio_3slots(
                         if noted_dump_pct is not None
                         else DEFAULT_NOTED_DUMP_PCT
                     )
-                    noted_now = (
-                        float(positions[code].stop_noted_px or 0)
-                        if positions[code].stop_noted_px
-                        else 0.0
-                    )
-                    armed = bool(st.overnight_armed) and noted_now <= 0
+                    armed = bool(st.overnight_armed)
                     ev = eval_multi_tp_bar(
                         bar_open=float(bar_o),
                         bar_high=float(h),
@@ -697,7 +721,19 @@ def simulate_portfolio_3slots(
                         day_open=float(sd.open_px),
                         hard_pct=float(sd.pullback_pct),
                         dump_pct=dump,
+                        vol20_daily=sd.vol20_daily,
+                        session_peak_before=float(st.session_high or 0),
                     )
+                    st.session_high = float(
+                        ev.get("session_peak_after") or st.session_high or 0
+                    )
+                    if armed and pnl_exceeds(
+                        max(float(h), float(sd.open_px), float(bar_o)),
+                        float(pos.buy_px),
+                        DEFAULT_GIVEBACK_ARM_PCT,
+                    ):
+                        st.overnight_armed = False
+                        pos.stop_noted_px = None
                     if ev.get("tp_marked"):
                         pos.tp_marked = True
                     if (not can_sell) and ev.get("noted_px"):
@@ -807,8 +843,20 @@ def simulate_portfolio_3slots(
                 # 更新持仓峰值
                 if code in positions:
                     positions[code].peak_high = max(ph, h)
+                    positions[code].held_low = min(float(positions[code].held_low), lo)
                     st.running_high = max(rh, h)
                     last_px[code] = (h + lo) / 2.0
+                    # T+1 已记后，后续分钟低点仍远高于已记 → 作废（涨停封死/收回）
+                    if not can_sell:
+                        pos_n = positions[code]
+                        noted2 = (
+                            float(pos_n.stop_noted_px or 0)
+                            if pos_n.stop_noted_px
+                            else 0.0
+                        )
+                        if noted2 > 0 and lo > noted2 * 1.005 + 1e-12:
+                            pos_n.stop_noted_px = None
+                            pos_n.tp_marked = False
 
             # —— 买：本分钟新触达 ——
             new_hits: list[dict[str, Any]] = []
@@ -823,13 +871,16 @@ def simulate_portfolio_3slots(
                     continue
                 if st.pending_buy is not None:
                     continue
-                st.running_low = min(st.running_low, lo)
+                st.running_low = min(st.running_low, lo) if allow_attack else st.running_low
                 open_buy = entry_trigger_price(sd.open_px, entry_pct=sd.entry_pct)
-                attack = attack_buy_trigger_price(
-                    st.running_low, entry_pct=sd.entry_pct
-                )
                 hit_open = h + 1e-12 >= open_buy
-                hit_attack = attack > 0 and (h + 1e-12 >= attack)
+                hit_attack = False
+                attack = 0.0
+                if allow_attack:
+                    attack = attack_buy_trigger_price(
+                        st.running_low, entry_pct=sd.entry_pct
+                    )
+                    hit_attack = attack > 0 and (h + 1e-12 >= attack)
                 if not (hit_open or hit_attack):
                     st.running_high = max(st.running_high, h)
                     continue
@@ -887,6 +938,7 @@ def simulate_portfolio_3slots(
                         cost=cost,
                         kind=cand.get("kind"),
                         peak_high=px,
+                        held_low=px,
                     )
                     trades.append(
                         {
@@ -954,10 +1006,29 @@ def simulate_portfolio_3slots(
         for code, sd in day_map.items():
             if sd.close_px:
                 last_px[code] = float(sd.close_px)
-        # 日末：记昨亏标记，供次日规则4隔夜武装
+        # 日末：买入日按盈利/亏损门槛决定是否把已记带到次日
         for code, pos in list(positions.items()):
             px = float(last_px.get(code) or pos.buy_px or 0)
-            pos.yday_loss = bool(px > 0 and pos.buy_px > 0 and px < float(pos.buy_px))
+            sd = day_map.get(code)
+            hard = float(sd.pullback_pct) if sd else DEFAULT_PULLBACK_PCT
+            if is_t1_buy_day(pos.buy_day, sess):
+                day_lo = (
+                    float(pos.held_low)
+                    if pos.held_low < float("inf")
+                    else None
+                )
+                dec = resolve_t1_overnight_note(
+                    cost_px=float(pos.buy_px),
+                    peak_high=float(pos.peak_high or pos.buy_px),
+                    close_px=px,
+                    hard_pct=hard,
+                    bar_low=day_lo,
+                )
+                pos.stop_noted_px = dec.get("noted_px")
+                pos.tp_marked = bool(dec.get("noted_px"))
+                pos.yday_loss = str(dec.get("reason") or "") == "hard_from_cost"
+            else:
+                pos.yday_loss = bool(px > 0 and pos.buy_px > 0 and px < float(pos.buy_px))
         eq = _equity_now()
         equity_rows.append(
             {
@@ -993,6 +1064,23 @@ def simulate_portfolio_3slots(
         if closed
         else None
     )
+    peak = float(initial_cash)
+    max_dd = 0.0
+    last_peak_date = None
+    dd_peak_date = None
+    trough_date = None
+    for e in equity_rows:
+        v = float(e.get("equity") or 0)
+        d = e.get("date")
+        if v > peak:
+            peak = v
+            last_peak_date = d
+        if peak > 0:
+            dd = v / peak - 1.0
+            if dd < max_dd:
+                max_dd = dd
+                dd_peak_date = last_peak_date
+                trough_date = d
     return {
         "trades": trades,
         "equity": equity_rows,
@@ -1006,6 +1094,9 @@ def simulate_portfolio_3slots(
             "initial_cash": initial_cash,
             "final_equity": final_eq,
             "return_pct": round((final_eq / float(initial_cash) - 1.0) * 100.0, 2),
+            "max_dd_pct": round(max_dd * 100.0, 2),
+            "dd_peak_date": dd_peak_date,
+            "dd_trough_date": trough_date,
             "n_buys": sum(1 for t in trades if t["side"] == "buy"),
             "n_sells": sum(1 for t in trades if t["side"] == "sell"),
             "n_closed": len(closed),
@@ -1013,12 +1104,283 @@ def simulate_portfolio_3slots(
             "n_open": len(positions),
             "n_skipped_or_queued": len(skipped),
             "exit_mode": exit_mode,
-            "max_slots": max_slots,
+            "buy_mode": bmode,
             "reserve_empty": reserve,
             "max_overnight": max_overnight,
             "max_buys_per_day": max_buys,
         },
     }
+
+
+LEDGER_REASON_ZH = {
+    "attack": "攻击波买",
+    "open": "开盘突破买",
+    "queue_fill": "排队补仓",
+    "t1_peak_trail": "未到3%·次日动态峰值回落2.5%全清",
+    "vol_giveback": "中赚（3–10%）动态高点回落0.5×20日日频σ全清",
+    "noted_open_dump": "已记·开盘下杀1%全清（研究对照）",
+    "noted_gap_open": "已记·低开按开盘卖（研究模式）",
+    "noted_open": "已记·次日开盘市价卖（研究模式）",
+    "half_gain": "中赚回落一半清（旧口径，研究对照）",
+    "hard_from_cost": "成本硬保护（亏≥2.5%）",
+    "ladder_half_10": "大赚·浮盈10%卖一半",
+    "ladder_half_10_clear": "已半仓后再触10%·剩余全清",
+    "ladder_full_15": "大赚·浮盈15%全清",
+    "peak_pullback_clear": "大赚后峰值回落2%清仓",
+    "overnight_open_dump": "隔夜武装·开盘下杀1%全清（研究对照）",
+    "eod_reserve_slot": "尾盘空槽强制卖",
+}
+
+
+def _ledger_buy_logic(t: dict[str, Any]) -> str:
+    kind = str(t.get("kind") or "attack")
+    src = str(t.get("source") or "")
+    base = LEDGER_REASON_ZH.get(kind, kind or "买入")
+    if src == "queue_fill":
+        trig = str(t.get("trigger_ts") or "")
+        hhmm = trig[11:16] if len(trig) >= 16 else trig
+        return f"{base}·排队补仓（触{hhmm}）" if hhmm else f"{base}·排队补仓"
+    return base
+
+
+def _ledger_sell_logic(t: dict[str, Any]) -> str:
+    er = str(t.get("exit_reason") or "")
+    return LEDGER_REASON_ZH.get(er, er or "卖出")
+
+
+def _annotate_ledger_trades(
+    trades: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """FIFO 配对买卖，半仓留下余股。"""
+    lots: dict[str, list[dict[str, Any]]] = {}
+    out: list[dict[str, Any]] = []
+    for t in trades:
+        row = dict(t)
+        code = str(t.get("code") or "")
+        sh = int(t.get("shares") or 0)
+        try:
+            px = float(t.get("px") or 0)
+        except (TypeError, ValueError):
+            px = 0.0
+        row["amount"] = round(px * sh, 2) if px > 0 and sh > 0 else 0.0
+        side = str(t.get("side") or "")
+        if side == "buy":
+            lots.setdefault(code, []).append(
+                {
+                    "ts": t.get("ts"),
+                    "px": px,
+                    "shares": sh,
+                    "name": t.get("name"),
+                    "code": code,
+                }
+            )
+            row["matched_buy"] = ""
+            row["logic"] = _ledger_buy_logic(t)
+            row["left_after_lot"] = sh
+        else:
+            need = sh
+            matched: list[tuple[dict[str, Any], int]] = []
+            q = lots.setdefault(code, [])
+            while need > 0 and q:
+                lot = q[0]
+                take = min(int(lot["shares"]), need)
+                matched.append((lot, take))
+                lot["shares"] = int(lot["shares"]) - take
+                need -= take
+                if int(lot["shares"]) <= 0:
+                    q.pop(0)
+            if matched:
+                lot0, _ = matched[0]
+                try:
+                    bpx = float(lot0["px"])
+                    bpx_s = f"{bpx:g}"
+                except (TypeError, ValueError):
+                    bpx = 0.0
+                    bpx_s = str(lot0.get("px") or "")
+                row["matched_buy"] = f"{lot0.get('ts') or ''} @{bpx_s}".strip()
+                row["matched_buy_px"] = bpx
+                left = sum(int(x["shares"]) for x in q)
+                row["left_after_lot"] = left
+                if bpx > 0:
+                    row["realized_pnl"] = round((px - bpx) * sh, 2)
+                else:
+                    row["realized_pnl"] = None
+            else:
+                row["matched_buy"] = ""
+                row["matched_buy_px"] = None
+                row["left_after_lot"] = 0
+                row["realized_pnl"] = None
+            row["logic"] = _ledger_sell_logic(t)
+        out.append(row)
+    return out, lots
+
+
+def write_trade_ledger(
+    *,
+    path: Path,
+    trades: list[dict[str, Any]],
+    equity: list[dict[str, Any]],
+    open_positions: list[dict[str, Any]],
+    summary: dict[str, Any],
+    buy_label: str,
+    n_pool: int,
+) -> None:
+    """写出详细交割单（研究用途，非投资建议）。"""
+    ps = summary.get("portfolio") or summary
+    cal = ps.get("calendar") or []
+    cal_s = "～".join([str(cal[0]), str(cal[-1])]) if len(cal) >= 2 else "、".join(str(x) for x in cal)
+    annotated, leftover = _annotate_ledger_trades(list(trades or []))
+    n_buy = sum(1 for t in annotated if t.get("side") == "buy")
+    n_sell = sum(1 for t in annotated if t.get("side") == "sell")
+    lines = [
+        "# 交割单 · 策略一定盘池 1m 三槽",
+        "",
+        "> 研究用途，非投资建议。未计佣金/印花税/滑点。",
+        "",
+        "## 摘要",
+        "",
+        f"- 池：{n_pool} 只；窗：{cal_s}（{ps.get('window_days', len(cal))} 个交易日）",
+        f"- 买 {n_buy} / 卖 {n_sell}；期末权益 {ps.get('final_equity', '—')}（{ps.get('return_pct', '—')}%）",
+        f"- 最大回撤 {ps.get('max_dd_pct', '—')}%"
+        + (
+            f"（{ps.get('dd_peak_date')} → {ps.get('dd_trough_date')}）"
+            if ps.get("dd_peak_date")
+            else ""
+        ),
+        f"- 已平仓回合 {ps.get('n_closed', 0)}（均收益 {ps.get('avg_closed_pnl_pct', '—')}%）；期末持仓 {ps.get('n_open', 0)} 只",
+        f"- 组合：物理 {ps.get('max_slots', 3)} 槽（隔夜可持 {ps.get('max_overnight', 3)}）；日最多买 {ps.get('max_buys_per_day', 2)}；每槽约 {float(ps.get('slot_weight') or 0.3)*100:.0f}%",
+        f"- 买={buy_label}；卖=硬保护2.5% / 中赚3–10%动态高点回落0.5×20日日频σ / 阶梯10%·15% / 大赚后回落2% / 买入日未到3%则次日峰值回落2.5%",
+        f"- T+1：买入日盈利≥3%不记、其余都记（次日走峰值回落2.5%，到3%改中段，到10%改分段）；当日卖出禁再买该票",
+        "",
+        "## 标签速查",
+        "",
+        "| 标签 | 含义 |",
+        "|------|------|",
+        "| `attack` | 攻击波买 |",
+        "| `open` | 开盘突破买 |",
+        "| `queue_fill` | 槽满后排队，释放再补 |",
+        "| `t1_peak_trail` | 买入日未到 3% 已记且当日尚未 >3% → 次日动态峰值回落 2.5% 全清 |",
+        "| `vol_giveback` | 中赚 >3% 且 <10% → 动态高点回落 0.5×近20日日频σ 全清 |",
+        "| `noted_open_dump` | 研究对照：已记开盘下杀 1%（生产不用） |",
+        "| `half_gain` | 研究对照：中赚回落一半（生产不用） |",
+        "| `ladder_half_10` | 浮盈 ≥10% → 卖一半 |",
+        "| `ladder_full_15` | 浮盈 ≥15% → 全清 |",
+        "| `peak_pullback_clear` | 峰值浮盈 ≥10% 后再回落 2 个点 → 清仓 |",
+        "| `hard_from_cost` | 相对成本亏 ≥2.5% → 硬保护 |",
+        "| `overnight_open_dump` | 研究对照：隔夜武装开盘下杀 1% |",
+        "",
+        "## 交割明细（时间序）",
+        "",
+        "| # | 时间 | 方向 | 代码 | 名称 | 价 | 股 | 金额 | 槽后 | 盈亏% | 余股 | 对应买入 | 逻辑 |",
+        "|---|------|------|------|------|----|----|------|------|-------|------|----------|------|",
+    ]
+    for i, t in enumerate(annotated, 1):
+        pnl = t.get("pnl_pct")
+        pnl_s = "" if pnl is None else f"{float(pnl) * 100:.2f}%"
+        amt = t.get("amount") or 0.0
+        left = t.get("left_after_lot")
+        left_s = "" if left is None else str(int(left))
+        if str(t.get("side")) == "buy":
+            left_s = str(int(t.get("shares") or 0))
+        lines.append(
+            f"| {i} | {t.get('ts', '')} | {t.get('side')} | {t.get('code')} | {t.get('name')} | "
+            f"{t.get('px')} | {t.get('shares')} | {amt:,.0f} | {t.get('slots_after', '')} | "
+            f"{pnl_s} | {left_s} | {t.get('matched_buy') or ''} | {t.get('logic') or ''} |"
+        )
+    if not annotated:
+        lines.append("| — | — | — | — | — | — | — | — | — | — | — | — | 无成交 |")
+
+    # 按标的回合
+    by_code: dict[str, list[dict[str, Any]]] = {}
+    for t in annotated:
+        by_code.setdefault(str(t.get("code")), []).append(t)
+    lines.extend(["", "## 按标的拆解", ""])
+    for code, rows in by_code.items():
+        name = rows[0].get("name") or ""
+        lines.append(f"### {code} {name}")
+        lines.append("")
+        realized = 0.0
+        has_pnl = False
+        for t in rows:
+            side = "买" if t.get("side") == "buy" else "卖"
+            extra = t.get("logic") or ""
+            pnl = t.get("pnl_pct")
+            pnl_s = "" if pnl is None else f"，盈亏 {float(pnl)*100:.2f}%"
+            rp = t.get("realized_pnl")
+            if rp is not None:
+                has_pnl = True
+                realized += float(rp)
+            mb = t.get("matched_buy") or ""
+            mb_s = f"；对 {mb}" if mb else ""
+            lines.append(
+                f"- {t.get('ts')} {side} {t.get('shares')}股 @ {t.get('px')}（{t.get('amount', 0):,.0f}）"
+                f"{pnl_s}{mb_s}。{extra}"
+            )
+        left_lots = leftover.get(code) or []
+        shown_left = False
+        for lot in left_lots:
+            if int(lot.get("shares") or 0) <= 0:
+                continue
+            shown_left = True
+            lines.append(
+                f"- 期末余 {int(lot['shares'])}股，成本 {lot.get('px')}（买于 {lot.get('ts')}）"
+            )
+        if has_pnl:
+            lines.append(f"- 本窗已实现盈亏约 {realized:,.0f} 元")
+        lines.append("")
+
+    lines.extend(
+        [
+            "## 日末持仓",
+            "",
+            "| 日期 | 权益 | 现金 | 持仓数 | 持仓 | 累计% |",
+            "|------|------|------|--------|------|-------|",
+        ]
+    )
+    for e in equity or []:
+        eq = e.get("equity")
+        cash = e.get("cash")
+        try:
+            eq_s = f"{float(eq):,.0f}"
+        except (TypeError, ValueError):
+            eq_s = str(eq)
+        try:
+            cash_s = f"{float(cash):,.0f}"
+        except (TypeError, ValueError):
+            cash_s = str(cash)
+        lines.append(
+            f"| {e.get('date')} | {eq_s} | {cash_s} | {e.get('n_pos')} | "
+            f"{e.get('codes') or '—'} | {e.get('ret_pct')} |"
+        )
+
+    if open_positions:
+        lines.extend(
+            [
+                "",
+                "## 期末未平仓",
+                "",
+                "| 代码 | 名称 | 买日 | 买价 | 现价 | 股数 | 市值 | 浮盈额 | 浮盈% |",
+                "|------|------|------|------|------|------|------|--------|-------|",
+            ]
+        )
+        for p in open_positions:
+            try:
+                last = float(p.get("last_px") or 0)
+                cost = float(p.get("buy_px") or 0)
+                sh = int(p.get("shares") or 0)
+            except (TypeError, ValueError):
+                last, cost, sh = 0.0, 0.0, 0
+            mkt = round(last * sh, 2)
+            u_pnl = round((last - cost) * sh, 2)
+            pp = p.get("pnl_pct")
+            pp_s = "" if pp is None else f"{float(pp) * 100:.2f}"
+            lines.append(
+                f"| {p.get('code')} | {p.get('name')} | {p.get('buy_day')} | {p.get('buy_px')} | "
+                f"{p.get('last_px')} | {sh} | {mkt:,.0f} | {u_pnl:,.0f} | {pp_s} |"
+            )
+
+    lines.extend(["", "研究用途，非投资建议。", ""])
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def run(
@@ -1028,15 +1390,25 @@ def run(
     entry_pct: float | None = None,
     max_slots: int = MAX_PORTFOLIO_SLOTS,
     source: str = "auto",
+    buy_mode: str = BUY_MODE_DEFAULT,
+    tag: str | None = None,
 ) -> dict:
     entry = float(entry_pct if entry_pct is not None else DEFAULT_ENTRY_PCT)
     pb = float(DEFAULT_PULLBACK_PCT)
+    bmode = str(buy_mode or BUY_MODE_DEFAULT).strip().lower()
+    if bmode not in BUY_MODES:
+        bmode = BUY_MODE_DEFAULT
+    allow_attack = bmode == BUY_MODE_OPEN_OR_ATTACK
+    suffix = str(tag or "").strip()
+    if not suffix and bmode != BUY_MODE_DEFAULT:
+        suffix = "attack" if bmode == BUY_MODE_OPEN_OR_ATTACK else bmode
     pool = _load_pool()
     rows: list[dict] = []
     stock_payload: list[dict[str, Any]] = []
+    buy_label = "开盘突破" if bmode == BUY_MODE_OPEN else "开盘突破或攻击波"
     print(
         f"定盘池 {len(pool)} 只 · 近 {days} 交易日 1m · source={source} · "
-        f"三槽≤{max_slots} · 先触发先买 · entry/pb={entry*100:.1f}%"
+        f"三槽≤{max_slots} · 先触发先买 · entry/pb={entry*100:.1f}% · 买={buy_label}"
     )
 
     for w in pool:
@@ -1054,6 +1426,7 @@ def run(
             entry_pct=ep,
             pullback_pct=sp,
             last_n_days=int(days),
+            allow_attack=allow_attack,
         )
         pnl, n_round = _trade_pnl(list(rep.get("trades") or []))
         rows.append(
@@ -1096,6 +1469,7 @@ def run(
         max_slots=int(max_slots),
         initial_cash=float(DEFAULT_ACCOUNT_TOTAL),
         slot_weight=float(SLOT_WEIGHT),
+        buy_mode=bmode,
     )
     ps = port.get("summary") or {}
 
@@ -1114,6 +1488,7 @@ def run(
         "max_slots": int(max_slots),
         "slot_weight": float(SLOT_WEIGHT),
         "priority": "first_trigger_first_buy",
+        "buy_mode": bmode,
         "factor2_alert": th.as_dict(),
         "factor2_label": th.label(),
         "factor2_rules": format_rules(th),
@@ -1121,11 +1496,13 @@ def run(
         "disclaimer": "研究用途，非投资建议；1m 约近数日；未计费/滑点；三槽先触发先买。",
     }
 
-    out_csv = OUT / "pool_1m_7d.csv"
-    out_json = OUT / "pool_1m_7d.json"
-    out_trades = OUT / "portfolio_trades.csv"
-    out_eq = OUT / "portfolio_equity.csv"
-    out_md = OUT / "REPORT.md"
+    stem = f"_{suffix}" if suffix else ""
+    out_csv = OUT / f"pool_1m_7d{stem}.csv"
+    out_json = OUT / f"pool_1m_7d{stem}.json"
+    out_trades = OUT / f"portfolio_trades{stem}.csv"
+    out_eq = OUT / f"portfolio_equity{stem}.csv"
+    out_md = OUT / (f"REPORT{stem}.md" if stem else "REPORT.md")
+    out_ledger = OUT / (f"TRADE_LEDGER{stem}.md" if stem else "TRADE_LEDGER.md")
 
     df.drop(columns=["trades"], errors="ignore").to_csv(out_csv, index=False)
     pd.DataFrame(port.get("trades") or []).to_csv(out_trades, index=False)
@@ -1156,10 +1533,17 @@ def run(
         "## 规则",
         "",
         "- **选股/过滤**：日线（前日阴/小阳、双阳禁买）；因子2 回撤仅预警阈值，不注资",
-        "- **成交**：池内票近 N 交易日 **1 分钟** path-dependent（买=开盘突破或攻击波；"
-        "卖=多层止盈：阶梯10%/15% + 回吐一半 + 峰值回落3%半仓 + 隔夜下杀1%）",
-        f"- **组合**：物理 **{max_slots}** 槽（盘中可持 {max_slots}）；当日最多买 **{MAX_BUYS_PER_DAY}**；"
-        f"尾盘空 **{RESERVE_EMPTY_SLOTS}**（隔夜最多 {MAX_OVERNIGHT_SLOTS}）；**先触发买点的先买**；"
+        "- **成交**：池内票近 N 交易日 **1 分钟** path-dependent（"
+        f"买={buy_label}；"
+        "卖=多层止盈：阶梯10%/15% + 中赚3–10%波动回落 + 大赚后回落2%清 + 未到3%次日峰值回落2.5%；"
+        "买入日盈利≥3%不记、其余都记）",
+        f"- **组合**：物理 **{max_slots}** 槽（盘中/隔夜均可持 {max_slots}）；当日最多买 **{MAX_BUYS_PER_DAY}**；"
+        + (
+            f"隔夜最多 **{MAX_OVERNIGHT_SLOTS}**；"
+            if int(RESERVE_EMPTY_SLOTS) <= 0
+            else f"尾盘空 **{RESERVE_EMPTY_SLOTS}**（隔夜最多 {MAX_OVERNIGHT_SLOTS}）；"
+        )
+        + "**先触发买点的先买**；"
         f"每槽约 {SLOT_WEIGHT*100:.0f}% 仓；T+1；槽满触买入队，释放后再按触发先后补；"
         f"**当日止损/已记卖出禁再买**",
         f"- 窗长：{days} 交易日；日历：{', '.join(cal) if cal else '—'}",
@@ -1169,6 +1553,12 @@ def run(
         "",
         f"- 初始资金：{ps.get('initial_cash', DEFAULT_ACCOUNT_TOTAL):,.0f}",
         f"- 期末权益：{ps.get('final_equity', '—')}（{ps.get('return_pct', '—')}%）",
+        f"- 最大回撤：{ps.get('max_dd_pct', '—')}%"
+        + (
+            f"（峰值 {ps.get('dd_peak_date')} → 谷值 {ps.get('dd_trough_date')}）"
+            if ps.get("dd_peak_date")
+            else ""
+        ),
         f"- 买入 {ps.get('n_buys', 0)} / 卖出 {ps.get('n_sells', 0)} / "
         f"已平仓回合 {ps.get('n_closed', 0)}（均收益 {ps.get('avg_closed_pnl_pct', '—')}%）",
         f"- 期末持仓：{ps.get('n_open', 0)} 只",
@@ -1247,17 +1637,29 @@ def run(
     lines.extend(
         [
             "",
-            f"产物：`{out_csv.name}` / `{out_json.name}` / `{out_trades.name}` / `{out_eq.name}`",
+            f"产物：`{out_csv.name}` / `{out_json.name}` / `{out_trades.name}` / `{out_eq.name}`"
+            f" / `{out_ledger.name}`",
             "",
             summary["disclaimer"],
             "",
         ]
     )
     out_md.write_text("\n".join(lines), encoding="utf-8")
+    write_trade_ledger(
+        path=out_ledger,
+        trades=list(port.get("trades") or []),
+        equity=list(port.get("equity") or []),
+        open_positions=list(port.get("open_positions") or []),
+        summary=summary,
+        buy_label=buy_label,
+        n_pool=int(summary.get("n_pool") or 0),
+    )
     print(f"\n写入 {out_csv}")
     print(f"写入 {out_md}")
+    print(f"写入 {out_ledger}")
     print(
         f"三槽组合：{ps.get('return_pct', '—')}%  "
+        f"回撤{ps.get('max_dd_pct', '—')}%  "
         f"买{ps.get('n_buys', 0)}/卖{ps.get('n_sells', 0)}  "
         f"期末持仓{ps.get('n_open', 0)}"
     )
@@ -1283,6 +1685,17 @@ def main() -> None:
         default=MAX_PORTFOLIO_SLOTS,
         help="每天最多同时持有票数（默认 3）",
     )
+    ap.add_argument(
+        "--buy-mode",
+        default=BUY_MODE_DEFAULT,
+        choices=BUY_MODES,
+        help="open=只买开盘涨到阈值（默认）；open_or_attack=开盘突破或攻击波（对照）",
+    )
+    ap.add_argument(
+        "--tag",
+        default=None,
+        help="产物后缀；非默认买点会自动加 tag，避免覆盖 REPORT.md",
+    )
     args = ap.parse_args()
     run(
         days=int(args.days),
@@ -1290,6 +1703,8 @@ def main() -> None:
         entry_pct=args.entry_pct,
         max_slots=int(args.max_slots),
         source=str(args.source),
+        buy_mode=str(args.buy_mode),
+        tag=args.tag,
     )
 
 

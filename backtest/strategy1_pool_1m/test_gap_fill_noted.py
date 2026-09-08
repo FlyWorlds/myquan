@@ -15,7 +15,7 @@ class TestGapFillNoted(unittest.TestCase):
             [
                 {"date": "2026-09-03", "open": 10.0, "high": 10.1, "low": 9.9, "close": 9.95},
                 {"date": "2026-09-04", "open": 10.0, "high": 10.2, "low": 9.8, "close": 9.9},
-                {"date": "2026-09-07", "open": 10.0, "high": 10.5, "low": 9.7, "close": 10.1},
+                {"date": "2026-09-07", "open": 10.0, "high": 10.6, "low": 9.7, "close": 10.30},
                 {"date": "2026-09-08", "open": 9.5, "high": 9.8, "low": 9.3, "close": 9.6},
             ]
         )
@@ -25,15 +25,22 @@ class TestGapFillNoted(unittest.TestCase):
                     "ts": "2026-09-07 09:31:00",
                     "open": 10.00,
                     "high": 10.30,
-                    "low": 9.90,
+                    "low": 10.00,
                     "close": 10.20,
                 },
                 {
                     "ts": "2026-09-07 09:32:00",
                     "open": 10.20,
-                    "high": 10.40,
-                    "low": 10.00,
-                    "close": 10.05,
+                    "high": 10.60,
+                    "low": 10.50,
+                    "close": 10.55,
+                },
+                {
+                    "ts": "2026-09-07 09:33:00",
+                    "open": 10.50,
+                    "high": 10.52,
+                    "low": 10.35,
+                    "close": 10.30,
                 },
                 {
                     "ts": "2026-09-08 09:31:00",
@@ -61,9 +68,9 @@ class TestGapFillNoted(unittest.TestCase):
         sells = [t for t in out["trades"] if t["side"] == "sell"]
         self.assertTrue(sells, msg=out["trades"])
         s0 = sells[0]
-        self.assertEqual(s0["exit_reason"], "noted_gap_open")
-        self.assertAlmostEqual(float(s0["px"]), 9.5, places=2)
-        self.assertNotEqual(s0.get("exit_reason"), "half_gain")
+        self.assertEqual(s0["exit_reason"], "hard_from_cost")
+        self.assertAlmostEqual(float(s0["px"]), 9.50, places=2)
+        self.assertNotEqual(s0.get("exit_reason"), "vol_giveback")
 
 
 if __name__ == "__main__":

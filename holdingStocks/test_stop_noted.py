@@ -26,9 +26,9 @@ class TestStopNoted(unittest.TestCase):
             )["hit"]
         )
 
-    def test_gap_down_fills_open_not_noted(self):
-        """低开下杀：按开盘价成交，不是昨日已记价。"""
-        pos = {"stop_noted": True, "stop_noted_px": 10.0}
+    def test_gap_down_fills_open_dump(self):
+        """低开：未到 3% 走次日峰值回落 2.5%，不是昨日已记价。"""
+        pos = {"stop_noted": True, "stop_noted_px": 10.0, "cost": 10.0}
         hit = resolve_stop_noted_hit(
             pos,
             open_px=9.5,
@@ -39,10 +39,12 @@ class TestStopNoted(unittest.TestCase):
             now=datetime(2026, 9, 9, 9, 31),
         )
         self.assertTrue(hit["hit"])
-        self.assertAlmostEqual(hit["fill_px"], 9.5)
+        self.assertEqual(hit["kind"], "t1_peak_trail")
+        self.assertAlmostEqual(hit["fill_px"], 9.26, places=2)
+        self.assertNotAlmostEqual(hit["fill_px"], 10.0)
 
     def test_gap_up_no_dump_does_not_force_sell(self):
-        """次日高开且未从开盘下杀 1%：不强制开盘卖。"""
+        """次日高开且未从开盘回落 2.5%：不强制开盘卖。"""
         pos = {"stop_noted": True, "stop_noted_px": 10.0}
         hit = resolve_stop_noted_hit(
             pos,
@@ -55,8 +57,9 @@ class TestStopNoted(unittest.TestCase):
         )
         self.assertFalse(hit["hit"])
 
-    def test_gap_up_dump_from_open_sells(self):
-        pos = {"stop_noted": True, "stop_noted_px": 10.0}
+    def test_gap_up_profit_over_2_skips_open_dump(self):
+        """高开且浮盈>3%：不走峰值回落 2.5%，交给波动回落/档位。"""
+        pos = {"stop_noted": True, "stop_noted_px": 10.0, "cost": 10.0}
         hit = resolve_stop_noted_hit(
             pos,
             open_px=10.8,
@@ -66,11 +69,25 @@ class TestStopNoted(unittest.TestCase):
             t1_buy_day=False,
             now=datetime(2026, 9, 9, 9, 40),
         )
-        self.assertTrue(hit["hit"])
-        self.assertLess(hit["fill_px"], 10.8)
+        self.assertFalse(hit["hit"])
 
-    def test_missed_open_uses_last(self):
-        pos = {"stop_noted": True, "stop_noted_px": 10.0}
+    def test_gap_up_dump_from_open_sells(self):
+        """高开但浮盈未过 3%：从当日峰值回落 2.5% 才卖。"""
+        pos = {"stop_noted": True, "stop_noted_px": 10.0, "cost": 10.0}
+        hit = resolve_stop_noted_hit(
+            pos,
+            open_px=10.15,
+            low_px=9.85,
+            last_px=9.90,
+            sellable=100,
+            t1_buy_day=False,
+            now=datetime(2026, 9, 9, 9, 40),
+        )
+        self.assertTrue(hit["hit"])
+        self.assertLess(hit["fill_px"], 10.15)
+
+    def test_missed_open_uses_dump_stop(self):
+        pos = {"stop_noted": True, "stop_noted_px": 10.0, "cost": 10.0}
         hit = resolve_stop_noted_hit(
             pos,
             open_px=9.5,
@@ -81,7 +98,7 @@ class TestStopNoted(unittest.TestCase):
             now=datetime(2026, 9, 9, 13, 5),
         )
         self.assertTrue(hit["hit"])
-        self.assertAlmostEqual(hit["fill_px"], 9.8)
+        self.assertAlmostEqual(hit["fill_px"], 9.5, places=2)
 
     def test_limit_down_locked_waits(self):
         pos = {"stop_noted": True, "stop_noted_px": 10.0}
@@ -165,7 +182,7 @@ class TestStopNoted(unittest.TestCase):
             peak_high_in=10.0,
             stop_noted_px_in=9.75,
         )
-        self.assertAlmostEqual(float(out["sell_px"]), 9.2)
+        self.assertAlmostEqual(float(out["sell_px"]), 9.20, places=2)
         self.assertNotAlmostEqual(float(out["sell_px"]), 9.75)
 
     def test_gap_dump_high_open_no_dump_holds(self):
@@ -175,7 +192,7 @@ class TestStopNoted(unittest.TestCase):
             {
                 "ts": pd.date_range("2024-01-03 09:31", periods=3, freq="min"),
                 "open": [10.5, 10.6, 10.7],
-                "high": [10.6, 10.8, 11.0],
+                "high": [10.6, 10.7, 10.8],
                 "low": [10.4, 10.5, 10.6],
             }
         )
@@ -216,6 +233,7 @@ class TestStopNoted(unittest.TestCase):
             stop_noted_px_in=9.75,
             noted_mode=NOTED_MODE_GAP_DUMP,
             noted_dump_pct=0.01,
+            vol20_daily=0.05,
         )
         self.assertIsNotNone(out.get("sell_px"))
         self.assertLess(float(out["sell_px"]), 10.5)

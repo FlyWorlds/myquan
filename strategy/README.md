@@ -9,7 +9,7 @@
 
 因子13B 熊盾 Top3（🔒锁定对照）：东材 / 珠峰 / 雷赛（[`LOCKED.json`](../backtest/factor13_bear_shield/LOCKED.json)）
 
-- 决策/盯盘买卖看因子26（开盘突破或攻击波买，止损跟分时最高回落）；因子2 默认只挂预警阈值（**回测不注资**）。
+- 决策/盯盘买卖看因子26（**开盘阈值买**；卖=硬保护/中赚波动回落/大赚档位/未到3%次日峰值回落）；因子2 默认只挂预警阈值（**回测不注资**）。
 - 仅开盘突破交易（旧因子1）：`run_open_break` 或切 bindings。
 - 旧版权益注资叠加：`run_strategy1(..., apply_factor2_overlay=True)`（`dd_topup`）。
 - **开闭调参**：改 `bindings.py` / `BacktestConfig` / `DEFAULT_*`，不必改算法。
@@ -91,7 +91,7 @@ strategy/
 | **factor23** | 因子23-最高连板止盈 | 止盈持股 | 策略十五止盈形态 | 最高板≤2 早止盈；3～4 板 10%减半；≥5 放宽；见 [`docs/FACTOR23.md`](../docs/FACTOR23.md) |
 | **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五择时 | 低/中梯度开因子22；高梯度关因子22并上移止盈；见 [`docs/FACTOR24.md`](../docs/FACTOR24.md) |
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡叠加 | 30m 确认止损 + 动态半仓 + 卖飞回补；见 [`docs/FACTOR25.md`](../docs/FACTOR25.md) |
-| **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买/卖成交均 **1m path-dependent**；卖=阶梯10%半仓/15%全清 + 回吐一半 + 峰值回落3%半仓（同分钟半仓一次）+ 昨亏/止盈标记次日开盘下杀1%；池回测近 7 日；见 [`docs/FACTOR26.md`](../docs/FACTOR26.md) |
+| **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买=开盘阈值 1m；卖=硬保护2.5% + 中赚3–10%动态高点回落0.5×20日日频σ + 阶梯10%/15% + 大赚后回落2%清 + 买入日未到3%则次日峰值回落2.5%；买入日盈利≥3%不记、其余都记；池回测近 7 日；见 [`docs/FACTOR26.md`](../docs/FACTOR26.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
@@ -107,7 +107,7 @@ for f in list_factors():
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor26 + factor2 + factor13a + factor16 + factor22 | ✅ 默认 | 开盘/攻击波买、多层止盈 + 回撤预警；三槽（盘中可持3、日最多买2、尾盘空1隔夜最多2、当日卖出禁再买）；定盘池 13A→16 Top20；别名 `open_break3` / `s1` / `策略一` |
+| **strategy1** | 援军战法 | factor26 + factor2 + factor13a + factor16 + factor22 | ✅ 默认 | 开盘阈值买、多层止盈 + 回撤预警；三槽（盘中/隔夜均可持3、日最多买2、当日卖出禁再买）；定盘池 13A→16 Top20；别名 `open_break3` / `s1` / `策略一` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
 | **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮展示+±阈值；回测：首板+gap/量比 · 别名 `s3` |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧 run 别名 `run_strategy9` / `s9` / `策略九` |
@@ -244,6 +244,7 @@ cd backtest && python strategy1.py --no-factor2 --no-open   # 仅因子1
 # 定盘池近 7 日 1 分钟路径（选股日线 / 成交 1m）
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 7 --refresh
+PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack   # 研究：加回攻击波
 cd backtest && python run.py kaicheng --no-open
 # 天通 2026：止损后同日再买 / 因子22 收盘动量对照
 python backtest/tiantong_stop_rebuy_2026/run.py
