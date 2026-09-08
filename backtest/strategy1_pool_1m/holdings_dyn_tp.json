@@ -1,0 +1,53 @@
+[
+  {
+    "code": "600330",
+    "name": "天通股份",
+    "cost": 27.93,
+    "peak": 28.89,
+    "last": 28.89,
+    "day_high_since_buy": 28.89,
+    "dyn_tp": 28.41,
+    "levels_stop": 28.41,
+    "path_stop": 28.06,
+    "old_peak_pct_stop": 28.0233,
+    "unrealized_pct": 3.44,
+    "dist_to_tp_pct": 1.69,
+    "hit_stop": true,
+    "source": "1m",
+    "hard_pct": 0.03
+  },
+  {
+    "code": "600353",
+    "name": "旭光电子",
+    "cost": 32.46,
+    "peak": 33.66,
+    "last": 33.09,
+    "day_high_since_buy": 33.66,
+    "dyn_tp": 33.06,
+    "levels_stop": 33.06,
+    "path_stop": 32.5,
+    "old_peak_pct_stop": 32.8185,
+    "unrealized_pct": 1.94,
+    "dist_to_tp_pct": 0.09,
+    "hit_stop": true,
+    "source": "1m",
+    "hard_pct": 0.025
+  },
+  {
+    "code": "603920",
+    "name": "世运电路",
+    "cost": 37.22,
+    "peak": 39.0,
+    "last": 38.6,
+    "day_high_since_buy": 39.0,
+    "dyn_tp": 38.11,
+    "levels_stop": 38.11,
+    "path_stop": 37.54,
+    "old_peak_pct_stop": 37.83,
+    "unrealized_pct": 3.71,
+    "dist_to_tp_pct": 1.29,
+    "hit_stop": true,
+    "source": "1m",
+    "hard_pct": 0.03
+  }
+]

@@ -2,7 +2,7 @@
 
 策略锁定 · 策略一：
   · 买（因子26）：开盘突破 或 攻击波(当日最低+entry)；前日阴/小阳；禁双阳；T+1
-  · 卖（因子26）：1 分钟顺序抬高最高再判回落止损；禁止全日 low×抬高后止损
+  · 卖（因子26）：浮盈回落一半（持仓最高相对成本）；未浮盈成本硬保护；1 分钟 path-dependent
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：止损后收盘动量可同日再买
   · 9:15 清空非实仓盯盘状态；9:30 起触发买卖/止损
@@ -12,12 +12,11 @@
 
 功能：
   · 拉取当日实时行情（东财 SSE + 新浪批量；全池不串行拉历史分钟）
-  · 因子26 实仓/近止损：缓存拉当日 1 分钟 K，按时间顺序判止损触达
-  · 阈值与信号：因子26 回落波止损（开盘突破或攻击波买；止损跟分时最高回落）
-  · 因子26 与 strategy1 bindings / pullback_wave_stop 同源
+  · 因子26 实仓：按成本+持仓峰值算动态止盈价；1 分钟顺序判触达
+  · 阈值与信号：因子26 浮盈回落一半（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
-  · 有仓：回落波止损自动结算（全清）；空仓：已触买/将买入建议限价
-  · 本地 JSON 记录持仓；T+1 买入日不可卖
+  · 有仓：动态止盈触达自动结算（全清）；空仓：已触买/将买入建议限价
+  · 本地 JSON 记录持仓（含 peak_high）；T+1 买入日不可卖
 
 用法：
   python index.py              # 终端查看行情 + 持仓（若 watch 在跑则同步 JSON 并打开前端）
@@ -139,14 +138,14 @@ from watch_config import (
 )
 from watch_snapshot import build_watch_snapshot
 
-# 盯盘与回测共用：默认策略一 = 因子26（回落波止损）+ 因子2 + 因子22
+# 盯盘与回测共用：默认策略一 = 因子26（浮盈回落一半）+ 因子2 + 因子22
 # 标的池唯一真源：watch_config.WATCHLIST
 FACTOR2_ID = "factor2"
 
 _STRATEGY_FACTORS_LABEL = (
     "因子1买卖 + 因子4牛市持股"
     if USE_FACTOR4
-    else "因子26回落波止损 + 因子2回撤预警 + 因子22收盘动量 · 13A+16池"
+    else "因子26浮盈回落一半 + 因子2回撤预警 + 因子22收盘动量 · 13A+16池"
 )
 _STRATEGY_SYNC_NOTE = (
     "与 strategy3/strategy4 bindings / bull_regime 同源"
@@ -164,7 +163,7 @@ def strategy_levels(
     high_px: float | None = None,
     **kw: Any,
 ) -> dict[str, Any]:
-    """策略一默认因子26：止损跟分时最高；其它仍用开盘±。"""
+    """策略一默认因子26：有仓按成本+峰值算浮盈回落一半卖价；其它仍用开盘±。"""
     if str(FACTOR_ID) == "factor26":
         return _levels_f26(
             open_px,
@@ -1146,10 +1145,13 @@ def _resolve_hit_stop_path_dependent(
     stop_px: float,
     since_ts: str | None = None,
     seed_high: float | None = None,
+    cost_px: float | None = None,
 ) -> dict[str, Any]:
-    """止损触达：优先 1 分钟顺序；无分钟时仅 last≤当前止损（禁止全日 low 假触）。
+    """动态止盈触达：优先 1 分钟顺序；无分钟时仅 last≤当前卖价。
 
-    since_ts / seed_high：实仓从买入时刻起算（避免买入前路径误报已触止损）。
+    since_ts：实仓从买入时刻起算。
+    seed_high：持仓峰值初值（成本/已记 peak/今日高）。
+    cost_px：买入成本（浮盈回落一半锚；勿把 peak 当成本）。
     """
     bars = quote.get("_day_bars")
     if not isinstance(bars, pd.DataFrame) or bars.empty:
@@ -1173,7 +1175,7 @@ def _resolve_hit_stop_path_dependent(
             live_low=last if last > 0 else None,
             since_ts=since_ts,
             seed_high=seed_high,
-            cost_px=seed_high,
+            cost_px=cost_px if cost_px is not None else None,
         )
         touch = float(pd_hit.get("touch_stop") or 0)
         if bool(pd_hit.get("hit_stop")) and touch <= 0:
@@ -1183,17 +1185,19 @@ def _resolve_hit_stop_path_dependent(
             "bars": bars,
             "touch_stop": touch,
             "stop_px": float(pd_hit.get("stop_px") or stop_px or 0),
+            "running_high": float(pd_hit.get("running_high") or 0),
             "source": str(pd_hit.get("source") or "1m"),
         }
 
     stop_now = float(stop_px or 0)
-    # 无分钟：T+1/有 since 时仅现价破止损才算（更严，防误报）
+    # 无分钟：仅现价破卖价才算（更严，防误报）
     hit = bool(stop_now > 0 and last <= stop_now + 1e-12)
     return {
         "hit_stop": hit,
         "bars": bars,
         "touch_stop": stop_now if hit else 0.0,
         "stop_px": stop_now,
+        "running_high": float(seed_high or high or 0),
         "source": "last_vs_stop",
     }
 
@@ -3042,9 +3046,19 @@ def collect_rows(
                     stop_px=float(lv["stop"]),
                     since_ts=since_stop,
                     seed_high=seed_h,
+                    cost_px=cost_h,
                 )
                 hit_eff_stop = bool(path_res.get("hit_stop"))
                 path_touch_stop = float(path_res.get("touch_stop") or 0)
+                # 有仓：展示卖价与 path 一致（1m 峰值可能高于快照 high）
+                if qty_early > 0:
+                    try:
+                        path_stop = float(path_res.get("stop_px") or 0)
+                        if path_stop > 0:
+                            lv["stop"] = path_stop
+                            lv_base["stop"] = path_stop
+                    except (TypeError, ValueError):
+                        pass
                 # 刷新持仓峰值（供次日浮盈回落一半）
                 if qty_early > 0:
                     try:
@@ -3072,6 +3086,7 @@ def collect_rows(
                         stop_px=float(lv_base["stop"]),
                         since_ts=since_stop,
                         seed_high=seed_h,
+                        cost_px=cost_h,
                     )
                     hit_base_stop = bool(base_res.get("hit_stop"))
                 else:
