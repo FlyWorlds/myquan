@@ -1,9 +1,9 @@
 {
   "summary": {
     "window_days": 7,
-    "n_pool": 25,
-    "n_with_rounds": 24,
-    "equal_weight_pnl_pct": 1.8,
+    "n_pool": 24,
+    "n_with_rounds": 23,
+    "equal_weight_pnl_pct": 1.77,
     "portfolio": {
       "window_days": 7,
       "calendar": [
@@ -18,14 +18,14 @@
       "max_slots": 3,
       "slot_weight": 0.3,
       "initial_cash": 100000.0,
-      "final_equity": 102537.0,
-      "return_pct": 2.54,
+      "final_equity": 99930.0,
+      "return_pct": -0.07,
       "n_buys": 14,
       "n_sells": 12,
       "n_closed": 12,
-      "avg_closed_pnl_pct": 0.99,
+      "avg_closed_pnl_pct": 0.21,
       "n_open": 2,
-      "n_skipped_or_queued": 63,
+      "n_skipped_or_queued": 59,
       "exit_mode": "half_gain",
       "reserve_empty": 1,
       "max_overnight": 2,
@@ -193,58 +193,6 @@
           "px": 13.99,
           "ts": "2026-09-03 10:28:00",
           "note": "stop_noted"
-        }
-      ]
-    },
-    {
-      "code": "603626",
-      "name": "科森科技",
-      "sina": "sh603626",
-      "entry_pct": 0.025,
-      "pullback_pct": 0.025,
-      "days_used": 7,
-      "holding": true,
-      "n_trades": 5,
-      "n_rounds": 2,
-      "pnl_pct": 2.3,
-      "last_side": "buy",
-      "last_px": 18.76,
-      "last_date": "2026-09-07",
-      "trades": [
-        {
-          "date": "2026-08-31",
-          "side": "buy",
-          "px": 19.33,
-          "ts": "2026-08-31 09:33:00",
-          "kind": "attack"
-        },
-        {
-          "date": "2026-09-01",
-          "side": "sell",
-          "px": 20.21,
-          "ts": "2026-09-01 13:41:00",
-          "note": "stop_noted"
-        },
-        {
-          "date": "2026-09-02",
-          "side": "buy",
-          "px": 19.92,
-          "ts": "2026-09-02 09:34:00",
-          "kind": "attack"
-        },
-        {
-          "date": "2026-09-03",
-          "side": "sell",
-          "px": 19.49,
-          "ts": "2026-09-03 09:31:00",
-          "note": "stop_noted"
-        },
-        {
-          "date": "2026-09-07",
-          "side": "buy",
-          "px": 18.76,
-          "ts": "2026-09-07 09:31:00",
-          "kind": "open"
         }
       ]
     },
@@ -1334,12 +1282,12 @@
     },
     {
       "date": "2026-09-02",
-      "ts": "2026-09-02 09:34:00",
+      "ts": "2026-09-02 09:37:00",
       "side": "buy",
-      "code": "603626",
-      "name": "科森科技",
-      "px": 19.92,
-      "shares": 1500,
+      "code": "002636",
+      "name": "金安国纪",
+      "px": 72.78,
+      "shares": 400,
       "kind": "attack",
       "source": "trigger",
       "slots_after": 3
@@ -1360,11 +1308,11 @@
       "date": "2026-09-03",
       "ts": "2026-09-03 09:31:00",
       "side": "sell",
-      "code": "603301",
-      "name": "振德医疗",
-      "px": 79.8,
-      "shares": 300,
-      "pnl_pct": -0.02,
+      "code": "002636",
+      "name": "金安国纪",
+      "px": 71.5,
+      "shares": 400,
+      "pnl_pct": -0.0176,
       "exit_reason": "noted_gap_open",
       "slots_after": 1
     },
@@ -1372,11 +1320,11 @@
       "date": "2026-09-03",
       "ts": "2026-09-03 09:31:00",
       "side": "sell",
-      "code": "603626",
-      "name": "科森科技",
-      "px": 19.49,
-      "shares": 1500,
-      "pnl_pct": -0.0216,
+      "code": "603301",
+      "name": "振德医疗",
+      "px": 79.8,
+      "shares": 300,
+      "pnl_pct": -0.02,
       "exit_reason": "noted_gap_open",
       "slots_after": 0
     },
@@ -1490,12 +1438,12 @@
     },
     {
       "date": "2026-09-07",
-      "ts": "2026-09-07 09:31:00",
+      "ts": "2026-09-07 09:32:00",
       "side": "buy",
-      "code": "603626",
-      "name": "科森科技",
-      "px": 18.75,
-      "shares": 1500,
+      "code": "600330",
+      "name": "天通股份",
+      "px": 27.93,
+      "shares": 1000,
       "kind": "attack",
       "source": "trigger",
       "slots_after": 2
@@ -1519,10 +1467,22 @@
       "code": "002104",
       "name": "恒宝股份",
       "px": 13.38,
-      "shares": 2300,
+      "shares": 2200,
       "kind": "attack",
       "source": "trigger",
       "slots_after": 2
+    },
+    {
+      "date": "2026-09-08",
+      "ts": "2026-09-08 09:33:00",
+      "side": "sell",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 29.59,
+      "shares": 1000,
+      "pnl_pct": 0.0594,
+      "exit_reason": "noted_open_dump",
+      "slots_after": 1
     },
     {
       "date": "2026-09-08",
@@ -1534,18 +1494,6 @@
       "shares": 1700,
       "kind": "attack",
       "source": "trigger",
-      "slots_after": 3
-    },
-    {
-      "date": "2026-09-08",
-      "ts": "2026-09-08 14:57:00",
-      "side": "sell",
-      "code": "603626",
-      "name": "科森科技",
-      "px": 21.69,
-      "shares": 1500,
-      "pnl_pct": 0.1568,
-      "exit_reason": "eod_reserve_slot",
       "slots_after": 2
     }
   ],
@@ -1568,43 +1516,43 @@
     },
     {
       "date": "2026-09-02",
-      "equity": 101492.0,
-      "cash": 48578.0,
+      "equity": 101200.0,
+      "cash": 49346.0,
       "n_pos": 2,
-      "codes": "603301,603626",
-      "ret_pct": 1.49
+      "codes": "002636,603301",
+      "ret_pct": 1.2
     },
     {
       "date": "2026-09-03",
-      "equity": 101657.0,
-      "cash": 42854.0,
+      "equity": 101790.0,
+      "cash": 42987.0,
       "n_pos": 2,
       "codes": "002922,600338",
-      "ret_pct": 1.66
+      "ret_pct": 1.79
     },
     {
       "date": "2026-09-04",
-      "equity": 100228.0,
-      "cash": 44879.0,
+      "equity": 100361.0,
+      "cash": 45012.0,
       "n_pos": 2,
       "codes": "002104,002636",
-      "ret_pct": 0.23
+      "ret_pct": 0.36
     },
     {
       "date": "2026-09-07",
-      "equity": 100496.0,
-      "cash": 42902.0,
+      "equity": 100134.0,
+      "cash": 43230.0,
       "n_pos": 2,
-      "codes": "600967,603626",
-      "ret_pct": 0.5
+      "codes": "600330,600967",
+      "ret_pct": 0.13
     },
     {
       "date": "2026-09-08",
-      "equity": 102537.0,
-      "cash": 43229.0,
+      "equity": 99930.0,
+      "cash": 41950.0,
       "n_pos": 2,
       "codes": "002015,002104",
-      "ret_pct": 2.54
+      "ret_pct": -0.07
     }
   ],
   "open_positions": [
@@ -1614,7 +1562,7 @@
       "buy_day": "2026-09-08",
       "buy_px": 13.38,
       "last_px": 13.28,
-      "shares": 2300,
+      "shares": 2200,
       "pnl_pct": -0.0075
     },
     {
@@ -1644,16 +1592,6 @@
       "code": "601609",
       "name": "金田股份",
       "px": 12.82,
-      "kind": "attack",
-      "source": "trigger",
-      "reason": "max_buys_per_day"
-    },
-    {
-      "day": "2026-08-31",
-      "ts": "2026-08-31 09:33:00",
-      "code": "603626",
-      "name": "科森科技",
-      "px": 19.33,
       "kind": "attack",
       "source": "trigger",
       "reason": "max_buys_per_day"
@@ -1784,16 +1722,6 @@
       "code": "000581",
       "name": "威孚高科",
       "px": 18.39,
-      "kind": "attack",
-      "source": "trigger",
-      "reason": "max_buys_per_day"
-    },
-    {
-      "day": "2026-09-02",
-      "ts": "2026-09-02 09:37:00",
-      "code": "002636",
-      "name": "金安国纪",
-      "px": 72.78,
       "kind": "attack",
       "source": "trigger",
       "reason": "max_buys_per_day"
@@ -1981,16 +1909,6 @@
     {
       "day": "2026-09-03",
       "ts": "2026-09-03 14:03:00",
-      "code": "002636",
-      "name": "金安国纪",
-      "px": 69.37,
-      "kind": "attack",
-      "source": "trigger",
-      "reason": "max_buys_per_day"
-    },
-    {
-      "day": "2026-09-03",
-      "ts": "2026-09-03 14:03:00",
       "code": "600552",
       "name": "凯盛科技",
       "px": 17.41,
@@ -2074,16 +1992,6 @@
       "code": "600330",
       "name": "天通股份",
       "px": 27.39,
-      "kind": "attack",
-      "source": "trigger",
-      "reason": "max_buys_per_day"
-    },
-    {
-      "day": "2026-09-07",
-      "ts": "2026-09-07 09:32:00",
-      "code": "600330",
-      "name": "天通股份",
-      "px": 27.93,
       "kind": "attack",
       "source": "trigger",
       "reason": "max_buys_per_day"
