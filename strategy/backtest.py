@@ -25,7 +25,7 @@ from strategy.open_break import (
     should_block_entry_by_yang,
     stop_trigger_price,
 )
-from strategy.pullback_wave_stop import half_gain_stop_price, pullback_stop_price
+from strategy.pullback_wave_stop import half_gain_stop_price
 
 
 class OpenBreak3Strategy(Strategy):
