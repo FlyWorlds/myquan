@@ -120,6 +120,91 @@ def test_half_gain_after_peak():
     assert float(out["touch_stop"]) < old
 
 
+def test_multi_tp_ladder_and_peak_once():
+    """规则1+3：同分钟只半仓一次；X=3%；15%全清优先。"""
+    ev = _m.eval_multi_tp_bar
+    # 10% 半仓
+    r = ev(
+        bar_open=100.0,
+        bar_high=111.0,
+        bar_low=110.5,
+        cost_px=100.0,
+        peak_before=100.0,
+        shares=1000,
+        can_sell=True,
+    )
+    assert r["action"]["kind"] == "half"
+    assert r["action"]["reason"] == "ladder_half_10"
+    assert r["action"]["shares"] == 500
+    assert abs(float(r["action"]["fill_px"]) - 110.0) < 1e-9
+    # 15% 全清
+    r15 = ev(
+        bar_open=100.0,
+        bar_high=116.0,
+        bar_low=115.0,
+        cost_px=100.0,
+        peak_before=100.0,
+        shares=1000,
+        can_sell=True,
+    )
+    assert r15["action"]["kind"] == "full"
+    assert r15["action"]["reason"] == "ladder_full_15"
+    # 峰值回落 3%（高未到 10%）
+    r3 = ev(
+        bar_open=109.0,
+        bar_high=109.5,
+        bar_low=106.6,
+        cost_px=100.0,
+        peak_before=110.0,
+        shares=1000,
+        can_sell=True,
+        tp_stage=0,
+    )
+    assert r3["action"]["kind"] == "half"
+    assert r3["action"]["reason"] == "peak_pullback_half"
+    # 同分钟既触 10% 又触峰值回落 → 只减一次，优先阶梯
+    both = ev(
+        bar_open=110.0,
+        bar_high=111.0,
+        bar_low=106.6,
+        cost_px=100.0,
+        peak_before=110.0,
+        shares=1000,
+        can_sell=True,
+    )
+    assert both["action"]["kind"] == "half"
+    assert both["action"]["reason"] == "ladder_half_10"
+    # 已半仓后再触峰值 → 清剩余
+    clr = ev(
+        bar_open=109.0,
+        bar_high=109.5,
+        bar_low=106.6,
+        cost_px=100.0,
+        peak_before=110.0,
+        shares=500,
+        can_sell=True,
+        tp_stage=1,
+    )
+    assert clr["action"]["kind"] == "full"
+    assert "clear" in clr["action"]["reason"]
+
+
+def test_multi_tp_overnight_dump():
+    r = _m.eval_multi_tp_bar(
+        bar_open=100.0,
+        bar_high=100.5,
+        bar_low=98.9,
+        cost_px=100.0,
+        peak_before=105.0,
+        shares=1000,
+        can_sell=True,
+        overnight_armed=True,
+        day_open=100.0,
+    )
+    assert r["action"]["kind"] == "full"
+    assert r["action"]["reason"] == "overnight_open_dump"
+
+
 def test_live_last_half_gain():
     bars = _bars([(110.0, 109.0)])
     bad = path_dependent_pullback_hit(

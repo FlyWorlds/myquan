@@ -41,29 +41,32 @@ from strategy.open_break import (
 DEFAULT_ENTRY_PCT = DEFAULT_PCT
 DEFAULT_PULLBACK_PCT = DEFAULT_PCT  # 未浮盈时的成本硬保护
 DEFAULT_GIVEBACK_RATIO = 0.5  # 浮盈回落一半
+DEFAULT_LADDER_HALF_PCT = 0.10  # 规则1：浮盈 10% 卖一半
+DEFAULT_LADDER_FULL_PCT = 0.15  # 规则1：浮盈 15% 全清
+DEFAULT_PEAK_PULLBACK_X = 0.03  # 规则3：峰值回落 3% 清一半
+DEFAULT_NOTED_DUMP_PCT = 0.01  # 规则4 / 已记：开盘下杀 1%
 
 STRATEGY_RULES = """
 ================================================================================
-  因子26 · 浮盈回落一半止盈（买=开盘突破或攻击波）
+  因子26 · 多层止盈（买=开盘突破或攻击波）
 ================================================================================
 
 【空仓 · 买入】两条任一触发（过滤同因子1：前日阴/小阳；禁双阳；T+1）
   A) 开盘突破：当日最高 >= ceil(开盘 × (1+阈值))，按该触发价限价买
   B) 攻击波：  须先有更早分钟低点，再 high >= ceil(此前最低 × (1+阈值))（禁止同根 K 自造）
 
-【有仓 · 卖出】
-  卖价 = 浮盈回落一半（持仓以来最高相对成本）：
-    · 已浮盈：floor(成本 + 0.5×(持仓最高 − 成本))
-    · 未浮盈：floor(成本 × (1 − 硬保护阈值))，默认硬保护 2.5%
-  · 触达判定：按 1 分钟 K 顺序 —— 先用「此前最高」算卖价，再看该分钟最低是否跌破；
-    然后才用本分钟最高抬升 peak（禁止全日 low 对抬高后卖价）
-  · 买入当日不可卖（除非 t0）。若当日已触止损：只「止损已记」；
-    次日低开跌破已记→开盘市价卖；高开则等从开盘下杀 1%，未下杀继续浮盈回落一半
-    （一字跌停封死则等开板）
+【有仓 · 卖出】同分钟优先级（全清优先于半仓；半仓同分钟只减一次）：
+  1) 隔夜武装（昨亏 / 昨止盈标记 / 止损已记）→ 开盘下杀 1% 全清
+  2) 阶梯：浮盈 ≥15% → 可卖全清
+  3) T+1 后利润回吐一半（相对峰值）→ 全清；未浮盈成本硬保护 2.5%
+  4) 阶梯 10% 半仓 与 峰值回落 3% 半仓：同分钟只减一次
+     （已半仓后再触半仓条件 → 剩余全清）
+  5) 抬升持仓最高 peak
+  · 买入当日不可卖：只记 tp_marked / stop_noted；次日走隔夜规则
+  · 半仓不足 200 股则改为全清
 
-【默认】entry 2.5%；giveback 50%；未浮盈硬保护 2.5%。
+【默认】entry 2.5%；阶梯 10%/15%；峰值回落 3%；giveback 50%；硬保护 2.5%。
 【说明】选股/过滤用日线；成交触达用 1 分钟 path-dependent（定盘池短窗约 7 日）。
-  长窗日线回测仍有同 bar 次序偏差。
 ================================================================================
 """
 
@@ -126,6 +129,197 @@ def exit_stop_price(
     return pullback_stop_price(peak, pullback_pct=hard_pct, tick=tick)
 
 
+def lot_half_shares(shares: int) -> int:
+    """半仓股数：向下取整到 100；不足 200 股则全额（无法半仓）。"""
+    sh = max(0, int(shares))
+    if sh < 200:
+        return sh
+    return (sh // 2 // 100) * 100
+
+
+def ladder_target_price(
+    cost_px: float,
+    *,
+    gain_pct: float,
+    tick: float = TICK_SIZE,
+) -> float:
+    """阶梯止盈目标价：成本 × (1+gain_pct)。"""
+    c = float(cost_px)
+    if c <= 0:
+        return 0.0
+    return floor_to_tick(c * (1.0 + float(gain_pct)), tick)
+
+
+def peak_pullback_half_price(
+    peak_high: float,
+    *,
+    pullback_x: float = DEFAULT_PEAK_PULLBACK_X,
+    tick: float = TICK_SIZE,
+) -> float:
+    """规则3：峰值回落 X 的半仓线。"""
+    return pullback_stop_price(peak_high, pullback_pct=pullback_x, tick=tick)
+
+
+def overnight_open_dump_fill(
+    *,
+    day_open: float,
+    bar_low: float,
+    dump_pct: float = DEFAULT_NOTED_DUMP_PCT,
+    tick: float = TICK_SIZE,
+) -> dict[str, Any]:
+    """规则4：基于开盘价下杀 dump_pct 全清（不依赖已记价）。"""
+    out = {"hit": False, "fill_px": 0.0, "reason": ""}
+    o = float(day_open or 0)
+    lo = float(bar_low or 0)
+    if o <= 0 or lo <= 0:
+        return out
+    dump_stop = open_dump_stop_price(o, dump_pct=dump_pct, tick=tick)
+    if dump_stop > 0 and lo <= dump_stop + 1e-12:
+        fill = o if o <= dump_stop + 1e-12 else dump_stop
+        return {"hit": True, "fill_px": float(fill), "reason": "overnight_open_dump"}
+    return out
+
+
+def eval_multi_tp_bar(
+    *,
+    bar_open: float,
+    bar_high: float,
+    bar_low: float,
+    cost_px: float,
+    peak_before: float,
+    shares: int,
+    tp_stage: int = 0,
+    can_sell: bool = True,
+    overnight_armed: bool = False,
+    day_open: float | None = None,
+    giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    hard_pct: float = DEFAULT_PULLBACK_PCT,
+    ladder_half_pct: float = DEFAULT_LADDER_HALF_PCT,
+    ladder_full_pct: float = DEFAULT_LADDER_FULL_PCT,
+    peak_pullback_x: float = DEFAULT_PEAK_PULLBACK_X,
+    dump_pct: float = DEFAULT_NOTED_DUMP_PCT,
+    tick: float = TICK_SIZE,
+) -> dict[str, Any]:
+    """单根 1m：多层止盈判定（不含「止损已记」专用缺口逻辑）。
+
+    返回：
+      action: None | {kind: full|half, reason, fill_px, shares}
+      tp_marked: 当日应触止盈但因 T+1 未卖
+      noted_px: 建议记入的止损/止盈价（T+1）
+      peak_after: 本 bar 结束后峰值
+    """
+    cost = float(cost_px)
+    h = float(bar_high)
+    lo = float(bar_low)
+    bar_o = float(bar_open or 0)
+    day_o = float(day_open) if day_open is not None and float(day_open) > 0 else bar_o
+    peak = max(float(peak_before or 0), cost) if cost > 0 else float(peak_before or 0)
+    stage = max(0, int(tp_stage))
+    sh = max(0, int(shares))
+    empty = {
+        "action": None,
+        "tp_marked": False,
+        "noted_px": None,
+        "peak_after": max(peak, h) if h > 0 else peak,
+    }
+    if cost <= 0 or sh <= 0 or h <= 0 or lo <= 0:
+        return empty
+
+    def _full(reason: str, px: float, *, downside: bool = True) -> dict[str, Any]:
+        fill = float(px)
+        if downside and bar_o > 0 and bar_o <= fill + 1e-12:
+            fill = float(bar_o)
+        return {
+            "action": {
+                "kind": "full",
+                "reason": reason,
+                "fill_px": fill,
+                "shares": sh,
+            },
+            "tp_marked": True,
+            "noted_px": float(px),
+            "peak_after": max(peak, h),
+        }
+
+    def _half(reason: str, px: float, *, downside: bool = True) -> dict[str, Any]:
+        sell_n = lot_half_shares(sh)
+        if sell_n >= sh:
+            return _full(reason, px, downside=downside)
+        fill = float(px)
+        if downside and bar_o > 0 and bar_o <= fill + 1e-12:
+            fill = float(bar_o)
+        return {
+            "action": {
+                "kind": "half",
+                "reason": reason,
+                "fill_px": fill,
+                "shares": sell_n,
+            },
+            "tp_marked": True,
+            "noted_px": float(px),
+            "peak_after": max(peak, h),
+        }
+
+    def _mark(px: float) -> dict[str, Any]:
+        return {
+            "action": None,
+            "tp_marked": True,
+            "noted_px": float(px),
+            "peak_after": max(peak, h),
+        }
+
+    # 1) 隔夜武装：开盘下杀
+    if overnight_armed:
+        od = overnight_open_dump_fill(
+            day_open=day_o, bar_low=lo, dump_pct=dump_pct, tick=tick
+        )
+        if od.get("hit"):
+            if can_sell:
+                return _full(str(od["reason"]), float(od["fill_px"]))
+            return _mark(float(od["fill_px"]))
+
+    ladder15 = ladder_target_price(cost, gain_pct=ladder_full_pct, tick=tick)
+    ladder10 = ladder_target_price(cost, gain_pct=ladder_half_pct, tick=tick)
+
+    # 2) 阶梯 15% 全清（上破）
+    if ladder15 > 0 and h + 1e-12 >= ladder15:
+        if can_sell:
+            return _full("ladder_full_15", ladder15, downside=False)
+        return _mark(ladder15)
+
+    # 3) 利润回吐一半 / 硬保护（下破）
+    giveback = half_gain_stop_price(
+        peak, cost, giveback_ratio=giveback_ratio, hard_pct=hard_pct, tick=tick
+    )
+    if giveback > 0 and lo <= giveback + 1e-12:
+        reason = "half_gain" if peak > cost + 1e-12 else "hard_from_cost"
+        if can_sell:
+            return _full(reason, giveback, downside=True)
+        return _mark(giveback)
+
+    # 4) 半仓：10% 阶梯 或 峰值回落 X（同分钟只一次）
+    peak_line = peak_pullback_half_price(peak, pullback_x=peak_pullback_x, tick=tick)
+    hit_ladder10 = ladder10 > 0 and h + 1e-12 >= ladder10
+    hit_peak_half = peak > cost + 1e-12 and peak_line > 0 and lo <= peak_line + 1e-12
+    if hit_ladder10 or hit_peak_half:
+        reason = "ladder_half_10" if hit_ladder10 else "peak_pullback_half"
+        px = ladder10 if hit_ladder10 else peak_line
+        downside = not hit_ladder10
+        if stage >= 1:
+            # 已半仓后再触 → 剩余全清
+            if can_sell:
+                return _full(reason + "_clear", px, downside=downside)
+            return _mark(px)
+        if can_sell:
+            return _half(reason, px, downside=downside)
+        return _mark(px)
+
+    return empty
+
+
+# open_dump_stop_price 定义在文件后部；overnight 调用前需已定义。
+# 若静态检查顺序问题，将在 DEFAULT_NOTED 段之后不依赖前向引用——
+# 实际 Python 运行时 overnight_open_dump_fill 被调用时函数已存在。
 def path_dependent_pullback_hit(
     bars: pd.DataFrame | None,
     *,
@@ -326,11 +520,13 @@ def rules_text(
     giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
 ) -> str:
     return (
-        f"因子26-浮盈回落一半止盈\n"
+        f"因子26-多层止盈\n"
         f"  · 买A：开盘+{entry_pct*100:.1f}%\n"
         f"  · 买B：攻击波=当日最低+{entry_pct*100:.1f}%\n"
-        f"  · 卖：浮盈回落 {giveback_ratio*100:.0f}%（未浮盈成本保护 {pullback_pct*100:.1f}%）\n"
-        f"  · 默认绑策略一"
+        f"  · 卖：阶梯{DEFAULT_LADDER_HALF_PCT*100:.0f}%半/"
+        f"{DEFAULT_LADDER_FULL_PCT*100:.0f}%全 + 回吐{giveback_ratio*100:.0f}% + "
+        f"峰值回落{DEFAULT_PEAK_PULLBACK_X*100:.0f}%半仓 + 隔夜下杀1%\n"
+        f"  · 未浮盈硬保护 {pullback_pct*100:.1f}%；默认绑策略一"
     )
 
 
@@ -878,7 +1074,6 @@ NOTED_MODE_SELL_OPEN = "sell_open"
 NOTED_MODE_GAP_DUMP = "gap_dump"
 NOTED_MODE_CONTINUE = "continue_f26"
 NOTED_MODE_WAIT_NOTED = "wait_noted"
-DEFAULT_NOTED_DUMP_PCT = 0.01
 
 
 def open_dump_stop_price(
@@ -1331,10 +1526,19 @@ __all__ = [
     "DEFAULT_ENTRY_PCT",
     "DEFAULT_PULLBACK_PCT",
     "DEFAULT_GIVEBACK_RATIO",
+    "DEFAULT_LADDER_HALF_PCT",
+    "DEFAULT_LADDER_FULL_PCT",
+    "DEFAULT_PEAK_PULLBACK_X",
+    "DEFAULT_NOTED_DUMP_PCT",
     "STRATEGY_RULES",
     "pullback_stop_price",
     "half_gain_stop_price",
     "exit_stop_price",
+    "lot_half_shares",
+    "ladder_target_price",
+    "peak_pullback_half_price",
+    "overnight_open_dump_fill",
+    "eval_multi_tp_bar",
     "path_dependent_pullback_hit",
     "path_dependent_buy_hit",
     "attack_buy_trigger_price",

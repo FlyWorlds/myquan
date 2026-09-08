@@ -65,6 +65,7 @@ from strategy.pullback_wave_stop import (  # noqa: E402
     attack_buy_trigger_price,
     delayed_t1_stop_fill_px,
     entry_trigger_price,
+    eval_multi_tp_bar,
     is_one_word_bar,
     noted_next_day_fill,
     pullback_stop_price,
@@ -242,6 +243,9 @@ class _Pos:
     kind: str | None = None
     peak_high: float = 0.0  # 持仓以来最高（用于收益回落一半）
     stop_noted_px: float | None = None  # T+1 止损已触发（次日市价离场，不是按该价成交）
+    tp_stage: int = 0  # 0=未半仓；1=已阶梯/峰值半仓
+    tp_marked: bool = False  # 当日触止盈条件（含 T+1 未卖）
+    yday_loss: bool = False  # 昨收相对成本亏损 → 次日隔夜武装
 
 
 def _exit_stop_px(
@@ -298,6 +302,8 @@ class _DayState:
     sold_today: bool = False
     noted_lock_wait: bool = False
     noted_first_exec: bool = True
+    overnight_armed: bool = False  # 昨亏/昨止盈标记/已记 → 开盘下杀
+    overnight_first: bool = True
 
 
 def _lot_shares(budget: float, price: float) -> int:
@@ -547,6 +553,12 @@ def simulate_portfolio_3slots(
                 continue
             # 持仓票不再找新买点
             states[code].buy_armed = False
+            # 规则4：昨亏 / 昨止盈标记 / 止损已记 → 隔夜武装开盘下杀
+            noted0 = float(pos.stop_noted_px or 0) if pos.stop_noted_px else 0.0
+            states[code].overnight_armed = bool(
+                noted0 > 0 or pos.tp_marked or pos.yday_loss
+            )
+            pos.tp_marked = False  # 当日重新累计；武装已吃进 overnight_armed
 
         # 合并时间线
         timeline: list[tuple[pd.Timestamp, str, float, float, float]] = []
@@ -598,46 +610,111 @@ def simulate_portfolio_3slots(
                 rh = float(st.running_high or 0.0)
                 ph = max(float(pos.peak_high or 0.0), rh)
                 noted = float(pos.stop_noted_px or 0.0) if pos.stop_noted_px else 0.0
-                if can_sell and (not st.sold_today):
-                    # 先兑现「止损已记」：T+1 推迟市价离场（低开按开盘，不是已记价）
-                    if noted > 0:
-                        locked = False
-                        pc = float(sd.prev_close or 0)
-                        if pc > 0:
-                            limit_px = floor_to_tick(pc * 0.9, 0.01)
-                            locked = is_one_word_bar(bar_o, h, lo) and (
-                                abs(float(bar_o) - limit_px) <= 0.01 + 1e-9
-                            )
-                        if locked:
-                            st.noted_lock_wait = True
-                            st.running_low = min(st.running_low, lo)
-                            st.running_high = max(st.running_high, h)
-                            last_px[code] = (h + lo) / 2.0
-                            continue
-                        day_o = (
-                            float(bar_o)
-                            if st.noted_lock_wait
-                            else float(sd.open_px)
+                # 先兑现「止损已记」（可卖日）
+                if can_sell and (not st.sold_today) and noted > 0:
+                    locked = False
+                    pc = float(sd.prev_close or 0)
+                    if pc > 0:
+                        limit_px = floor_to_tick(pc * 0.9, 0.01)
+                        locked = is_one_word_bar(bar_o, h, lo) and (
+                            abs(float(bar_o) - limit_px) <= 0.01 + 1e-9
                         )
-                        dump = (
-                            float(noted_dump_pct)
-                            if noted_dump_pct is not None
-                            else DEFAULT_NOTED_DUMP_PCT
+                    if locked:
+                        st.noted_lock_wait = True
+                        st.running_low = min(st.running_low, lo)
+                        st.running_high = max(st.running_high, h)
+                        last_px[code] = (h + lo) / 2.0
+                        continue
+                    day_o = (
+                        float(bar_o) if st.noted_lock_wait else float(sd.open_px)
+                    )
+                    dump = (
+                        float(noted_dump_pct)
+                        if noted_dump_pct is not None
+                        else DEFAULT_NOTED_DUMP_PCT
+                    )
+                    nxt = noted_next_day_fill(
+                        mode=nmode,
+                        noted_px=noted,
+                        day_open=day_o,
+                        bar_low=lo,
+                        dump_pct=dump,
+                        tick=0.01,
+                        first_executable=bool(st.noted_first_exec),
+                    )
+                    st.noted_first_exec = False
+                    if nxt.get("hit") and float(nxt.get("fill_px") or 0) > 0:
+                        fill = float(nxt["fill_px"])
+                        proceeds = float(fill) * int(pos.shares)
+                        cash += proceeds
+                        trades.append(
+                            {
+                                "date": sess,
+                                "ts": str(ts),
+                                "side": "sell",
+                                "code": code,
+                                "name": pos.name,
+                                "px": float(fill),
+                                "shares": int(pos.shares),
+                                "pnl_pct": round(float(fill) / pos.buy_px - 1.0, 4)
+                                if pos.buy_px
+                                else None,
+                                "exit_reason": str(nxt.get("reason") or "stop_noted"),
+                                "slots_after": len(positions) - 1,
+                            }
                         )
-                        nxt = noted_next_day_fill(
-                            mode=nmode,
-                            noted_px=noted,
-                            day_open=day_o,
-                            bar_low=lo,
-                            dump_pct=dump,
-                            tick=0.01,
-                            first_executable=bool(st.noted_first_exec),
+                        del positions[code]
+                        st.sold_today = True
+                        st.buy_armed = False
+                        st.pending_buy = None
+                        last_px[code] = float(fill)
+                        _try_fill_from_queue(sess, str(ts))
+                        continue
+
+                # 多层止盈：可卖则成交；T+1 只记 tp_marked / stop_noted
+                if code in positions and exit_mode in ("half_gain", "multi_tp"):
+                    dump = (
+                        float(noted_dump_pct)
+                        if noted_dump_pct is not None
+                        else DEFAULT_NOTED_DUMP_PCT
+                    )
+                    noted_now = (
+                        float(positions[code].stop_noted_px or 0)
+                        if positions[code].stop_noted_px
+                        else 0.0
+                    )
+                    armed = bool(st.overnight_armed) and noted_now <= 0
+                    ev = eval_multi_tp_bar(
+                        bar_open=float(bar_o),
+                        bar_high=float(h),
+                        bar_low=float(lo),
+                        cost_px=float(pos.buy_px),
+                        peak_before=float(ph),
+                        shares=int(pos.shares),
+                        tp_stage=int(pos.tp_stage or 0),
+                        can_sell=bool(can_sell) and (not st.sold_today),
+                        overnight_armed=armed and can_sell,
+                        day_open=float(sd.open_px),
+                        hard_pct=float(sd.pullback_pct),
+                        dump_pct=dump,
+                    )
+                    if ev.get("tp_marked"):
+                        pos.tp_marked = True
+                    if (not can_sell) and ev.get("noted_px"):
+                        prev_n = (
+                            float(pos.stop_noted_px or 0) if pos.stop_noted_px else 0.0
                         )
-                        st.noted_first_exec = False
-                        if nxt.get("hit") and float(nxt.get("fill_px") or 0) > 0:
-                            fill = float(nxt["fill_px"])
-                            proceeds = float(fill) * int(pos.shares)
+                        npx = float(ev["noted_px"])
+                        pos.stop_noted_px = npx if prev_n <= 0 else min(prev_n, npx)
+                    act = ev.get("action")
+                    if can_sell and act and code in positions:
+                        fill = float(act["fill_px"])
+                        sell_n = max(0, min(int(act["shares"]), int(pos.shares)))
+                        if sell_n > 0:
+                            proceeds = float(fill) * sell_n
                             cash += proceeds
+                            left_after = int(pos.shares) - sell_n
+                            full_exit = left_after <= 0 or str(act.get("kind")) == "full"
                             trades.append(
                                 {
                                     "date": sess,
@@ -646,24 +723,34 @@ def simulate_portfolio_3slots(
                                     "code": code,
                                     "name": pos.name,
                                     "px": float(fill),
-                                    "shares": int(pos.shares),
+                                    "shares": sell_n,
                                     "pnl_pct": round(float(fill) / pos.buy_px - 1.0, 4)
                                     if pos.buy_px
                                     else None,
-                                    "exit_reason": str(nxt.get("reason") or "stop_noted"),
-                                    "slots_after": len(positions) - 1,
+                                    "exit_reason": str(act.get("reason") or "multi_tp"),
+                                    "slots_after": len(positions) - (1 if full_exit else 0),
                                 }
                             )
-                            del positions[code]
+                            # sold_today：禁同日再买该票；半仓后仍可继续止盈剩余仓
                             st.sold_today = True
-                            st.buy_armed = False  # 当日已记/止损卖出：禁再买
-                            st.pending_buy = None
+                            st.buy_armed = False
+                            if full_exit:
+                                del positions[code]
+                                st.pending_buy = None
+                                st.overnight_armed = False
+                            else:
+                                pos.shares = left_after
+                                pos.tp_stage = 1
                             last_px[code] = float(fill)
-                            _try_fill_from_queue(sess, str(ts))
-                            continue
-                    can_eval = (exit_mode == "half_gain" and ph > 0) or (
-                        exit_mode != "half_gain" and rh > 0
-                    )
+                            if code not in positions:
+                                _try_fill_from_queue(sess, str(ts))
+                                continue
+                elif (
+                    can_sell
+                    and (not st.sold_today)
+                    and exit_mode not in ("half_gain", "multi_tp")
+                ):
+                    can_eval = rh > 0
                     if can_eval:
                         stop, reason = _exit_stop_px(
                             mode=exit_mode,
@@ -673,7 +760,6 @@ def simulate_portfolio_3slots(
                             pullback_pct=sd.pullback_pct,
                         )
                         if stop > 0 and lo <= stop + 1e-12:
-                            # 缺口/开盘已跌破止损价 → 按开盘价成交，禁止虚高用止损价
                             fill = (
                                 float(bar_o)
                                 if bar_o > 0 and bar_o <= stop + 1e-12
@@ -699,16 +785,15 @@ def simulate_portfolio_3slots(
                             )
                             del positions[code]
                             st.sold_today = True
-                            # 当日止损/已记卖出：禁再买该票
                             st.buy_armed = False
                             st.pending_buy = None
                             last_px[code] = float(fill)
                             _try_fill_from_queue(sess, str(ts))
                             continue
-                elif not can_sell:
-                    # T+1：触止损只记，不卖。
-                    # 注意：同日曾卖出再开新仓时 sold_today=True，仍须给新仓记止损
-                    # （可卖仍由 buy_day 约束，不会当日卖掉新仓）
+                elif (
+                    (not can_sell)
+                    and exit_mode not in ("half_gain", "multi_tp")
+                ):
                     stop, _reason = _exit_stop_px(
                         mode=exit_mode,
                         running_high=max(rh, ph, float(pos.buy_px)),
@@ -869,6 +954,10 @@ def simulate_portfolio_3slots(
         for code, sd in day_map.items():
             if sd.close_px:
                 last_px[code] = float(sd.close_px)
+        # 日末：记昨亏标记，供次日规则4隔夜武装
+        for code, pos in list(positions.items()):
+            px = float(last_px.get(code) or pos.buy_px or 0)
+            pos.yday_loss = bool(px > 0 and pos.buy_px > 0 and px < float(pos.buy_px))
         eq = _equity_now()
         equity_rows.append(
             {
@@ -1067,7 +1156,8 @@ def run(
         "## 规则",
         "",
         "- **选股/过滤**：日线（前日阴/小阳、双阳禁买）；因子2 回撤仅预警阈值，不注资",
-        "- **成交**：池内票近 N 交易日 **1 分钟** path-dependent（买=开盘突破或攻击波；卖=分时最高回落）",
+        "- **成交**：池内票近 N 交易日 **1 分钟** path-dependent（买=开盘突破或攻击波；"
+        "卖=多层止盈：阶梯10%/15% + 回吐一半 + 峰值回落3%半仓 + 隔夜下杀1%）",
         f"- **组合**：物理 **{max_slots}** 槽（盘中可持 {max_slots}）；当日最多买 **{MAX_BUYS_PER_DAY}**；"
         f"尾盘空 **{RESERVE_EMPTY_SLOTS}**（隔夜最多 {MAX_OVERNIGHT_SLOTS}）；**先触发买点的先买**；"
         f"每槽约 {SLOT_WEIGHT*100:.0f}% 仓；T+1；槽满触买入队，释放后再按触发先后补；"
