@@ -242,16 +242,16 @@ def simulate_portfolio_3slots(
     max_slots: int = MAX_PORTFOLIO_SLOTS,
     initial_cash: float = DEFAULT_ACCOUNT_TOTAL,
     slot_weight: float = SLOT_WEIGHT,
-    exit_mode: str = "peak_pct",
+    exit_mode: str = "half_gain",
 ) -> dict[str, Any]:
     """三槽组合：1m 路径，先触发买点先买，最多同时持有 max_slots 只。
 
     exit_mode:
-      - peak_pct：峰值回落阈值（因子26 默认）
-      - half_gain：浮盈相对持仓最高回落一半止盈（未浮盈用成本回撤保护）
+      - half_gain：浮盈相对持仓最高回落一半止盈（因子26 默认；未浮盈用成本回撤保护）
+      - peak_pct：旧版峰值回落阈值（对照）
     """
     max_slots = max(1, int(max_slots))
-    exit_mode = str(exit_mode or "peak_pct")
+    exit_mode = str(exit_mode or "half_gain")
     prepared: list[dict[str, Any]] = []
     all_days: set[str] = set()
 

@@ -25,7 +25,7 @@ from strategy.open_break import (
     should_block_entry_by_yang,
     stop_trigger_price,
 )
-from strategy.pullback_wave_stop import pullback_stop_price
+from strategy.pullback_wave_stop import half_gain_stop_price, pullback_stop_price
 
 
 class OpenBreak3Strategy(Strategy):
@@ -43,7 +43,7 @@ class OpenBreak3Strategy(Strategy):
     stamp_tax_rate: float = STAMP_TAX_RATE
     entry_pct: float = ENTRY_PCT
     stop_pct: float = STOP_PCT
-    # open | day_high（因子26 回落波）
+    # open | day_high（因子26 浮盈回落一半，peak 用日高/持仓最高）
     stop_anchor: str = "open"
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT
     tick: float = TICK_SIZE
@@ -250,6 +250,7 @@ class OpenBreak3Strategy(Strategy):
     def _reset_trade_state(self) -> None:
         self.armed = True
         self.entry_price = None
+        self.peak_high = None
         self.buy_day = None
         self.initial_qty = None
         self.tp_done = set()
@@ -579,6 +580,7 @@ class OpenBreak3Strategy(Strategy):
         )
         self.armed = False
         self.entry_price = entry_px
+        self.peak_high = max(float(entry_px), float(high_px or 0))
         self.buy_day = day
         self.bars_held = 0
         gate_note = ""
@@ -625,8 +627,20 @@ class OpenBreak3Strategy(Strategy):
             )
             anchor = str(getattr(self, "stop_anchor", "open") or "open")
             if anchor == "day_high":
-                stop_px = pullback_stop_price(
-                    h, pullback_pct=self.stop_pct, tick=self.tick
+                cost = float(getattr(self, "entry_price", None) or 0.0)
+                if cost <= 0:
+                    cost = float(o)
+                peak = float(getattr(self, "peak_high", None) or 0.0)
+                peak = max(peak, float(h), cost)
+                self.peak_high = peak
+                stop_px = half_gain_stop_price(
+                    peak,
+                    cost,
+                    giveback_ratio=float(
+                        getattr(self, "giveback_ratio", 0.5) or 0.5
+                    ),
+                    hard_pct=self.stop_pct,
+                    tick=self.tick,
                 )
             else:
                 stop_px = stop_trigger_price(o, stop_pct=self.stop_pct, tick=self.tick)
@@ -637,8 +651,17 @@ class OpenBreak3Strategy(Strategy):
             if bull_today and widen > 1.0 and bool(self.factor4_enabled):
                 wide_pct = float(self.stop_pct) * widen
                 if anchor == "day_high":
-                    stop_px_wide = pullback_stop_price(
-                        h, pullback_pct=wide_pct, tick=self.tick
+                    cost = float(getattr(self, "entry_price", None) or o)
+                    peak = float(getattr(self, "peak_high", None) or h)
+                    peak = max(peak, float(h), cost)
+                    stop_px_wide = half_gain_stop_price(
+                        peak,
+                        cost,
+                        giveback_ratio=float(
+                            getattr(self, "giveback_ratio", 0.5) or 0.5
+                        ),
+                        hard_pct=wide_pct,
+                        tick=self.tick,
                     )
                 else:
                     stop_px_wide = stop_trigger_price(
@@ -755,7 +778,7 @@ class OpenBreak3Strategy(Strategy):
                     if bool(limit_state["opened"])
                     else (
                         (
-                            f"最高回落-{self.stop_pct*100:.1f}%止损"
+                            f"浮盈回落一半止盈"
                             f"(high={h:.2f} low={low:.2f})"
                         )
                         if str(getattr(self, "stop_anchor", "open") or "open")

@@ -1,4 +1,4 @@
-"""援军战法 · 决策层：因子26（回落波止损）买卖；因子22 止损后收盘动量再买。"""
+"""援军战法 · 决策层：因子26（浮盈回落一半）买卖；因子22 止损后收盘动量再买。"""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ class Strategy1Decision(BaseDecisionEngine):
     """
     决策规则：
     - 空仓 + 因子允许 + high 触开盘买点或攻击波买点 → buy（因子26）
-    - 有仓 + 非 T+1 + low 触回落波止损（分时最高×(1−pct)）→ sell；
+    - 有仓 + 非 T+1 + low 触浮盈回落一半卖价 → sell；
       若同日收盘动量成立 → buy（因子22，隐含先止损再买）
     - 空仓 + 当日已止损（meta.stop_sold_today）+ 收盘动量 → buy（因子22）
     - 其余 → hold
@@ -37,14 +37,30 @@ class Strategy1Decision(BaseDecisionEngine):
         pullback = float(
             params.get("pullback_pct", params.get("stop_pct", entry_pct))
         )
+        giveback = float(params.get("giveback_ratio", 0.5))
         tick = float(params.get("tick", 0.01))
+        cost = None
+        if ctx.entry_price is not None and float(ctx.entry_price) > 0:
+            cost = float(ctx.entry_price)
+        peak = float(ctx.high)
+        meta_peak = (ctx.meta or {}).get("peak_high")
+        if meta_peak is not None:
+            try:
+                peak = max(peak, float(meta_peak))
+            except (TypeError, ValueError):
+                pass
+        if cost is not None:
+            peak = max(peak, cost)
         raw = factor.levels(
             ctx.open,
             entry_pct=entry_pct,
             stop_pct=pullback,
             pullback_pct=pullback,
+            giveback_ratio=giveback,
             high_px=float(ctx.high),
             low_px=float(ctx.low),
+            cost_px=cost,
+            peak_high=peak,
             tick=tick,
         )
         out = dict(raw or {})
@@ -122,11 +138,11 @@ class Strategy1Decision(BaseDecisionEngine):
                     )
                 return Decision.sell(
                     stop_px,
-                    reason=f"回落波止损 {stop_px:.2f}（高{high:.2f}）",
+                    reason=f"浮盈回落一半 {stop_px:.2f}（高{high:.2f}）",
                     factor_id=fid,
                     buy_price=buy_px,
                     stop_price=stop_px,
-                    tags=("stop", fid, "pullback_wave"),
+                    tags=("stop", fid, "half_gain"),
                 )
             return Decision.hold(
                 "持有",

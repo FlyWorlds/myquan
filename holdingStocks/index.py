@@ -1173,6 +1173,7 @@ def _resolve_hit_stop_path_dependent(
             live_low=last if last > 0 else None,
             since_ts=since_ts,
             seed_high=seed_high,
+            cost_px=seed_high,
         )
         touch = float(pd_hit.get("touch_stop") or 0)
         if bool(pd_hit.get("hit_stop")) and touch <= 0:
@@ -2236,6 +2237,7 @@ def apply_paper_slot_buy(
     pos["qty"] = qty
     pos["cost"] = round(price, 4)
     pos["today_cost"] = round(price, 4)
+    pos["peak_high"] = round(price, 4)
     pos["available"] = 0
     pos["buy_time"] = _now()
     pos["note"] = note
@@ -2941,6 +2943,32 @@ def collect_rows(
                 stop_pct = base_stop_pct
                 f4_mode = "off"
                 stop_pct_for_levels = base_stop_pct
+            pos_early = positions.get(code, {})
+            qty_early = int(pos_early.get("qty") or 0)
+            buy_time_early = pos_early.get("buy_time")
+            cost_early = pos_early.get("cost")
+            peak_early = pos_early.get("peak_high")
+            cost_h = None
+            seed_h = None
+            since_stop = None
+            if qty_early > 0:
+                since_stop = str(buy_time_early) if buy_time_early else None
+                try:
+                    cost_h = float(cost_early) if cost_early is not None else None
+                except (TypeError, ValueError):
+                    cost_h = None
+                try:
+                    peak_h = float(peak_early) if peak_early is not None else None
+                except (TypeError, ValueError):
+                    peak_h = None
+                if cost_h and cost_h > 0:
+                    seed_h = cost_h
+                    if peak_h and peak_h > 0:
+                        seed_h = max(seed_h, peak_h)
+                    try:
+                        seed_h = max(float(seed_h), float(q.get("high") or 0))
+                    except (TypeError, ValueError):
+                        pass
             lv = strategy_levels(
                 q["open"],
                 entry_pct=entry_pct,
@@ -2948,6 +2976,8 @@ def collect_rows(
                 tick=tick,
                 high_px=float(q["high"]),
                 low_px=float(q["low"]),
+                cost_px=cost_h,
+                peak_high=seed_h,
             )
             lv_base = strategy_levels(
                 q["open"],
@@ -2956,6 +2986,8 @@ def collect_rows(
                 tick=tick,
                 high_px=float(q["high"]),
                 low_px=float(q["low"]),
+                cost_px=cost_h,
+                peak_high=seed_h,
             )
             vs = points_vs_open(q["open"], q["last"])
             vs_pct = pct_vs_open(q["open"], q["last"])
@@ -2988,22 +3020,9 @@ def collect_rows(
             hit_attack = attack_buy > 0 and (q["high"] + 1e-12 >= attack_buy)
             hit_buy_raw = hit_open or hit_attack
             hit_buy = bool(allow_entry) and hit_buy_raw
-            pos_early = positions.get(code, {})
-            qty_early = int(pos_early.get("qty") or 0)
             _replay_holding_early = bool(replay.get("holding")) and qty_early <= 0
             # 因子26：止损必须 1 分钟 path-dependent；禁止全日 low × 抬高后止损
             path_touch_stop = 0.0
-            buy_time_early = pos_early.get("buy_time")
-            cost_early = pos_early.get("cost")
-            since_stop = None
-            seed_h = None
-            if qty_early > 0:
-                # 实仓：只认买入之后的路径；锚定成本避免「买入前假触」
-                since_stop = str(buy_time_early) if buy_time_early else None
-                try:
-                    seed_h = float(cost_early) if cost_early is not None else None
-                except (TypeError, ValueError):
-                    seed_h = None
             if str(FACTOR_ID).lower() in ("factor26", "f26", "26"):
                 need_m1 = bool(
                     qty_early > 0
@@ -3026,6 +3045,22 @@ def collect_rows(
                 )
                 hit_eff_stop = bool(path_res.get("hit_stop"))
                 path_touch_stop = float(path_res.get("touch_stop") or 0)
+                # 刷新持仓峰值（供次日浮盈回落一半）
+                if qty_early > 0:
+                    try:
+                        rh = float(path_res.get("running_high") or 0)
+                        qh = float(q.get("high") or 0)
+                        new_peak = max(float(seed_h or 0), rh, qh)
+                        old_peak = float(pos_early.get("peak_high") or 0)
+                        if new_peak > old_peak + 1e-9:
+                            pos_early["peak_high"] = round(new_peak, 4)
+                            _holdings_data = load_holdings()
+                            _p = (_holdings_data.get("positions") or {}).get(code)
+                            if isinstance(_p, dict):
+                                _p["peak_high"] = round(new_peak, 4)
+                                save_holdings(_holdings_data)
+                    except (TypeError, ValueError, KeyError):
+                        pass
                 if USE_FACTOR4:
                     base_res = _resolve_hit_stop_path_dependent(
                         sina=str(w["sina"]),

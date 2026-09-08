@@ -63,11 +63,12 @@ def strategy1_factor_filter(
 FACTOR_BINDINGS = (
     bind_factor(
         "factor26",
-        label="回落波阈值止损",
+        label="浮盈回落一半止盈",
         role="both",
         entry_pct=DEFAULT_PCT,
         stop_pct=DEFAULT_PCT,
         pullback_pct=DEFAULT_PCT,
+        giveback_ratio=0.5,
         prev_small_yang_pct=DEFAULT_PCT,
         prev_entry_mode="yin_or_small_yang",
         ban_double_yang=DEFAULT_BAN_DOUBLE_YANG,
@@ -75,7 +76,7 @@ FACTOR_BINDINGS = (
         double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
         double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
         filter=strategy1_factor_filter,
-        filter_desc="买同因子1；止损=分时最高回落±阈值（默认2.5%）",
+        filter_desc="买同因子1；卖=持仓最高浮盈回落一半（未浮盈成本保护±2.5%）",
     ),
     bind_factor(
         "factor2",

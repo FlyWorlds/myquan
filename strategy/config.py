@@ -30,7 +30,7 @@ class BacktestConfig:
     # 非对称买/止损：None=沿用 threshold_pct（对称）
     entry_pct: float | None = None
     stop_pct: float | None = None
-    # open=开盘锚定止损；day_high=分时/日线最高回落（因子26）
+    # open=开盘锚定止损；day_high=因子26 浮盈回落一半（peak/成本）
     stop_anchor: str = "open"
     start_date: str = "20200101"
     end_date: str = field(default_factory=lambda: dt.date.today().strftime("%Y%m%d"))

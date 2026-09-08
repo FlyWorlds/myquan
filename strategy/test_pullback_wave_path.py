@@ -1,4 +1,4 @@
-"""因子26：1 分钟 path-dependent 止损触达（防全日 OHLC 假触）。"""
+"""因子26：1 分钟 path-dependent 浮盈回落一半触达。"""
 
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ _m = _load(
     inject={"strategy.open_break": _ob},
 )
 path_dependent_pullback_hit = _m.path_dependent_pullback_hit
+half_gain_stop_price = _m.half_gain_stop_price
 pullback_stop_price = _m.pullback_stop_price
 
 
@@ -48,46 +49,68 @@ def _bars(rows: list[tuple[float, float]]) -> pd.DataFrame:
     )
 
 
+def test_half_gain_formula():
+    # 成本100、最高110 → 回落一半卖价 105
+    assert abs(half_gain_stop_price(110.0, 100.0) - 105.0) < 1e-9
+    # 未浮盈 → 成本硬保护 97.5
+    assert abs(half_gain_stop_price(100.0, 100.0, hard_pct=0.025) - 97.5) < 1e-9
+
+
 def test_daily_ohlc_false_positive_avoided():
     bars = _bars([(100.0, 98.0), (110.0, 108.0)])
-    day_high, day_low = 110.0, 98.0
-    stop_now = pullback_stop_price(day_high, pullback_pct=0.025)
-    assert day_low <= stop_now
-    out = path_dependent_pullback_hit(bars, pullback_pct=0.025)
+    out = path_dependent_pullback_hit(
+        bars, pullback_pct=0.025, seed_high=100.0, cost_px=100.0
+    )
     assert out["hit_stop"] is False, out
 
 
-def test_true_path_hit():
+def test_hard_protect_path_hit():
+    """未抬升峰值时，成本硬保护与旧峰值2.5%同价。"""
     bars = _bars([(100.0, 99.0), (100.5, 97.0)])
-    out = path_dependent_pullback_hit(bars, pullback_pct=0.025)
+    out = path_dependent_pullback_hit(
+        bars, pullback_pct=0.025, seed_high=100.0, cost_px=100.0
+    )
     assert out["hit_stop"] is True, out
+    assert abs(float(out["touch_stop"]) - 97.5) < 1e-9, out
 
 
-def test_live_last_not_day_low():
-    bars = _bars([(100.0, 99.0), (110.0, 108.0)])
+def test_half_gain_after_peak():
+    """峰值110后回落到105触浮盈一半。"""
+    bars = _bars([(110.0, 109.0), (110.0, 105.0)])
+    out = path_dependent_pullback_hit(
+        bars, pullback_pct=0.025, seed_high=100.0, cost_px=100.0
+    )
+    assert out["hit_stop"] is True, out
+    assert abs(float(out["touch_stop"]) - 105.0) < 1e-9, out
+    # 旧峰值2.5%卖价约107.25，本规则更宽
+    old = pullback_stop_price(110.0, pullback_pct=0.025)
+    assert float(out["touch_stop"]) < old
+
+
+def test_live_last_half_gain():
+    bars = _bars([(110.0, 109.0)])
     bad = path_dependent_pullback_hit(
-        bars, pullback_pct=0.025, live_high=110.0, live_low=98.0
+        bars,
+        pullback_pct=0.025,
+        seed_high=100.0,
+        cost_px=100.0,
+        live_high=110.0,
+        live_low=104.0,
     )
     assert bad["hit_stop"] is True
     ok = path_dependent_pullback_hit(
-        bars, pullback_pct=0.025, live_high=110.0, live_low=109.0
+        bars,
+        pullback_pct=0.025,
+        seed_high=100.0,
+        cost_px=100.0,
+        live_high=110.0,
+        live_low=106.0,
     )
     assert ok["hit_stop"] is False, ok
 
 
-def test_touch_stop_is_prior_high_stop_not_raised():
-    """触达价应是破位当时止损，不是之后抬高的止损。"""
-    bars = _bars([(100.0, 99.0), (110.0, 97.0)])
-    out = path_dependent_pullback_hit(bars, pullback_pct=0.025)
-    assert out["hit_stop"] is True
-    assert abs(float(out["touch_stop"]) - 97.5) < 1e-9, out
-    raised = pullback_stop_price(110.0, pullback_pct=0.025)
-    assert raised > float(out["touch_stop"])
-
-
 def test_simulate_day_buy_then_no_same_day_sell():
     sim = _m.simulate_factor26_day_1m
-    # 开盘 100，突破 102.5；其后回落不卖（T+1）
     bars = _bars([(103.0, 100.0), (104.0, 101.0), (103.0, 99.0)])
     out = sim(
         bars,
@@ -104,7 +127,7 @@ def test_simulate_day_buy_then_no_same_day_sell():
     assert out["holding_out"] is True
 
 
-def test_simulate_overnight_stop_path():
+def test_simulate_overnight_hard_protect():
     sim = _m.simulate_factor26_day_1m
     bars = _bars([(100.0, 99.0), (100.5, 97.0)])
     out = sim(
@@ -114,6 +137,8 @@ def test_simulate_overnight_stop_path():
         holding_in=True,
         can_sell=True,
         allow_entry=False,
+        cost_px=100.0,
+        peak_high_in=100.0,
     )
     assert out["sell_px"] is not None
     assert abs(float(out["sell_px"]) - 97.5) < 1e-9
@@ -121,23 +146,23 @@ def test_simulate_overnight_stop_path():
 
 
 def test_since_buy_ignores_pre_entry_dip():
-    """买入前曾破止损路径，买入后上涨 → 不应算持仓已触止损。"""
     ts0 = pd.Timestamp("2026-09-07 09:31:00")
     bars = pd.DataFrame(
         [
             {"ts": ts0, "high": 100.0, "low": 99.0},
-            # 10:00 相对 100 的止损 97.5 被击穿
             {"ts": ts0 + pd.Timedelta(minutes=29), "high": 100.2, "low": 97.0},
-            # 午后新高并持稳（13:00 后买入）
             {"ts": ts0 + pd.Timedelta(hours=4), "high": 112.0, "low": 109.0},
         ]
     )
-    assert path_dependent_pullback_hit(bars, pullback_pct=0.025)["hit_stop"] is True
+    assert path_dependent_pullback_hit(
+        bars, pullback_pct=0.025, seed_high=100.0, cost_px=100.0
+    )["hit_stop"] is True
     out = path_dependent_pullback_hit(
         bars,
         pullback_pct=0.025,
         since_ts="2026-09-07 13:00:00",
         seed_high=109.0,
+        cost_px=109.0,
         live_high=112.0,
         live_low=111.0,
     )
@@ -145,11 +170,12 @@ def test_since_buy_ignores_pre_entry_dip():
 
 
 if __name__ == "__main__":
+    test_half_gain_formula()
     test_daily_ohlc_false_positive_avoided()
-    test_true_path_hit()
-    test_live_last_not_day_low()
-    test_touch_stop_is_prior_high_stop_not_raised()
+    test_hard_protect_path_hit()
+    test_half_gain_after_peak()
+    test_live_last_half_gain()
     test_simulate_day_buy_then_no_same_day_sell()
-    test_simulate_overnight_stop_path()
+    test_simulate_overnight_hard_protect()
     test_since_buy_ignores_pre_entry_dip()
     print("ok")
