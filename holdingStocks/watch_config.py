@@ -307,7 +307,6 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
     watch_item("600552", "凯盛科技", pct=0.025),
     watch_item("600330", "天通股份", pct=0.03),
     watch_item("600338", "西藏珠峰", pct=0.025),
-    watch_item("603626", "科森科技", pct=0.025),
     watch_item("002636", "金安国纪", pct=0.025),
     watch_item("601208", "东材科技", pct=0.025),
 ]

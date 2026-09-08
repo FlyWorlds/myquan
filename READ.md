@@ -61,7 +61,7 @@ akshare DataFrame
 ```bash
 cd backtest && python strategy1.py --rules
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py   # 定盘池近7日1m·三槽·先触发先买；T+1已记次日开盘市价离场
-# 交割注释：backtest/strategy1_pool_1m/TRADE_LEDGER.md（剔科森 TRADE_LEDGER_EX_KOSEN.md）
+# 交割注释：backtest/strategy1_pool_1m/TRADE_LEDGER.md
 python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
 python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）
 ```
@@ -276,7 +276,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 ## 盯盘要点
 
-**策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略收益**（自 2026-09-01 起因子1 回放、含费用；见 `watch_config.STRATEGY_PNL_START`）。额外盯盘（非 Top20）见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含科森 603626、金安国纪 002636、东材科技 601208）。
+**策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略收益**（自 2026-09-01 起因子1 回放、含费用；见 `watch_config.STRATEGY_PNL_START`）。额外盯盘（非 Top20）见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含金安国纪 002636、东材科技 601208；科森已移出）。
 
 **持仓三槽**：盘中最多 3 只实仓（各约 30%）；当日最多买 2；14:50 起按隔夜上限，尾盘须空 1 → 隔夜最多 2。连续竞价（9:30–11:30 / 13:00–15:00）才自动成交；买入/卖出触达按 1 分钟顺序（同根 K 不自造攻击波；未走完分钟不用现价撞抬高后卖价）；同一轮止损不立刻补仓。因子22 14:57 后收盘确认。止损若记了 `account_cash` 会加回现金。
 
