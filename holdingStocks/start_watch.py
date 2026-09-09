@@ -258,6 +258,7 @@ def main() -> int:
         str(API_PORT),
         "--no-open",
         "--wechat-optional",
+        "--no-ui-dev",
     ]
     if args.force:
         watch_args.append("--force")

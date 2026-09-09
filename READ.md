@@ -185,6 +185,8 @@ cd myquan/backtest && python strategy1.py --rules
 cd myquan && PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 7 --source auto
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 20 --source panda --refresh
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack   # 研究：加回攻击波
+# 策略十六：核心龙头池近 7 日 1m（产物 backtest/strategy16_core_leader/）
+PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 
 # 因子13 熊市盾牌 WF（thr* Top3，锁定配置）
 cd myquan && python strategy/run_factor13_bear_shield_wf.py
@@ -195,6 +197,7 @@ python backtest/strategy12_emotion_gate/run.py
 
 # 策略十六：核心龙头池（通达信概念活跃度，滚动近3个月）
 python strategy/run_core_leader_pool.py
+PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 
 # 离线规则测试
 cd myquan && python -m unittest -v test_strategy_rules.py
@@ -260,7 +263,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 - 规则与 **因子1** 同源（`strategy/open_break.py`）；盯盘首页 Tab 为 **策略1 / 3 / 8 / 15 / 16**；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。策略十二在 `/strategies` 因子组合栏。
 - 早盘节点：9:15 竞价+**全日状态重置**（sticky/缓存/微信防抖，只留实仓；启动过点补跑）→ 9:20 不可撤 → 9:25 算阈值/过门 → 9:30 触发信号（`watch_config.py`）。因子26 止盈触达按 **1 分钟 path-dependent**（禁止全日 low×抬高后卖价假触）。
 - 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
-- 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。一键启动：`python start_watch.py`。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
+- 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。**先绑 `:8765` 再后台冷启动**（避免首屏超过 `start_watch.py` 120s 等待、页面「推送断开」）。一键启动：`python start_watch.py`。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
 - 股票名/代码外链：百度财经 `finance.baidu.com/stock/ab-{code}`。
 - 微信预警：OpenClaw（P0 ✅）；自动结算不下真实委托。
 
@@ -285,7 +288,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 **策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略收益**（自 2026-09-01 起因子1 回放、含费用；见 `watch_config.STRATEGY_PNL_START`）。额外盯盘（非 Top20）见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材科技 601208；金安国纪 002636、科森已移出）。
 
-**策略16 Tab**：因子27 核心龙头池（滚动近 3 个月冻结）+ 同策略一买卖信号；不占策略一三槽、不进持仓 Tab 预警。刷新：`python strategy/run_core_leader_pool.py`。
+**策略16 Tab**：因子27 核心龙头池（滚动近 3 个月冻结）+ 同策略一买卖；开盘阈值按 2026 至今 {2/2.5/3}% 日线夏普择优（`thr_2026.json`）；不占策略一三槽、不进持仓 Tab 预警。刷新池：`python strategy/run_core_leader_pool.py`；拟合阈值：`python backtest/strategy16_core_leader/fit_thr.py`。
 
 **持仓三槽**：盘中/隔夜最多 3 只实仓（各约 30%）；当日最多买 2。连续竞价（9:30–11:30 / 13:00–15:00）才自动成交；买入/卖出触达按 1 分钟顺序（买=开盘阈值；未走完分钟不用现价撞抬高后卖价）；同一轮止损不立刻补仓。因子22 14:57 后收盘确认。止损若记了 `account_cash` 会加回现金。
 

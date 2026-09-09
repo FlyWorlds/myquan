@@ -177,6 +177,7 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 - **选股（因子27）**：通达信概念成交额 ≥ 截面中位数（最多扫 Top25）；每概念至多 3 只龙头；去重后约 **20** 只；剔创业/科创/北交/ST、现价 < 100；**滚动近 3 个月冻结**（非自然季度）。
 - **买卖**：同策略一（因子26 多层止盈 + 因子2 预警 + 因子22 再买）。
 - **刷新池**：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json`。
+- **近 7 日 1m 回测**（开盘阈值=2026至今 {2/2.5/3}% 日线夏普择优；卖同策略一；独立三槽）：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr` → `backtest/strategy16_core_leader/REPORT.md`。
 - 说明：[`FACTOR27.md`](FACTOR27.md)。
 
 ---

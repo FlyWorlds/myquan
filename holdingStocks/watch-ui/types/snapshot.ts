@@ -313,6 +313,8 @@ export interface WatchSnapshot {
   v: number
   type: 'snapshot'
   ts: number
+  /** 冷启动占位：API/WS 已通，首屏快照尚未算完 */
+  boot?: boolean
   updatedAt?: string
   clock?: string
   phase?: string

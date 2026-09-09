@@ -204,6 +204,7 @@ limit_up_pct_of = limit_down_pct_of
 
 
 CORE_LEADER_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "picks_quarter.json"
+STRATEGY16_THR_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "thr_2026.json"
 
 
 def load_core_leader_payload() -> dict[str, Any]:
@@ -223,6 +224,27 @@ def core_leader_codes() -> set[str]:
         c = code_key(str(it.get("code") or it.get("symbol") or ""))
         if c and c != "000000":
             out.add(c)
+    return out
+
+
+def load_strategy16_thr_map() -> dict[str, float]:
+    """策略十六开盘买入阈值（2026 至今日线 {2/2.5/3}% 夏普择优）。"""
+    if not STRATEGY16_THR_PATH.is_file():
+        return {}
+    try:
+        raw = json.loads(STRATEGY16_THR_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict[str, float] = {}
+    for code, rec in (raw.get("thrs") or {}).items():
+        c = code_key(str(code))
+        if not c:
+            continue
+        thr = rec.get("thr") if isinstance(rec, dict) else rec
+        try:
+            out[c] = float(thr)
+        except (TypeError, ValueError):
+            continue
     return out
 
 
@@ -454,6 +476,11 @@ def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
         seen.add(code)
         item = meta_for_code(code, holdings)
         item["universe"] = "strategy16"
+        thr = load_strategy16_thr_map().get(code)
+        if thr is not None:
+            item["pct"] = float(thr)
+            item["entry_pct"] = float(thr)
+            item["stop_pct"] = float(DEFAULT_PCT)
         out.append(item)
     for code in portfolio_pool_codes(holdings):
         if code in seen:

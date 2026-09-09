@@ -1,0 +1,1174 @@
+{
+  "summary": {
+    "window_days": 7,
+    "n_pool": 20,
+    "pool": "strategy16",
+    "n_with_rounds": 14,
+    "equal_weight_pnl_pct": 2.19,
+    "portfolio": {
+      "window_days": 7,
+      "calendar": [
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07",
+        "2026-09-08",
+        "2026-09-09"
+      ],
+      "max_slots": 3,
+      "slot_weight": 0.3,
+      "initial_cash": 100000.0,
+      "final_equity": 103568.0,
+      "return_pct": 3.57,
+      "max_dd_pct": -3.53,
+      "dd_peak_date": "2026-09-01",
+      "dd_trough_date": "2026-09-04",
+      "n_buys": 11,
+      "n_sells": 10,
+      "n_closed": 10,
+      "avg_closed_pnl_pct": 1.14,
+      "n_open": 1,
+      "n_skipped_or_queued": 14,
+      "exit_mode": "half_gain",
+      "buy_mode": "open",
+      "reserve_empty": 0,
+      "max_overnight": 3,
+      "max_buys_per_day": 2
+    },
+    "max_slots": 3,
+    "slot_weight": 0.3,
+    "priority": "first_trigger_first_buy",
+    "buy_mode": "open",
+    "entry_by_code": {
+      "000523": 0.03,
+      "000972": 0.02,
+      "600359": 0.03,
+      "603330": 0.03,
+      "605277": 0.025,
+      "002815": 0.02,
+      "603042": 0.02,
+      "002498": 0.02,
+      "000049": 0.025,
+      "000063": 0.03,
+      "000066": 0.02,
+      "000021": 0.02,
+      "000062": 0.02,
+      "000541": 0.02,
+      "000034": 0.02,
+      "000050": 0.03,
+      "603663": 0.03,
+      "603938": 0.02,
+      "000070": 0.03,
+      "000586": 0.025
+    },
+    "factor2_alert": {
+      "hist_max_dd": 0.26,
+      "avg_yearly_max_dd": 0.19,
+      "add_alert_dd": 0.2,
+      "reduce_alert_dd": 0.10000000000000002,
+      "min_gap_to_max": 0.05
+    },
+    "factor2_label": "加仓≥20% / 减仓≤10% / 年均值19.0% / 历史最大26.0%",
+    "factor2_rules": "================================================================================\n  因子2 — 回撤预警（加仓/减仓提示，回测不介入权益）\n================================================================================\n\n【作用】\n  用策略历史回撤统计标定阈值；盯盘触发加仓/减仓预警。\n  不改变买卖点，回测默认不注资、不叠加权益。\n\n【当前阈值】\n  · 历史最大回撤: 26.00%\n  · 年最大回撤均值: 19.00%\n  · 加仓预警线: ≥20%  (历史最大向10%下取整，且距极值≥5%)\n  · 减仓预警线: ≤10%  (由年均值推导；须曾进入加仓区后收窄才触发)\n  · 接近历史最大: 不宜继续加仓\n\n【说明】\n  · 可用策略权益曲线 derive_thresholds(equity) 重标定\n  · 半仓天通+凯盛默认见 DEFAULT_HIST_MAX_DD / DEFAULT_AVG_YEARLY_MAX_DD\n================================================================================",
+    "factor2_note": "样本过短，回撤预警仅作阈值展示",
+    "disclaimer": "研究用途，非投资建议；1m 约近数日；未计费/滑点；三槽先触发先买。"
+  },
+  "rows": [
+    {
+      "code": "000523",
+      "name": "红棉股份",
+      "sina": "sz000523",
+      "entry_pct": 0.03,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": 3.42,
+      "last_side": "sell",
+      "last_px": 3.62,
+      "last_date": "2026-09-07",
+      "trades": [
+        {
+          "date": "2026-09-01",
+          "side": "buy",
+          "px": 3.49,
+          "ts": "2026-09-01 09:32:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-02",
+          "side": "sell",
+          "px": 3.4,
+          "ts": "2026-09-02 09:31:00",
+          "note": "hard_from_cost"
+        },
+        {
+          "date": "2026-09-04",
+          "side": "buy",
+          "px": 3.41,
+          "ts": "2026-09-04 13:18:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-07",
+          "side": "sell",
+          "px": 3.62,
+          "ts": "2026-09-07 10:01:00",
+          "note": "vol_giveback"
+        }
+      ]
+    },
+    {
+      "code": "000972",
+      "name": "中基健康",
+      "sina": "sz000972",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": true,
+      "n_trades": 3,
+      "n_rounds": 1,
+      "pnl_pct": -1.79,
+      "last_side": "buy",
+      "last_px": 3.97,
+      "last_date": "2026-09-08",
+      "trades": [
+        {
+          "date": "2026-09-01",
+          "side": "buy",
+          "px": 3.9,
+          "ts": "2026-09-01 09:31:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-02",
+          "side": "sell",
+          "px": 3.83,
+          "ts": "2026-09-02 10:13:00",
+          "note": "t1_peak_trail"
+        },
+        {
+          "date": "2026-09-08",
+          "side": "buy",
+          "px": 3.97,
+          "ts": "2026-09-08 13:13:00",
+          "kind": "open"
+        }
+      ]
+    },
+    {
+      "code": "600359",
+      "name": "新农开发",
+      "sina": "sh600359",
+      "entry_pct": 0.03,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": 0.16,
+      "last_side": "sell",
+      "last_px": 7.07,
+      "last_date": "2026-09-04",
+      "trades": [
+        {
+          "date": "2026-09-01",
+          "side": "buy",
+          "px": 7.36,
+          "ts": "2026-09-01 09:31:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-02",
+          "side": "sell",
+          "px": 7.57,
+          "ts": "2026-09-02 09:31:00",
+          "note": "vol_giveback"
+        },
+        {
+          "date": "2026-09-03",
+          "side": "buy",
+          "px": 7.26,
+          "ts": "2026-09-03 09:31:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-04",
+          "side": "sell",
+          "px": 7.07,
+          "ts": "2026-09-04 09:31:00",
+          "note": "hard_from_cost"
+        }
+      ]
+    },
+    {
+      "code": "603330",
+      "name": "天洋新材",
+      "sina": "sh603330",
+      "entry_pct": 0.03,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": 0.96,
+      "last_side": "sell",
+      "last_px": 10.69,
+      "last_date": "2026-09-08",
+      "trades": [
+        {
+          "date": "2026-09-01",
+          "side": "buy",
+          "px": 11.09,
+          "ts": "2026-09-01 09:32:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-02",
+          "side": "sell",
+          "px": 11.49,
+          "ts": "2026-09-02 09:35:00",
+          "note": "vol_giveback"
+        },
+        {
+          "date": "2026-09-07",
+          "side": "buy",
+          "px": 10.97,
+          "ts": "2026-09-07 09:35:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-08",
+          "side": "sell",
+          "px": 10.69,
+          "ts": "2026-09-08 09:31:00",
+          "note": "hard_from_cost"
+        }
+      ]
+    },
+    {
+      "code": "605277",
+      "name": "新亚电子",
+      "sina": "sh605277",
+      "entry_pct": 0.025,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": 3.89,
+      "last_side": "sell",
+      "last_px": 17.89,
+      "last_date": "2026-09-03",
+      "trades": [
+        {
+          "date": "2026-09-02",
+          "side": "buy",
+          "px": 17.22,
+          "ts": "2026-09-02 10:20:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-03",
+          "side": "sell",
+          "px": 17.89,
+          "ts": "2026-09-03 09:55:00",
+          "note": "vol_giveback"
+        }
+      ]
+    },
+    {
+      "code": "002815",
+      "name": "崇达技术",
+      "sina": "sz002815",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": 14.99,
+      "last_side": "sell",
+      "last_px": 17.41,
+      "last_date": "2026-09-08",
+      "trades": [
+        {
+          "date": "2026-09-07",
+          "side": "buy",
+          "px": 15.14,
+          "ts": "2026-09-07 09:35:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-08",
+          "side": "sell",
+          "px": 17.41,
+          "ts": "2026-09-08 09:31:00",
+          "note": "ladder_full_15"
+        }
+      ]
+    },
+    {
+      "code": "603042",
+      "name": "华脉科技",
+      "sina": "sh603042",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": 16.51,
+      "last_side": "sell",
+      "last_px": 16.47,
+      "last_date": "2026-09-08",
+      "trades": [
+        {
+          "date": "2026-09-02",
+          "side": "buy",
+          "px": 14.56,
+          "ts": "2026-09-02 11:29:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-03",
+          "side": "sell",
+          "px": 14.76,
+          "ts": "2026-09-03 09:33:00",
+          "note": "vol_giveback"
+        },
+        {
+          "date": "2026-09-07",
+          "side": "buy",
+          "px": 14.33,
+          "ts": "2026-09-07 10:33:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-08",
+          "side": "sell",
+          "px": 16.47,
+          "ts": "2026-09-08 09:31:00",
+          "note": "ladder_full_15"
+        }
+      ]
+    },
+    {
+      "code": "002498",
+      "name": "汉缆股份",
+      "sina": "sz002498",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": 2.18,
+      "last_side": "sell",
+      "last_px": 6.57,
+      "last_date": "2026-09-03",
+      "trades": [
+        {
+          "date": "2026-09-02",
+          "side": "buy",
+          "px": 6.43,
+          "ts": "2026-09-02 09:47:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-03",
+          "side": "sell",
+          "px": 6.57,
+          "ts": "2026-09-03 09:33:00",
+          "note": "vol_giveback"
+        }
+      ]
+    },
+    {
+      "code": "000049",
+      "name": "德赛电池",
+      "sina": "sz000049",
+      "entry_pct": 0.025,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 0,
+      "n_rounds": 0,
+      "pnl_pct": null,
+      "last_side": null,
+      "last_px": null,
+      "last_date": null,
+      "trades": []
+    },
+    {
+      "code": "000063",
+      "name": "中兴通讯",
+      "sina": "sz000063",
+      "entry_pct": 0.03,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 0,
+      "n_rounds": 0,
+      "pnl_pct": null,
+      "last_side": null,
+      "last_px": null,
+      "last_date": null,
+      "trades": []
+    },
+    {
+      "code": "000066",
+      "name": "中国长城",
+      "sina": "sz000066",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": true,
+      "n_trades": 1,
+      "n_rounds": 0,
+      "pnl_pct": null,
+      "last_side": "buy",
+      "last_px": 14.64,
+      "last_date": "2026-09-07",
+      "trades": [
+        {
+          "date": "2026-09-07",
+          "side": "buy",
+          "px": 14.64,
+          "ts": "2026-09-07 13:08:00",
+          "kind": "open"
+        }
+      ]
+    },
+    {
+      "code": "000021",
+      "name": "深科技",
+      "sina": "sz000021",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": true,
+      "n_trades": 1,
+      "n_rounds": 0,
+      "pnl_pct": null,
+      "last_side": "buy",
+      "last_px": 35.88,
+      "last_date": "2026-09-08",
+      "trades": [
+        {
+          "date": "2026-09-08",
+          "side": "buy",
+          "px": 35.88,
+          "ts": "2026-09-08 10:34:00",
+          "kind": "open"
+        }
+      ]
+    },
+    {
+      "code": "000062",
+      "name": "深圳华强",
+      "sina": "sz000062",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": -1.26,
+      "last_side": "sell",
+      "last_px": 24.33,
+      "last_date": "2026-09-03",
+      "trades": [
+        {
+          "date": "2026-09-02",
+          "side": "buy",
+          "px": 24.64,
+          "ts": "2026-09-02 09:51:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-03",
+          "side": "sell",
+          "px": 24.33,
+          "ts": "2026-09-03 09:52:00",
+          "note": "t1_peak_trail"
+        }
+      ]
+    },
+    {
+      "code": "000541",
+      "name": "佛山照明",
+      "sina": "sz000541",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 0,
+      "n_rounds": 0,
+      "pnl_pct": null,
+      "last_side": null,
+      "last_px": null,
+      "last_date": null,
+      "trades": []
+    },
+    {
+      "code": "000034",
+      "name": "神州数码",
+      "sina": "sz000034",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": -2.54,
+      "last_side": "sell",
+      "last_px": 23.82,
+      "last_date": "2026-09-04",
+      "trades": [
+        {
+          "date": "2026-09-03",
+          "side": "buy",
+          "px": 24.44,
+          "ts": "2026-09-03 09:40:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-04",
+          "side": "sell",
+          "px": 23.82,
+          "ts": "2026-09-04 11:25:00",
+          "note": "hard_from_cost"
+        }
+      ]
+    },
+    {
+      "code": "000050",
+      "name": "深天马Ａ",
+      "sina": "sz000050",
+      "entry_pct": 0.03,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 0,
+      "n_rounds": 0,
+      "pnl_pct": null,
+      "last_side": null,
+      "last_px": null,
+      "last_date": null,
+      "trades": []
+    },
+    {
+      "code": "603663",
+      "name": "三祥新材",
+      "sina": "sh603663",
+      "entry_pct": 0.03,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": -1.2,
+      "last_side": "sell",
+      "last_px": 39.38,
+      "last_date": "2026-09-08",
+      "trades": [
+        {
+          "date": "2026-09-07",
+          "side": "buy",
+          "px": 39.86,
+          "ts": "2026-09-07 10:09:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-08",
+          "side": "sell",
+          "px": 39.38,
+          "ts": "2026-09-08 09:52:00",
+          "note": "t1_peak_trail"
+        }
+      ]
+    },
+    {
+      "code": "603938",
+      "name": "三孚股份",
+      "sina": "sh603938",
+      "entry_pct": 0.02,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": -2.45,
+      "last_side": "sell",
+      "last_px": 42.63,
+      "last_date": "2026-09-03",
+      "trades": [
+        {
+          "date": "2026-09-02",
+          "side": "buy",
+          "px": 43.7,
+          "ts": "2026-09-02 09:42:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-03",
+          "side": "sell",
+          "px": 42.63,
+          "ts": "2026-09-03 09:32:00",
+          "note": "t1_peak_trail"
+        }
+      ]
+    },
+    {
+      "code": "000070",
+      "name": "特发信息",
+      "sina": "sz000070",
+      "entry_pct": 0.03,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": 0.31,
+      "last_side": "sell",
+      "last_px": 16.56,
+      "last_date": "2026-09-08",
+      "trades": [
+        {
+          "date": "2026-09-03",
+          "side": "buy",
+          "px": 16.2,
+          "ts": "2026-09-03 14:26:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-04",
+          "side": "sell",
+          "px": 15.77,
+          "ts": "2026-09-04 09:53:00",
+          "note": "t1_peak_trail"
+        },
+        {
+          "date": "2026-09-07",
+          "side": "buy",
+          "px": 16.07,
+          "ts": "2026-09-07 13:13:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-08",
+          "side": "sell",
+          "px": 16.56,
+          "ts": "2026-09-08 13:07:00",
+          "note": "vol_giveback"
+        }
+      ]
+    },
+    {
+      "code": "000586",
+      "name": "汇源通信",
+      "sina": "sz000586",
+      "entry_pct": 0.025,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": true,
+      "n_trades": 3,
+      "n_rounds": 1,
+      "pnl_pct": -2.51,
+      "last_side": "buy",
+      "last_px": 13.73,
+      "last_date": "2026-09-07",
+      "trades": [
+        {
+          "date": "2026-09-01",
+          "side": "buy",
+          "px": 13.94,
+          "ts": "2026-09-01 09:45:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-02",
+          "side": "sell",
+          "px": 13.59,
+          "ts": "2026-09-02 09:37:00",
+          "note": "hard_from_cost"
+        },
+        {
+          "date": "2026-09-07",
+          "side": "buy",
+          "px": 13.73,
+          "ts": "2026-09-07 10:35:00",
+          "kind": "open"
+        }
+      ]
+    }
+  ],
+  "portfolio_trades": [
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:31:00",
+      "side": "buy",
+      "code": "000972",
+      "name": "中基健康",
+      "px": 3.9,
+      "shares": 7600,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-01",
+      "ts": "2026-09-01 09:31:00",
+      "side": "buy",
+      "code": "600359",
+      "name": "新农开发",
+      "px": 7.36,
+      "shares": 4000,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:31:00",
+      "side": "sell",
+      "code": "600359",
+      "name": "新农开发",
+      "px": 7.57,
+      "shares": 4000,
+      "pnl_pct": 0.0285,
+      "exit_reason": "vol_giveback",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:42:00",
+      "side": "buy",
+      "code": "603938",
+      "name": "三孚股份",
+      "px": 43.7,
+      "shares": 600,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 09:47:00",
+      "side": "buy",
+      "code": "002498",
+      "name": "汉缆股份",
+      "px": 6.43,
+      "shares": 4600,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-02",
+      "ts": "2026-09-02 10:13:00",
+      "side": "sell",
+      "code": "000972",
+      "name": "中基健康",
+      "px": 3.83,
+      "shares": 7600,
+      "pnl_pct": -0.0179,
+      "exit_reason": "t1_peak_trail",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:31:00",
+      "side": "buy",
+      "code": "600359",
+      "name": "新农开发",
+      "px": 7.26,
+      "shares": 4100,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:32:00",
+      "side": "sell",
+      "code": "603938",
+      "name": "三孚股份",
+      "px": 42.63,
+      "shares": 600,
+      "pnl_pct": -0.0245,
+      "exit_reason": "t1_peak_trail",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:32:00",
+      "side": "buy",
+      "code": "603042",
+      "name": "华脉科技",
+      "px": 14.85,
+      "shares": 2000,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-03",
+      "ts": "2026-09-03 09:33:00",
+      "side": "sell",
+      "code": "002498",
+      "name": "汉缆股份",
+      "px": 6.57,
+      "shares": 4600,
+      "pnl_pct": 0.0218,
+      "exit_reason": "vol_giveback",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 09:31:00",
+      "side": "sell",
+      "code": "600359",
+      "name": "新农开发",
+      "px": 7.07,
+      "shares": 4100,
+      "pnl_pct": -0.0262,
+      "exit_reason": "hard_from_cost",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 09:31:00",
+      "side": "sell",
+      "code": "603042",
+      "name": "华脉科技",
+      "px": 14.43,
+      "shares": 2000,
+      "pnl_pct": -0.0283,
+      "exit_reason": "hard_from_cost",
+      "slots_after": 0
+    },
+    {
+      "date": "2026-09-04",
+      "ts": "2026-09-04 13:18:00",
+      "side": "buy",
+      "code": "000523",
+      "name": "红棉股份",
+      "px": 3.41,
+      "shares": 8600,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:35:00",
+      "side": "buy",
+      "code": "002815",
+      "name": "崇达技术",
+      "px": 15.14,
+      "shares": 1900,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 09:35:00",
+      "side": "buy",
+      "code": "603330",
+      "name": "天洋新材",
+      "px": 10.97,
+      "shares": 2700,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 3
+    },
+    {
+      "date": "2026-09-07",
+      "ts": "2026-09-07 10:01:00",
+      "side": "sell",
+      "code": "000523",
+      "name": "红棉股份",
+      "px": 3.62,
+      "shares": 8600,
+      "pnl_pct": 0.0616,
+      "exit_reason": "vol_giveback",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-08",
+      "ts": "2026-09-08 09:31:00",
+      "side": "sell",
+      "code": "002815",
+      "name": "崇达技术",
+      "px": 17.41,
+      "shares": 1900,
+      "pnl_pct": 0.1499,
+      "exit_reason": "ladder_full_15",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-08",
+      "ts": "2026-09-08 09:31:00",
+      "side": "sell",
+      "code": "603330",
+      "name": "天洋新材",
+      "px": 10.69,
+      "shares": 2700,
+      "pnl_pct": -0.0255,
+      "exit_reason": "hard_from_cost",
+      "slots_after": 0
+    },
+    {
+      "date": "2026-09-08",
+      "ts": "2026-09-08 10:34:00",
+      "side": "buy",
+      "code": "000021",
+      "name": "深科技",
+      "px": 35.88,
+      "shares": 800,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-09-08",
+      "ts": "2026-09-08 10:42:00",
+      "side": "buy",
+      "code": "000070",
+      "name": "特发信息",
+      "px": 16.56,
+      "shares": 1800,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-09",
+      "ts": "2026-09-09 11:22:00",
+      "side": "sell",
+      "code": "000021",
+      "name": "深科技",
+      "px": 34.98,
+      "shares": 800,
+      "pnl_pct": -0.0251,
+      "exit_reason": "hard_from_cost",
+      "slots_after": 1
+    }
+  ],
+  "portfolio_equity": [
+    {
+      "date": "2026-09-01",
+      "equity": 101948.0,
+      "cash": 40920.0,
+      "n_pos": 2,
+      "codes": "000972,600359",
+      "ret_pct": 1.95
+    },
+    {
+      "date": "2026-09-02",
+      "equity": 100188.0,
+      "cash": 44510.0,
+      "n_pos": 2,
+      "codes": "002498,603938",
+      "ret_pct": 0.19
+    },
+    {
+      "date": "2026-09-03",
+      "equity": 98880.0,
+      "cash": 40844.0,
+      "n_pos": 2,
+      "codes": "600359,603042",
+      "ret_pct": -1.12
+    },
+    {
+      "date": "2026-09-04",
+      "equity": 98347.0,
+      "cash": 69365.0,
+      "n_pos": 1,
+      "codes": "000523",
+      "ret_pct": -1.65
+    },
+    {
+      "date": "2026-09-07",
+      "equity": 101934.0,
+      "cash": 42112.0,
+      "n_pos": 2,
+      "codes": "002815,603330",
+      "ret_pct": 1.93
+    },
+    {
+      "date": "2026-09-08",
+      "equity": 103234.0,
+      "cash": 45542.0,
+      "n_pos": 2,
+      "codes": "000021,000070",
+      "ret_pct": 3.23
+    },
+    {
+      "date": "2026-09-09",
+      "equity": 103568.0,
+      "cash": 73526.0,
+      "n_pos": 1,
+      "codes": "000070",
+      "ret_pct": 3.57
+    }
+  ],
+  "open_positions": [
+    {
+      "code": "000070",
+      "name": "特发信息",
+      "buy_day": "2026-09-08",
+      "buy_px": 16.56,
+      "last_px": 16.69,
+      "shares": 1800,
+      "pnl_pct": 0.0079
+    }
+  ],
+  "skipped_buys": [
+    {
+      "day": "2026-09-01",
+      "ts": "2026-09-01 09:32:00",
+      "code": "000523",
+      "name": "红棉股份",
+      "px": 3.49,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-01",
+      "ts": "2026-09-01 09:32:00",
+      "code": "603330",
+      "name": "天洋新材",
+      "px": 11.09,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-01",
+      "ts": "2026-09-01 09:45:00",
+      "code": "000586",
+      "name": "汇源通信",
+      "px": 13.94,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 09:51:00",
+      "code": "000062",
+      "name": "深圳华强",
+      "px": 24.64,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 10:20:00",
+      "code": "605277",
+      "name": "新亚电子",
+      "px": 17.22,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-02",
+      "ts": "2026-09-02 11:29:00",
+      "code": "603042",
+      "name": "华脉科技",
+      "px": 14.56,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 09:40:00",
+      "code": "000034",
+      "name": "神州数码",
+      "px": 24.44,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 14:26:00",
+      "code": "000070",
+      "name": "特发信息",
+      "px": 16.2,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 10:09:00",
+      "code": "603663",
+      "name": "三祥新材",
+      "px": 39.86,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 10:33:00",
+      "code": "603042",
+      "name": "华脉科技",
+      "px": 14.33,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 10:35:00",
+      "code": "000586",
+      "name": "汇源通信",
+      "px": 13.73,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 13:08:00",
+      "code": "000066",
+      "name": "中国长城",
+      "px": 14.64,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 13:13:00",
+      "code": "000070",
+      "name": "特发信息",
+      "px": 16.07,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-08",
+      "ts": "2026-09-08 13:13:00",
+      "code": "000972",
+      "name": "中基健康",
+      "px": 3.97,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    }
+  ]
+}

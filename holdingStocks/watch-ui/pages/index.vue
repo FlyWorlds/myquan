@@ -42,7 +42,11 @@ const strategy3Tab = computed(() => strategyTabs.value.find((t) => t.id === 'str
 const strategy8Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy8'))
 const strategy15Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy15'))
 const strategy16Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16'))
-const loading = computed(() => !snapshot.value && wsStatus.value.includes('连接'))
+const loading = computed(
+  () =>
+    Boolean(snapshot.value?.boot) ||
+    (!snapshot.value && wsStatus.value.includes('连接')),
+)
 
 const pinnedHoldings = computed(() =>
   (snapshot.value?.holdings || []).filter((r) => Boolean(r.置顶) && Number(r.持仓) > 0),

@@ -30,3 +30,5 @@
 - `strategy/core_leader_universe.py`
 - `strategy/factors/factor27.py`
 - CLI：`python strategy/run_core_leader_pool.py`
+- 近 7 日 1m 回测（先拟合 2026 至今开盘阈值）：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr`
+- 只拟合阈值：`python backtest/strategy16_core_leader/fit_thr.py` → `thr_2026.json`

@@ -247,6 +247,8 @@ cd backtest && python strategy1.py --no-factor2 --no-open   # 仅因子1
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 7 --refresh
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack   # 研究：加回攻击波
+# 策略十六核心龙头池（因子27）近 7 日 1m
+PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 cd backtest && python run.py kaicheng --no-open
 # 天通 2026：止损后同日再买 / 因子22 收盘动量对照
 python backtest/tiantong_stop_rebuy_2026/run.py

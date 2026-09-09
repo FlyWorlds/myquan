@@ -60,7 +60,13 @@ _MYQUAN_ROOT = Path(__file__).resolve().parents[1]
 if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
-from quote_feed import LocalWsHub, QuoteFeedManager, fetch_sina_batch, ws_accept_key
+from quote_feed import (
+    LocalWsHub,
+    QuoteFeedManager,
+    fetch_sina_batch,
+    ws_accept_key,
+    ws_pack_text,
+)
 from strategy.minute import pull_akshare_1m
 from strategy import get_strategy_bindings
 from strategy.open_break import (
@@ -157,7 +163,7 @@ from watch_config import (
     occupied_slot_codes,
     slot_meta as _slot_meta_from_holdings,
 )
-from watch_snapshot import build_watch_snapshot
+from watch_snapshot import SNAPSHOT_VERSION, build_watch_snapshot
 
 # 盯盘与回测共用：默认策略一 = 因子26（浮盈回落一半）+ 因子2 + 因子22
 # 标的池唯一真源：watch_config.WATCHLIST
@@ -997,6 +1003,55 @@ def publish_watch_snapshot(
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] WS 广播失败: {e}")
     return WATCH_META_FILE, True
+
+
+def _seed_boot_watch_snapshot() -> None:
+    """HTTP/WS 先于冷启动就绪：复用上次快照，没有则占位，避免前端 503。"""
+    global _last_watch_snapshot
+    if _last_watch_snapshot is not None:
+        return
+    if WATCH_META_FILE.is_file():
+        try:
+            snap = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
+            if isinstance(snap, dict) and snap.get("type") == "snapshot":
+                _last_watch_snapshot = snap
+                return
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            pass
+    clock = _now()
+    _last_watch_snapshot = {
+        "v": SNAPSHOT_VERSION,
+        "type": "snapshot",
+        "ts": int(datetime.now().timestamp() * 1000),
+        "updatedAt": clock,
+        "clock": clock,
+        "phase": market_phase_label(),
+        "phaseKey": market_phase(),
+        "refreshSec": 5,
+        "boot": True,
+        "strategy": {
+            "id": STRATEGY_ID,
+            "name": STRATEGY_NAME,
+            "factorsLabel": _STRATEGY_FACTORS_LABEL,
+        },
+        "account": {},
+        "slotMeta": {
+            "max": 3,
+            "weight": 0.3,
+            "occupied": [],
+            "occupiedCount": 0,
+            "free": 3,
+        },
+        "indices": [],
+        "holdings": [],
+        "strategy1": [],
+        "strategy3": {},
+        "strategy8": {},
+        "strategy15": {},
+        "strategy16": [],
+        "sectors": {},
+        "strategies": _watch_tabs_with_live_s8({}),
+    }
 
 
 # 兼容旧名
@@ -5454,8 +5509,9 @@ def _resolve_watch_ui_mode(args: argparse.Namespace) -> tuple[bool, int]:
     dev_port = int(getattr(args, "ui_dev_port", None) or WATCH_UI_DEV_PORT)
     force_dev = bool(getattr(args, "ui_dev", False))
     force_static = bool(getattr(args, "ui_static", False))
+    no_ui_dev = bool(getattr(args, "no_ui_dev", False))
     env_dev = os.environ.get("WATCH_UI_DEV", "").strip().lower() in ("1", "true", "yes")
-    if force_static:
+    if no_ui_dev or force_static:
         return False, dev_port
     if force_dev or env_dev or not _watch_ui_dist_ready():
         return True, dev_port
@@ -5499,6 +5555,8 @@ def _start_watch_ui_dev(
         "stdout": subprocess.PIPE,
         "stderr": subprocess.STDOUT,
         "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
         "env": env,
     }
     if sys.platform == "win32":
@@ -5725,13 +5783,6 @@ def cmd_watch(args: argparse.Namespace) -> None:
         ui_dev_port=ui_dev_port if use_ui_dev else None,
         force=bool(getattr(args, "force", False)),
     )
-    try:
-        from stock_names import warm_name_cache
-
-        n_names = warm_name_cache()
-        print(f"[{_now()}] 股票名称缓存已预热（{n_names} 条）")
-    except Exception as e:  # noqa: BLE001
-        print(f"[{_now()}] 名称缓存预热失败（继续）: {e}")
     stop = threading.Event()
     refresh_lock = threading.Lock()
     ws_hub = LocalWsHub()
@@ -5761,27 +5812,6 @@ def cmd_watch(args: argparse.Namespace) -> None:
         with refresh_lock:
             reseed_live()
             return _refresh_open_prices(interval, get_quote=get_quote)
-
-    print("冷启动：新浪批量实时快照 + 预热日线…")
-    try:
-        # 若启动已过 9:15 且本日未重置，补跑状态清空（避免旧「已触止损」粘住）
-        ensure_watch_status_reset_today()
-        t0 = time.perf_counter()
-        n_fast = reseed_live()
-        _daily_cache_warm()
-        feed.start()
-        report, _ = safe_refresh()
-        elapsed = time.perf_counter() - t0
-        _log_watch_snapshot_push(
-            f"快照已推送: {report}（实时 {n_fast} 只 · {elapsed:.1f}s）",
-            force=True,
-        )
-    except Exception as e:
-        feed.stop()
-        _ws_hub = None
-        _release_watch_lock()
-        print(f"首次更新失败: {e}")
-        raise
 
     def loop() -> None:
         last = 0.0
@@ -5827,11 +5857,9 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 print(f"[{_now()}] 早盘节点失败 [{label}]: {e}")
 
     worker = threading.Thread(target=loop, name="holdings-watch", daemon=True)
-    worker.start()
     milestone_worker = threading.Thread(
         target=auction_milestone_loop, name="holdings-auction-milestones", daemon=True
     )
-    milestone_worker.start()
 
     class _Handler(SimpleHTTPRequestHandler):
         def __init__(self, *a: Any, **kw: Any) -> None:
@@ -5975,9 +6003,18 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 self.wfile.flush()
             except Exception:  # noqa: BLE001
                 pass
+            snap = _last_watch_snapshot
+            if snap is not None:
+                try:
+                    self.connection.sendall(
+                        ws_pack_text(json.dumps(snap, ensure_ascii=False))
+                    )
+                except OSError:
+                    pass
             self.close_connection = True
             ws_hub.serve_client(self.connection)
 
+    _seed_boot_watch_snapshot()
     try:
         server = ThreadingHTTPServer((host, port), _Handler)
     except OSError as e:
@@ -5988,12 +6025,58 @@ def cmd_watch(args: argparse.Namespace) -> None:
             f"端口 {host}:{port} 无法绑定（可能已有盯盘在跑）。\n"
             f"请先停掉旧进程再启动，避免抢写报告。\n{e}"
         ) from e
+    http_thread = threading.Thread(
+        target=server.serve_forever, name="watch-http", daemon=True
+    )
+    http_thread.start()
     url = _watch_browser_url(
         host=host,
         api_port=port,
         ui_dev_port=ui_dev_port if use_ui_dev else None,
     )
     print(f"盯盘 API 已启动: http://{host}:{port}/")
+    print("冷启动放到后台：新浪批量 + 预热日线 + 东财 SSE（页面可先连上）")
+
+    def _watch_cold_boot() -> None:
+        try:
+            from stock_names import warm_name_cache
+
+            n_names = warm_name_cache()
+            print(f"[{_now()}] 股票名称缓存已预热（{n_names} 条）")
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 名称缓存预热失败（继续）: {e}")
+        print("冷启动：新浪批量实时快照 + 预热日线…")
+        feed_started = False
+        try:
+            ensure_watch_status_reset_today()
+            t0 = time.perf_counter()
+            n_fast = reseed_live()
+            _daily_cache_warm()
+            feed.start()
+            feed_started = True
+            report, _ = safe_refresh()
+            elapsed = time.perf_counter() - t0
+            _log_watch_snapshot_push(
+                f"快照已推送: {report}（实时 {n_fast} 只 · {elapsed:.1f}s）",
+                force=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 首次更新失败（API 已就绪，继续后台刷新）: {e}")
+            if not feed_started:
+                try:
+                    feed.start()
+                except Exception as e2:  # noqa: BLE001
+                    print(f"[{_now()}] 行情源启动失败: {e2}")
+        if stop.is_set():
+            return
+        if not worker.is_alive():
+            worker.start()
+        if not milestone_worker.is_alive():
+            milestone_worker.start()
+
+    threading.Thread(
+        target=_watch_cold_boot, name="watch-cold-boot", daemon=True
+    ).start()
     if use_ui_dev:
         ui_dev_proc = _start_watch_ui_dev(
             port=ui_dev_port,
@@ -6006,6 +6089,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
         )
     elif _watch_ui_dist_ready():
         print(f"前端静态: http://{host}:{port}/ （watch-ui/dist）")
+    elif bool(getattr(args, "no_ui_dev", False)):
+        print("前端: 由 start_watch / 外部 Nuxt 提供 http://127.0.0.1:3000/")
     else:
         print(
             "提示: 无 watch-ui/dist；开发请 python index.py watch --ui-dev "
@@ -6055,7 +6140,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
     if not args.no_open:
         webbrowser.open(url)
     try:
-        server.serve_forever()
+        while not stop.wait(1.0):
+            pass
     except KeyboardInterrupt:
         print("\n已停止盯盘")
     finally:
@@ -6118,6 +6204,11 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--host", default="127.0.0.1", help="监听地址")
     w.add_argument("--port", type=int, default=8765, help="端口，默认8765")
     w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
+    w.add_argument(
+        "--no-ui-dev",
+        action="store_true",
+        help="不在 watch 进程内启动 Nuxt（start_watch.py 会自己开前端）",
+    )
     w.add_argument(
         "--ui-dev",
         action="store_true",

@@ -48,8 +48,16 @@ export function useWatchWs() {
         cache: 'no-store',
       })
       applySnapshot(data)
+      if (data.boot) {
+        store.setWsStatus('行情加载中…')
+        return
+      }
       store.setWsStatus('兜底同步 ' + (data.updatedAt || ''))
     } catch {
+      if (ws?.readyState === WebSocket.OPEN) {
+        store.setWsStatus('行情加载中…')
+        return
+      }
       store.setWsStatus('推送断开，等待重连…')
     }
   }

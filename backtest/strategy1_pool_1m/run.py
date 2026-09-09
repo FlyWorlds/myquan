@@ -15,6 +15,7 @@
   PYTHONPATH=. python3 backtest/strategy1_pool_1m/run.py
   PYTHONPATH=. python3 backtest/strategy1_pool_1m/run.py --days 7 --refresh --max-slots 3
   PYTHONPATH=. python3 backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack   # 研究：加回攻击波
+  PYTHONPATH=. python3 backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 
 研究用途，非投资建议。
 """
@@ -43,6 +44,9 @@ from holdingStocks.watch_config import (  # noqa: E402
     RESERVE_SLOT_HOUR,
     RESERVE_SLOT_MINUTE,
     SLOT_WEIGHT,
+    load_core_leader_payload,
+    load_strategy16_thr_map,
+    meta_for_code,
     strategy_watchlist,
 )
 from strategy.data import fetch_daily  # noqa: E402
@@ -53,6 +57,7 @@ from strategy.open_break import (  # noqa: E402
     DEFAULT_BAN_SINGLE_YANG,
     DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+    DEFAULT_PCT,
     floor_to_tick,
     is_t1_buy_day,
     prev_day_allows_entry,
@@ -97,7 +102,41 @@ def _em(code: str) -> str:
     return str(code).zfill(6)
 
 
-def _load_pool() -> list[dict]:
+POOL_STRATEGY1 = "strategy1"
+POOL_STRATEGY16 = "strategy16"
+POOL_CHOICES = (POOL_STRATEGY1, POOL_STRATEGY16)
+
+
+def _load_pool(pool: str = POOL_STRATEGY1) -> list[dict]:
+    name = str(pool or POOL_STRATEGY1).strip().lower()
+    if name in ("s16", "core_leader"):
+        name = POOL_STRATEGY16
+    if name == POOL_STRATEGY16:
+        payload = load_core_leader_payload()
+        picks = payload.get("picks") or []
+        if not picks:
+            raise SystemExit(
+                "策略十六池为空。请先: python strategy/run_core_leader_pool.py"
+            )
+        out: list[dict] = []
+        seen: set[str] = set()
+        for it in picks:
+            code = str(it.get("code") or it.get("symbol") or "").zfill(6)
+            if not code or code in seen or code == "000000":
+                continue
+            seen.add(code)
+            item = dict(meta_for_code(code, {"positions": []}))
+            if it.get("name"):
+                item["name"] = str(it["name"])
+            item["universe"] = "strategy16"
+            item["concept"] = it.get("concept")
+            thr = load_strategy16_thr_map().get(code)
+            if thr is not None:
+                item["pct"] = float(thr)
+                item["entry_pct"] = float(thr)
+                item["stop_pct"] = float(DEFAULT_PCT)
+            out.append(item)
+        return out
     return list(strategy_watchlist())
 
 
@@ -1224,6 +1263,7 @@ def write_trade_ledger(
     summary: dict[str, Any],
     buy_label: str,
     n_pool: int,
+    title: str = "策略一定盘池",
 ) -> None:
     """写出详细交割单（研究用途，非投资建议）。"""
     ps = summary.get("portfolio") or summary
@@ -1233,7 +1273,7 @@ def write_trade_ledger(
     n_buy = sum(1 for t in annotated if t.get("side") == "buy")
     n_sell = sum(1 for t in annotated if t.get("side") == "sell")
     lines = [
-        "# 交割单 · 策略一定盘池 1m 三槽",
+        f"# 交割单 · {title} 1m 三槽",
         "",
         "> 研究用途，非投资建议。未计佣金/印花税/滑点。",
         "",
@@ -1392,6 +1432,8 @@ def run(
     source: str = "auto",
     buy_mode: str = BUY_MODE_DEFAULT,
     tag: str | None = None,
+    pool: str = POOL_STRATEGY1,
+    fit_thr: bool = False,
 ) -> dict:
     entry = float(entry_pct if entry_pct is not None else DEFAULT_ENTRY_PCT)
     pb = float(DEFAULT_PULLBACK_PCT)
@@ -1399,25 +1441,61 @@ def run(
     if bmode not in BUY_MODES:
         bmode = BUY_MODE_DEFAULT
     allow_attack = bmode == BUY_MODE_OPEN_OR_ATTACK
+    pool_id = str(pool or POOL_STRATEGY1).strip().lower()
+    if pool_id in ("s16", "core_leader"):
+        pool_id = POOL_STRATEGY16
+    is_s16 = pool_id == POOL_STRATEGY16
     suffix = str(tag or "").strip()
     if not suffix and bmode != BUY_MODE_DEFAULT:
         suffix = "attack" if bmode == BUY_MODE_OPEN_OR_ATTACK else bmode
-    pool = _load_pool()
+    pool_rows = _load_pool(pool_id)
+    if is_s16:
+        need_fit = bool(fit_thr) or not load_strategy16_thr_map()
+        if need_fit:
+            import importlib.util
+
+            _fit_py = _ROOT / "backtest" / "strategy16_core_leader" / "fit_thr.py"
+            spec = importlib.util.spec_from_file_location("s16_fit_thr", _fit_py)
+            if spec is None or spec.loader is None:
+                raise SystemExit(f"无法加载 {_fit_py}")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            mod.fit_strategy16_thresholds()
+            pool_rows = _load_pool(pool_id)
+    out_dir = (
+        _ROOT / "backtest" / "strategy16_core_leader" if is_s16 else OUT
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+    strat_title = (
+        "策略十六·核心龙头（因子27 池）"
+        if is_s16
+        else "策略一定盘池"
+    )
     rows: list[dict] = []
     stock_payload: list[dict[str, Any]] = []
     buy_label = "开盘突破" if bmode == BUY_MODE_OPEN else "开盘突破或攻击波"
+    s16_thr_note = ""
+    if is_s16:
+        n_fitted = sum(
+            1
+            for w in pool_rows
+            if abs(float(w.get("entry_pct") or entry) - float(entry)) > 1e-12
+        )
+        s16_thr_note = (
+            f" · 开盘阈值=2026至今个股择优（{n_fitted}/{len(pool_rows)} 只非默认）"
+        )
     print(
-        f"定盘池 {len(pool)} 只 · 近 {days} 交易日 1m · source={source} · "
-        f"三槽≤{max_slots} · 先触发先买 · entry/pb={entry*100:.1f}% · 买={buy_label}"
+        f"{strat_title} {len(pool_rows)} 只 · 近 {days} 交易日 1m · source={source} · "
+        f"三槽≤{max_slots} · 先触发先买 · 买={buy_label}{s16_thr_note}"
     )
 
-    for w in pool:
+    for w in pool_rows:
         code = str(w.get("code") or "").zfill(6)
         name = str(w.get("name") or code)
         sina = str(w.get("sina") or _sina(code)).lower()
         ep = float(w.get("entry_pct") or w.get("pct") or entry)
-        sp = float(w.get("stop_pct") or w.get("pct") or pb)
-        print(f"· {code} {name} …", flush=True)
+        sp = float(pb) if is_s16 else float(w.get("stop_pct") or w.get("pct") or pb)
+        print(f"· {code} {name} 开盘±{ep*100:.1f}% …", flush=True)
         daily = _daily(sina)
         mins = _minutes(sina, refresh=refresh, days=int(days), source=source)
         rep = replay_factor26_1m(
@@ -1481,7 +1559,8 @@ def run(
     th = derive_thresholds()
     summary = {
         "window_days": int(days),
-        "n_pool": len(pool),
+        "n_pool": len(pool_rows),
+        "pool": pool_id,
         "n_with_rounds": int(len(finished)),
         "equal_weight_pnl_pct": eq_pnl,
         "portfolio": ps,
@@ -1489,6 +1568,12 @@ def run(
         "slot_weight": float(SLOT_WEIGHT),
         "priority": "first_trigger_first_buy",
         "buy_mode": bmode,
+        "entry_by_code": {
+            str(w.get("code")): float(w.get("entry_pct") or w.get("pct") or entry)
+            for w in pool_rows
+        }
+        if is_s16
+        else None,
         "factor2_alert": th.as_dict(),
         "factor2_label": th.label(),
         "factor2_rules": format_rules(th),
@@ -1497,12 +1582,12 @@ def run(
     }
 
     stem = f"_{suffix}" if suffix else ""
-    out_csv = OUT / f"pool_1m_7d{stem}.csv"
-    out_json = OUT / f"pool_1m_7d{stem}.json"
-    out_trades = OUT / f"portfolio_trades{stem}.csv"
-    out_eq = OUT / f"portfolio_equity{stem}.csv"
-    out_md = OUT / (f"REPORT{stem}.md" if stem else "REPORT.md")
-    out_ledger = OUT / (f"TRADE_LEDGER{stem}.md" if stem else "TRADE_LEDGER.md")
+    out_csv = out_dir / f"pool_1m_7d{stem}.csv"
+    out_json = out_dir / f"pool_1m_7d{stem}.json"
+    out_trades = out_dir / f"portfolio_trades{stem}.csv"
+    out_eq = out_dir / f"portfolio_equity{stem}.csv"
+    out_md = out_dir / (f"REPORT{stem}.md" if stem else "REPORT.md")
+    out_ledger = out_dir / (f"TRADE_LEDGER{stem}.md" if stem else "TRADE_LEDGER.md")
 
     df.drop(columns=["trades"], errors="ignore").to_csv(out_csv, index=False)
     pd.DataFrame(port.get("trades") or []).to_csv(out_trades, index=False)
@@ -1525,14 +1610,26 @@ def run(
     )
 
     cal = ps.get("calendar") or []
+    rule_universe = (
+        [
+            "- **选股**：因子27 核心龙头滚动近3个月冻结池（约20只；不与策略一共享三槽，本回测独立开 3 槽）",
+            "- **过滤**：日线（前日阴/小阳、双阳禁买）；因子2 回撤仅预警阈值，不注资",
+            "- **开盘阈值**：非固定；2026-01-01 至今回测日线开盘突破，在 {2%, 2.5%, 3%} 按夏普择优（买/止损拟合同 thr）；"
+            "1m 组合只用该 thr **买入**，卖出仍因子26（硬保护 2.5%）。拟合窗含本周则近 7 日有样本内重叠",
+        ]
+        if is_s16
+        else [
+            "- **选股/过滤**：日线（前日阴/小阳、双阳禁买）；因子2 回撤仅预警阈值，不注资",
+        ]
+    )
     lines = [
-        "# 策略一定盘池 · 近 7 日 1 分钟路径回测（三槽）",
+        f"# {strat_title} · 近 {days} 日 1 分钟路径回测（三槽）",
         "",
         "> 研究用途，非投资建议。",
         "",
         "## 规则",
         "",
-        "- **选股/过滤**：日线（前日阴/小阳、双阳禁买）；因子2 回撤仅预警阈值，不注资",
+        *rule_universe,
         "- **成交**：池内票近 N 交易日 **1 分钟** path-dependent（"
         f"买={buy_label}；"
         "卖=多层止盈：阶梯10%/15% + 中赚3–10%波动回落 + 大赚后回落2%清 + 未到3%次日峰值回落2.5%；"
@@ -1547,7 +1644,15 @@ def run(
         f"每槽约 {SLOT_WEIGHT*100:.0f}% 仓；T+1；槽满触买入队，释放后再按触发先后补；"
         f"**当日止损/已记卖出禁再买**",
         f"- 窗长：{days} 交易日；日历：{', '.join(cal) if cal else '—'}",
-        f"- 默认阈值 ±{entry*100:.1f}%（个股可覆盖）",
+        (
+            "- **个股开盘阈值**（2026至今夏普择优）："
+            + "；".join(
+                f"{r['code']}±{float(r['entry_pct'])*100:.1f}%"
+                for r in rows
+            )
+            if is_s16
+            else f"- 默认阈值 ±{entry*100:.1f}%（个股可覆盖）"
+        ),
         "",
         "## 三槽组合摘要",
         "",
@@ -1624,13 +1729,14 @@ def run(
             f"- 等权已平仓收益：{eq_pnl if eq_pnl is not None else '—'}%",
             f"- 因子2：{summary['factor2_label']}",
             "",
-            "| 代码 | 名称 | 天数 | 成交笔数 | 回合 | 收益% | 持有 | 末次 |",
-            "|------|------|------|----------|------|-------|------|------|",
+            "| 代码 | 名称 | 开盘阈值 | 天数 | 成交笔数 | 回合 | 收益% | 持有 | 末次 |",
+            "|------|------|----------|------|----------|------|-------|------|------|",
         ]
     )
     for r in rows:
         lines.append(
-            f"| {r['code']} | {r['name']} | {r['days_used']} | {r['n_trades']} | "
+            f"| {r['code']} | {r['name']} | ±{float(r['entry_pct'])*100:.1f}% | "
+            f"{r['days_used']} | {r['n_trades']} | "
             f"{r['n_rounds']} | {r['pnl_pct'] if r['pnl_pct'] is not None else '—'} | "
             f"{'Y' if r['holding'] else ''} | {r['last_side'] or ''} |"
         )
@@ -1653,6 +1759,7 @@ def run(
         summary=summary,
         buy_label=buy_label,
         n_pool=int(summary.get("n_pool") or 0),
+        title=strat_title,
     )
     print(f"\n写入 {out_csv}")
     print(f"写入 {out_md}")
@@ -1692,6 +1799,17 @@ def main() -> None:
         help="open=只买开盘涨到阈值（默认）；open_or_attack=开盘突破或攻击波（对照）",
     )
     ap.add_argument(
+        "--pool",
+        default=POOL_STRATEGY1,
+        choices=POOL_CHOICES,
+        help="strategy1=定盘池；strategy16=因子27 核心龙头池（产物写 backtest/strategy16_core_leader/）",
+    )
+    ap.add_argument(
+        "--fit-thr",
+        action="store_true",
+        help="策略十六：先按 2026 至今日线 {2/2.5/3}% 夏普重拟合开盘阈值",
+    )
+    ap.add_argument(
         "--tag",
         default=None,
         help="产物后缀；非默认买点会自动加 tag，避免覆盖 REPORT.md",
@@ -1705,6 +1823,8 @@ def main() -> None:
         source=str(args.source),
         buy_mode=str(args.buy_mode),
         tag=args.tag,
+        pool=str(args.pool),
+        fit_thr=bool(args.fit_thr),
     )
 
 

@@ -73,7 +73,7 @@ WATCHLIST = list(S7_WATCHLIST)
 
 ## 信号触发规则（盘中对齐回测）
 
-**盯盘 Tab**：仅 **策略1 / 策略3 / 策略8 / 策略15 / 策略16**（有实时面板）。**策略说明**按盯盘 / 完整 / 因子组合 / 研究分区；缠论笔盈亏比在 **`/factors` → 缠论**。
+**盯盘 Tab**：仅 **策略1 / 策略3 / 策略8 / 策略15 / 策略16**（有实时面板）。**策略16** 开盘买入阈值来自 `backtest/strategy16_core_leader/thr_2026.json`（2026 至今日线 {2/2.5/3}% 夏普择优；卖仍因子26 硬保护 2.5%）。**策略说明**按盯盘 / 完整 / 因子组合 / 研究分区；缠论笔盈亏比在 **`/factors` → 缠论**。
 
 | 时刻 | 行为 |
 |------|------|
@@ -160,6 +160,8 @@ python start_watch.py --force     # 强制停旧实例并启动
 cd holdingStocks && python index.py watch --no-wechat
 cd holdingStocks/watch-ui && npm install && npm run dev
 ```
+
+**启动顺序**：`watch` **先绑定并开始接受** `:8765`（HTTP `/api` + WebSocket `/ws`），再后台做冷启动（新浪批量、日线预热、东财 SSE、首屏快照）。`start_watch.py` 等 API 端口就绪后再自己开 Nuxt（并传 `--no-ui-dev`，避免两套前端抢 `:3000`）。此前若等首屏算完才绑端口，池子变大后会超过 120s，页面红字「推送断开，等待重连…」。冷启动期间若有上次 `holdings_watch.json` 会先展示旧快照，否则推 `boot` 占位。
 
 loop 内「快照已推送」默认**每 12 次**输出一条（冷启动仍打印；业务无变化跳过写盘/WS 时不计次）；恢复每次：`WATCH_SNAPSHOT_LOG_EVERY=1 python index.py watch …`
 
