@@ -153,7 +153,7 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 
 - **静态合格池**：中证500∪1000 主板，夏普等筛选 → `backtest/universe_zz500_1000/`。
 - **动态池（锁定）**：因子13 WF 每年 `T←≤T−1` 重算 Top3，见 `LOCKED.json`。
-- **盯盘**：`holdingStocks/`，规则与因子1 同源；首页 Tab：策略1 / 3 / 8 / **15**。
+- **盯盘**：`holdingStocks/`，规则与因子1 同源；首页 Tab：策略1 / 3 / 8 / 15 / **16**。
 
 ---
 
@@ -167,6 +167,17 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 - **卖飞接回（无 30m）**：因子22 收盘动量；与 F25 同由因子24 门控，高潮关掉接回。
 
 情绪口径与策略三相同：盯盘读 T-1 `mkt_max_height` / `mkt_ladder_score` / `mkt_lianban`。
+
+---
+
+## 4.6 策略十六 · 核心龙头（strategy16）
+
+> 研究用途，不构成投资建议。盯盘有实时面板；**持仓 Tab / 三槽自动成交仍只服务策略一**，本策略为对照池。
+
+- **选股（因子27）**：通达信概念成交额 ≥ 截面中位数（最多扫 Top25）；每概念至多 3 只龙头；去重后约 **20** 只；剔创业/科创/北交/ST、现价 < 100；**滚动近 3 个月冻结**（非自然季度）。
+- **买卖**：同策略一（因子26 多层止盈 + 因子2 预警 + 因子22 再买）。
+- **刷新池**：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json`。
+- 说明：[`FACTOR27.md`](FACTOR27.md)。
 
 ---
 
@@ -193,5 +204,6 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 | [`FACTOR23.md`](FACTOR23.md) | 因子23 最高连板止盈 |
 | [`FACTOR24.md`](FACTOR24.md) | 因子24 连板梯度情绪 |
 | [`FACTOR25.md`](FACTOR25.md) | 因子25 30m 震荡减磨损 |
+| [`FACTOR27.md`](FACTOR27.md) | 因子27 核心龙头（策略十六宇宙） |
 | [`TODO.MD`](../TODO.MD) | 任务优先级 |
 | [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak 审计底稿 |

@@ -63,6 +63,12 @@ _PICK_SOURCES: dict[str, dict[str, Any]] = {
             _MYQUAN / "strategy/strategies/strategy5/backtest/weekly_picks.csv",
         ],
     },
+    "strategy16": {
+        "kind": "pool",
+        "paths": [
+            _MYQUAN / "backtest/strategy16_core_leader/picks_quarter.json",
+        ],
+    },
 }
 
 
@@ -380,6 +386,40 @@ def _load_s12_signals(path: Path) -> dict[str, Any]:
     }
 
 
+def _load_s16_quarter(path: Path) -> dict[str, Any]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return _empty_picks("pool", note="核心龙头产物格式错误")
+    items: list[dict[str, Any]] = []
+    for i, it in enumerate(raw.get("picks") or [], 1):
+        code = _code_from_symbol(str(it.get("code") or it.get("symbol") or ""))
+        items.append(
+            {
+                "rank": int(it.get("rank") or i),
+                "symbol": code,
+                "code": code,
+                "name": _resolve_name(code=code, name=str(it.get("name") or "")),
+                "theme": it.get("concept") or it.get("theme"),
+                "theme_lu": it.get("rank_in_concept"),
+                "score": it.get("chg_pct"),
+            }
+        )
+    window = str(raw.get("label") or raw.get("quarter") or "")
+    until = str(raw.get("valid_until") or "")
+    note = str(raw.get("note") or "")
+    if not note:
+        note = f"近3个月 {window} 冻结" + (f"至 {until}" if until else "") + " · 通达信活跃概念龙头 · 每概念≤3 · 池约20只"
+    if not items:
+        note = (note + " · 池为空，请先跑 python strategy/run_core_leader_pool.py").strip(" ·")
+    return {
+        "kind": "pool",
+        "asOf": raw.get("as_of") or window,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": note,
+        "items": items,
+    }
+
+
 @lru_cache(maxsize=16)
 def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
     """返回策略最新选股/信号快照。"""
@@ -424,6 +464,8 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
         if sid in ("strategy4", "strategy5"):
             col = "symbols" if sid == "strategy4" else "picks"
             return _load_weekly_csv(path, symbol_col=col)
+        if sid == "strategy16":
+            return _load_s16_quarter(path)
     except Exception as e:  # noqa: BLE001
         return _empty_picks(str(spec.get("kind", "none")), note=f"读取失败: {e}")
 

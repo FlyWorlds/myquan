@@ -1,0 +1,455 @@
+{
+  "horizon": "rolling_3m",
+  "window_start": "2026-06-09",
+  "window_end": "2026-09-09",
+  "valid_until": "2026-12-09",
+  "label": "2026-06-09~2026-09-09",
+  "quarter": "2026-06-09~2026-09-09",
+  "as_of": "2026-09-09",
+  "built_at": "2026-09-09T10:02:35",
+  "source": "em_concept_spot",
+  "max_concepts": 25,
+  "per_concept": 3,
+  "target_pool": 20,
+  "price_max": 100.0,
+  "concepts": [
+    {
+      "rank": 3,
+      "name": "央国企改革",
+      "code": "BK0683",
+      "activity": 193717641622.0,
+      "chg_pct": -0.12,
+      "median": 9180586895.0,
+      "picked": 3
+    },
+    {
+      "rank": 4,
+      "name": "华为概念",
+      "code": "BK0854",
+      "activity": 176554493543.0,
+      "chg_pct": 0.05,
+      "median": 9180586895.0,
+      "picked": 3
+    },
+    {
+      "rank": 5,
+      "name": "通信技术",
+      "code": "BK1650",
+      "activity": 176129877174.0,
+      "chg_pct": 1.19,
+      "median": 9180586895.0,
+      "picked": 2
+    },
+    {
+      "rank": 6,
+      "name": "5G概念",
+      "code": "BK0714",
+      "activity": 153028277300.0,
+      "chg_pct": 1.16,
+      "median": 9180586895.0,
+      "picked": 3
+    },
+    {
+      "rank": 8,
+      "name": "百元股",
+      "code": "BK1059",
+      "activity": 151264674998.0,
+      "chg_pct": 1.24,
+      "median": 9180586895.0,
+      "picked": 0
+    },
+    {
+      "rank": 9,
+      "name": "半导体概念",
+      "code": "BK0917",
+      "activity": 139338283778.0,
+      "chg_pct": 1.18,
+      "median": 9180586895.0,
+      "picked": 3
+    },
+    {
+      "rank": 11,
+      "name": "国产芯片",
+      "code": "BK0891",
+      "activity": 120322866922.0,
+      "chg_pct": 0.66,
+      "median": 9180586895.0,
+      "picked": 2
+    },
+    {
+      "rank": 13,
+      "name": "专精特新",
+      "code": "BK1005",
+      "activity": 112609483436.0,
+      "chg_pct": 0.47,
+      "median": 9180586895.0,
+      "picked": 2
+    },
+    {
+      "rank": 14,
+      "name": "光通信模块",
+      "code": "BK1136",
+      "activity": 106292836042.0,
+      "chg_pct": 2.22,
+      "median": 9180586895.0,
+      "picked": 2
+    },
+    {
+      "rank": 15,
+      "name": "新能源车",
+      "code": "BK0900",
+      "activity": 102553875051.0,
+      "chg_pct": 0.4,
+      "median": 9180586895.0
+    },
+    {
+      "rank": 18,
+      "name": "人工智能",
+      "code": "BK0800",
+      "activity": 98927463513.0,
+      "chg_pct": -0.66,
+      "median": 9180586895.0
+    },
+    {
+      "rank": 19,
+      "name": "机器人概念",
+      "code": "BK1090",
+      "activity": 98702155336.0,
+      "chg_pct": 0.15,
+      "median": 9180586895.0
+    },
+    {
+      "rank": 20,
+      "name": "电池技术",
+      "code": "BK1648",
+      "activity": 95312434559.0,
+      "chg_pct": 0.51,
+      "median": 9180586895.0
+    },
+    {
+      "rank": 21,
+      "name": "CPO概念",
+      "code": "BK1128",
+      "activity": 95152551922.0,
+      "chg_pct": 2.02,
+      "median": 9180586895.0
+    },
+    {
+      "rank": 22,
+      "name": "最近多板",
+      "code": "BK1638",
+      "activity": 89510188393.0,
+      "chg_pct": 0.44,
+      "median": 9180586895.0
+    },
+    {
+      "rank": 23,
+      "name": "西部大开发",
+      "code": "BK0590",
+      "activity": 89251438049.0,
+      "chg_pct": -0.09,
+      "median": 9180586895.0
+    },
+    {
+      "rank": 24,
+      "name": "PCB",
+      "code": "BK0877",
+      "activity": 88481737963.0,
+      "chg_pct": 2.22,
+      "median": 9180586895.0
+    },
+    {
+      "rank": 25,
+      "name": "数据中心",
+      "code": "BK0922",
+      "activity": 79534840170.0,
+      "chg_pct": 0.26,
+      "median": 9180586895.0
+    }
+  ],
+  "used_concepts": [
+    {
+      "rank": 3,
+      "name": "央国企改革",
+      "code": "BK0683",
+      "activity": 193717641622.0,
+      "chg_pct": -0.12,
+      "median": 9180586895.0,
+      "picked": 3
+    },
+    {
+      "rank": 4,
+      "name": "华为概念",
+      "code": "BK0854",
+      "activity": 176554493543.0,
+      "chg_pct": 0.05,
+      "median": 9180586895.0,
+      "picked": 3
+    },
+    {
+      "rank": 5,
+      "name": "通信技术",
+      "code": "BK1650",
+      "activity": 176129877174.0,
+      "chg_pct": 1.19,
+      "median": 9180586895.0,
+      "picked": 2
+    },
+    {
+      "rank": 6,
+      "name": "5G概念",
+      "code": "BK0714",
+      "activity": 153028277300.0,
+      "chg_pct": 1.16,
+      "median": 9180586895.0,
+      "picked": 3
+    },
+    {
+      "rank": 9,
+      "name": "半导体概念",
+      "code": "BK0917",
+      "activity": 139338283778.0,
+      "chg_pct": 1.18,
+      "median": 9180586895.0,
+      "picked": 3
+    },
+    {
+      "rank": 11,
+      "name": "国产芯片",
+      "code": "BK0891",
+      "activity": 120322866922.0,
+      "chg_pct": 0.66,
+      "median": 9180586895.0,
+      "picked": 2
+    },
+    {
+      "rank": 13,
+      "name": "专精特新",
+      "code": "BK1005",
+      "activity": 112609483436.0,
+      "chg_pct": 0.47,
+      "median": 9180586895.0,
+      "picked": 2
+    },
+    {
+      "rank": 14,
+      "name": "光通信模块",
+      "code": "BK1136",
+      "activity": 106292836042.0,
+      "chg_pct": 2.22,
+      "median": 9180586895.0,
+      "picked": 2
+    }
+  ],
+  "picks": [
+    {
+      "code": "000523",
+      "name": "红棉股份",
+      "concept": "央国企改革",
+      "price": 4.36,
+      "chg_pct": 10.1,
+      "amount": 94331438.36,
+      "rank_in_concept": 1,
+      "rank": 1
+    },
+    {
+      "code": "000972",
+      "name": "中基健康",
+      "concept": "央国企改革",
+      "price": 4.37,
+      "chg_pct": 10.08,
+      "amount": 148291899.01,
+      "rank_in_concept": 2,
+      "rank": 2
+    },
+    {
+      "code": "600359",
+      "name": "新农开发",
+      "concept": "央国企改革",
+      "price": 8.76,
+      "chg_pct": 10.05,
+      "amount": 301816347.0,
+      "rank_in_concept": 3,
+      "rank": 3
+    },
+    {
+      "code": "603330",
+      "name": "天洋新材",
+      "concept": "华为概念",
+      "price": 11.21,
+      "chg_pct": 10.01,
+      "amount": 490131937.0,
+      "rank_in_concept": 1,
+      "concepts": "华为概念 / 专精特新",
+      "rank": 4
+    },
+    {
+      "code": "605277",
+      "name": "新亚电子",
+      "concept": "华为概念",
+      "price": 18.03,
+      "chg_pct": 10.01,
+      "amount": 364547606.0,
+      "rank_in_concept": 2,
+      "concepts": "华为概念 / 通信技术",
+      "rank": 5
+    },
+    {
+      "code": "002815",
+      "name": "崇达技术",
+      "concept": "华为概念",
+      "price": 18.59,
+      "chg_pct": 8.84,
+      "amount": 1277052248.14,
+      "rank_in_concept": 3,
+      "rank": 6
+    },
+    {
+      "code": "603042",
+      "name": "华脉科技",
+      "concept": "通信技术",
+      "price": 18.67,
+      "chg_pct": 10.02,
+      "amount": 65593311.0,
+      "rank_in_concept": 1,
+      "rank": 7
+    },
+    {
+      "code": "002498",
+      "name": "汉缆股份",
+      "concept": "通信技术",
+      "price": 7.08,
+      "chg_pct": 9.94,
+      "amount": 568450012.71,
+      "rank_in_concept": 3,
+      "rank": 8
+    },
+    {
+      "code": "000049",
+      "name": "德赛电池",
+      "concept": "5G概念",
+      "price": 22.87,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 1,
+      "rank": 9
+    },
+    {
+      "code": "000063",
+      "name": "中兴通讯",
+      "concept": "5G概念",
+      "price": 33.26,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 2,
+      "concepts": "5G概念 / 光通信模块",
+      "rank": 10
+    },
+    {
+      "code": "000066",
+      "name": "中国长城",
+      "concept": "5G概念",
+      "price": 14.69,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 3,
+      "rank": 11
+    },
+    {
+      "code": "000021",
+      "name": "深科技",
+      "concept": "半导体概念",
+      "price": 35.39,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 1,
+      "concepts": "半导体概念 / 国产芯片",
+      "rank": 12
+    },
+    {
+      "code": "000062",
+      "name": "深圳华强",
+      "concept": "半导体概念",
+      "price": 23.59,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 2,
+      "rank": 13
+    },
+    {
+      "code": "000541",
+      "name": "佛山照明",
+      "concept": "半导体概念",
+      "price": 4.99,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 3,
+      "rank": 14
+    },
+    {
+      "code": "000034",
+      "name": "神州数码",
+      "concept": "国产芯片",
+      "price": 23.37,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 2,
+      "rank": 15
+    },
+    {
+      "code": "000050",
+      "name": "深天马Ａ",
+      "concept": "国产芯片",
+      "price": 6.6,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 3,
+      "rank": 16
+    },
+    {
+      "code": "603663",
+      "name": "三祥新材",
+      "concept": "专精特新",
+      "price": 43.02,
+      "chg_pct": 10.0,
+      "amount": 804329339.0,
+      "rank_in_concept": 2,
+      "rank": 17
+    },
+    {
+      "code": "603938",
+      "name": "三孚股份",
+      "concept": "专精特新",
+      "price": 48.87,
+      "chg_pct": 9.99,
+      "amount": 1496619896.0,
+      "rank_in_concept": 3,
+      "rank": 18
+    },
+    {
+      "code": "000070",
+      "name": "特发信息",
+      "concept": "光通信模块",
+      "price": 16.71,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 2,
+      "rank": 19
+    },
+    {
+      "code": "000586",
+      "name": "汇源通信",
+      "concept": "光通信模块",
+      "price": 14.59,
+      "chg_pct": null,
+      "amount": null,
+      "rank_in_concept": 3,
+      "rank": 20
+    }
+  ],
+  "n_concepts": 18,
+  "n_used_concepts": 8,
+  "n_picks": 20,
+  "note": "近3个月 2026-06-09~2026-09-09 冻结至 2026-12-09：活跃概念偏高（成交额≥中位数，最多扫 Top25），每概念≤3，池约 20 只；实际 20 只 / 8 个概念入池；主板非ST非科创创业、现价<100。买卖同策略一（因子26/2/22）。研究用途，非投资建议。",
+  "errors": []
+}

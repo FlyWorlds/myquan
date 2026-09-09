@@ -29,6 +29,7 @@
   · factor24 — 连板梯度情绪（定止盈目标 + 是否启用因子22）
   · factor25 — 30m 震荡减磨损（确认止损 + 动态半仓止盈 + 卖飞回补）
   · factor26 — 浮盈回落一半止盈（买同开盘突破；卖=持仓最高浮盈回落一半；策略一主因子）
+  · factor27 — 核心龙头（通达信活跃概念偏高 → 概念内龙头；滚动近3个月冻结；策略十六宇宙）
   · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
   分类见 strategy.factors.categories
 """
@@ -61,6 +62,7 @@ from strategy.factors import factor23 as _factor23  # noqa: F401
 from strategy.factors import factor24 as _factor24  # noqa: F401
 from strategy.factors import factor25 as _factor25  # noqa: F401
 from strategy.factors import factor26 as _factor26  # noqa: F401
+from strategy.factors import factor27 as _factor27  # noqa: F401
 from strategy.factors import factor_cf1 as _factor_cf1  # noqa: F401
 from strategy.core.factor_registry import FACTOR_REGISTRY, get_factor, list_factors
 from strategy.factors.categories import list_category_catalog

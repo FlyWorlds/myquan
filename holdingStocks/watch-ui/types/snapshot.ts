@@ -257,7 +257,7 @@ export interface StrategyTab {
   aliases?: string[]
   implemented?: boolean
   is_watch_default?: boolean
-  /** 是否在盯盘首页 Tab 展示（strategy1/3/8/15） */
+  /** 是否在盯盘首页 Tab 展示（strategy1/3/8/15/16） */
   watch_tab?: boolean
   /** watch | production | factor_template | research */
   registry_kind?: string
@@ -331,6 +331,7 @@ export interface WatchSnapshot {
   strategy3?: Strategy3Payload
   strategy8?: Strategy8Payload
   strategy15?: Strategy15Payload
+  strategy16?: HoldingRow[]
   sectors?: SectorsLivePayload
   strategies: StrategyTab[]
 }

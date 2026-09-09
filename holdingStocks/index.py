@@ -446,7 +446,7 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
 }
 
 # 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
-WATCH_LIVE_TAB_IDS = frozenset({"strategy1", "strategy3", "strategy8", "strategy15"})
+WATCH_LIVE_TAB_IDS = frozenset({"strategy1", "strategy3", "strategy8", "strategy15", "strategy16"})
 
 _REGISTRY_KIND_ZH = {
     "watch": "盯盘",
@@ -564,6 +564,8 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
             tabs[-1]["reportPath"] = "backtest/strategy12_emotion_gate/REPORT.md"
         if spec.id == "strategy15":
             tabs[-1]["reportPath"] = "docs/STRATEGY.md"
+        if spec.id == "strategy16":
+            tabs[-1]["reportPath"] = "docs/FACTOR27.md"
         from strategy_picks_loader import load_strategy_picks
 
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
@@ -841,6 +843,7 @@ def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
             else snapshot.get("strategy8")
         ),
         "strategy15": snapshot.get("strategy15"),
+        "strategy16": snapshot.get("strategy16"),
         "phaseKey": snapshot.get("phaseKey"),
         "strategy": snapshot.get("strategy"),
     }
@@ -2502,6 +2505,13 @@ def _apply_portfolio_slots(
             continue
         if bool(r.get("当日禁买")):
             continue
+        try:
+            from watch_config import is_strategy16_watch_only
+
+            if is_strategy16_watch_only(code):
+                continue
+        except Exception:  # noqa: BLE001
+            pass
         pos = str(r.get("持仓状态") or "")
         if pos in ("当日禁买", "已止损"):
             continue
@@ -5226,7 +5236,15 @@ def _refresh_once(
         try:
             from wechat_notify import notify_watch_rows
 
-            notify_watch_rows(rows)
+            from watch_config import is_strategy16_watch_only
+
+            notify_watch_rows(
+                [
+                    r
+                    for r in rows
+                    if not is_strategy16_watch_only(str(r.get("代码") or ""))
+                ]
+            )
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 微信预警推送异常: {e}")
     elif wechat and is_auction_window():

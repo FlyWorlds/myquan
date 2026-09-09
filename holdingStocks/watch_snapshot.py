@@ -109,6 +109,14 @@ def filter_portfolio_holdings(
         alert_only = (not in_pool) and _is_today_alert_row(r)
         if holdings_only:
             alert_only = False
+        if alert_only:
+            try:
+                from watch_config import is_strategy16_watch_only
+
+                if is_strategy16_watch_only(c):
+                    continue
+            except Exception:  # noqa: BLE001
+                pass
         if not in_pool and not alert_only and qty <= 0:
             continue
         if c in seen:
@@ -206,6 +214,17 @@ def build_watch_snapshot(
         for r in rows
         if not r.get("error") and code_key(str(r.get("代码") or "")) in strategy_codes
     ]
+    try:
+        from watch_config import core_leader_codes
+
+        s16_codes = core_leader_codes()
+    except Exception:  # noqa: BLE001
+        s16_codes = set()
+    strategy16_rows = [
+        _strip_holdings_pnl(r)
+        for r in rows
+        if not r.get("error") and code_key(str(r.get("代码") or "")) in s16_codes
+    ]
     slot_meta = None
     for r in rows:
         if isinstance(r.get("_slot_meta"), dict):
@@ -241,6 +260,7 @@ def build_watch_snapshot(
         "strategy3": strategy3 or {},
         "strategy8": strategy8 or {},
         "strategy15": strategy15 or {},
+        "strategy16": strategy16_rows,
         "sectors": sectors or {},
         "strategies": strategies or [],
     }

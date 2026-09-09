@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -202,6 +203,49 @@ def limit_down_pct_of(code: str) -> float:
 limit_up_pct_of = limit_down_pct_of
 
 
+CORE_LEADER_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "picks_quarter.json"
+
+
+def load_core_leader_payload() -> dict[str, Any]:
+    if not CORE_LEADER_PICKS_PATH.is_file():
+        return {}
+    try:
+        raw = json.loads(CORE_LEADER_PICKS_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def core_leader_codes() -> set[str]:
+    """策略十六滚动近3个月冻结池（因子27）。"""
+    out: set[str] = set()
+    for it in load_core_leader_payload().get("picks") or []:
+        c = code_key(str(it.get("code") or it.get("symbol") or ""))
+        if c and c != "000000":
+            out.add(c)
+    return out
+
+
+def is_strategy16_watch_only(
+    code: str,
+    holdings: dict[str, Any] | None = None,
+) -> bool:
+    """仅核心龙头池、非策略一定盘、非用户持仓：不算三槽、不进持仓 Tab 预警。"""
+    c = code_key(code)
+    if c in strategy_watchlist_codes():
+        return False
+    if holdings is None:
+        try:
+            from index import load_holdings
+
+            holdings = load_holdings()
+        except Exception:  # noqa: BLE001
+            holdings = {}
+    if c in set(portfolio_pool_codes(holdings or {})):
+        return False
+    return c in core_leader_codes()
+
+
 def is_mainboard_pool(code: str) -> bool:
     """策略一股票池：沪深主板（剔创业板/科创板/北交所）。"""
     c = code_key(code)
@@ -394,7 +438,7 @@ def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str
 
 
 def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """盯盘拉行情/算信号：策略1 定盘池 + 用户持仓池（去重）。"""
+    """盯盘拉行情/算信号：策略1 定盘池 + 核心龙头池 + 用户持仓池（去重）。"""
     if holdings is None:
         try:
             from index import load_holdings
@@ -404,6 +448,13 @@ def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
             holdings = {}
     seen = {code_key(w["code"]) for w in strategy_watchlist()}
     out = list(strategy_watchlist())
+    for code in core_leader_codes():
+        if code in seen:
+            continue
+        seen.add(code)
+        item = meta_for_code(code, holdings)
+        item["universe"] = "strategy16"
+        out.append(item)
     for code in portfolio_pool_codes(holdings):
         if code in seen:
             continue

@@ -54,9 +54,10 @@ akshare DataFrame
 | **因子26** | 选股日线 / 成交 1m；池回测近 7 日；T+1；**买=开盘阈值**；卖=硬保护2.5% + 中赚3–10%动态高点回落0.5×20日日频σ + 阶梯10%/15% + 大赚后回落2%清 + 买入日未到3%则次日峰值回落2.5%；买入日盈利≥3%不记、其余都记；三槽（盘中/隔夜均可持3、日最多买2、当日卖出禁再买） |
 | **因子1（复用）** | 开盘±锚定止损；策略三/四/八等仍用；已非策略一主因子 |
 | **动态选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top20**（宽宇宙主板，剔ST/百元股，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
+| **策略十六选股（研究）** | **因子27 核心龙头**（活跃概念偏高、每概念≤3、池约20只、滚动近3个月冻结）→ `python strategy/run_core_leader_pool.py` |
 | **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
 
-因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md) · 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md) · 因子26：[`docs/FACTOR26.md`](docs/FACTOR26.md)
+因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md) · 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md) · 因子26：[`docs/FACTOR26.md`](docs/FACTOR26.md) · 因子27：[`docs/FACTOR27.md`](docs/FACTOR27.md)
 
 ```bash
 cd backtest && python strategy1.py --rules
@@ -108,6 +109,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五 | 低中梯度开 F22/F25；高潮关接回 |
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡 | 30m 确认止损+动态半仓+卖飞回补；见 [`docs/FACTOR25.md`](docs/FACTOR25.md) |
 | **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买=开盘阈值 1m；卖=硬保护2.5% + 中赚3–10%动态高点回落0.5×20日日频σ + 阶梯10%/15% + 大赚后回落2%清 + 买入日未到3%则次日峰值回落2.5%；买入日盈利≥3%不记、其余都记；池近 7 日；见 [`docs/FACTOR26.md`](docs/FACTOR26.md) |
+| **factor27** | 因子27-核心龙头 | 情绪题材 | 策略十六宇宙 | 通达信活跃概念≥中位数（最多扫 Top25）；每概念≤3；池约20只；主板非ST<100元；滚动近3个月冻结；见 [`docs/FACTOR27.md`](docs/FACTOR27.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
 
 ### 策略一览
@@ -123,6 +125,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材（盯盘实时重算）→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2%；调参 2020–2024 +645%/夏普 1.23，盲测 +3.6%/回撤 55% |
 | **strategy15** | 策略十五·连板减磨损 | factor1+22+23+24+25 | ✅ 盯盘 | 震荡 F25(30m) 减磨损；高潮关接回；回测 `backtest/strategy15_m30_chop/` |
+| **strategy16** | 策略十六·核心龙头 | factor27+26+2+22 | ✅ 盯盘 | 通达信活跃龙头近3个月池约20只；买卖同策略一；盯盘 Tab 不占三槽 |
 
 `run_strategy7` 已归入 **因子17-缠论笔盈亏比**（Web 策略栏不展示）。
 `run_strategy9_emotion` 已归入 **因子18-低开跌停情绪**（Web 策略栏不展示）。
@@ -190,6 +193,9 @@ cd myquan && python strategy/run_factor13_bear_shield_wf.py
 python backtest/strategy12_emotion_gate/tune.py
 python backtest/strategy12_emotion_gate/run.py
 
+# 策略十六：核心龙头池（通达信概念活跃度，滚动近3个月）
+python strategy/run_core_leader_pool.py
+
 # 离线规则测试
 cd myquan && python -m unittest -v test_strategy_rules.py
 
@@ -251,7 +257,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 
 
-- 规则与 **因子1** 同源（`strategy/open_break.py`）；盯盘首页 Tab 为 **策略1 / 3 / 8 / 15**；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。策略十二在 `/strategies` 因子组合栏。
+- 规则与 **因子1** 同源（`strategy/open_break.py`）；盯盘首页 Tab 为 **策略1 / 3 / 8 / 15 / 16**；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。策略十二在 `/strategies` 因子组合栏。
 - 早盘节点：9:15 竞价+**全日状态重置**（sticky/缓存/微信防抖，只留实仓；启动过点补跑）→ 9:20 不可撤 → 9:25 算阈值/过门 → 9:30 触发信号（`watch_config.py`）。因子26 止盈触达按 **1 分钟 path-dependent**（禁止全日 low×抬高后卖价假触）。
 - 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
 - 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。一键启动：`python start_watch.py`。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
@@ -278,6 +284,8 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 ## 盯盘要点
 
 **策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略收益**（自 2026-09-01 起因子1 回放、含费用；见 `watch_config.STRATEGY_PNL_START`）。额外盯盘（非 Top20）见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材科技 601208；金安国纪 002636、科森已移出）。
+
+**策略16 Tab**：因子27 核心龙头池（滚动近 3 个月冻结）+ 同策略一买卖信号；不占策略一三槽、不进持仓 Tab 预警。刷新：`python strategy/run_core_leader_pool.py`。
 
 **持仓三槽**：盘中/隔夜最多 3 只实仓（各约 30%）；当日最多买 2。连续竞价（9:30–11:30 / 13:00–15:00）才自动成交；买入/卖出触达按 1 分钟顺序（买=开盘阈值；未走完分钟不用现价撞抬高后卖价）；同一轮止损不立刻补仓。因子22 14:57 后收盘确认。止损若记了 `account_cash` 会加回现金。
 

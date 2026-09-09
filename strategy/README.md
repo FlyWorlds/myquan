@@ -92,6 +92,7 @@ strategy/
 | **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五择时 | 低/中梯度开因子22；高梯度关因子22并上移止盈；见 [`docs/FACTOR24.md`](../docs/FACTOR24.md) |
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡叠加 | 30m 确认止损 + 动态半仓 + 卖飞回补；见 [`docs/FACTOR25.md`](../docs/FACTOR25.md) |
 | **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买=开盘阈值 1m；卖=硬保护2.5% + 中赚3–10%动态高点回落0.5×20日日频σ + 阶梯10%/15% + 大赚后回落2%清 + 买入日未到3%则次日峰值回落2.5%；买入日盈利≥3%不记、其余都记；池回测近 7 日；见 [`docs/FACTOR26.md`](../docs/FACTOR26.md) |
+| **factor27** | 因子27-核心龙头 | 情绪题材 | 策略十六宇宙 | 通达信概念成交额≥中位数（最多扫 Top25）；每概念≤3；池约20只；主板非ST非科创创业、现价<100；滚动近3个月冻结；见 [`docs/FACTOR27.md`](../docs/FACTOR27.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
@@ -116,6 +117,7 @@ for f in list_factors():
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**（盯盘实时重算）→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2% 空仓；调参 2020–2024 +645%/夏普 1.23，盲测 2025→ +3.6%/回撤 55%；`backtest/strategy12_emotion_gate/` |
 | **strategy15** | 策略十五·连板减磨损 | factor1 + factor22 + factor23 + factor24 + factor25 | ✅ 盯盘 | 因子1 建仓；震荡 F25(30m) 确认止损/动态半仓/回补；高潮关接回；盯盘 Tab |
+| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor2 + factor22 | ✅ 盯盘 | 通达信活跃概念龙头（每概念≤3，池约20只，滚动近3个月冻结）；买卖同策略一；不占策略一三槽 |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
 策略九 CLI（`run_strategy9_emotion`）已归入 **因子18**，Web 策略栏不展示。
@@ -297,6 +299,7 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy6` | 因子12 反转池近高 Top5 等权持有；研究候选，不替换策略五 |
 | `run_strategy12` | 因子18 恐慌空仓 + 因子21 涨停次日低开（v6 昨开板+指数昨收门）；`backtest/strategy12_emotion_gate/run.py`（盲测未过关） |
 | `run_strategy15` | 连板减磨损（F23/F24 + 震荡 F25 30m；回测 `backtest/strategy15_m30_chop/run.py`）；盯盘 `strategy15` Tab |
+| `run_core_leader_pool` | 策略十六近3个月选股：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json` |
 | `run_strategy9_emotion` | 因子18 家数对照上证（CLI，Web 不展示） |
 | `run_strategy2` | 因子8缠论选股；`panel` / `panel_path` / `factor_column` / `start` / `end` |
 | `OpenBreak3Strategy` | = Strategy1 执行类 |
