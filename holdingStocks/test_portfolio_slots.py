@@ -93,6 +93,70 @@ def test_full_slots():
     assert len(occupied_slot_codes(holdings)) == 3
 
 
+def test_stop_trace_in_slot_area_not_occupying():
+    """止损平仓：进三槽留痕区、不占槽；实仓仍可满 3。"""
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {"代码": "600552", "名称": "凯盛", "持仓": 100, "持仓状态": "已经买入", "距买点%": 1},
+        {"代码": "600301", "名称": "华锡", "持仓": 100, "持仓状态": "已经买入", "距买点%": 2},
+        {"代码": "601020", "名称": "华钰", "持仓": 100, "持仓状态": "已经买入", "距买点%": 3},
+        {
+            "代码": "600330",
+            "名称": "天通",
+            "持仓": 0,
+            "持仓状态": "已平仓",
+            "已实现": True,
+            "预警": "已触止损",
+            "距买点%": 0,
+        },
+    ]
+    picked = filter_portfolio_holdings(
+        rows, portfolio_codes={"600552", "600301", "601020", "600330"}, phase="continuous"
+    )
+    pinned = [r for r in picked if r.get("置顶")]
+    traces = [r for r in picked if r.get("槽位留痕")]
+    assert len(pinned) == 3
+    assert all(int(r.get("持仓") or 0) > 0 for r in pinned)
+    assert len(traces) == 1
+    assert traces[0]["代码"] == "600330"
+    assert traces[0].get("槽位占用") is False
+    assert traces[0].get("置顶") is False
+
+
+def test_stop_trace_visible_outside_continuous():
+    """盘前/收盘：止损留痕仍进持仓 Tab（次日才清）。"""
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {"代码": "600552", "名称": "凯盛", "持仓": 100, "持仓状态": "已经买入"},
+        {
+            "代码": "600330",
+            "名称": "天通",
+            "持仓": 0,
+            "持仓状态": "已平仓",
+            "已实现": True,
+            "预警": "已触止损",
+        },
+        {
+            "代码": "002104",
+            "名称": "恒宝",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "将买入",
+            "近买点": True,
+        },
+    ]
+    picked = filter_portfolio_holdings(
+        rows, portfolio_codes={"600552", "600330"}, phase="pre_auction"
+    )
+    codes = [r["代码"] for r in picked]
+    assert "600552" in codes
+    assert "600330" in codes
+    assert "002104" not in codes
+    assert next(r for r in picked if r["代码"] == "600330").get("槽位留痕") is True
+
+
 def test_filter_includes_alert_without_pool():
     from watch_snapshot import filter_portfolio_holdings
 
@@ -109,7 +173,7 @@ def test_filter_includes_alert_without_pool():
         },
         {"代码": "600301", "名称": "华锡", "持仓": 0, "持仓状态": "空仓", "预警": "空仓", "距买点%": 5},
     ]
-    picked = filter_portfolio_holdings(rows, portfolio_codes={"600552"})
+    picked = filter_portfolio_holdings(rows, portfolio_codes={"600552"}, phase="continuous")
     codes = [str(r["代码"]) for r in picked]
     assert "600552" in codes
     assert "002104" in codes
@@ -134,7 +198,7 @@ def test_pin_top3_slots():
         {"代码": "002104", "名称": "恒宝", "持仓": 0, "持仓状态": "待买入", "预警": "已触买", "距买点%": 0},
     ]
     picked = filter_portfolio_holdings(
-        rows, portfolio_codes={"600301", "600552", "600330", "002104"}
+        rows, portfolio_codes={"600301", "600552", "600330", "002104"}, phase="continuous"
     )
     pinned = [r for r in picked if r.get("置顶")]
     assert len(pinned) == 3
@@ -237,7 +301,7 @@ def test_finalize_sold_today_is_stopped():
         "策略回放持有": False,
     }
     _finalize_position_row(row)
-    assert row["持仓状态"] == "已止损"
+    assert row["持仓状态"] == "已平仓"
 
 
 def test_finalize_sold_today_rebuy_banned():
@@ -264,14 +328,14 @@ def test_apply_trigger_sold_today_bans_rebuy():
     from index import _apply_trigger_date_fields
 
     row = {
-        "持仓状态": "已止损",
+        "持仓状态": "已平仓",
         "预警": "止损",
         "已触买": "否",
         "买点": 10.5,
         "止损": 9.8,
         "成交价": 9.8,
     }
-    sig = {"hit_buy": False, "hit_stop": True, "因子触发": "已触发", "持仓状态": "已止损"}
+    sig = {"hit_buy": False, "hit_stop": True, "因子触发": "已触发", "持仓状态": "已平仓"}
     _apply_trigger_date_fields(
         row,
         sig=sig,

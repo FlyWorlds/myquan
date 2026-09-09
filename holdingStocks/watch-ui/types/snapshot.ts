@@ -49,6 +49,7 @@ export interface HoldingRow {
   持仓状态?: string
   置顶?: boolean
   槽位占用?: boolean
+  槽位留痕?: boolean
   槽位候选?: boolean
   当日预警?: boolean
   因子侧?: string

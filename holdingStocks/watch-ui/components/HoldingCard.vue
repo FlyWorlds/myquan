@@ -10,7 +10,18 @@ const pdg = props.row['价位小数'] ?? 2
 const visual = computed(() => resolveSignalVisual(props.row))
 
 const posStatus = computed(() => String(props.row.持仓状态 || '').trim() || '-')
-const pinned = computed(() => Boolean(props.row.置顶) && Number(props.row.持仓) > 0)
+const pinned = computed(
+  () => Boolean(props.row.置顶) && Number(props.row.持仓) > 0,
+)
+const slotTrace = computed(
+  () =>
+    Boolean(props.row.槽位留痕) ||
+    (Number(props.row.持仓) <= 0 &&
+      (Boolean(props.row.已实现) ||
+        posStatus.value === '已平仓' ||
+        posStatus.value === '已触止损平仓' ||
+        posStatus.value === '已止损')),
+)
 
 const posChipStyle = computed(() => {
   const s = posStatus.value
@@ -26,6 +37,13 @@ const posChipStyle = computed(() => {
       color: 'var(--watch-down)',
       borderColor: 'color-mix(in srgb, var(--watch-down) 45%, transparent)',
       background: 'color-mix(in srgb, var(--watch-down) 12%, transparent)',
+    }
+  }
+  if (s === '已平仓' || s === '已触止损平仓' || s === '已止损' || s === '当日禁买') {
+    return {
+      color: 'var(--ui-text-2)',
+      borderColor: 'var(--ui-hairline)',
+      background: 'color-mix(in srgb, var(--ui-text-2) 10%, transparent)',
     }
   }
   if (s === '待买入') {
@@ -79,6 +97,11 @@ const cardClass = computed(() => {
               class="rounded-full px-2 py-0.5 text-xs font-medium"
               style="color: var(--watch-hold); border: 1px solid color-mix(in srgb, var(--watch-hold) 50%, transparent); background: color-mix(in srgb, var(--watch-hold) 16%, transparent)"
             >置顶·三槽</span>
+            <span
+              v-else-if="slotTrace"
+              class="rounded-full px-2 py-0.5 text-xs font-medium text-ui-text-2"
+              style="border: 1px solid var(--ui-hairline); background: color-mix(in srgb, var(--ui-text-2) 8%, transparent)"
+            >止损留痕·不占槽</span>
             <span
               class="rounded-full border px-2 py-0.5 text-xs font-medium"
               :style="posChipStyle"

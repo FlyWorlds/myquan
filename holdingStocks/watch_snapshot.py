@@ -76,11 +76,14 @@ def _is_today_alert_row(row: dict[str, Any]) -> bool:
 def filter_portfolio_holdings(
     rows: list[dict[str, Any]],
     portfolio_codes: set[str] | None = None,
+    *,
+    phase: str | None = None,
 ) -> list[dict[str, Any]]:
-    """持仓 Tab：实仓/当日留痕 + 当日预警票（预警仅展示，不登记 qty/成本）。
+    """持仓 Tab：实仓/当日止损留痕 + 当日预警票（预警仅展示，不登记 qty/成本）。
 
-    排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=3）→ 当日留痕 → 预警/候选 → 其余。
-    9:15–9:30（非 continuous）：只展示实仓 qty>0，其它状态清空不进持仓 Tab。
+    排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=3）→ 当日止损留痕（不占槽）→ 预警/候选 → 其余。
+    止损平仓后当日仍进三槽区展示（槽位留痕=True、槽位占用=False），次日随 realized 清除。
+    竞价/收盘：仍展示实仓 + 当日止损留痕；其它空仓预警不进持仓 Tab。
     """
     from watch_config import MAX_PORTFOLIO_SLOTS, code_key, market_phase, portfolio_pool_codes
 
@@ -92,9 +95,21 @@ def filter_portfolio_holdings(
         except Exception:  # noqa: BLE001
             portfolio_codes = set()
 
-    # 竞价阶段：持仓 Tab 只留实仓
-    phase = market_phase()
-    holdings_only = phase != "continuous"
+    def _is_stop_trace(r: dict[str, Any]) -> bool:
+        pos = str(r.get("持仓状态") or "")
+        if bool(r.get("已实现")):
+            return True
+        if pos in ("已平仓", "已触止损平仓", "已止损", "当日禁买"):
+            return True
+        alert = str(r.get("预警") or "")
+        return (
+            "已触止损平仓" in alert
+            or "今日已止损" in alert
+            or (bool(r.get("已实现")) and "已触止损" in alert)
+        )
+
+    phase_now = phase if phase is not None else market_phase()
+    holdings_only = phase_now != "continuous"
 
     picked: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -103,7 +118,8 @@ def filter_portfolio_holdings(
             continue
         c = code_key(str(r.get("代码") or ""))
         qty = int(r.get("持仓") or 0)
-        if holdings_only and qty <= 0:
+        stop_trace = qty <= 0 and _is_stop_trace(r)
+        if holdings_only and qty <= 0 and not stop_trace:
             continue
         in_pool = c in portfolio_codes
         alert_only = (not in_pool) and _is_today_alert_row(r)
@@ -117,16 +133,34 @@ def filter_portfolio_holdings(
                     continue
             except Exception:  # noqa: BLE001
                 pass
-        if not in_pool and not alert_only and qty <= 0:
+        if not in_pool and not alert_only and qty <= 0 and not stop_trace:
             continue
         if c in seen:
             continue
         seen.add(c)
         out = dict(r)
-        if alert_only:
-            out["当日预警"] = True
+        if stop_trace:
+            out["当日预警"] = False
+            out["槽位候选"] = False
+            out["槽位占用"] = False
+            out["槽位留痕"] = True
             out["持仓"] = 0
-            # 不展示持仓口径浮盈（未登记）
+            out.setdefault("持仓状态", "已平仓")
+            alert0 = str(out.get("预警") or "").strip()
+            if (not alert0) or alert0 in (
+                "-",
+                "持有",
+                "已经买入",
+                "空仓",
+                "止损成交",
+                "已平仓",
+                "已触止损平仓",
+            ):
+                out["预警"] = "已触止损"  # 信号；持仓态另见「已平仓」
+        elif alert_only:
+            out["当日预警"] = True
+            out["槽位留痕"] = False
+            out["持仓"] = 0
             out["浮盈"] = None
             out["浮盈%"] = None
             out["盈亏状态"] = None
@@ -136,21 +170,20 @@ def filter_portfolio_holdings(
             out["仓位%"] = None
         else:
             out.setdefault("当日预警", False)
-        # 竞价阶段：非实仓不展示策略持有/预警态
+            out["槽位留痕"] = False
         if holdings_only and qty > 0:
             out["当日预警"] = False
             out["槽位候选"] = False
         picked.append(out)
 
     def _pos_rank(pos: str) -> int:
-        # 待卖出最前，再已经买入/持有，其余靠后
         if pos == "待卖出":
             return 0
         if pos in ("已经买入", "持有", "持有·T+1"):
             return 1
         if pos == "策略持有":
             return 2
-        if pos in ("已止损", "当日禁买"):
+        if pos in ("已平仓", "已止损", "已触止损平仓", "当日禁买"):
             return 3
         return 4
 
@@ -159,7 +192,7 @@ def filter_portfolio_holdings(
         pos = str(r.get("持仓状态") or "")
         if qty > 0 or bool(r.get("槽位占用")):
             tier = 0
-        elif bool(r.get("已实现")):
+        elif bool(r.get("槽位留痕")) or bool(r.get("已实现")):
             tier = 1
         elif bool(r.get("当日预警")) or bool(r.get("槽位候选")) or pos == "待买入":
             tier = 2
@@ -172,17 +205,23 @@ def filter_portfolio_holdings(
         return (tier, _pos_rank(pos), dist, str(r.get("代码") or ""))
 
     ordered = sorted(picked, key=_sort_key)
-    # 实仓前 N 只标置顶（三槽）
     pinned = 0
     max_pin = int(MAX_PORTFOLIO_SLOTS)
     for r in ordered:
         qty = int(r.get("持仓") or 0)
         if qty > 0 and pinned < max_pin:
             r["置顶"] = True
+            r["槽位占用"] = True
+            r["槽位留痕"] = False
             pinned += 1
         else:
             r["置顶"] = False
+            if bool(r.get("槽位留痕")):
+                r["槽位占用"] = False
+            else:
+                r["槽位占用"] = bool(qty > 0)
     return ordered
+
 
 
 def build_watch_snapshot(

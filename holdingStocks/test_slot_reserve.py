@@ -59,7 +59,7 @@ class TestSoldTodayBan(unittest.TestCase):
         from index import _apply_trigger_date_fields
 
         row = {
-            "持仓状态": "已止损",
+            "持仓状态": "已平仓",
             "预警": "止损",
             "已触买": "否",
             "买点": 10.5,
@@ -70,7 +70,7 @@ class TestSoldTodayBan(unittest.TestCase):
             "hit_buy": False,
             "hit_stop": True,
             "因子触发": "已触发",
-            "持仓状态": "已止损",
+            "持仓状态": "已平仓",
         }
         _apply_trigger_date_fields(
             row,

@@ -7,7 +7,7 @@
   · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
   · **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 2
   · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值；9:30 起触发结算
-  · 策略回放触止损 → 已止损（不再「策略持有」）；当日已卖出该票不可再待买入
+  · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票不可再待买入
   · 默认交易宇宙：因子27 核心龙头近3个月池 + 天通/凯盛（见 watch_config.WATCHLIST）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
@@ -265,6 +265,19 @@ WATCH_PID_FILE = ROOT / "holdings_watch.pid"
 WATCH_UI_DIST = ROOT / "watch-ui" / "dist"
 WATCH_UI_DIR = ROOT / "watch-ui"
 WATCH_UI_DEV_PORT = 3000
+
+# 止损已平仓展示态（旧文案「已止损」仍兼容识别）
+# 持仓态：止损后已平仓（与信号「已触止损」分离）
+STATUS_STOP_CLOSED = "已平仓"
+_STOP_CLOSED_STATUSES = frozenset(
+    {STATUS_STOP_CLOSED, "已止损", "已触止损平仓"}  # 后两者兼容旧文案
+)
+SIGNAL_STOP_HIT = "已触止损"
+
+
+def _is_stop_closed_status(pos: str | None) -> bool:
+    return str(pos or "") in _STOP_CLOSED_STATUSES
+
 
 # watch 模式本地 WebSocket 广播（/ws）；非 watch 为 None
 _ws_hub: LocalWsHub | None = None
@@ -1667,7 +1680,7 @@ def _apply_trigger_date_fields(
         and qty <= 0
         and (
             str(row.get("预警") or "") in EXIT_REASONS
-            or str(row.get("持仓状态") or "") == "已止损"
+            or _is_stop_closed_status(row.get("持仓状态"))
             or "止损" in str(row.get("预警") or "")
         )
     )
@@ -1683,7 +1696,7 @@ def _apply_trigger_date_fields(
     # 三槽执行：当日止损/已记卖出（含纸面止损）→ 当日禁买该票（含因子22）
     row["当日禁买"] = bool(stop_exit_today)
     if paper_stopped:
-        row["持仓状态"] = "已止损"
+        row["持仓状态"] = STATUS_STOP_CLOSED
         if str(row.get("预警") or "") in ("", "-", "空仓", "待买入", "策略持有"):
             row["预警"] = "策略回放·今日已止损"
 
@@ -1825,9 +1838,21 @@ def _apply_trigger_date_fields(
             # 强制不挂买单
             row["建议挂单"] = None
             row["近买点"] = False
-            # 已真实平仓 → 已止损；纸面触止损仍空仓观望
+            # 已真实平仓 → 持仓态「已平仓」；信号用「已触止损」
             if sold_today:
-                row["持仓状态"] = "已止损"
+                row["持仓状态"] = STATUS_STOP_CLOSED
+                a0 = str(row.get("预警") or "")
+                if a0 in (
+                    "",
+                    "-",
+                    "空仓",
+                    "待买入",
+                    "止损成交",
+                    "已平仓",
+                    "已触止损平仓",
+                    "今日已止损·过门未过",
+                ):
+                    row["预警"] = SIGNAL_STOP_HIT
             elif str(row.get("持仓状态") or "") == "待买入":
                 row["持仓状态"] = "空仓"
             if str(row.get("因子侧") or "") == "买入":
@@ -2586,7 +2611,7 @@ def _apply_portfolio_slots(
         except Exception:  # noqa: BLE001
             pass
         pos = str(r.get("持仓状态") or "")
-        if pos in ("当日禁买", "已止损"):
+        if pos in ("当日禁买",) or _is_stop_closed_status(pos):
             continue
         if r.get("过门OK") is False:
             continue
@@ -2940,7 +2965,7 @@ def force_eod_reserve_slot(
                 row["持仓"] = 0
                 row["可用"] = 0
                 row["当日禁买"] = True
-                row["持仓状态"] = "已止损"
+                row["持仓状态"] = STATUS_STOP_CLOSED
                 break
     return sold
 
@@ -3678,20 +3703,69 @@ def collect_rows(
             )
             # 9:25 前：仅竞价参考；9:25–9:30：算阈值/过门/接近预警，不触发；
             # 9:30 起才「已触发」买卖与止损结算
+            # 展示与结算拆开：路径/现价破卖价 → 始终可显示「已触止损」；
+            # 仅连续竞价才自动结算（午休/收盘后不再把展示清成「否」）。
             preview_ok = threshold_ok
             signal_ok = signal_ok_global
+            hit_path = bool(hit_stop)
+            try:
+                _last_chk = float(q["last"])
+                _stop_chk = float(lv.get("stop") or 0)
+            except (TypeError, ValueError):
+                _last_chk, _stop_chk = 0.0, 0.0
+            # 有仓：现价已破当前卖价 → 立即标展示触达（不限时段；结算仍要连续竞价）
+            if (
+                qty_early > 0
+                and _stop_chk > 0
+                and _last_chk > 0
+                and _last_chk <= _stop_chk + 1e-12
+            ):
+                hit_path = True
+                if path_touch_stop <= 0:
+                    path_touch_stop = _stop_chk
+            # 当日粘滞：盘中已触过后，午休/收盘后仍保持「已触止损」展示
+            _st_prev = sticky.get(code) if isinstance(sticky.get(code), dict) else None
+            if (
+                qty_early > 0
+                and _st_prev
+                and str(_st_prev.get("session") or "") == str(q["session"])
+                and bool(_st_prev.get("stop_touched"))
+            ):
+                if _stop_chk <= 0 or _last_chk <= _stop_chk * 1.003 + 1e-12:
+                    hit_path = True
+                    if path_touch_stop <= 0:
+                        try:
+                            path_touch_stop = float(
+                                _st_prev.get("touch_stop") or _stop_chk or 0
+                            )
+                        except (TypeError, ValueError):
+                            path_touch_stop = _stop_chk
             if not preview_ok:
                 hit_buy = False
-                hit_stop = False
             elif not signal_ok:
                 hit_buy = False
-                hit_stop = False
             # 用户确认仍持有：不自动止损清槽（天通误剔后曾按 3 空槽补仓）
-            if qty_early > 0 and bool(pos_early.get("hold_lock")):
-                hit_stop = False
+            hold_locked = bool(qty_early > 0 and pos_early.get("hold_lock"))
+            if hold_locked:
+                hit_path = False
                 hit_eff_stop = False
                 hit_base_stop = False
                 path_touch_stop = 0.0
+            hit_stop_show = bool(hit_path)
+            hit_stop_settle = bool(
+                hit_path and preview_ok and signal_ok and (not hold_locked)
+            )
+            hit_stop = hit_stop_settle  # 下文结算 / 纸面逻辑用结算口径
+            if hit_stop_show and qty_early > 0:
+                sticky[code] = {
+                    "session": str(q["session"]),
+                    "bg_class": "warn-sell",
+                    "alert": "已触止损",
+                    "pending_sell": True,
+                    "stop_touched": True,
+                    "touch_stop": float(path_touch_stop or _stop_chk or 0) or None,
+                    "near_stop": True,
+                }
             # 当日止损/已结算卖出 → 三槽规则下当日禁再买（含因子22）
             _realized_pre = realized_map.get(code)
             _sold_today_pre = bool(
@@ -3703,9 +3777,11 @@ def collect_rows(
                 (positions.get(code) or {}).get("qty") or 0
             ) <= 0
             # 回放触止损：不再当策略持有（避免「策略持有+已触止损」）
-            _paper_hold = bool(_replay_holding and not (hit_stop and signal_ok))
+            _paper_hold = bool(
+                _replay_holding and not (hit_stop_show and (signal_ok or hit_path))
+            )
             _f22_pre = None
-            if _sold_today_pre or (_replay_holding and hit_stop):
+            if _sold_today_pre or (_replay_holding and hit_stop_show):
                 # 因子22：收盘确认后才允许再买（盘中 last 不当收盘）
                 if is_close_confirmed():
                     _f22_pre = _factor22_rebuy_ok(
@@ -3765,23 +3841,27 @@ def collect_rows(
                 locked=stop_locked,
             )
             if (
-                signal_ok
-                and bool(noted_hit.get("hit"))
+                bool(noted_hit.get("hit"))
                 and not bool(pos.get("hold_lock"))
             ):
-                hit_stop = True
-                path_touch_stop = float(noted_hit.get("fill_px") or 0)
+                hit_stop_show = True
+                path_touch_stop = float(
+                    noted_hit.get("fill_px") or path_touch_stop or 0
+                )
+                if signal_ok:
+                    hit_stop_settle = True
+                    hit_stop = True
             # 结算价：优先 path 触达当时止损；跌停开板则用跌停价
             if bool(limit_state["opened"]):
                 stop_base_px = float(limit_state["limit_px"])
-            elif path_touch_stop > 0 and hit_stop:
+            elif path_touch_stop > 0 and hit_stop_show:
                 stop_base_px = float(path_touch_stop)
             else:
                 stop_base_px = float(lv["stop"])
             # 盯盘按人工/云条件单的触发价记录，不对买卖触发价额外加滑点。
             stop_fill_px = stop_base_px
-            # 已触止损且可卖 → 视为成交（只卖券商可卖数量）
-            if qty > 0 and hit_stop and sellable > 0 and not stop_locked:
+            # 已触止损且可卖 → 仅连续竞价结算（只卖券商可卖数量）
+            if qty > 0 and hit_stop_settle and sellable > 0 and not stop_locked:
                 apply_stop_fill(
                     code=code,
                     meta=w,
@@ -3922,8 +4002,13 @@ def collect_rows(
                     hang0 = float(buy_show) if buy_show is not None else None
                     note0 = note
                 else:
-                    pos_st0 = "已止损"
-                    alert0 = reason
+                    pos_st0 = STATUS_STOP_CLOSED
+                    # 信号=已触止损；持仓态=已平仓
+                    alert0 = (
+                        SIGNAL_STOP_HIT
+                        if reason == REASON_STOP
+                        else (reason or SIGNAL_STOP_HIT)
+                    )
                     bg0 = sig0.get("bg_class") or "status-flat"
                     hang0 = None
                     note0 = (
@@ -4030,10 +4115,10 @@ def collect_rows(
                 elif _sold_today_pre:
                     row0["当日禁买"] = True
                     if str(row0.get("持仓状态") or "") in ("", "空仓", "待买入"):
-                        row0["持仓状态"] = "已止损"
+                        row0["持仓状态"] = STATUS_STOP_CLOSED
                 elif allow_entry:
                     row0["当日禁买"] = False
-                    if str(row0.get("持仓状态") or "") == "已止损":
+                    if _is_stop_closed_status(row0.get("持仓状态")):
                         row0["挂单说明"] = note + "；可再买·待触买点"
                 _attach_strategy_pnl_fields(
                     row0,
@@ -4074,14 +4159,39 @@ def collect_rows(
                 t0=t0,
                 # 纸面仓禁止买入预警；9:30 前允许接近预警，已触买由下方 demote
                 allow_entry=False if paper_active else (allow_entry and preview_ok),
-                hit_stop=bool(hit_stop),
+                hit_stop=bool(hit_stop_show),
                 hit_buy=bool(hit_buy),
             )
             if not signal_ok:
-                sig = _demote_pre_signal_window(sig)
+                if qty > 0 and hit_stop_show:
+                    # 午休/收盘/盘前：保留「已触止损」展示，仅提示待连续竞价结算
+                    sig = dict(sig)
+                    sig["hit_stop"] = True
+                    sig["pending_sell"] = True
+                    sig["near_stop"] = True
+                    sig["bg_class"] = "warn-sell"
+                    sig["持仓状态"] = "待卖出"
+                    sig["因子触发"] = "已触发" if preview_ok else "接近"
+                    if preview_ok:
+                        sig["alert"] = "已触止损·待盘中结算"
+                        note = str(sig.get("挂单说明") or "")
+                        if "连续竞价" not in note:
+                            sig["挂单说明"] = (
+                                (note + "；" if note else "")
+                                + "已破止损价，待 9:30–11:30 / 13:00–15:00 自动结算"
+                            )
+                    else:
+                        sig = _demote_pre_signal_window(sig)
+                        sig["hit_stop"] = True
+                        sig["alert"] = "将止损" if "止损" in str(sig.get("alert") or "") else sig.get("alert")
+                        sig["bg_class"] = "warn-sell"
+                        sig["pending_sell"] = True
+                else:
+                    sig = _demote_pre_signal_window(sig)
                 hit_buy = False
+                # 结算口径保持 False；展示口径 hit_stop_show 不变
                 hit_stop = False
-            if qty > 0 and hit_stop and stop_locked:
+            if qty > 0 and hit_stop_show and stop_locked:
                 limit_px = float(limit_state["limit_px"])
                 sig = dict(sig)
                 sig.update(
@@ -4095,9 +4205,10 @@ def collect_rows(
                             "止损触发但不可成交；持仓延续，待开板"
                         ),
                         "因子触发": "不可成交",
+                        "hit_stop": True,
                     }
                 )
-            elif qty > 0 and hit_stop and sellable <= 0 and not stop_locked:
+            elif qty > 0 and hit_stop_show and sellable <= 0 and not stop_locked:
                 # 典型：买入当日 T+1；持仓状态仍「已经买入」，预警提示明日可卖
                 sig = dict(sig)
                 t1_today = (not t0) and is_t1_buy_day(buy_time, q["session"])
@@ -4144,6 +4255,7 @@ def collect_rows(
                             "建议挂单": None,
                             "挂单说明": "无可卖数量，请核对 available / 买入日",
                             "因子触发": "已触发",
+                            "hit_stop": True,
                         }
                     )
             # T+1 实仓未触止损：强制持有态并清卖出粘滞
@@ -4152,7 +4264,7 @@ def collect_rows(
                 and sellable <= 0
                 and (not t0)
                 and is_t1_buy_day(buy_time, q["session"])
-                and not hit_stop
+                and not hit_stop_show
             ):
                 sig = dict(sig)
                 alert0 = str(sig.get("alert") or "")
@@ -4219,8 +4331,13 @@ def collect_rows(
                 stop_lvl=-stop_pct * 100.0,
                 sticky=sticky,
             )
+            # 稳定化后仍保留「当日已触止损」粘滞标记，避免午休被洗掉
+            if hit_stop_show and qty > 0 and isinstance(sticky.get(code), dict):
+                sticky[code]["stop_touched"] = True
+                if path_touch_stop > 0:
+                    sticky[code]["touch_stop"] = float(path_touch_stop)
             entry_for_overlay = bool(allow_entry and preview_ok and signal_ok)
-            if not (_paper_hold and hit_stop):
+            if not (_paper_hold and hit_stop_show):
                 sig = _overlay_buy_signal_on_hold(
                     sig,
                     hit_buy=hit_buy if signal_ok else False,
@@ -4234,7 +4351,8 @@ def collect_rows(
                     last_px=float(q["last"]),
                     px_digits=px_digits,
                 )
-                if not signal_ok:
+                # 已触止损展示中：勿再 demote 成「持有」
+                if not signal_ok and not (qty > 0 and hit_stop_show):
                     sig = _demote_pre_signal_window(sig)
             if qty > 0 and sellable > 0 and sellable < qty:
                 # 部分 T+1：状态标为持有·部分T+1
@@ -4307,7 +4425,7 @@ def collect_rows(
                     "因子4": f4_tag,
                     "牛市": ("是" if bull else "否") if USE_FACTOR4 else "-",
                     "已触买": "是" if sig.get("hit_buy") else "否",
-                    "已触止损": "是" if hit_stop else (
+                    "已触止损": "是" if hit_stop_show else (
                         "触基础·暂停"
                         if (USE_FACTOR4 and f4_mode == "suppressed" and hit_base_stop)
                         else "否"
@@ -4613,7 +4731,7 @@ def _enrich_float_pnl(row: dict[str, Any]) -> None:
 
 
 def _finalize_position_row(row: dict[str, Any]) -> None:
-    """收敛持仓状态：已经买入 / 待卖出 / 已止损 / 策略回放 / 可执行。"""
+    """收敛持仓状态：已经买入 / 待卖出 / 已平仓；信号「已触止损」另见预警/角标。"""
     if row.get("error"):
         row["可执行"] = False
         return
@@ -4625,15 +4743,15 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
     t1 = "T+1" in alert
 
     if no_buy and qty <= 0:
-        # 过门未过等禁买：统一「已止损」（兼容旧「当日禁买」）
-        row["持仓状态"] = "已止损"
+        # 当日已平仓/禁买：持仓态「已平仓」；信号「已触止损」
+        row["持仓状态"] = STATUS_STOP_CLOSED
         row["因子侧"] = "空仓"
         row["建议挂单"] = None
         row["近买点"] = False
         row["可执行"] = False
         row["bg_class"] = "status-flat"
-        if alert in ("", "-", "空仓", "待买入", "当日禁买"):
-            row["预警"] = "今日已止损·过门未过"
+        if alert in ("", "-", "空仓", "待买入", "当日禁买", "止损成交", "已平仓", "已触止损平仓"):
+            row["预警"] = SIGNAL_STOP_HIT
         # 主展示价：保留上次买入触发价
         if row.get("已触发因子侧") == "买入" and row.get("已触发因子价") is not None:
             row["因子价"] = row["已触发因子价"]
@@ -4648,7 +4766,7 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
             or "策略回放·今日已止损" in alert
         ):
             row["策略回放持有"] = False
-            row["持仓状态"] = "已止损"
+            row["持仓状态"] = STATUS_STOP_CLOSED
             row["因子侧"] = "空仓"
             row["建议挂单"] = None
             row["近买点"] = False

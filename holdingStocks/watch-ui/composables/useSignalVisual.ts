@@ -48,7 +48,9 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
       !paperHold &&
       pos !== '待买入' &&
       pos !== '当日禁买' &&
-      pos !== '已止损')
+      pos !== '已止损' &&
+      pos !== '已平仓' &&
+      pos !== '已触止损平仓')
 
   const buyTriggered =
     qty <= 0 &&
@@ -61,10 +63,17 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
           trig.includes('已触发') ||
           trig.includes('再触买') ||
           trig.includes('收盘动量'))))
+  const stopClosed =
+    pos === '已平仓' ||
+    pos === '已止损' ||
+    pos === '已触止损平仓' ||
+    alert.includes('已触止损平仓') ||
+    alert.includes('今日已止损')
   const sellTriggered =
-    alert.includes('已触止损') ||
-    trig.startsWith('策略止损') ||
-    (pos === '待卖出' && (trig.startsWith('已触发') || alert.includes('止损')))
+    !stopClosed &&
+    (alert.includes('已触止损') ||
+      trig.startsWith('策略止损') ||
+      (pos === '待卖出' && (trig.startsWith('已触发') || alert.includes('止损'))))
 
   const buyWarn =
     bg === 'warn-buy' ||
@@ -134,13 +143,9 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     return mk('warn-buy', alert || '将买入')
   }
 
-  // 3. 已止损 / 策略持有 / 空仓（再触买已在上方 buy 分支处理）
-  if (
-    (pos === '当日禁买' || pos === '已止损' || alert.includes('今日已止损')) &&
-    !buyTriggered &&
-    !buyWarn
-  ) {
-    return mk('ban-buy', alert || (pos === '已止损' ? '已止损' : '当日禁买'))
+  // 3. 已平仓（角标用信号「已触止损」）/ 策略持有 / 空仓
+  if ((stopClosed || pos === '当日禁买') && !buyTriggered && !buyWarn) {
+    return mk('ban-buy', stopClosed ? '已触止损' : alert || '当日禁买')
   }
   if (paperHold || bg === 'status-hold') {
     return mk('paper-hold', alert || '策略持有')

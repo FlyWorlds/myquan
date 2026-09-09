@@ -107,7 +107,12 @@ def _has_holding(row: dict[str, Any]) -> bool:
     pos = str(row.get("持仓状态") or "")
     if qty > 0 or pos in ("持有", "已经买入", "待卖出", "策略持有"):
         return True
-    return bool(row.get("策略回放持有")) and pos not in ("当日禁买", "已止损")
+    return bool(row.get("策略回放持有")) and pos not in (
+        "当日禁买",
+        "已止损",
+        "已平仓",
+        "已触止损平仓",
+    )
 
 
 def _factor_px_for_push(row: dict[str, Any], *, holding: bool) -> Any:

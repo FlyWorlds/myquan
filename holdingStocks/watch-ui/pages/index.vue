@@ -49,12 +49,32 @@ const loading = computed(
 )
 
 const pinnedHoldings = computed(() =>
-  (snapshot.value?.holdings || []).filter((r) => Boolean(r.置顶) && Number(r.持仓) > 0),
+  (snapshot.value?.holdings || []).filter((r) => {
+    if (Boolean(r.置顶) && Number(r.持仓) > 0) return true
+    // 当日止损平仓留痕：进三槽区但不占位
+    if (Boolean(r.槽位留痕)) return true
+    const pos = String(r.持仓状态 || '')
+    if (
+      Number(r.持仓) <= 0 &&
+      (Boolean(r.已实现) || pos === '已平仓' || pos === '已触止损平仓' || pos === '已止损')
+    ) {
+      return true
+    }
+    return false
+  }),
 )
-const otherHoldings = computed(() =>
-  (snapshot.value?.holdings || []).filter((r) => !(Boolean(r.置顶) && Number(r.持仓) > 0)),
-)
+const otherHoldings = computed(() => {
+  const pinnedCodes = new Set(
+    pinnedHoldings.value.map((r) => String(r.代码 || '')),
+  )
+  return (snapshot.value?.holdings || []).filter(
+    (r) => !pinnedCodes.has(String(r.代码 || '')),
+  )
+})
 const slotMeta = computed(() => snapshot.value?.slotMeta)
+const slotTraceCount = computed(
+  () => pinnedHoldings.value.filter((r) => Number(r.持仓) <= 0).length,
+)
 </script>
 
 <template>
@@ -124,10 +144,13 @@ const slotMeta = computed(() => snapshot.value?.slotMeta)
               <h2 class="text-sm font-semibold text-ui-text">
                 三槽持仓（置顶）
                 <span class="ml-1 font-normal text-ui-text-2">
-                  {{ slotMeta?.occupiedCount ?? pinnedHoldings.length }}/{{ slotMeta?.max ?? 3 }}
+                  占槽 {{ slotMeta?.occupiedCount ?? 0 }}/{{ slotMeta?.max ?? 3 }}
+                  <template v-if="slotTraceCount">
+                    · 止损留痕 {{ slotTraceCount }}（不占槽）
+                  </template>
                 </span>
               </h2>
-              <p class="text-xs text-ui-text-3">持仓状态 · 已经买入 / 待卖出 / 已止损</p>
+              <p class="text-xs text-ui-text-3">已经买入 / 待卖出 / 已平仓（信号「已触止损」；留痕不占位，次日清除）</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in pinnedHoldings" :key="'pin-' + String(row.代码)" :row="row" />
@@ -135,7 +158,7 @@ const slotMeta = computed(() => snapshot.value?.slotMeta)
           </div>
           <div v-if="otherHoldings.length" class="space-y-2">
             <h2 class="text-sm font-semibold text-ui-text-2">
-              {{ pinnedHoldings.length ? '预警 / 留痕' : '持仓列表' }}
+              {{ pinnedHoldings.length ? '预警 / 其它' : '持仓列表' }}
             </h2>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in otherHoldings" :key="'other-' + String(row.代码)" :row="row" />
