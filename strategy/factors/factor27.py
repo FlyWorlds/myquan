@@ -24,8 +24,8 @@ def _rules() -> str:
     return """
 因子27·核心龙头（滚动近 3 个月冻结）
   · 数据：通达信概念现价成交额（活跃度）+ 概念成分行情
-  · 偏高概念：成交额 ≥ 当日截面中位数，最多扫成交额 Top25
-  · 每个概念至多 3 只：过滤后按涨跌幅、成交额取前 3；去重后凑满约 20 只
+  · 偏高概念：成交额 ≥ 当日截面中位数，最多扫成交额 Top40
+  · 每个概念至多 2 只：过滤后按涨跌幅、成交额取前 2；去重后凑满约 30 只
   · 过滤：非创业 / 非科创 / 非北交 / 非 ST / 现价 < 100
   · 周期：滚动近 3 个月（非自然季度 Q1/Q2/Q3）；CLI `python strategy/run_core_leader_pool.py`
   · 用途：策略十六宇宙；买卖不在本因子（复用因子26/2/22）
@@ -50,7 +50,7 @@ SPEC = FactorSpec(
     id=FACTOR_ID,
     name=FACTOR_NAME,
     description=(
-        "通达信概念活跃度偏高（成交额≥中位数，最多扫 Top25）内取龙头；"
+        "通达信概念活跃度偏高（成交额≥中位数，最多扫题材 Top40）内取龙头；"
         f"每概念≤{DEFAULT_PER_CONCEPT}；池约{DEFAULT_TARGET_POOL}只；主板非ST非科创创业、现价<{DEFAULT_PRICE_MAX:.0f}；滚动近3个月冻结"
     ),
     rules_text=_rules(),

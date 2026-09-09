@@ -115,7 +115,7 @@ def test_hard_protect_path_hit():
 
 
 def test_half_gain_after_peak():
-    """中赚峰值106后回落超过 0.5×日频波动（测试用 5%）触达。"""
+    """峰值106：一半=103、波动=103.35；同 bar 先碰到更高的波动线。"""
     bars = _bars([(106.0, 105.0), (106.0, 102.9)])
     out = path_dependent_pullback_hit(
         bars,
@@ -198,8 +198,41 @@ def test_multi_tp_ladder_and_peak_once():
     assert "clear" in clr["action"]["reason"]
 
 
+def test_mid_gain_race_half_vs_vol():
+    """中赚并行：从峰值往下谁先碰到走谁（同分钟价高者先触）。"""
+    ev = _m.eval_multi_tp_bar
+    # peak 105 / σ=5%：一半 102.50 > 波动 102.375 → 先触一半
+    half_first = ev(
+        bar_open=104.0,
+        bar_high=105.0,
+        bar_low=102.40,
+        cost_px=100.0,
+        peak_before=105.0,
+        shares=1000,
+        can_sell=True,
+        vol20_daily=0.05,
+    )
+    assert half_first["action"]["kind"] == "full"
+    assert half_first["action"]["reason"] == "half_gain"
+    assert abs(float(half_first["action"]["fill_px"]) - 102.50) < 1e-9
+    # peak 108 / σ=5%：波动 105.30 > 一半 104 → 先触波动
+    vol_first = ev(
+        bar_open=107.0,
+        bar_high=108.0,
+        bar_low=105.00,
+        cost_px=100.0,
+        peak_before=108.0,
+        shares=1000,
+        can_sell=True,
+        vol20_daily=0.05,
+    )
+    assert vol_first["action"]["kind"] == "full"
+    assert vol_first["action"]["reason"] == "vol_giveback"
+    assert abs(float(vol_first["action"]["fill_px"]) - 105.30) < 1e-9
+
+
 def test_multi_tp_mid_gain_giveback_and_small_profit_no_giveback():
-    """中赚 >3% 且 <10% 才走波动回落；小赚不回落。"""
+    """中赚 >3% 且 <10% 才走一半/波动赛跑；小赚不回落。"""
     ev = _m.eval_multi_tp_bar
     mid = ev(
         bar_open=104.0,
@@ -212,7 +245,8 @@ def test_multi_tp_mid_gain_giveback_and_small_profit_no_giveback():
         vol20_daily=0.05,
     )
     assert mid["action"]["kind"] == "full"
-    assert mid["action"]["reason"] == "vol_giveback"
+    assert mid["action"]["reason"] == "half_gain"
+    assert abs(float(mid["action"]["fill_px"]) - 102.50) < 1e-9
     small = ev(
         bar_open=101.2,
         bar_high=101.5,
@@ -253,7 +287,7 @@ def test_multi_tp_overnight_dump():
     )
     assert r["action"]["kind"] == "full"
     assert r["action"]["reason"] == "t1_peak_trail"
-    # 浮盈已 >3%：不再走峰值回落 2.5%，改走波动回落
+    # 浮盈已 >3%：不再走峰值回落 2.5%，改走中段（一半 102.50 先于波动 102.375）
     skip = _m.eval_multi_tp_bar(
         bar_open=103.0,
         bar_high=103.5,
@@ -267,7 +301,8 @@ def test_multi_tp_overnight_dump():
         vol20_daily=0.05,
     )
     assert skip["action"]["kind"] == "full"
-    assert skip["action"]["reason"] == "vol_giveback"
+    assert skip["action"]["reason"] == "half_gain"
+    assert abs(float(skip["action"]["fill_px"]) - 102.50) < 1e-9
 
 
 def test_live_last_half_gain():
@@ -480,6 +515,7 @@ def test_limit_up_clears_t1_note():
 if __name__ == "__main__":
     test_half_gain_formula()
     test_multi_tp_ladder_and_peak_once()
+    test_mid_gain_race_half_vs_vol()
     test_multi_tp_mid_gain_giveback_and_small_profit_no_giveback()
     test_multi_tp_overnight_dump()
     test_snapshot_high_must_not_seed_before_morning_low()

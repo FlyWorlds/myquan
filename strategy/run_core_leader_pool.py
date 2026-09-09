@@ -2,7 +2,7 @@
 
 用法：
   python strategy/run_core_leader_pool.py
-  python strategy/run_core_leader_pool.py --max-concepts 25 --per-concept 3 --target-pool 20
+  python strategy/run_core_leader_pool.py --max-concepts 40 --per-concept 2 --target-pool 30
 """
 
 from __future__ import annotations

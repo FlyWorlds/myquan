@@ -1,20 +1,20 @@
-"""持仓记录与盯盘：与核心策略一（因子26 + 因子2 + 因子22）同步。
+"""持仓记录与盯盘：与默认核心策略（strategy16）同步。
 
-策略锁定 · 策略一：
+策略锁定 · 策略十六：
   · 买（因子26）：开盘阈值 ceil(open×(1+entry))；前日阴/小阳；禁双阳；T+1
-  · 卖（因子26）：浮盈回落一半（持仓最高相对成本）；未浮盈成本硬保护；1 分钟 path-dependent
+  · 卖（因子26）：硬保护2.5%；中赚3–10%回落一半与0.5×20日日频σ谁先到走谁；阶梯10%/15%；未到3%次日峰值回落2.5%；1 分钟 path-dependent
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
   · **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 2
   · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值；9:30 起触发结算
   · 策略回放触止损 → 已止损（不再「策略持有」）；当日已卖出该票不可再待买入
-  · 默认定盘宇宙：因子13A+16 宽宇宙换池 Top20（剔ST/百元股；无置顶；见 watch_config.WATCHLIST）
+  · 默认交易宇宙：因子27 核心龙头近3个月池 + 天通/凯盛（见 watch_config.WATCHLIST）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
 功能：
   · 拉取当日实时行情（东财 SSE + 新浪批量；全池不串行拉历史分钟）
   · 因子26 实仓：按成本+持仓峰值算动态止盈价；1 分钟顺序判触达
-  · 阈值与信号：因子26 浮盈回落一半（与 pullback_wave_stop 同源）
+  · 阈值与信号：因子26 多层止盈（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
   · 有仓：动态止盈触达自动结算（全清）；空仓：已触买/将买入建议限价
   · 本地 JSON 记录持仓（含 peak_high）；T+1 买入日不可卖
@@ -165,14 +165,14 @@ from watch_config import (
 )
 from watch_snapshot import SNAPSHOT_VERSION, build_watch_snapshot
 
-# 盯盘与回测共用：默认策略一 = 因子26（浮盈回落一半）+ 因子2 + 因子22
-# 标的池唯一真源：watch_config.WATCHLIST
+# 盯盘与回测共用：默认策略十六 = 因子27 + 因子26 + 因子2 + 因子22
+# 默认交易池唯一真源：watch_config.WATCHLIST
 FACTOR2_ID = "factor2"
 
 _STRATEGY_FACTORS_LABEL = (
     "因子1买卖 + 因子4牛市持股"
     if USE_FACTOR4
-    else "因子26浮盈回落一半 + 因子2回撤预警 + 因子22收盘动量 · 13A+16池"
+    else "因子27核心龙头池 + 因子26多层止盈 + 因子2回撤预警 + 因子22收盘动量"
 )
 _STRATEGY_SYNC_NOTE = (
     "与 strategy3/strategy4 bindings / bull_regime 同源"
@@ -190,7 +190,7 @@ def strategy_levels(
     high_px: float | None = None,
     **kw: Any,
 ) -> dict[str, Any]:
-    """策略一默认因子26：有仓按成本+峰值算浮盈回落一半卖价；其它仍用开盘±。"""
+    """默认策略因子26：有仓按成本+峰值算动态止盈价；其它仍用开盘±。"""
     if str(FACTOR_ID) == "factor26":
         return _levels_f26(
             open_px,
@@ -575,7 +575,12 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
         from strategy_picks_loader import load_strategy_picks
 
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
-    tabs.sort(key=lambda t: int(_strategy_tab_number(str(t["id"]))))
+    tabs.sort(
+        key=lambda t: (
+            0 if t.get("is_watch_default") else 1,
+            int(_strategy_tab_number(str(t["id"]))),
+        )
+    )
     return tabs
 
 
@@ -852,6 +857,11 @@ def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
         "strategy16": snapshot.get("strategy16"),
         "phaseKey": snapshot.get("phaseKey"),
         "strategy": snapshot.get("strategy"),
+        "strategyTabs": [
+            str(t.get("id") or "")
+            for t in (snapshot.get("strategies") or [])
+            if isinstance(t, dict)
+        ],
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -982,6 +992,8 @@ def publish_watch_snapshot(
         snap["updatedAt"] = clock_now
         snap["ts"] = int(datetime.now().timestamp() * 1000)
         snap["sectors"] = sectors
+        snap["strategies"] = snapshot.get("strategies") or snap.get("strategies") or []
+        snap["strategy16"] = snapshot.get("strategy16") if "strategy16" in snapshot else snap.get("strategy16") or []
         _last_watch_snapshot = snap
         body = json.dumps(snap, ensure_ascii=False)
         hub = _ws_hub
@@ -1014,6 +1026,12 @@ def _seed_boot_watch_snapshot() -> None:
         try:
             snap = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
             if isinstance(snap, dict) and snap.get("type") == "snapshot":
+                try:
+                    s8 = snap.get("strategy8") if isinstance(snap.get("strategy8"), dict) else {}
+                    snap["strategies"] = _watch_tabs_with_live_s8(s8)
+                except Exception:  # noqa: BLE001
+                    pass
+                snap.setdefault("strategy16", [])
                 _last_watch_snapshot = snap
                 return
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
@@ -3720,7 +3738,7 @@ def collect_rows(
             sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
             # 一字跌停封单不可卖；触及跌停后开板则按跌停价成交。
             stop_locked = bool(limit_state["locked"])
-            # 隔夜：昨日 T+1 已记 → 次日浮盈未过 3% 则峰值回落 2.5%；过 3% 走波动回落/档位
+            # 隔夜：昨日 T+1 已记 → 次日浮盈未过 3% 则峰值回落 2.5%；过 3% 走中段（一半/波动）/档位
             t1_today = bool(
                 qty > 0
                 and buy_time
@@ -4108,7 +4126,7 @@ def collect_rows(
                                 f"今日买入不可卖；买入后曾触止损"
                                 f"@{touch_show:.{px_digits}f}。"
                                 "下一交易日：浮盈未过3%则动态峰值回落2.5%全清；"
-                                "过3%走波动回落，过10%走档位/回落2个点"
+                                "过3%走中段（回落一半与波动回落谁先到走谁），过10%走档位/回落2个点"
                             ),
                             "因子触发": format_trigger_md(buy_time)
                             or format_trigger_md(q["session"])

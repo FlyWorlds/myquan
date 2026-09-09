@@ -1,7 +1,7 @@
 """策略一定盘池 · 近 7 交易日 1 分钟路径回测（三槽组合）。
 
 选股/过滤：日线（前日阴/小阳、双阳禁买）；组合回撤看因子2 预警（不注资）。
-成交：池内票近 7 日用 1 分钟 path-dependent（开盘阈值买 + 多层止盈）。
+成交：池内票近 7 日用 1 分钟 path-dependent（开盘阈值买 + 多层止盈：中赚回落一半与波动回落谁先到走谁）。
 
 组合约束（对齐盯盘三槽）：
   · 物理槽 max_slots=3：盘中/隔夜均可同时持仓 3
@@ -47,17 +47,21 @@ from holdingStocks.watch_config import (  # noqa: E402
     load_core_leader_payload,
     load_strategy16_thr_map,
     meta_for_code,
+    strategy1_watchlist,
     strategy_watchlist,
 )
 from strategy.data import fetch_daily  # noqa: E402
 from strategy.dd_alert import derive_thresholds, format_rules  # noqa: E402
 from strategy.minute import pull_akshare_1m  # noqa: E402
+from strategy.close_momentum import rebuy_signal  # noqa: E402
 from strategy.open_break import (  # noqa: E402
     DEFAULT_BAN_DOUBLE_YANG,
     DEFAULT_BAN_SINGLE_YANG,
     DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
+    TICK_SIZE,
+    ceil_to_tick,
     floor_to_tick,
     is_t1_buy_day,
     prev_day_allows_entry,
@@ -112,32 +116,13 @@ def _load_pool(pool: str = POOL_STRATEGY1) -> list[dict]:
     if name in ("s16", "core_leader"):
         name = POOL_STRATEGY16
     if name == POOL_STRATEGY16:
-        payload = load_core_leader_payload()
-        picks = payload.get("picks") or []
+        picks = strategy_watchlist()
         if not picks:
             raise SystemExit(
                 "策略十六池为空。请先: python strategy/run_core_leader_pool.py"
             )
-        out: list[dict] = []
-        seen: set[str] = set()
-        for it in picks:
-            code = str(it.get("code") or it.get("symbol") or "").zfill(6)
-            if not code or code in seen or code == "000000":
-                continue
-            seen.add(code)
-            item = dict(meta_for_code(code, {"positions": []}))
-            if it.get("name"):
-                item["name"] = str(it["name"])
-            item["universe"] = "strategy16"
-            item["concept"] = it.get("concept")
-            thr = load_strategy16_thr_map().get(code)
-            if thr is not None:
-                item["pct"] = float(thr)
-                item["entry_pct"] = float(thr)
-                item["stop_pct"] = float(DEFAULT_PCT)
-            out.append(item)
-        return out
-    return list(strategy_watchlist())
+        return [dict(w) for w in picks]
+    return list(strategy1_watchlist())
 
 
 def _daily(sina: str, lookback_cal_days: int = 40) -> pd.DataFrame:
@@ -390,6 +375,8 @@ def simulate_portfolio_3slots(
     reserve_empty: int = RESERVE_EMPTY_SLOTS,
     max_buys_per_day: int = MAX_BUYS_PER_DAY,
     buy_mode: str = BUY_MODE_DEFAULT,
+    allow_f22_rebuy: bool = False,
+    f22_bounce_pct: float = 0.01,
 ) -> dict[str, Any]:
     """三槽组合：1m 路径，先触发买点先买，最多同时持有 max_slots 只。
 
@@ -398,6 +385,7 @@ def simulate_portfolio_3slots(
       - peak_pct：旧版峰值回落阈值（对照）
     noted_mode / noted_dump_pct：T+1 止损已记后的次日规则
     buy_mode：open=只认开盘涨到阈值（默认）；open_or_attack=开盘突破或攻击波（对照）
+    allow_f22_rebuy：研究对照——当日卖出后若收盘≥当日最低×(1+bounce) 允许同日再买（生产默认 False）
     """
     max_slots = max(1, int(max_slots))
     reserve = max(0, min(int(reserve_empty), max_slots - 1))
@@ -409,6 +397,8 @@ def simulate_portfolio_3slots(
     if bmode not in BUY_MODES:
         bmode = BUY_MODE_DEFAULT
     allow_attack = bmode == BUY_MODE_OPEN_OR_ATTACK
+    allow_f22 = bool(allow_f22_rebuy)
+    f22_bounce = float(f22_bounce_pct)
     prepared: list[dict[str, Any]] = []
     all_days: set[str] = set()
 
@@ -1045,6 +1035,101 @@ def simulate_portfolio_3slots(
         for code, sd in day_map.items():
             if sd.close_px:
                 last_px[code] = float(sd.close_px)
+
+        # 研究：因子22 日末同日再买（生产默认关闭；须当日已卖且收盘确认）
+        if allow_f22 and buys_today < max_buys:
+            f22_cands: list[dict[str, Any]] = []
+            for code, st in states.items():
+                if code in positions or not st.sold_today:
+                    continue
+                sd = day_map.get(code)
+                if sd is None or not sd.close_px or not sd.open_px:
+                    continue
+                bars = sd.bars
+                if bars is None or getattr(bars, "empty", True):
+                    day_hi = float(sd.close_px)
+                    day_lo = float(sd.close_px)
+                else:
+                    day_hi = float(bars["high"].max())
+                    day_lo = float(bars["low"].min())
+                sig = rebuy_signal(
+                    open_px=float(sd.open_px),
+                    high_px=day_hi,
+                    low_px=day_lo,
+                    close_px=float(sd.close_px),
+                    bounce_pct=f22_bounce,
+                    candle="any",
+                    mode="close",
+                    tick_ceil=lambda p: ceil_to_tick(p, TICK_SIZE),
+                )
+                if not sig.get("ok") or sig.get("fill_px") is None:
+                    continue
+                f22_cands.append(
+                    {
+                        "day": sess,
+                        "ts": f"{sess} 14:57:00",
+                        "code": code,
+                        "name": sd.name,
+                        "px": float(sig["fill_px"]),
+                        "kind": "factor22",
+                        "source": "f22_close_rebuy",
+                    }
+                )
+            f22_cands.sort(key=lambda x: (str(x["ts"]), str(x["code"])))
+            for cand in f22_cands:
+                if not _can_open_buy(pd.Timestamp(cand["ts"])):
+                    skipped.append({**cand, "reason": "f22_no_slot_or_buy_cap"})
+                    continue
+                code = cand["code"]
+                if code in positions:
+                    continue
+                px = float(cand["px"])
+                eq = _equity_now()
+                budget = eq * float(slot_weight)
+                shares = _lot_shares(budget, px)
+                if shares < 100:
+                    skipped.append({**cand, "reason": "f22_budget_too_small"})
+                    continue
+                cost = shares * px
+                if cost > cash + 1e-6:
+                    shares = _lot_shares(cash, px)
+                    cost = shares * px
+                if shares < 100:
+                    skipped.append({**cand, "reason": "f22_cash_too_small"})
+                    continue
+                cash -= cost
+                buys_today += 1
+                positions[code] = _Pos(
+                    code=code,
+                    name=str(cand["name"]),
+                    buy_day=sess,
+                    buy_px=px,
+                    buy_ts=str(cand["ts"]),
+                    shares=shares,
+                    cost=cost,
+                    kind="factor22",
+                    peak_high=px,
+                    held_low=px,
+                )
+                st = states.get(code)
+                if st is not None:
+                    st.sold_today = True  # 仍记当日已交易，防开盘阈值再买叠仓
+                    st.buy_armed = False
+                trades.append(
+                    {
+                        "date": sess,
+                        "ts": str(cand["ts"]),
+                        "side": "buy",
+                        "code": code,
+                        "name": cand["name"],
+                        "px": px,
+                        "shares": shares,
+                        "kind": "factor22",
+                        "source": "f22_close_rebuy",
+                        "slots_after": len(positions),
+                    }
+                )
+                last_px[code] = px
         # 日末：买入日按盈利/亏损门槛决定是否把已记带到次日
         for code, pos in list(positions.items()):
             px = float(last_px.get(code) or pos.buy_px or 0)
@@ -1156,11 +1241,11 @@ LEDGER_REASON_ZH = {
     "open": "开盘突破买",
     "queue_fill": "排队补仓",
     "t1_peak_trail": "未到3%·次日动态峰值回落2.5%全清",
-    "vol_giveback": "中赚（3–10%）动态高点回落0.5×20日日频σ全清",
+    "vol_giveback": "中赚（3–10%）动态高点回落0.5×20日日频σ全清（与回落一半谁先到走谁）",
     "noted_open_dump": "已记·开盘下杀1%全清（研究对照）",
     "noted_gap_open": "已记·低开按开盘卖（研究模式）",
     "noted_open": "已记·次日开盘市价卖（研究模式）",
-    "half_gain": "中赚回落一半清（旧口径，研究对照）",
+    "half_gain": "中赚（3–10%）浮盈回落一半全清（与波动回落谁先到走谁）",
     "hard_from_cost": "成本硬保护（亏≥2.5%）",
     "ladder_half_10": "大赚·浮盈10%卖一半",
     "ladder_half_10_clear": "已半仓后再触10%·剩余全清",
@@ -1289,7 +1374,7 @@ def write_trade_ledger(
         ),
         f"- 已平仓回合 {ps.get('n_closed', 0)}（均收益 {ps.get('avg_closed_pnl_pct', '—')}%）；期末持仓 {ps.get('n_open', 0)} 只",
         f"- 组合：物理 {ps.get('max_slots', 3)} 槽（隔夜可持 {ps.get('max_overnight', 3)}）；日最多买 {ps.get('max_buys_per_day', 2)}；每槽约 {float(ps.get('slot_weight') or 0.3)*100:.0f}%",
-        f"- 买={buy_label}；卖=硬保护2.5% / 中赚3–10%动态高点回落0.5×20日日频σ / 阶梯10%·15% / 大赚后回落2% / 买入日未到3%则次日峰值回落2.5%",
+        f"- 买={buy_label}；卖=硬保护2.5% / 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 / 阶梯10%·15% / 大赚后回落2% / 买入日未到3%则次日峰值回落2.5%",
         f"- T+1：买入日盈利≥3%不记、其余都记（次日走峰值回落2.5%，到3%改中段，到10%改分段）；当日卖出禁再买该票",
         "",
         "## 标签速查",
@@ -1300,9 +1385,9 @@ def write_trade_ledger(
         "| `open` | 开盘突破买 |",
         "| `queue_fill` | 槽满后排队，释放再补 |",
         "| `t1_peak_trail` | 买入日未到 3% 已记且当日尚未 >3% → 次日动态峰值回落 2.5% 全清 |",
-        "| `vol_giveback` | 中赚 >3% 且 <10% → 动态高点回落 0.5×近20日日频σ 全清 |",
+        "| `vol_giveback` | 中赚 >3% 且 <10% → 峰值回落 0.5×近20日日频σ 全清（与回落一半谁先到走谁） |",
         "| `noted_open_dump` | 研究对照：已记开盘下杀 1%（生产不用） |",
-        "| `half_gain` | 研究对照：中赚回落一半（生产不用） |",
+        "| `half_gain` | 中赚 >3% 且 <10% → 浮盈回落一半全清（与波动回落谁先到走谁） |",
         "| `ladder_half_10` | 浮盈 ≥10% → 卖一半 |",
         "| `ladder_full_15` | 浮盈 ≥15% → 全清 |",
         "| `peak_pullback_clear` | 峰值浮盈 ≥10% 后再回落 2 个点 → 清仓 |",
@@ -1467,7 +1552,7 @@ def run(
     )
     out_dir.mkdir(parents=True, exist_ok=True)
     strat_title = (
-        "策略十六·核心龙头（因子27 池）"
+        "策略十六·核心龙头（因子27 池 + 天通/凯盛）"
         if is_s16
         else "策略一定盘池"
     )
@@ -1612,7 +1697,7 @@ def run(
     cal = ps.get("calendar") or []
     rule_universe = (
         [
-            "- **选股**：因子27 核心龙头滚动近3个月冻结池（约20只；不与策略一共享三槽，本回测独立开 3 槽）",
+            "- **选股**：因子27 核心龙头滚动近3个月冻结池（约30只），并额外纳入天通/凯盛；本回测独立开 3 槽",
             "- **过滤**：日线（前日阴/小阳、双阳禁买）；因子2 回撤仅预警阈值，不注资",
             "- **开盘阈值**：非固定；2026-01-01 至今回测日线开盘突破，在 {2%, 2.5%, 3%} 按夏普择优（买/止损拟合同 thr）；"
             "1m 组合只用该 thr **买入**，卖出仍因子26（硬保护 2.5%）。拟合窗含本周则近 7 日有样本内重叠",
@@ -1632,7 +1717,7 @@ def run(
         *rule_universe,
         "- **成交**：池内票近 N 交易日 **1 分钟** path-dependent（"
         f"买={buy_label}；"
-        "卖=多层止盈：阶梯10%/15% + 中赚3–10%波动回落 + 大赚后回落2%清 + 未到3%次日峰值回落2.5%；"
+        "卖=多层止盈：阶梯10%/15% + 中赚3–10%回落一半与波动回落谁先到走谁 + 大赚后回落2%清 + 未到3%次日峰值回落2.5%；"
         "买入日盈利≥3%不记、其余都记）",
         f"- **组合**：物理 **{max_slots}** 槽（盘中/隔夜均可持 {max_slots}）；当日最多买 **{MAX_BUYS_PER_DAY}**；"
         + (

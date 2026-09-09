@@ -1,4 +1,4 @@
-"""核心龙头选股：过滤 / 偏高概念 / 每概念 Top3（无通达信依赖）。"""
+"""核心龙头选股：过滤 / 偏高概念 / 每概念 TopK（无通达信依赖）。"""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ class TestCoreLeaderUniverse(unittest.TestCase):
         hot = select_hot_concepts(spot, max_concepts=15)
         self.assertEqual([x["name"] for x in hot], ["光通信模块"])
 
-    def test_per_concept_top3_after_filter(self):
+    def test_per_concept_top2_after_filter(self):
         members = pd.DataFrame(
             [
                 {"代码": "300001", "名称": "创业票", "现价": 10, "涨跌幅": 9, "成交额": 9e8},
@@ -73,9 +73,9 @@ class TestCoreLeaderUniverse(unittest.TestCase):
                 {"代码": "600006", "名称": "第五", "现价": 9, "涨跌幅": 1, "成交额": 1e8},
             ]
         )
-        picks = pick_leaders_from_members(members, concept="测试概念", per_concept=3)
-        self.assertEqual([x["code"] for x in picks], ["600001", "600003", "600004"])
-        self.assertEqual([x["rank_in_concept"] for x in picks], [1, 2, 3])
+        picks = pick_leaders_from_members(members, concept="测试概念", per_concept=2)
+        self.assertEqual([x["code"] for x in picks], ["600001", "600003"])
+        self.assertEqual([x["rank_in_concept"] for x in picks], [1, 2])
 
     def test_build_pool_dedup_across_concepts(self):
         spot = pd.DataFrame(
@@ -102,7 +102,7 @@ class TestCoreLeaderUniverse(unittest.TestCase):
             members_by_concept=members,
             fetch=False,
             max_concepts=2,
-            per_concept=3,
+            per_concept=2,
         )
         self.assertEqual(payload["horizon"], "rolling_3m")
         self.assertEqual(payload["label"], "2026-06-09~2026-09-09")
@@ -110,9 +110,9 @@ class TestCoreLeaderUniverse(unittest.TestCase):
         self.assertEqual([x["code"] for x in payload["picks"]], ["600001", "600002"])
         self.assertIn("概念乙", str(payload["picks"][0].get("concepts") or ""))
 
-    def test_target_pool_stops_at_20(self):
+    def test_target_pool_stops_at_30(self):
         spot = pd.DataFrame(
-            [{"板块": f"概念{i}", "资金": 200 - i, "涨跌幅": 1} for i in range(12)]
+            [{"板块": f"概念{i}", "资金": 200 - i, "涨跌幅": 1} for i in range(20)]
         )
         members = {
             f"概念{i}": pd.DataFrame(
@@ -127,19 +127,20 @@ class TestCoreLeaderUniverse(unittest.TestCase):
                     for j in range(3)
                 ]
             )
-            for i in range(12)
+            for i in range(20)
         }
         payload = build_quarter_pool(
             today=date(2026, 9, 9),
             spot=spot,
             members_by_concept=members,
             fetch=False,
-            max_concepts=12,
-            per_concept=3,
-            target_pool=20,
+            max_concepts=20,
+            per_concept=2,
+            target_pool=30,
         )
-        self.assertEqual(payload["n_picks"], 20)
-        self.assertGreaterEqual(payload["n_used_concepts"], 7)
+        self.assertEqual(payload["n_picks"], 30)
+        self.assertEqual(payload["per_concept"], 2)
+        self.assertGreaterEqual(payload["n_used_concepts"], 15)
 
     def test_rolling_3m_window(self):
         w = rolling_3m_window(date(2026, 9, 9))

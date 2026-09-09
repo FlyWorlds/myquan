@@ -20,7 +20,7 @@ def _print_rules() -> str:
 
 
 def run_strategy16(cfg: Any = None, **kwargs: Any):
-    """买卖回测同策略一；宇宙请用季度 picks，不替换策略一定盘池。"""
+    """买卖回测同策略一；默认交易宇宙为核心龙头近3个月池 + 天通/凯盛。"""
     from strategy.strategies.strategy1 import run_strategy1
 
     return run_strategy1(cfg, **kwargs)
@@ -31,7 +31,7 @@ register_strategy(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
         description=(
-            "核心龙头：通达信活跃概念偏高、每概念≤3、池约20只、主板非ST非科创创业百元以下；"
+            "核心龙头：通达信活跃概念偏高、每概念≤2、池约30只、主板非ST非科创创业百元以下；"
             "滚动近3个月冻结选股；买卖同策略一（因子26 多层止盈 + 因子2 预警 + 因子22 再买）"
         ),
         factor_bindings=FACTOR_BINDINGS,
@@ -43,12 +43,13 @@ register_strategy(
         aliases=("s16", "核心龙头", "core_leader"),
         implemented=True,
         meta={
-            "default": False,
+            "default": True,
             "mode": "watch_overlay",
             "watch_tab": True,
             "universe": "factor27",
             "horizon": "rolling_3m",
             "factors": ("factor26", "factor2", "factor27", "factor22"),
+            "pool_manual_additions": ("600330", "600552"),
         },
     ),
     replace=True,

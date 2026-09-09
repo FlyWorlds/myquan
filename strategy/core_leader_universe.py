@@ -22,9 +22,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PICKS_PATH = ROOT / "backtest" / "strategy16_core_leader" / "picks_quarter.json"
 _LAST_SPOT_SOURCE = "tdx_concept_activity"
 
-DEFAULT_MAX_CONCEPTS = 25
-DEFAULT_PER_CONCEPT = 3
-DEFAULT_TARGET_POOL = 20
+DEFAULT_MAX_CONCEPTS = 40
+DEFAULT_PER_CONCEPT = 2
+DEFAULT_TARGET_POOL = 30
 DEFAULT_PRICE_MAX = 100.0
 DEFAULT_HORIZON_MONTHS = 3
 
@@ -170,13 +170,15 @@ def select_hot_concepts(
         hot = valid[valid["_activity"] >= median].copy()
         hot = hot.sort_values("_activity", ascending=False)
     out: list[dict[str, Any]] = []
-    for i, rec in enumerate(hot.head(int(max_concepts)).to_dict("records"), 1):
+    for rec in hot.to_dict("records"):
+        if len(out) >= int(max_concepts):
+            break
         name = str(rec.get("板块") or rec.get("name") or rec.get("概念") or "").strip()
         if not name or not is_theme_concept(name):
             continue
         out.append(
             {
-                "rank": i,
+                "rank": len(out) + 1,
                 "name": name,
                 "code": str(rec.get("label") or rec.get("code") or ""),
                 "activity": _num(rec.get("_activity")),
@@ -422,7 +424,7 @@ def build_quarter_pool(
 ) -> dict[str, Any]:
     """构建核心龙头池（滚动近 3 个月冻结）。fetch=False 时仅用传入的 spot / members。
 
-    按活跃概念从高到低填池：每概念≤K，去重后凑满 target_pool（默认 20）即停。
+    按活跃概念从高到低填池：每概念≤K，去重后凑满 target_pool（默认 30）即停。
     """
     end_d = today or date.today()
     as_of = end_d.isoformat()

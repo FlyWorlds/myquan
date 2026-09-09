@@ -1,7 +1,7 @@
 """盯盘标的池与代码工具（唯一真源；index 从此处导入）。
 
-当前锁定：**策略一 = 因子26（多层止盈）+ 因子2（回撤预警）+ 因子22（收盘动量再买）**。
-定案宇宙：因子13 宽宇宙换池（无置顶；及格才入池）。
+当前锁定：**默认策略 = 策略十六（核心龙头） = 因子27 + 因子26 + 因子2 + 因子22**。
+默认交易池：因子27 核心龙头近 3 个月冻结池，并额外纳入天通/凯盛。
 策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
 """
 
@@ -18,14 +18,14 @@ if str(_MYQUAN_ROOT) not in sys.path:
 
 from strategy.open_break import DEFAULT_PCT, TICK_SIZE, is_t1_buy_day
 
-# 默认定盘：策略一 + 因子26/因子2/因子22
-STRATEGY_ID = "strategy1"
+# 默认定盘：策略十六 + 因子27/因子26/因子2/因子22
+STRATEGY_ID = "strategy16"
 FACTOR_ID = "factor26"
 FACTOR2_ID = "factor2"
 FACTOR22_ID = "factor22"
 FACTOR4_ID = "factor4"
-STRATEGY_NAME = "策略一·因子26多层止盈+因子2+因子22"
-# 策略三（旧号策略七）才叠因子4；策略一关闭
+STRATEGY_NAME = "策略十六·核心龙头"
+# 策略三（旧号策略七）才叠因子4；默认核心龙头关闭
 USE_FACTOR4 = False
 
 # 早盘节点（A 股集合竞价 + 连续竞价）
@@ -205,6 +205,24 @@ limit_up_pct_of = limit_down_pct_of
 
 CORE_LEADER_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "picks_quarter.json"
 STRATEGY16_THR_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "thr_2026.json"
+STRATEGY16_EXTRA_PICKS: tuple[tuple[str, str], ...] = (
+    ("600330", "天通股份"),
+    ("600552", "凯盛科技"),
+)
+
+
+def _strategy16_extra_pick_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for code, name in STRATEGY16_EXTRA_PICKS:
+        rows.append(
+            {
+                "code": code_key(code),
+                "name": name,
+                "concept": "manual_add",
+                "manual_add": True,
+            }
+        )
+    return rows
 
 
 def load_core_leader_payload() -> dict[str, Any]:
@@ -214,7 +232,29 @@ def load_core_leader_payload() -> dict[str, Any]:
         raw = json.loads(CORE_LEADER_PICKS_PATH.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         return {}
-    return raw if isinstance(raw, dict) else {}
+    if not isinstance(raw, dict):
+        return {}
+    payload = dict(raw)
+    picks = list(payload.get("picks") or [])
+    seen = {
+        code_key(str(it.get("code") or it.get("symbol") or ""))
+        for it in picks
+        if isinstance(it, dict)
+    }
+    extras_added: list[str] = []
+    for extra in _strategy16_extra_pick_rows():
+        code = code_key(str(extra.get("code") or ""))
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        picks.append(extra)
+        extras_added.append(code)
+    if extras_added:
+        payload["picks"] = picks
+        payload["manual_additions"] = extras_added
+        payload["n_picks"] = len(picks)
+        payload["target_pool_with_manual_additions"] = len(picks)
+    return payload
 
 
 def core_leader_codes() -> set[str]:
@@ -365,8 +405,8 @@ FIT_WATCHLIST: list[dict[str, Any]] = [
     if is_mainboard_pool(c)
 ]
 
-# 现行盯盘：与契合池一致（无置顶；因子13 及格才入池）
-WATCHLIST: list[dict[str, Any]] = list(FIT_WATCHLIST)
+# 旧策略一定盘池：与契合池一致（无置顶；因子13 及格才入池）
+WATCHLIST_STRATEGY1: list[dict[str, Any]] = list(FIT_WATCHLIST)
 
 # 持仓 Tab 固定展示：实仓 + 已卖仍跟踪（因子13 熊盾研究票阈值）
 PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
@@ -379,17 +419,55 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
 # 切策略三：STRATEGY_ID="strategy3"; USE_FACTOR4=True; WATCHLIST=list(S7_WATCHLIST)
 
 
-def strategy_watchlist() -> list[dict[str, Any]]:
-    """策略1 定盘池（置顶 + WATCHLIST），与持仓池独立。"""
+def strategy16_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """默认策略池：核心龙头 picks + 手工补入天通/凯盛。"""
+    payload = load_core_leader_payload()
+    picks = payload.get("picks") or []
+    thrs = load_strategy16_thr_map()
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for it in picks:
+        code = code_key(str(it.get("code") or it.get("symbol") or ""))
+        if not code or code in seen or code == "000000":
+            continue
+        seen.add(code)
+        item = meta_for_code(code, holdings)
+        if it.get("name"):
+            item["name"] = str(it.get("name"))
+        item["universe"] = "strategy16"
+        item["concept"] = it.get("concept")
+        if bool(it.get("manual_add")):
+            item["manual_add"] = True
+        thr = thrs.get(code)
+        if thr is not None:
+            item["pct"] = float(thr)
+            item["entry_pct"] = float(thr)
+            item["stop_pct"] = float(DEFAULT_PCT)
+        out.append(item)
+    return out
+
+
+WATCHLIST: list[dict[str, Any]] = []
+
+
+def strategy1_watchlist() -> list[dict[str, Any]]:
+    """策略一定盘池（置顶 + 13A→16 Top20）。"""
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
-    for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST):
+    for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST_STRATEGY1):
         c = code_key(w["code"])
         if c in seen:
             continue
         seen.add(c)
         out.append(w)
     return out
+
+
+def strategy_watchlist() -> list[dict[str, Any]]:
+    """当前默认策略池。"""
+    if STRATEGY_ID == "strategy16":
+        return strategy16_watchlist({})
+    return strategy1_watchlist()
 
 
 def strategy_watchlist_codes() -> set[str]:
@@ -437,7 +515,7 @@ def portfolio_pool_codes(holdings: dict[str, Any]) -> list[str]:
 def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str, Any]:
     """任意 A 股代码 → watch_item；名称优先 holdings.json。"""
     c = code_key(code)
-    for w in strategy_watchlist():
+    for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST_STRATEGY1):
         if w["code"] == c:
             return w
     pos: dict[str, Any] = {}
@@ -459,8 +537,11 @@ def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str
     return watch_item(c, name, pct=pct, limit_down_pct=limit_down_pct_of(c))
 
 
+WATCHLIST = strategy_watchlist()
+
+
 def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """盯盘拉行情/算信号：策略1 定盘池 + 核心龙头池 + 用户持仓池（去重）。"""
+    """盯盘拉行情/算信号：默认策略池 + 其余核心龙头补集 + 用户持仓池（去重）。"""
     if holdings is None:
         try:
             from index import load_holdings
@@ -468,8 +549,9 @@ def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
             holdings = load_holdings()
         except Exception:  # noqa: BLE001
             holdings = {}
-    seen = {code_key(w["code"]) for w in strategy_watchlist()}
-    out = list(strategy_watchlist())
+    base = strategy16_watchlist(holdings) if STRATEGY_ID == "strategy16" else strategy_watchlist()
+    seen = {code_key(w["code"]) for w in base}
+    out = list(base)
     for code in core_leader_codes():
         if code in seen:
             continue

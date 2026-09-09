@@ -408,7 +408,7 @@ def _load_s16_quarter(path: Path) -> dict[str, Any]:
     until = str(raw.get("valid_until") or "")
     note = str(raw.get("note") or "")
     if not note:
-        note = f"近3个月 {window} 冻结" + (f"至 {until}" if until else "") + " · 通达信活跃概念龙头 · 每概念≤3 · 池约20只"
+        note = f"近3个月 {window} 冻结" + (f"至 {until}" if until else "") + " · 通达信活跃概念龙头 · 每概念≤2 · 池约30只"
     if not items:
         note = (note + " · 池为空，请先跑 python strategy/run_core_leader_pool.py").strip(" ·")
     return {

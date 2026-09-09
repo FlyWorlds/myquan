@@ -4,7 +4,7 @@
 攻击波（研究对照 `--buy-mode open_or_attack`）：先用此前分钟最低算买点，再更新本分钟最低。
 卖出（止盈/保护）：
   · 盈利 >10%：分段止盈（10% 半仓 / 15% 全清；过 10% 后峰值回落 2% 清）
-  · 盈利 3%～10%：动态高点回落「近 20 日日频波动率的一半」全清
+  · 盈利 3%～10%：回落一半 与 动态高点回落「0.5×近20日日频σ」并行，谁先碰到走谁
   · 买入日收盘盈利 <3%：次日按当日动态峰值回落 2.5% 立即止损；
     盘中浮盈到 3% 改走中段，到 10% 改走分段
   · 任何时候亏到 2.5%：成本硬保护
@@ -68,15 +68,16 @@ STRATEGY_RULES = """
 【有仓 · 卖出】同分钟优先级（全清优先于半仓；半仓同分钟只减一次）：
   1) 买入日收盘盈利 <3%（已记）且当日尚未 >3% → 次日动态峰值回落 2.5% 全清
   2) 阶梯：浮盈 ≥15% → 可卖全清
-  3) 中赚（浮盈 >3% 且 <10%）：动态高点回落「近20日日频波动的一半」全清
+  3) 中赚（浮盈 >3% 且 <10%）：回落一半 与 峰值回落 0.5×20日日频σ 并行，
+     从动态高点往下谁先碰到走谁（同分钟价高者先触）
   4) 硬保护：亏损达 2.5%
   5) 大赚：阶梯 10% 半仓；≥10% 后峰值回落 2% 清仓
      （已半仓后再触 10% / 回落 → 剩余全清）
-  · 买入当日不可卖；次日未过 3% 走峰值回落 2.5%；过 3% 走波动回落；过 10% 走分段
+  · 买入当日不可卖；次日未过 3% 走峰值回落 2.5%；过 3% 走中段（一半/波动先到先卖）；过 10% 走分段
   · 峰值只从买入之后算，未卖出前创新高则抬升；T1 回落峰值从次日开盘起算
   · 半仓不足 200 股则改为全清
 
-【默认】entry 2.5%；中段门槛 3%；阶梯 10%/15%；大赚回落 2%；波动回落 50%×20日日频σ；
+【默认】entry 2.5%；中段门槛 3%；阶梯 10%/15%；大赚回落 2%；回落一半 50%；波动回落 50%×20日日频σ；
        T1 峰值回落 2.5%；硬保护 2.5%。
 【说明】选股/过滤用日线；成交触达用 1 分钟 path-dependent（定盘池短窗约 7 日）。
 ================================================================================
@@ -168,6 +169,92 @@ def vol_giveback_stop_price(
     return floor_to_tick(peak * (1.0 - dist), tick)
 
 
+def mid_gain_tp_candidates(
+    peak_high: float,
+    cost_px: float,
+    vol20_daily: float | None,
+    *,
+    giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    vol_giveback_ratio: float = DEFAULT_VOL_GIVEBACK_RATIO,
+    tick: float = TICK_SIZE,
+) -> list[tuple[str, float]]:
+    """中赚两条止盈线：(reason, 卖价)。价高者从峰值回落时先碰到。"""
+    cost = float(cost_px or 0)
+    peak = float(peak_high or 0)
+    out: list[tuple[str, float]] = []
+    if cost > 0 and peak > cost + 1e-12:
+        half_px = half_gain_stop_price(
+            peak,
+            cost,
+            giveback_ratio=giveback_ratio,
+            tick=tick,
+        )
+        if half_px > 0:
+            out.append(("half_gain", float(half_px)))
+    vol_px = vol_giveback_stop_price(
+        peak, vol20_daily, ratio=vol_giveback_ratio, tick=tick
+    )
+    if vol_px > 0:
+        out.append(("vol_giveback", float(vol_px)))
+    return out
+
+
+def mid_gain_first_stop(
+    peak_high: float,
+    cost_px: float,
+    vol20_daily: float | None,
+    *,
+    giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    vol_giveback_ratio: float = DEFAULT_VOL_GIVEBACK_RATIO,
+    tick: float = TICK_SIZE,
+) -> tuple[str, float]:
+    """尚未触达时的工作止盈价：两条线里更高的那条（会先触发）。"""
+    cands = mid_gain_tp_candidates(
+        peak_high,
+        cost_px,
+        vol20_daily,
+        giveback_ratio=giveback_ratio,
+        vol_giveback_ratio=vol_giveback_ratio,
+        tick=tick,
+    )
+    if not cands:
+        return "", 0.0
+    reason, px = max(cands, key=lambda x: x[1])
+    return reason, float(px)
+
+
+def mid_gain_first_hit(
+    bar_low: float,
+    peak_high: float,
+    cost_px: float,
+    vol20_daily: float | None,
+    *,
+    giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    vol_giveback_ratio: float = DEFAULT_VOL_GIVEBACK_RATIO,
+    tick: float = TICK_SIZE,
+) -> tuple[str, float] | None:
+    """本 bar 最低价碰到的止盈里，从峰值往下先碰到的那条（卖价更高者）。"""
+    lo = float(bar_low or 0)
+    if lo <= 0:
+        return None
+    hit = [
+        (reason, px)
+        for reason, px in mid_gain_tp_candidates(
+            peak_high,
+            cost_px,
+            vol20_daily,
+            giveback_ratio=giveback_ratio,
+            vol_giveback_ratio=vol_giveback_ratio,
+            tick=tick,
+        )
+        if px > 0 and lo <= px + 1e-12
+    ]
+    if not hit:
+        return None
+    reason, px = max(hit, key=lambda x: x[1])
+    return reason, float(px)
+
+
 def half_gain_stop_price(
     peak_high: float,
     cost_px: float,
@@ -204,7 +291,7 @@ def resolve_t1_overnight_note(
 ) -> dict[str, Any]:
     """买入当日日末：是否把已记带到次日。
 
-    · 收盘盈利 ≥ 3%：不记（次日走波动回落 / 分段）
+    · 收盘盈利 ≥ 3%：不记（次日走中段一半/波动赛跑 / 分段）
     · 收盘盈利 < 3%（含小亏）：记 T1 峰值回落，次日按当日动态峰值回落 2.5%
     · 收盘/最低亏损 ≥ hard_pct（默认 2.5%）：记硬保护
     """
@@ -456,18 +543,29 @@ def eval_multi_tp_bar(
             return _full("ladder_full_15", ladder15, downside=False)
         return {**empty, "peak_after": max(peak, h)}
 
-    # 3) 中赚 3%～10%：动态高点回落 0.5×20日日频波动
+    # 3) 中赚 3%～10%：回落一半 vs 波动回落，价高者先触
     mid_gain = (
         live_ok
         and peak_gain > float(giveback_arm_pct) + 1e-12
         and peak_gain < float(ladder_half_pct) - 1e-12
     )
-    gb_px = vol_giveback_stop_price(
-        peak, vol20_daily, ratio=vol_giveback_ratio, tick=tick
+    mid_hit = (
+        mid_gain_first_hit(
+            lo,
+            peak,
+            cost,
+            vol20_daily,
+            giveback_ratio=giveback_ratio,
+            vol_giveback_ratio=vol_giveback_ratio,
+            tick=tick,
+        )
+        if mid_gain
+        else None
     )
-    if mid_gain and gb_px > 0 and lo <= gb_px + 1e-12:
+    if mid_hit is not None:
+        reason, px = mid_hit
         if can_sell:
-            return _full("vol_giveback", gb_px, downside=True)
+            return _full(reason, px, downside=True)
         return {**empty, "peak_after": max(peak, h)}
     hard_px = floor_to_tick(cost * (1.0 - float(hard_pct)), tick)
     if hard_px > 0 and lo <= hard_px + 1e-12:
@@ -661,8 +759,9 @@ def path_dependent_pullback_hit(
             elif pnl_exceeds(peak_now, cost, giveback_arm_pct) and (
                 peak_now / cost - 1.0 < DEFAULT_LADDER_HALF_PCT
             ):
-                stop_now = vol_giveback_stop_price(peak_now, vol20_daily, tick=tick)
-                kind_now = "vol_giveback"
+                kind_now, stop_now = mid_gain_first_stop(
+                    peak_now, cost, vol20_daily, tick=tick
+                )
             elif peak_now / cost - 1.0 + 1e-12 >= DEFAULT_LADDER_HALF_PCT:
                 stop_now = peak_pullback_half_price(peak_now, tick=tick)
                 kind_now = "peak_pullback"
@@ -734,7 +833,7 @@ def strategy_levels(
         sess = float(_extra.get("session_peak") or open_px or peak)
         stop = pullback_stop_price(sess, pullback_pct=trail, tick=tick)
     elif live_ok and peak_gain < DEFAULT_LADDER_HALF_PCT - 1e-12:
-        stop = vol_giveback_stop_price(peak, vol20, tick=tick)
+        _kind, stop = mid_gain_first_stop(peak, cost, vol20, tick=tick)
         if stop <= 0:
             stop = floor_to_tick(cost * (1.0 - pb), tick)
     elif live_ok and peak_gain + 1e-12 >= DEFAULT_LADDER_HALF_PCT:
@@ -767,7 +866,7 @@ def rules_text(
         f"  · 买：开盘+{entry_pct*100:.1f}%（默认关攻击波）\n"
         f"  · 卖：>10% 分段{DEFAULT_LADDER_HALF_PCT*100:.0f}%半/"
         f"{DEFAULT_LADDER_FULL_PCT*100:.0f}%全 + 回落{DEFAULT_PEAK_PULLBACK_X*100:.0f}%；"
-        f"3–10% 动态高点回落 0.5×20日日频σ；未到3% 次日峰值回落"
+        f"3–10% 回落一半与0.5×20日日频σ谁先到走谁；未到3% 次日峰值回落"
         f"{DEFAULT_T1_PEAK_TRAIL_PCT*100:.1f}%\n"
         f"  · 中段门槛 {DEFAULT_GIVEBACK_ARM_PCT*100:.0f}%；硬保护 {pullback_pct*100:.1f}%；默认绑策略一"
     )
@@ -1844,6 +1943,9 @@ __all__ = [
     "realized_vol_daily",
     "vol_giveback_stop_price",
     "vol_giveback_distance",
+    "mid_gain_first_hit",
+    "mid_gain_first_stop",
+    "mid_gain_tp_candidates",
     "resolve_t1_overnight_note",
     "stop_note_invalidated_by_recovery",
     "exit_stop_price",

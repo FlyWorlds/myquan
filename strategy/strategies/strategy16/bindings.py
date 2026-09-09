@@ -26,7 +26,7 @@ _TH = default_thresholds()
 FACTOR_BINDINGS = (
     bind_factor(
         "factor26",
-        label="浮盈回落一半止盈",
+        label="多层止盈",
         role="both",
         entry_pct=DEFAULT_PCT,
         stop_pct=DEFAULT_PCT,
@@ -39,7 +39,7 @@ FACTOR_BINDINGS = (
         double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
         double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
         filter=strategy1_factor_filter,
-        filter_desc="买同因子1；卖=持仓最高浮盈回落一半（未浮盈成本保护±2.5%）",
+        filter_desc="买=开盘阈值（个股 thr 2026 夏普择优）；卖同策略一：硬保护2.5% / 中赚回落一半与波动回落谁先到走谁 / 阶梯10%·15% / 未到3%次日峰值回落2.5%",
     ),
     bind_factor(
         "factor2",
@@ -61,7 +61,7 @@ FACTOR_BINDINGS = (
         "factor27",
         label="核心龙头近3个月池",
         role="universe",
-        filter_desc="通达信活跃概念偏高；每概念≤3；池约20只；主板非ST非科创创业、百元以下；滚动近3个月冻结",
+        filter_desc="通达信活跃概念偏高；每概念≤2；池约30只；主板非ST非科创创业、百元以下；滚动近3个月冻结",
         enabled=True,
     ),
     bind_factor(

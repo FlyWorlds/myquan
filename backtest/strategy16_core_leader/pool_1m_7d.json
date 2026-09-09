@@ -1,10 +1,10 @@
 {
   "summary": {
     "window_days": 7,
-    "n_pool": 20,
+    "n_pool": 22,
     "pool": "strategy16",
-    "n_with_rounds": 14,
-    "equal_weight_pnl_pct": 2.19,
+    "n_with_rounds": 18,
+    "equal_weight_pnl_pct": 1.66,
     "portfolio": {
       "window_days": 7,
       "calendar": [
@@ -19,17 +19,17 @@
       "max_slots": 3,
       "slot_weight": 0.3,
       "initial_cash": 100000.0,
-      "final_equity": 103568.0,
-      "return_pct": 3.57,
+      "final_equity": 104597.0,
+      "return_pct": 4.6,
       "max_dd_pct": -3.53,
       "dd_peak_date": "2026-09-01",
       "dd_trough_date": "2026-09-04",
-      "n_buys": 11,
+      "n_buys": 13,
       "n_sells": 10,
       "n_closed": 10,
-      "avg_closed_pnl_pct": 1.14,
-      "n_open": 1,
-      "n_skipped_or_queued": 14,
+      "avg_closed_pnl_pct": 1.92,
+      "n_open": 3,
+      "n_skipped_or_queued": 23,
       "exit_mode": "half_gain",
       "buy_mode": "open",
       "reserve_empty": 0,
@@ -60,7 +60,9 @@
       "603663": 0.03,
       "603938": 0.02,
       "000070": 0.03,
-      "000586": 0.025
+      "000586": 0.025,
+      "600330": 0.03,
+      "600552": 0.025
     },
     "factor2_alert": {
       "hist_max_dd": 0.26,
@@ -210,13 +212,13 @@
       "entry_pct": 0.03,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": false,
-      "n_trades": 4,
+      "holding": true,
+      "n_trades": 5,
       "n_rounds": 2,
-      "pnl_pct": 0.96,
-      "last_side": "sell",
-      "last_px": 10.69,
-      "last_date": "2026-09-08",
+      "pnl_pct": -1.41,
+      "last_side": "buy",
+      "last_px": 10.56,
+      "last_date": "2026-09-09",
       "trades": [
         {
           "date": "2026-09-01",
@@ -228,9 +230,9 @@
         {
           "date": "2026-09-02",
           "side": "sell",
-          "px": 11.49,
-          "ts": "2026-09-02 09:35:00",
-          "note": "vol_giveback"
+          "px": 11.22,
+          "ts": "2026-09-02 09:31:00",
+          "note": "half_gain"
         },
         {
           "date": "2026-09-07",
@@ -245,6 +247,13 @@
           "px": 10.69,
           "ts": "2026-09-08 09:31:00",
           "note": "hard_from_cost"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "buy",
+          "px": 10.56,
+          "ts": "2026-09-09 09:31:00",
+          "kind": "open"
         }
       ]
     },
@@ -255,13 +264,13 @@
       "entry_pct": 0.025,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": false,
-      "n_trades": 2,
+      "holding": true,
+      "n_trades": 3,
       "n_rounds": 1,
       "pnl_pct": 3.89,
-      "last_side": "sell",
-      "last_px": 17.89,
-      "last_date": "2026-09-03",
+      "last_side": "buy",
+      "last_px": 16.92,
+      "last_date": "2026-09-09",
       "trades": [
         {
           "date": "2026-09-02",
@@ -276,6 +285,13 @@
           "px": 17.89,
           "ts": "2026-09-03 09:55:00",
           "note": "vol_giveback"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "buy",
+          "px": 16.92,
+          "ts": "2026-09-09 09:35:00",
+          "kind": "open"
         }
       ]
     },
@@ -286,13 +302,13 @@
       "entry_pct": 0.02,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": false,
-      "n_trades": 2,
+      "holding": true,
+      "n_trades": 3,
       "n_rounds": 1,
       "pnl_pct": 14.99,
-      "last_side": "sell",
-      "last_px": 17.41,
-      "last_date": "2026-09-08",
+      "last_side": "buy",
+      "last_px": 18.03,
+      "last_date": "2026-09-09",
       "trades": [
         {
           "date": "2026-09-07",
@@ -307,6 +323,13 @@
           "px": 17.41,
           "ts": "2026-09-08 09:31:00",
           "note": "ladder_full_15"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "buy",
+          "px": 18.03,
+          "ts": "2026-09-09 09:35:00",
+          "kind": "open"
         }
       ]
     },
@@ -320,7 +343,7 @@
       "holding": false,
       "n_trades": 4,
       "n_rounds": 2,
-      "pnl_pct": 16.51,
+      "pnl_pct": 15.88,
       "last_side": "sell",
       "last_px": 16.47,
       "last_date": "2026-09-08",
@@ -335,9 +358,9 @@
         {
           "date": "2026-09-03",
           "side": "sell",
-          "px": 14.76,
-          "ts": "2026-09-03 09:33:00",
-          "note": "vol_giveback"
+          "px": 14.68,
+          "ts": "2026-09-03 09:32:00",
+          "note": "half_gain"
         },
         {
           "date": "2026-09-07",
@@ -362,13 +385,13 @@
       "entry_pct": 0.02,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": false,
-      "n_trades": 2,
+      "holding": true,
+      "n_trades": 3,
       "n_rounds": 1,
       "pnl_pct": 2.18,
-      "last_side": "sell",
-      "last_px": 6.57,
-      "last_date": "2026-09-03",
+      "last_side": "buy",
+      "last_px": 6.66,
+      "last_date": "2026-09-09",
       "trades": [
         {
           "date": "2026-09-02",
@@ -383,6 +406,13 @@
           "px": 6.57,
           "ts": "2026-09-03 09:33:00",
           "note": "vol_giveback"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "buy",
+          "px": 6.66,
+          "ts": "2026-09-09 09:59:00",
+          "kind": "open"
         }
       ]
     },
@@ -425,13 +455,13 @@
       "entry_pct": 0.02,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": true,
-      "n_trades": 1,
-      "n_rounds": 0,
-      "pnl_pct": null,
-      "last_side": "buy",
-      "last_px": 14.64,
-      "last_date": "2026-09-07",
+      "holding": false,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": 1.23,
+      "last_side": "sell",
+      "last_px": 14.82,
+      "last_date": "2026-09-09",
       "trades": [
         {
           "date": "2026-09-07",
@@ -439,6 +469,13 @@
           "px": 14.64,
           "ts": "2026-09-07 13:08:00",
           "kind": "open"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "sell",
+          "px": 14.82,
+          "ts": "2026-09-09 09:31:00",
+          "note": "vol_giveback"
         }
       ]
     },
@@ -449,13 +486,13 @@
       "entry_pct": 0.02,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": true,
-      "n_trades": 1,
-      "n_rounds": 0,
-      "pnl_pct": null,
-      "last_side": "buy",
-      "last_px": 35.88,
-      "last_date": "2026-09-08",
+      "holding": false,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": -2.51,
+      "last_side": "sell",
+      "last_px": 34.98,
+      "last_date": "2026-09-09",
       "trades": [
         {
           "date": "2026-09-08",
@@ -463,6 +500,13 @@
           "px": 35.88,
           "ts": "2026-09-08 10:34:00",
           "kind": "open"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "sell",
+          "px": 34.98,
+          "ts": "2026-09-09 11:22:00",
+          "note": "hard_from_cost"
         }
       ]
     },
@@ -567,13 +611,13 @@
       "entry_pct": 0.03,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": false,
-      "n_trades": 2,
+      "holding": true,
+      "n_trades": 3,
       "n_rounds": 1,
       "pnl_pct": -1.2,
-      "last_side": "sell",
-      "last_px": 39.38,
-      "last_date": "2026-09-08",
+      "last_side": "buy",
+      "last_px": 40.7,
+      "last_date": "2026-09-09",
       "trades": [
         {
           "date": "2026-09-07",
@@ -588,6 +632,13 @@
           "px": 39.38,
           "ts": "2026-09-08 09:52:00",
           "note": "t1_peak_trail"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "buy",
+          "px": 40.7,
+          "ts": "2026-09-09 09:35:00",
+          "kind": "open"
         }
       ]
     },
@@ -598,13 +649,13 @@
       "entry_pct": 0.02,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": false,
-      "n_trades": 2,
+      "holding": true,
+      "n_trades": 3,
       "n_rounds": 1,
       "pnl_pct": -2.45,
-      "last_side": "sell",
-      "last_px": 42.63,
-      "last_date": "2026-09-03",
+      "last_side": "buy",
+      "last_px": 47.81,
+      "last_date": "2026-09-09",
       "trades": [
         {
           "date": "2026-09-02",
@@ -619,6 +670,13 @@
           "px": 42.63,
           "ts": "2026-09-03 09:32:00",
           "note": "t1_peak_trail"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "buy",
+          "px": 47.81,
+          "ts": "2026-09-09 09:31:00",
+          "kind": "open"
         }
       ]
     },
@@ -674,13 +732,13 @@
       "entry_pct": 0.025,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": true,
-      "n_trades": 3,
-      "n_rounds": 1,
-      "pnl_pct": -2.51,
-      "last_side": "buy",
-      "last_px": 13.73,
-      "last_date": "2026-09-07",
+      "holding": false,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": -1.66,
+      "last_side": "sell",
+      "last_px": 13.85,
+      "last_date": "2026-09-09",
       "trades": [
         {
           "date": "2026-09-01",
@@ -701,6 +759,96 @@
           "side": "buy",
           "px": 13.73,
           "ts": "2026-09-07 10:35:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "sell",
+          "px": 13.85,
+          "ts": "2026-09-09 09:31:00",
+          "note": "half_gain"
+        }
+      ]
+    },
+    {
+      "code": "600330",
+      "name": "天通股份",
+      "sina": "sh600330",
+      "entry_pct": 0.03,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": false,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": 4.19,
+      "last_side": "sell",
+      "last_px": 29.66,
+      "last_date": "2026-09-08",
+      "trades": [
+        {
+          "date": "2026-09-03",
+          "side": "buy",
+          "px": 27.8,
+          "ts": "2026-09-03 14:28:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-04",
+          "side": "sell",
+          "px": 27.54,
+          "ts": "2026-09-04 09:42:00",
+          "note": "t1_peak_trail"
+        },
+        {
+          "date": "2026-09-07",
+          "side": "buy",
+          "px": 28.2,
+          "ts": "2026-09-07 09:32:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-08",
+          "side": "sell",
+          "px": 29.66,
+          "ts": "2026-09-08 09:33:00",
+          "note": "vol_giveback"
+        }
+      ]
+    },
+    {
+      "code": "600552",
+      "name": "凯盛科技",
+      "sina": "sh600552",
+      "entry_pct": 0.025,
+      "pullback_pct": 0.025,
+      "days_used": 7,
+      "holding": true,
+      "n_trades": 3,
+      "n_rounds": 1,
+      "pnl_pct": -1.51,
+      "last_side": "buy",
+      "last_px": 17.33,
+      "last_date": "2026-09-09",
+      "trades": [
+        {
+          "date": "2026-09-07",
+          "side": "buy",
+          "px": 17.2,
+          "ts": "2026-09-07 13:31:00",
+          "kind": "open"
+        },
+        {
+          "date": "2026-09-08",
+          "side": "sell",
+          "px": 16.94,
+          "ts": "2026-09-08 09:51:00",
+          "note": "t1_peak_trail"
+        },
+        {
+          "date": "2026-09-09",
+          "side": "buy",
+          "px": 17.33,
+          "ts": "2026-09-09 09:36:00",
           "kind": "open"
         }
       ]
@@ -865,12 +1013,12 @@
     },
     {
       "date": "2026-09-07",
-      "ts": "2026-09-07 09:35:00",
+      "ts": "2026-09-07 09:32:00",
       "side": "buy",
-      "code": "002815",
-      "name": "崇达技术",
-      "px": 15.14,
-      "shares": 1900,
+      "code": "600330",
+      "name": "天通股份",
+      "px": 28.2,
+      "shares": 1000,
       "kind": "open",
       "source": "trigger",
       "slots_after": 2
@@ -879,10 +1027,10 @@
       "date": "2026-09-07",
       "ts": "2026-09-07 09:35:00",
       "side": "buy",
-      "code": "603330",
-      "name": "天洋新材",
-      "px": 10.97,
-      "shares": 2700,
+      "code": "002815",
+      "name": "崇达技术",
+      "px": 15.14,
+      "shares": 1900,
       "kind": "open",
       "source": "trigger",
       "slots_after": 3
@@ -913,14 +1061,14 @@
     },
     {
       "date": "2026-09-08",
-      "ts": "2026-09-08 09:31:00",
+      "ts": "2026-09-08 09:33:00",
       "side": "sell",
-      "code": "603330",
-      "name": "天洋新材",
-      "px": 10.69,
-      "shares": 2700,
-      "pnl_pct": -0.0255,
-      "exit_reason": "hard_from_cost",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 29.66,
+      "shares": 1000,
+      "pnl_pct": 0.0518,
+      "exit_reason": "vol_giveback",
       "slots_after": 0
     },
     {
@@ -942,10 +1090,22 @@
       "code": "000070",
       "name": "特发信息",
       "px": 16.56,
-      "shares": 1800,
+      "shares": 1900,
       "kind": "open",
       "source": "trigger",
       "slots_after": 2
+    },
+    {
+      "date": "2026-09-09",
+      "ts": "2026-09-09 09:31:00",
+      "side": "buy",
+      "code": "603330",
+      "name": "天洋新材",
+      "px": 10.56,
+      "shares": 3000,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 3
     },
     {
       "date": "2026-09-09",
@@ -957,7 +1117,20 @@
       "shares": 800,
       "pnl_pct": -0.0251,
       "exit_reason": "hard_from_cost",
-      "slots_after": 1
+      "slots_after": 2
+    },
+    {
+      "date": "2026-09-09",
+      "ts": "2026-09-09 11:22:00",
+      "trigger_ts": "2026-09-09 09:31:00",
+      "side": "buy",
+      "code": "603938",
+      "name": "三孚股份",
+      "px": 47.81,
+      "shares": 600,
+      "kind": "open",
+      "source": "queue_fill",
+      "slots_after": 3
     }
   ],
   "portfolio_equity": [
@@ -995,27 +1168,27 @@
     },
     {
       "date": "2026-09-07",
-      "equity": 101934.0,
-      "cash": 42112.0,
+      "equity": 102840.0,
+      "cash": 43531.0,
       "n_pos": 2,
-      "codes": "002815,603330",
-      "ret_pct": 1.93
+      "codes": "002815,600330",
+      "ret_pct": 2.84
     },
     {
       "date": "2026-09-08",
-      "equity": 103234.0,
-      "cash": 45542.0,
+      "equity": 105444.0,
+      "cash": 46102.0,
       "n_pos": 2,
       "codes": "000021,000070",
-      "ret_pct": 3.23
+      "ret_pct": 5.44
     },
     {
       "date": "2026-09-09",
-      "equity": 103568.0,
-      "cash": 73526.0,
-      "n_pos": 1,
-      "codes": "000070",
-      "ret_pct": 3.57
+      "equity": 104597.0,
+      "cash": 13720.0,
+      "n_pos": 3,
+      "codes": "000070,603330,603938",
+      "ret_pct": 4.6
     }
   ],
   "open_positions": [
@@ -1025,8 +1198,26 @@
       "buy_day": "2026-09-08",
       "buy_px": 16.56,
       "last_px": 16.69,
-      "shares": 1800,
+      "shares": 1900,
       "pnl_pct": 0.0079
+    },
+    {
+      "code": "603330",
+      "name": "天洋新材",
+      "buy_day": "2026-09-09",
+      "buy_px": 10.56,
+      "last_px": 10.3,
+      "shares": 3000,
+      "pnl_pct": -0.0246
+    },
+    {
+      "code": "603938",
+      "name": "三孚股份",
+      "buy_day": "2026-09-09",
+      "buy_px": 47.81,
+      "last_px": 47.11,
+      "shares": 600,
+      "pnl_pct": -0.0146
     }
   ],
   "skipped_buys": [
@@ -1111,6 +1302,26 @@
       "reason": "max_buys_per_day"
     },
     {
+      "day": "2026-09-03",
+      "ts": "2026-09-03 14:28:00",
+      "code": "600330",
+      "name": "天通股份",
+      "px": 27.8,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 09:35:00",
+      "code": "603330",
+      "name": "天洋新材",
+      "px": 10.97,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
       "day": "2026-09-07",
       "ts": "2026-09-07 10:09:00",
       "code": "603663",
@@ -1161,6 +1372,16 @@
       "reason": "max_buys_per_day"
     },
     {
+      "day": "2026-09-07",
+      "ts": "2026-09-07 13:31:00",
+      "code": "600552",
+      "name": "凯盛科技",
+      "px": 17.2,
+      "kind": "open",
+      "source": "trigger",
+      "reason": "max_buys_per_day"
+    },
+    {
       "day": "2026-09-08",
       "ts": "2026-09-08 13:13:00",
       "code": "000972",
@@ -1169,6 +1390,72 @@
       "kind": "open",
       "source": "trigger",
       "reason": "max_buys_per_day"
+    },
+    {
+      "day": "2026-09-09",
+      "ts": "2026-09-09 09:35:00",
+      "code": "002815",
+      "name": "崇达技术",
+      "px": 18.03,
+      "kind": "open",
+      "source": "trigger",
+      "queued_at": "2026-09-09 09:35:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-09",
+      "ts": "2026-09-09 09:35:00",
+      "code": "603663",
+      "name": "三祥新材",
+      "px": 40.7,
+      "kind": "open",
+      "source": "trigger",
+      "queued_at": "2026-09-09 09:35:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-09",
+      "ts": "2026-09-09 09:35:00",
+      "code": "605277",
+      "name": "新亚电子",
+      "px": 16.92,
+      "kind": "open",
+      "source": "trigger",
+      "queued_at": "2026-09-09 09:35:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-09",
+      "ts": "2026-09-09 09:36:00",
+      "code": "000586",
+      "name": "汇源通信",
+      "px": 14.33,
+      "kind": "open",
+      "source": "trigger",
+      "queued_at": "2026-09-09 09:36:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-09",
+      "ts": "2026-09-09 09:36:00",
+      "code": "600552",
+      "name": "凯盛科技",
+      "px": 17.33,
+      "kind": "open",
+      "source": "trigger",
+      "queued_at": "2026-09-09 09:36:00",
+      "reason": "slots_full_unfilled_eod"
+    },
+    {
+      "day": "2026-09-09",
+      "ts": "2026-09-09 09:59:00",
+      "code": "002498",
+      "name": "汉缆股份",
+      "px": 6.66,
+      "kind": "open",
+      "source": "trigger",
+      "queued_at": "2026-09-09 09:59:00",
+      "reason": "slots_full_unfilled_eod"
     }
   ]
 }
