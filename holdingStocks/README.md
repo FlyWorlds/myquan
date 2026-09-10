@@ -174,6 +174,7 @@ cd holdingStocks
 python start_watch.py        # 推荐：数据 API + Web 盯盘（Mac/Windows）
 python index.py              # 终端查看行情 + 持仓
 python index.py watch        # 仅数据后端（不启页面）
+python index.py clear-all    # 清仓+重置状态+归档当日成交，重新执行三槽
 python index.py buy 600552 15.50 400
 python index.py sell 600552 16.20 400
 ```

@@ -5393,20 +5393,113 @@ def cmd_clear(args: argparse.Namespace) -> None:
 
 
 def cmd_clear_all(_: argparse.Namespace) -> None:
-    """清空全部盯盘标的持仓与当日已实现、绿底粘滞。"""
+    """清仓并重置全部盯盘状态，便于当日重新执行默认策略三槽。
+
+    · 全部 positions → 空仓；realized / alert_sticky / factor_memory 清空
+    · strategy 纸面持有复位；portfolio_pool 对齐默认策略池
+    · 当日 trades.jsonl 买卖行归档，避免「日最多买2 / 当日禁买」挡住重跑
+    · 账户总资产回到默认纸面资金；清内存缓存与微信防抖
+    """
+    from watch_config import (
+        DEFAULT_ACCOUNT_TOTAL,
+        prune_portfolio_pool,
+        strategy_watchlist_codes,
+    )
+
+    global _REPLAY_CACHE, _STRATEGY_PNL_CACHE, _M1_CACHE, _HOLDINGS_CACHE
+
     data = load_holdings()
-    for w in effective_watchlist():
-        data["positions"][w["code"]] = _empty_position(w)
+    sess = str(pd.Timestamp.now().date())
+    # 1) 所有票空仓（含非当前池遗留代码）
+    positions = data.setdefault("positions", {})
+    for code, pos in list(positions.items()):
+        name = ""
+        market = "深证"
+        if isinstance(pos, dict):
+            name = str(pos.get("name") or "")
+            market = str(pos.get("market") or market)
+        meta = {"code": _code_key(code), "name": name or _code_key(code), "market": market}
+        try:
+            meta = _find_meta(code) if code else meta
+        except Exception:  # noqa: BLE001
+            pass
+        positions[_code_key(code)] = _empty_position(meta)
+    for w in effective_watchlist(data):
+        positions[w["code"]] = _empty_position(w)
+
     data["realized_today"] = {}
     data["alert_sticky"] = {}
-    data["account_total"] = None
-    data["account_cash"] = None
-    data["account_total_open"] = None
-    data["account_total_open_session"] = None
+    data["factor_memory"] = {}
+    data["account_total"] = float(DEFAULT_ACCOUNT_TOTAL)
+    data["account_cash"] = float(DEFAULT_ACCOUNT_TOTAL)
+    data["account_total_open"] = float(DEFAULT_ACCOUNT_TOTAL)
+    data["account_total_open_session"] = sess
     data["last_session"] = None
-    save_holdings(data)
-    print(f"已清空全部持仓（{len(WATCHLIST)} 只）与当日结算记录")
+    data["watch_status_reset_session"] = sess
 
+    # 策略纸面持有复位
+    strat = data.get("strategy")
+    if isinstance(strat, dict):
+        for code, st in list(strat.items()):
+            if isinstance(st, dict):
+                st["holding"] = False
+                st["buy_time"] = None
+            else:
+                strat[code] = {"holding": False, "buy_time": None}
+
+    # 持仓池只留默认策略池
+    data["portfolio_pool"] = sorted(strategy_watchlist_codes())
+    prune_portfolio_pool(data)
+
+    # 2) 当日成交行移出 trades.jsonl（保留历史），否则日买次数仍占满
+    n_archived = 0
+    if TRADES_FILE.exists():
+        try:
+            lines = TRADES_FILE.read_text(encoding="utf-8").splitlines()
+            keep: list[str] = []
+            archived: list[str] = []
+            for line in lines:
+                s = line.strip()
+                if not s:
+                    continue
+                try:
+                    rec = json.loads(s)
+                except json.JSONDecodeError:
+                    keep.append(line)
+                    continue
+                ts = str(rec.get("time") or rec.get("ts") or "")
+                if ts.startswith(sess):
+                    archived.append(s)
+                else:
+                    keep.append(s)
+            if archived:
+                stamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+                arch = ROOT / f"trades_reset_{stamp}.jsonl"
+                arch.write_text("\n".join(archived) + "\n", encoding="utf-8")
+                n_archived = len(archived)
+            TRADES_FILE.write_text(("\n".join(keep) + ("\n" if keep else "")), encoding="utf-8")
+        except OSError as e:
+            print(f"归档当日成交失败（继续）: {e}")
+
+    save_holdings(data)
+    _HOLDINGS_CACHE.clear()
+    _REPLAY_CACHE.clear()
+    _STRATEGY_PNL_CACHE.clear()
+    _M1_CACHE.clear()
+    try:
+        from wechat_notify import STATE_FILE
+
+        if STATE_FILE.exists():
+            STATE_FILE.unlink()
+    except Exception as e:  # noqa: BLE001
+        print(f"清微信预警状态失败（继续）: {e}")
+
+    print(
+        f"已清仓并重置全部状态 · session={sess} · "
+        f"池 {len(data.get('portfolio_pool') or [])} 只 · "
+        f"归档当日成交 {n_archived} 笔 · 账户 {DEFAULT_ACCOUNT_TOTAL:.0f}"
+    )
+    print("盯盘下一轮将按默认策略重新扫描入槽（日最多买 2）。")
 
 def cmd_history(_: argparse.Namespace) -> None:
     if not TRADES_FILE.exists():
@@ -6424,7 +6517,10 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("code")
     c.set_defaults(func=cmd_clear)
 
-    ca = sub.add_parser("clear-all", help="清空全部持仓与当日结算")
+    ca = sub.add_parser(
+        "clear-all",
+        help="清仓并重置全部状态（含当日成交归档），便于重新执行策略三槽",
+    )
     ca.set_defaults(func=cmd_clear_all)
 
     sc = sub.add_parser("set-cost", help="登记/修改成本价")
