@@ -440,3 +440,55 @@ def test_overlay_does_not_rewrite_real_qty():
     )
     assert out["持仓状态"] == "已经买入"
     assert out.get("alert") == "已经买入"
+
+
+def test_annotate_unfilled_buy_signals_slot_full_and_gate():
+    """触买信号与入槽拆开：槽满仍预警；价触未过门弱信号。"""
+    from index import _annotate_unfilled_buy_signals
+    from watch_snapshot import filter_portfolio_holdings
+
+    hit = {
+        "代码": "600869",
+        "名称": "远东",
+        "持仓": 0,
+        "已触买": "是",
+        "预警": "已触买",
+        "持仓状态": "待买入",
+        "过门OK": True,
+        "买点": 24.81,
+        "买入侧价": 24.81,
+        "价位小数": 2,
+        "挂单说明": "",
+    }
+    gate = {
+        "代码": "002068",
+        "名称": "黑猫",
+        "持仓": 0,
+        "已触买": "否",
+        "预警": "空仓",
+        "持仓状态": "空仓",
+        "过门OK": False,
+        "过门": "前日大阳·不过门",
+        "最高": 11.0,
+        "买点": 10.27,
+        "挂单说明": "",
+    }
+    _annotate_unfilled_buy_signals(
+        [hit, gate],
+        {"freeBuy": 0, "buysLeft": 0, "free": 0},
+    )
+    assert hit["预警"] == "已触买·槽满"
+    assert hit["持仓状态"] == "待买入"
+    assert hit["槽位候选"] is True
+    assert gate["预警"] == "触买价·未过门"
+    assert gate["当日预警"] is True
+
+    picked = filter_portfolio_holdings(
+        [hit, gate],
+        portfolio_codes=set(),
+        strategy_codes={"600869", "002068"},
+        phase="continuous",
+    )
+    codes = {str(r["代码"]) for r in picked}
+    assert codes == {"600869", "002068"}
+

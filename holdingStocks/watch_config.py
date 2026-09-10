@@ -1,7 +1,8 @@
 """盯盘标的池与代码工具（唯一真源；index 从此处导入）。
 
 当前锁定：**默认策略 = 策略十六（核心龙头） = 因子27 + 因子26 + 因子2 + 因子22**。
-默认交易池：因子27 核心龙头近 3 个月冻结池，并额外纳入天通/凯盛。
+默认交易池：因子27 核心龙头近 3 个月冻结池 ∪ **公共自选池**（天通/凯盛/东材/金安，
+`SELF_WATCHLIST_PICKS`；策略一/十五/十六与 effective 并集均并入，非仅策略十六）。
 策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
 """
 
@@ -205,68 +206,81 @@ limit_up_pct_of = limit_down_pct_of
 
 CORE_LEADER_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "picks_quarter.json"
 STRATEGY16_THR_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "thr_2026.json"
-STRATEGY16_EXTRA_PICKS: tuple[tuple[str, str], ...] = (
+
+# 公共自选池（非因子选股）：所有策略交易/盯盘宇宙均并入；可入三槽；UI 标「自选」。
+# 旧名 STRATEGY16_EXTRA_PICKS 仍兼容（历史曾只挂策略十六）。
+SELF_WATCHLIST_PICKS: tuple[tuple[str, str], ...] = (
     ("600330", "天通股份"),
     ("600552", "凯盛科技"),
     ("601208", "东材科技"),
     ("002636", "金安国纪"),
 )
+STRATEGY16_EXTRA_PICKS = SELF_WATCHLIST_PICKS
+
+POOL_SRC_FACTOR27 = "factor27"
+POOL_SRC_SELF = "self"
+POOL_SRC_LABEL = {
+    POOL_SRC_FACTOR27: "因子27",
+    POOL_SRC_SELF: "自选",
+}
 
 
-def _strategy16_extra_pick_rows() -> list[dict[str, Any]]:
+def self_watchlist_pick_rows() -> list[dict[str, Any]]:
+    """公共自选池原始行（不含阈值；供各策略合并）。"""
     rows: list[dict[str, Any]] = []
-    for code, name in STRATEGY16_EXTRA_PICKS:
+    for code, name in SELF_WATCHLIST_PICKS:
         rows.append(
             {
                 "code": code_key(code),
                 "name": name,
-                "concept": "manual_add",
-                "manual_add": True,
+                "concept": "self_watch",
+                "pool_src": POOL_SRC_SELF,
+                "manual_add": True,  # 兼容旧字段
             }
         )
     return rows
 
 
+def self_watchlist_codes() -> set[str]:
+    """公共自选池代码集合（6 位）。"""
+    return {
+        code_key(c)
+        for c, _ in SELF_WATCHLIST_PICKS
+        if code_key(c) and code_key(c) != "000000"
+    }
+
+
 def load_core_leader_payload() -> dict[str, Any]:
+    """因子27 近3个月冻结池（纯选股产物，不含自选）。"""
     if not CORE_LEADER_PICKS_PATH.is_file():
         return {}
     try:
         raw = json.loads(CORE_LEADER_PICKS_PATH.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         return {}
-    if not isinstance(raw, dict):
-        return {}
-    payload = dict(raw)
-    picks = list(payload.get("picks") or [])
-    seen = {
-        code_key(str(it.get("code") or it.get("symbol") or ""))
-        for it in picks
-        if isinstance(it, dict)
-    }
-    extras_added: list[str] = []
-    for extra in _strategy16_extra_pick_rows():
-        code = code_key(str(extra.get("code") or ""))
-        if not code or code in seen:
-            continue
-        seen.add(code)
-        picks.append(extra)
-        extras_added.append(code)
-    if extras_added:
-        payload["picks"] = picks
-        payload["manual_additions"] = extras_added
-        payload["n_picks"] = len(picks)
-        payload["target_pool_with_manual_additions"] = len(picks)
-    return payload
+    return dict(raw) if isinstance(raw, dict) else {}
 
 
-def core_leader_codes() -> set[str]:
-    """策略十六滚动近3个月冻结池（因子27）。"""
+def factor27_codes() -> set[str]:
+    """仅因子27选股池。"""
     out: set[str] = set()
     for it in load_core_leader_payload().get("picks") or []:
+        if not isinstance(it, dict):
+            continue
         c = code_key(str(it.get("code") or it.get("symbol") or ""))
         if c and c != "000000":
             out.add(c)
     return out
+
+
+def core_leader_codes() -> set[str]:
+    """策略十六交易宇宙 = 因子27 ∪ 公共自选池。"""
+    return factor27_codes() | self_watchlist_codes()
+
+
+def _strategy16_extra_pick_rows() -> list[dict[str, Any]]:
+    """旧名：等同公共自选池行。"""
+    return self_watchlist_pick_rows()
 
 
 def load_strategy16_thr_map() -> dict[str, float]:
@@ -424,39 +438,89 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
 # 切策略三：STRATEGY_ID="strategy3"; USE_FACTOR4=True; WATCHLIST=list(S7_WATCHLIST)
 
 
-def strategy16_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """默认策略池：核心龙头 picks + 手工补入天通/凯盛。"""
-    payload = load_core_leader_payload()
-    picks = payload.get("picks") or []
-    thrs = load_strategy16_thr_map()
+def self_watch_items(
+    holdings: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """公共自选池 → watch_item 列表（带池来源标签）。"""
     out: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for it in picks:
-        code = code_key(str(it.get("code") or it.get("symbol") or ""))
-        if not code or code in seen or code == "000000":
+    thrs = load_strategy16_thr_map()
+    for code, name in SELF_WATCHLIST_PICKS:
+        c = code_key(code)
+        if not c or c == "000000":
             continue
-        seen.add(code)
+        item = meta_for_code(c, holdings)
+        item["name"] = name
+        item["pool_src"] = POOL_SRC_SELF
+        item["池来源"] = POOL_SRC_LABEL[POOL_SRC_SELF]
+        item["self_watch"] = True
+        item["manual_add"] = True
+        item["concept"] = "self_watch"
+        thr = thrs.get(c)
+        if thr is not None:
+            item["pct"] = float(thr)
+            item["entry_pct"] = float(thr)
+            item.setdefault("stop_pct", float(DEFAULT_PCT))
+        out.append(item)
+    return out
+
+
+def merge_self_watchlist(
+    items: list[dict[str, Any]],
+    holdings: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """任意策略池 ∪ 公共自选池：自选置前；同码以自选标签为准。"""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for w in self_watch_items(holdings):
+        c = code_key(w["code"])
+        if c in seen:
+            continue
+        seen.add(c)
+        out.append(w)
+    for w in items:
+        c = code_key(str(w.get("code") or ""))
+        if not c or c in seen:
+            continue
+        seen.add(c)
+        row = dict(w)
+        # 已在自选中的不会走到这里；其余保留原标签
+        out.append(row)
+    return out
+
+
+def strategy16_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """策略十六：因子27选股池 ∪ 公共自选池。"""
+    thrs = load_strategy16_thr_map()
+    factor_rows: list[dict[str, Any]] = []
+    seen_f: set[str] = set()
+    for it in load_core_leader_payload().get("picks") or []:
+        if not isinstance(it, dict):
+            continue
+        code = code_key(str(it.get("code") or it.get("symbol") or ""))
+        if not code or code in seen_f or code == "000000":
+            continue
+        seen_f.add(code)
         item = meta_for_code(code, holdings)
         if it.get("name"):
             item["name"] = str(it.get("name"))
         item["universe"] = "strategy16"
+        item["pool_src"] = POOL_SRC_FACTOR27
+        item["池来源"] = POOL_SRC_LABEL[POOL_SRC_FACTOR27]
         item["concept"] = it.get("concept")
-        if bool(it.get("manual_add")):
-            item["manual_add"] = True
         thr = thrs.get(code)
         if thr is not None:
             item["pct"] = float(thr)
             item["entry_pct"] = float(thr)
             item["stop_pct"] = float(DEFAULT_PCT)
-        out.append(item)
-    return out
+        factor_rows.append(item)
+    return merge_self_watchlist(factor_rows, holdings)
 
 
 WATCHLIST: list[dict[str, Any]] = []
 
 
-def strategy1_watchlist() -> list[dict[str, Any]]:
-    """策略一定盘池（置顶 + 13A→16 Top20）。"""
+def strategy1_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """策略一定盘池（置顶 + 13A→16 Top20）∪ 公共自选池。"""
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
     for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST_STRATEGY1):
@@ -465,18 +529,18 @@ def strategy1_watchlist() -> list[dict[str, Any]]:
             continue
         seen.add(c)
         out.append(w)
-    return out
+    return merge_self_watchlist(out, holdings)
 
 
-def strategy_watchlist() -> list[dict[str, Any]]:
-    """当前默认策略池。"""
+def strategy_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """当前默认策略池（始终含公共自选池）。"""
     if STRATEGY_ID == "strategy16":
-        return strategy16_watchlist({})
-    return strategy1_watchlist()
+        return strategy16_watchlist(holdings)
+    return strategy1_watchlist(holdings)
 
 
-def strategy_watchlist_codes() -> set[str]:
-    return {code_key(w["code"]) for w in strategy_watchlist()}
+def strategy_watchlist_codes(holdings: dict[str, Any] | None = None) -> set[str]:
+    return {code_key(w["code"]) for w in strategy_watchlist(holdings)}
 
 
 def _position_user_designated(
@@ -585,7 +649,7 @@ WATCHLIST = strategy_watchlist()
 
 
 def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """盯盘拉行情/算信号：默认策略池 + 其余核心龙头补集 + 用户持仓池（去重）。"""
+    """盯盘拉行情/算信号：默认策略池 + 公共自选 + 其余核心龙头补集 + 用户持仓池（去重）。"""
     if holdings is None:
         try:
             from index import load_holdings
@@ -613,7 +677,8 @@ def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
             continue
         seen.add(code)
         out.append(meta_for_code(code, holdings))
-    return out
+    # 兜底：无论默认策略为何，公共自选始终在盯盘宇宙内
+    return merge_self_watchlist(out, holdings)
 
 
 def empty_position(meta: dict[str, Any]) -> dict[str, Any]:

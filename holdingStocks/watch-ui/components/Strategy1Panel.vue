@@ -77,6 +77,14 @@ const legend = [
               <td class="px-3 py-2.5 align-top">
                 <div class="leading-snug">
                   <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
+                  <span
+                    v-if="r.池来源 === '自选' || r.pool_src === 'self'"
+                    class="ml-1 rounded bg-accent/15 px-1 py-0.5 text-[10px] font-normal text-accent"
+                  >自选</span>
+                  <span
+                    v-else-if="r.池来源 === '因子27' || r.pool_src === 'factor27'"
+                    class="ml-1 rounded bg-ui-ink/40 px-1 py-0.5 text-[10px] font-normal text-ui-text-3"
+                  >因子27</span>
                 </div>
               </td>
               <td class="px-3 py-2.5 align-top">

@@ -8,7 +8,7 @@
   · **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 3
   · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值；9:30 起触发结算
   · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票不可再待买入
-  · 默认交易宇宙：因子27 核心龙头近3个月池 + 天通/凯盛（见 watch_config.WATCHLIST）
+  · 默认交易宇宙：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用，见 watch_config.SELF_WATCHLIST_PICKS）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
 
 功能：
@@ -17,6 +17,7 @@
   · 阈值与信号：因子26 多层止盈（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
   · 有仓：动态止盈触达自动结算（全清）；空仓：已触买/将买入建议限价
+  · **信号≠入槽**：触买预警见 `watch_buy_signal.py`；槽满仍发「已触买·槽满」；自动入槽才是成交
   · 本地 JSON 记录持仓（含 peak_high）；T+1 买入日不可卖
 
 用法：
@@ -164,6 +165,17 @@ from watch_config import (
     slot_meta as _slot_meta_from_holdings,
 )
 from watch_snapshot import SNAPSHOT_VERSION, build_watch_snapshot
+from watch_buy_signal import (
+    ALERT_FILLED,
+    ALERT_HIT_BUY,
+    ALERT_NOT_SLOTTED,
+    ALERT_PRICE_NO_GATE,
+    ALERT_SLOT_FULL,
+    annotate_unfilled_buy_signals as _annotate_buy_signals_core,
+    is_actionable_unfilled_buy,
+    is_buy_hit as _row_hit_buy,
+    is_buy_signal_active as _buy_signal_active,
+)
 
 # 盯盘与回测共用：默认策略十六 = 因子27 + 因子26 + 因子2 + 因子22
 # 默认交易池唯一真源：watch_config.WATCHLIST
@@ -2144,15 +2156,25 @@ def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _buy_signal_active(row: dict[str, Any]) -> bool:
-    """今日买入侧信号是否应优先于「持有/策略持有」展示。"""
-    alert = str(row.get("预警") or "")
-    pos = str(row.get("持仓状态") or "")
-    return (
-        alert in ("已触买", "将买入")
-        or pos == "待买入"
-        or bool(row.get("近买点"))
-        or str(row.get("已触买") or "") == "是"
+# _buy_signal_active / _row_hit_buy：见 watch_buy_signal（信号≠入槽）
+
+
+def _annotate_unfilled_buy_signals(
+    rows: list[dict[str, Any]],
+    slot_meta: dict[str, Any],
+) -> None:
+    """委托 watch_buy_signal；槽满仍发触买预警。"""
+
+    def _log(n_hit: int, n_gate: int) -> None:
+        print(
+            f"[{_now()}] 买入信号标注: 未入槽触买 {n_hit} · 触买价未过门 {n_gate}"
+        )
+
+    _annotate_buy_signals_core(
+        rows,
+        slot_meta,
+        is_stop_closed=_is_stop_closed_status,
+        log=_log,
     )
 
 
@@ -2479,18 +2501,6 @@ def _slot_notional_budget(
     return None
 
 
-def _row_hit_buy(row: dict[str, Any]) -> bool:
-    if str(row.get("已触买") or "") == "是":
-        return True
-    if str(row.get("预警") or "") == "已触买":
-        return True
-    if str(row.get("持仓状态") or "") == "待买入" and str(
-        row.get("因子触发") or ""
-    ).startswith("已触发"):
-        return True
-    return False
-
-
 def today_slot_buy_ranks(
     session: str,
     *,
@@ -2633,11 +2643,14 @@ def _apply_portfolio_slots(
         rank = int(buy_ranks.get(code, 10_000))
         candidates.append((rank, dist, code, r))
     candidates.sort(key=lambda x: (x[0], x[1], x[2]))
-    # 展示：空槽附近票标候选
+    # 展示：空槽附近票标候选；已触买信号无论能否入槽都标候选（预警≠成交）
     selected = candidates[: max(0, free)]
     selected_codes = {c for _, _, c, _ in selected}
     for _, _, _c, r in selected:
         r["槽位候选"] = True
+    for _rank, _dist, _c, r in candidates:
+        if _row_hit_buy(r):
+            r["槽位候选"] = True
 
     bought_codes: list[str] = []
     if phase_now == "continuous" and free > 0 and buys_left > 0:
@@ -2711,7 +2724,7 @@ def _apply_portfolio_slots(
             r["槽位候选"] = False
             r["已实现"] = False
             r["持仓状态"] = "已经买入"
-            r["预警"] = "已触买·已入槽"
+            r["预警"] = ALERT_FILLED
             r["因子侧"] = "持有"
             px_digits = int(r.get("价位小数") or 2)
             last = r.get("现价")
@@ -3402,6 +3415,16 @@ def collect_rows(
 
     for w in effective_watchlist(holdings):
         code = w["code"]
+        pool_src = str(w.get("pool_src") or "")
+        if not pool_src:
+            if w.get("self_watch") or w.get("manual_add"):
+                pool_src = "self"
+            elif str(w.get("universe") or "") == "strategy16":
+                pool_src = "factor27"
+        pool_label = str(
+            w.get("池来源")
+            or ("自选" if pool_src == "self" else ("因子27" if pool_src == "factor27" else ""))
+        )
         entry_pct = _watch_pct(w)
         base_stop_pct = _watch_stop_pct(w)
         tick = _watch_tick(w)
@@ -4050,6 +4073,8 @@ def collect_rows(
                         "较开盘点": vs,
                         "较开盘涨幅": vs_pct,
                         "阈值%": pct_pct,
+                        "池来源": pool_label or None,
+                        "pool_src": pool_src or None,
                         "买点": buy_show,
                         "止损": lv["stop"],
                         "基础止损": lv_base["stop"],
@@ -4435,6 +4460,8 @@ def collect_rows(
                     "较开盘点": vs,
                     "较开盘涨幅": vs_pct,
                     "阈值%": pct_pct,
+                    "池来源": pool_label or None,
+                    "pool_src": pool_src or None,
                     "买点": float(lv.get("open_buy") or lv["buy_trigger"]),
                     "止损": lv["stop"],
                     "基础止损": lv_base["stop"],
@@ -4546,6 +4573,8 @@ def collect_rows(
                     "较开盘点": None,
                     "较开盘涨幅": None,
                     "阈值%": pct_pct,
+                    "池来源": pool_label or None,
+                    "pool_src": pool_src or None,
                     "买点": None,
                     "止损": None,
                     "基础止损": None,
@@ -4689,7 +4718,10 @@ def collect_rows(
         r["槽位信息"] = (
             f"{slot_info.get('occupiedCount', 0)}/{slot_info.get('max', MAX_PORTFOLIO_SLOTS)}"
         )
-    # 挂在首行便于快照读取（build_watch_snapshot 取 meta）
+    # 信号层（触买预警）在成交层（入槽）之后；finalize 再收敛持仓态
+    _annotate_unfilled_buy_signals(rows, slot_info)
+    for r in rows:
+        _finalize_position_row(r)
     if rows:
         rows[0]["_slot_meta"] = slot_info
     return sort_watch_rows(rows)
@@ -4792,7 +4824,9 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
                 row["预警"] = "策略回放·今日已止损"
             return
         if _buy_signal_active(row):
-            row["可执行"] = str(row.get("预警") or "") == "已触买"
+            row["可执行"] = is_actionable_unfilled_buy(row) or alert.startswith(
+                ALERT_HIT_BUY
+            )
             if str(row.get("bg_class") or "") in ("", "status-hold", "status-flat"):
                 row["bg_class"] = "warn-buy"
             if row.get("买点") is not None:
@@ -4877,19 +4911,28 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
                 "已触止损",
                 "已经买入",
                 "持有",
-                "已触买",
-                "已触买·已入槽",
+                ALERT_HIT_BUY,
+                ALERT_FILLED,
             ) or alert.startswith("已触买"):
                 row["预警"] = "已触止损·暂不可卖"
         elif (
-            alert in ("", "-", "空仓", "待买入", "已触买", "已触买·已入槽")
+            alert in ("", "-", "空仓", "待买入", ALERT_HIT_BUY, ALERT_FILLED)
             or alert.startswith("已触买")
         ) and pos == "已经买入":
             row["预警"] = "已经买入"
         row["因子侧"] = "持有" if pos == "已经买入" else row.get("因子侧") or "卖出"
         return
 
-    # 真·空仓
+    # 真·空仓：保留 annotate 后的触买/弱信号，勿冲回空仓
+    if alert.startswith("已触买·") and alert != ALERT_FILLED:
+        row["持仓状态"] = "待买入"
+        row["可执行"] = True
+        row["bg_class"] = row.get("bg_class") or "warn-buy"
+        return
+    if ALERT_PRICE_NO_GATE in alert or alert.startswith("触买价"):
+        row["可执行"] = False
+        row["bg_class"] = row.get("bg_class") or "warn-buy"
+        return
     row["可执行"] = pos == "待买入"
 
 

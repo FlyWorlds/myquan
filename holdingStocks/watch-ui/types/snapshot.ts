@@ -30,6 +30,8 @@ export interface HoldingRow {
   市场?: string
   代码?: string
   名称?: string
+  池来源?: string | null
+  pool_src?: string | null
   开盘?: number | null
   现价?: number | null
   当日涨幅?: number | null

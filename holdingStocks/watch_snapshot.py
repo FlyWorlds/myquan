@@ -45,32 +45,7 @@ def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _is_today_alert_row(row: dict[str, Any]) -> bool:
-    """当日预警（买入/卖出接近或已触、槽位候选等）— 仅展示，不登记持仓。"""
-    if row.get("error"):
-        return False
-    if int(row.get("持仓") or 0) > 0:
-        return False
-    if bool(row.get("已实现")):
-        return False
-    if bool(row.get("槽位候选")):
-        return True
-    alert = str(row.get("预警") or "").strip()
-    pos = str(row.get("持仓状态") or "")
-    if alert in ("已触买", "将买入", "已触止损") or alert.startswith("已触"):
-        return True
-    if "将买入" in alert or "将卖出" in alert or "近买入" in alert:
-        return True
-    if pos in ("待买入", "待卖出"):
-        return True
-    if bool(row.get("近买点")) or bool(row.get("近止损")):
-        return True
-    if bool(row.get("可执行")):
-        return True
-    hit = str(row.get("因子触发") or "")
-    if hit.startswith("已触发") or hit == "接近":
-        return True
-    return False
+from watch_buy_signal import is_today_alert_row as _is_today_alert_row
 
 
 def filter_portfolio_holdings(

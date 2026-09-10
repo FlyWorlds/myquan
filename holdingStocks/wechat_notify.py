@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from watch_buy_signal import ALERT_PRICE_NO_GATE, is_buy_hit, is_weak_price_buy_alert
+
 
 _SEND_LOCK = threading.Lock()
 _LAST_SEND_TS = 0.0
@@ -145,7 +147,7 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
     no_buy = bool(row.get("当日禁买")) or pos == "当日禁买"
     holding = _has_holding(row)
 
-    hit_buy = str(row.get("已触买") or "") == "是"
+    hit_buy = is_buy_hit(row)
     hit_stop = str(row.get("已触止损") or "") == "是"
     near_buy = bool(row.get("近买点"))
     near_stop = bool(row.get("近止损"))
@@ -217,6 +219,15 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
     # 无持仓：过门禁买 → 不推买入；当日卖出后再触买仍推
     if no_buy:
         return None
+    if is_weak_price_buy_alert(row) or ALERT_PRICE_NO_GATE in alert:
+        return _pack(
+            PRIORITY_P1,
+            KIND_P1,
+            ALERT_PRICE_NO_GATE,
+            row.get("买入侧价")
+            or row.get("买点")
+            or _factor_px_for_push(row, holding=False),
+        )
     if (
         hit_buy
         or (pos == "待买入" and hit.startswith("已触发"))
