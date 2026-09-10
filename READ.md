@@ -10,7 +10,7 @@ cd holdingStocks && python start_watch.py --no-wechat
 # 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
 # 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
 # 策略8 Tab：当日涨停实时定题材（随涨停变化重算）
-# 持仓 Tab：三槽×约3成；触买→已经买入；信号「已触止损」→有仓则平仓「已平仓」（留痕不占槽）
+# 持仓 Tab：三槽×约3成；触买→已经买入；止损/止盈清仓→「已平仓」栏（不占槽）
 # 策略1 Tab：按距买点升序；空槽标候选
 # 板块轮动：http://127.0.0.1:3000/sectors （通达信优先；仅复用当日缓存，隔日回退东财；概念详情 lite 秒开）
 ```
@@ -189,6 +189,11 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack 
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 # 策略十六：因子22 同日再买对照（生产禁再买 vs 研究开 F22）→ COMPARE_F22.md
 PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7
+# 卖出后开盘阈值同日再买对照 → COMPARE_OPEN_REBUY.md；全池等权加 --all-pool → COMPARE_OPEN_REBUY_ALL.md
+PYTHONPATH=. python backtest/strategy16_core_leader/compare_open_rebuy.py --days 7
+PYTHONPATH=. python backtest/strategy16_core_leader/compare_open_rebuy.py --days 7 --all-pool
+# 低开破硬保护：立刻卖 vs 开盘再下杀1%（全池等权）→ COMPARE_HARD_GAP.md
+PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7
 
 # 因子13 熊市盾牌 WF（thr* Top3，锁定配置）
 cd myquan && python strategy/run_factor13_bear_shield_wf.py
@@ -292,7 +297,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 **策略16 Tab**：因子27 核心龙头池（滚动近 3 个月冻结）+ 天通/凯盛 + 同策略一买卖；开盘阈值按 2026 至今 {2/2.5/3}% 日线夏普择优（`thr_2026.json`）；现为默认三槽交易池。刷新池：`python strategy/run_core_leader_pool.py`；拟合阈值：`python backtest/strategy16_core_leader/fit_thr.py`。
 
-**持仓三槽**：盘中/隔夜最多 3 只实仓（各约 30%）；当日最多买 2。连续竞价（9:30–11:30 / 13:00–15:00）才自动成交；买入/卖出触达按 1 分钟顺序（买=开盘阈值；未走完分钟不用现价撞抬高后卖价）；同一轮止损不立刻补仓。**信号**「已触止损」与**持仓态**「已平仓」分开：触达后有仓则清 qty，当日三槽留痕不占槽，次日清除。因子22 14:57 后收盘确认。止损若记了 `account_cash` 会加回现金。
+**持仓三槽**：盘中/隔夜最多 3 只实仓（各约 30%）；当日最多买 2；**仅当前默认策略池（strategy16 核心龙头）入槽**。连续竞价（9:30–11:30 / 13:00–15:00）才自动成交；买入/卖出触达按 1 分钟顺序（买=开盘阈值；未走完分钟不用现价撞抬高后卖价）；同一轮平仓不立刻补仓。**信号**「已触止损」与**持仓态**「已平仓」分开：三槽止损/止盈卖出后清 qty，持仓页「已平仓（当日）」栏展示且不占槽，次日清除。因子22 14:57 后收盘确认。止损若记了 `account_cash` 会加回现金。
 
 **启动（推荐）**
 

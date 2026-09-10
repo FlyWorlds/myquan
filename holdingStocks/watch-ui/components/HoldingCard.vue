@@ -101,7 +101,7 @@ const cardClass = computed(() => {
               v-else-if="slotTrace"
               class="rounded-full px-2 py-0.5 text-xs font-medium text-ui-text-2"
               style="border: 1px solid var(--ui-hairline); background: color-mix(in srgb, var(--ui-text-2) 8%, transparent)"
-            >止损留痕·不占槽</span>
+            >已平仓·不占槽</span>
             <span
               class="rounded-full border px-2 py-0.5 text-xs font-medium"
               :style="posChipStyle"

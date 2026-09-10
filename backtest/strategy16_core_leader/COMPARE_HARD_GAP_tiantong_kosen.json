@@ -1,0 +1,446 @@
+{
+  "summary": {
+    "pool": "strategy16",
+    "codes": [
+      "600330",
+      "600552"
+    ],
+    "n_pool": 2,
+    "days": 7,
+    "slot_weight": 0.5,
+    "max_slots": 2,
+    "max_buys_per_day": 2,
+    "note": "等权进场；仅改低开已破硬保护时的卖法",
+    "delta_return_pct_open_dump_minus_immediate": 0.0,
+    "delta_max_dd_pct_open_dump_minus_immediate": 0.0,
+    "policies": {
+      "immediate": {
+        "return_pct": 0.21,
+        "max_dd_pct": -1.06,
+        "final_equity": 100213.0,
+        "n_buys": 4,
+        "n_sells": 3,
+        "n_closed": 3,
+        "avg_closed_pnl_pct": 0.91,
+        "n_open": 1,
+        "calendar": [
+          "2026-09-01",
+          "2026-09-02",
+          "2026-09-03",
+          "2026-09-04",
+          "2026-09-07",
+          "2026-09-08",
+          "2026-09-09"
+        ],
+        "exit_reasons": {
+          "t1_peak_trail": 2,
+          "vol_giveback": 1
+        },
+        "n_hard_gap_exits": 0,
+        "hard_gap_avg_pnl_pct": null,
+        "hard_gap_trades": []
+      },
+      "open_dump_1pct": {
+        "return_pct": 0.21,
+        "max_dd_pct": -1.06,
+        "final_equity": 100213.0,
+        "n_buys": 4,
+        "n_sells": 3,
+        "n_closed": 3,
+        "avg_closed_pnl_pct": 0.91,
+        "n_open": 1,
+        "calendar": [
+          "2026-09-01",
+          "2026-09-02",
+          "2026-09-03",
+          "2026-09-04",
+          "2026-09-07",
+          "2026-09-08",
+          "2026-09-09"
+        ],
+        "exit_reasons": {
+          "t1_peak_trail": 2,
+          "vol_giveback": 1
+        },
+        "n_hard_gap_exits": 0,
+        "hard_gap_avg_pnl_pct": null,
+        "hard_gap_trades": []
+      }
+    },
+    "disclaimer": "研究用途，非投资建议；1m 近数日；未计费/滑点。"
+  },
+  "results": {
+    "immediate": {
+      "label": "低开已破硬保护→开盘立刻卖（生产）",
+      "hard_gap_mode": "immediate",
+      "hard_gap_dump_pct": 0.01,
+      "portfolio": {
+        "return_pct": 0.21,
+        "max_dd_pct": -1.06,
+        "final_equity": 100213.0,
+        "n_buys": 4,
+        "n_sells": 3,
+        "n_closed": 3,
+        "avg_closed_pnl_pct": 0.91,
+        "n_open": 1,
+        "calendar": [
+          "2026-09-01",
+          "2026-09-02",
+          "2026-09-03",
+          "2026-09-04",
+          "2026-09-07",
+          "2026-09-08",
+          "2026-09-09"
+        ],
+        "exit_reasons": {
+          "t1_peak_trail": 2,
+          "vol_giveback": 1
+        },
+        "n_hard_gap_exits": 0,
+        "hard_gap_avg_pnl_pct": null,
+        "hard_gap_trades": []
+      },
+      "trades": [
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 14:28:00",
+          "side": "buy",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 27.8,
+          "shares": 1700,
+          "kind": "open",
+          "source": "trigger",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:42:00",
+          "side": "sell",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 27.54,
+          "shares": 1700,
+          "pnl_pct": -0.0094,
+          "exit_reason": "t1_peak_trail",
+          "slots_after": 0
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:32:00",
+          "side": "buy",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 28.2,
+          "shares": 1700,
+          "kind": "open",
+          "source": "trigger",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 13:31:00",
+          "side": "buy",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 17.2,
+          "shares": 2900,
+          "kind": "open",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-08",
+          "ts": "2026-09-08 09:33:00",
+          "side": "sell",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 29.66,
+          "shares": 1700,
+          "pnl_pct": 0.0518,
+          "exit_reason": "vol_giveback",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-08",
+          "ts": "2026-09-08 09:51:00",
+          "side": "sell",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 16.94,
+          "shares": 2900,
+          "pnl_pct": -0.0151,
+          "exit_reason": "t1_peak_trail",
+          "slots_after": 0
+        },
+        {
+          "date": "2026-09-09",
+          "ts": "2026-09-09 09:36:00",
+          "side": "buy",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 17.33,
+          "shares": 2900,
+          "kind": "open",
+          "source": "trigger",
+          "slots_after": 1
+        }
+      ],
+      "equity": [
+        {
+          "date": "2026-09-01",
+          "equity": 100000.0,
+          "cash": 100000.0,
+          "n_pos": 0,
+          "codes": "",
+          "ret_pct": 0.0
+        },
+        {
+          "date": "2026-09-02",
+          "equity": 100000.0,
+          "cash": 100000.0,
+          "n_pos": 0,
+          "codes": "",
+          "ret_pct": 0.0
+        },
+        {
+          "date": "2026-09-03",
+          "equity": 99388.0,
+          "cash": 52740.0,
+          "n_pos": 1,
+          "codes": "600330",
+          "ret_pct": -0.61
+        },
+        {
+          "date": "2026-09-04",
+          "equity": 99558.0,
+          "cash": 99558.0,
+          "n_pos": 0,
+          "codes": "",
+          "ret_pct": -0.44
+        },
+        {
+          "date": "2026-09-07",
+          "equity": 100528.0,
+          "cash": 1738.0,
+          "n_pos": 2,
+          "codes": "600330,600552",
+          "ret_pct": 0.53
+        },
+        {
+          "date": "2026-09-08",
+          "equity": 101286.0,
+          "cash": 101286.0,
+          "n_pos": 0,
+          "codes": "",
+          "ret_pct": 1.29
+        },
+        {
+          "date": "2026-09-09",
+          "equity": 100213.0,
+          "cash": 51029.0,
+          "n_pos": 1,
+          "codes": "600552",
+          "ret_pct": 0.21
+        }
+      ],
+      "open_positions": [
+        {
+          "code": "600552",
+          "name": "凯盛科技",
+          "buy_day": "2026-09-09",
+          "buy_px": 17.33,
+          "last_px": 16.96,
+          "shares": 2900,
+          "pnl_pct": -0.0214
+        }
+      ]
+    },
+    "open_dump_1pct": {
+      "label": "低开已破硬保护→再下杀1%才卖（研究）",
+      "hard_gap_mode": "open_dump",
+      "hard_gap_dump_pct": 0.01,
+      "portfolio": {
+        "return_pct": 0.21,
+        "max_dd_pct": -1.06,
+        "final_equity": 100213.0,
+        "n_buys": 4,
+        "n_sells": 3,
+        "n_closed": 3,
+        "avg_closed_pnl_pct": 0.91,
+        "n_open": 1,
+        "calendar": [
+          "2026-09-01",
+          "2026-09-02",
+          "2026-09-03",
+          "2026-09-04",
+          "2026-09-07",
+          "2026-09-08",
+          "2026-09-09"
+        ],
+        "exit_reasons": {
+          "t1_peak_trail": 2,
+          "vol_giveback": 1
+        },
+        "n_hard_gap_exits": 0,
+        "hard_gap_avg_pnl_pct": null,
+        "hard_gap_trades": []
+      },
+      "trades": [
+        {
+          "date": "2026-09-03",
+          "ts": "2026-09-03 14:28:00",
+          "side": "buy",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 27.8,
+          "shares": 1700,
+          "kind": "open",
+          "source": "trigger",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-04",
+          "ts": "2026-09-04 09:42:00",
+          "side": "sell",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 27.54,
+          "shares": 1700,
+          "pnl_pct": -0.0094,
+          "exit_reason": "t1_peak_trail",
+          "slots_after": 0
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 09:32:00",
+          "side": "buy",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 28.2,
+          "shares": 1700,
+          "kind": "open",
+          "source": "trigger",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-07",
+          "ts": "2026-09-07 13:31:00",
+          "side": "buy",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 17.2,
+          "shares": 2900,
+          "kind": "open",
+          "source": "trigger",
+          "slots_after": 2
+        },
+        {
+          "date": "2026-09-08",
+          "ts": "2026-09-08 09:33:00",
+          "side": "sell",
+          "code": "600330",
+          "name": "天通股份",
+          "px": 29.66,
+          "shares": 1700,
+          "pnl_pct": 0.0518,
+          "exit_reason": "vol_giveback",
+          "slots_after": 1
+        },
+        {
+          "date": "2026-09-08",
+          "ts": "2026-09-08 09:51:00",
+          "side": "sell",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 16.94,
+          "shares": 2900,
+          "pnl_pct": -0.0151,
+          "exit_reason": "t1_peak_trail",
+          "slots_after": 0
+        },
+        {
+          "date": "2026-09-09",
+          "ts": "2026-09-09 09:36:00",
+          "side": "buy",
+          "code": "600552",
+          "name": "凯盛科技",
+          "px": 17.33,
+          "shares": 2900,
+          "kind": "open",
+          "source": "trigger",
+          "slots_after": 1
+        }
+      ],
+      "equity": [
+        {
+          "date": "2026-09-01",
+          "equity": 100000.0,
+          "cash": 100000.0,
+          "n_pos": 0,
+          "codes": "",
+          "ret_pct": 0.0
+        },
+        {
+          "date": "2026-09-02",
+          "equity": 100000.0,
+          "cash": 100000.0,
+          "n_pos": 0,
+          "codes": "",
+          "ret_pct": 0.0
+        },
+        {
+          "date": "2026-09-03",
+          "equity": 99388.0,
+          "cash": 52740.0,
+          "n_pos": 1,
+          "codes": "600330",
+          "ret_pct": -0.61
+        },
+        {
+          "date": "2026-09-04",
+          "equity": 99558.0,
+          "cash": 99558.0,
+          "n_pos": 0,
+          "codes": "",
+          "ret_pct": -0.44
+        },
+        {
+          "date": "2026-09-07",
+          "equity": 100528.0,
+          "cash": 1738.0,
+          "n_pos": 2,
+          "codes": "600330,600552",
+          "ret_pct": 0.53
+        },
+        {
+          "date": "2026-09-08",
+          "equity": 101286.0,
+          "cash": 101286.0,
+          "n_pos": 0,
+          "codes": "",
+          "ret_pct": 1.29
+        },
+        {
+          "date": "2026-09-09",
+          "equity": 100213.0,
+          "cash": 51029.0,
+          "n_pos": 1,
+          "codes": "600552",
+          "ret_pct": 0.21
+        }
+      ],
+      "open_positions": [
+        {
+          "code": "600552",
+          "name": "凯盛科技",
+          "buy_day": "2026-09-09",
+          "buy_px": 17.33,
+          "last_px": 16.96,
+          "shares": 2900,
+          "pnl_pct": -0.0214
+        }
+      ]
+    }
+  }
+}

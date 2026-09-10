@@ -2577,6 +2577,15 @@ def _apply_portfolio_slots(
     · 止损平仓后释放槽位，但该票当日不可再买
     """
     data = load_holdings()
+    try:
+        from watch_config import code_key, prune_portfolio_pool
+
+        before_pool = sorted(code_key(str(c)) for c in (data.get("portfolio_pool") or []))
+        pruned = prune_portfolio_pool(data)
+        if pruned != before_pool:
+            save_holdings(data)
+    except Exception:  # noqa: BLE001
+        pass
     occupied = occupied_slot_codes(data)
     free = free_buy_slot_count(data)
     occupied_set = set(occupied)
@@ -2587,6 +2596,13 @@ def _apply_portfolio_slots(
     buy_ranks = today_slot_buy_ranks(session)
     buys_done = today_slot_buy_count(session)
     buys_left = max(0, int(MAX_BUYS_PER_DAY) - buys_done)
+
+    try:
+        from watch_config import strategy_watchlist_codes
+
+        strategy_codes = set(strategy_watchlist_codes())
+    except Exception:  # noqa: BLE001
+        strategy_codes = set()
 
     for r in rows:
         code = _code_key(str(r.get("代码") or ""))
@@ -2603,13 +2619,9 @@ def _apply_portfolio_slots(
             continue
         if bool(r.get("当日禁买")):
             continue
-        try:
-            from watch_config import is_strategy16_watch_only
-
-            if is_strategy16_watch_only(code):
-                continue
-        except Exception:  # noqa: BLE001
-            pass
+        # 三槽只从当前默认策略池入场（strategy16=核心龙头）；旧 portfolio_pool 遗留票不买
+        if code not in strategy_codes:
+            continue
         pos = str(r.get("持仓状态") or "")
         if pos in ("当日禁买",) or _is_stop_closed_status(pos):
             continue

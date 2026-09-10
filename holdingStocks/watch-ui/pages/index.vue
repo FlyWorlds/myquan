@@ -48,33 +48,37 @@ const loading = computed(
     (!snapshot.value && wsStatus.value.includes('连接')),
 )
 
-const pinnedHoldings = computed(() =>
+const slotHoldings = computed(() =>
+  (snapshot.value?.holdings || []).filter(
+    (r) => Boolean(r.置顶) && Number(r.持仓) > 0,
+  ),
+)
+
+const closedHoldings = computed(() =>
   (snapshot.value?.holdings || []).filter((r) => {
-    if (Boolean(r.置顶) && Number(r.持仓) > 0) return true
-    // 当日止损平仓留痕：进三槽区但不占位
+    if (Number(r.持仓) > 0) return false
     if (Boolean(r.槽位留痕)) return true
     const pos = String(r.持仓状态 || '')
-    if (
-      Number(r.持仓) <= 0 &&
-      (Boolean(r.已实现) || pos === '已平仓' || pos === '已触止损平仓' || pos === '已止损')
-    ) {
-      return true
-    }
-    return false
+    return (
+      Boolean(r.已实现) ||
+      pos === '已平仓' ||
+      pos === '已触止损平仓' ||
+      pos === '已止损' ||
+      pos === '当日禁买'
+    )
   }),
 )
+
 const otherHoldings = computed(() => {
-  const pinnedCodes = new Set(
-    pinnedHoldings.value.map((r) => String(r.代码 || '')),
+  const taken = new Set(
+    [...slotHoldings.value, ...closedHoldings.value].map((r) => String(r.代码 || '')),
   )
   return (snapshot.value?.holdings || []).filter(
-    (r) => !pinnedCodes.has(String(r.代码 || '')),
+    (r) => !taken.has(String(r.代码 || '')),
   )
 })
 const slotMeta = computed(() => snapshot.value?.slotMeta)
-const slotTraceCount = computed(
-  () => pinnedHoldings.value.filter((r) => Number(r.持仓) <= 0).length,
-)
+const closedCount = computed(() => closedHoldings.value.length)
 </script>
 
 <template>
@@ -139,26 +143,37 @@ const slotTraceCount = computed(
         <AccountSummary v-if="snapshot" :account="snapshot.account" />
         <p v-if="snapshot && !snapshot.holdings?.length" class="text-sm text-ui-text-2">暂无持仓/当日预警；实仓登记或定盘池出现买入预警后显示于此。</p>
         <template v-else>
-          <div v-if="pinnedHoldings.length" class="space-y-2">
+          <div v-if="slotHoldings.length" class="space-y-2">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <h2 class="text-sm font-semibold text-ui-text">
                 三槽持仓（置顶）
                 <span class="ml-1 font-normal text-ui-text-2">
                   占槽 {{ slotMeta?.occupiedCount ?? 0 }}/{{ slotMeta?.max ?? 3 }}
-                  <template v-if="slotTraceCount">
-                    · 止损留痕 {{ slotTraceCount }}（不占槽）
-                  </template>
                 </span>
               </h2>
-              <p class="text-xs text-ui-text-3">已经买入 / 待卖出 / 已平仓（信号「已触止损」；留痕不占位，次日清除）</p>
+              <p class="text-xs text-ui-text-3">已经买入 / 待卖出 · 仅默认策略池入槽</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in pinnedHoldings" :key="'pin-' + String(row.代码)" :row="row" />
+              <HoldingCard v-for="row in slotHoldings" :key="'slot-' + String(row.代码)" :row="row" />
+            </div>
+          </div>
+          <div v-if="closedHoldings.length" class="space-y-2">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="text-sm font-semibold text-ui-text">
+                已平仓（当日）
+                <span class="ml-1 font-normal text-ui-text-2">
+                  平仓 {{ closedCount }} · 不占槽
+                </span>
+              </h2>
+              <p class="text-xs text-ui-text-3">三槽止损/止盈卖出后当日留痕，次日清除</p>
+            </div>
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.代码)" :row="row" />
             </div>
           </div>
           <div v-if="otherHoldings.length" class="space-y-2">
             <h2 class="text-sm font-semibold text-ui-text-2">
-              {{ pinnedHoldings.length ? '预警 / 其它' : '持仓列表' }}
+              {{ slotHoldings.length || closedHoldings.length ? '预警 / 其它' : '持仓列表' }}
             </h2>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in otherHoldings" :key="'other-' + String(row.代码)" :row="row" />

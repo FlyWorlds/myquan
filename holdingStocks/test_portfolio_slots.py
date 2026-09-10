@@ -94,7 +94,7 @@ def test_full_slots():
 
 
 def test_stop_trace_in_slot_area_not_occupying():
-    """止损平仓：进三槽留痕区、不占槽；实仓仍可满 3。"""
+    """已平仓：槽位留痕不占槽；实仓仍可满 3。"""
     from watch_snapshot import filter_portfolio_holdings
 
     rows = [
@@ -112,7 +112,10 @@ def test_stop_trace_in_slot_area_not_occupying():
         },
     ]
     picked = filter_portfolio_holdings(
-        rows, portfolio_codes={"600552", "600301", "601020", "600330"}, phase="continuous"
+        rows,
+        portfolio_codes={"600552", "600301", "601020", "600330"},
+        strategy_codes={"600552", "600301", "601020", "600330"},
+        phase="continuous",
     )
     pinned = [r for r in picked if r.get("置顶")]
     traces = [r for r in picked if r.get("槽位留痕")]
@@ -125,7 +128,7 @@ def test_stop_trace_in_slot_area_not_occupying():
 
 
 def test_stop_trace_visible_outside_continuous():
-    """盘前/收盘：止损留痕仍进持仓 Tab（次日才清）。"""
+    """盘前/收盘：已平仓留痕仍进持仓 Tab（次日才清）。"""
     from watch_snapshot import filter_portfolio_holdings
 
     rows = [
@@ -148,7 +151,10 @@ def test_stop_trace_visible_outside_continuous():
         },
     ]
     picked = filter_portfolio_holdings(
-        rows, portfolio_codes={"600552", "600330"}, phase="pre_auction"
+        rows,
+        portfolio_codes={"600552", "600330"},
+        strategy_codes={"600552", "600330", "002104"},
+        phase="pre_auction",
     )
     codes = [r["代码"] for r in picked]
     assert "600552" in codes
@@ -173,7 +179,13 @@ def test_filter_includes_alert_without_pool():
         },
         {"代码": "600301", "名称": "华锡", "持仓": 0, "持仓状态": "空仓", "预警": "空仓", "距买点%": 5},
     ]
-    picked = filter_portfolio_holdings(rows, portfolio_codes={"600552"}, phase="continuous")
+    # 预警须在默认策略池内；portfolio_codes 空壳不再单独进 Tab
+    picked = filter_portfolio_holdings(
+        rows,
+        portfolio_codes={"600552"},
+        strategy_codes={"600552", "002104", "600301"},
+        phase="continuous",
+    )
     codes = [str(r["代码"]) for r in picked]
     assert "600552" in codes
     assert "002104" in codes
@@ -188,6 +200,61 @@ def test_filter_includes_alert_without_pool():
     assert alert.get("置顶") is False
 
 
+def test_filter_skips_stale_pool_shell_and_off_strategy_alert():
+    """旧 portfolio_pool 空壳、非默认策略池预警不进持仓 Tab。"""
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {"代码": "600552", "名称": "凯盛", "持仓": 100, "持仓状态": "已经买入", "距买点%": 0},
+        {"代码": "002015", "名称": "旧池空壳", "持仓": 0, "持仓状态": "空仓", "预警": "-", "距买点%": 9},
+        {
+            "代码": "002093",
+            "名称": "旧池预警",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "将买入",
+            "近买点": True,
+            "距买点%": 0.2,
+        },
+    ]
+    picked = filter_portfolio_holdings(
+        rows,
+        portfolio_codes={"600552", "002015", "002093"},
+        strategy_codes={"600552"},  # 默认策略仅凯盛
+        phase="continuous",
+    )
+    codes = [str(r["代码"]) for r in picked]
+    assert codes == ["600552"]
+
+
+def test_prune_portfolio_pool_drops_stale():
+    from watch_config import prune_portfolio_pool
+
+    holdings = {
+        "portfolio_pool": ["600552", "002015", "002636", "600353"],
+        "positions": {
+            "600552": {"qty": 0},
+            "002636": {"qty": 400, "cost": 70.0},  # 非策略但仍持仓，保留
+            "002015": {"qty": 0},
+        },
+        "realized_today": {"600353": {"qty": 100, "reason": "止损成交"}},
+    }
+    # monkey: strategy pool = only 600552
+    import watch_config as wc
+
+    old = wc.strategy_watchlist_codes
+    wc.strategy_watchlist_codes = lambda: {"600552"}  # type: ignore[assignment]
+    try:
+        pruned = prune_portfolio_pool(holdings)
+    finally:
+        wc.strategy_watchlist_codes = old
+    assert "600552" in pruned
+    assert "002636" in pruned
+    assert "600353" in pruned
+    assert "002015" not in pruned
+    assert holdings["portfolio_pool"] == pruned
+
+
 def test_pin_top3_slots():
     from watch_snapshot import filter_portfolio_holdings
 
@@ -198,7 +265,10 @@ def test_pin_top3_slots():
         {"代码": "002104", "名称": "恒宝", "持仓": 0, "持仓状态": "待买入", "预警": "已触买", "距买点%": 0},
     ]
     picked = filter_portfolio_holdings(
-        rows, portfolio_codes={"600301", "600552", "600330", "002104"}, phase="continuous"
+        rows,
+        portfolio_codes={"600301", "600552", "600330", "002104"},
+        strategy_codes={"600301", "600552", "600330", "002104"},
+        phase="continuous",
     )
     pinned = [r for r in picked if r.get("置顶")]
     assert len(pinned) == 3

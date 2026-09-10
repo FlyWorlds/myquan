@@ -72,6 +72,10 @@ from strategy.pullback_wave_stop import (  # noqa: E402
     DEFAULT_PULLBACK_PCT,
     DEFAULT_NOTED_DUMP_PCT,
     DEFAULT_GIVEBACK_ARM_PCT,
+    HARD_GAP_IMMEDIATE,
+    HARD_GAP_OPEN_DUMP,
+    HARD_GAP_MODES,
+    DEFAULT_HARD_GAP_DUMP_PCT,
     NOTED_MODE_GAP_DUMP,
     attack_buy_trigger_price,
     delayed_t1_stop_fill_px,
@@ -377,6 +381,9 @@ def simulate_portfolio_3slots(
     buy_mode: str = BUY_MODE_DEFAULT,
     allow_f22_rebuy: bool = False,
     f22_bounce_pct: float = 0.01,
+    hard_gap_mode: str = HARD_GAP_IMMEDIATE,
+    hard_gap_dump_pct: float = DEFAULT_HARD_GAP_DUMP_PCT,
+    allow_open_rebuy_after_sell: bool = False,
 ) -> dict[str, Any]:
     """三槽组合：1m 路径，先触发买点先买，最多同时持有 max_slots 只。
 
@@ -386,6 +393,8 @@ def simulate_portfolio_3slots(
     noted_mode / noted_dump_pct：T+1 止损已记后的次日规则
     buy_mode：open=只认开盘涨到阈值（默认）；open_or_attack=开盘突破或攻击波（对照）
     allow_f22_rebuy：研究对照——当日卖出后若收盘≥当日最低×(1+bounce) 允许同日再买（生产默认 False）
+    hard_gap_mode：immediate=低开破硬保护立刻卖；open_dump=再等开盘下杀 dump%（研究）
+    allow_open_rebuy_after_sell：研究对照——当日全清后仍允许再触开盘阈值买入（生产默认 False）
     """
     max_slots = max(1, int(max_slots))
     reserve = max(0, min(int(reserve_empty), max_slots - 1))
@@ -399,6 +408,10 @@ def simulate_portfolio_3slots(
     allow_attack = bmode == BUY_MODE_OPEN_OR_ATTACK
     allow_f22 = bool(allow_f22_rebuy)
     f22_bounce = float(f22_bounce_pct)
+    hgap = str(hard_gap_mode or HARD_GAP_IMMEDIATE).strip().lower()
+    if hgap not in HARD_GAP_MODES:
+        hgap = HARD_GAP_IMMEDIATE
+    allow_open_rebuy = bool(allow_open_rebuy_after_sell)
     prepared: list[dict[str, Any]] = []
     all_days: set[str] = set()
 
@@ -475,7 +488,7 @@ def simulate_portfolio_3slots(
             if code in positions:
                 continue
             st_q = states.get(code)
-            if st_q is not None and st_q.sold_today:
+            if st_q is not None and st_q.sold_today and (not allow_open_rebuy):
                 skipped.append({**cand, "reason": "sold_today_no_rebuy"})
                 continue
             if cand.get("day") != sess:
@@ -520,7 +533,8 @@ def simulate_portfolio_3slots(
                     "px": px,
                     "shares": shares,
                     "kind": cand.get("kind"),
-                    "source": "queue_fill",
+                    # 保留 pending 来源（如 open_rebuy_after_sell）；无则记排队成交
+                    "source": cand.get("source") or "queue_fill",
                     "slots_after": len(positions),
                 }
             )
@@ -723,7 +737,7 @@ def simulate_portfolio_3slots(
                             )
                             del positions[code]
                             st.sold_today = True
-                            st.buy_armed = False
+                            st.buy_armed = bool(allow_open_rebuy)
                             st.pending_buy = None
                             last_px[code] = float(fill)
                             _try_fill_from_queue(sess, str(ts))
@@ -752,6 +766,8 @@ def simulate_portfolio_3slots(
                         dump_pct=dump,
                         vol20_daily=sd.vol20_daily,
                         session_peak_before=float(st.session_high or 0),
+                        hard_gap_mode=hgap,
+                        hard_gap_dump_pct=float(hard_gap_dump_pct),
                     )
                     st.session_high = float(
                         ev.get("session_peak_after") or st.session_high or 0
@@ -796,9 +812,9 @@ def simulate_portfolio_3slots(
                                     "slots_after": len(positions) - (1 if full_exit else 0),
                                 }
                             )
-                            # sold_today：禁同日再买该票；半仓后仍可继续止盈剩余仓
+                            # sold_today：生产禁同日再买；半仓后仍可继续止盈剩余仓
                             st.sold_today = True
-                            st.buy_armed = False
+                            st.buy_armed = bool(allow_open_rebuy) and full_exit
                             if full_exit:
                                 del positions[code]
                                 st.pending_buy = None
@@ -806,6 +822,7 @@ def simulate_portfolio_3slots(
                             else:
                                 pos.shares = left_after
                                 pos.tp_stage = 1
+                                st.buy_armed = False
                             last_px[code] = float(fill)
                             if code not in positions:
                                 _try_fill_from_queue(sess, str(ts))
@@ -850,7 +867,7 @@ def simulate_portfolio_3slots(
                             )
                             del positions[code]
                             st.sold_today = True
-                            st.buy_armed = False
+                            st.buy_armed = bool(allow_open_rebuy)
                             st.pending_buy = None
                             last_px[code] = float(fill)
                             _try_fill_from_queue(sess, str(ts))
@@ -896,7 +913,9 @@ def simulate_portfolio_3slots(
                 sd = day_map.get(code)
                 if st is None or sd is None:
                     continue
-                if (not st.buy_armed) or (not sd.allow_entry) or st.sold_today:
+                if (not st.buy_armed) or (not sd.allow_entry):
+                    continue
+                if st.sold_today and (not allow_open_rebuy):
                     continue
                 if st.pending_buy is not None:
                     continue
@@ -917,6 +936,7 @@ def simulate_portfolio_3slots(
                     buy_px, buy_kind = float(attack), "attack"
                 else:
                     buy_px, buy_kind = float(open_buy), "open"
+                rebuy = bool(st.sold_today and allow_open_rebuy)
                 st.pending_buy = {
                     "day": sess,
                     "ts": str(ts),
@@ -924,7 +944,7 @@ def simulate_portfolio_3slots(
                     "name": sd.name,
                     "px": buy_px,
                     "kind": buy_kind,
-                    "source": "trigger",
+                    "source": "open_rebuy_after_sell" if rebuy else "trigger",
                 }
                 st.buy_armed = False
                 new_hits.append(st.pending_buy)
@@ -937,7 +957,7 @@ def simulate_portfolio_3slots(
                 if code in positions:
                     continue
                 st_c = states.get(code)
-                if st_c is not None and st_c.sold_today:
+                if st_c is not None and st_c.sold_today and (not allow_open_rebuy):
                     skipped.append({**cand, "reason": "sold_today_no_rebuy"})
                     continue
                 if _can_open_buy(ts):
@@ -979,7 +999,7 @@ def simulate_portfolio_3slots(
                             "px": px,
                             "shares": shares,
                             "kind": cand.get("kind"),
-                            "source": "trigger",
+                            "source": cand.get("source") or "trigger",
                             "slots_after": len(positions),
                         }
                     )
@@ -1026,7 +1046,7 @@ def simulate_portfolio_3slots(
             st = states.get(code)
             if st is not None:
                 st.sold_today = True
-                st.buy_armed = False
+                st.buy_armed = bool(allow_open_rebuy)
             last_px[code] = float(fill)
 
         for cand in wait_q:

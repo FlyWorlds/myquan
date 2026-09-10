@@ -55,6 +55,10 @@ DEFAULT_T1_PEAK_TRAIL_PCT = 0.025  # 未到 3%：次日动态峰值回落 2.5%
 DEFAULT_VOL_GIVEBACK_RATIO = 0.5  # 中段：回落距离 = 近 20 日日频波动 × 该比例
 DEFAULT_VOL20_WINDOW = 20
 DEFAULT_VOL_GIVEBACK_CAP = 0.15  # 回落距离上限，避免极端波动把卖价打到 0
+HARD_GAP_IMMEDIATE = "immediate"  # 低开已破硬保护 → 开盘价立刻卖（生产）
+HARD_GAP_OPEN_DUMP = "open_dump"  # 低开已破硬保护 → 再等开盘下杀 dump% 才卖（研究）
+HARD_GAP_MODES = (HARD_GAP_IMMEDIATE, HARD_GAP_OPEN_DUMP)
+DEFAULT_HARD_GAP_DUMP_PCT = 0.01  # open_dump：从开盘再下杀 1%
 
 STRATEGY_RULES = """
 ================================================================================
@@ -439,9 +443,15 @@ def eval_multi_tp_bar(
     vol20_daily: float | None = None,
     vol_giveback_ratio: float = DEFAULT_VOL_GIVEBACK_RATIO,
     session_peak_before: float = 0.0,
+    hard_gap_mode: str = HARD_GAP_IMMEDIATE,
+    hard_gap_dump_pct: float = DEFAULT_HARD_GAP_DUMP_PCT,
     tick: float = TICK_SIZE,
 ) -> dict[str, Any]:
     """单根 1m：多层止盈判定。
+
+    hard_gap_mode：
+      · immediate：开盘已 ≤ 硬保护价 → 按开盘价立刻 hard_from_cost（生产）
+      · open_dump：开盘已破硬保护 → 再等开盘下杀 hard_gap_dump_pct 才卖（研究对照）
 
     返回：
       action: None | {kind: full|half, reason, fill_px, shares}
@@ -568,7 +578,29 @@ def eval_multi_tp_bar(
             return _full(reason, px, downside=True)
         return {**empty, "peak_after": max(peak, h)}
     hard_px = floor_to_tick(cost * (1.0 - float(hard_pct)), tick)
-    if hard_px > 0 and lo <= hard_px + 1e-12:
+    gap_mode = str(hard_gap_mode or HARD_GAP_IMMEDIATE).strip().lower()
+    if gap_mode not in HARD_GAP_MODES:
+        gap_mode = HARD_GAP_IMMEDIATE
+    open_broke_hard = hard_px > 0 and day_o > 0 and day_o <= hard_px + 1e-12
+    if (
+        gap_mode == HARD_GAP_OPEN_DUMP
+        and open_broke_hard
+        and can_sell
+    ):
+        dump = overnight_open_dump_fill(
+            day_open=day_o,
+            bar_low=lo,
+            dump_pct=float(hard_gap_dump_pct),
+            tick=tick,
+        )
+        if dump.get("hit") and float(dump.get("fill_px") or 0) > 0:
+            return _full(
+                "hard_open_dump",
+                float(dump["fill_px"]),
+                downside=True,
+            )
+        # 低开已破硬保护但尚未再下杀 dump%：本 bar 不按硬保护砍
+    elif hard_px > 0 and lo <= hard_px + 1e-12:
         if can_sell:
             return _full("hard_from_cost", hard_px, downside=True)
         return _mark(hard_px)
@@ -1499,6 +1531,8 @@ def simulate_factor26_day_1m(
     noted_dump_pct: float | None = None,
     allow_attack: bool = DEFAULT_ALLOW_ATTACK,
     vol20_daily: float | None = None,
+    hard_gap_mode: str = HARD_GAP_IMMEDIATE,
+    hard_gap_dump_pct: float = DEFAULT_HARD_GAP_DUMP_PCT,
 ) -> dict[str, Any]:
     """单日 1 分钟路径：买入（默认开盘阈值）+ 多层止盈卖出。
 
@@ -1635,6 +1669,8 @@ def simulate_factor26_day_1m(
                     dump_pct=ndump,
                     vol20_daily=vol20_daily,
                     session_peak_before=session_peak,
+                    hard_gap_mode=hard_gap_mode,
+                    hard_gap_dump_pct=hard_gap_dump_pct,
                     tick=tick,
                 )
                 session_peak = float(ev.get("session_peak_after") or session_peak)
@@ -1936,6 +1972,10 @@ __all__ = [
     "DEFAULT_T1_PEAK_TRAIL_PCT",
     "DEFAULT_VOL_GIVEBACK_RATIO",
     "DEFAULT_VOL20_WINDOW",
+    "HARD_GAP_IMMEDIATE",
+    "HARD_GAP_OPEN_DUMP",
+    "HARD_GAP_MODES",
+    "DEFAULT_HARD_GAP_DUMP_PCT",
     "STRATEGY_RULES",
     "pullback_stop_price",
     "half_gain_stop_price",

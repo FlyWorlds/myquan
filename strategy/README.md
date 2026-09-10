@@ -249,6 +249,8 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 7 --refresh
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack   # 研究：加回攻击波
 # 策略十六核心龙头池（因子27）近 7 日 1m
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
+# 低开破硬保护：立刻卖 vs 开盘再下杀1%（全池等权）→ COMPARE_HARD_GAP.md
+PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7
 cd backtest && python run.py kaicheng --no-open
 # 天通 2026：止损后同日再买 / 因子22 收盘动量对照
 python backtest/tiantong_stop_rebuy_2026/run.py
@@ -303,6 +305,8 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy15` | 连板减磨损（F23/F24 + 震荡 F25 30m；回测 `backtest/strategy15_m30_chop/run.py`）；盯盘 `strategy15` Tab |
 | `run_core_leader_pool` | 策略十六近3个月选股：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json` |
 | `compare_f22`（策略十六） | 三槽有/无 F22 同日再买对照：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7` → `COMPARE_F22.md` |
+| `compare_open_rebuy` | 卖出后开盘阈值同日再买：`…/compare_open_rebuy.py --days 7`；全池等权加 `--all-pool` → `COMPARE_OPEN_REBUY_ALL.md` |
+| `compare_hard_gap` | 低开破硬保护立刻卖 vs 开盘再下杀1%：`PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7` → `COMPARE_HARD_GAP.md` |
 | `run_strategy9_emotion` | 因子18 家数对照上证（CLI，Web 不展示） |
 | `run_strategy2` | 因子8缠论选股；`panel` / `panel_path` / `factor_column` / `start` / `end` |
 | `OpenBreak3Strategy` | = Strategy1 执行类 |

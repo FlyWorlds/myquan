@@ -512,6 +512,45 @@ def portfolio_pool_codes(holdings: dict[str, Any]) -> list[str]:
     return sorted(codes)
 
 
+def is_default_strategy_pool_code(code: str) -> bool:
+    """是否属于当前默认策略交易池（strategy16 时=核心龙头 watchlist）。"""
+    return code_key(code) in strategy_watchlist_codes()
+
+
+def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
+    """对齐默认策略池：剔除旧策略遗留空壳；保留实仓 / 当日已实现 / 用户有成本登记。
+
+    返回新的 portfolio_pool 列表（已写回 holdings）。
+    """
+    sw = strategy_watchlist_codes()
+    positions = holdings.get("positions") or {}
+    realized = holdings.get("realized_today") or {}
+    keep: set[str] = set()
+    for raw in holdings.get("portfolio_pool") or []:
+        c = code_key(str(raw))
+        if not c:
+            continue
+        pos = positions.get(c) if isinstance(positions.get(c), dict) else {}
+        if c in sw:
+            keep.add(c)
+        elif int((pos or {}).get("qty") or 0) > 0:
+            keep.add(c)
+        elif c in realized and realized.get(c):
+            keep.add(c)
+        elif (pos or {}).get("cost") is not None or (pos or {}).get("buy_time"):
+            keep.add(c)
+    # 实仓 / 当日已实现即使未写进列表也保留
+    for code, pos in positions.items():
+        if isinstance(pos, dict) and int(pos.get("qty") or 0) > 0:
+            keep.add(code_key(str(code)))
+    for code, rec in realized.items():
+        if rec:
+            keep.add(code_key(str(code)))
+    pruned = sorted(keep)
+    holdings["portfolio_pool"] = pruned
+    return pruned
+
+
 def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str, Any]:
     """任意 A 股代码 → watch_item；名称优先 holdings.json。"""
     c = code_key(code)

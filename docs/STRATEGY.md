@@ -180,6 +180,8 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 - **刷新池**：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json`。
 - **近 7 日 1m 回测**（开盘阈值=2026至今 {2/2.5/3}% 日线夏普择优；卖同策略一；独立三槽）：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr` → `backtest/strategy16_core_leader/REPORT.md`。
 - **F22 对照**：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7`。
+- **开盘阈值同日再买对照**：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_open_rebuy.py --days 7` → `COMPARE_OPEN_REBUY.md`；全池等权加 `--all-pool` → `COMPARE_OPEN_REBUY_ALL.md`（近7日：禁再买约 +1.93%，开盘再买约 +2.34%，开盘再买 6 次，Δ约 0.41pp）。
+- **低开硬保护对照**：立刻卖 vs 开盘再下杀 1%（全池等权）：`PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7` → `COMPARE_HARD_GAP.md`。
 - 说明：[`FACTOR27.md`](FACTOR27.md)。
 
 ---

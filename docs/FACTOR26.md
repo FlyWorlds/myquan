@@ -27,6 +27,8 @@
 - `strategy/strategies/strategy1/bindings.py` → `factor26`
 - 池回测：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py`（近7日1m；三槽；默认开盘阈值买）
 - 研究对照：`--buy-mode open_or_attack` 加回攻击波（产物 `REPORT_attack.md`）
+- 研究对照：低开破硬保护立刻卖 vs 再下杀 1%：`PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7` → `backtest/strategy16_core_leader/COMPARE_HARD_GAP.md`
+- 研究对照：卖出后开盘阈值同日再买：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_open_rebuy.py --days 7` → `COMPARE_OPEN_REBUY.md`；全池等权 `--all-pool` → `COMPARE_OPEN_REBUY_ALL.md`
 
 ## 真源
 

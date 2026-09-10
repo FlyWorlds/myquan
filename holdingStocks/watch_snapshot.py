@@ -78,14 +78,22 @@ def filter_portfolio_holdings(
     portfolio_codes: set[str] | None = None,
     *,
     phase: str | None = None,
+    strategy_codes: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """持仓 Tab：实仓/当日止损留痕 + 当日预警票（预警仅展示，不登记 qty/成本）。
+    """持仓 Tab：实仓 + 当日已平仓留痕 + 默认策略池当日买点预警。
 
-    排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=3）→ 当日止损留痕（不占槽）→ 预警/候选 → 其余。
-    止损平仓后当日仍进三槽区展示（槽位留痕=True、槽位占用=False），次日随 realized 清除。
-    竞价/收盘：仍展示实仓 + 当日止损留痕；其它空仓预警不进持仓 Tab。
+    排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=3）→ 当日已平仓（不占槽）→ 预警/候选。
+    平仓 = 三槽实仓止损/止盈卖出清仓；当日留痕（槽位留痕=True）不占槽，次日随 realized 清除。
+    买点预警仅默认策略池（strategy16=核心龙头）；旧 portfolio_pool 空壳不进持仓 Tab。
+    竞价/收盘：仍展示实仓 + 当日已平仓；其它空仓预警不进持仓 Tab。
     """
-    from watch_config import MAX_PORTFOLIO_SLOTS, code_key, market_phase, portfolio_pool_codes
+    from watch_config import (
+        MAX_PORTFOLIO_SLOTS,
+        code_key,
+        market_phase,
+        portfolio_pool_codes,
+        strategy_watchlist_codes,
+    )
 
     if portfolio_codes is None:
         try:
@@ -94,8 +102,16 @@ def filter_portfolio_holdings(
             portfolio_codes = set(portfolio_pool_codes(load_holdings()))
         except Exception:  # noqa: BLE001
             portfolio_codes = set()
+    # 兼容旧参数：展示宇宙改由 strategy_codes + 实仓/已平仓决定
+    _ = portfolio_codes
+    if strategy_codes is None:
+        try:
+            strategy_codes = set(strategy_watchlist_codes())
+        except Exception:  # noqa: BLE001
+            strategy_codes = set()
 
-    def _is_stop_trace(r: dict[str, Any]) -> bool:
+    def _is_closed_trace(r: dict[str, Any]) -> bool:
+        """当日已平仓留痕（止损/止盈卖出后 qty=0）。"""
         pos = str(r.get("持仓状态") or "")
         if bool(r.get("已实现")):
             return True
@@ -118,28 +134,22 @@ def filter_portfolio_holdings(
             continue
         c = code_key(str(r.get("代码") or ""))
         qty = int(r.get("持仓") or 0)
-        stop_trace = qty <= 0 and _is_stop_trace(r)
-        if holdings_only and qty <= 0 and not stop_trace:
-            continue
-        in_pool = c in portfolio_codes
-        alert_only = (not in_pool) and _is_today_alert_row(r)
-        if holdings_only:
-            alert_only = False
-        if alert_only:
-            try:
-                from watch_config import is_strategy16_watch_only
-
-                if is_strategy16_watch_only(c):
-                    continue
-            except Exception:  # noqa: BLE001
-                pass
-        if not in_pool and not alert_only and qty <= 0 and not stop_trace:
+        closed_trace = qty <= 0 and _is_closed_trace(r)
+        # 买点预警：仅默认策略池；不把旧池空壳/别的策略票灌进持仓 Tab
+        alert_only = (
+            (not holdings_only)
+            and qty <= 0
+            and (not closed_trace)
+            and c in strategy_codes
+            and _is_today_alert_row(r)
+        )
+        if qty <= 0 and not closed_trace and not alert_only:
             continue
         if c in seen:
             continue
         seen.add(c)
         out = dict(r)
-        if stop_trace:
+        if closed_trace:
             out["当日预警"] = False
             out["槽位候选"] = False
             out["槽位占用"] = False
