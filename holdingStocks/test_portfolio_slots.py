@@ -443,7 +443,7 @@ def test_overlay_does_not_rewrite_real_qty():
 
 
 def test_annotate_unfilled_buy_signals_slot_full_and_gate():
-    """触买信号与入槽拆开：槽满仍预警；价触未过门弱信号。"""
+    """触买信号与入槽拆开：槽满仍预警；未过门不算触买、不进预警。"""
     from index import _annotate_unfilled_buy_signals
     from watch_snapshot import filter_portfolio_holdings
 
@@ -473,22 +473,39 @@ def test_annotate_unfilled_buy_signals_slot_full_and_gate():
         "买点": 10.27,
         "挂单说明": "",
     }
+    stale = {
+        "代码": "000070",
+        "名称": "特发",
+        "持仓": 0,
+        "已触买": "否",
+        "预警": "触买价·未过门",
+        "持仓状态": "空仓",
+        "过门OK": False,
+        "过门": "前日大阳·不过门",
+        "最高": 12.0,
+        "买点": 11.0,
+        "当日预警": True,
+        "bg_class": "warn-buy",
+        "挂单说明": "最高已过买点@11.00，但前日大阳·不过门·不入槽",
+    }
     _annotate_unfilled_buy_signals(
-        [hit, gate],
+        [hit, gate, stale],
         {"freeBuy": 0, "buysLeft": 0, "free": 0},
     )
     assert hit["预警"] == "已触买·槽满"
     assert hit["持仓状态"] == "待买入"
     assert hit["槽位候选"] is True
-    assert gate["预警"] == "触买价·未过门"
-    assert gate["当日预警"] is True
+    assert gate["预警"] == "空仓"
+    assert gate.get("当日预警") is not True
+    assert stale["预警"] == "空仓"
+    assert stale.get("当日预警") is False
 
     picked = filter_portfolio_holdings(
-        [hit, gate],
+        [hit, gate, stale],
         portfolio_codes=set(),
-        strategy_codes={"600869", "002068"},
+        strategy_codes={"600869", "002068", "000070"},
         phase="continuous",
     )
     codes = {str(r["代码"]) for r in picked}
-    assert codes == {"600869", "002068"}
+    assert codes == {"600869"}
 

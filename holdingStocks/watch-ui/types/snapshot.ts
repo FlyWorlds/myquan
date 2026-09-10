@@ -115,6 +115,10 @@ export interface StrategyPickItem {
   theme?: string
   theme_lu?: number
   pool_tag?: string
+  /** 分类：自选 / 因子27 / 策略池 / 涨停池 / 题材池 */
+  category?: string
+  分类?: string
+  pool_src?: string | null
   weight?: number
   oos_pl_ratio?: number
   oos_win_rate_pct?: number

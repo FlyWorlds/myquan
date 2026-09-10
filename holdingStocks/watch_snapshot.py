@@ -229,26 +229,56 @@ def build_watch_snapshot(
 
     if strategy_codes is None:
         strategy_codes = strategy_watchlist_codes()
+
+    def _pool_cat_tier(r: dict[str, Any]) -> int:
+        src = str(r.get("pool_src") or "")
+        label = str(r.get("池来源") or "")
+        if src == "self" or label == "自选":
+            return 0
+        if src == "factor27" or label == "因子27":
+            return 1
+        return 2
+
+    def _dist(r: dict[str, Any]) -> float:
+        try:
+            return float(r.get("距买点%") if r.get("距买点%") is not None else 9_999.0)
+        except (TypeError, ValueError):
+            return 9_999.0
+
+    def _sort_pool_rows(xs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(
+            xs,
+            key=lambda r: (
+                _pool_cat_tier(r),
+                _dist(r),
+                code_key(str(r.get("代码") or "")),
+            ),
+        )
+
     holdings = [
         _row_json(r)
         for r in filter_portfolio_holdings(rows, portfolio_codes=portfolio_codes)
     ]
-    strategy1_rows = [
-        _strip_holdings_pnl(r)
-        for r in rows
-        if not r.get("error") and code_key(str(r.get("代码") or "")) in strategy_codes
-    ]
+    strategy1_rows = _sort_pool_rows(
+        [
+            _strip_holdings_pnl(r)
+            for r in rows
+            if not r.get("error") and code_key(str(r.get("代码") or "")) in strategy_codes
+        ]
+    )
     try:
         from watch_config import core_leader_codes
 
         s16_codes = core_leader_codes()
     except Exception:  # noqa: BLE001
         s16_codes = set()
-    strategy16_rows = [
-        _strip_holdings_pnl(r)
-        for r in rows
-        if not r.get("error") and code_key(str(r.get("代码") or "")) in s16_codes
-    ]
+    strategy16_rows = _sort_pool_rows(
+        [
+            _strip_holdings_pnl(r)
+            for r in rows
+            if not r.get("error") and code_key(str(r.get("代码") or "")) in s16_codes
+        ]
+    )
     slot_meta = None
     for r in rows:
         if isinstance(r.get("_slot_meta"), dict):

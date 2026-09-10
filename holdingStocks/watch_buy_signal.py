@@ -3,7 +3,7 @@
 设计：
   · 信号：过门 + 触买点 → 必须预警（哪怕槽满未成交）
   · 成交：空槽自动入三槽 →「已触买·已入槽」
-  · 弱信号：价到买点但未过门 →「触买价·未过门」（不入槽、不可执行）
+  · 未过门：不算触买、不预警、不推送（价到买点也忽略）
 
 研究用途，非投资建议。
 """
@@ -17,6 +17,7 @@ ALERT_HIT_BUY = "已触买"
 ALERT_FILLED = "已触买·已入槽"
 ALERT_SLOT_FULL = "已触买·槽满"
 ALERT_NOT_SLOTTED = "已触买·未入槽"
+# 历史文案：曾作弱信号；现已废弃，仅用于清除粘滞/兼容
 ALERT_PRICE_NO_GATE = "触买价·未过门"
 ALERT_NEAR_BUY = "将买入"
 
@@ -53,7 +54,10 @@ def is_filled_into_slot(row: dict[str, Any]) -> bool:
 
 
 def is_buy_hit(row: dict[str, Any]) -> bool:
-    """有效买入信号（过门触买）：可入槽或应预警。不含「触买价·未过门」。"""
+    """有效买入信号（过门触买）：可入槽或应预警。未过门一律不算。"""
+    gok = gate_ok(row)
+    if gok is False:
+        return False
     if str(row.get("已触买") or "") == "是":
         return True
     alert = alert_text(row)
@@ -67,7 +71,9 @@ def is_buy_hit(row: dict[str, Any]) -> bool:
 
 
 def is_buy_signal_active(row: dict[str, Any]) -> bool:
-    """展示/叠加用：含将买入、近买点、已触买族。"""
+    """展示/叠加用：含将买入、近买点、已触买族。未过门不算。"""
+    if gate_ok(row) is False:
+        return False
     alert = alert_text(row)
     pos = str(row.get("持仓状态") or "")
     return (
@@ -80,12 +86,15 @@ def is_buy_signal_active(row: dict[str, Any]) -> bool:
 
 
 def is_weak_price_buy_alert(row: dict[str, Any]) -> bool:
+    """兼容旧粘滞文案检测；业务上已不产生、不计入预警。"""
     return ALERT_PRICE_NO_GATE in alert_text(row) or "触买价" in alert_text(row)
 
 
 def is_buy_side_alert(row: dict[str, Any]) -> bool:
-    """持仓 Tab / 推送：任何买入侧预警（强+弱）。"""
-    if is_buy_hit(row) or is_buy_signal_active(row) or is_weak_price_buy_alert(row):
+    """持仓 Tab / 推送：买入侧预警（仅过门后触买/近买）。"""
+    if is_weak_price_buy_alert(row):
+        return False
+    if is_buy_hit(row) or is_buy_signal_active(row):
         return True
     alert = alert_text(row)
     return bool(row.get("槽位候选")) and (
@@ -111,6 +120,23 @@ def _append_note(row: dict[str, Any], tip: str) -> None:
         row["挂单说明"] = f"{tip}；{note}" if note else tip
 
 
+def _clear_stale_no_gate_alert(row: dict[str, Any]) -> None:
+    """清掉历史「触买价·未过门」粘滞，恢复空仓展示。"""
+    if not is_weak_price_buy_alert(row):
+        return
+    row["预警"] = "空仓"
+    row["持仓状态"] = "空仓"
+    row["近买点"] = False
+    row["可执行"] = False
+    row["槽位候选"] = False
+    row["当日预警"] = False
+    if str(row.get("bg_class") or "") == "warn-buy":
+        row["bg_class"] = ""
+    note = str(row.get("挂单说明") or "")
+    if "不入槽" in note or "未过门" in note:
+        row["挂单说明"] = ""
+
+
 def annotate_unfilled_buy_signals(
     rows: list[dict[str, Any]],
     slot_meta: dict[str, Any],
@@ -118,17 +144,26 @@ def annotate_unfilled_buy_signals(
     is_stop_closed: Any | None = None,
     log: Any | None = None,
 ) -> tuple[int, int]:
-    """触买=信号，入槽=成交。返回 (未入槽触买数, 触买价未过门数)。"""
+    """触买=信号，入槽=成交。返回 (未入槽触买数, 0)；未过门不标注。"""
     free_buy = int(slot_meta.get("freeBuy") or slot_meta.get("free") or 0)
     buys_left = int(slot_meta.get("buysLeft") or 0)
     slot_blocked = free_buy <= 0 or buys_left <= 0
     n_hit = 0
-    n_gate = 0
 
     for r in rows:
         if r.get("error"):
             continue
         if int(r.get("持仓") or 0) > 0:
+            continue
+        # 未过门 / 历史弱信号：一律清掉，不算触买、不预警
+        if gate_ok(r) is False or is_weak_price_buy_alert(r):
+            _clear_stale_no_gate_alert(r)
+            r["当日预警"] = False
+            r["槽位候选"] = False
+            r["近买点"] = False
+            r["可执行"] = False
+            if str(r.get("已触买") or "") == "是":
+                r["已触买"] = "否"
             continue
         alert = alert_text(r)
         if alert.startswith(ALERT_FILLED):
@@ -159,36 +194,21 @@ def annotate_unfilled_buy_signals(
                     pass
             _append_note(r, tip)
             n_hit += 1
-            continue
 
-        # 弱信号：价到、未过门
-        gok = gate_ok(r)
-        if gok is not None and not gok and price_touched_open_buy(r):
-            if alert in _EMPTY_ALERTS or "触买价" in alert:
-                buy = float(r.get("买点") or r.get("买入侧价") or 0)
-                gate = str(r.get("过门") or "未过门")
-                r["预警"] = ALERT_PRICE_NO_GATE
-                r["持仓状态"] = "空仓"
-                r["近买点"] = False
-                r["可执行"] = False
-                r["槽位候选"] = False
-                r["当日预警"] = True
-                r["bg_class"] = "warn-buy"
-                _append_note(r, f"最高已过买点@{buy:.2f}，但{gate}·不入槽")
-                n_gate += 1
-
-    if log is not None and (n_hit or n_gate):
-        log(n_hit, n_gate)
-    return n_hit, n_gate
+    if log is not None and n_hit:
+        log(n_hit, 0)
+    return n_hit, 0
 
 
 def is_today_alert_row(row: dict[str, Any]) -> bool:
-    """持仓 Tab「当日预警」行（空仓信号，不含实仓）。"""
+    """持仓 Tab「当日预警」行（空仓信号，不含实仓；未过门不算）。"""
     if row.get("error"):
         return False
     if int(row.get("持仓") or 0) > 0:
         return False
     if bool(row.get("已实现")):
+        return False
+    if gate_ok(row) is False or is_weak_price_buy_alert(row):
         return False
     if bool(row.get("槽位候选")):
         return True
@@ -199,8 +219,6 @@ def is_today_alert_row(row: dict[str, Any]) -> bool:
     if alert in (ALERT_HIT_BUY, ALERT_NEAR_BUY, "已触止损") or alert.startswith("已触"):
         return True
     if "将买入" in alert or "将卖出" in alert or "近买入" in alert:
-        return True
-    if is_weak_price_buy_alert(row):
         return True
     if pos in ("待买入", "待卖出"):
         return True

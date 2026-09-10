@@ -216,18 +216,11 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
             )
         return None
 
-    # 无持仓：过门禁买 → 不推买入；当日卖出后再触买仍推
+    # 无持仓：过门禁买 / 未过门 → 不推买入；当日卖出后再触买仍推
     if no_buy:
         return None
     if is_weak_price_buy_alert(row) or ALERT_PRICE_NO_GATE in alert:
-        return _pack(
-            PRIORITY_P1,
-            KIND_P1,
-            ALERT_PRICE_NO_GATE,
-            row.get("买入侧价")
-            or row.get("买点")
-            or _factor_px_for_push(row, holding=False),
-        )
+        return None
     if (
         hit_buy
         or (pos == "待买入" and hit.startswith("已触发"))

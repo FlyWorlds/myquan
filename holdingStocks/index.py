@@ -17,7 +17,7 @@
   · 阈值与信号：因子26 多层止盈（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
   · 有仓：动态止盈触达自动结算（全清）；空仓：已触买/将买入建议限价
-  · **信号≠入槽**：触买预警见 `watch_buy_signal.py`；槽满仍发「已触买·槽满」；自动入槽才是成交
+  · **信号≠入槽**：触买预警见 `watch_buy_signal.py`（须过门）；槽满仍发「已触买·槽满」；未过门不算触买、不预警；自动入槽才是成交
   · 本地 JSON 记录持仓（含 peak_high）；T+1 买入日不可卖
 
 用法：
@@ -897,6 +897,7 @@ _WATCH_TABS_CACHE: dict[str, Any] = {"t": 0.0, "tabs": []}
 
 def _watch_tabs_with_live_s8(strategy8: dict[str, Any]) -> list[dict[str, Any]]:
     from strategy8_watch import live_picks_from_payload
+    from strategy_picks_loader import merge_public_self_picks
 
     now_m = time.monotonic()
     cached = _WATCH_TABS_CACHE.get("tabs") or []
@@ -907,7 +908,9 @@ def _watch_tabs_with_live_s8(strategy8: dict[str, Any]) -> list[dict[str, Any]]:
     tabs = [dict(t) for t in cached]
     for t in tabs:
         if t.get("id") == "strategy8":
-            t["picks"] = live_picks_from_payload(strategy8)
+            t["picks"] = merge_public_self_picks(
+                live_picks_from_payload(strategy8), "strategy8"
+            )
     return tabs
 
 
@@ -2167,7 +2170,8 @@ def _annotate_unfilled_buy_signals(
 
     def _log(n_hit: int, n_gate: int) -> None:
         print(
-            f"[{_now()}] 买入信号标注: 未入槽触买 {n_hit} · 触买价未过门 {n_gate}"
+            f"[{_now()}] 买入信号标注: 未入槽触买 {n_hit}"
+            + (f" · 已忽略未过门弱信号 {n_gate}" if n_gate else "")
         )
 
     _annotate_buy_signals_core(
@@ -4923,15 +4927,22 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
         row["因子侧"] = "持有" if pos == "已经买入" else row.get("因子侧") or "卖出"
         return
 
-    # 真·空仓：保留 annotate 后的触买/弱信号，勿冲回空仓
+    # 真·空仓：保留 annotate 后的触买信号，勿冲回空仓（未过门不算触买）
     if alert.startswith("已触买·") and alert != ALERT_FILLED:
         row["持仓状态"] = "待买入"
         row["可执行"] = True
         row["bg_class"] = row.get("bg_class") or "warn-buy"
         return
     if ALERT_PRICE_NO_GATE in alert or alert.startswith("触买价"):
+        # 废弃弱信号：恢复空仓，不预警
+        row["预警"] = "空仓"
+        row["持仓状态"] = "空仓"
         row["可执行"] = False
-        row["bg_class"] = row.get("bg_class") or "warn-buy"
+        row["近买点"] = False
+        row["槽位候选"] = False
+        row["当日预警"] = False
+        if str(row.get("bg_class") or "") == "warn-buy":
+            row["bg_class"] = ""
         return
     row["可执行"] = pos == "待买入"
 

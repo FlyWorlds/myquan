@@ -4,7 +4,13 @@ import { fmtNum, fmtSignedPct, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 
-defineProps<{ rows: HoldingRow[]; phase?: string; slotMeta?: { max?: number; occupiedCount?: number; free?: number; weight?: number } }>()
+const props = defineProps<{
+  rows: HoldingRow[]
+  phase?: string
+  slotMeta?: { max?: number; occupiedCount?: number; free?: number; weight?: number }
+  /** 策略池分类默认文案（无 pool_src 时） */
+  poolCategory?: string
+}>()
 
 const steps = [
   ['9:15', '竞价·可撤'],
@@ -23,6 +29,13 @@ const legend = [
   { cls: 'signal-badge signal-badge-trigger-sell', label: '已触止损' },
   { cls: 'signal-badge signal-badge-flat', label: '空仓' },
 ]
+
+function categoryOf(r: HoldingRow): string {
+  if (r.pool_src === 'self' || r.池来源 === '自选') return '自选'
+  if (r.pool_src === 'factor27' || r.池来源 === '因子27') return '因子27'
+  if (r.池来源) return String(r.池来源)
+  return props.poolCategory || '策略池'
+}
 </script>
 
 <template>
@@ -36,7 +49,7 @@ const legend = [
         三槽持仓 {{ slotMeta.occupiedCount ?? 0 }}/{{ slotMeta.max ?? 3 }}
         · 空槽 {{ slotMeta.free ?? '-' }}
         · 每槽约 {{ Math.round((slotMeta.weight ?? 0.3) * 100) }}%
-        · 列表按距买点升序
+        · 列表按距买点升序（自选优先）
       </div>
       <div class="mt-1 text-xs text-ui-text-3">
         策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）
@@ -51,6 +64,7 @@ const legend = [
         <table class="watch-sticky-table">
           <thead>
             <tr>
+              <th class="px-3 py-2.5">分类</th>
               <th class="px-3 py-2.5">标的</th>
               <th class="min-w-[5.5rem] px-3 py-2.5">状态</th>
               <th class="px-3 py-2.5">距买点</th>
@@ -75,16 +89,14 @@ const legend = [
               :class="resolveSignalVisual(r).rowClass"
             >
               <td class="px-3 py-2.5 align-top">
+                <span
+                  class="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                  :class="categoryOf(r) === '自选' ? 'bg-accent/15 text-accent' : 'bg-ui-ink/30 text-ui-text-3'"
+                >{{ categoryOf(r) }}</span>
+              </td>
+              <td class="px-3 py-2.5 align-top">
                 <div class="leading-snug">
                   <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
-                  <span
-                    v-if="r.池来源 === '自选' || r.pool_src === 'self'"
-                    class="ml-1 rounded bg-accent/15 px-1 py-0.5 text-[10px] font-normal text-accent"
-                  >自选</span>
-                  <span
-                    v-else-if="r.池来源 === '因子27' || r.pool_src === 'factor27'"
-                    class="ml-1 rounded bg-ui-ink/40 px-1 py-0.5 text-[10px] font-normal text-ui-text-3"
-                  >因子27</span>
                 </div>
               </td>
               <td class="px-3 py-2.5 align-top">

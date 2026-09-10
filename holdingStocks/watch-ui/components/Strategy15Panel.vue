@@ -11,6 +11,12 @@ const regimeLabel: Record<string, string> = {
   normal: '常规',
   hot: '高潮·少接回',
 }
+
+function categoryOf(r: HoldingRow): string {
+  if (r.pool_src === 'self' || r.池来源 === '自选') return '自选'
+  if (r.pool_src === 'factor27' || r.池来源 === '因子27') return '因子27'
+  return String(r.池来源 || '策略池')
+}
 </script>
 
 <template>
@@ -54,6 +60,7 @@ const regimeLabel: Record<string, string> = {
       <table class="watch-sticky-table">
         <thead>
           <tr>
+            <th class="px-3 py-2.5">分类</th>
             <th class="px-3 py-2.5">标的</th>
             <th class="min-w-[5.5rem] px-3 py-2.5">状态</th>
             <th class="px-3 py-2.5">现价</th>
@@ -74,25 +81,26 @@ const regimeLabel: Record<string, string> = {
             :class="resolveSignalVisual(r).rowClass"
           >
             <td class="px-3 py-2.5 align-top">
+              <span
+                class="rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                :class="categoryOf(r) === '自选' ? 'bg-accent/15 text-accent' : 'bg-ui-ink/30 text-ui-text-3'"
+              >{{ categoryOf(r) }}</span>
+            </td>
+            <td class="px-3 py-2.5 align-top">
               <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
             </td>
             <td class="px-3 py-2.5 align-top">
               <span :class="resolveSignalVisual(r).badgeClass">{{ resolveSignalVisual(r).badgeText }}</span>
+              <div v-if="r.情绪档" class="mt-1 text-[10px] text-ui-text-3">{{ r.情绪档 }}</div>
             </td>
-            <td class="sensitive px-3 py-2.5 font-semibold">{{ fmtNum(r.现价, r['价位小数'] ?? 2) }}</td>
-            <td class="sensitive px-3 py-2.5">
-              {{ r.止盈价 != null ? fmtNum(r.止盈价, r['价位小数'] ?? 2) : '—' }}
-              <span v-if="r.已触止盈 === '是'" class="ml-1 text-xs text-up">已触</span>
-              <div class="text-[10px] text-ui-text-3">
-                {{ r.因子25 === '开' ? (r.F25提示 || '30m动态') : (r['止盈目标%'] != null ? `${r['止盈目标%']}%减半` : '') }}
-              </div>
-            </td>
-            <td class="px-3 py-2.5">{{ r.因子22 || '—' }}</td>
-            <td class="px-3 py-2.5">{{ r.因子25 || '—' }}</td>
-            <td class="sensitive px-3 py-2.5 text-up">{{ r.阈值就绪 ? fmtNum(r.买入侧价 ?? r.买点, r['价位小数'] ?? 2) : '-' }}</td>
-            <td class="sensitive px-3 py-2.5 text-down">{{ r.阈值就绪 ? fmtNum(r.卖出侧价 ?? r.止损, r['价位小数'] ?? 2) : '-' }}</td>
+            <td class="sensitive px-3 py-2.5">{{ fmtNum(r.现价, r['价位小数'] ?? 2) }}</td>
+            <td class="sensitive px-3 py-2.5">{{ fmtNum(r.止盈价 ?? r.F25动态臂, r['价位小数'] ?? 2) }}</td>
+            <td class="px-3 py-2.5">{{ r.因子22 || '-' }}</td>
+            <td class="px-3 py-2.5">{{ r.因子25 || '-' }}</td>
+            <td class="sensitive px-3 py-2.5">{{ fmtNum(r.买入侧价 ?? r.买点, r['价位小数'] ?? 2) }}</td>
+            <td class="sensitive px-3 py-2.5">{{ fmtNum(r.卖出侧价 ?? r.止损, r['价位小数'] ?? 2) }}</td>
             <td class="px-3 py-2.5">{{ r.因子侧 || '-' }}</td>
-            <td class="max-w-[280px] px-3 py-2.5 text-xs leading-relaxed text-ui-text-2">{{ r.说明 || r.挂单说明 || '-' }}</td>
+            <td class="max-w-[220px] px-3 py-2.5 text-xs text-ui-text-2">{{ r.F25提示 || r.挂单说明 || r.预警 || '-' }}</td>
           </tr>
         </tbody>
       </table>

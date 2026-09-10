@@ -84,6 +84,85 @@ def _empty_picks(kind: str = "none", *, note: str = "") -> dict[str, Any]:
     return {"kind": kind, "asOf": None, "source": None, "note": note, "items": []}
 
 
+# 各策略「策略池」分类文案（公共自选统一标「自选」）
+_POOL_CATEGORY: dict[str, str] = {
+    "strategy1": "策略池",
+    "strategy2": "策略池",
+    "strategy3": "涨停池",
+    "strategy4": "策略池",
+    "strategy5": "策略池",
+    "strategy8": "题材池",
+    "strategy12": "策略池",
+    "strategy15": "策略池",
+    "strategy16": "因子27",
+}
+
+
+def _self_pick_items() -> list[dict[str, Any]]:
+    """公共自选 → picks 条目（带分类）。"""
+    try:
+        from watch_config import SELF_WATCHLIST_PICKS, code_key
+    except Exception:  # noqa: BLE001
+        return []
+    out: list[dict[str, Any]] = []
+    for i, (code, name) in enumerate(SELF_WATCHLIST_PICKS, 1):
+        c = code_key(str(code))
+        if not c or c == "000000":
+            continue
+        out.append(
+            {
+                "rank": i,
+                "symbol": c,
+                "code": c,
+                "name": str(name),
+                "category": "自选",
+                "分类": "自选",
+                "pool_src": "self",
+            }
+        )
+    return out
+
+
+def merge_public_self_picks(
+    picks: dict[str, Any] | None,
+    strategy_id: str = "",
+) -> dict[str, Any]:
+    """任意策略选股/信号 ∪ 公共自选；自选置前并标分类。"""
+    base = dict(picks or _empty_picks())
+    pool_cat = _POOL_CATEGORY.get(str(strategy_id), "策略池")
+    seen: set[str] = set()
+    merged: list[dict[str, Any]] = []
+    for it in _self_pick_items():
+        c = str(it.get("code") or "").zfill(6)[-6:]
+        if not c or c in seen:
+            continue
+        seen.add(c)
+        merged.append(dict(it))
+    for it in base.get("items") or []:
+        if not isinstance(it, dict):
+            continue
+        row = dict(it)
+        c = _code_from_symbol(str(row.get("code") or row.get("symbol") or ""))
+        if c and c in seen:
+            continue
+        if c:
+            seen.add(c)
+            row["code"] = c
+        row.setdefault("category", pool_cat)
+        row.setdefault("分类", pool_cat)
+        if not row.get("pool_src"):
+            row["pool_src"] = "pool"
+        merged.append(row)
+    for i, row in enumerate(merged, 1):
+        row["rank"] = i
+    base["items"] = merged
+    n_self = sum(1 for x in merged if x.get("pool_src") == "self" or x.get("分类") == "自选")
+    note = str(base.get("note") or "")
+    if n_self and "公共自选" not in note:
+        base["note"] = (f"含公共自选 {n_self} 只 · " + note).strip(" ·")
+    return base
+
+
 def _first_existing(paths: list[Path]) -> Path | None:
     for p in paths:
         if p.is_file():
@@ -422,54 +501,61 @@ def _load_s16_quarter(path: Path) -> dict[str, Any]:
 
 @lru_cache(maxsize=16)
 def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
-    """返回策略最新选股/信号快照。"""
+    """返回策略最新选股/信号快照（始终并入公共自选并标分类）。"""
     sid = str(strategy_id)
     if sid == "strategy6":
-        return _empty_picks(
+        raw = _empty_picks(
             "none",
             note="因子12 周频 gate 需截面面板；运行 strategy6 回测后自行导出 weekly_picks",
         )
+        return merge_public_self_picks(raw, sid)
     if sid == "strategy7":
-        return _empty_picks("none", note="单票笔归因策略，无截面选股名单")
+        raw = _empty_picks("none", note="单票笔归因策略，无截面选股名单")
+        return merge_public_self_picks(raw, sid)
 
     spec = _PICK_SOURCES.get(sid)
     if not spec:
-        return _empty_picks()
+        return merge_public_self_picks(_empty_picks(), sid)
 
     path = _first_existing(list(spec["paths"]))
     if path is None:
-        return _empty_picks(str(spec["kind"]), note="产物文件不存在，需先跑回测")
+        return merge_public_self_picks(
+            _empty_picks(str(spec["kind"]), note="产物文件不存在，需先跑回测"),
+            sid,
+        )
 
     try:
         if sid == "strategy1":
             if path.name == "summary.json":
-                return _load_s1_f13_refit_summary(path)
-            if path.name in ("pool_detail.csv", "picks_2025_for_2026.csv"):
-                return _load_s1_f13_refit_pool_csv(path)
-            if path.suffix == ".json":
-                return _load_factor13_locked(path)
-            return _load_factor13_csv(path)
-        if sid == "strategy2":
-            return _load_strategy2_daily(path)
-        if sid == "strategy3":
-            return _load_strategy3_signals(path)
-        if sid == "strategy8":
-            out = _load_strategy8_signals(path)
-            note = str(out.get("note") or "")
+                raw = _load_s1_f13_refit_summary(path)
+            elif path.name in ("pool_detail.csv", "picks_2025_for_2026.csv"):
+                raw = _load_s1_f13_refit_pool_csv(path)
+            elif path.suffix == ".json":
+                raw = _load_factor13_locked(path)
+            else:
+                raw = _load_factor13_csv(path)
+        elif sid == "strategy2":
+            raw = _load_strategy2_daily(path)
+        elif sid == "strategy3":
+            raw = _load_strategy3_signals(path)
+        elif sid == "strategy8":
+            raw = _load_strategy8_signals(path)
+            note = str(raw.get("note") or "")
             if "盯盘" not in note:
-                out["note"] = (note + " · 回测截面；盯盘 Tab 用当日涨停实时重算").strip(" ·")
-            return out
-        if sid == "strategy12":
-            return _load_s12_signals(path)
-        if sid in ("strategy4", "strategy5"):
+                raw["note"] = (note + " · 回测截面；盯盘 Tab 用当日涨停实时重算").strip(" ·")
+        elif sid == "strategy12":
+            raw = _load_s12_signals(path)
+        elif sid in ("strategy4", "strategy5"):
             col = "symbols" if sid == "strategy4" else "picks"
-            return _load_weekly_csv(path, symbol_col=col)
-        if sid == "strategy16":
-            return _load_s16_quarter(path)
+            raw = _load_weekly_csv(path, symbol_col=col)
+        elif sid == "strategy16":
+            raw = _load_s16_quarter(path)
+        else:
+            raw = _empty_picks()
     except Exception as e:  # noqa: BLE001
-        return _empty_picks(str(spec.get("kind", "none")), note=f"读取失败: {e}")
+        raw = _empty_picks(str(spec.get("kind", "none")), note=f"读取失败: {e}")
 
-    return _empty_picks()
+    return merge_public_self_picks(raw, sid)
 
 
 def invalidate_picks_cache() -> None:

@@ -185,7 +185,7 @@ const closedCount = computed(() => closedHoldings.value.length)
       <section v-show="activeTab === 'strategy1'">
         <StrategyInfoPanel v-if="strategy1Tab" :tab="strategy1Tab" class="mb-4" />
         <StrategyPicksPanel :picks="strategy1Tab?.picks" />
-        <Strategy1Panel v-if="snapshot" :rows="snapshot.strategy1" :phase="snapshot.phase" :slot-meta="snapshot.slotMeta" class="mt-4" />
+        <Strategy1Panel v-if="snapshot" :rows="snapshot.strategy1" :phase="snapshot.phase" :slot-meta="snapshot.slotMeta" pool-category="策略池" class="mt-4" />
       </section>
 
       <section v-show="activeTab === 'strategy3'">
@@ -229,6 +229,7 @@ const closedCount = computed(() => closedHoldings.value.length)
           :rows="snapshot.strategy16 || []"
           :phase="snapshot.phase"
           :slot-meta="snapshot.slotMeta"
+          pool-category="因子27"
           class="mt-4"
         />
       </section>
