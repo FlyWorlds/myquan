@@ -5,7 +5,7 @@
   · 卖（因子26）：硬保护2.5%；中赚3–10%回落一半与0.5×20日日频σ谁先到走谁；阶梯10%/15%；未到3%次日峰值回落2.5%；1 分钟 path-dependent
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
-  · **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 2
+  · **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 3
   · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值；9:30 起触发结算
   · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票不可再待买入
   · 默认交易宇宙：因子27 核心龙头近3个月池 + 天通/凯盛（见 watch_config.WATCHLIST）
@@ -2570,7 +2570,7 @@ def _apply_portfolio_slots(
     account_total: float | None,
     phase_now: str,
 ) -> dict[str, Any]:
-    """三槽：盘中可持 3；当日最多买 2；尾盘窗口按隔夜上限 2。
+    """三槽：盘中可持 3；当日最多买 3；尾盘窗口按隔夜上限（现同为 3）。
 
     · 用户实仓 qty>0 占槽；可买空槽见 free_buy_slot_count（盘中/隔夜均为 3）
     · 入槽顺序：当日「槽位触买」先后；当日止损/已记卖出禁再买
@@ -3488,6 +3488,7 @@ def collect_rows(
                 if qty_early > 0
                 else None,
                 overnight_armed=bool(pos_early.get("stop_noted")),
+                allow_attack=DEFAULT_ALLOW_ATTACK,
             )
             lv_base = strategy_levels(
                 open_for_lv if open_for_lv > 0 else float(q["open"]),
@@ -3498,6 +3499,7 @@ def collect_rows(
                 low_px=low_for_lv if low_for_lv > 0 else None,
                 cost_px=cost_h,
                 peak_high=seed_h,
+                allow_attack=DEFAULT_ALLOW_ATTACK,
             )
             vs = points_vs_open(q["open"], q["last"])
             vs_pct = pct_vs_open(q["open"], q["last"])
@@ -3558,15 +3560,14 @@ def collect_rows(
                     hit_eff_stop = False
                     hit_base_stop = False
                     path_touch_stop = 0.0
+                elif qty_early <= 0 and not _replay_holding_early:
+                    # 空仓无止损语义：勿用「现价≤开盘派生卖价」标已触止损
+                    hit_eff_stop = False
+                    hit_base_stop = False
+                    path_touch_stop = 0.0
                 else:
-                    need_m1 = bool(
-                        qty_early > 0
-                        or _replay_holding_early
-                        or (
-                            float(lv["stop"]) > 0
-                            and float(q["last"]) <= float(lv["stop"]) * 1.02
-                        )
-                    )
+                    # 仅实仓/纸面持仓拉 1m。空仓勿拉（akshare 单票超时可达 ~90s）。
+                    need_m1 = True
                     path_res = _resolve_hit_stop_path_dependent(
                         sina=str(w["sina"]),
                         session=str(q["session"]),
@@ -3971,14 +3972,13 @@ def collect_rows(
                     if f22 and f22.get("fill_px") is not None
                     else None
                 )
-                buy_show = lv["buy_trigger"]
+                buy_show = float(lv.get("open_buy") or lv["buy_trigger"])
                 if _sold_today_pre:
                     note += "；当日已卖出·禁再买"
                 elif f22 and not f26_rebuy:
-                    buy_show = f22_px if f22_px is not None else lv["buy_trigger"]
+                    buy_show = f22_px if f22_px is not None else buy_show
                     note += f"；收盘动量可再买@{buy_show:.{px_digits}f}"
                 elif f26_rebuy:
-                    buy_show = lv["buy_trigger"]
                     note += f"；卖出后再触买点@{buy_show:.{px_digits}f}"
                 rebuy_hit = bool(rebuy_ok and signal_ok)
                 # 已清仓：因子侧/持仓状态按空仓规则重算（可再进待买入）
@@ -3999,6 +3999,7 @@ def collect_rows(
                     t0=t0,
                     allow_entry=bool(rebuy_ok) and preview_ok,
                     hit_stop=False,
+                    allow_attack=DEFAULT_ALLOW_ATTACK,
                 )
                 if not signal_ok:
                     sig0 = _demote_pre_signal_window(sig0)
@@ -4160,7 +4161,9 @@ def collect_rows(
                 low_px=q["low"],
                 last_px=q["last"],
                 session=q["session"],
-                buy_trigger=path_buy_px if path_buy_px else lv["buy_trigger"],
+                buy_trigger=path_buy_px
+                if path_buy_px
+                else float(lv.get("open_buy") or lv["buy_trigger"]),
                 stop_px=lv["stop"],
                 qty=sig_qty,
                 buy_time=sig_buy_time,
@@ -4173,6 +4176,7 @@ def collect_rows(
                 allow_entry=False if paper_active else (allow_entry and preview_ok),
                 hit_stop=bool(hit_stop_show),
                 hit_buy=bool(hit_buy),
+                allow_attack=DEFAULT_ALLOW_ATTACK,
             )
             if not signal_ok:
                 if qty > 0 and hit_stop_show:
@@ -4358,7 +4362,7 @@ def collect_rows(
                     qty=qty,
                     buy_time=buy_time,
                     session=str(q["session"]),
-                    buy_trigger=float(lv["buy_trigger"]),
+                    buy_trigger=float(lv.get("open_buy") or lv["buy_trigger"]),
                     stop_px=float(lv["stop"]),
                     last_px=float(q["last"]),
                     px_digits=px_digits,
@@ -4431,7 +4435,7 @@ def collect_rows(
                     "较开盘点": vs,
                     "较开盘涨幅": vs_pct,
                     "阈值%": pct_pct,
-                    "买点": lv["buy_trigger"],
+                    "买点": float(lv.get("open_buy") or lv["buy_trigger"]),
                     "止损": lv["stop"],
                     "基础止损": lv_base["stop"],
                     "因子4": f4_tag,
@@ -5397,7 +5401,7 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
 
     · 全部 positions → 空仓；realized / alert_sticky / factor_memory 清空
     · strategy 纸面持有复位；portfolio_pool 对齐默认策略池
-    · 当日 trades.jsonl 买卖行归档，避免「日最多买2 / 当日禁买」挡住重跑
+    · 当日 trades.jsonl 买卖行归档，避免「日最多买 / 当日禁买」挡住重跑
     · 账户总资产回到默认纸面资金；清内存缓存与微信防抖
     """
     from watch_config import (
@@ -5499,7 +5503,7 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
         f"池 {len(data.get('portfolio_pool') or [])} 只 · "
         f"归档当日成交 {n_archived} 笔 · 账户 {DEFAULT_ACCOUNT_TOTAL:.0f}"
     )
-    print("盯盘下一轮将按默认策略重新扫描入槽（日最多买 2）。")
+    print(f"盯盘下一轮将按默认策略重新扫描入槽（日最多买 {int(MAX_BUYS_PER_DAY)}）。")
 
 def cmd_history(_: argparse.Namespace) -> None:
     if not TRADES_FILE.exists():
@@ -6286,15 +6290,33 @@ def cmd_watch(args: argparse.Namespace) -> None:
             print(f"[{_now()}] 股票名称缓存已预热（{n_names} 条）")
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 名称缓存预热失败（继续）: {e}")
-        print("冷启动：新浪批量实时快照 + 预热日线…")
+        # 先起刷新线程 + 行情源：日线预热常因缺 panda_data/网络挂住，
+        # 若堵在 feed.start() 之前，worker 一直 wait_update，快照永不更新。
+        if not worker.is_alive():
+            worker.start()
+        if not milestone_worker.is_alive():
+            milestone_worker.start()
+        print("冷启动：新浪批量实时 + 行情源 → 首屏快照；日线并行预热…")
         feed_started = False
+
+        def _warm_daily_bg() -> None:
+            try:
+                print(f"[{_now()}] 后台预热日线缓存…")
+                _daily_cache_warm()
+                print(f"[{_now()}] 日线缓存预热完成")
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 日线预热失败（继续）: {e}")
+
         try:
             ensure_watch_status_reset_today()
             t0 = time.perf_counter()
             n_fast = reseed_live()
-            _daily_cache_warm()
             feed.start()
             feed_started = True
+            # 与首屏并行，避免串行 fetch_daily / 1m 互堵
+            threading.Thread(
+                target=_warm_daily_bg, name="watch-daily-warm", daemon=True
+            ).start()
             report, _ = safe_refresh()
             elapsed = time.perf_counter() - t0
             _log_watch_snapshot_push(
@@ -6306,6 +6328,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             if not feed_started:
                 try:
                     feed.start()
+                    feed_started = True
                 except Exception as e2:  # noqa: BLE001
                     print(f"[{_now()}] 行情源启动失败: {e2}")
         if stop.is_set():

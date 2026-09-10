@@ -31,6 +31,7 @@ from backtest.strategy1_pool_1m.run import (  # noqa: E402
 )
 from holdingStocks.watch_config import (  # noqa: E402
     DEFAULT_ACCOUNT_TOTAL,
+    MAX_BUYS_PER_DAY,
     MAX_PORTFOLIO_SLOTS,
     SLOT_WEIGHT,
     load_strategy16_thr_map,
@@ -122,7 +123,7 @@ def main(days: int = 7, refresh: bool = False, all_pool: bool = False) -> int:
             allow_f22_rebuy=False,
         )
         stem = ""
-        scope = f"三槽；日最多买 2；每槽约 {SLOT_WEIGHT*100:.0f}%"
+        scope = f"三槽；日最多买 {int(MAX_BUYS_PER_DAY)}；每槽约 {SLOT_WEIGHT*100:.0f}%"
 
     print("\n跑 A：禁再买…", flush=True)
     a = simulate_portfolio_3slots(

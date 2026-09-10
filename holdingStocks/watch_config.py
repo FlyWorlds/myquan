@@ -208,6 +208,8 @@ STRATEGY16_THR_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "th
 STRATEGY16_EXTRA_PICKS: tuple[tuple[str, str], ...] = (
     ("600330", "天通股份"),
     ("600552", "凯盛科技"),
+    ("601208", "东材科技"),
+    ("002636", "金安国纪"),
 )
 
 
@@ -392,6 +394,8 @@ _WATCH_PCT: dict[str, float] = {
     "002273": 0.02,
     "002922": 0.02,
     "601609": 0.02,
+    "601208": 0.025,
+    "002636": 0.025,
 }
 
 FIT_WATCHLIST: list[dict[str, Any]] = [
@@ -414,6 +418,7 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
     watch_item("600330", "天通股份", pct=0.03),
     watch_item("600338", "西藏珠峰", pct=0.025),
     watch_item("601208", "东材科技", pct=0.025),
+    watch_item("002636", "金安国纪", pct=0.025),
 ]
 
 # 切策略三：STRATEGY_ID="strategy3"; USE_FACTOR4=True; WATCHLIST=list(S7_WATCHLIST)
@@ -744,7 +749,7 @@ RESERVE_EMPTY_SLOTS = 0  # 不再尾盘强制空槽
 MAX_OVERNIGHT_SLOTS = MAX_PORTFOLIO_SLOTS - RESERVE_EMPTY_SLOTS  # 隔夜最多 3
 # 兼容旧名：曾误作「盘中也最多2」；现仅表示隔夜上限
 MAX_ACTIVE_SLOTS = MAX_OVERNIGHT_SLOTS
-MAX_BUYS_PER_DAY = 2  # 当日最多买入次数
+MAX_BUYS_PER_DAY = 3  # 当日最多买入次数（与三槽对齐，可买满 3）
 RESERVE_SLOT_HOUR = 14
 RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓（现与盘中同为 3）
 SLOT_WEIGHT = 0.30  # 每槽约 3 成仓

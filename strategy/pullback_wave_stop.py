@@ -837,9 +837,14 @@ def strategy_levels(
     peak_high: float | None = None,
     giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
     tick: float = TICK_SIZE,
+    allow_attack: bool = DEFAULT_ALLOW_ATTACK,
     **_extra: Any,
 ) -> dict[str, float]:
-    """buy：默认开盘阈值；stop=浮盈回落一半（相对成本/峰值）。"""
+    """buy：默认开盘阈值；stop=浮盈回落一半（相对成本/峰值）。
+
+    allow_attack=False（生产默认）时 buy_trigger 只等于开盘突破价，
+    避免一字开板下砸后用「低点×(1+entry)」误触空仓「将买入」。
+    """
     pb = float(
         pullback_pct
         if pullback_pct is not None
@@ -850,7 +855,7 @@ def strategy_levels(
     lo = float(low_px) if low_px is not None and float(low_px) > 0 else float(open_px)
     attack_buy = attack_buy_trigger_price(lo, entry_pct=entry_pct, tick=tick)
     buy = open_buy
-    if attack_buy > 0 and (buy <= 0 or attack_buy < buy):
+    if bool(allow_attack) and attack_buy > 0 and (buy <= 0 or attack_buy < buy):
         buy = attack_buy
     cost = float(cost_px) if cost_px is not None and float(cost_px) > 0 else float(open_px)
     peak = float(peak_high) if peak_high is not None and float(peak_high) > 0 else anchor
@@ -948,6 +953,7 @@ def strategy_signal(
         peak_high=peak_high,
         giveback_ratio=giveback_ratio,
         tick=tick,
+        allow_attack=allow_attack,
     )
     open_buy = float(lv["open_buy"])
     attack_buy = float(lv["attack_buy"])
@@ -966,10 +972,16 @@ def strategy_signal(
     elif hit_open:
         eff_buy = open_buy
         buy_kind = "open"
-    elif buy_trigger is not None and float(buy_trigger) > 0:
+    elif allow_attack and buy_trigger is not None and float(buy_trigger) > 0:
+        # 研究：攻击波开启时，近买可锚传入价（常为较低的 attack）
         eff_buy = float(buy_trigger)
-        buy_kind = "open"
+        buy_kind = (
+            "attack"
+            if attack_buy > 0 and abs(float(buy_trigger) - attack_buy) <= 1e-9
+            else "open"
+        )
     else:
+        # 生产默认：未触达时近买/展示只认开盘突破，避免下砸低点派生价误报「将买入」
         eff_buy = open_buy
         buy_kind = "open"
 

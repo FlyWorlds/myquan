@@ -22,7 +22,7 @@ class TestSlotReserve(unittest.TestCase):
         self.assertEqual(RESERVE_EMPTY_SLOTS, 0)
         self.assertEqual(MAX_OVERNIGHT_SLOTS, 3)
         self.assertEqual(MAX_ACTIVE_SLOTS, 3)  # 兼容旧名=隔夜上限
-        self.assertEqual(MAX_BUYS_PER_DAY, 2)
+        self.assertEqual(MAX_BUYS_PER_DAY, 3)
 
     def test_free_buy_midday_allows_third(self):
         """持 2 仍可再买 1（到 3）；尾盘与盘中同上限。"""

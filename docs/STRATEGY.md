@@ -43,7 +43,7 @@
 ### 因子22 · 收盘动量（已绑策略一）
 
 - 因子26 当日止损后：三槽执行下**当日禁再买该票**（因子22 研究路径不覆盖槽位禁买）。
-- **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 2。
+- **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 3。
 - 对照见 `holdingStocks/watch_config.py`：`MAX_PORTFOLIO_SLOTS` / `MAX_OVERNIGHT_SLOTS` / `MAX_BUYS_PER_DAY` / `RESERVE_EMPTY_SLOTS`（`MAX_ACTIVE_SLOTS` 兼容旧名=隔夜上限）。
 - 绑定：`strategy1/bindings`；决策见 `Strategy1Decision`；说明：[`FACTOR22.md`](FACTOR22.md)。
 - 天通 2026 日线对照见 `backtest/tiantong_stop_rebuy_2026/`；扩样本前勿调默认 pct。
@@ -174,7 +174,7 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 
 > 研究用途，不构成投资建议。盯盘有实时面板；**现已作为默认三槽交易池**。
 
-- **选股（因子27）**：通达信概念成交额 ≥ 截面中位数（最多扫 Top40）；每概念至多 2 只龙头；去重后约 **30** 只；剔创业/科创/北交/ST、现价 < 100；**滚动近 3 个月冻结**（非自然季度）；默认交易池**额外补入天通股份、凯盛科技**。
+- **选股（因子27）**：通达信概念成交额 ≥ 截面中位数（最多扫 Top40）；每概念至多 2 只龙头；去重后约 **30** 只；剔创业/科创/北交/ST、现价 < 100；**滚动近 3 个月冻结**（非自然季度）；默认交易池**额外补入天通、凯盛、东材科技、金安国纪**。
 - **买卖**：同策略一（因子26 多层止盈 + 因子2 预警 + 因子22 再买）。
 - **因子22 与三槽**：生产三槽「当日卖出禁再买」下 factor22 **不改变成交**；对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`（近7日：禁再买约 +4.6%，开同日再买约 +7.65%，差约 3.05pp，研究用途）。
 - **刷新池**：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json`。

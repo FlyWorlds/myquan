@@ -512,6 +512,42 @@ def test_limit_up_clears_t1_note():
     assert out.get("stop_noted_out") in (None, 0, 0.0), out
 
 
+def test_open_only_near_buy_ignores_attack_from_dump():
+    """生产关闭攻击波：一字开板下砸后，不得用低点派生价触发「将买入」。"""
+    from strategy.pullback_wave_stop import strategy_levels, strategy_signal
+
+    lv = strategy_levels(
+        4.8,
+        entry_pct=0.03,
+        pullback_pct=0.025,
+        high_px=4.8,
+        low_px=4.51,
+        allow_attack=False,
+    )
+    assert abs(float(lv["open_buy"]) - 4.95) < 1e-9
+    assert abs(float(lv["attack_buy"]) - 4.65) < 1e-9
+    assert abs(float(lv["buy_trigger"]) - 4.95) < 1e-9
+
+    sig = strategy_signal(
+        open_px=4.8,
+        high_px=4.8,
+        low_px=4.51,
+        last_px=4.66,
+        session="2026-09-10",
+        qty=0,
+        buy_time=None,
+        vs_open_pts=-2.92,
+        entry_pct=0.03,
+        stop_pct=0.025,
+        allow_entry=True,
+        allow_attack=False,
+        buy_trigger=4.65,  # 故意传入攻击波价，也应被忽略
+    )
+    assert sig.get("alert") == "空仓"
+    assert abs(float(sig.get("因子价") or 0) - 4.95) < 1e-9
+    assert "将买入" not in str(sig.get("alert") or "")
+
+
 if __name__ == "__main__":
     test_half_gain_formula()
     test_multi_tp_ladder_and_peak_once()
@@ -527,6 +563,7 @@ if __name__ == "__main__":
     test_live_last_half_gain()
     test_simulate_day_buy_then_no_same_day_sell()
     test_open_only_skips_attack_wave()
+    test_open_only_near_buy_ignores_attack_from_dump()
     test_simulate_overnight_hard_protect()
     test_since_buy_ignores_pre_entry_dip()
     test_micro_peak_giveback_does_not_note()
