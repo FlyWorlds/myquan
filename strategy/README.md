@@ -20,11 +20,13 @@
 因子层 (factors)     → 价位 / 信号 / 通用过滤（可复用）
 策略层 (bindings)    → 本策略挂哪些因子、参数、专属过滤器
 决策层 (decision)    → MarketContext → Decision(buy|sell|hold)
+算法层 (akq_math)    → 收益率/波动/盯市盈亏，走 akquant `vec_*`（禁止手写 pct_change）
 执行层 (runner/backtest) → 下单、回测、盯盘对接
 ```
 
 ```
 strategy/
+├── akq_math.py           # akquant vec_returns / 波动 / 今日盈亏唯一入口
 ├── core/                 # 协议 / MarketContext / Decision / 注册表
 ├── factors/
 │   ├── factor1.py        # 开盘突破 ±pct

@@ -27,7 +27,7 @@ class TestStopNoted(unittest.TestCase):
         )
 
     def test_gap_down_fills_open_dump(self):
-        """低开：未到 3% 走次日峰值回落 2.5%，不是昨日已记价。"""
+        """低开已破买点硬保护：按开盘卖，不是继续等到 T1 回落。"""
         pos = {"stop_noted": True, "stop_noted_px": 10.0, "cost": 10.0}
         hit = resolve_stop_noted_hit(
             pos,
@@ -39,8 +39,8 @@ class TestStopNoted(unittest.TestCase):
             now=datetime(2026, 9, 9, 9, 31),
         )
         self.assertTrue(hit["hit"])
-        self.assertEqual(hit["kind"], "t1_peak_trail")
-        self.assertAlmostEqual(hit["fill_px"], 9.26, places=2)
+        self.assertEqual(hit["kind"], "hard_from_cost")
+        self.assertAlmostEqual(hit["fill_px"], 9.5, places=2)
         self.assertNotAlmostEqual(hit["fill_px"], 10.0)
 
     def test_gap_up_no_dump_does_not_force_sell(self):

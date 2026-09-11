@@ -12,7 +12,14 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable
+from pathlib import Path
+import sys
 
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from strategy.akq_math import price_chg_pct
 import pandas as pd
 import requests
 
@@ -160,9 +167,7 @@ class QuoteHub:
                 h = float(high or last)
                 l = float(low or last)
                 pc = prev_close
-                chg = None
-                if pc is not None and pc > 0:
-                    chg = (float(last) / pc - 1.0) * 100.0
+                chg = price_chg_pct(last, pc)
                 self._quotes[sina] = QuoteSnapshot(
                     sina=sina,
                     session=datetime.now().strftime("%Y-%m-%d"),
@@ -208,8 +213,8 @@ class QuoteHub:
                 changed = True
             if last_ts:
                 cur.last_ts = last_ts
-            if cur.prev_close is not None and cur.prev_close > 0 and cur.last > 0:
-                cur.day_chg_pct = (cur.last / cur.prev_close - 1.0) * 100.0
+            if cur.prev_close is not None and cur.last > 0:
+                cur.day_chg_pct = price_chg_pct(cur.last, cur.prev_close)
             cur.source = source
             if changed:
                 self._gen += 1

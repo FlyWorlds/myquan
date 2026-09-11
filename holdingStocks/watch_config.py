@@ -17,6 +17,7 @@ _MYQUAN_ROOT = Path(__file__).resolve().parents[1]
 if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
+from strategy.akq_math import session_day_pnl
 from strategy.open_break import DEFAULT_PCT, TICK_SIZE, is_t1_buy_day
 
 # 默认定盘：策略十六 + 因子27/因子26/因子2/因子22
@@ -804,47 +805,19 @@ def calc_day_pnl(
     session: str | None = None,
     t0: bool = False,
 ) -> tuple[float | None, float | None, float | None]:
-    """当日盈亏 = 现价盯市盈亏。"""
-    if qty <= 0:
-        return None, None, None
-    last = float(last)
-    open_px = float(open_px)
-    cost_f = float(cost) if cost is not None else None
-    today_f = float(today_cost) if today_cost is not None else None
-    prev = float(prev_close) if prev_close is not None and float(prev_close) > 0 else None
-    bought_today = (not t0) and bool(session) and is_t1_buy_day(buy_time, str(session))
-
-    if not bought_today:
-        base = prev if prev is not None else open_px
-        day_pnl = (last - base) * int(qty)
-        day_base = base * int(qty)
-        if day_base <= 0:
-            return round(day_pnl, 2), None, None
-        return (
-            round(day_pnl, 2),
-            round(day_pnl / day_base * 100.0, 2),
-            round(day_base, 2),
-        )
-
-    avail = max(0, min(int(available), int(qty)))
-    locked = int(qty) - avail
-    day_pnl = 0.0
-    day_base = 0.0
-    if avail > 0:
-        base_ov = prev if prev is not None else open_px
-        day_pnl += (last - base_ov) * avail
-        day_base += base_ov * avail
-    if locked > 0:
-        base_td = (
-            today_f
-            if today_f is not None
-            else (cost_f if cost_f is not None else open_px)
-        )
-        day_pnl += (last - base_td) * locked
-        day_base += base_td * locked
-    if day_base <= 0:
-        return round(day_pnl, 2), None, None
-    return round(day_pnl, 2), round(day_pnl / day_base * 100.0, 2), round(day_base, 2)
+    """当日盈亏：唯一入口 ``strategy.akq_math.session_day_pnl``（akquant 权益日变化）。"""
+    del available, t0  # 口径按买日整仓，不再拆可卖/锁定
+    bought_today = bool(session) and is_t1_buy_day(buy_time, str(session))
+    cost_use = today_cost if today_cost is not None else cost
+    fb = float(open_px) if open_px is not None else None
+    return session_day_pnl(
+        mark=last,
+        qty=qty,
+        cost=cost_use,
+        prev_close=prev_close,
+        bought_today=bought_today,
+        fallback=fb,
+    )
 
 
 def find_meta(code: str, watchlist: list[dict[str, Any]] | None = None) -> dict[str, Any]:

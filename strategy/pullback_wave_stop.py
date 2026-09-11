@@ -22,6 +22,7 @@ from typing import Any
 
 import pandas as pd
 
+from strategy.akq_math import log_return_sample_std, simple_return
 from strategy.open_break import (
     DEFAULT_BAN_DOUBLE_YANG,
     DEFAULT_BAN_SINGLE_YANG,
@@ -78,7 +79,7 @@ STRATEGY_RULES = """
   5) 大赚：阶梯 10% 半仓；≥10% 后峰值回落 2% 清仓
      （已半仓后再触 10% / 回落 → 剩余全清）
   · 买入当日不可卖；次日未过 3% 走峰值回落 2.5%；过 3% 走中段（一半/波动先到先卖）；过 10% 走分段
-  · 峰值只从买入之后算，未卖出前创新高则抬升；T1 回落峰值从次日开盘起算
+  · 峰值只从买入之后算，未卖出前创新高则抬升；T1 回落峰值=max(隔夜持仓高点, 当日高点)，不得低于买点硬保护；低开已破硬保护按开盘卖
   · 半仓不足 200 股则改为全清
 
 【默认】entry 2.5%；中段门槛 3%；阶梯 10%/15%；大赚回落 2%；回落一半 50%；波动回落 50%×20日日频σ；
@@ -101,13 +102,43 @@ def pullback_stop_price(
     return floor_to_tick(h * (1.0 - float(pullback_pct)), tick)
 
 
+def cost_hard_stop_px(
+    cost_px: float,
+    *,
+    hard_pct: float = DEFAULT_PULLBACK_PCT,
+    tick: float = TICK_SIZE,
+) -> float:
+    """买点硬保护：floor(成本×(1−2.5%))。"""
+    c = float(cost_px or 0)
+    if c <= 0:
+        return 0.0
+    return floor_to_tick(c * (1.0 - float(hard_pct)), tick)
+
+
+def t1_trail_stop_px(
+    session_peak: float,
+    *,
+    cost_px: float,
+    t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
+    hard_pct: float = DEFAULT_PULLBACK_PCT,
+    tick: float = TICK_SIZE,
+) -> float:
+    """隔夜未到 3%：峰值回落 2.5%，且不得低于买点硬保护。"""
+    trail = pullback_stop_price(session_peak, pullback_pct=t1_trail_pct, tick=tick)
+    hard = cost_hard_stop_px(cost_px, hard_pct=hard_pct, tick=tick)
+    if trail <= 0:
+        return hard
+    if hard <= 0:
+        return trail
+    return max(trail, hard)
+
+
 def pnl_exceeds(px: float, cost_px: float, thresh: float) -> bool:
     """现价相对成本是否严格超过 thresh（默认用来判断浮盈 >3%）。"""
-    c = float(cost_px or 0)
-    p = float(px or 0)
-    if c <= 0 or p <= 0:
+    r = simple_return(px, cost_px)
+    if r is None:
         return False
-    return p / c - 1.0 > float(thresh) + 1e-12
+    return r > float(thresh) + 1e-12
 
 
 def realized_vol_daily(
@@ -115,30 +146,8 @@ def realized_vol_daily(
     *,
     window: int = DEFAULT_VOL20_WINDOW,
 ) -> float | None:
-    """近 window 根日对数收益样本标准差（日频，不年化）。至少 window+1 个正收盘价。"""
-    vals: list[float] = []
-    for x in list(closes or []):
-        try:
-            v = float(x)
-        except (TypeError, ValueError):
-            continue
-        if v > 0:
-            vals.append(v)
-    w = max(2, int(window))
-    if len(vals) < w + 1:
-        return None
-    vals = vals[-(w + 1) :]
-    rets: list[float] = []
-    for a, b in zip(vals, vals[1:]):
-        if a > 0 and b > 0:
-            rets.append(math.log(b / a))
-    if len(rets) < w:
-        return None
-    mean = sum(rets) / float(len(rets))
-    var = sum((r - mean) ** 2 for r in rets) / float(len(rets) - 1)
-    if var <= 0:
-        return 0.0
-    return math.sqrt(var)
+    """近 window 根日对数收益样本标准差（日频，不年化）。akquant ``vec_log_returns`` + ``vec_rolling_std``。"""
+    return log_return_sample_std(closes, window=window)
 
 
 def vol_giveback_distance(
@@ -532,12 +541,40 @@ def eval_multi_tp_bar(
     live_ok = pnl_exceeds(live_hi, cost, giveback_arm_pct)
     peak_incl = max(peak, h)
     peak_gain = (peak_incl / cost - 1.0) if cost > 0 and peak_incl > 0 else 0.0
+    hard_px = cost_hard_stop_px(cost, hard_pct=hard_pct, tick=tick)
+    gap_mode = str(hard_gap_mode or HARD_GAP_IMMEDIATE).strip().lower()
+    if gap_mode not in HARD_GAP_MODES:
+        gap_mode = HARD_GAP_IMMEDIATE
+    open_broke_hard = hard_px > 0 and day_o > 0 and day_o <= hard_px + 1e-12
 
-    # 1) 未到 3%：次日动态峰值回落 2.5%
+    # 0) 买点硬保护：低开已破 → 生产按开盘立刻卖（先于 T1 峰值回落）
+    if open_broke_hard and gap_mode == HARD_GAP_OPEN_DUMP and can_sell:
+        dump = overnight_open_dump_fill(
+            day_open=day_o,
+            bar_low=lo,
+            dump_pct=float(hard_gap_dump_pct),
+            tick=tick,
+        )
+        if dump.get("hit") and float(dump.get("fill_px") or 0) > 0:
+            return _full(
+                "hard_open_dump",
+                float(dump["fill_px"]),
+                downside=True,
+            )
+    elif open_broke_hard:
+        if can_sell:
+            return _full("hard_from_cost", hard_px, downside=True)
+        return _mark(hard_px)
+
+    # 1) 未到 3%：次日按隔夜高点/当日高点回落 2.5%（不得低于买点硬保护）
     if overnight_armed and (not live_ok):
-        sess_ref = sess if sess > 0 else (day_o if day_o > 0 else bar_o)
-        trail_px = pullback_stop_price(
-            sess_ref, pullback_pct=t1_trail_pct, tick=tick
+        sess_ref = max(sess, day_o, peak, bar_o)
+        trail_px = t1_trail_stop_px(
+            sess_ref,
+            cost_px=cost,
+            t1_trail_pct=t1_trail_pct,
+            hard_pct=hard_pct,
+            tick=tick,
         )
         if trail_px > 0 and lo <= trail_px + 1e-12:
             if can_sell:
@@ -577,30 +614,7 @@ def eval_multi_tp_bar(
         if can_sell:
             return _full(reason, px, downside=True)
         return {**empty, "peak_after": max(peak, h)}
-    hard_px = floor_to_tick(cost * (1.0 - float(hard_pct)), tick)
-    gap_mode = str(hard_gap_mode or HARD_GAP_IMMEDIATE).strip().lower()
-    if gap_mode not in HARD_GAP_MODES:
-        gap_mode = HARD_GAP_IMMEDIATE
-    open_broke_hard = hard_px > 0 and day_o > 0 and day_o <= hard_px + 1e-12
-    if (
-        gap_mode == HARD_GAP_OPEN_DUMP
-        and open_broke_hard
-        and can_sell
-    ):
-        dump = overnight_open_dump_fill(
-            day_open=day_o,
-            bar_low=lo,
-            dump_pct=float(hard_gap_dump_pct),
-            tick=tick,
-        )
-        if dump.get("hit") and float(dump.get("fill_px") or 0) > 0:
-            return _full(
-                "hard_open_dump",
-                float(dump["fill_px"]),
-                downside=True,
-            )
-        # 低开已破硬保护但尚未再下杀 dump%：本 bar 不按硬保护砍
-    elif hard_px > 0 and lo <= hard_px + 1e-12:
+    if hard_px > 0 and lo <= hard_px + 1e-12:
         if can_sell:
             return _full("hard_from_cost", hard_px, downside=True)
         return _mark(hard_px)
@@ -672,7 +686,7 @@ def path_dependent_pullback_hit(
         except Exception:  # noqa: BLE001
             since = None
     day_o = float(day_open) if day_open is not None and float(day_open) > 0 else 0.0
-    session_peak = 0.0
+    session_peak = running_high if (overnight_armed and running_high > 0) else 0.0
 
     def _iter_rows() -> list[dict[str, Any]]:
         if bars is None or getattr(bars, "empty", True):
@@ -782,9 +796,11 @@ def path_dependent_pullback_hit(
         kind_now = str((dummy.get("action") or {}).get("reason") or "")
         if stop_now <= 0:
             if overnight_armed and not pnl_exceeds(peak_now, cost, giveback_arm_pct):
-                stop_now = pullback_stop_price(
+                stop_now = t1_trail_stop_px(
                     session_peak if session_peak > 0 else peak_now,
-                    pullback_pct=t1_trail_pct,
+                    cost_px=cost,
+                    t1_trail_pct=t1_trail_pct,
+                    hard_pct=pb,
                     tick=tick,
                 )
                 kind_now = "t1_peak_trail"
@@ -798,7 +814,7 @@ def path_dependent_pullback_hit(
                 stop_now = peak_pullback_half_price(peak_now, tick=tick)
                 kind_now = "peak_pullback"
             else:
-                stop_now = floor_to_tick(cost * (1.0 - pb), tick)
+                stop_now = cost_hard_stop_px(cost, hard_pct=pb, tick=tick)
                 kind_now = "hard_from_cost"
     return {
         "hit_stop": False,
@@ -867,8 +883,18 @@ def strategy_levels(
     peak_gain = peak / cost - 1.0 if cost > 0 else 0.0
     live_ok = pnl_exceeds(peak, cost, arm)
     if t1_armed and (not live_ok):
-        sess = float(_extra.get("session_peak") or open_px or peak)
-        stop = pullback_stop_price(sess, pullback_pct=trail, tick=tick)
+        sess = max(
+            float(_extra.get("session_peak") or 0),
+            float(open_px or 0),
+            float(peak or 0),
+        )
+        stop = t1_trail_stop_px(
+            sess,
+            cost_px=cost,
+            t1_trail_pct=trail,
+            hard_pct=pb,
+            tick=tick,
+        )
     elif live_ok and peak_gain < DEFAULT_LADDER_HALF_PCT - 1e-12:
         _kind, stop = mid_gain_first_stop(peak, cost, vol20, tick=tick)
         if stop <= 0:
@@ -1990,6 +2016,8 @@ __all__ = [
     "DEFAULT_HARD_GAP_DUMP_PCT",
     "STRATEGY_RULES",
     "pullback_stop_price",
+    "cost_hard_stop_px",
+    "t1_trail_stop_px",
     "half_gain_stop_price",
     "pnl_exceeds",
     "realized_vol_daily",

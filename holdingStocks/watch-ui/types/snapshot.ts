@@ -33,6 +33,7 @@ export interface HoldingRow {
   池来源?: string | null
   pool_src?: string | null
   开盘?: number | null
+  昨收?: number | null
   现价?: number | null
   当日涨幅?: number | null
   较开盘涨幅?: number | null
@@ -40,6 +41,8 @@ export interface HoldingRow {
   '策略收益%'?: number | null
   策略起算?: string
   持仓?: number
+  买入时间?: string | null
+  交易日?: string | null
   成本?: number | null
   成交价?: number | null
   浮盈?: number | null

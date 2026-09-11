@@ -29,10 +29,11 @@ def _load(name: str, path: Path, *, inject: dict[str, ModuleType] | None = None)
 
 # 不走 strategy/__init__（会拖 factors→backtest）
 _ob = _load("strategy.open_break", _DIR / "open_break.py")
+_akq = _load("strategy.akq_math", _DIR / "akq_math.py")
 _m = _load(
     "strategy.pullback_wave_stop",
     _DIR / "pullback_wave_stop.py",
-    inject={"strategy.open_break": _ob},
+    inject={"strategy.open_break": _ob, "strategy.akq_math": _akq},
 )
 path_dependent_pullback_hit = _m.path_dependent_pullback_hit
 path_dependent_buy_hit = _m.path_dependent_buy_hit
@@ -287,6 +288,36 @@ def test_multi_tp_overnight_dump():
     )
     assert r["action"]["kind"] == "full"
     assert r["action"]["reason"] == "t1_peak_trail"
+
+
+def test_hard_gap_beats_t1_trail_shenkeji():
+    """深科技：今开已破买点硬保护，成交开盘，不得等到今开重置的 T1 回落。"""
+    r = _m.eval_multi_tp_bar(
+        bar_open=35.21,
+        bar_high=35.30,
+        bar_low=34.08,
+        cost_px=36.35,
+        peak_before=36.50,
+        shares=2400,
+        can_sell=True,
+        overnight_armed=True,
+        day_open=35.21,
+        session_peak_before=36.50,
+    )
+    assert r["action"]["kind"] == "full"
+    assert r["action"]["reason"] == "hard_from_cost"
+    assert abs(float(r["action"]["fill_px"]) - 35.21) < 1e-9
+    lv = _m.strategy_levels(
+        35.21,
+        cost_px=36.35,
+        peak_high=36.50,
+        overnight_armed=True,
+    )
+    assert lv["stop"] >= _m.cost_hard_stop_px(36.35) - 1e-12
+    assert lv["stop"] > 34.32
+
+
+def test_multi_tp_overnight_skips_trail_when_live_ok():
     # 浮盈已 >3%：不再走峰值回落 2.5%，改走中段（一半 102.50 先于波动 102.375）
     skip = _m.eval_multi_tp_bar(
         bar_open=103.0,

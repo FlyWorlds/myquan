@@ -68,6 +68,7 @@ from quote_feed import (
     ws_accept_key,
     ws_pack_text,
 )
+from strategy.akq_math import mark_unrealized, price_chg_pct, session_day_pnl, simple_return
 from strategy.minute import pull_akshare_1m
 from strategy import get_strategy_bindings
 from strategy.open_break import (
@@ -100,7 +101,9 @@ from strategy.open_break import (
 from strategy.pullback_wave_stop import (
     DEFAULT_ALLOW_ATTACK,
     DEFAULT_GIVEBACK_ARM_PCT,
+    DEFAULT_PULLBACK_PCT,
     DEFAULT_T1_PEAK_TRAIL_PCT,
+    cost_hard_stop_px,
     path_dependent_buy_hit,
     path_dependent_pullback_hit,
     pnl_exceeds,
@@ -112,6 +115,7 @@ from strategy.pullback_wave_stop import (
     stop_note_invalidated_by_recovery,
     strategy_levels as _levels_f26,
     strategy_signal as _signal_f26,
+    t1_trail_stop_px,
 )
 from strategy.data import AKSHARE_CALL_LOCK, fetch_daily, latest_completed_weekday
 
@@ -812,13 +816,15 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 elif r.get("市值") is not None and qty > 0:
                     total_day_base += float(r["市值"]) - float(r["当日盈亏"])
                 elif slot_closed:
+                    prev = _as_money(r.get("昨收"))
                     open_px = _as_money(r.get("开盘"))
+                    base_px = prev if prev is not None and prev > 0 else open_px
                     try:
                         sold = int(r.get("卖出数量") or 0)
                     except (TypeError, ValueError):
                         sold = 0
-                    if open_px is not None and open_px > 0 and sold > 0:
-                        total_day_base += float(open_px) * sold
+                    if base_px is not None and base_px > 0 and sold > 0:
+                        total_day_base += float(base_px) * sold
         if realized or slot_closed:
             settled_n += 1
             if r.get("浮盈") is not None:
@@ -1186,9 +1192,7 @@ def _quote_from_sina_spot(spot: dict[str, Any]) -> dict[str, Any]:
     """新浪快照 → collect_rows 可用的 quote dict（无分钟 K）。"""
     prev = spot.get("prev_close")
     last = float(spot["last"])
-    day_chg = None
-    if prev is not None and float(prev) > 0:
-        day_chg = (last / float(prev) - 1.0) * 100.0
+    day_chg = price_chg_pct(last, prev)
     return {
         "session": str(spot.get("session") or pd.Timestamp.now().date()),
         "open": float(spot["open"]),
@@ -1673,7 +1677,10 @@ def _fill_dual_factor_dist(
         if px is None or float(px) <= 0:
             return None, None
         dpx = round(float(last_px) - float(px), px_digits)
-        dpct = round((float(last_px) / float(px) - 1.0) * 100.0, 2)
+        dpct = price_chg_pct(last_px, px)
+        if dpct is None:
+            return None, None
+        dpct = round(float(dpct), 2)
         if side == "卖出":
             dpx = round(-dpx, px_digits)
             dpct = round(-dpct, 2)
@@ -2063,6 +2070,23 @@ def _as_money(v: Any) -> float | None:
     return x if x > 0 else None
 
 
+def _prev_close_from_snapshot(code: str) -> float | None:
+    """CLI 卖出无行情时，用最近盯盘快照的昨收，避免昨仓今日盈亏误用成本。"""
+    if not WATCH_META_FILE.is_file():
+        return None
+    try:
+        snap = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    key = _code_key(code)
+    for r in snap.get("holdings") or []:
+        if not isinstance(r, dict):
+            continue
+        if _code_key(str(r.get("代码") or "")) == key:
+            return _as_money(r.get("昨收"))
+    return None
+
+
 def _alert_sticky_map(data: dict[str, Any] | None = None) -> dict[str, Any]:
     data = data if data is not None else load_holdings()
     raw = data.get("alert_sticky")
@@ -2182,8 +2206,9 @@ def _stabilize_sell_warn(
         # 将止损：距止损因子价仍在 near+0.5% 内则保持
         if "将止损" in prev_alert or prev.get("near_stop"):
             if stop_px > 0:
-                dist_pct = abs(float(last_px) / float(stop_px) - 1.0) * 100.0
-                if dist_pct <= (near_points + 0.5) + 1e-12:
+                r = simple_return(last_px, stop_px)
+                dist_pct = None if r is None else abs(r) * 100.0
+                if dist_pct is not None and dist_pct <= (near_points + 0.5) + 1e-12:
                     keep = True
         # 已触止损：价格仍在止损价下方或附近则保持
         elif "止损" in prev_alert:
@@ -2414,7 +2439,8 @@ def _overlay_buy_signal_on_hold(
 
     dist_pct = None
     if float(buy_trigger) > 0:
-        dist_pct = abs(float(last_px) / float(buy_trigger) - 1.0) * 100.0
+        r = simple_return(last_px, buy_trigger)
+        dist_pct = None if r is None else abs(r) * 100.0
     near_buy = dist_pct is not None and dist_pct <= near_points + 1e-12
 
     if hit_buy:
@@ -3010,10 +3036,22 @@ def _apply_portfolio_slots(
                 try:
                     last_f = float(last)
                     cost_f = float(pos["cost"])
-                    r["浮盈"] = round((last_f - cost_f) * qty, 2)
-                    r["浮盈%"] = round((last_f / cost_f - 1.0) * 100.0, 2)
+                    pnl, pnl_pct = mark_unrealized(last_f, cost_f, qty)
+                    r["浮盈"] = pnl
+                    r["浮盈%"] = pnl_pct
                     r["市值"] = round(last_f * qty, 2)
                     r["成本额"] = round(cost_f * qty, 2)
+                    day_pnl, day_pct, day_base = session_day_pnl(
+                        mark=last_f,
+                        qty=qty,
+                        cost=cost_f,
+                        prev_close=r.get("昨收"),
+                        bought_today=True,
+                        fallback=r.get("开盘"),
+                    )
+                    r["当日盈亏"] = day_pnl
+                    r["当日盈亏%"] = day_pct
+                    r["当日基数"] = day_base
                 except (TypeError, ValueError):
                     pass
             note = str(r.get("挂单说明") or "")
@@ -3069,24 +3107,15 @@ def apply_exit_fill(
 
     fill_px = float(fill_px)
     cost_f = float(cost) if cost is not None else None
-    pnl = (fill_px - cost_f) * sell_qty if cost_f is not None else None
-    pnl_pct = (fill_px / cost_f - 1.0) * 100.0 if cost_f and cost_f > 0 else None
-
-    # 隔夜仓平仓浮亏：今开 → 成交价（锁定）；今买当日按成本
-    avail_before = _sellable_qty(pos, old_qty, buy_time, session, t0=False)
-    overnight_sell = sell_qty <= avail_before and avail_before > 0
-    if overnight_sell and open_px is not None and float(open_px) > 0:
-        base_px = float(open_px)
-    elif (not overnight_sell) and cost_f is not None:
-        base_px = cost_f
-    elif open_px is not None and float(open_px) > 0:
-        base_px = float(open_px)
-    else:
-        base_px = cost_f if cost_f is not None else float(open_px)
-    day_base = float(base_px) * sell_qty if base_px else None
-    day_pnl = (fill_px - base_px) * sell_qty if base_px else None
-    day_pnl_pct = (
-        (fill_px / base_px - 1.0) * 100.0 if base_px and base_px > 0 else None
+    pnl, pnl_pct = mark_unrealized(fill_px, cost_f, sell_qty)
+    bought_today = is_t1_buy_day(buy_time, session)
+    day_pnl, day_pnl_pct, day_base = session_day_pnl(
+        mark=fill_px,
+        qty=sell_qty,
+        cost=cost_f,
+        prev_close=prev_close,
+        bought_today=bool(bought_today),
+        fallback=float(open_px) if open_px is not None else None,
     )
 
     rec = {
@@ -3229,7 +3258,10 @@ def force_eod_reserve_slot(
                 continue
             if px <= 0 or cost <= 0:
                 continue
-            cands.append((px / cost - 1.0, code, r, pos))
+            ret = simple_return(px, cost)
+            if ret is None:
+                continue
+            cands.append((ret, code, r, pos))
         if not cands:
             break
         cands.sort(key=lambda x: x[0])
@@ -3367,16 +3399,30 @@ def resolve_stop_noted_hit(
         if giveback_arm_pct is not None
         else DEFAULT_GIVEBACK_ARM_PCT
     )
-    if pnl_exceeds(max(o, hi, last), cost, arm):
+    if pnl_exceeds(max(o, hi, last, cost if cost > 0 else 0), cost, arm):
         return out
-    sess_peak = max(x for x in (o, hi, last) if x > 0)
+    hard = cost_hard_stop_px(cost)
+    if hard > 0 and o <= hard + 1e-12:
+        return {"hit": True, "fill_px": o, "kind": "hard_from_cost"}
+    try:
+        peak_pos = float(pos.get("peak_high") or 0)
+    except (TypeError, ValueError):
+        peak_pos = 0.0
+    peaks = [x for x in (o, hi, last, peak_pos, cost) if x > 0]
+    sess_peak = max(peaks) if peaks else 0.0
     k = float(dump_pct) if dump_pct is not None else DEFAULT_T1_PEAK_TRAIL_PCT
-    trail_stop = pullback_stop_price(sess_peak, pullback_pct=k)
+    trail_stop = t1_trail_stop_px(
+        sess_peak,
+        cost_px=cost,
+        t1_trail_pct=k,
+        hard_pct=DEFAULT_PULLBACK_PCT,
+    )
     if trail_stop <= 0:
         return out
     if (lo > 0 and lo <= trail_stop + 1e-12) or (last > 0 and last <= trail_stop + 1e-12):
         fill = o if o <= trail_stop + 1e-12 else trail_stop
-        return {"hit": True, "fill_px": fill, "kind": "t1_peak_trail"}
+        kind = "hard_from_cost" if abs(trail_stop - hard) <= 1e-9 and hard > 0 else "t1_peak_trail"
+        return {"hit": True, "fill_px": fill, "kind": kind}
     return out
 
 
@@ -3523,9 +3569,7 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
                 open_px = float(spot["open"])
         elif prev_close is None and spot is not None:
             prev_close = float(spot["prev_close"])
-        day_chg = None
-        if prev_close is not None and prev_close > 0:
-            day_chg = (last_px / prev_close - 1.0) * 100.0
+        day_chg = price_chg_pct(last_px, prev_close)
         return {
             "session": today,
             "open": open_px,
@@ -3540,11 +3584,9 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
 
     # 竞价/开盘初：分钟线尚无今日，用新浪现价
     if spot_ok:
-        day_chg = None
         prev_close = float(spot["prev_close"])
         last_px = float(spot["last"])
-        if prev_close > 0:
-            day_chg = (last_px / prev_close - 1.0) * 100.0
+        day_chg = price_chg_pct(last_px, prev_close)
         return {
             "session": today,
             "open": float(spot["open"]),
@@ -3584,9 +3626,7 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     low_px = float(day["low"].min())
     last_px = float(day.iloc[-1]["close"])
     last_ts = day.iloc[-1]["ts"]
-    day_chg = None
-    if prev_close is not None and prev_close > 0:
-        day_chg = (last_px / prev_close - 1.0) * 100.0
+    day_chg = price_chg_pct(last_px, prev_close)
     return {
         "session": last_day,
         "open": open_px,
@@ -3601,9 +3641,8 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
 
 
 def points_vs_open(open_px: float, px: float) -> float:
-    if open_px <= 0:
-        return float("nan")
-    return (px / open_px - 1.0) * 100.0
+    r = simple_return(px, open_px)
+    return float("nan") if r is None else r * 100.0
 
 
 def pct_vs_open(open_px: float, px: float) -> float | None:
@@ -4711,10 +4750,8 @@ def collect_rows(
             day_pnl_pct = None
             day_base = None
             if cost is not None and qty > 0:
-                cost_f = float(cost)
-                pnl_pct = (q["last"] / cost_f - 1.0) * 100.0
-                pnl = (q["last"] - cost_f) * qty
-                cost_value = cost_f * qty
+                pnl, pnl_pct = mark_unrealized(q["last"], cost, qty)
+                cost_value = float(cost) * qty
 
             if qty > 0:
                 today_cost = pos.get("today_cost")
@@ -5055,9 +5092,9 @@ def _enrich_float_pnl(row: dict[str, Any]) -> None:
 
     cost = row.get("成本")
     if qty > 0 and cost is not None:
-        cost_f = float(cost)
-        row["浮盈"] = round((last_f - cost_f) * qty, 2)
-        row["浮盈%"] = round((last_f / cost_f - 1.0) * 100.0, 2)
+        pnl, pnl_pct = mark_unrealized(last_f, cost, qty)
+        row["浮盈"] = pnl
+        row["浮盈%"] = pnl_pct
         row["盈亏状态"] = "浮盈"
         return
 
@@ -5067,13 +5104,10 @@ def _enrich_float_pnl(row: dict[str, Any]) -> None:
         if buy_px is None:
             buy_px = row.get("因子价")
         if buy_px is not None:
-            try:
-                bp = float(buy_px)
-            except (TypeError, ValueError):
-                bp = 0.0
-            if bp > 0:
-                row["浮盈"] = round(last_f - bp, 2)
-                row["浮盈%"] = round((last_f / bp - 1.0) * 100.0, 2)
+            pnl, pnl_pct = mark_unrealized(last_f, buy_px, 1)
+            if pnl is not None:
+                row["浮盈"] = pnl
+                row["浮盈%"] = pnl_pct
                 row["盈亏状态"] = "浮盈"
                 row["盈亏说明"] = "策略买入价·单股"
         return
@@ -5195,22 +5229,38 @@ def _last_open_lots_from_trades(*, text: str | None = None) -> dict[str, dict[st
     return lots
 
 
-def _closed_mark_px(row: dict[str, Any]) -> float | None:
-    """已平仓价（锁定）：已有成交价不再改；低开跌破止损用开盘；盘中触及用止损。不用现价。"""
-    fill = _as_money(row.get("成交价"))
-    if fill is not None:
-        return fill
+def _closed_mark_px(
+    row: dict[str, Any],
+    *,
+    cost: float | None = None,
+) -> float | None:
+    """已平仓价：低开破买点硬保护/昨高回落用开盘；盘中触及用保护止损。不用现价。
+
+    已锁定的成交价若低于保护价（例如误用今开重置的 T1 回落），纠正为保护成交。
+    """
     stop = _as_money(row.get("止损"))
     open_px = _as_money(row.get("开盘"))
     low = _as_money(row.get("最低"))
     hit = str(row.get("已触止损") or "") == "是"
-    if hit and stop is not None:
-        if open_px is not None and open_px <= stop + 1e-12:
-            return open_px
-        if low is not None and low <= stop + 1e-12:
-            return stop
-        return stop
-    return None
+    cost_f = cost if cost is not None else _as_money(row.get("成本"))
+    hard = cost_hard_stop_px(float(cost_f)) if cost_f else 0.0
+    prot = max(x for x in (stop or 0.0, hard) if x > 0) if (stop or hard) else None
+    protective_fill = None
+    if hit and prot is not None:
+        if open_px is not None and open_px <= prot + 1e-12:
+            protective_fill = open_px
+        elif low is not None and low <= prot + 1e-12:
+            protective_fill = prot
+        else:
+            protective_fill = prot
+    existing = _as_money(row.get("成交价"))
+    if existing is not None and protective_fill is not None:
+        if existing + 1e-9 < float(protective_fill):
+            return protective_fill
+        return existing
+    if existing is not None:
+        return existing
+    return protective_fill
 
 
 def _enrich_closed_day_pnl(
@@ -5219,7 +5269,7 @@ def _enrich_closed_day_pnl(
     lots: dict[str, dict[str, Any]] | None = None,
     traces: dict[str, dict[str, Any]] | None = None,
 ) -> None:
-    """已平仓卡片：昨仓留痕按今开→平仓价、30万×30%槽位；已实现成交保留记账股数与当日盈亏。"""
+    """已平仓卡片：今买相对买入价、昨仓相对昨收；30万×30%槽位；已实现保留记账当日盈亏。"""
     if row.get("error") or not _is_closed_trace_row(row, lots=lots, traces=traces):
         return
     code = _code_key(str(row.get("代码") or ""))
@@ -5252,32 +5302,42 @@ def _enrich_closed_day_pnl(
         qty = qty_slot if qty_slot > 0 else qty_lot
     if qty <= 0:
         return
-    fill = _closed_mark_px(row)
-    open_px = _as_money(row.get("开盘"))
-    if fill is None or open_px is None or open_px <= 0:
+    fill = _closed_mark_px(row, cost=cost_f)
+    if fill is None:
         return
-    if row.get("成交价") is None:
-        row["成交价"] = fill
-    else:
-        locked = _as_money(row.get("成交价"))
-        if locked is not None:
-            fill = locked
-    day_pnl = (fill - open_px) * qty
-    day_pct = (fill / open_px - 1.0) * 100.0
-    row["当日盈亏"] = round(day_pnl, 2)
-    row["当日盈亏%"] = round(day_pct, 2)
+    row["成交价"] = fill
+    prev = _as_money(row.get("昨收"))
+    open_px = _as_money(row.get("开盘"))
+    lot_day = str(lot.get("time") or "")[:10]
+    sess = str(row.get("交易日") or "")[:10]
+    bought_today = bool(lot_day and sess and lot_day == sess)
+    day_pnl, day_pct, day_base = session_day_pnl(
+        mark=fill,
+        qty=qty,
+        cost=cost_f,
+        prev_close=prev,
+        bought_today=bought_today,
+        fallback=open_px,
+    )
+    if day_pnl is None:
+        return
+    row["当日盈亏"] = day_pnl
+    row["当日盈亏%"] = day_pct
+    row["当日基数"] = day_base
     row["卖出数量"] = qty
     row["三槽平仓"] = True
     if row.get("成本") is None and cost_f is not None:
         row["成本"] = cost_f
-    if cost_f is not None and cost_f > 0:
-        row["浮盈"] = round((fill - cost_f) * qty, 2)
-        row["浮盈%"] = round((fill / cost_f - 1.0) * 100.0, 2)
+    if cost_f is not None:
+        upnl, upct = mark_unrealized(fill, cost_f, qty)
+        row["浮盈"] = upnl
+        row["浮盈%"] = upct
         row["盈亏状态"] = "结算"
+        base_note = "买入价" if bought_today else "昨收"
         row["盈亏说明"] = (
-            "已平仓·今开至平仓价锁定；股数按30万×30%槽位折算（与今日三槽同一账户口径）"
+            f"已平仓·相对{base_note}；槽位股数"
             if qty_slot > 0
-            else "已平仓·今开至平仓价锁定；昨仓股数来自成交流水"
+            else f"已平仓·相对{base_note}"
         )
     _remember_slot_closed(row)
 
@@ -5364,10 +5424,12 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
             stop_px = float(row.get("止损") or row.get("未触发因子价") or 0)
             last = float(row.get("现价") or 0)
             if stop_px > 0 and last > 0:
-                dist_pct = abs(last / stop_px - 1.0) * 100.0
-                if dist_pct <= float(NEAR_FACTOR_PCT) + 1e-12 or str(
-                    row.get("已触止损") or ""
-                ) == "是":
+                r = simple_return(last, stop_px)
+                dist_pct = None if r is None else abs(r) * 100.0
+                if dist_pct is not None and (
+                    dist_pct <= float(NEAR_FACTOR_PCT) + 1e-12
+                    or str(row.get("已触止损") or "") == "是"
+                ):
                     near_stop = True
                     row["近止损"] = True
         except (TypeError, ValueError):
@@ -5711,8 +5773,8 @@ def cmd_status(args: argparse.Namespace) -> None:
 
     print(f"策略: {STRATEGY_NAME}（{_STRATEGY_SYNC_NOTE}）")
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
-    print("     当日盈亏: 持仓隔夜=(现价-昨收)×持股；今买=(现价-今买成交价)×今买股数")
-    print("     已平仓浮亏: (平仓价-今开)×卖出股数，成交价锁定后不再随现价")
+    print("     当日盈亏: 今买=(现价或平仓价-买入价)×股数；昨仓=(现价或平仓价-昨收)×股数")
+    print("     已平仓浮亏: 昨仓=(平仓价-昨收)×卖出股数；今买当日=(平仓价-成本)×股数；成交价锁定后不再随现价")
     print("     因子26卖出: 分时最高回落阈值止损；已触止损=视为成交并锁定盈亏")
     print("     买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
     _f2 = load_holdings().get("factor2")
@@ -5874,7 +5936,8 @@ def cmd_sell(args: argparse.Namespace) -> None:
         raise RuntimeError(f"卖出数量 {qty} > 持仓 {old_qty}")
     cost = float(pos["cost"]) if pos.get("cost") is not None else price
     buy_time = pos.get("buy_time")
-    pnl = (price - cost) * qty
+    pnl, pnl_pct = mark_unrealized(price, cost, qty)
+    pnl = 0.0 if pnl is None else pnl
     new_qty = old_qty - qty
     pos["qty"] = new_qty
     raw_avail = pos.get("available")
@@ -5899,11 +5962,17 @@ def cmd_sell(args: argparse.Namespace) -> None:
         _purge_stale_realized(data, session)
         reason = REASON_STOP if "止损" in note else "手动卖出"
         bought_today = is_t1_buy_day(buy_time, session)
-        base_px = cost if (bought_today or cost) else price
-        day_base = float(base_px) * qty
-        day_pnl = (price - base_px) * qty
-        day_pnl_pct = (price / base_px - 1.0) * 100.0 if base_px > 0 else None
+        day_pnl, day_pnl_pct, day_base = session_day_pnl(
+            mark=price,
+            qty=qty,
+            cost=cost,
+            prev_close=_prev_close_from_snapshot(code),
+            bought_today=bool(bought_today),
+            fallback=None if not bought_today else cost,
+        )
         px_digits = 3 if abs(price) < 10 else 2
+        rec_day_base = 0.0 if day_base is None else day_base
+        rec_day_pnl = 0.0 if day_pnl is None else day_pnl
         data.setdefault("realized_today", {})[code] = {
             "session": session,
             "name": meta["name"],
@@ -5912,10 +5981,10 @@ def cmd_sell(args: argparse.Namespace) -> None:
             "price": round(price, px_digits),
             "cost": round(cost, 4),
             "pnl": round(pnl, 2),
-            "pnl_pct": round((price / cost - 1.0) * 100.0, 2) if cost > 0 else None,
-            "day_base": round(day_base, 2),
-            "day_pnl": round(day_pnl, 2),
-            "day_pnl_pct": None if day_pnl_pct is None else round(day_pnl_pct, 2),
+            "pnl_pct": pnl_pct,
+            "day_base": round(rec_day_base, 2),
+            "day_pnl": round(rec_day_pnl, 2),
+            "day_pnl_pct": day_pnl_pct,
             "reason": reason,
             "time": _now(),
         }

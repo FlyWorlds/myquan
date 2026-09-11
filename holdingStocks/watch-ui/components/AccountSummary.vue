@@ -19,7 +19,7 @@ function fmt(v?: number | null, d = 2) {
       </span>
     </div>
     <div class="mt-2 text-sm">
-      <span class="text-ui-text-2">今日浮盈 </span>
+      <span class="text-ui-text-2">今日盈亏 </span>
       <span class="sensitive font-semibold">
         <ChgText :chg="account.dayPnl">{{ account.dayPnl == null ? '-' : `${account.dayPnl >= 0 ? '+' : ''}${fmt(account.dayPnl)}` }}</ChgText>
         <template v-if="account.dayPnlPct != null">

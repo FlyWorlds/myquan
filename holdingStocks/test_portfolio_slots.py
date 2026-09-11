@@ -869,7 +869,7 @@ def test_filter_skips_paper_replay_closed():
 
 
 def test_closed_day_pnl_gap_open():
-    """已平仓：低开跌破止损，平仓价=开盘，当日浮亏相对今开为 0。"""
+    """已平仓：低开跌破止损，平仓价=开盘，当日浮亏相对昨收。"""
     from index import _enrich_closed_day_pnl
 
     row = {
@@ -893,13 +893,13 @@ def test_closed_day_pnl_gap_open():
     assert qty == 1800
     assert row["成交价"] == 46.97
     assert row["卖出数量"] == qty
-    assert row["当日盈亏"] == 0.0
-    assert row["当日盈亏%"] == 0.0
+    assert row["当日盈亏"] == round((46.97 - 48.59) * qty, 2)
+    assert row["当日盈亏%"] == round((46.97 / 48.59 - 1.0) * 100.0, 2)
     assert row["浮盈"] == round((46.97 - 47.67) * qty, 2)
 
 
 def test_closed_day_pnl_path_stop():
-    """已平仓：开盘未破、盘中触及止损，当日浮亏=止损相对今开。"""
+    """已平仓：开盘已破买点硬保护，平仓价=开盘，不是更低的 T1 回落。"""
     from index import _enrich_closed_day_pnl
 
     row = {
@@ -921,9 +921,9 @@ def test_closed_day_pnl_path_stop():
 
     qty = _paper_slot_qty(36.35)
     assert qty == 2400
-    assert row["成交价"] == 34.32
+    assert row["成交价"] == 35.21
     assert row["卖出数量"] == qty
-    assert row["当日盈亏"] == round((34.32 - 35.21) * qty, 2)
+    assert row["当日盈亏"] == round((35.21 - 36.5) * qty, 2)
 
 
 def test_closed_day_pnl_locks_stop_not_last():
@@ -951,7 +951,7 @@ def test_closed_day_pnl_locks_stop_not_last():
     assert qty == 1200
     assert row["成交价"] == 74.1
     locked = row["当日盈亏"]
-    assert locked == round((74.1 - 76.0) * qty, 2)
+    assert locked == round((74.1 - 76.45) * qty, 2)
     row["现价"] = 80.0
     _enrich_closed_day_pnl(
         row, lots={"002636": {"qty": 400, "cost": 70.21}}
@@ -1039,8 +1039,47 @@ def test_parse_open_lots_last_buy():
     assert lots["002636"]["cost"] == 70.21
 
 
+def test_calc_day_pnl_today_buy_vs_cost():
+    """今买：今日盈亏=现价相对买入价（akq_math / akquant）。"""
+    from watch_config import calc_day_pnl
+
+    pnl, pct, base = calc_day_pnl(
+        last=17.0,
+        qty=5500,
+        available=0,
+        cost=16.29,
+        prev_close=16.18,
+        open_px=15.31,
+        today_cost=16.29,
+        buy_time="2026-09-11 09:43:32",
+        session="2026-09-11",
+    )
+    assert pnl == round((17.0 - 16.29) * 5500, 2)
+    assert base == round(16.29 * 5500, 2)
+    assert pct == round((17.0 / 16.29 - 1.0) * 100.0, 2)
+
+
+def test_calc_day_pnl_overnight_vs_prev_close():
+    """昨仓：今日盈亏=现价相对昨收，等于 akquant vec_returns。"""
+    from watch_config import calc_day_pnl
+
+    pnl, pct, base = calc_day_pnl(
+        last=46.97,
+        qty=1800,
+        available=1800,
+        cost=47.67,
+        prev_close=48.59,
+        open_px=46.97,
+        buy_time="2026-09-10 13:42:30",
+        session="2026-09-11",
+    )
+    assert pnl == round((46.97 - 48.59) * 1800, 2)
+    assert base == round(48.59 * 1800, 2)
+    assert pct == round((46.97 / 48.59 - 1.0) * 100.0, 2)
+
+
 def test_account_summary_sums_hold_and_closed_day_pnl():
-    """今日浮盈 = 三槽持仓当日盈亏 + 已平仓当日盈亏。"""
+    """今日盈亏 = 三槽持仓当日盈亏 + 已平仓当日盈亏。"""
     from index import _build_watch_account_summary
 
     acc = _build_watch_account_summary(
