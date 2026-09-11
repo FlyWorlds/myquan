@@ -133,6 +133,34 @@ def t1_trail_stop_px(
     return max(trail, hard)
 
 
+def overnight_open_protect_px(
+    cost_px: float,
+    prev_close: float | None,
+    *,
+    hard_pct: float = DEFAULT_PULLBACK_PCT,
+    giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
+    t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
+    tick: float = TICK_SIZE,
+) -> float:
+    """开盘时刻保护价（策略统一）：硬保护 / T1 昨高回落 / 隔夜中段回落一半。
+
+    不含盘中抬高后的展示止损，避免用收盘后卖价去撞今开。
+    """
+    cost = float(cost_px or 0)
+    if cost <= 0:
+        return 0.0
+    hard = cost_hard_stop_px(cost, hard_pct=hard_pct, tick=tick)
+    prev = float(prev_close or 0)
+    peak = max(x for x in (cost, prev) if x > 0)
+    if prev > 0 and pnl_exceeds(prev, cost, giveback_arm_pct):
+        half = half_gain_stop_price(peak, cost, hard_pct=hard_pct, tick=tick)
+        return max(x for x in (hard, half) if x and x > 0)
+    trail = t1_trail_stop_px(
+        peak, cost_px=cost, t1_trail_pct=t1_trail_pct, hard_pct=hard_pct, tick=tick
+    )
+    return max(x for x in (hard, trail) if x and x > 0)
+
+
 def pnl_exceeds(px: float, cost_px: float, thresh: float) -> bool:
     """现价相对成本是否严格超过 thresh（默认用来判断浮盈 >3%）。"""
     r = simple_return(px, cost_px)
@@ -826,6 +854,43 @@ def path_dependent_pullback_hit(
         "stop_kind": kind_now or "vol_giveback",
         "cost_px": cost,
     }
+
+
+def first_session_exit_fill(
+    bars: pd.DataFrame | None,
+    *,
+    cost_px: float,
+    prev_close: float | None = None,
+    day_open: float | None = None,
+    vol20_daily: float | None = None,
+    pullback_pct: float = DEFAULT_PULLBACK_PCT,
+    giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
+    t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
+    tick: float = TICK_SIZE,
+) -> float | None:
+    """隔夜仓当日第一次可执行卖出成交价（1 分钟顺序）。策略统一入口，无个股特例。"""
+    cost = float(cost_px or 0)
+    if cost <= 0 or bars is None or getattr(bars, "empty", True):
+        return None
+    prev = float(prev_close or 0)
+    armed = bool(prev > 0) and not pnl_exceeds(prev, cost, giveback_arm_pct)
+    seed = max(x for x in (cost, prev) if x > 0)
+    hit = path_dependent_pullback_hit(
+        bars,
+        pullback_pct=pullback_pct,
+        seed_high=seed,
+        cost_px=cost,
+        overnight_armed=armed,
+        day_open=float(day_open) if day_open else None,
+        vol20_daily=vol20_daily,
+        giveback_arm_pct=giveback_arm_pct,
+        t1_trail_pct=t1_trail_pct,
+        tick=tick,
+    )
+    if not bool(hit.get("hit_stop")):
+        return None
+    touch = float(hit.get("touch_stop") or hit.get("stop_px") or 0)
+    return touch if touch > 0 else None
 
 
 def attack_buy_trigger_price(
@@ -1617,6 +1682,7 @@ def simulate_factor26_day_1m(
     use_legacy_noted = nmode != NOTED_MODE_GAP_DUMP
     t1_armed = bool(noted > 0 and (not use_legacy_noted))
     session_peak = 0.0
+    tp_stage = 0
 
     rows: list[dict[str, Any]] = []
     if bars is not None and not getattr(bars, "empty", True):
@@ -1699,6 +1765,7 @@ def simulate_factor26_day_1m(
                     cost_px=cost,
                     peak_before=peak,
                     shares=1000,
+                    tp_stage=tp_stage,
                     can_sell=True,
                     overnight_armed=bool(t1_armed),
                     day_open=o if o > 0 else bar_o,
@@ -1717,7 +1784,12 @@ def simulate_factor26_day_1m(
                     noted = 0.0
                 act = ev.get("action") or {}
                 fill = float(act.get("fill_px") or 0)
-                if str(act.get("kind") or "") == "full" and fill > 0:
+                kind = str(act.get("kind") or "")
+                if kind == "half" and fill > 0:
+                    tp_stage = 1
+                    running_high = max(running_high, h)
+                    continue
+                if kind == "full" and fill > 0:
                     sell_px = fill
                     sell_ts = row.get("ts")
                     sell_reason = str(act.get("reason") or "half_gain")
@@ -2018,6 +2090,8 @@ __all__ = [
     "pullback_stop_price",
     "cost_hard_stop_px",
     "t1_trail_stop_px",
+    "overnight_open_protect_px",
+    "first_session_exit_fill",
     "half_gain_stop_price",
     "pnl_exceeds",
     "realized_vol_daily",

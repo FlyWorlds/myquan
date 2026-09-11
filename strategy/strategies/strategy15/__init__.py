@@ -20,10 +20,15 @@ def _print_rules() -> str:
 
 
 def run_strategy15(cfg: Any = None, **kwargs: Any):
-    """回测底层仍走因子1 开盘突破；止盈/F22 门控见决策层与盯盘。"""
-    from strategy.strategies.strategy1 import run_strategy1
+    """回测底层走开盘突破引擎；止盈/F22 门控见本策略决策层。不调用策略一。"""
+    from strategy.strategies._factor26_runner import run_factor26_strategy
 
-    return run_strategy1(cfg, **kwargs)
+    return run_factor26_strategy(
+        cfg,
+        bindings=FACTOR_BINDINGS,
+        strategy_name=STRATEGY_NAME,
+        **kwargs,
+    )
 
 
 register_strategy(

@@ -5,7 +5,8 @@
   · decision.py  — 决策层：MarketContext → Decision（buy/sell/hold）
   · __init__.py  — 注册 StrategySpec（含 decision_factory / run）
 
-  strategy1 — 援军战法（默认）：因子1（买卖）+ 因子2（回撤预警）
+  strategy1 — 援军战法：因子26（买卖）+ 因子2（回撤预警）+ 因子13A/16 定盘池（研究）
+  strategy16 — 核心龙头（默认）：因子27 季度宇宙 + 因子26/2/22 买卖
   strategy2 — 缠论选股：日线交易，30分钟小转大一买/二买，日线二/三卖退出
   strategy3 — 首板晋级：昨日首板 → 次日因子1 开盘突破
   strategy4 — 因子1 + 因子4 + 20%昨高止盈 + 因子10 周频动量选股（旧 strategy9）

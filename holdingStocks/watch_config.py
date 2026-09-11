@@ -682,16 +682,18 @@ def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
     return pruned
 
 
-def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str, Any]:
-    """任意 A 股代码 → watch_item；名称优先 holdings.json。"""
+def _name_for_code(code: str, holdings: dict[str, Any] | None = None) -> tuple[str, str]:
+    """(名称, 市场)；名称优先 holdings，其次置顶名单。"""
     c = code_key(code)
-    for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST_STRATEGY1):
-        if w["code"] == c:
-            return w
     pos: dict[str, Any] = {}
     if holdings:
         pos = (holdings.get("positions") or {}).get(c) or {}
     name = str(pos.get("name") or "").strip()
+    if not name:
+        for w in PORTFOLIO_PINNED_WATCHLIST:
+            if w["code"] == c:
+                name = str(w.get("name") or "").strip()
+                break
     if not name:
         try:
             from stock_names import resolve_stock_name
@@ -703,6 +705,25 @@ def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str
         pos.get("market")
         or ("上证" if c.startswith(("5", "6", "9")) else "深证")
     )
+    return name, market
+
+
+def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str, Any]:
+    """任意 A 股代码 → watch_item。
+
+    默认策略十六：开盘阈值只认 ``thr_2026.json``，否则 ``DEFAULT_PCT``。
+    不走策略一遗留池 ``WATCHLIST_STRATEGY1`` / ``_WATCH_PCT`` / 置顶名单里的 pct。
+    """
+    c = code_key(code)
+    if STRATEGY_ID == "strategy16":
+        name, _market = _name_for_code(c, holdings)
+        thrs = load_strategy16_thr_map()
+        pct = float(thrs[c]) if c in thrs else float(DEFAULT_PCT)
+        return watch_item(c, name, pct=pct, limit_down_pct=limit_down_pct_of(c))
+    for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST_STRATEGY1):
+        if w["code"] == c:
+            return w
+    name, _market = _name_for_code(c, holdings)
     pct = _WATCH_PCT.get(c, DEFAULT_PCT)
     return watch_item(c, name, pct=pct, limit_down_pct=limit_down_pct_of(c))
 

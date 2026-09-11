@@ -10,6 +10,9 @@
   · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票不可再待买入
   · 默认交易宇宙：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用，见 watch_config.SELF_WATCHLIST_PICKS）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
+  · 运行时分叉：本文件 collect_rows() **不**调用 get_decision_engine()；
+    registry/bindings 供回测。改 bindings 后须同步本文件 FACTOR_ID 分支
+    （levels / signal / replay / first_session_exit_fill）。
 
 功能：
   · 拉取当日实时行情（东财 SSE + 新浪批量；全池不串行拉历史分钟）
@@ -104,7 +107,8 @@ from strategy.pullback_wave_stop import (
     DEFAULT_PULLBACK_PCT,
     DEFAULT_T1_PEAK_TRAIL_PCT,
     cost_hard_stop_px,
-    half_gain_stop_price,
+    first_session_exit_fill,
+    overnight_open_protect_px,
     path_dependent_buy_hit,
     path_dependent_pullback_hit,
     pnl_exceeds,
@@ -196,7 +200,7 @@ _STRATEGY_FACTORS_LABEL = (
 _STRATEGY_SYNC_NOTE = (
     "与 strategy3/strategy4 bindings / bull_regime 同源"
     if USE_FACTOR4
-    else "与 strategy1 bindings / pullback_wave_stop 同源"
+    else "与 strategy16 bindings / pullback_wave_stop 同源"
 )
 
 
@@ -5237,18 +5241,12 @@ def _closed_open_protect_px(
     cost: float | None,
     prev_close: float | None,
 ) -> float:
-    """开盘时刻保护价：硬保护 / T1 昨高回落 / 隔夜中段回落一半。不含收盘后抬高的止损。"""
-    cost_f = float(cost or 0)
-    if cost_f <= 0:
+    """开盘时刻保护价：委托因子26 overnight_open_protect_px。"""
+    try:
+        cost_f = float(cost or 0)
+    except (TypeError, ValueError):
         return 0.0
-    hard = cost_hard_stop_px(cost_f)
-    prev = float(prev_close or 0)
-    peak = max(x for x in (cost_f, prev) if x > 0)
-    if prev > 0 and pnl_exceeds(prev, cost_f, DEFAULT_GIVEBACK_ARM_PCT):
-        half = half_gain_stop_price(peak, cost_f)
-        return max(x for x in (hard, half) if x and x > 0)
-    trail = t1_trail_stop_px(peak, cost_px=cost_f)
-    return max(x for x in (hard, trail) if x and x > 0)
+    return overnight_open_protect_px(cost_f, prev_close)
 
 
 def _peek_cached_today_1m(sina: str, session: str) -> pd.DataFrame | None:
@@ -5294,30 +5292,19 @@ def _closed_path_fill(
     cost: float,
     bars: pd.DataFrame | None,
 ) -> float | None:
-    """已平仓成交价：1 分钟 path 第一次触达。"""
-    if bars is None or getattr(bars, "empty", True) or cost <= 0:
-        return None
-    prev = _as_money(row.get("昨收"))
-    open_px = _as_money(row.get("开盘"))
-    armed = bool(prev) and not pnl_exceeds(float(prev), cost, DEFAULT_GIVEBACK_ARM_PCT)
-    seed = max(x for x in (cost, float(prev or 0)) if x > 0)
+    """已平仓成交价：因子26 first_session_exit_fill（1 分钟第一次触达）。"""
     sina = _sina_of(_code_key(str(row.get("代码") or "")))
     sess = str(row.get("交易日") or "")[:10]
     vol = None
     if sina and sess and not os.environ.get("PYTEST_CURRENT_TEST"):
         vol = _vol20_daily_for(sina, sess)
-    hit = path_dependent_pullback_hit(
+    return first_session_exit_fill(
         bars,
-        seed_high=seed,
         cost_px=cost,
-        overnight_armed=armed,
-        day_open=float(open_px) if open_px else None,
+        prev_close=_as_money(row.get("昨收")),
+        day_open=_as_money(row.get("开盘")),
         vol20_daily=vol,
     )
-    if not bool(hit.get("hit_stop")):
-        return None
-    touch = float(hit.get("touch_stop") or hit.get("stop_px") or 0)
-    return touch if touch > 0 else None
 
 
 def _closed_mark_px(

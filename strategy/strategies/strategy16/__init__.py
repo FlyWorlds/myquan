@@ -1,4 +1,4 @@
-"""策略十六·核心龙头：因子27 季度宇宙 + 因子26/2/22 买卖（同策略一）。"""
+"""策略十六·核心龙头：因子27 季度宇宙 + 因子26/2/22 买卖（绑定独立）。"""
 
 from __future__ import annotations
 
@@ -20,10 +20,15 @@ def _print_rules() -> str:
 
 
 def run_strategy16(cfg: Any = None, **kwargs: Any):
-    """买卖回测同策略一；默认交易宇宙为核心龙头近3个月池 + 天通/凯盛。"""
-    from strategy.strategies.strategy1 import run_strategy1
+    """买卖内核与策略一相同（因子26），绑定/宇宙独立，不调用 run_strategy1。"""
+    from strategy.strategies._factor26_runner import run_factor26_strategy
 
-    return run_strategy1(cfg, **kwargs)
+    return run_factor26_strategy(
+        cfg,
+        bindings=FACTOR_BINDINGS,
+        strategy_name=STRATEGY_NAME,
+        **kwargs,
+    )
 
 
 register_strategy(
@@ -32,7 +37,7 @@ register_strategy(
         name=STRATEGY_NAME,
         description=(
             "核心龙头：通达信活跃概念偏高、每概念≤2、池约30只、主板非ST非科创创业百元以下；"
-            "滚动近3个月冻结选股；买卖同策略一（因子26 多层止盈 + 因子2 预警 + 因子22 再买）"
+            "滚动近3个月冻结选股；买卖走因子26 多层止盈 + 因子2 预警 + 因子22 再买（绑定独立）"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy16,

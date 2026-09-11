@@ -52,6 +52,10 @@ class FactorBinding:
     enabled: bool = True
     meta: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "params", dict(self.params))
+        object.__setattr__(self, "meta", dict(self.meta))
+
     def display_name(self) -> str:
         return self.label or self.factor_id
 

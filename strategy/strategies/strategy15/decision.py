@@ -8,11 +8,11 @@ from strategy.core.protocols import StrategySpec
 from strategy.ladder_tp import resolve_ladder_tp_policy
 from strategy.m30_chop import M30ChopParams, advisory_levels
 from strategy.open_break import TICK_SIZE, ceil_to_tick
-from strategy.strategies.strategy1.decision import Strategy1Decision
+from strategy.strategies._factor26_decision import Factor26Decision
 from strategy.strategies.strategy15.bindings import FACTOR_BINDINGS, STRATEGY_ID, STRATEGY_NAME
 
 
-class Strategy15Decision(Strategy1Decision):
+class Strategy15Decision(Factor26Decision):
     strategy_id = STRATEGY_ID
     strategy_name = STRATEGY_NAME
 

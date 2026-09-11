@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from strategy.strategies.strategy1.decision import Strategy1Decision
+from strategy.strategies._factor26_decision import Factor26Decision
 from strategy.core.protocols import StrategySpec
 from strategy.strategies.strategy4.bindings import FACTOR_BINDINGS, STRATEGY_ID, STRATEGY_NAME
 
 
-class Strategy4Decision(Strategy1Decision):
+class Strategy4Decision(Factor26Decision):
     strategy_id = STRATEGY_ID
     strategy_name = STRATEGY_NAME
 

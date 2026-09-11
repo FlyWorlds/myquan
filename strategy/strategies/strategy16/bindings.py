@@ -1,4 +1,4 @@
-"""策略十六·核心龙头 · 因子绑定（买卖同策略一；宇宙=因子27）。"""
+"""策略十六·核心龙头 · 因子绑定（宇宙=因子27；买卖走因子26）。"""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ FACTOR_BINDINGS = (
         double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
         double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
         filter=open_break_entry_filter,
-        filter_desc="买=开盘阈值（个股 thr 2026 夏普择优）；卖同策略一：硬保护2.5% / 中赚回落一半与波动回落谁先到走谁 / 阶梯10%·15% / 未到3%次日峰值回落2.5%",
+        filter_desc="买=开盘阈值（个股 thr 2026 夏普择优）；卖=硬保护2.5% / 中赚回落一半与波动回落谁先到走谁 / 阶梯10%·15% / 未到3%次日峰值回落2.5%",
     ),
     bind_factor(
         "factor2",

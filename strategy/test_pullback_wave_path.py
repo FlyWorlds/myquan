@@ -579,6 +579,35 @@ def test_open_only_near_buy_ignores_attack_from_dump():
     assert "将买入" not in str(sig.get("alert") or "")
 
 
+def test_first_session_exit_fill_uses_path_not_open_gap():
+    """隔夜已过 3%：第一次卖出价走 1m 触达，不是用今开去撞盘中抬高后的止损。"""
+    ts0 = pd.Timestamp("2026-09-11 09:31:00")
+    bars = pd.DataFrame(
+        [
+            {
+                "ts": ts0,
+                "open": 76.0,
+                "high": 76.99,
+                "low": 75.90,
+                "close": 76.92,
+            },
+            {
+                "ts": ts0 + pd.Timedelta(minutes=8),
+                "open": 76.09,
+                "high": 77.34,
+                "low": 76.00,
+                "close": 77.30,
+            },
+        ]
+    )
+    fill = _m.first_session_exit_fill(
+        bars, cost_px=70.21, prev_close=76.45, day_open=76.0
+    )
+    assert fill is not None
+    assert abs(float(fill) - 77.23) < 0.02
+    assert abs(float(fill) - 76.0) > 0.01
+
+
 if __name__ == "__main__":
     test_half_gain_formula()
     test_multi_tp_ladder_and_peak_once()
@@ -600,4 +629,5 @@ if __name__ == "__main__":
     test_micro_peak_giveback_does_not_note()
     test_t1_overnight_note_profit_gates()
     test_limit_up_clears_t1_note()
+    test_first_session_exit_fill_uses_path_not_open_gap()
     print("ok")
