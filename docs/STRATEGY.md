@@ -211,5 +211,6 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 | [`FACTOR24.md`](FACTOR24.md) | 因子24 连板梯度情绪 |
 | [`FACTOR25.md`](FACTOR25.md) | 因子25 30m 震荡减磨损 |
 | [`FACTOR27.md`](FACTOR27.md) | 因子27 核心龙头（策略十六宇宙） |
+| [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md) | 策略十六/因子26 算法审核（2026-09-11） |
 | [`TODO.MD`](../TODO.MD) | 任务优先级 |
-| [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak 审计底稿 |
+| [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak（因子1）底稿 |

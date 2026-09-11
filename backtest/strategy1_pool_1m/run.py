@@ -759,8 +759,9 @@ def simulate_portfolio_3slots(
                         peak_before=float(ph),
                         shares=int(pos.shares),
                         tp_stage=int(pos.tp_stage or 0),
-                        can_sell=bool(can_sell) and (not st.sold_today),
-                        overnight_armed=armed and can_sell,
+                        # T+1 才禁卖；sold_today 只禁同日再买，半仓后剩余仓仍可继续止盈
+                        can_sell=bool(can_sell),
+                        overnight_armed=armed and bool(can_sell),
                         day_open=float(sd.open_px),
                         hard_pct=float(sd.pullback_pct),
                         dump_pct=dump,
