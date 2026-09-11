@@ -14,8 +14,8 @@
 | 可对账回测 | `backtest/strategy1_pool_1m/run.py --pool strategy16`（1m + 三槽 + `eval_multi_tp_bar`） |
 | **不要用来对账盯盘** | `run_strategy16()` / `run_factor26_strategy()`：日线 `OpenBreak3`，无三槽、无完整多层止盈、无因子22 |
 | 内核 `eval_multi_tp_bar` | 优先级（硬保护 / T1 峰值回落 / 15% / 中赚赛跑 / 10% 半仓 / 峰值回落 2%）自洽 |
-| 本次已修 | 三槽 1m 半仓后 `sold_today` 误禁剩余仓当日止盈；单票 `simulate_factor26_day_1m` 半仓不减股 |
-| 未改盯盘行为 | 盯盘仍把任意止盈触达当**全清**（全历史 1m 回放无 `tp_stage`） |
+| 本次已修 | 三槽 1m 半仓后 `sold_today` 误禁剩余仓当日止盈；单票 `simulate_factor26_day_1m` 半仓不减股；**单测误写 `holdings.json`**；盯盘 7 日回放恢复 10% 全清口径 |
+| 未改盯盘成交 | 盯盘 `collect_rows` 仍把任意止盈触达当**全清**（全历史 1m 回放无 `tp_stage`） |
 
 **可行性**：规则在 A 股连续竞价时段可执行（开盘后算阈值、预挂限价/条件单）。当前系统仍是「1m 路径回测 + 信号盯盘 + 本地模拟记账」，不是券商实盘自动成交。回测数字只作研究参考。
 
@@ -120,6 +120,12 @@
 3. Decision 在无 `path_hit_*` 时不要用全日 low 成交；或停用 Decision 作为执行参考。
 4. 因子22：要么从默认 bindings 关掉，要么改文档为「生产禁再买、仅研究对照」。
 5. 因子27 建池改为历史时点概念活跃度后再谈样本外。
+
+### 审核副作用（已修，2026-09-11 下午）
+
+审核回归跑 `unittest` 时，`_apply_trigger_date_fields` → `remember_factor_trigger` **直接写了生产 `holdingStocks/holdings.json`**（unittest 不设 `PYTEST_CURRENT_TEST`）。表现为因子触发价/日期被测试夹具盖掉（例如天通 `last_sell=9.8` / `2026-09-07`），持仓页「已触发因子价」会跟着变。另：半仓减股修进了 `replay_factor26_1m`，盯盘 7 日「策略回放持有」一度按半仓剩仓展示，与盯盘全清不一致。
+
+**修复**：单测默认内存账本、不碰生产 JSON；qty/成本/因子记忆变化时另存 `holdings.json.bak`；盯盘回放 `flatten_ladder_half=True`（10% 全清）。本地若已被单测改过，把 `holdings.json.bak` 拷回，或用 `python index.py set-cost` 按券商持仓重登。
 
 ## 6. 方法附录
 

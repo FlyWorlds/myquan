@@ -675,6 +675,27 @@ def test_simulate_ladder_half_only_keeps_remainder():
     assert sim2.get("holding_out") is False
 
 
+def test_simulate_flatten_ladder_half_matches_watch_full_clear():
+    """盯盘口径：10% 一次全清，不留剩余仓。"""
+    ts0 = pd.Timestamp("2026-09-09 09:31:00")
+    bars = pd.DataFrame(
+        [{"ts": ts0, "open": 111.0, "high": 111.2, "low": 110.6, "close": 111.0}]
+    )
+    sim = _m.simulate_factor26_day_1m(
+        bars,
+        open_px=111.0,
+        holding_in=True,
+        can_sell=True,
+        allow_entry=False,
+        cost_px=100.0,
+        peak_high_in=100.0,
+        flatten_ladder_half=True,
+    )
+    assert sim.get("holding_out") is False, sim
+    assert sim.get("sell_px") is not None, sim
+    assert int(sim.get("shares_out") or 0) == 0
+
+
 if __name__ == "__main__":
     test_half_gain_formula()
     test_multi_tp_ladder_and_peak_once()
@@ -699,4 +720,5 @@ if __name__ == "__main__":
     test_first_session_exit_fill_uses_path_not_open_gap()
     test_simulate_ladder_half_reduces_shares_then_peak_trail_clears_rest()
     test_simulate_ladder_half_only_keeps_remainder()
+    test_simulate_flatten_ladder_half_matches_watch_full_clear()
     print("ok")

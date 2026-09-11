@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
+
+os.environ.setdefault("MYQUAN_DISABLE_HOLDINGS_IO", "1")
 
 _HS = Path(__file__).resolve().parent / "holdingStocks"
 if str(_HS) not in sys.path:

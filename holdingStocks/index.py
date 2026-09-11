@@ -283,6 +283,54 @@ def _m1_lookback_bars(sina: str, *, session: str) -> pd.DataFrame:
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
 TRADES_FILE = ROOT / "trades.jsonl"
+_ISOLATED_HOLDINGS: dict[str, Any] | None = None
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
+
+
+def _running_unit_tests() -> bool:
+    """unittest/pytest 跑盯盘单测时，禁止读写生产 holdings.json。"""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
+    if _env_flag("MYQUAN_DISABLE_HOLDINGS_IO"):
+        return True
+    args = [str(a).replace("\\", "/") for a in sys.argv]
+    blob = " ".join(args)
+    if "unittest" in blob or "pytest" in blob:
+        return True
+    for a in args:
+        name = Path(a).name
+        if name.startswith("test_") and name.endswith(".py"):
+            return True
+    return False
+
+
+def holdings_file() -> Path:
+    """生产路径；单测默认不落这个文件。MYQUAN_HOLDINGS_FILE 可指向临时副本。"""
+    override = os.environ.get("MYQUAN_HOLDINGS_FILE", "").strip()
+    if override:
+        return Path(override)
+    return HOLDINGS_FILE
+
+
+def _use_isolated_holdings_memory() -> bool:
+    return _running_unit_tests() and not os.environ.get("MYQUAN_HOLDINGS_FILE", "").strip()
+
+
+def _empty_holdings_payload() -> dict[str, Any]:
+    return {
+        "updated_at": None,
+        "account_total": None,
+        "account_cash": None,
+        "positions": {},
+        "realized_today": {},
+        "closed_today": {},
+        "factor_memory": {},
+    }
+
+
 WATCH_META_FILE = ROOT / "holdings_watch.json"
 WATCH_PID_FILE = ROOT / "holdings_watch.pid"
 WATCH_UI_DIST = ROOT / "watch-ui" / "dist"
@@ -1607,6 +1655,8 @@ def _replay_last_factor_triggers_cached(
                 tick=tick,
                 prev_entry_mode=prev_entry_mode,
                 last_n_days=int(_REPLAY_1M_DAYS),
+                # 盯盘 10% 仍全清：7 日回放与 collect_rows 同一口径，避免「策略回放持有」被半仓减股改掉
+                flatten_ladder_half=True,
             )
         else:
             out = dict(
@@ -2001,18 +2051,30 @@ def _apply_trigger_date_fields(
 
 
 def _holdings_file_mtime() -> float:
+    if _use_isolated_holdings_memory():
+        return 1.0 if _ISOLATED_HOLDINGS is not None else 0.0
+    path = holdings_file()
     try:
-        return HOLDINGS_FILE.stat().st_mtime if HOLDINGS_FILE.exists() else 0.0
+        return path.stat().st_mtime if path.exists() else 0.0
     except OSError:
         return 0.0
 
 
 def load_holdings() -> dict[str, Any]:
+    global _ISOLATED_HOLDINGS
+    if _use_isolated_holdings_memory():
+        if _ISOLATED_HOLDINGS is None:
+            _ISOLATED_HOLDINGS = _empty_holdings_payload()
+        data = _ISOLATED_HOLDINGS
+        _HOLDINGS_CACHE["data"] = data
+        _HOLDINGS_CACHE["mtime"] = 1.0
+        return data
     mtime = _holdings_file_mtime()
     cached = _HOLDINGS_CACHE.get("data")
     if cached is not None and float(_HOLDINGS_CACHE.get("mtime") or 0.0) >= mtime:
         return cached
-    if not HOLDINGS_FILE.exists():
+    path = holdings_file()
+    if not path.exists():
         data = {
             "updated_at": None,
             "account_total": None,
@@ -2026,7 +2088,7 @@ def load_holdings() -> dict[str, Any]:
         }
         save_holdings(data)
         return data
-    with HOLDINGS_FILE.open("r", encoding="utf-8") as f:
+    with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     positions = data.setdefault("positions", {})
     for w in effective_watchlist():
@@ -2588,9 +2650,66 @@ def _sync_account_total(rows: list[dict[str, Any]]) -> float | None:
     return total
 
 
+def _holdings_identity(data: dict[str, Any]) -> tuple[Any, ...]:
+    """qty/成本/买入时刻 + 因子记忆；峰值等展示字段变化不触发备份。"""
+    pos = data.get("positions") or {}
+    occupied = tuple(
+        sorted(
+            (
+                str(k),
+                int(v.get("qty") or 0),
+                round(float(v.get("cost") or 0) if v.get("cost") not in (None, "") else 0.0, 4),
+                str(v.get("buy_time") or "")[:19],
+            )
+            for k, v in pos.items()
+            if isinstance(v, dict) and int(v.get("qty") or 0) > 0
+        )
+    )
+    mem = data.get("factor_memory") or {}
+    mem_fp = tuple(
+        sorted(
+            (
+                str(k),
+                str((v or {}).get("last_buy_factor_date") or ""),
+                str((v or {}).get("last_sell_factor_date") or ""),
+                str((v or {}).get("last_buy_factor_px") or ""),
+                str((v or {}).get("last_sell_factor_px") or ""),
+            )
+            for k, v in mem.items()
+            if isinstance(v, dict)
+        )
+    )
+    return occupied, mem_fp
+
+
+def _backup_holdings_if_identity_changed(path: Path, new_data: dict[str, Any]) -> None:
+    if not path.exists():
+        return
+    try:
+        old = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return
+    if _holdings_identity(old) == _holdings_identity(new_data):
+        return
+    bak = path.with_name("holdings.json.bak")
+    try:
+        shutil.copy2(path, bak)
+    except OSError:
+        pass
+
+
 def save_holdings(data: dict[str, Any]) -> None:
+    global _ISOLATED_HOLDINGS
     data["updated_at"] = _now()
-    with HOLDINGS_FILE.open("w", encoding="utf-8") as f:
+    if _use_isolated_holdings_memory():
+        _ISOLATED_HOLDINGS = data
+        _HOLDINGS_CACHE["data"] = data
+        _HOLDINGS_CACHE["mtime"] = 1.0
+        return
+    path = holdings_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _backup_holdings_if_identity_changed(path, data)
+    with path.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     _HOLDINGS_CACHE["data"] = data
     _HOLDINGS_CACHE["mtime"] = _holdings_file_mtime()
@@ -5733,7 +5852,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     print(
         f"  卖出全清: 仅止损"
     )
-    print(f"持仓文件: {HOLDINGS_FILE}")
+    print(f"持仓文件: {holdings_file()}")
     holdings_meta = load_holdings()
     account_total = _account_total(rows, holdings_meta)
     available = _available_cash(rows, holdings_meta)

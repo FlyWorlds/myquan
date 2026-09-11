@@ -1638,6 +1638,7 @@ def simulate_factor26_day_1m(
     hard_gap_dump_pct: float = DEFAULT_HARD_GAP_DUMP_PCT,
     tp_stage_in: int = 0,
     shares_in: int = 1000,
+    flatten_ladder_half: bool = False,
 ) -> dict[str, Any]:
     """单日 1 分钟路径：买入（默认开盘阈值）+ 多层止盈卖出。
 
@@ -1646,6 +1647,7 @@ def simulate_factor26_day_1m(
     · stop_noted_px_in：昨日 T+1 已记；默认次日走峰值回落 2.5%（gap_dump 生产口径）
     · noted_mode：sell_open / gap_dump / continue_f26 / wait_noted（后三者为研究对照）
     · vol20_daily：近 20 日日频实现波动（中段回落距离 = 其一半）
+    · flatten_ladder_half：True 时 10% 半仓按盯盘口径一次全清（7 日回放/展示用）
     """
     pb = float(pullback_pct)
     gb = float(giveback_ratio)
@@ -1792,6 +1794,15 @@ def simulate_factor26_day_1m(
                 fill = float(act.get("fill_px") or 0)
                 kind = str(act.get("kind") or "")
                 if kind == "half" and fill > 0:
+                    if flatten_ladder_half:
+                        sell_px = fill
+                        sell_ts = row.get("ts")
+                        sell_reason = str(act.get("reason") or "ladder_half_10")
+                        holding = False
+                        running_high = max(running_high, h)
+                        sh = 0
+                        tp_stage = 0
+                        break
                     sell_n = max(0, min(int(act.get("shares") or 0), sh))
                     sh = max(0, sh - sell_n)
                     tp_stage = 1
@@ -1910,12 +1921,15 @@ def replay_factor26_1m(
     prev_entry_mode: str = "yin_or_small_yang",
     last_n_days: int = 7,
     allow_attack: bool = DEFAULT_ALLOW_ATTACK,
+    flatten_ladder_half: bool = True,
 ) -> dict[str, Any]:
     """定盘池短窗回测：日线过滤选买卖日，近 last_n_days 用 1 分钟路径成交。
 
     日线：前日阴/小阳、双阳禁买；回撤预警仍在组合层（本函数只做个股路径）。
     分钟：触买/触止损按时间顺序，避免全日 OHLC 假触。
     allow_attack：默认 False（只买开盘阈值）；True 才开攻击波。
+    flatten_ladder_half：默认 True，10% 按盯盘全清，避免 7 日「策略回放持有」与三槽半仓口径混用。
+    研究半仓路径传 False。
     """
     pb = float(pullback_pct if pullback_pct is not None else stop_pct)
     out: dict[str, Any] = {
@@ -2030,8 +2044,9 @@ def replay_factor26_1m(
             stop_noted_px_in=stop_noted_px if holding else None,
             allow_attack=allow_attack,
             vol20_daily=vol20,
-            tp_stage_in=tp_stage if holding else 0,
-            shares_in=shares_held if holding else 1000,
+            tp_stage_in=(0 if flatten_ladder_half else (tp_stage if holding else 0)),
+            shares_in=(1000 if flatten_ladder_half else (shares_held if holding else 1000)),
+            flatten_ladder_half=bool(flatten_ladder_half),
         )
 
         if sim.get("sell_px") is not None:
@@ -2059,7 +2074,7 @@ def replay_factor26_1m(
             tp_stage = 0
             shares_held = 1000
 
-        elif sim.get("half_px") is not None:
+        elif (not flatten_ladder_half) and sim.get("half_px") is not None:
             trades.append(
                 {
                     "date": sess,
@@ -2096,8 +2111,8 @@ def replay_factor26_1m(
             peak_high = float(sim.get("peak_high_out") or peak_high or 0)
             if sim.get("cost_px") is not None:
                 cost_px = float(sim["cost_px"])
-            tp_stage = int(sim.get("tp_stage_out") or 0)
-            so = int(sim.get("shares_out") or 0)
+            tp_stage = 0 if flatten_ladder_half else int(sim.get("tp_stage_out") or 0)
+            so = 0 if flatten_ladder_half else int(sim.get("shares_out") or 0)
             if so > 0:
                 shares_held = so
             # T+1 当日触止损 → 止损已记

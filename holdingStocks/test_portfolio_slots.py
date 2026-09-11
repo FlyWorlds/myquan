@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+
+os.environ.setdefault("MYQUAN_DISABLE_HOLDINGS_IO", "1")
+
 from watch_config import (
     MAX_PORTFOLIO_SLOTS,
     SLOT_WEIGHT,

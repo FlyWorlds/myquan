@@ -1,6 +1,10 @@
 """当日止损禁再买 / 盘中隔夜均可持3 / 日最多2买 — 单测。"""
 from __future__ import annotations
 
+import os
+
+os.environ.setdefault("MYQUAN_DISABLE_HOLDINGS_IO", "1")
+
 import unittest
 from datetime import datetime
 

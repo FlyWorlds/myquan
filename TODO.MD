@@ -52,6 +52,7 @@
 - [x] 低开破硬保护对照：立刻卖 vs 开盘再下杀1%（`compare_hard_gap.py`，全池等权 7 日 1m）
 - [x] 开盘阈值同日再买对照（`compare_open_rebuy.py`：三槽 / `--all-pool` 全池等权；产物 `COMPARE_OPEN_REBUY*.md`）
 - [x] **策略十六算法审核**（2026-09-11）：[`docs/PROJECT_AUDIT.md`](docs/PROJECT_AUDIT.md)；修三槽 1m 半仓后剩余仓被 `sold_today` 禁卖、单票模拟半仓不减股
+- [x] 审核单测误写 `holdings.json`：隔离写盘；盯盘 7 日回放 10% 恢复全清（与成交路径一致）
 
 ### 策略一 · 因子26 1 分钟（2026-09-07）
 - [x] 盯盘止损 / 策略回放：1m path-dependent；选股与因子2 回撤仍日线

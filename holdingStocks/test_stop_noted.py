@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import os
+
+# 禁止单测改写生产 holdings.json（须在 import index 之前）
+os.environ.setdefault("MYQUAN_DISABLE_HOLDINGS_IO", "1")
+
 import unittest
 from datetime import datetime
 

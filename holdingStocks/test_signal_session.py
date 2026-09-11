@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 import sys
 from pathlib import Path
+
+os.environ.setdefault("MYQUAN_DISABLE_HOLDINGS_IO", "1")
 
 import pandas as pd
 
