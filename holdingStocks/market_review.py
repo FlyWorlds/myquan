@@ -97,7 +97,9 @@ def build_review(
         qty = int(r.get("持仓") or 0)
         if r.get("市值") is not None and qty > 0:
             total_mv += float(r["市值"])
-        if r.get("当日盈亏") is not None and (qty > 0 or r.get("已实现")):
+        if r.get("当日盈亏") is not None and (
+            qty > 0 or r.get("已实现") or r.get("三槽平仓")
+        ):
             day_total += float(r["当日盈亏"])
             day_n += 1
 

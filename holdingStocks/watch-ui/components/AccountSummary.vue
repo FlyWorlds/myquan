@@ -11,7 +11,7 @@ function fmt(v?: number | null, d = 2) {
 
 <template>
   <section class="card p-4">
-    <div class="text-sm text-ui-text-2">合计盈亏</div>
+    <div class="text-sm text-ui-text-2">合计盈亏 <span class="text-[10px] font-normal">持仓+已平仓</span></div>
     <div class="sensitive text-3xl font-bold">
       <ChgText :chg="account.totalPnl">{{ account.totalPnl == null ? '-' : `${account.totalPnl >= 0 ? '+' : ''}${fmt(account.totalPnl)}` }}</ChgText>
       <span v-if="account.totalPnlPct != null" class="ml-2 text-lg font-semibold">
@@ -19,13 +19,14 @@ function fmt(v?: number | null, d = 2) {
       </span>
     </div>
     <div class="mt-2 text-sm">
-      <span class="text-ui-text-2">当日盈亏 </span>
+      <span class="text-ui-text-2">今日浮盈 </span>
       <span class="sensitive font-semibold">
         <ChgText :chg="account.dayPnl">{{ account.dayPnl == null ? '-' : `${account.dayPnl >= 0 ? '+' : ''}${fmt(account.dayPnl)}` }}</ChgText>
         <template v-if="account.dayPnlPct != null">
           <ChgText :chg="account.dayPnlPct"> {{ (account.dayPnlPct >= 0 ? '+' : '') + account.dayPnlPct.toFixed(2) + '%' }}</ChgText>
         </template>
       </span>
+      <span class="ml-1 text-[10px] text-ui-text-3">持仓+已平仓</span>
     </div>
     <div class="sensitive mt-2 text-xs text-ui-text-2">
       总资产 {{ fmt(account.accountTotal) }}

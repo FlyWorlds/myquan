@@ -208,8 +208,18 @@ def is_today_alert_row(row: dict[str, Any]) -> bool:
         return False
     if bool(row.get("已实现")):
         return False
+    pos0 = str(row.get("持仓状态") or "")
+    alert0 = str(row.get("预警") or "")
+    # 策略回放已止损 / 已平仓不是买点预警；持仓 Tab 已平仓栏只走三槽留痕
+    if bool(row.get("当日禁买")) or pos0 in ("已平仓", "已止损", "已触止损平仓"):
+        return False
+    if alert0.startswith("策略回放"):
+        return False
     if gate_ok(row) is False or is_weak_price_buy_alert(row):
         return False
+    # 当日已触买：现价离开买点后预警文案若被清掉，仍凭「已触买=是」留在预警栏
+    if is_buy_hit(row):
+        return True
     if bool(row.get("槽位候选")):
         return True
     if bool(row.get("当日预警")):

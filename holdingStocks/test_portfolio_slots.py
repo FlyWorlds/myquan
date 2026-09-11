@@ -163,6 +163,90 @@ def test_stop_trace_visible_outside_continuous():
     assert next(r for r in picked if r["代码"] == "600330").get("槽位留痕") is True
 
 
+def test_lunch_keeps_buy_alert_in_holdings():
+    """午休：已触买仍进持仓预警栏，不因非连续竞价被藏掉。"""
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {"代码": "600552", "名称": "凯盛", "持仓": 100, "持仓状态": "已经买入"},
+        {
+            "代码": "600330",
+            "名称": "天通",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "已触买·槽满",
+            "已触买": "是",
+            "当日预警": True,
+            "槽位候选": True,
+            "过门OK": True,
+        },
+    ]
+    picked = filter_portfolio_holdings(
+        rows,
+        portfolio_codes={"600552", "600330"},
+        strategy_codes={"600552", "600330"},
+        phase="lunch",
+    )
+    codes = [str(r["代码"]) for r in picked]
+    assert "600552" in codes
+    assert "600330" in codes
+    closed = filter_portfolio_holdings(
+        rows,
+        portfolio_codes={"600552", "600330"},
+        strategy_codes={"600552", "600330"},
+        phase="closed",
+    )
+    assert "600330" in [str(r["代码"]) for r in closed]
+
+
+def test_closed_keeps_buy_hit_drops_near_buy():
+    """收盘：已触买留在预警栏；将买入等接近信号不留。"""
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {"代码": "600552", "名称": "凯盛", "持仓": 100, "持仓状态": "已经买入"},
+        {
+            "代码": "600330",
+            "名称": "天通",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "已触买·槽满",
+            "已触买": "是",
+            "当日预警": True,
+            "过门OK": True,
+        },
+        {
+            "代码": "000151",
+            "名称": "中成",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "将买入",
+            "已触买": "否",
+            "当日预警": True,
+            "近买点": True,
+            "过门OK": True,
+        },
+    ]
+    closed = filter_portfolio_holdings(
+        rows,
+        portfolio_codes={"600552", "600330", "000151"},
+        strategy_codes={"600552", "600330", "000151"},
+        phase="closed",
+    )
+    codes = [str(r["代码"]) for r in closed]
+    assert "600552" in codes
+    assert "600330" in codes
+    assert "000151" not in codes
+    auction = filter_portfolio_holdings(
+        rows,
+        portfolio_codes={"600552", "600330", "000151"},
+        strategy_codes={"600552", "600330", "000151"},
+        phase="auction",
+    )
+    assert "600330" not in [str(r["代码"]) for r in auction]
+    assert "000151" not in [str(r["代码"]) for r in auction]
+
+
 def test_filter_includes_alert_without_pool():
     from watch_snapshot import filter_portfolio_holdings
 
@@ -305,6 +389,93 @@ def test_demote_pre_signal_window():
     assert sell["因子触发"] == "接近"
 
 
+def test_should_demote_pre_signal_skips_lunch_and_close():
+    from index import _should_demote_pre_signal
+
+    assert _should_demote_pre_signal("open_set") is True
+    assert _should_demote_pre_signal("auction_locked") is True
+    assert _should_demote_pre_signal("continuous") is False
+    assert _should_demote_pre_signal("lunch") is False
+    assert _should_demote_pre_signal("closed") is False
+
+
+def test_empty_1m_keeps_daily_high_buy_hit():
+    import pandas as pd
+    from index import _merge_path_buy_hit
+
+    hit, px = _merge_path_buy_hit(True, None, open_px=10.0, entry_pct=0.025, tick=0.01)
+    assert hit is True
+    assert px is None
+    empty = pd.DataFrame(columns=["ts", "high", "low"])
+    hit2, _ = _merge_path_buy_hit(True, empty, open_px=10.0, entry_pct=0.025, tick=0.01)
+    assert hit2 is True
+    miss, _ = _merge_path_buy_hit(False, None, open_px=10.0, entry_pct=0.025, tick=0.01)
+    assert miss is False
+    # 1m 未走过买点时，仍保留日线最高已触（预警当天不摘）
+    miss_1m = pd.DataFrame({"ts": [1, 2], "high": [10.1, 10.05], "low": [10.0, 10.0]})
+    keep, _ = _merge_path_buy_hit(
+        True, miss_1m, open_px=10.0, entry_pct=0.025, tick=0.01
+    )
+    assert keep is True
+
+
+def test_stamp_buy_touched_sticky():
+    from index import _stamp_buy_touched
+
+    sticky: dict = {}
+    _stamp_buy_touched(sticky, "600552", session="2026-09-11")
+    assert sticky["600552"]["buy_touched"] is True
+    assert sticky["600552"]["session"] == "2026-09-11"
+    sticky["600552"]["stop_touched"] = True
+    _stamp_buy_touched(sticky, "600552", session="2026-09-11")
+    assert sticky["600552"]["stop_touched"] is True
+    assert sticky["600552"]["buy_touched"] is True
+
+
+def test_restore_session_buy_hit_ignores_1m_pullback():
+    """有分钟线、现价已离开买点：当日 sticky 仍把已触买留住。"""
+    from index import _restore_session_buy_hit, _sticky_drop_sell_keep_buy
+
+    sticky = {
+        "000151": {"session": "2026-09-11", "buy_touched": True, "bg_class": "warn-sell"}
+    }
+    assert (
+        _restore_session_buy_hit(
+            False,
+            qty=0,
+            sticky_row=sticky["000151"],
+            session="2026-09-11",
+        )
+        is True
+    )
+    assert (
+        _restore_session_buy_hit(
+            False,
+            qty=0,
+            sticky_row=sticky["000151"],
+            session="2026-09-12",
+        )
+        is False
+    )
+    _sticky_drop_sell_keep_buy(sticky, "000151", "2026-09-11")
+    assert sticky["000151"]["buy_touched"] is True
+    assert "bg_class" not in sticky["000151"]
+
+
+def test_today_alert_row_keeps_buy_hit_without_alert_text():
+    from watch_buy_signal import is_today_alert_row
+
+    row = {
+        "代码": "000151",
+        "持仓": 0,
+        "持仓状态": "空仓",
+        "预警": "空仓",
+        "已触买": "是",
+        "过门OK": True,
+    }
+    assert is_today_alert_row(row) is True
+
+
 def test_buy_distance_and_sort_helpers():
     from index import _buy_distance_pct, sort_watch_rows
 
@@ -374,6 +545,22 @@ def test_finalize_sold_today_is_stopped():
     assert row["持仓状态"] == "已平仓"
 
 
+def test_finalize_slot_closed_not_paper_replay():
+    from index import _finalize_position_row, SIGNAL_STOP_HIT
+
+    row = {
+        "持仓": 0,
+        "持仓状态": "已平仓",
+        "预警": "策略回放·今日已止损",
+        "当日禁买": True,
+        "三槽平仓": True,
+        "卖出数量": 1800,
+    }
+    _finalize_position_row(row)
+    assert row["预警"] == SIGNAL_STOP_HIT
+    assert row["持仓状态"] == "已平仓"
+
+
 def test_finalize_sold_today_rebuy_banned():
     """当日卖出后再触买：仍记当日禁买（三槽规则）。"""
     from index import _finalize_position_row
@@ -419,6 +606,74 @@ def test_apply_trigger_sold_today_bans_rebuy():
         allow_entry=True,
     )
     assert row.get("当日禁买") is True
+
+
+def test_apply_trigger_holding_today_buy_marks_triggered():
+    """今日入槽实仓：因子触发写「已触发 M/D」，即使 T+1 止损已记。"""
+    from index import _apply_trigger_date_fields
+
+    row = {
+        "持仓状态": "已经买入",
+        "预警": "持有·T+1·止损已记",
+        "已触买": "是",
+        "已触止损": "是",
+        "买点": 16.29,
+        "止损": 17.24,
+    }
+    sig = {
+        "hit_buy": True,
+        "hit_stop": True,
+        "因子触发": "已触发",
+        "持仓状态": "已经买入",
+    }
+    _apply_trigger_date_fields(
+        row,
+        sig=sig,
+        session="2026-09-11",
+        last_px=17.0,
+        px_digits=2,
+        buy_time="2026-09-11 09:43:32",
+        qty=5500,
+        replay={"holding": False, "last_buy_px": 16.29, "last_buy_date": "2026-09-11"},
+        code="000070",
+        allow_entry=True,
+    )
+    assert str(row.get("因子触发") or "").startswith("已触发")
+    assert "9/11" in str(row.get("因子触发") or "")
+    assert row.get("已触发因子侧") == "买入"
+
+
+def test_apply_trigger_holding_today_buy_not_unavailable():
+    """今日入槽但信号文案是不可用：仍标已触发，不写不可用。"""
+    from index import _apply_trigger_date_fields
+
+    row = {
+        "持仓状态": "已经买入",
+        "预警": "持有·T+1",
+        "已触买": "是",
+        "已触止损": "否",
+        "买点": 33.48,
+        "止损": 32.64,
+    }
+    sig = {
+        "hit_buy": True,
+        "hit_stop": False,
+        "因子触发": "不可用",
+        "持仓状态": "已经买入",
+    }
+    _apply_trigger_date_fields(
+        row,
+        sig=sig,
+        session="2026-09-11",
+        last_px=32.91,
+        px_digits=2,
+        buy_time="2026-09-11 09:43:32",
+        qty=2600,
+        replay={"holding": False, "last_buy_px": 33.48, "last_buy_date": "2026-09-11"},
+        code="600522",
+        allow_entry=True,
+    )
+    assert row.get("因子触发") == "已触发 9/11"
 
 
 def test_overlay_does_not_rewrite_real_qty():
@@ -508,4 +763,325 @@ def test_annotate_unfilled_buy_signals_slot_full_and_gate():
     )
     codes = {str(r["代码"]) for r in picked}
     assert codes == {"600869"}
+
+
+def test_enrich_skips_paper_replay_without_lots():
+    """中钨高新这类回放已止损、从未入三槽：不算平仓、不折算 30 万槽位。"""
+    from index import _enrich_closed_day_pnl, _is_closed_trace_row
+
+    row = {
+        "代码": "000657",
+        "名称": "中钨高新",
+        "持仓": 0,
+        "持仓状态": "已平仓",
+        "当日禁买": True,
+        "已触止损": "是",
+        "成本": 59.45,
+        "昨收": 59.42,
+        "现价": 56.4,
+        "开盘": 57.83,
+        "最低": 56.4,
+        "止损": 56.38,
+        "预警": "策略回放·今日已止损",
+    }
+    assert _is_closed_trace_row(row, lots={}) is False
+    _enrich_closed_day_pnl(row, lots={})
+    assert row.get("三槽平仓") is not True
+    assert not row.get("卖出数量")
+    assert row.get("当日盈亏") is None
+
+
+def test_closed_trace_cleared_next_session():
+    """今日已平仓下一交易日不再展示，即使成交流水仍有昨仓。"""
+    from index import _is_closed_trace_row
+
+    lots = {"601208": {"qty": 600, "cost": 47.67}}
+    today = {
+        "代码": "601208",
+        "持仓": 0,
+        "交易日": "2026-09-11",
+        "当日禁买": True,
+        "已触止损": "是",
+    }
+    traces_today = {"601208": {"session": "2026-09-11", "qty": 1800}}
+    assert _is_closed_trace_row(today, lots=lots, traces=traces_today) is True
+
+    nxt = dict(today)
+    nxt["交易日"] = "2026-09-14"
+    assert _is_closed_trace_row(nxt, lots=lots, traces=traces_today) is False
+
+
+def test_closed_trace_first_detect_today_without_stamp():
+    """当日尚未落库 closed_today：成交流水+当日禁买仍算今日平仓。"""
+    from index import _is_closed_trace_row
+
+    row = {
+        "代码": "601208",
+        "持仓": 0,
+        "交易日": "2026-09-11",
+        "当日禁买": True,
+        "已触止损": "是",
+    }
+    assert (
+        _is_closed_trace_row(
+            row, lots={"601208": {"qty": 600, "cost": 47.67}}, traces={}
+        )
+        is True
+    )
+
+
+def test_filter_skips_paper_replay_closed():
+    """策略回放已平仓、从未入三槽：不进持仓 Tab 已平仓栏。"""
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {"代码": "000070", "名称": "特发", "持仓": 100, "持仓状态": "已经买入"},
+        {
+            "代码": "000657",
+            "名称": "中钨高新",
+            "持仓": 0,
+            "持仓状态": "已平仓",
+            "当日禁买": True,
+            "预警": "策略回放·今日已止损",
+            "已触止损": "是",
+        },
+        {
+            "代码": "601208",
+            "名称": "东材",
+            "持仓": 0,
+            "持仓状态": "已平仓",
+            "卖出数量": 1800,
+            "三槽平仓": True,
+            "预警": "已触止损",
+        },
+    ]
+    picked = filter_portfolio_holdings(
+        rows,
+        portfolio_codes={"000070", "000657", "601208"},
+        strategy_codes={"000070", "000657", "601208"},
+        phase="continuous",
+    )
+    codes = [str(r["代码"]) for r in picked]
+    assert "000070" in codes
+    assert "601208" in codes
+    assert "000657" not in codes
+    assert next(r for r in picked if r["代码"] == "601208").get("槽位留痕") is True
+
+
+def test_closed_day_pnl_gap_open():
+    """已平仓：低开跌破止损，平仓价=开盘，当日浮亏相对今开为 0。"""
+    from index import _enrich_closed_day_pnl
+
+    row = {
+        "代码": "601208",
+        "持仓": 0,
+        "持仓状态": "已平仓",
+        "当日禁买": True,
+        "已触止损": "是",
+        "现价": 47.07,
+        "昨收": 48.59,
+        "开盘": 46.97,
+        "最低": 46.88,
+        "止损": 47.71,
+    }
+    _enrich_closed_day_pnl(
+        row, lots={"601208": {"qty": 600, "cost": 47.67}}
+    )
+    from index import _paper_slot_qty
+
+    qty = _paper_slot_qty(47.67)
+    assert qty == 1800
+    assert row["成交价"] == 46.97
+    assert row["卖出数量"] == qty
+    assert row["当日盈亏"] == 0.0
+    assert row["当日盈亏%"] == 0.0
+    assert row["浮盈"] == round((46.97 - 47.67) * qty, 2)
+
+
+def test_closed_day_pnl_path_stop():
+    """已平仓：开盘未破、盘中触及止损，当日浮亏=止损相对今开。"""
+    from index import _enrich_closed_day_pnl
+
+    row = {
+        "代码": "000021",
+        "持仓": 0,
+        "槽位留痕": True,
+        "持仓状态": "已平仓",
+        "已触止损": "是",
+        "现价": 34.43,
+        "昨收": 36.5,
+        "开盘": 35.21,
+        "最低": 34.08,
+        "止损": 34.32,
+    }
+    _enrich_closed_day_pnl(
+        row, lots={"000021": {"qty": 800, "cost": 36.35}}
+    )
+    from index import _paper_slot_qty
+
+    qty = _paper_slot_qty(36.35)
+    assert qty == 2400
+    assert row["成交价"] == 34.32
+    assert row["卖出数量"] == qty
+    assert row["当日盈亏"] == round((34.32 - 35.21) * qty, 2)
+
+
+def test_closed_day_pnl_locks_stop_not_last():
+    """已触止损但日线最低未到：仍按止损锁定，不跟现价。"""
+    from index import _enrich_closed_day_pnl
+
+    row = {
+        "代码": "002636",
+        "持仓": 0,
+        "持仓状态": "已平仓",
+        "当日禁买": True,
+        "已触止损": "是",
+        "现价": 75.38,
+        "昨收": 76.45,
+        "开盘": 76.0,
+        "最低": 75.18,
+        "止损": 74.1,
+    }
+    _enrich_closed_day_pnl(
+        row, lots={"002636": {"qty": 400, "cost": 70.21}}
+    )
+    from index import _paper_slot_qty
+
+    qty = _paper_slot_qty(70.21)
+    assert qty == 1200
+    assert row["成交价"] == 74.1
+    locked = row["当日盈亏"]
+    assert locked == round((74.1 - 76.0) * qty, 2)
+    row["现价"] = 80.0
+    _enrich_closed_day_pnl(
+        row, lots={"002636": {"qty": 400, "cost": 70.21}}
+    )
+    assert row["成交价"] == 74.1
+    assert row["当日盈亏"] == locked
+
+
+def test_closed_day_pnl_keeps_realized_without_open():
+    from index import _enrich_closed_day_pnl
+
+    row = {
+        "代码": "600330",
+        "持仓": 0,
+        "已实现": True,
+        "当日盈亏": -100.0,
+        "昨收": 20.0,
+        "现价": 19.0,
+    }
+    _enrich_closed_day_pnl(
+        row, lots={"600330": {"qty": 1000, "cost": 20.0}}
+    )
+    assert row["当日盈亏"] == -100.0
+
+
+def test_enrich_keeps_realized_ledger_qty():
+    """已实现成交不得被纸面槽位股数覆盖。"""
+    from index import _enrich_closed_day_pnl, _paper_slot_qty
+
+    row = {
+        "代码": "601208",
+        "持仓": 0,
+        "持仓状态": "已平仓",
+        "已实现": True,
+        "卖出数量": 600,
+        "当日盈亏": -12.5,
+        "当日盈亏%": -0.44,
+        "成交价": 46.97,
+        "开盘": 46.97,
+        "成本": 47.67,
+        "昨收": 48.59,
+    }
+    _enrich_closed_day_pnl(
+        row, lots={"601208": {"qty": 600, "cost": 47.67}}
+    )
+    assert _paper_slot_qty(47.67) == 1800
+    assert row["卖出数量"] == 600
+    assert row["当日盈亏"] == -12.5
+    assert row["三槽平仓"] is True
+
+
+def test_purge_stale_closed_today():
+    from index import _purge_stale_realized
+
+    data = {
+        "realized_today": {
+            "601208": {"session": "2026-09-10", "qty": 600},
+            "000070": {"session": "2026-09-11", "qty": 100},
+        },
+        "closed_today": {
+            "601208": {"session": "2026-09-10", "qty": 1800},
+            "000021": {"session": "2026-09-11", "qty": 2400},
+        },
+    }
+    _purge_stale_realized(data, "2026-09-11")
+    assert "601208" not in data["realized_today"]
+    assert "000070" in data["realized_today"]
+    assert "601208" not in data["closed_today"]
+    assert data["closed_today"]["000021"]["qty"] == 2400
+
+
+def test_parse_open_lots_last_buy():
+    from index import _parse_open_lots
+
+    text = "\n".join(
+        [
+            '{"time":"2026-09-10 13:42:30","side":"buy","code":"601208","price":47.67,"qty":600,"after_qty":600,"avg_cost":47.67}',
+            '{"time":"2026-09-10 13:50:00","side":"sell","code":"601208","price":47.0,"qty":600,"after_qty":0,"avg_cost":47.67}',
+            '{"time":"2026-09-10 13:42:30","side":"buy","code":"002636","price":70.21,"qty":400,"after_qty":400,"avg_cost":70.21}',
+        ]
+    )
+    lots = _parse_open_lots(text)
+    assert "601208" not in lots
+    assert lots["002636"]["qty"] == 400
+    assert lots["002636"]["cost"] == 70.21
+
+
+def test_account_summary_sums_hold_and_closed_day_pnl():
+    """今日浮盈 = 三槽持仓当日盈亏 + 已平仓当日盈亏。"""
+    from index import _build_watch_account_summary
+
+    acc = _build_watch_account_summary(
+        [
+            {
+                "代码": "000070",
+                "持仓": 5500,
+                "浮盈": 3575.0,
+                "当日盈亏": 3575.0,
+                "市值": 90000.0,
+                "成本额": 86000.0,
+            },
+            {
+                "代码": "601208",
+                "持仓": 0,
+                "三槽平仓": True,
+                "浮盈": -1260.0,
+                "当日盈亏": 0.0,
+                "开盘": 46.97,
+                "卖出数量": 1800,
+                "成本": 47.67,
+            },
+            {
+                "代码": "000021",
+                "持仓": 0,
+                "三槽平仓": True,
+                "浮盈": -4872.0,
+                "当日盈亏": -2136.0,
+                "开盘": 35.21,
+                "卖出数量": 2400,
+                "成本": 36.35,
+            },
+            {
+                "代码": "000657",
+                "持仓": 0,
+                "持仓状态": "已平仓",
+                "当日盈亏": -9999.0,
+            },
+        ]
+    )
+    assert acc["dayPnl"] == round(3575.0 + 0.0 - 2136.0, 2)
+    assert acc["settledCount"] == 2
+    assert acc["settledDayPnl"] == round(0.0 - 2136.0, 2)
 

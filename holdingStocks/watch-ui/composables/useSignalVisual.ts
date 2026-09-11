@@ -55,6 +55,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   const buyTriggered =
     qty <= 0 &&
     (alert === '已触买' ||
+      alert.includes('已触买') ||
       alert.includes('再触买') ||
       alert.includes('收盘动量可再买') ||
       String(row.已触买 || '') === '是' ||
@@ -94,12 +95,10 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     (realHold && trig === '接近' && bg === 'warn-sell')
 
   // 实仓：底色固定持仓青绿 #5eead4；止损/预警只改角标，不换整卡绿底
-  // T+1 当日不可卖：角标优先「持有·T+1」，不因误触止损刷成卖出绿标
+  // T+1 当日不可卖：角标固定「已经买入/持有·T+1」，止损已记不当成已触止损筛选
   if (qty > 0) {
     const sellHit =
       !t1Locked && (sellTriggered || sellWarn || pos === '待卖出')
-    const softNote =
-      t1Locked && (alert.includes('止损已记') || alert.includes('已触止损'))
     const badgeText = t1Locked
       ? alert && alert !== '-'
         ? alert
@@ -112,10 +111,9 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     return {
       tier: 'hold',
       rowClass: 'signal-row signal-hold-real',
-      badgeClass:
-        sellHit || softNote
-          ? 'signal-badge signal-badge-trigger-sell'
-          : 'signal-badge signal-badge-hold-real',
+      badgeClass: sellHit
+        ? 'signal-badge signal-badge-trigger-sell'
+        : 'signal-badge signal-badge-hold-real',
       badgeText,
     }
   }
@@ -160,6 +158,67 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   }
 
   return mk('flat', pos || side || '—')
+}
+
+export type SignalLegendId =
+  | 'hold-real'
+  | 'hold-paper'
+  | 'ban-buy'
+  | 'warn-buy'
+  | 'trigger-buy'
+  | 'warn-sell'
+  | 'trigger-sell'
+  | 'flat'
+
+/** 图例筛选可多标签：今日入槽既算已经买入，也算已触买；T+1 止损已记不算已触止损。 */
+export function collectLegendIds(row: HoldingRow): SignalLegendId[] {
+  const qty = qtyOf(row)
+  const pos = String(row.持仓状态 || '')
+  const alert = String(row.预警 || '').trim()
+  const t1Locked =
+    qty > 0 && (alert.includes('T+1') || pos === '已经买入') && Number(row.可用 || 0) <= 0
+  const buyHit =
+    String(row.已触买 || '') === '是' ||
+    alert.includes('已触买') ||
+    alert.includes('再触买') ||
+    alert.includes('收盘动量可再买')
+  const stopClosed =
+    pos === '已平仓' ||
+    pos === '已止损' ||
+    pos === '已触止损平仓' ||
+    alert.includes('已触止损平仓') ||
+    alert.includes('今日已止损')
+  const ids: SignalLegendId[] = []
+
+  if (qty > 0) ids.push('hold-real')
+  else if (pos === '策略持有') ids.push('hold-paper')
+  else if (stopClosed || pos === '当日禁买') ids.push('ban-buy')
+
+  if (buyHit) ids.push('trigger-buy')
+
+  if (
+    !t1Locked &&
+    !stopClosed &&
+    (String(row.已触止损 || '') === '是' ||
+      alert.includes('已触止损') ||
+      (pos === '待卖出' && alert.includes('止损')))
+  ) {
+    ids.push('trigger-sell')
+  } else if (
+    !t1Locked &&
+    !stopClosed &&
+    qty <= 0 &&
+    (pos === '待卖出' || alert.includes('将止损') || alert.includes('将卖出') || Boolean(row.近止损))
+  ) {
+    ids.push('warn-sell')
+  }
+
+  if (qty <= 0 && !buyHit && !stopClosed && pos !== '当日禁买') {
+    if (pos === '待买入' || alert.includes('将买') || Boolean(row.近买点)) ids.push('warn-buy')
+  }
+
+  if (!ids.length) ids.push('flat')
+  return ids
 }
 
 function mk(tier: SignalTier, badgeText: string): SignalVisual {

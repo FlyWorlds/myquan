@@ -766,6 +766,17 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
     return 404, {"error": "not found"}
 
 
+def _row_counts_in_watch_pnl(row: dict[str, Any]) -> bool:
+    """账户今日/合计：实仓 + 已实现成交 + 当日三槽平仓。"""
+    if row.get("error"):
+        return False
+    try:
+        qty = int(row.get("持仓") or 0)
+    except (TypeError, ValueError):
+        qty = 0
+    return qty > 0 or bool(row.get("已实现")) or bool(row.get("三槽平仓"))
+
+
 def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """账户合计（JSON 快照 / CLI 共用口径）。"""
     total_pnl = 0.0
@@ -777,15 +788,18 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     settled_pnl = 0.0
     settled_day = 0.0
     settled_n = 0
+    closed_extra = 0.0
     has_pos = False
     has_day = False
     for r in rows:
         qty = int(r.get("持仓") or 0)
         realized = bool(r.get("已实现"))
-        if r.get("浮盈") is not None and (qty > 0 or realized):
+        slot_closed = bool(r.get("三槽平仓"))
+        in_pnl = _row_counts_in_watch_pnl(r)
+        if r.get("浮盈") is not None and in_pnl:
             total_pnl += float(r["浮盈"])
             has_pos = True
-        if r.get("当日盈亏") is not None and (qty > 0 or realized):
+        if r.get("当日盈亏") is not None and in_pnl:
             total_day_pnl += float(r["当日盈亏"])
             has_day = True
             db = r.get("当日基数")
@@ -795,9 +809,17 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 dpct = r.get("当日盈亏%")
                 if dpct is not None and abs(float(dpct)) > 1e-12:
                     total_day_base += float(r["当日盈亏"]) / (float(dpct) / 100.0)
-                elif r.get("市值") is not None and not realized:
+                elif r.get("市值") is not None and qty > 0:
                     total_day_base += float(r["市值"]) - float(r["当日盈亏"])
-        if realized:
+                elif slot_closed:
+                    open_px = _as_money(r.get("开盘"))
+                    try:
+                        sold = int(r.get("卖出数量") or 0)
+                    except (TypeError, ValueError):
+                        sold = 0
+                    if open_px is not None and open_px > 0 and sold > 0:
+                        total_day_base += float(open_px) * sold
+        if realized or slot_closed:
             settled_n += 1
             if r.get("浮盈") is not None:
                 settled_pnl += float(r["浮盈"])
@@ -805,6 +827,8 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 settled_day += float(r["当日盈亏"])
             if r.get("成本") is not None and r.get("卖出数量"):
                 total_cost += float(r["成本"]) * int(r["卖出数量"])
+            if slot_closed and not realized and r.get("浮盈") is not None:
+                closed_extra += float(r["浮盈"])
         if r.get("市值") is not None and qty > 0:
             mv = float(r["市值"])
             total_mv += mv
@@ -831,7 +855,7 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     holdings_meta = load_holdings()
     account_open = _account_total_open(holdings_meta)
     if account_total is not None and account_open is not None:
-        total_pnl = round(float(account_total) - float(account_open), 2)
+        total_pnl = round(float(account_total) - float(account_open) + closed_extra, 2)
         has_pos = True
         total_pnl_pct = round(total_pnl / float(account_open) * 100.0, 2)
     if has_day and account_open is not None and account_open > 0:
@@ -850,7 +874,7 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "totalPnl": total_pnl if has_pos else None,
         "totalPnlPct": total_pnl_pct,
-        "dayPnl": total_day_pnl if has_day else None,
+        "dayPnl": round(total_day_pnl, 2) if has_day else None,
         "dayPnlPct": total_day_pct,
         "accountTotal": account_total,
         "accountOpen": account_open,
@@ -936,10 +960,7 @@ def publish_watch_snapshot(
     from watch_config import code_key, portfolio_pool_codes, strategy_watchlist_codes
 
     portfolio_codes = set(portfolio_pool_codes(holdings_meta))
-    portfolio_rows = [
-        r for r in rows if code_key(str(r.get("代码") or "")) in portfolio_codes
-    ]
-    account = _build_watch_account_summary(portfolio_rows)
+    account = _build_watch_account_summary(rows)
     session_today = next(
         (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
         "",
@@ -1767,7 +1788,7 @@ def _apply_trigger_date_fields(
     stop_exit_today = bool(sold_today or paper_stopped)
     # 三槽执行：当日止损/已记卖出（含纸面止损）→ 当日禁买该票（含因子22）
     row["当日禁买"] = bool(stop_exit_today)
-    if paper_stopped:
+    if paper_stopped and not sold_today:
         row["持仓状态"] = STATUS_STOP_CLOSED
         if str(row.get("预警") or "") in ("", "-", "空仓", "待买入", "策略持有"):
             row["预警"] = "策略回放·今日已止损"
@@ -1929,8 +1950,18 @@ def _apply_trigger_date_fields(
                 row["持仓状态"] = "空仓"
             if str(row.get("因子侧") or "") == "买入":
                 row["因子侧"] = "空仓"
+        elif hit_buy and md and md == today_md:
+            # 今日触买（含已入槽 / T+1）：优先标已触发，不被「不可用」盖掉
+            row["因子触发"] = f"已触发 {md}"
+            if qty > 0 and str(row.get("持仓状态") or "") in (
+                "",
+                "空仓",
+                "待买入",
+                "持有",
+            ):
+                row["持仓状态"] = "已经买入"
         elif hit_stop_while_held and today_md and qty > 0:
-            # 仍持仓：保留买入日；止损仅在预警/待卖出侧体现，勿写成空仓
+            # 仍持仓：保留买入日；止损仅在预警/待卖出侧体现
             if md:
                 row["因子触发"] = md
             if str(row.get("持仓状态") or "") in ("", "空仓", "待买入", "持有"):
@@ -1979,6 +2010,7 @@ def load_holdings() -> dict[str, Any]:
                 for w in effective_watchlist()
             },
             "realized_today": {},
+            "closed_today": {},
         }
         save_holdings(data)
         return data
@@ -1988,6 +2020,7 @@ def load_holdings() -> dict[str, Any]:
     for w in effective_watchlist():
         positions.setdefault(w["code"], _empty_position(w))
     data.setdefault("realized_today", {})
+    data.setdefault("closed_today", {})
     data.setdefault("account_total", None)
     data.setdefault("account_cash", None)
     data.setdefault("account_total_open", None)
@@ -2123,15 +2156,19 @@ def _stabilize_sell_warn(
     alert = str(sig.get("alert") or "")
 
     if bg == "warn-sell":
-        sticky[code] = {
-            "session": session,
-            "bg_class": "warn-sell",
-            "alert": alert,
-            "pending_sell": True,
-            "建议挂单": sig.get("建议挂单"),
-            "挂单说明": sig.get("挂单说明"),
-            "near_stop": bool(sig.get("near_stop")),
-        }
+        _sticky_put(
+            sticky,
+            code,
+            session,
+            {
+                "bg_class": "warn-sell",
+                "alert": alert,
+                "pending_sell": True,
+                "建议挂单": sig.get("建议挂单"),
+                "挂单说明": sig.get("挂单说明"),
+                "near_stop": bool(sig.get("near_stop")),
+            },
+        )
         return sig
 
     # 当前已非卖出预警：若仍处于近止损缓冲带，则保持上一帧绿底
@@ -2140,7 +2177,7 @@ def _stabilize_sell_warn(
         prev_alert = str(prev.get("alert") or "")
         # 现价已明显高于止损：立即解除粘滞（涨停/强反弹）
         if stop_px > 0 and float(last_px) > float(stop_px) * 1.005:
-            sticky.pop(code, None)
+            _sticky_drop_sell_keep_buy(sticky, code, session)
             return sig
         # 将止损：距止损因子价仍在 near+0.5% 内则保持
         if "将止损" in prev_alert or prev.get("near_stop"):
@@ -2162,20 +2199,125 @@ def _stabilize_sell_warn(
                 out["建议挂单"] = prev.get("建议挂单")
             if prev.get("挂单说明") and not out.get("挂单说明"):
                 out["挂单说明"] = prev.get("挂单说明")
-            sticky[code] = {
-                "session": session,
-                "bg_class": "warn-sell",
-                "alert": out["alert"],
-                "pending_sell": True,
-                "建议挂单": out.get("建议挂单"),
-                "挂单说明": out.get("挂单说明"),
-                "near_stop": bool(prev.get("near_stop")),
-            }
+            _sticky_put(
+                sticky,
+                code,
+                session,
+                {
+                    "bg_class": "warn-sell",
+                    "alert": out["alert"],
+                    "pending_sell": True,
+                    "建议挂单": out.get("建议挂单"),
+                    "挂单说明": out.get("挂单说明"),
+                    "near_stop": bool(prev.get("near_stop")),
+                },
+            )
             return out
 
-        sticky.pop(code, None)
+        _sticky_drop_sell_keep_buy(sticky, code, session)
 
     return sig
+
+
+def _should_demote_pre_signal(phase: str) -> bool:
+    """非连续竞价时：9:30 前把已触发降成将买入/将止损；午休/收盘保留盘中已触达。"""
+    return str(phase or "") not in ("lunch", "closed", "continuous")
+
+
+def _merge_path_buy_hit(
+    hit_open: bool,
+    bars_buy: Any,
+    *,
+    open_px: float,
+    entry_pct: float,
+    tick: float,
+) -> tuple[bool, float | None]:
+    """有分钟线走路径；日线最高已触开盘买点时，1m 不全或回退也不把已触买打成未触。"""
+    if bars_buy is None or getattr(bars_buy, "empty", True):
+        return bool(hit_open), None
+    buy_path = path_dependent_buy_hit(
+        bars_buy,
+        open_px=float(open_px),
+        entry_pct=float(entry_pct),
+        tick=tick,
+        allow_attack=DEFAULT_ALLOW_ATTACK,
+    )
+    hit = bool(buy_path.get("hit_buy"))
+    px = None
+    if hit and buy_path.get("buy_px"):
+        try:
+            px = float(buy_path["buy_px"])
+        except (TypeError, ValueError):
+            px = None
+    return bool(hit_open or hit), px
+
+
+def _sticky_put(
+    sticky: dict[str, Any],
+    code: str,
+    session: str,
+    payload: dict[str, Any],
+) -> None:
+    """写粘滞时保留当日 buy_touched / stop_touched，避免卖出防抖把已触买抹掉。"""
+    prev = sticky.get(code) if isinstance(sticky.get(code), dict) else {}
+    if not isinstance(prev, dict):
+        prev = {}
+    st = dict(prev)
+    st.update(payload)
+    st["session"] = str(session)
+    if bool(prev.get("buy_touched")) or bool(st.get("buy_touched")):
+        st["buy_touched"] = True
+    if bool(prev.get("stop_touched")) or bool(st.get("stop_touched")):
+        st["stop_touched"] = True
+        if prev.get("touch_stop") and not st.get("touch_stop"):
+            st["touch_stop"] = prev.get("touch_stop")
+    sticky[code] = st
+
+
+def _sticky_drop_sell_keep_buy(
+    sticky: dict[str, Any],
+    code: str,
+    session: str,
+) -> None:
+    """解除卖出绿底时，当日已触买标记仍留到次日 9:15。"""
+    prev = sticky.get(code) if isinstance(sticky.get(code), dict) else None
+    if (
+        isinstance(prev, dict)
+        and bool(prev.get("buy_touched"))
+        and str(prev.get("session") or "") == str(session)
+    ):
+        sticky[code] = {"session": str(session), "buy_touched": True}
+        return
+    sticky.pop(code, None)
+
+
+def _restore_session_buy_hit(
+    hit_buy_raw: bool,
+    *,
+    qty: int,
+    sticky_row: dict[str, Any] | None,
+    session: str,
+) -> bool:
+    """当日已触买粘滞：有分钟线、现价离开买点也不摘。次日 9:15 才清。"""
+    if int(qty or 0) > 0:
+        return bool(hit_buy_raw)
+    if not isinstance(sticky_row, dict):
+        return bool(hit_buy_raw)
+    if str(sticky_row.get("session") or "") != str(session):
+        return bool(hit_buy_raw)
+    if bool(sticky_row.get("buy_touched")):
+        return True
+    return bool(hit_buy_raw)
+
+
+def _stamp_buy_touched(
+    sticky: dict[str, Any],
+    code: str,
+    *,
+    session: str,
+) -> None:
+    """当日已触买粘滞，对标 stop_touched。"""
+    _sticky_put(sticky, code, session, {"buy_touched": True})
 
 
 def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
@@ -2424,11 +2566,65 @@ def save_holdings(data: dict[str, Any]) -> None:
 
 
 def _purge_stale_realized(data: dict[str, Any], session: str) -> None:
-    """清除非当日已实现记录，避免隔日污染合计。"""
+    """清除非当日已实现记录 / 三槽平仓留痕，避免隔日污染合计。"""
     realized = data.setdefault("realized_today", {})
     stale = [k for k, v in realized.items() if str(v.get("session") or "") != session]
     for k in stale:
         del realized[k]
+    traces = data.get("closed_today")
+    if isinstance(traces, dict):
+        data["closed_today"] = {
+            k: v
+            for k, v in traces.items()
+            if isinstance(v, dict) and str(v.get("session") or "") == session
+        }
+
+
+def _slot_closed_map(
+    data: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    raw = (data if data is not None else load_holdings()).get("closed_today")
+    return raw if isinstance(raw, dict) else {}
+
+
+def _forget_slot_closed(code: str) -> None:
+    """再入槽后允许下一笔平仓重新记当日留痕。"""
+    ck = _code_key(code)
+    if not ck:
+        return
+    data = load_holdings()
+    traces = data.get("closed_today")
+    if not isinstance(traces, dict) or ck not in traces:
+        return
+    del traces[ck]
+    save_holdings(data)
+
+
+def _remember_slot_closed(row: dict[str, Any]) -> None:
+    """记下今日三槽平仓；下一交易日用 session 对不上来清空展示。"""
+    sess = str(row.get("交易日") or "")[:10]
+    code = _code_key(str(row.get("代码") or ""))
+    if not sess or not code:
+        return
+    try:
+        qty = int(row.get("卖出数量") or 0)
+    except (TypeError, ValueError):
+        qty = 0
+    rec = {
+        "session": sess,
+        "name": row.get("名称"),
+        "qty": qty,
+        "price": row.get("成交价"),
+        "day_pnl": row.get("当日盈亏"),
+        "day_pnl_pct": row.get("当日盈亏%"),
+    }
+    data = load_holdings()
+    traces = data.setdefault("closed_today", {})
+    old = traces.get(code) if isinstance(traces.get(code), dict) else None
+    if old == rec:
+        return
+    traces[code] = rec
+    save_holdings(data)
 
 
 def update_high_after_stop(
@@ -2508,6 +2704,9 @@ def apply_paper_slot_buy(
         if ck not in {_code_key(str(c)) for c in pool}:
             pool.append(ck)
             data["portfolio_pool"] = pool
+    traces = data.get("closed_today")
+    if isinstance(traces, dict):
+        traces.pop(_code_key(code), None)
     save_holdings(data)
     append_trade(
         {
@@ -2558,6 +2757,26 @@ def _slot_notional_budget(
     if n > 0 and mv > 0:
         return round(mv / float(n), 2)
     return None
+
+
+def _paper_slot_qty(price: float, *, account_total: float | None = None) -> int:
+    """纸面单槽股数：30 万×30% / 价，向下取整到 100 股（与入槽成交同一口径）。"""
+    try:
+        px = float(price)
+    except (TypeError, ValueError):
+        return 0
+    if px <= 0:
+        return 0
+    try:
+        equity = float(account_total) if account_total is not None else 0.0
+    except (TypeError, ValueError):
+        equity = 0.0
+    if equity <= 0:
+        equity = float(DEFAULT_ACCOUNT_TOTAL)
+    budget = equity * float(SLOT_WEIGHT)
+    if budget <= 0:
+        return 0
+    return int(budget // (px * 100.0)) * 100
 
 
 def today_slot_buy_ranks(
@@ -2853,15 +3072,15 @@ def apply_exit_fill(
     pnl = (fill_px - cost_f) * sell_qty if cost_f is not None else None
     pnl_pct = (fill_px / cost_f - 1.0) * 100.0 if cost_f and cost_f > 0 else None
 
-    # 卖出可用(=隔夜)按昨收计当日盈亏；否则按成本
+    # 隔夜仓平仓浮亏：今开 → 成交价（锁定）；今买当日按成本
     avail_before = _sellable_qty(pos, old_qty, buy_time, session, t0=False)
     overnight_sell = sell_qty <= avail_before and avail_before > 0
-    if overnight_sell and prev_close is not None and float(prev_close) > 0:
-        base_px = float(prev_close)
+    if overnight_sell and open_px is not None and float(open_px) > 0:
+        base_px = float(open_px)
     elif (not overnight_sell) and cost_f is not None:
         base_px = cost_f
-    elif prev_close is not None and float(prev_close) > 0:
-        base_px = float(prev_close)
+    elif open_px is not None and float(open_px) > 0:
+        base_px = float(open_px)
     else:
         base_px = cost_f if cost_f is not None else float(open_px)
     day_base = float(base_px) * sell_qty if base_px else None
@@ -3547,7 +3766,14 @@ def collect_rows(
                         seed_h = max(seed_h, peak_h)
                     # 禁止把当日快照 high 种进 seed：否则早盘低点会撞上尚未走完的高点
                     # （天通 600330 曾因此被误剔仓）。今日高点只经 1m 顺序抬升。
-            # 9:25 前：有仓卖价只用成本+已记峰值；空仓不拿竞价虚高算买点展示锚
+            # 买入当日 T+1：已记只武装次日，不当作今日已触止损
+            t1_today_early = bool(
+                qty_early > 0
+                and buy_time_early
+                and (not bool(w.get("t0")))
+                and is_t1_buy_day(buy_time_early, str(q["session"]))
+            )
+            overnight_armed_lv = bool(pos_early.get("stop_noted")) and not t1_today_early
             # 有仓：卖价锚也不用当日快照 high（否则 lv.stop 被抬高，无 1m 时 last 会假触）
             snap_high = float(q["high"]) if threshold_ok else float(
                 seed_h or cost_h or q.get("prev_close") or 0
@@ -3571,7 +3797,7 @@ def collect_rows(
                 vol20_daily=_vol20_daily_for(str(w["sina"]), str(q["session"]))
                 if qty_early > 0
                 else None,
-                overnight_armed=bool(pos_early.get("stop_noted")),
+                overnight_armed=overnight_armed_lv,
                 allow_attack=DEFAULT_ALLOW_ATTACK,
             )
             lv_base = strategy_levels(
@@ -3624,16 +3850,21 @@ def collect_rows(
                 if not isinstance(bars_buy, pd.DataFrame) or bars_buy.empty:
                     bars_buy = _today_1m_bars(str(w["sina"]), str(q["session"]))
                     q["_day_bars"] = bars_buy
-                buy_path = path_dependent_buy_hit(
+                hit_buy_raw, path_buy_px = _merge_path_buy_hit(
+                    hit_open,
                     bars_buy,
                     open_px=float(q["open"]),
                     entry_pct=float(entry_pct),
                     tick=tick,
-                    allow_attack=DEFAULT_ALLOW_ATTACK,
                 )
-                hit_buy_raw = bool(buy_path.get("hit_buy"))
-                if hit_buy_raw and buy_path.get("buy_px"):
-                    path_buy_px = float(buy_path["buy_px"])
+            # 当日粘滞：已触买进预警后整天保留（有 1m / 现价离开买点也不摘）
+            _st_buy = sticky.get(code) if isinstance(sticky.get(code), dict) else None
+            hit_buy_raw = _restore_session_buy_hit(
+                hit_buy_raw,
+                qty=qty_early,
+                sticky_row=_st_buy,
+                session=str(q["session"]),
+            )
             hit_buy = bool(allow_entry) and hit_buy_raw
             _replay_holding_early = bool(replay.get("holding")) and qty_early <= 0
             # 因子26：止损必须 1 分钟 path-dependent；禁止全日 low × 抬高后止损
@@ -3664,7 +3895,7 @@ def collect_rows(
                         seed_high=seed_h,
                         cost_px=cost_h,
                         vol20_daily=_vol20_daily_for(str(w["sina"]), str(q["session"])),
-                        overnight_armed=bool(pos_early.get("stop_noted")),
+                        overnight_armed=overnight_armed_lv,
                         day_open=float(q.get("open") or 0) or None,
                     )
                     hit_eff_stop = bool(path_res.get("hit_stop"))
@@ -3723,7 +3954,8 @@ def collect_rows(
                 hit_stop = False
             else:
                 hit_stop = hit_eff_stop
-            # 今日买入 T+1：盈利≥3%不记；其余走次日峰值回落 2.5%
+            # 今日买入 T+1：盈利≥3%不记；其余收到日末才落库武装次日。
+            # 盘中「盈<3%」只是预告，不得把 hit_stop 打成真（否则假已触止损）。
             if (
                 qty_early > 0
                 and buy_time_early
@@ -3755,27 +3987,21 @@ def collect_rows(
                     hard_pct=float(stop_pct),
                     bar_low=low_n if low_n > 0 else None,
                 )
+                note_reason = str(dec.get("reason") or "")
                 allow_note = dec.get("noted_px") is not None
-                if allow_note:
-                    persist_stop_noted(
-                        code,
-                        stop_px=float(dec["noted_px"]),
-                        session=str(q["session"]),
-                        px_digits=px_digits,
-                    )
-                    path_touch_stop = float(dec["noted_px"])
-                    hit_stop = True
-                    hit_eff_stop = True
-                else:
+                if note_reason == "profit_ge_3pct":
                     clear_stop_noted(code)
                     if isinstance(sticky, dict):
                         sticky.pop(code, None)
-                    if hit_stop and str(dec.get("reason") or "") in (
-                        "profit_ge_3pct",
-                    ):
-                        hit_stop = False
-                        hit_eff_stop = False
-                        path_touch_stop = 0.0
+                elif allow_note:
+                    # 硬亏当日可记；t1_trail 仅收盘确认后落库。一律不把「盈<3%」抬成今日 hit_stop。
+                    if note_reason == "hard_from_cost" or is_close_confirmed():
+                        persist_stop_noted(
+                            code,
+                            stop_px=float(dec["noted_px"]),
+                            session=str(q["session"]),
+                            px_digits=px_digits,
+                        )
                 try:
                     prev_c_n = float(q.get("prev_close") or 0)
                 except (TypeError, ValueError):
@@ -3802,15 +4028,17 @@ def collect_rows(
             # 9:30 起才「已触发」买卖与止损结算
             # 展示与结算拆开：路径/现价破卖价 → 始终可显示「已触止损」；
             # 仅连续竞价才自动结算（午休/收盘后不再把展示清成「否」）。
+            # 已触买同理：午休/收盘保留盘中触达，9:30 前仍可降成「将买入」。
             preview_ok = threshold_ok
             signal_ok = signal_ok_global
+            hit_path_settle = bool(hit_stop)  # 仅 1m/路径；现价旁路只用于展示
             hit_path = bool(hit_stop)
             try:
                 _last_chk = float(q["last"])
                 _stop_chk = float(lv.get("stop") or 0)
             except (TypeError, ValueError):
                 _last_chk, _stop_chk = 0.0, 0.0
-            # 有仓：现价已破当前卖价 → 立即标展示触达（不限时段；结算仍要连续竞价）
+            # 有仓：现价已破当前卖价 → 立即标展示触达（不限时段；结算仍要路径+连续竞价）
             if (
                 qty_early > 0
                 and _stop_chk > 0
@@ -3839,30 +4067,35 @@ def collect_rows(
                             path_touch_stop = _stop_chk
             if not preview_ok:
                 hit_buy = False
-            elif not signal_ok:
+            elif not signal_ok and _should_demote_pre_signal(phase_now):
                 hit_buy = False
             # 用户确认仍持有：不自动止损清槽（天通误剔后曾按 3 空槽补仓）
             hold_locked = bool(qty_early > 0 and pos_early.get("hold_lock"))
             if hold_locked:
                 hit_path = False
+                hit_path_settle = False
                 hit_eff_stop = False
                 hit_base_stop = False
                 path_touch_stop = 0.0
             hit_stop_show = bool(hit_path)
             hit_stop_settle = bool(
-                hit_path and preview_ok and signal_ok and (not hold_locked)
+                hit_path_settle and preview_ok and signal_ok and (not hold_locked)
             )
             hit_stop = hit_stop_settle  # 下文结算 / 纸面逻辑用结算口径
             if hit_stop_show and qty_early > 0:
-                sticky[code] = {
-                    "session": str(q["session"]),
-                    "bg_class": "warn-sell",
-                    "alert": "已触止损",
-                    "pending_sell": True,
-                    "stop_touched": True,
-                    "touch_stop": float(path_touch_stop or _stop_chk or 0) or None,
-                    "near_stop": True,
-                }
+                _sticky_put(
+                    sticky,
+                    code,
+                    str(q["session"]),
+                    {
+                        "bg_class": "warn-sell",
+                        "alert": "已触止损",
+                        "pending_sell": True,
+                        "stop_touched": True,
+                        "touch_stop": float(path_touch_stop or _stop_chk or 0) or None,
+                        "near_stop": True,
+                    },
+                )
             # 当日止损/已结算卖出 → 三槽规则下当日禁再买（含因子22）
             _realized_pre = realized_map.get(code)
             _sold_today_pre = bool(
@@ -4288,10 +4521,11 @@ def collect_rows(
                         sig["alert"] = "将止损" if "止损" in str(sig.get("alert") or "") else sig.get("alert")
                         sig["bg_class"] = "warn-sell"
                         sig["pending_sell"] = True
-                else:
+                elif _should_demote_pre_signal(phase_now):
                     sig = _demote_pre_signal_window(sig)
-                hit_buy = False
-                # 结算口径保持 False；展示口径 hit_stop_show 不变
+                if _should_demote_pre_signal(phase_now):
+                    hit_buy = False
+                # 结算口径保持 False；展示口径 hit_stop_show / hit_buy 不变
                 hit_stop = False
             if qty > 0 and hit_stop_show and stop_locked:
                 limit_px = float(limit_state["limit_px"])
@@ -4438,11 +4672,13 @@ def collect_rows(
                 sticky[code]["stop_touched"] = True
                 if path_touch_stop > 0:
                     sticky[code]["touch_stop"] = float(path_touch_stop)
+            if hit_buy and qty <= 0 and preview_ok:
+                _stamp_buy_touched(sticky, code, session=str(q["session"]))
             entry_for_overlay = bool(allow_entry and preview_ok and signal_ok)
             if not (_paper_hold and hit_stop_show):
                 sig = _overlay_buy_signal_on_hold(
                     sig,
-                    hit_buy=hit_buy if signal_ok else False,
+                    hit_buy=hit_buy if (signal_ok or not _should_demote_pre_signal(phase_now)) else False,
                     allow_entry=entry_for_overlay,
                     paper_active=paper_active,
                     qty=qty,
@@ -4453,8 +4689,12 @@ def collect_rows(
                     last_px=float(q["last"]),
                     px_digits=px_digits,
                 )
-                # 已触止损展示中：勿再 demote 成「持有」
-                if not signal_ok and not (qty > 0 and hit_stop_show):
+                # 已触止损展示中：勿再 demote 成「持有」；午休/收盘勿把已触买降成将买入
+                if (
+                    not signal_ok
+                    and not (qty > 0 and hit_stop_show)
+                    and _should_demote_pre_signal(phase_now)
+                ):
                     sig = _demote_pre_signal_window(sig)
             if qty > 0 and sellable > 0 and sellable < qty:
                 # 部分 T+1：状态标为持有·部分T+1
@@ -4783,6 +5023,11 @@ def collect_rows(
     _annotate_unfilled_buy_signals(rows, slot_info)
     for r in rows:
         _finalize_position_row(r)
+    for r in rows:
+        if int(r.get("持仓") or 0) > 0:
+            _forget_slot_closed(str(r.get("代码") or ""))
+        _enrich_closed_day_pnl(r)
+        _finalize_position_row(r)
     if rows:
         rows[0]["_slot_meta"] = slot_info
     return sort_watch_rows(rows)
@@ -4834,9 +5079,207 @@ def _enrich_float_pnl(row: dict[str, Any]) -> None:
         return
 
     if qty <= 0:
+        if _is_closed_trace_row(row):
+            _enrich_closed_day_pnl(row)
+            return
         row["浮盈"] = None
         row["浮盈%"] = None
         row["盈亏状态"] = None
+
+
+_LOTS_CACHE: dict[str, Any] = {"mtime": None, "lots": {}}
+
+
+def _is_closed_trace_row(
+    row: dict[str, Any],
+    *,
+    lots: dict[str, dict[str, Any]] | None = None,
+    traces: dict[str, dict[str, Any]] | None = None,
+) -> bool:
+    """三槽实仓清仓留痕：仅当日。下一交易日 session 对不上即清空，不因昨仓流水复活。
+
+    不含策略回放未入槽。
+    """
+    if int(row.get("持仓") or 0) > 0:
+        return False
+    if bool(row.get("已实现")):
+        return True
+    code = _code_key(str(row.get("代码") or ""))
+    if not code:
+        return False
+    sess = str(row.get("交易日") or "")[:10]
+    book_traces = traces if traces is not None else _slot_closed_map()
+    rec = book_traces.get(code) if isinstance(book_traces, dict) else None
+    rec_sess = str((rec or {}).get("session") or "")[:10]
+    if sess:
+        if rec_sess == sess:
+            return True
+        if rec_sess and rec_sess != sess:
+            return False
+    book = lots if lots is not None else _last_open_lots_from_trades()
+    if code not in book:
+        return False
+    return bool(row.get("当日禁买")) or str(row.get("已触止损") or "") == "是"
+
+
+def _parse_open_lots(text: str) -> dict[str, dict[str, Any]]:
+    """成交流水推到当前未平买档：code → {qty, cost, time}。"""
+    lots: dict[str, dict[str, Any]] = {}
+    for line in str(text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        note = str(rec.get("note") or "")
+        if "非实盘" in note:
+            continue
+        code = _code_key(str(rec.get("code") or ""))
+        if not code:
+            continue
+        side = str(rec.get("side") or "").lower()
+        if side in ("buy", "买入"):
+            try:
+                qty = int(rec.get("after_qty") if rec.get("after_qty") is not None else rec.get("qty") or 0)
+            except (TypeError, ValueError):
+                qty = 0
+            cost = rec.get("avg_cost")
+            if cost is None:
+                cost = rec.get("price")
+            try:
+                cost_f = float(cost) if cost is not None else 0.0
+            except (TypeError, ValueError):
+                cost_f = 0.0
+            if qty > 0 and cost_f > 0:
+                lots[code] = {
+                    "qty": qty,
+                    "cost": cost_f,
+                    "time": rec.get("time"),
+                }
+        elif side in ("sell", "卖出", "stop"):
+            after = rec.get("after_qty")
+            try:
+                after_n = int(after) if after is not None else 0
+            except (TypeError, ValueError):
+                after_n = 0
+            if after_n <= 0:
+                lots.pop(code, None)
+            elif code in lots:
+                lots[code]["qty"] = after_n
+    return lots
+
+
+def _last_open_lots_from_trades(*, text: str | None = None) -> dict[str, dict[str, Any]]:
+    """昨仓未记账卖出时，用 trades.jsonl 最后一档买量估已平仓当日盈亏。"""
+    if text is not None:
+        return _parse_open_lots(text)
+    try:
+        mtime = TRADES_FILE.stat().st_mtime if TRADES_FILE.exists() else None
+    except OSError:
+        return {}
+    if _LOTS_CACHE.get("mtime") == mtime and isinstance(_LOTS_CACHE.get("lots"), dict):
+        return _LOTS_CACHE["lots"]
+    raw = ""
+    if TRADES_FILE.exists():
+        try:
+            raw = TRADES_FILE.read_text(encoding="utf-8")
+        except OSError:
+            return {}
+    lots = _parse_open_lots(raw)
+    _LOTS_CACHE["mtime"] = mtime
+    _LOTS_CACHE["lots"] = lots
+    return lots
+
+
+def _closed_mark_px(row: dict[str, Any]) -> float | None:
+    """已平仓价（锁定）：已有成交价不再改；低开跌破止损用开盘；盘中触及用止损。不用现价。"""
+    fill = _as_money(row.get("成交价"))
+    if fill is not None:
+        return fill
+    stop = _as_money(row.get("止损"))
+    open_px = _as_money(row.get("开盘"))
+    low = _as_money(row.get("最低"))
+    hit = str(row.get("已触止损") or "") == "是"
+    if hit and stop is not None:
+        if open_px is not None and open_px <= stop + 1e-12:
+            return open_px
+        if low is not None and low <= stop + 1e-12:
+            return stop
+        return stop
+    return None
+
+
+def _enrich_closed_day_pnl(
+    row: dict[str, Any],
+    *,
+    lots: dict[str, dict[str, Any]] | None = None,
+    traces: dict[str, dict[str, Any]] | None = None,
+) -> None:
+    """已平仓卡片：昨仓留痕按今开→平仓价、30万×30%槽位；已实现成交保留记账股数与当日盈亏。"""
+    if row.get("error") or not _is_closed_trace_row(row, lots=lots, traces=traces):
+        return
+    code = _code_key(str(row.get("代码") or ""))
+    lot = (lots if lots is not None else _last_open_lots_from_trades()).get(code) or {}
+    cost = lot.get("cost")
+    try:
+        cost_f = float(cost) if cost is not None else None
+    except (TypeError, ValueError):
+        cost_f = None
+    if cost_f is None:
+        cost_f = _as_money(row.get("成本"))
+    try:
+        qty_lot = int(lot.get("qty") or row.get("卖出数量") or 0)
+    except (TypeError, ValueError):
+        qty_lot = 0
+    # 已实现成交：用记账股数，不要被 30 万×30% 纸面槽位覆盖
+    if bool(row.get("已实现")):
+        qty = qty_lot if qty_lot > 0 else int(row.get("卖出数量") or 0)
+        if qty > 0:
+            row["卖出数量"] = qty
+        row["三槽平仓"] = True
+        if row.get("当日盈亏") is not None:
+            if row.get("成本") is None and cost_f is not None:
+                row["成本"] = cost_f
+            _remember_slot_closed(row)
+            return
+        qty_slot = 0
+    else:
+        qty_slot = _paper_slot_qty(cost_f, account_total=DEFAULT_ACCOUNT_TOTAL) if cost_f else 0
+        qty = qty_slot if qty_slot > 0 else qty_lot
+    if qty <= 0:
+        return
+    fill = _closed_mark_px(row)
+    open_px = _as_money(row.get("开盘"))
+    if fill is None or open_px is None or open_px <= 0:
+        return
+    if row.get("成交价") is None:
+        row["成交价"] = fill
+    else:
+        locked = _as_money(row.get("成交价"))
+        if locked is not None:
+            fill = locked
+    day_pnl = (fill - open_px) * qty
+    day_pct = (fill / open_px - 1.0) * 100.0
+    row["当日盈亏"] = round(day_pnl, 2)
+    row["当日盈亏%"] = round(day_pct, 2)
+    row["卖出数量"] = qty
+    row["三槽平仓"] = True
+    if row.get("成本") is None and cost_f is not None:
+        row["成本"] = cost_f
+    if cost_f is not None and cost_f > 0:
+        row["浮盈"] = round((fill - cost_f) * qty, 2)
+        row["浮盈%"] = round((fill / cost_f - 1.0) * 100.0, 2)
+        row["盈亏状态"] = "结算"
+        row["盈亏说明"] = (
+            "已平仓·今开至平仓价锁定；股数按30万×30%槽位折算（与今日三槽同一账户口径）"
+            if qty_slot > 0
+            else "已平仓·今开至平仓价锁定；昨仓股数来自成交流水"
+        )
+    _remember_slot_closed(row)
 
 
 def _finalize_position_row(row: dict[str, Any]) -> None:
@@ -4859,7 +5302,19 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
         row["近买点"] = False
         row["可执行"] = False
         row["bg_class"] = "status-flat"
-        if alert in ("", "-", "空仓", "待买入", "当日禁买", "止损成交", "已平仓", "已触止损平仓"):
+        if alert in (
+            "",
+            "-",
+            "空仓",
+            "待买入",
+            "当日禁买",
+            "止损成交",
+            "已平仓",
+            "已触止损平仓",
+        ) or (
+            (bool(row.get("已实现")) or bool(row.get("三槽平仓")) or int(row.get("卖出数量") or 0) > 0)
+            and alert.startswith("策略回放")
+        ):
             row["预警"] = SIGNAL_STOP_HIT
         # 主展示价：保留上次买入触发价
         if row.get("已触发因子侧") == "买入" and row.get("已触发因子价") is not None:
@@ -5202,7 +5657,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     for r in show_rows:
         raw = next((x for x in rows if x["代码"] == r["代码"]), {})
         if raw.get("浮盈") is not None and (
-            int(raw.get("持仓") or 0) > 0 or raw.get("已实现")
+            int(raw.get("持仓") or 0) > 0 or raw.get("已实现") or raw.get("三槽平仓")
         ):
             stock_pnl += float(raw["浮盈"])
             stock_n += 1
@@ -5256,7 +5711,8 @@ def cmd_status(args: argparse.Namespace) -> None:
 
     print(f"策略: {STRATEGY_NAME}（{_STRATEGY_SYNC_NOTE}）")
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
-    print("     当日盈亏(现价盈亏): 隔夜=(现价-昨收)×持股；今买=(现价-今买成交价)×今买股数")
+    print("     当日盈亏: 持仓隔夜=(现价-昨收)×持股；今买=(现价-今买成交价)×今买股数")
+    print("     已平仓浮亏: (平仓价-今开)×卖出股数，成交价锁定后不再随现价")
     print("     因子26卖出: 分时最高回落阈值止损；已触止损=视为成交并锁定盈亏")
     print("     买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
     _f2 = load_holdings().get("factor2")
@@ -5543,6 +5999,7 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
         positions[w["code"]] = _empty_position(w)
 
     data["realized_today"] = {}
+    data["closed_today"] = {}
     data["alert_sticky"] = {}
     data["factor_memory"] = {}
     data["account_total"] = float(DEFAULT_ACCOUNT_TOTAL)

@@ -45,7 +45,10 @@ def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-from watch_buy_signal import is_today_alert_row as _is_today_alert_row
+from watch_buy_signal import (
+    is_buy_hit as _is_buy_hit,
+    is_today_alert_row as _is_today_alert_row,
+)
 
 
 def filter_portfolio_holdings(
@@ -58,9 +61,11 @@ def filter_portfolio_holdings(
     """持仓 Tab：实仓 + 当日已平仓留痕 + 默认策略池当日买点预警。
 
     排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=3）→ 当日已平仓（不占槽）→ 预警/候选。
-    平仓 = 三槽实仓止损/止盈卖出清仓；当日留痕（槽位留痕=True）不占槽，次日随 realized 清除。
+    平仓 = 三槽实仓止损/止盈卖出清仓；当日留痕（槽位留痕=True）不占槽，下一交易日清空。
     买点预警仅默认策略池（strategy16=核心龙头）；旧 portfolio_pool 空壳不进持仓 Tab。
-    竞价/收盘：仍展示实仓 + 当日已平仓；其它空仓预警不进持仓 Tab。
+    竞价：仍展示实仓 + 当日已平仓；其它空仓预警不进持仓 Tab。
+    连续竞价与午休：当日买点预警进持仓 Tab。
+    收盘：当日已触买仍留在预警栏（当天不摘），将买入等接近信号不留。
     """
     from watch_config import (
         MAX_PORTFOLIO_SLOTS,
@@ -85,22 +90,21 @@ def filter_portfolio_holdings(
         except Exception:  # noqa: BLE001
             strategy_codes = set()
 
+    def _slot_sold_qty(r: dict[str, Any]) -> int:
+        try:
+            return int(r.get("卖出数量") or 0)
+        except (TypeError, ValueError):
+            return 0
+
     def _is_closed_trace(r: dict[str, Any]) -> bool:
-        """当日已平仓留痕（止损/止盈卖出后 qty=0）。"""
-        pos = str(r.get("持仓状态") or "")
-        if bool(r.get("已实现")):
+        """三槽实仓清仓留痕：已实现成交，或昨仓/今仓有卖出股数。不含策略回放未入槽。"""
+        if bool(r.get("已实现")) or bool(r.get("三槽平仓")):
             return True
-        if pos in ("已平仓", "已触止损平仓", "已止损", "当日禁买"):
-            return True
-        alert = str(r.get("预警") or "")
-        return (
-            "已触止损平仓" in alert
-            or "今日已止损" in alert
-            or (bool(r.get("已实现")) and "已触止损" in alert)
-        )
+        return _slot_sold_qty(r) > 0
 
     phase_now = phase if phase is not None else market_phase()
-    holdings_only = phase_now != "continuous"
+    # 竞价只留实仓+已平仓；连续竞价/午休展示当日买点预警；收盘只留已触买
+    holdings_only = phase_now not in ("continuous", "lunch", "closed")
 
     picked: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -111,8 +115,11 @@ def filter_portfolio_holdings(
         qty = int(r.get("持仓") or 0)
         closed_trace = qty <= 0 and _is_closed_trace(r)
         # 买点预警：仅默认策略池；不把旧池空壳/别的策略票灌进持仓 Tab
+        keep_empty_alert = phase_now in ("continuous", "lunch") or (
+            phase_now == "closed" and _is_buy_hit(r)
+        )
         alert_only = (
-            (not holdings_only)
+            keep_empty_alert
             and qty <= 0
             and (not closed_trace)
             and c in strategy_codes

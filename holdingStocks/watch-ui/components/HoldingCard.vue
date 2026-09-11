@@ -121,7 +121,10 @@ const cardClass = computed(() => {
       <p v-if="row.error" class="text-sm text-up">{{ row.error }}</p>
       <div v-else class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
         <div><span class="text-ui-text-2">持仓状态</span> <b>{{ posStatus }}</b></div>
-        <div><span class="text-ui-text-2">持仓</span> <b class="sensitive">{{ row.持仓 ?? 0 }}</b></div>
+        <div>
+          <span class="text-ui-text-2">{{ slotTrace && row.卖出数量 ? '卖出' : '持仓' }}</span>
+          <b class="sensitive">{{ slotTrace && row.卖出数量 ? row.卖出数量 : (row.持仓 ?? 0) }}</b>
+        </div>
         <div><span class="text-ui-text-2">成本</span> <b class="sensitive">{{ row.成本 != null ? fmtNum(row.成本, pdg) : '-' }}</b></div>
         <div><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
         <div><span class="text-ui-text-2">因子触发</span> <b>{{ row.因子触发 || '-' }}</b></div>

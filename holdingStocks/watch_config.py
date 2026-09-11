@@ -636,6 +636,9 @@ def portfolio_pool_codes(holdings: dict[str, Any]) -> list[str]:
     for code, rec in (holdings.get("realized_today") or {}).items():
         if rec:
             codes.add(code_key(str(code)))
+    for code, rec in (holdings.get("closed_today") or {}).items():
+        if rec:
+            codes.add(code_key(str(code)))
     return sorted(codes)
 
 

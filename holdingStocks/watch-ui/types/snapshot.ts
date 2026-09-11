@@ -47,10 +47,12 @@ export interface HoldingRow {
   盈亏状态?: string | null
   盈亏说明?: string | null
   已实现?: boolean
-  /** 单笔价差：未结=现价−成本；已卖=成交价−成本（前端也可自算） */
+  /** 单笔收入% 由前端用现价或成交价相对成本计算 */
   单笔收入?: number | null
   当日盈亏?: number | null
   '当日盈亏%'?: number | null
+  卖出数量?: number | null
+  三槽平仓?: boolean
   持仓状态?: string
   置顶?: boolean
   槽位占用?: boolean

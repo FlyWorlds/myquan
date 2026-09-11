@@ -57,15 +57,8 @@ const slotHoldings = computed(() =>
 const closedHoldings = computed(() =>
   (snapshot.value?.holdings || []).filter((r) => {
     if (Number(r.持仓) > 0) return false
-    if (Boolean(r.槽位留痕)) return true
-    const pos = String(r.持仓状态 || '')
-    return (
-      Boolean(r.已实现) ||
-      pos === '已平仓' ||
-      pos === '已触止损平仓' ||
-      pos === '已止损' ||
-      pos === '当日禁买'
-    )
+    if (Boolean(r.已实现) || Boolean(r.三槽平仓)) return true
+    return Number(r.卖出数量) > 0
   }),
 )
 
@@ -165,7 +158,7 @@ const closedCount = computed(() => closedHoldings.value.length)
                   平仓 {{ closedCount }} · 不占槽
                 </span>
               </h2>
-              <p class="text-xs text-ui-text-3">三槽止损/止盈卖出后当日留痕，次日清除</p>
+              <p class="text-xs text-ui-text-3">三槽止损/止盈卖出后当日留痕，下一交易日清空</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.代码)" :row="row" />
