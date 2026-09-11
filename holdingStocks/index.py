@@ -104,6 +104,7 @@ from strategy.pullback_wave_stop import (
     DEFAULT_PULLBACK_PCT,
     DEFAULT_T1_PEAK_TRAIL_PCT,
     cost_hard_stop_px,
+    half_gain_stop_price,
     path_dependent_buy_hit,
     path_dependent_pullback_hit,
     pnl_exceeds,
@@ -5229,31 +5230,142 @@ def _last_open_lots_from_trades(*, text: str | None = None) -> dict[str, dict[st
     return lots
 
 
+def _closed_open_protect_px(
+    cost: float | None,
+    prev_close: float | None,
+) -> float:
+    """开盘时刻保护价：硬保护 / T1 昨高回落 / 隔夜中段回落一半。不含收盘后抬高的止损。"""
+    cost_f = float(cost or 0)
+    if cost_f <= 0:
+        return 0.0
+    hard = cost_hard_stop_px(cost_f)
+    prev = float(prev_close or 0)
+    peak = max(x for x in (cost_f, prev) if x > 0)
+    if prev > 0 and pnl_exceeds(prev, cost_f, DEFAULT_GIVEBACK_ARM_PCT):
+        half = half_gain_stop_price(peak, cost_f)
+        return max(x for x in (hard, half) if x and x > 0)
+    trail = t1_trail_stop_px(peak, cost_px=cost_f)
+    return max(x for x in (hard, trail) if x and x > 0)
+
+
+def _peek_cached_today_1m(sina: str, session: str) -> pd.DataFrame | None:
+    """只读 1m 缓存，不拉网（单测/无缓存时返回 None）。"""
+    key = str(sina or "").lower()
+    sess = str(session or "")[:10]
+    if not key or not sess:
+        return None
+    hit = _M1_CACHE.get(key)
+    if hit and str(hit[1])[:10] == sess and isinstance(hit[2], pd.DataFrame) and not hit[2].empty:
+        return hit[2]
+    look = _M1_CACHE.get(f"lookback:{key}")
+    if look and isinstance(look[2], pd.DataFrame) and not look[2].empty and "ts" in look[2].columns:
+        day = look[2][_day_key_series(look[2]["ts"]) == sess]
+        if not day.empty:
+            return day
+    return None
+
+
+def _closed_1m_bars(row: dict[str, Any]) -> pd.DataFrame | None:
+    bars = row.get("_day_bars")
+    if isinstance(bars, pd.DataFrame) and not bars.empty:
+        return bars
+    code = _code_key(str(row.get("代码") or ""))
+    sess = str(row.get("交易日") or "")[:10]
+    if not code or not sess:
+        return None
+    sina = _sina_of(code)
+    cached = _peek_cached_today_1m(sina, sess)
+    if cached is not None:
+        return cached
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return None
+    day = _today_1m_bars(sina, sess)
+    if isinstance(day, pd.DataFrame) and not day.empty:
+        return day
+    return None
+
+
+def _closed_path_fill(
+    row: dict[str, Any],
+    *,
+    cost: float,
+    bars: pd.DataFrame | None,
+) -> float | None:
+    """已平仓成交价：1 分钟 path 第一次触达。"""
+    if bars is None or getattr(bars, "empty", True) or cost <= 0:
+        return None
+    prev = _as_money(row.get("昨收"))
+    open_px = _as_money(row.get("开盘"))
+    armed = bool(prev) and not pnl_exceeds(float(prev), cost, DEFAULT_GIVEBACK_ARM_PCT)
+    seed = max(x for x in (cost, float(prev or 0)) if x > 0)
+    sina = _sina_of(_code_key(str(row.get("代码") or "")))
+    sess = str(row.get("交易日") or "")[:10]
+    vol = None
+    if sina and sess and not os.environ.get("PYTEST_CURRENT_TEST"):
+        vol = _vol20_daily_for(sina, sess)
+    hit = path_dependent_pullback_hit(
+        bars,
+        seed_high=seed,
+        cost_px=cost,
+        overnight_armed=armed,
+        day_open=float(open_px) if open_px else None,
+        vol20_daily=vol,
+    )
+    if not bool(hit.get("hit_stop")):
+        return None
+    touch = float(hit.get("touch_stop") or hit.get("stop_px") or 0)
+    return touch if touch > 0 else None
+
+
 def _closed_mark_px(
     row: dict[str, Any],
     *,
     cost: float | None = None,
+    bars: pd.DataFrame | None = None,
 ) -> float | None:
-    """已平仓价：低开破买点硬保护/昨高回落用开盘；盘中触及用保护止损。不用现价。
-
-    已锁定的成交价若低于保护价（例如误用今开重置的 T1 回落），纠正为保护成交。
-    """
-    stop = _as_money(row.get("止损"))
+    """已平仓价：优先 1m 触达；低开破开盘时刻保护价用开盘。禁止用收盘后抬高的止损去撞今开。"""
+    cost_f = cost if cost is not None else _as_money(row.get("成本"))
+    try:
+        cost_n = float(cost_f) if cost_f else 0.0
+    except (TypeError, ValueError):
+        cost_n = 0.0
     open_px = _as_money(row.get("开盘"))
+    prev = _as_money(row.get("昨收"))
+    path_fill = _closed_path_fill(row, cost=cost_n, bars=bars) if cost_n > 0 else None
+    if path_fill is not None:
+        return path_fill
+    open_prot = _closed_open_protect_px(cost_n, prev) if cost_n > 0 else 0.0
+    if open_px is not None and open_prot > 0 and open_px <= open_prot + 1e-12:
+        return open_px
+    stop = _as_money(row.get("止损"))
     low = _as_money(row.get("最低"))
     hit = str(row.get("已触止损") or "") == "是"
-    cost_f = cost if cost is not None else _as_money(row.get("成本"))
-    hard = cost_hard_stop_px(float(cost_f)) if cost_f else 0.0
-    prot = max(x for x in (stop or 0.0, hard) if x > 0) if (stop or hard) else None
+    hard = cost_hard_stop_px(cost_n) if cost_n > 0 else 0.0
+    # 展示止损 ≤ 开盘：才是开盘时刻就能碰到的下行保护；高于开盘的是盘中抬高后的价，禁止拿去撞今开。
+    display_ok = bool(stop) and open_px is not None and float(stop) <= float(open_px) + 1e-12
+    prot = None
+    if display_ok:
+        prot = max(x for x in (float(stop), hard) if x > 0)
+    elif hard > 0:
+        prot = hard
     protective_fill = None
     if hit and prot is not None:
         if open_px is not None and open_px <= prot + 1e-12:
             protective_fill = open_px
         elif low is not None and low <= prot + 1e-12:
             protective_fill = prot
-        else:
+        elif display_ok:
             protective_fill = prot
     existing = _as_money(row.get("成交价"))
+    fake_gap = bool(
+        existing is not None
+        and open_px is not None
+        and abs(float(existing) - float(open_px)) <= 1e-6
+        and open_prot > 0
+        and float(existing) > open_prot + 1e-12
+    )
+    if fake_gap:
+        existing = None
     if existing is not None and protective_fill is not None:
         if existing + 1e-9 < float(protective_fill):
             return protective_fill
@@ -5302,10 +5414,27 @@ def _enrich_closed_day_pnl(
         qty = qty_slot if qty_slot > 0 else qty_lot
     if qty <= 0:
         return
-    fill = _closed_mark_px(row, cost=cost_f)
+    bars = row.pop("_day_bars", None)
+    if not isinstance(bars, pd.DataFrame) or bars.empty:
+        bars = _closed_1m_bars(row)
+    path_fill = _closed_path_fill(row, cost=float(cost_f), bars=bars)
+    fill = _closed_mark_px(row, cost=cost_f, bars=bars)
     if fill is None:
+        open_px = _as_money(row.get("开盘"))
+        existing = _as_money(row.get("成交价"))
+        open_prot = _closed_open_protect_px(float(cost_f), _as_money(row.get("昨收")))
+        if (
+            existing is not None
+            and open_px is not None
+            and abs(float(existing) - float(open_px)) <= 1e-6
+            and open_prot > 0
+            and float(existing) > open_prot + 1e-12
+        ):
+            row["成交价"] = None
         return
     row["成交价"] = fill
+    if path_fill is not None:
+        row["止损"] = fill
     prev = _as_money(row.get("昨收"))
     open_px = _as_money(row.get("开盘"))
     lot_day = str(lot.get("time") or "")[:10]

@@ -960,6 +960,77 @@ def test_closed_day_pnl_locks_stop_not_last():
     assert row["当日盈亏"] == locked
 
 
+def test_closed_jinan_rejects_eod_stop_vs_open():
+    """金安昨仓已过 3%：禁止用收盘后抬高的止损去撞今开。"""
+    from index import _enrich_closed_day_pnl
+
+    row = {
+        "代码": "002636",
+        "持仓": 0,
+        "持仓状态": "已平仓",
+        "当日禁买": True,
+        "已触止损": "是",
+        "现价": 82.46,
+        "昨收": 76.45,
+        "开盘": 76.0,
+        "最高": 84.0,
+        "最低": 73.0,
+        "止损": 82.32,
+        "成交价": 76.0,
+        "交易日": "2026-09-11",
+    }
+    _enrich_closed_day_pnl(
+        row, lots={"002636": {"qty": 400, "cost": 70.21, "time": "2026-09-10 10:00:00"}}
+    )
+    assert row.get("成交价") != 76.0
+
+
+def test_closed_jinan_path_ladder_not_open():
+    """金安 1m：先触 10% 阶梯半仓，成交价不是今开。"""
+    import pandas as pd
+    from index import _enrich_closed_day_pnl
+
+    bars = pd.DataFrame(
+        [
+            {
+                "ts": "2026-09-11 09:31:00",
+                "open": 76.0,
+                "high": 76.99,
+                "low": 75.90,
+                "close": 76.92,
+            },
+            {
+                "ts": "2026-09-11 09:39:00",
+                "open": 76.09,
+                "high": 77.34,
+                "low": 76.00,
+                "close": 77.30,
+            },
+        ]
+    )
+    row = {
+        "代码": "002636",
+        "持仓": 0,
+        "持仓状态": "已平仓",
+        "当日禁买": True,
+        "已触止损": "是",
+        "现价": 82.46,
+        "昨收": 76.45,
+        "开盘": 76.0,
+        "最高": 84.0,
+        "最低": 73.0,
+        "止损": 82.32,
+        "成交价": 76.0,
+        "交易日": "2026-09-11",
+        "_day_bars": bars,
+    }
+    _enrich_closed_day_pnl(
+        row, lots={"002636": {"qty": 400, "cost": 70.21, "time": "2026-09-10 10:00:00"}}
+    )
+    assert abs(float(row["成交价"]) - 77.23) < 0.02
+    assert row["成交价"] != 76.0
+
+
 def test_closed_day_pnl_keeps_realized_without_open():
     from index import _enrich_closed_day_pnl
 
