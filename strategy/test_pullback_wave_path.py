@@ -608,73 +608,6 @@ def test_first_session_exit_fill_uses_path_not_open_gap():
     assert abs(float(fill) - 76.0) > 0.01
 
 
-def test_simulate_ladder_half_reduces_shares_then_peak_trail_clears_rest():
-    """隔夜仓：先 10% 半仓减股，再峰值回落 2% 清剩余；不得把半仓当成「只改状态不清仓」。"""
-    ts0 = pd.Timestamp("2026-09-09 09:31:00")
-    bars = pd.DataFrame(
-        [
-            {"ts": ts0, "open": 111.0, "high": 111.2, "low": 110.6, "close": 111.0},
-            {
-                "ts": ts0 + pd.Timedelta(minutes=1),
-                "open": 109.5,
-                "high": 109.8,
-                "low": 107.5,
-                "close": 108.0,
-            },
-        ]
-    )
-    sim = _m.simulate_factor26_day_1m(
-        bars,
-        open_px=111.0,
-        holding_in=True,
-        can_sell=True,
-        allow_entry=False,
-        cost_px=100.0,
-        peak_high_in=100.0,
-    )
-    assert sim.get("half_px") is not None, sim
-    assert abs(float(sim["half_px"]) - 110.0) < 1e-9
-    assert int(sim.get("half_shares") or 0) == 500
-    assert sim.get("sell_px") is not None, sim
-    assert sim.get("sell_reason") == "peak_pullback_clear"
-    assert sim.get("holding_out") is False
-    assert int(sim.get("shares_out") or 0) == 0
-
-
-def test_simulate_ladder_half_only_keeps_remainder():
-    """只触 10%、未触回落：应半仓后继续持有剩余。"""
-    ts0 = pd.Timestamp("2026-09-09 09:31:00")
-    bars = pd.DataFrame(
-        [{"ts": ts0, "open": 111.0, "high": 111.2, "low": 110.6, "close": 111.0}]
-    )
-    sim = _m.simulate_factor26_day_1m(
-        bars,
-        open_px=111.0,
-        holding_in=True,
-        can_sell=True,
-        allow_entry=False,
-        cost_px=100.0,
-        peak_high_in=100.0,
-    )
-    assert sim.get("holding_out") is True, sim
-    assert sim.get("sell_px") is None, sim
-    assert int(sim.get("shares_out") or 0) == 500
-    assert int(sim.get("tp_stage_out") or 0) == 1
-    sim2 = _m.simulate_factor26_day_1m(
-        _bars([(111.2, 110.8)]),
-        open_px=111.0,
-        holding_in=True,
-        can_sell=True,
-        allow_entry=False,
-        cost_px=100.0,
-        peak_high_in=111.2,
-        tp_stage_in=1,
-        shares_in=500,
-    )
-    assert sim2.get("sell_reason") == "ladder_half_10_clear", sim2
-    assert sim2.get("holding_out") is False
-
-
 if __name__ == "__main__":
     test_half_gain_formula()
     test_multi_tp_ladder_and_peak_once()
@@ -697,6 +630,4 @@ if __name__ == "__main__":
     test_t1_overnight_note_profit_gates()
     test_limit_up_clears_t1_note()
     test_first_session_exit_fill_uses_path_not_open_gap()
-    test_simulate_ladder_half_reduces_shares_then_peak_trail_clears_rest()
-    test_simulate_ladder_half_only_keeps_remainder()
     print("ok")

@@ -67,8 +67,7 @@ python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16
 python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）
 ```
 
-**任务进度**：[`TODO.MD`](TODO.MD)（P0 行情/预警 ✅；P0 持仓入库待做；因子13 已锁定）  
-**现行默认算法审核**（2026-09-11）：[`docs/PROJECT_AUDIT.md`](docs/PROJECT_AUDIT.md)
+**任务进度**：[`TODO.MD`](TODO.MD)（P0 行情/预警 ✅；P0 持仓入库待做；因子13 已锁定）
 
 ---
 
@@ -154,7 +153,6 @@ myquan/
 ├── TODO.MD                  # 任务优先级与锁定项
 ├── docs/
 │   ├── STRATEGY.md          # 策略说明专题
-│   ├── PROJECT_AUDIT.md     # 策略十六/因子26 算法审核（现行默认）
 │   ├── FACTOR13.md          # 因子13（质量带 + 熊盾锁定）
 │   ├── FACTOR14.md          # 因子14 题材共振（策略八）
 │   ├── FACTOR16.md          # 因子16 概念龙头评分

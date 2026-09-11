@@ -1636,8 +1636,6 @@ def simulate_factor26_day_1m(
     vol20_daily: float | None = None,
     hard_gap_mode: str = HARD_GAP_IMMEDIATE,
     hard_gap_dump_pct: float = DEFAULT_HARD_GAP_DUMP_PCT,
-    tp_stage_in: int = 0,
-    shares_in: int = 1000,
 ) -> dict[str, Any]:
     """单日 1 分钟路径：买入（默认开盘阈值）+ 多层止盈卖出。
 
@@ -1684,11 +1682,7 @@ def simulate_factor26_day_1m(
     use_legacy_noted = nmode != NOTED_MODE_GAP_DUMP
     t1_armed = bool(noted > 0 and (not use_legacy_noted))
     session_peak = 0.0
-    tp_stage = max(0, int(tp_stage_in or 0))
-    sh = max(100, int(shares_in or 1000))
-    half_px: float | None = None
-    half_ts: Any = None
-    half_shares = 0
+    tp_stage = 0
 
     rows: list[dict[str, Any]] = []
     if bars is not None and not getattr(bars, "empty", True):
@@ -1770,7 +1764,7 @@ def simulate_factor26_day_1m(
                     bar_low=lo,
                     cost_px=cost,
                     peak_before=peak,
-                    shares=sh,
+                    shares=1000,
                     tp_stage=tp_stage,
                     can_sell=True,
                     overnight_armed=bool(t1_armed),
@@ -1792,20 +1786,8 @@ def simulate_factor26_day_1m(
                 fill = float(act.get("fill_px") or 0)
                 kind = str(act.get("kind") or "")
                 if kind == "half" and fill > 0:
-                    sell_n = max(0, min(int(act.get("shares") or 0), sh))
-                    sh = max(0, sh - sell_n)
                     tp_stage = 1
-                    if half_px is None:
-                        half_px = fill
-                        half_ts = row.get("ts")
-                        half_shares = sell_n
                     running_high = max(running_high, h)
-                    if sh <= 0:
-                        sell_px = fill
-                        sell_ts = row.get("ts")
-                        sell_reason = str(act.get("reason") or "ladder_half_10")
-                        holding = False
-                        break
                     continue
                 if kind == "full" and fill > 0:
                     sell_px = fill
@@ -1891,11 +1873,6 @@ def simulate_factor26_day_1m(
         "open_buy": open_buy,
         "day_low": running_low if running_low < float("inf") else None,
         "stop_noted_out": stop_noted_out,
-        "shares_out": sh if holding else 0,
-        "tp_stage_out": tp_stage if holding else 0,
-        "half_px": half_px,
-        "half_ts": half_ts,
-        "half_shares": half_shares,
     }
 
 
@@ -1963,8 +1940,6 @@ def replay_factor26_1m(
     cost_px: float | None = None
     peak_high: float | None = None
     stop_noted_px: float | None = None
-    tp_stage = 0
-    shares_held = 1000
     trades: list[dict[str, Any]] = []
 
     for i in range(1, len(df)):
@@ -2030,8 +2005,6 @@ def replay_factor26_1m(
             stop_noted_px_in=stop_noted_px if holding else None,
             allow_attack=allow_attack,
             vol20_daily=vol20,
-            tp_stage_in=tp_stage if holding else 0,
-            shares_in=shares_held if holding else 1000,
         )
 
         if sim.get("sell_px") is not None:
@@ -2056,20 +2029,6 @@ def replay_factor26_1m(
             cost_px = None
             peak_high = None
             stop_noted_px = None
-            tp_stage = 0
-            shares_held = 1000
-
-        elif sim.get("half_px") is not None:
-            trades.append(
-                {
-                    "date": sess,
-                    "side": "sell",
-                    "px": float(sim["half_px"]),
-                    "ts": str(sim.get("half_ts") or ""),
-                    "note": "ladder_half_10",
-                    "shares": int(sim.get("half_shares") or 0),
-                }
-            )
 
         if sim.get("buy_px") is not None:
             holding = True
@@ -2096,10 +2055,6 @@ def replay_factor26_1m(
             peak_high = float(sim.get("peak_high_out") or peak_high or 0)
             if sim.get("cost_px") is not None:
                 cost_px = float(sim["cost_px"])
-            tp_stage = int(sim.get("tp_stage_out") or 0)
-            so = int(sim.get("shares_out") or 0)
-            if so > 0:
-                shares_held = so
             # T+1 当日触止损 → 止损已记
             noted = sim.get("stop_noted_out")
             if noted is not None and float(noted) > 0:
