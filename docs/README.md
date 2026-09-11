@@ -14,6 +14,7 @@
 | [`FACTOR20.md`](FACTOR20.md) | 因子20 跌停次日开板（已否决） |
 | [`FACTOR21.md`](FACTOR21.md) | 因子21 涨停次日低开（策略十二，OOS 未过关） |
 | [`strategy/README.md`](../strategy/README.md) | 因子/策略注册表、CLI |
-| [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak 审计底稿 |
+| [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md) | **2026-09-11 策略十六/因子26 算法审核**（现行默认） |
+| [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 2026-08 凯盛 OpenBreak（因子1）底稿 |
 
 改代码时同步更新：`.cursor/rules/docs-sync.mdc`

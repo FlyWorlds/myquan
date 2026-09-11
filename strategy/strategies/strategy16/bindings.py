@@ -70,7 +70,7 @@ FACTOR_BINDINGS = (
         bounce_pct=0.01,
         candle="any",
         mode="close",
-        filter_desc="因子26 止损后：收盘≥当日最低价×(1+1%) 同日再买；默认 1%、不限阴阳",
+        filter_desc="研究路径：止损后收盘≥low×(1+1%) 同日再买；生产三槽当日卖出禁再买，不改变成交",
         enabled=True,
     ),
 )

@@ -1,7 +1,8 @@
 # 凯盛科技 OpenBreak3 策略说明与审计
 
-> **文档索引**：项目总览 [`READ.md`](../READ.md)；策略专题 [`docs/STRATEGY.md`](../docs/STRATEGY.md)；因子13 [`docs/FACTOR13.md`](../docs/FACTOR13.md)。  
-> 本文档为 **2026-08 凯盛单票审计底稿**，通用策略规则以 `open_break.py` / `strategy/README.md` 为准。
+> **文档索引**：项目总览 [`READ.md`](../READ.md)；策略专题 [`docs/STRATEGY.md`](../docs/STRATEGY.md)。  
+> **现行默认（策略十六 / 因子26）算法审核**：[`docs/PROJECT_AUDIT.md`](../docs/PROJECT_AUDIT.md)（2026-09-11）。  
+> 本文档为 **2026-08 凯盛单票因子1 审计底稿**，不再代表盯盘默认策略。
 
 审计日期：2026-08-05（凯盛单票审计底稿）  
 **更新说明（2026-08-07）**：盯盘已扩展为合格池约 11 只（见 `holdingStocks/watch_config.py`），不再「仅绑定凯盛」。下文规则仍适用于策略一因子1；标的范围以现行池为准。

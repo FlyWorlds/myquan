@@ -10,6 +10,7 @@
 因子13B 熊盾 Top3（🔒锁定对照）：东材 / 珠峰 / 雷赛（[`LOCKED.json`](../backtest/factor13_bear_shield/LOCKED.json)）
 
 - 默认交易池看因子27（核心龙头近3个月冻结池）∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖看因子26（**开盘阈值买**；卖=硬保护/中赚回落一半与波动回落谁先到走谁/大赚档位/未到3%次日峰值回落）；因子2 默认只挂预警阈值（**回测不注资**）。
+- 算法审核（2026-09-11）：[`docs/PROJECT_AUDIT.md`](../docs/PROJECT_AUDIT.md)。对账用 `backtest/strategy1_pool_1m/run.py --pool strategy16`，不要用 `run_strategy16()` 的日线简化内核。
 - 仅开盘突破交易（旧因子1）：`run_open_break` 或切 bindings。
 - 旧版权益注资叠加：`run_strategy1(..., apply_factor2_overlay=True)`（`dd_topup`）。
 - **开闭调参**：改 `bindings.py` / `BacktestConfig` / `DEFAULT_*`，不必改算法。
