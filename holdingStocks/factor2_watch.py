@@ -1,6 +1,6 @@
 """盯盘 · 因子2（回撤加减仓预警）。
 
-与 strategy.dd_alert / strategy1 bindings 同源。
+与 strategy.dd_alert / 当前策略 bindings 同源。
 按账户总资产年内回撤触发加仓/减仓预警；不自动改现金。
 """
 
@@ -17,11 +17,11 @@ from strategy.dd_alert import (
 )
 
 
-def _thresholds():
+def _thresholds(strategy_id: str):
     try:
         from strategy import get_strategy_bindings
 
-        for b in get_strategy_bindings("strategy1"):
+        for b in get_strategy_bindings(strategy_id):
             if b.factor_id == "factor2" and b.enabled:
                 return derive_thresholds(
                     hist_max_dd=b.params.get("hist_max_dd"),
@@ -62,9 +62,10 @@ def sync_factor2(
     *,
     equity: float | None,
     session: str,
+    strategy_id: str,
 ) -> dict[str, Any]:
     """推进因子2预警状态并写回 holdings['factor2']。"""
-    th = _thresholds()
+    th = _thresholds(strategy_id)
     st = load_factor2_state(holdings)
     prev_action = st["last_action"]
     prev_label = st["last_label"]

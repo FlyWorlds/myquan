@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from strategy.binding_filters import open_break_entry_filter
 from strategy.core.protocols import bind_factor
 from strategy.dd_alert import (
     DEFAULT_AVG_YEARLY_MAX_DD,
@@ -15,8 +16,6 @@ from strategy.open_break import (
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
 )
-from strategy.strategies.strategy1.bindings import strategy1_factor_filter
-
 STRATEGY_ID = "strategy16"
 STRATEGY_NAME = "策略十六·核心龙头"
 
@@ -38,7 +37,7 @@ FACTOR_BINDINGS = (
         ban_single_yang=DEFAULT_BAN_SINGLE_YANG,
         double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
         double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
-        filter=strategy1_factor_filter,
+        filter=open_break_entry_filter,
         filter_desc="买=开盘阈值（个股 thr 2026 夏普择优）；卖同策略一：硬保护2.5% / 中赚回落一半与波动回落谁先到走谁 / 阶梯10%·15% / 未到3%次日峰值回落2.5%",
     ),
     bind_factor(

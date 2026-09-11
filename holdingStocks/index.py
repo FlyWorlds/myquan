@@ -5000,7 +5000,10 @@ def collect_rows(
     session_f2 = session_today or str(pd.Timestamp.now().date())
     data_f2 = load_holdings()
     f2_status = sync_factor2(
-        data_f2, equity=account_total, session=str(session_f2)
+        data_f2,
+        equity=account_total,
+        session=str(session_f2),
+        strategy_id=STRATEGY_ID,
     )
     save_holdings(data_f2)
     for r in rows:

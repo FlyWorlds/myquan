@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from strategy.binding_filters import open_break_entry_filter
 from strategy.core.protocols import bind_factor
 from strategy.m30_chop import (
     DEFAULT_RECLAIM_BAND,
@@ -18,8 +19,6 @@ from strategy.open_break import (
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
 )
-from strategy.strategies.strategy1.bindings import strategy1_factor_filter
-
 STRATEGY_ID = "strategy15"
 STRATEGY_NAME = "策略十五·连板减磨损"
 
@@ -36,7 +35,7 @@ FACTOR_BINDINGS = (
         ban_single_yang=DEFAULT_BAN_SINGLE_YANG,
         double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
         double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
-        filter=strategy1_factor_filter,
+        filter=open_break_entry_filter,
         filter_desc="建仓以因子1为准：前日阴/小阳 + 禁双阳跨日≥5%",
     ),
     bind_factor(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from strategy.binding_filters import open_break_entry_filter
 from strategy.core.protocols import bind_factor
 from strategy.dd_alert import (
     DEFAULT_AVG_YEARLY_MAX_DD,
@@ -14,7 +15,6 @@ from strategy.open_break import (
     DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
-    entry_filters_ok,
 )
 
 STRATEGY_ID = "strategy1"
@@ -23,41 +23,8 @@ STRATEGY_NAME = "援军战法"
 _TH = default_thresholds()
 
 
-def strategy1_factor_filter(
-    prev_open: float | None = None,
-    prev_close: float | None = None,
-    prev2_open: float | None = None,
-    prev2_close: float | None = None,
-    **params: object,
-) -> bool:
-    mode = str(params.get("prev_entry_mode") or "yin_or_small_yang")
-    pct = float(params.get("prev_small_yang_pct") or params.get("entry_pct") or DEFAULT_PCT)
-    ban_double = bool(params.get("ban_double_yang", DEFAULT_BAN_DOUBLE_YANG))
-    ban_single = bool(params.get("ban_single_yang", DEFAULT_BAN_SINGLE_YANG))
-    yang_min = float(params.get("yang_min_pct") or 0.0)
-    sec = params.get("double_yang_second_min_pct", None)
-    comb = params.get(
-        "double_yang_combined_min_pct", DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT
-    )
-    comb_mode = str(
-        params.get("double_yang_combined_mode") or DEFAULT_DOUBLE_YANG_COMBINED_MODE
-    )
-    smin = params.get("single_yang_min_pct", None)
-    return entry_filters_ok(
-        prev_open,
-        prev_close,
-        prev2_open,
-        prev2_close,
-        entry_pct=pct,
-        prev_entry_mode=mode,
-        ban_double_yang=ban_double,
-        ban_single_yang=ban_single,
-        yang_min_pct=yang_min,
-        double_yang_second_min_pct=float(sec) if sec is not None else None,
-        double_yang_combined_min_pct=float(comb) if comb is not None else None,
-        double_yang_combined_mode=comb_mode,
-        single_yang_min_pct=float(smin) if smin is not None else None,
-    )
+# 兼容旧导入名；实现位于无策略编号的基础过滤层。
+strategy1_factor_filter = open_break_entry_filter
 
 
 FACTOR_BINDINGS = (
