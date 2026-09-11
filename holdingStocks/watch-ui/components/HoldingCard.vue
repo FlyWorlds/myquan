@@ -126,7 +126,12 @@ const cardClass = computed(() => {
           <b class="sensitive">{{ slotTrace && row.卖出数量 ? row.卖出数量 : (row.持仓 ?? 0) }}</b>
         </div>
         <div><span class="text-ui-text-2">成本</span> <b class="sensitive">{{ row.成本 != null ? fmtNum(row.成本, pdg) : '-' }}</b></div>
-        <div><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
+        <div v-if="slotTrace">
+          <span class="text-ui-text-2">平仓价</span>
+          <b class="sensitive">{{ row.成交价 != null ? fmtNum(row.成交价, pdg) : '-' }}</b>
+        </div>
+        <div v-else><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
+        <div v-if="slotTrace"><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
         <div><span class="text-ui-text-2">因子触发</span> <b>{{ row.因子触发 || '-' }}</b></div>
         <div v-if="row.阈值就绪" class="col-span-2 grid grid-cols-2 gap-x-3 text-sm">
           <div>
