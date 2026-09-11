@@ -139,13 +139,13 @@
     @apply text-left text-ui-text-2;
   }
 
-  /** 全站页面左右边距：略宽于 7xl，适度留白 */
+  /** 全站页面左右边距：相对原先约减半留白，内容更宽 */
   .page-shell {
-    @apply mx-auto w-full max-w-[92rem] px-3 py-4 sm:px-3.5;
+    @apply mx-auto w-full max-w-[min(100%,120rem)] px-[80px] py-4;
   }
 
   .page-shell .registry-sticky-nav {
-    @apply -mx-3 px-3 sm:-mx-3.5 sm:px-3.5;
+    @apply -mx-[80px] px-[80px];
   }
 
   .factor-cat-nav {

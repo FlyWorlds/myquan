@@ -24,7 +24,7 @@
 
 编辑 **`watch_config.py`**：
 - **因子池**：刷新 `picks_quarter.json`（`python strategy/run_core_leader_pool.py`）
-- **公共自选池**：改 `SELF_WATCHLIST_PICKS`（旧名 `STRATEGY16_EXTRA_PICKS` 仍兼容；**全策略共用**，非仅策略十六）。「选股/信号」名单按 **分类 Tab**（自选 / 因子27·策略池）切换；下方实时信号表仍整表展示，行内标分类。
+- **公共自选池**：改 `SELF_WATCHLIST_PICKS`（旧名 `STRATEGY16_EXTRA_PICKS` 仍兼容；**全策略共用**，非仅策略十六）。「选股/池名单」在策略 Tab **底部折叠面板**（默认收起，展开后按分类 Tab 查看）；上方实时信号表整表展示。
 
 **当前**：因子27 滚动近3个月名单（每概念≤2、约30只）+ 自选四票；剔ST/百元股/科创/创业。改池后需重启 `start_watch.py`。
 
@@ -141,7 +141,7 @@ cd holdingStocks && python index.py watch --no-wechat
 cd holdingStocks/watch-ui && npm install && npm run dev
 ```
 
-**启动顺序**：`watch` **先绑定并开始接受** `:8765`（HTTP `/api` + WebSocket `/ws`），再后台做冷启动（新浪批量、日线预热、东财 SSE、首屏快照）。`start_watch.py` 等 API 端口就绪后再自己开 Nuxt（并传 `--no-ui-dev`，避免两套前端抢 `:3000`）。此前若等首屏算完才绑端口，池子变大后会超过 120s，页面红字「推送断开，等待重连…」。冷启动期间若有上次 `holdings_watch.json` 会先展示旧快照，否则推 `boot` 占位。
+**启动顺序**：`watch` **先绑定并开始接受** `:8765`（HTTP `/api` + WebSocket `/ws`），再后台做冷启动（新浪批量、**强制按信号交易日重拉日线**、东财 SSE、首屏快照）。日线末根须覆盖「最近已收盘工作日」（15:15 前不含当日）；缺则增量/全量补拉，避免过门/前日沿用旧 parquet。周六日信号日锚定上周五；周一「前日」自然为上周五。`start_watch.py` 等 API 端口就绪后再自己开 Nuxt（并传 `--no-ui-dev`，避免两套前端抢 `:3000`）。此前若等首屏算完才绑端口，池子变大后会超过 120s，页面红字「推送断开，等待重连…」。冷启动期间若有上次 `holdings_watch.json` 会先展示旧快照，否则推 `boot` 占位。
 
 loop 内「快照已推送」默认**每 12 次**输出一条（冷启动仍打印；业务无变化跳过写盘/WS 时不计次）；恢复每次：`WATCH_SNAPSHOT_LOG_EVERY=1 python index.py watch …`
 
@@ -175,7 +175,7 @@ cd holdingStocks
 python start_watch.py        # 推荐：数据 API + Web 盯盘（Mac/Windows）
 python index.py              # 终端查看行情 + 持仓
 python index.py watch        # 仅数据后端（不启页面）
-python index.py clear-all    # 清仓+重置状态+归档当日成交，重新执行三槽
+python index.py clear-all    # 清仓+重置状态+归档当日成交；账户回到 DEFAULT_ACCOUNT_TOTAL（现 30 万）
 python index.py buy 600552 15.50 400
 python index.py sell 600552 16.20 400
 ```

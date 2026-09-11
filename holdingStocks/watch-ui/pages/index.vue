@@ -184,54 +184,50 @@ const closedCount = computed(() => closedHoldings.value.length)
 
       <section v-show="activeTab === 'strategy1'">
         <StrategyInfoPanel v-if="strategy1Tab" :tab="strategy1Tab" class="mb-4" />
+        <Strategy1Panel v-if="snapshot" :rows="snapshot.strategy1" :phase="snapshot.phase" :slot-meta="snapshot.slotMeta" pool-category="策略池" />
         <StrategyPicksPanel :picks="strategy1Tab?.picks" />
-        <Strategy1Panel v-if="snapshot" :rows="snapshot.strategy1" :phase="snapshot.phase" :slot-meta="snapshot.slotMeta" pool-category="策略池" class="mt-4" />
       </section>
 
       <section v-show="activeTab === 'strategy3'">
         <StrategyInfoPanel v-if="strategy3Tab" :tab="strategy3Tab" class="mb-4" />
-        <StrategyPicksPanel :picks="strategy3Tab?.picks" />
         <Strategy3Panel
           v-if="snapshot"
-          class="mt-4"
           :tab="strategy3Tab"
           :payload="snapshot.strategy3"
           :phase="snapshot.phase"
         />
+        <StrategyPicksPanel :picks="strategy3Tab?.picks" />
       </section>
 
       <section v-show="activeTab === 'strategy8'">
         <StrategyInfoPanel v-if="strategy8Tab" :tab="strategy8Tab" class="mb-4" />
-        <StrategyPicksPanel :picks="strategy8Tab?.picks" />
         <Strategy8Panel
           v-if="snapshot"
-          class="mt-4"
           :tab="strategy8Tab"
           :payload="snapshot.strategy8"
           :phase="snapshot.phase"
         />
+        <StrategyPicksPanel :picks="strategy8Tab?.picks" />
       </section>
       <section v-show="activeTab === 'strategy15'">
         <StrategyInfoPanel v-if="strategy15Tab" :tab="strategy15Tab" class="mb-4" />
-        <StrategyPicksPanel :picks="strategy15Tab?.picks" />
         <Strategy15Panel
           v-if="snapshot"
-          class="mt-4"
           :payload="snapshot.strategy15"
           :phase="snapshot.phase"
         />
+        <StrategyPicksPanel :picks="strategy15Tab?.picks" />
       </section>
       <section v-show="activeTab === 'strategy16'">
         <StrategyInfoPanel v-if="strategy16Tab" :tab="strategy16Tab" class="mb-4" />
-        <StrategyPicksPanel :picks="strategy16Tab?.picks" />
         <Strategy1Panel
           v-if="snapshot"
           :rows="snapshot.strategy16 || []"
           :phase="snapshot.phase"
           :slot-meta="snapshot.slotMeta"
           pool-category="因子27"
-          class="mt-4"
         />
+        <StrategyPicksPanel :picks="strategy16Tab?.picks" />
       </section>
     </template>
 

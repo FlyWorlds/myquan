@@ -28,6 +28,10 @@ def _latest_completed_weekday(now: dt.datetime | None = None) -> dt.date:
     return day
 
 
+# 对外别名：盯盘启动/跨日校验「日线是否已含上一完整交易日」
+latest_completed_weekday = _latest_completed_weekday
+
+
 def _is_etf_symbol(symbol: str) -> bool:
     """识别常见场内 ETF / LOF 代码（带 sh/sz 前缀）。"""
     sym = str(symbol or "").strip().lower()

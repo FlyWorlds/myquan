@@ -41,11 +41,14 @@ export interface HoldingRow {
   策略起算?: string
   持仓?: number
   成本?: number | null
+  成交价?: number | null
   浮盈?: number | null
   '浮盈%'?: number | null
   盈亏状态?: string | null
   盈亏说明?: string | null
   已实现?: boolean
+  /** 单笔价差：未结=现价−成本；已卖=成交价−成本（前端也可自算） */
+  单笔收入?: number | null
   当日盈亏?: number | null
   '当日盈亏%'?: number | null
   持仓状态?: string

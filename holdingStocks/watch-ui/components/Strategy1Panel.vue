@@ -1,6 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
-import { fmtNum, fmtSignedPct, stockLabel } from '~/utils/format'
+import { fmtNum, fmtSignedMoney, fmtSignedPct, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 
@@ -8,7 +8,6 @@ const props = defineProps<{
   rows: HoldingRow[]
   phase?: string
   slotMeta?: { max?: number; occupiedCount?: number; free?: number; weight?: number }
-  /** 策略池分类默认文案（无 pool_src 时） */
   poolCategory?: string
 }>()
 
@@ -36,6 +35,42 @@ function categoryOf(r: HoldingRow): string {
   if (r.池来源) return String(r.池来源)
   return props.poolCategory || '策略池'
 }
+
+function asNum(v: unknown): number | null {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/** 单笔收入（价差）：持仓未结=现价−成本；已卖出=成交价−成本。 */
+function tradeIncome(r: HoldingRow): number | null {
+  const buy = asNum(r.成本)
+  if (buy == null || buy <= 0) return null
+  const qty = Number(r.持仓 || 0)
+  const pos = String(r.持仓状态 || '')
+  const sold =
+    Boolean(r.已实现) ||
+    Boolean(r.槽位留痕) ||
+    (qty <= 0 &&
+      (pos.includes('平仓') ||
+        pos.includes('已止损') ||
+        pos === '当日禁买' ||
+        asNum(r.成交价) != null))
+  if (sold) {
+    const sell = asNum(r.成交价)
+    if (sell == null || sell <= 0) return null
+    return sell - buy
+  }
+  const holding =
+    qty > 0 ||
+    pos.includes('持有') ||
+    pos.includes('买入') ||
+    pos === '待卖出'
+  if (!holding) return null
+  const last = asNum(r.现价)
+  if (last == null || last <= 0) return null
+  return last - buy
+}
 </script>
 
 <template>
@@ -52,7 +87,8 @@ function categoryOf(r: HoldingRow): string {
         · 列表按距买点升序（自选优先）
       </div>
       <div class="mt-1 text-xs text-ui-text-3">
-        策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）
+        策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）；
+        单笔收入=未结现价−成本 / 已卖成交价−成本
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <span v-for="item in legend" :key="item.label" class="text-xs text-ui-text-3">
@@ -72,6 +108,7 @@ function categoryOf(r: HoldingRow): string {
               <th class="px-3 py-2.5">现价</th>
               <th class="px-3 py-2.5">日内涨跌</th>
               <th class="px-3 py-2.5">策略收益</th>
+              <th class="px-3 py-2.5">单笔收入</th>
               <th class="px-3 py-2.5">前日</th>
               <th class="px-3 py-2.5">过门</th>
               <th class="px-3 py-2.5">阈值</th>
@@ -123,6 +160,9 @@ function categoryOf(r: HoldingRow): string {
               </td>
               <td class="sensitive px-3 py-2.5">
                 <ChgText :chg="r['策略收益%']">{{ fmtSignedPct(r['策略收益%']) }}</ChgText>
+              </td>
+              <td class="sensitive px-3 py-2.5 tabular-nums">
+                <ChgText :chg="tradeIncome(r)">{{ fmtSignedMoney(tradeIncome(r), r['价位小数'] ?? 2) }}</ChgText>
               </td>
               <td class="px-3 py-2.5">{{ r.前日形态 || '-' }}</td>
               <td class="px-3 py-2.5 font-semibold" :class="r.过门OK ? 'text-up' : 'text-ui-text-2'">{{ r.过门 || '-' }}</td>

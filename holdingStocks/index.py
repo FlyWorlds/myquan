@@ -113,7 +113,7 @@ from strategy.pullback_wave_stop import (
     strategy_levels as _levels_f26,
     strategy_signal as _signal_f26,
 )
-from strategy.data import AKSHARE_CALL_LOCK, fetch_daily
+from strategy.data import AKSHARE_CALL_LOCK, fetch_daily, latest_completed_weekday
 
 from factor2_watch import format_factor2_summary, sync_factor2
 from factor4_watch import (
@@ -135,6 +135,8 @@ from watch_config import (
     USE_FACTOR4,
     WATCHLIST,
     effective_watchlist,
+    normalize_signal_session,
+    trading_session_date,
     calc_day_pnl as _calc_day_pnl,
     code_key as _code_key,
     empty_position as _empty_position,
@@ -1214,20 +1216,59 @@ def _reseed_live_batch(
     return _reseed_sina_batch(feed, watchlist)
 
 
-def _daily_cache_warm(watchlist: list[dict[str, Any]] | None = None) -> None:
+def _daily_cache_warm(
+    watchlist: list[dict[str, Any]] | None = None, *, force: bool = False
+) -> None:
     """并行预热日线缓存，避免首屏 collect_rows 串行等 IO。"""
     items = watchlist if watchlist is not None else effective_watchlist()
     with ThreadPoolExecutor(max_workers=4) as pool:
-        list(pool.map(lambda w: _watch_daily(w["sina"]), items))
+        list(pool.map(lambda w: _watch_daily(w["sina"], force=force), items))
 
 
-# 日线缓存：当日只拉一次，供前日过滤与最近因子触发
+# 日线缓存：按信号交易日缓存；缺上一完整交易日则强制补拉（供前日过滤与最近因子触发）
 _DAILY_CACHE: dict[str, tuple[str, pd.DataFrame]] = {}
+_SIGNAL_CACHE_DAY: str | None = None
 # 1 分钟缓存：实仓/近止损触达判定（path-dependent）；ttl 秒
 _M1_CACHE: dict[str, tuple[float, str, pd.DataFrame]] = {}
 _M1_CACHE_TTL_SEC = 45.0
 _VOL20_CACHE: dict[str, tuple[str, float | None]] = {}
 _M1_EMPTY_TTL_SEC = 15.0  # 拉空/失败：短负缓存，避免每轮狂打接口
+
+
+def _daily_last_trade_date(daily: pd.DataFrame) -> Any | None:
+    """日线末根交易日（date）。"""
+    if daily is None or getattr(daily, "empty", True) or "date" not in daily.columns:
+        return None
+    try:
+        return pd.to_datetime(daily["date"]).dt.tz_localize(None).dt.normalize().max().date()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _invalidate_date_signal_caches(*, reason: str = "") -> None:
+    """跨日/启动：清日线与依赖过门/前日的派生缓存。"""
+    global _DAILY_CACHE, _VOL20_CACHE, _REPLAY_CACHE, _STRATEGY_PNL_CACHE, _M1_CACHE
+    global _SIGNAL_CACHE_DAY
+    _DAILY_CACHE.clear()
+    _VOL20_CACHE.clear()
+    _REPLAY_CACHE.clear()
+    _STRATEGY_PNL_CACHE.clear()
+    _M1_CACHE.clear()
+    _SIGNAL_CACHE_DAY = None
+    note = f" · {reason}" if reason else ""
+    print(f"[{_now()}] 已清空日期相关信号缓存（日线/回放/1m）{note}")
+
+
+def _ensure_signal_day_caches(*, force: bool = False) -> str:
+    """信号交易日变化或强制时清空缓存。返回规范化 session 日。"""
+    global _SIGNAL_CACHE_DAY
+    day = str(trading_session_date())
+    if force or _SIGNAL_CACHE_DAY != day:
+        _invalidate_date_signal_caches(
+            reason=("启动强制" if force else f"跨日 {_SIGNAL_CACHE_DAY}→{day}")
+        )
+        _SIGNAL_CACHE_DAY = day
+    return day
 
 
 def _today_1m_bars(sina: str, session: str, *, force: bool = False) -> pd.DataFrame:
@@ -1373,20 +1414,32 @@ def _resolve_hit_stop_path_dependent(
     }
 
 
-def _watch_daily(sina: str, *, lookback_days: int | None = None) -> pd.DataFrame:
-    """日线缓存；因子4开启时回溯加长以覆盖 roc_ma60。"""
+def _watch_daily(
+    sina: str, *, lookback_days: int | None = None, force: bool = False
+) -> pd.DataFrame:
+    """日线缓存；缺最新已收盘交易日则补拉（过门/前日依赖）。"""
     days = int(lookback_days) if lookback_days is not None else (280 if USE_FACTOR4 else 90)
-    today = str(pd.Timestamp.now().date())
+    cache_day = str(trading_session_date())
+    expected = latest_completed_weekday()
     cached = _DAILY_CACHE.get(sina)
-    if cached and cached[0] == today and cached[1] is not None and not cached[1].empty:
-        return cached[1]
+    if (not force) and cached and cached[0] == cache_day and cached[1] is not None:
+        last = _daily_last_trade_date(cached[1])
+        if last is not None and last >= expected and not cached[1].empty:
+            return cached[1]
     start = (pd.Timestamp.now() - pd.Timedelta(days=days)).strftime("%Y%m%d")
     end = pd.Timestamp.now().strftime("%Y%m%d")
+    df = pd.DataFrame()
     try:
         df = fetch_daily(sina, start, end)
-    except Exception:
+    except Exception:  # noqa: BLE001
         df = pd.DataFrame()
-    _DAILY_CACHE[sina] = (today, df)
+    last = _daily_last_trade_date(df)
+    if last is None or last < expected:
+        try:
+            df = fetch_daily(sina, start, end, force_refresh=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 日线强制刷新失败 {sina}: {e}")
+    _DAILY_CACHE[sina] = (cache_day, df)
     return df
 
 
@@ -1555,13 +1608,17 @@ def _replay_last_factor_triggers_cached(
 def _prev_bars_from_daily(
     daily: pd.DataFrame, session: str
 ) -> tuple[float | None, float | None, float | None, float | None]:
-    """返回 (prev_open, prev_close, prev2_open, prev2_close)。"""
+    """返回 (prev_open, prev_close, prev2_open, prev2_close)。
+
+    session 先规范化（周末→上周五）；取严格早于 session 的末两根，
+    故周一自然落到上周五 / 上上周四。
+    """
     if daily is None or daily.empty:
         return None, None, None, None
     d = daily.copy()
     d["date"] = pd.to_datetime(d["date"]).dt.tz_localize(None)
     d = d.dropna(subset=["open", "close"]).sort_values("date")
-    sess = pd.Timestamp(session).normalize()
+    sess = pd.Timestamp(normalize_signal_session(session)).normalize()
     hist = d[d["date"].dt.normalize() < sess]
     if hist.empty:
         return None, None, None, None
@@ -1995,12 +2052,12 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
     """每日 9:15：清空非实仓盯盘状态，只保留 qty>0 持仓。
 
     · 清 alert_sticky / 非当日 realized / 回放与策略收益缓存
+    · 清日线相关缓存并在后续预热中按最新交易日重拉（过门/前日）
     · 清微信预警防抖状态（当日重新推）
     · 标记 watch_status_reset_session，持仓 Tab 在 9:30 前仅展示实仓
     """
-    global _REPLAY_CACHE, _STRATEGY_PNL_CACHE, _M1_CACHE
     data = load_holdings()
-    sess = str(session or pd.Timestamp.now().date())
+    sess = normalize_signal_session(session)
     _purge_stale_realized(data, sess)
     data["alert_sticky"] = {}
     data["watch_status_reset_session"] = sess
@@ -2016,9 +2073,7 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
         if not is_t1_buy_day(pos.get("buy_time"), sess):
             pos["available"] = int(pos.get("qty") or 0)
     save_holdings(data)
-    _REPLAY_CACHE.clear()
-    _STRATEGY_PNL_CACHE.clear()
-    _M1_CACHE.clear()
+    _ensure_signal_day_caches(force=True)
     # 微信防抖：跨日/早盘重置，避免旧「已触止损」键挡住新信号
     try:
         from wechat_notify import STATE_FILE
@@ -2035,7 +2090,7 @@ def ensure_watch_status_reset_today(*, session: str | None = None) -> None:
     """启动时若已过 9:15 且本日未重置，则补跑一次。"""
     from watch_config import AUCTION_START_HOUR, AUCTION_START_MINUTE, _clock_minutes
 
-    sess = str(session or pd.Timestamp.now().date())
+    sess = normalize_signal_session(session)
     data = load_holdings()
     if str(data.get("watch_status_reset_session") or "") == sess:
         return
@@ -2493,7 +2548,7 @@ def _slot_notional_budget(
     rows: list[dict[str, Any]],
     occupied: list[str],
 ) -> float | None:
-    """单槽目标金额：总权益×30%；无总权益时默认按 10 万×30%。"""
+    """单槽目标金额：总权益×30%；无总权益时默认按 DEFAULT_ACCOUNT_TOTAL×30%。"""
     if account_total is not None and float(account_total) > 0:
         return round(float(account_total) * float(SLOT_WEIGHT), 2)
     if DEFAULT_ACCOUNT_TOTAL and float(DEFAULT_ACCOUNT_TOTAL) > 0:
@@ -3401,6 +3456,7 @@ def collect_rows(
 
     get_quote: 可选行情供给（watch 传入 QuoteHub）；默认 fetch_today_quote。
     """
+    _ensure_signal_day_caches(force=False)
     quote_fn = get_quote or fetch_today_quote
     holdings = load_holdings()
     positions = holdings.get("positions", {})
@@ -3441,7 +3497,8 @@ def collect_rows(
             pct_label = f"+{entry_pct * 100:.1f}/-{base_stop_pct * 100:.1f}"
         pct_pct = pct_label  # 卡片「阈值%」展示文案
         try:
-            q = quote_fn(w["sina"])
+            q = dict(quote_fn(w["sina"]) or {})
+            q["session"] = normalize_signal_session(q.get("session"))
             session_today = q["session"]
             daily = _watch_daily(w["sina"])
             if USE_FACTOR4:
@@ -5464,10 +5521,10 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
         strategy_watchlist_codes,
     )
 
-    global _REPLAY_CACHE, _STRATEGY_PNL_CACHE, _M1_CACHE, _HOLDINGS_CACHE
+    global _HOLDINGS_CACHE
 
     data = load_holdings()
-    sess = str(pd.Timestamp.now().date())
+    sess = str(trading_session_date())
     # 1) 所有票空仓（含非当前池遗留代码）
     positions = data.setdefault("positions", {})
     for code, pos in list(positions.items()):
@@ -5541,9 +5598,7 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
 
     save_holdings(data)
     _HOLDINGS_CACHE.clear()
-    _REPLAY_CACHE.clear()
-    _STRATEGY_PNL_CACHE.clear()
-    _M1_CACHE.clear()
+    _ensure_signal_day_caches(force=True)
     try:
         from wechat_notify import STATE_FILE
 
@@ -6145,6 +6200,10 @@ def cmd_watch(args: argparse.Namespace) -> None:
             try:
                 if action == "reseed":
                     reset_watch_status_at_auction()
+                    try:
+                        _daily_cache_warm(force=True)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[{_now()}] 9:15 日线重拉失败（继续）: {e}")
                     reseed_live()
                     safe_refresh()
                 elif action == "open":
@@ -6350,27 +6409,27 @@ def cmd_watch(args: argparse.Namespace) -> None:
             worker.start()
         if not milestone_worker.is_alive():
             milestone_worker.start()
-        print("冷启动：新浪批量实时 + 行情源 → 首屏快照；日线并行预热…")
+        print("冷启动：新浪批量实时 + 行情源 → 首屏快照；日线强制预热…")
         feed_started = False
-
-        def _warm_daily_bg() -> None:
-            try:
-                print(f"[{_now()}] 后台预热日线缓存…")
-                _daily_cache_warm()
-                print(f"[{_now()}] 日线缓存预热完成")
-            except Exception as e:  # noqa: BLE001
-                print(f"[{_now()}] 日线预热失败（继续）: {e}")
 
         try:
             ensure_watch_status_reset_today()
+            # 启动必刷：按信号交易日重拉日线，过门/前日不沿用旧 parquet 截断
+            _ensure_signal_day_caches(force=True)
+            print(
+                f"[{_now()}] 冷启动强制刷新日线"
+                f"（session={trading_session_date()} · "
+                f"已收盘日线截至 {latest_completed_weekday()}）…"
+            )
             t0 = time.perf_counter()
             n_fast = reseed_live()
             feed.start()
             feed_started = True
-            # 与首屏并行，避免串行 fetch_daily / 1m 互堵
-            threading.Thread(
-                target=_warm_daily_bg, name="watch-daily-warm", daemon=True
-            ).start()
+            try:
+                _daily_cache_warm(force=True)
+                print(f"[{_now()}] 日线缓存预热完成")
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 日线预热失败（继续按票补拉）: {e}")
             report, _ = safe_refresh()
             elapsed = time.perf_counter() - t0
             _log_watch_snapshot_push(
