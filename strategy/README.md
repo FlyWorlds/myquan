@@ -97,7 +97,7 @@ strategy/
 | **factor23** | 因子23-最高连板止盈 | 止盈持股 | 策略十五止盈形态 | 最高板≤2 早止盈；3～4 板 10%减半；≥5 放宽；见 [`docs/FACTOR23.md`](../docs/FACTOR23.md) |
 | **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五择时 | 低/中梯度开因子22；高梯度关因子22并上移止盈；见 [`docs/FACTOR24.md`](../docs/FACTOR24.md) |
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡叠加 | 30m 确认止损 + 动态半仓 + 卖飞回补；见 [`docs/FACTOR25.md`](../docs/FACTOR25.md) |
-| **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买=开盘阈值 1m；卖=硬保护2.5% + 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + 阶梯10%/15% + 大赚后回落2%清 + 买入日未到3%则次日峰值回落2.5%；买入日盈利≥3%不记、其余都记；**盯盘与 1m 回测 10% 均减半**（`tp_stage`）；已平仓留痕价同 1m 触达；池回测近 7 日；见 [`docs/FACTOR26.md`](../docs/FACTOR26.md) |
+| **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买=开盘阈值 1m；卖=硬保护2.5% + 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + **按个股**阶梯10%半仓/15%全清 + 未到15%则最高点回落2%把剩余全平 + 买入日未到3%则次日峰值回落2.5%；买入日盈利≥3%不记、其余都记；**Web 模拟持仓与 1m 回测 10% 均减半**（`tp_stage`）；已平仓留痕价同 1m 触达；池回测近 7 日；见 [`docs/FACTOR26.md`](../docs/FACTOR26.md) |
 | **factor27** | 因子27-核心龙头 | 情绪题材 | 策略十六宇宙 | 通达信概念成交额≥中位数（最多扫 Top40）；每概念≤2；池约30只；主板非ST非科创创业、现价<100；滚动近3个月冻结；交易宇宙另并**公共自选池**（全策略共用）；见 [`docs/FACTOR27.md`](../docs/FACTOR27.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
@@ -257,6 +257,8 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack 
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 # 本周 5 日核对（不覆盖默认 REPORT）
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 5 --source ak --tag _week202609
+# 交割单对照 1m K（半仓/剩余全平/脏K）
+PYTHONPATH=. python backtest/strategy16_core_leader/audit_week_1m.py --tag _week202609
 # 低开破硬保护：立刻卖 vs 开盘再下杀1%（全池等权）→ COMPARE_HARD_GAP.md
 PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7
 cd backtest && python run.py kaicheng --no-open

@@ -29,7 +29,7 @@
 ### 因子26 · 多层止盈（主执行）
 
 - 买：同因子1 过滤；前日阴/小阳；禁双阳跨日≥5%；**开盘阈值**限价买（默认关攻击波）。盘中触达以 `holdingStocks/index.py` 的 **1 分钟路径**为准（禁止全日 OHLC 假触）。
-- 卖（同分钟优先级）：买入日收盘<3%已记且当日尚未>3% → 次日动态峰值回落 2.5% 全清 → 阶梯 15% 全清 → 中赚（>3%且<10%）回落一半与动态高点回落 0.5×近20日日频σ 并行、谁先碰到走谁 → 硬保护 2.5% → 阶梯 10% 半仓；已半仓后不再因仍在 10% 上清剩余；≥10% 后峰值回落 2% 清仓。买入日：盈利≥3%不记，其余都记。**盯盘与三槽 1m 回测均真正减半**（持仓 `tp_stage` + `last_tp_ts`）；信号写「半仓止盈」，不接券商、人工按信号下单。
+- 卖（同分钟优先级）：买入日收盘<3%已记且当日尚未>3% → 次日动态峰值回落 2.5% 全清 → 阶梯 15% **该股全清** → 中赚（>3%且<10%）回落一半与动态高点回落 0.5×近20日日频σ 并行、谁先碰到走谁 → 硬保护 2.5% → 阶梯 10% **该股半仓**；已半仓后不再因仍在 10% 上清剩余；未到 15% 则最高点回落 2% **把该股剩余全平**。买入日：盈利≥3%不记，其余都记。**盯盘 Web 是模拟持仓**（`tp_stage` + `last_tp_ts`）；信号「半仓止盈 / 15%全清 / 剩余全平」，不接券商、人工按信号下单。
 - 默认 entry **±2.5%**，中段门槛 **3%**，阶梯 **10%/15%**，大赚回落 **2%**，回落一半 **50%**，波动回落 **50%×20日日频σ**，T1 峰值回落 **2.5%**，硬保护 **2.5%**。
 - 真源：`strategy/pullback_wave_stop.py`（`eval_multi_tp_bar`）、`strategy/factors/factor26.py`。
 - 池回测研究对照：`--buy-mode open_or_attack` 可加回攻击波（默认只买开盘涨到 `ceil(开盘×(1+entry_pct))`）。
@@ -180,6 +180,7 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 - **因子22 与三槽**：生产三槽「当日卖出禁再买」下 factor22 **不改变成交**；对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`（近7日：禁再买约 +4.6%，开同日再买约 +7.65%，差约 3.05pp，研究用途）。
 - **刷新池**：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json`。
 - **近 7 日 1m 回测**（开盘阈值=2026至今 {2/2.5/3}% 日线夏普择优；卖同策略一；独立三槽）：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr` → `backtest/strategy16_core_leader/REPORT.md`。
+- **本周交割 × 1m K**：`PYTHONPATH=. python backtest/strategy16_core_leader/audit_week_1m.py --tag _week202609` → [`AUDIT_1M__week202609.md`](../backtest/strategy16_core_leader/AUDIT_1M__week202609.md)。
 - **F22 对照**：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7`。
 - **开盘阈值同日再买对照**：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_open_rebuy.py --days 7` → `COMPARE_OPEN_REBUY.md`；全池等权加 `--all-pool` → `COMPARE_OPEN_REBUY_ALL.md`（近7日：禁再买约 +1.93%，开盘再买约 +2.34%，开盘再买 6 次，Δ约 0.41pp）。
 - **低开硬保护对照**：立刻卖 vs 开盘再下杀 1%（全池等权）：`PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7` → `COMPARE_HARD_GAP.md`。
