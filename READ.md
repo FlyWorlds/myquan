@@ -50,7 +50,7 @@ akshare DataFrame
 
 | 场景 | 配置 |
 |------|------|
-| **盯盘 / 默认回测** | **策略十六 = 因子27 核心龙头池 + 因子26 多层止盈 + 因子2 预警**（因子2 回测不注资；**因子22 默认关闭**，仅研究对照） |
+| **盯盘 / 默认回测** | **策略十六 = 因子27 核心龙头池 + 因子26 多层止盈 + 因子2 预警**（因子2 回测不注资；**因子22 默认关闭**，仅研究对照）。云环境无本机实仓时，纸面账本按本周 `pool_1m` 末日三槽种子：`python holdingStocks/seed_from_pool_1m.py --tag _week202609`（当前 2026-09-11：000070 / 600234 / 600869） |
 | **因子26** | 选股日线 / 成交 1m；池回测近 7 日；T+1；**买=开盘阈值**；卖=硬保护2.5%（低开已破按开盘）+ 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + 阶梯10%半仓/15%全清 + 大赚后回落2%清 + 买入日未到3%则次日按隔夜高点回落2.5%（不得低于硬保护）；**盯盘 10% 记减半**（`tp_stage`，不接券商只出信号）；买入日盈利≥3%不记、其余都记；三槽（盘中/隔夜均可持3、日最多买3、当日卖出禁再买） |
 | **因子1（复用）** | 开盘±锚定止损；策略三/四/八等仍用；已非策略一主因子 |
 | **策略一选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top20**（宽宇宙主板，剔ST/百元股，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
@@ -191,6 +191,8 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack 
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 # 本周 5 日核对（不覆盖默认 REPORT；短窗不能当策略期望）
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 5 --source ak --tag _week202609
+# 云环境纸面账本：按该次回测末日三槽写入 holdings.json（不入库）
+python holdingStocks/seed_from_pool_1m.py --tag _week202609
 # 策略十六：因子22 同日再买对照（生产禁再买 vs 研究开 F22）→ COMPARE_F22.md
 PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7
 # 卖出后开盘阈值同日再买对照 → COMPARE_OPEN_REBUY.md；全池等权加 --all-pool → COMPARE_OPEN_REBUY_ALL.md
@@ -308,4 +310,5 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 ```bash
 cd holdingStocks && python start_watch.py --no-wechat
 # 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
+# 云环境纸面持仓（本周回测末日）：python seed_from_pool_1m.py --tag _week202609
 ```

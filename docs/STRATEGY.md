@@ -180,6 +180,7 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 - **因子22 与三槽**：生产三槽「当日卖出禁再买」下 factor22 **不改变成交**；对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`（近7日：禁再买约 +4.6%，开同日再买约 +7.65%，差约 3.05pp，研究用途）。
 - **刷新池**：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json`。
 - **近 7 日 1m 回测**（开盘阈值=2026至今 {2/2.5/3}% 日线夏普择优；卖同策略一；独立三槽）：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr` → `backtest/strategy16_core_leader/REPORT.md`。
+- **云环境纸面账本**：无本机实仓时按该回测末日未平仓写入 `holdingStocks/holdings.json`（不入库）：`python holdingStocks/seed_from_pool_1m.py --tag _week202609`。当前 `_week202609` 末日 2026-09-11 三槽：特发信息 / 科新发展 / 远东股份（买入日 T+1 锁仓，下一交易日 9:15 可卖）。
 - **F22 对照**：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7`。
 - **开盘阈值同日再买对照**：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_open_rebuy.py --days 7` → `COMPARE_OPEN_REBUY.md`；全池等权加 `--all-pool` → `COMPARE_OPEN_REBUY_ALL.md`（近7日：禁再买约 +1.93%，开盘再买约 +2.34%，开盘再买 6 次，Δ约 0.41pp）。
 - **低开硬保护对照**：立刻卖 vs 开盘再下杀 1%（全池等权）：`PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7` → `COMPARE_HARD_GAP.md`。
