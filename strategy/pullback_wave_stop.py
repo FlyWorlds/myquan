@@ -70,14 +70,17 @@ STRATEGY_RULES = """
   当日最高 >= ceil(开盘 × (1+阈值))，按该触发价限价买
   （攻击波仅研究对照，默认关闭）
 
-【有仓 · 卖出】同分钟优先级（全清优先于半仓；半仓同分钟只减一次）：
+【有仓 · 卖出】同分钟优先级（与 eval_multi_tp_bar 一致；全清优先于半仓）：
+  0) 低开已破买点硬保护 → 开盘立刻卖（先于 T1）
   1) 买入日收盘盈利 <3%（已记）且当日尚未 >3% → 次日动态峰值回落 2.5% 全清
   2) 阶梯：浮盈 ≥15% → 可卖全清
   3) 中赚（浮盈 >3% 且 <10%）：回落一半 与 峰值回落 0.5×20日日频σ 并行，
      从动态高点往下谁先碰到走谁（同分钟价高者先触）
-  4) 硬保护：亏损达 2.5%
+  4) 硬保护：盘中亏损达 2.5%（未进中赚/大赚档时）
   5) 大赚：阶梯 10% 半仓；≥10% 后峰值回落 2% 清仓
      （已半仓后再触 10% / 回落 → 剩余全清）
+  · 未触达时的「工作卖价」走 working_stop_price：过 10% 展示峰值回落 2%，
+    禁止用 dummy OHLC 去撞 10%/15% 阶梯目标（否则盯盘会把阶梯价当止损）
   · 买入当日不可卖；次日未过 3% 走峰值回落 2.5%；过 3% 走中段（一半/波动先到先卖）；过 10% 走分段
   · 峰值只从买入之后算，未卖出前创新高则抬升；T1 回落峰值=max(隔夜持仓高点, 当日高点)，不得低于买点硬保护；低开已破硬保护按开盘卖
   · 半仓不足 200 股则改为全清
@@ -262,6 +265,60 @@ def mid_gain_first_stop(
         return "", 0.0
     reason, px = max(cands, key=lambda x: x[1])
     return reason, float(px)
+
+
+def working_stop_price(
+    *,
+    cost_px: float,
+    peak_high: float,
+    session_peak: float = 0.0,
+    day_open: float = 0.0,
+    overnight_armed: bool = False,
+    hard_pct: float = DEFAULT_PULLBACK_PCT,
+    giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
+    t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
+    vol20_daily: float | None = None,
+    giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    vol_giveback_ratio: float = DEFAULT_VOL_GIVEBACK_RATIO,
+    tick: float = TICK_SIZE,
+) -> tuple[str, float]:
+    """未触达时的工作卖价。
+
+    过 10% 后工作线是峰值回落 2%，不是 10%/15% 阶梯目标。
+    禁止用「open=high=low=peak」去跑 eval_multi_tp_bar：那会假触发阶梯，
+    把目标价写进盯盘 stop，现价回落到目标价就会误报「已触止损」。
+    """
+    cost = float(cost_px or 0)
+    peak = max(float(peak_high or 0), cost) if cost > 0 else float(peak_high or 0)
+    if cost <= 0 or peak <= 0:
+        return "", 0.0
+    live_ok = pnl_exceeds(peak, cost, giveback_arm_pct)
+    peak_gain = peak / cost - 1.0
+    hard = cost_hard_stop_px(cost, hard_pct=hard_pct, tick=tick)
+    if overnight_armed and (not live_ok):
+        sess = max(float(session_peak or 0), float(day_open or 0), peak)
+        return "t1_peak_trail", t1_trail_stop_px(
+            sess,
+            cost_px=cost,
+            t1_trail_pct=t1_trail_pct,
+            hard_pct=hard_pct,
+            tick=tick,
+        )
+    if live_ok and peak_gain < DEFAULT_LADDER_HALF_PCT - 1e-12:
+        kind, px = mid_gain_first_stop(
+            peak,
+            cost,
+            vol20_daily,
+            giveback_ratio=giveback_ratio,
+            vol_giveback_ratio=vol_giveback_ratio,
+            tick=tick,
+        )
+        if px > 0:
+            return (kind or "half_gain"), float(px)
+        return "hard_from_cost", hard
+    if live_ok and peak_gain + 1e-12 >= DEFAULT_LADDER_HALF_PCT:
+        return "peak_pullback", peak_pullback_half_price(peak, tick=tick)
+    return "hard_from_cost", hard
 
 
 def mid_gain_first_hit(
@@ -815,35 +872,18 @@ def path_dependent_pullback_hit(
     stop_now = 0.0
     kind_now = ""
     if peak_now > 0 and cost > 0:
-        dummy = _eval(
-            peak_now,
-            peak_now,
-            peak_now,
+        kind_now, stop_now = working_stop_price(
+            cost_px=cost,
+            peak_high=peak_now,
+            session_peak=session_peak,
+            day_open=day_o,
+            overnight_armed=bool(overnight_armed),
+            hard_pct=pb,
+            giveback_arm_pct=giveback_arm_pct,
+            t1_trail_pct=t1_trail_pct,
+            vol20_daily=vol20_daily,
+            tick=tick,
         )
-        stop_now = float((dummy.get("action") or {}).get("fill_px") or 0)
-        kind_now = str((dummy.get("action") or {}).get("reason") or "")
-        if stop_now <= 0:
-            if overnight_armed and not pnl_exceeds(peak_now, cost, giveback_arm_pct):
-                stop_now = t1_trail_stop_px(
-                    session_peak if session_peak > 0 else peak_now,
-                    cost_px=cost,
-                    t1_trail_pct=t1_trail_pct,
-                    hard_pct=pb,
-                    tick=tick,
-                )
-                kind_now = "t1_peak_trail"
-            elif pnl_exceeds(peak_now, cost, giveback_arm_pct) and (
-                peak_now / cost - 1.0 < DEFAULT_LADDER_HALF_PCT
-            ):
-                kind_now, stop_now = mid_gain_first_stop(
-                    peak_now, cost, vol20_daily, tick=tick
-                )
-            elif peak_now / cost - 1.0 + 1e-12 >= DEFAULT_LADDER_HALF_PCT:
-                stop_now = peak_pullback_half_price(peak_now, tick=tick)
-                kind_now = "peak_pullback"
-            else:
-                stop_now = cost_hard_stop_px(cost, hard_pct=pb, tick=tick)
-                kind_now = "hard_from_cost"
     return {
         "hit_stop": False,
         "running_high": peak_now,
@@ -945,35 +985,29 @@ def strategy_levels(
     t1_armed = bool(_extra.get("overnight_armed"))
     trail = float(_extra.get("t1_trail_pct") or DEFAULT_T1_PEAK_TRAIL_PCT)
     arm = float(_extra.get("giveback_arm_pct") or DEFAULT_GIVEBACK_ARM_PCT)
-    peak_gain = peak / cost - 1.0 if cost > 0 else 0.0
-    live_ok = pnl_exceeds(peak, cost, arm)
-    if t1_armed and (not live_ok):
-        sess = max(
-            float(_extra.get("session_peak") or 0),
-            float(open_px or 0),
-            float(peak or 0),
-        )
-        stop = t1_trail_stop_px(
-            sess,
-            cost_px=cost,
-            t1_trail_pct=trail,
-            hard_pct=pb,
-            tick=tick,
-        )
-    elif live_ok and peak_gain < DEFAULT_LADDER_HALF_PCT - 1e-12:
-        _kind, stop = mid_gain_first_stop(peak, cost, vol20, tick=tick)
-        if stop <= 0:
-            stop = floor_to_tick(cost * (1.0 - pb), tick)
-    elif live_ok and peak_gain + 1e-12 >= DEFAULT_LADDER_HALF_PCT:
-        stop = peak_pullback_half_price(peak, tick=tick)
-    else:
-        stop = floor_to_tick(cost * (1.0 - pb), tick)
+    _kind, stop = working_stop_price(
+        cost_px=cost,
+        peak_high=peak,
+        session_peak=float(_extra.get("session_peak") or 0),
+        day_open=float(open_px or 0),
+        overnight_armed=t1_armed,
+        hard_pct=pb,
+        giveback_arm_pct=arm,
+        t1_trail_pct=trail,
+        vol20_daily=vol20,
+        giveback_ratio=giveback_ratio,
+        tick=tick,
+    )
+    if stop <= 0:
+        stop = floor_to_tick(cost * (1.0 - pb), tick) if cost > 0 else 0.0
+        _kind = "hard_from_cost"
     return {
         "buy_trigger": buy,
         "buy": buy,
         "open_buy": open_buy,
         "attack_buy": attack_buy,
         "stop": stop,
+        "stop_kind": _kind,
         "day_high": anchor,
         "day_low": lo,
         "pullback_pct": pb,
@@ -1026,12 +1060,15 @@ def strategy_signal(
     peak_high: float | None = None,
     giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
     allow_attack: bool = DEFAULT_ALLOW_ATTACK,
+    stop_kind: str | None = None,
 ) -> dict[str, Any]:
-    """盯盘信号：默认开盘阈值买入；卖出=浮盈回落一半。
+    """盯盘信号：默认开盘阈值买入；卖出=因子26 多层止盈工作线。
 
     hit_stop：若传入则尊重调用方（应用 1 分钟 path-dependent 结果）；
     否则退回 low≤stop（日线/无分钟时有次序偏差）。
     hit_buy：若传入则尊重调用方（应用 1 分钟买入路径）；否则用全日 high/low。
+    stop_kind：工作卖价种类（hard_from_cost / t1_peak_trail / half_gain /
+    vol_giveback / peak_pullback）；不传则按成本/峰值推断。
     """
     pb = float(pullback_pct if pullback_pct is not None else stop_pct)
     lv = strategy_levels(
@@ -1077,6 +1114,40 @@ def strategy_signal(
         buy_kind = "open"
 
     buy_trigger = float(eff_buy)
+
+    kind_now = str(stop_kind or lv.get("stop_kind") or "").strip()
+    if not kind_now and cost_px is not None and float(cost_px or 0) > 0:
+        kind_now, _ = working_stop_price(
+            cost_px=float(cost_px),
+            peak_high=float(peak_high or high_px or 0),
+            day_open=float(open_px or 0),
+            hard_pct=pb,
+            giveback_ratio=giveback_ratio,
+            tick=tick,
+        )
+    if not kind_now:
+        kind_now = "hard_from_cost"
+
+    def _sell_note(*, near: bool = False, holding_idle: bool = False) -> str:
+        labels = {
+            "hard_from_cost": "买点硬保护",
+            "t1_peak_trail": "未到3%峰值回落2.5%",
+            "half_gain": "中赚回落一半",
+            "vol_giveback": "中赚波动回落",
+            "peak_pullback": "大赚后峰值回落2%",
+            "peak_pullback_clear": "大赚后峰值回落2%",
+            "ladder_half_10": "阶梯10%半仓",
+            "ladder_full_15": "阶梯15%全清",
+        }
+        label = labels.get(kind_now, "多层止盈")
+        if holding_idle:
+            return f"{label}@{pf.format(stop_px)}"
+        if near:
+            return (
+                f"距{label}在{near_points:g}%内"
+                f"（止{pf.format(stop_px)}）"
+            )
+        return f"{label}@{pf.format(stop_px)}"
 
     holding = qty > 0
     if hit_stop is None:
@@ -1135,7 +1206,7 @@ def strategy_signal(
         "attack_buy": round(attack_buy, px_digits) if attack_buy > 0 else None,
         "actionable": False,
         "near_pct": near_points,
-        "stop_kind": "half_gain",
+        "stop_kind": kind_now,
         "day_high": float(high_px),
         "day_low": float(low_px),
         "pullback_pct": pb,
@@ -1253,10 +1324,7 @@ def strategy_signal(
                     "alert": "已触止损",
                     "bg_class": "warn-sell",
                     "建议挂单": stop_px,
-                    "挂单说明": (
-                        f"回落波止损@{pf.format(stop_px)}"
-                        f"（高{pf.format(float(high_px))}回落{pb*100:.1f}%）"
-                    ),
+                    "挂单说明": _sell_note(),
                 }
             )
             return _finish(base)
@@ -1268,10 +1336,7 @@ def strategy_signal(
                     "alert": "将止损",
                     "bg_class": "warn-sell",
                     "建议挂单": stop_px,
-                    "挂单说明": (
-                        f"距回落波止损在{near_points:g}%内"
-                        f"（高{pf.format(float(high_px))}→止{pf.format(stop_px)}）"
-                    ),
+                    "挂单说明": _sell_note(near=True),
                 }
             )
             return _finish(base)
@@ -1280,10 +1345,7 @@ def strategy_signal(
                 "alert": "持有",
                 "bg_class": "status-hold",
                 "建议挂单": stop_px,
-                "挂单说明": (
-                    f"回落波止损=分时最高×(1-{pb*100:.1f}%)"
-                    f"@{pf.format(stop_px)}"
-                ),
+                "挂单说明": _sell_note(holding_idle=True),
                 "pending_sell": False,
             }
         )
@@ -2151,6 +2213,7 @@ __all__ = [
     "lot_half_shares",
     "ladder_target_price",
     "peak_pullback_half_price",
+    "working_stop_price",
     "overnight_open_dump_fill",
     "eval_multi_tp_bar",
     "path_dependent_pullback_hit",

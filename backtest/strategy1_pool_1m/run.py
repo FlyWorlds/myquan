@@ -2,6 +2,7 @@
 
 选股/过滤：日线（前日阴/小阳、双阳禁买）；组合回撤看因子2 预警（不注资）。
 成交：池内票近 7 日用 1 分钟 path-dependent（开盘阈值买 + 多层止盈：中赚回落一半与波动回落谁先到走谁）。
+现金/权益按 ``strategy.costs`` 扣佣金+杂费+印花+滑点；止盈止损价仍按成交价（不含费）。
 
 组合约束（对齐盯盘三槽）：
   · 物理槽 max_slots=3：盘中/隔夜均可同时持仓 3
@@ -66,6 +67,11 @@ from strategy.open_break import (  # noqa: E402
     is_t1_buy_day,
     prev_day_allows_entry,
     should_block_entry_by_yang,
+)
+from strategy.costs import (  # noqa: E402
+    ENGINE_COMMISSION_RATE,
+    SLIPPAGE_VALUE,
+    stamp_tax_for_code,
 )
 from strategy.pullback_wave_stop import (  # noqa: E402
     DEFAULT_ENTRY_PCT,
@@ -354,6 +360,21 @@ def _lot_shares(budget: float, price: float) -> int:
     return int(budget // (price * 100.0)) * 100
 
 
+def _buy_unit(px: float) -> float:
+    """含买滑点+佣金的每股现金占用。"""
+    return float(px) * (1.0 + SLIPPAGE_VALUE) * (1.0 + ENGINE_COMMISSION_RATE)
+
+
+def _buy_outlay(px: float, shares: int) -> float:
+    return _buy_unit(px) * int(shares)
+
+
+def _sell_credit(px: float, shares: int, code: str = "") -> float:
+    """含卖滑点+佣金+印花后的现金入账。"""
+    notional = float(px) * (1.0 - SLIPPAGE_VALUE) * int(shares)
+    return notional * (1.0 - ENGINE_COMMISSION_RATE - stamp_tax_for_code(code))
+
+
 def _mark_equity(
     cash: float,
     positions: dict[str, _Pos],
@@ -497,18 +518,19 @@ def simulate_portfolio_3slots(
             px = float(cand["px"])
             eq = _equity_now()
             budget = eq * float(slot_weight)
-            shares = _lot_shares(budget, px)
+            shares = _lot_shares(budget, _buy_unit(px))
             if shares < 100:
                 skipped.append({**cand, "reason": "budget_too_small"})
                 continue
-            cost = shares * px
-            if cost > cash + 1e-6:
-                shares = _lot_shares(cash, px)
-                cost = shares * px
+            outlay = _buy_outlay(px, shares)
+            if outlay > cash + 1e-6:
+                shares = _lot_shares(cash, _buy_unit(px))
+                outlay = _buy_outlay(px, shares)
             if shares < 100:
                 skipped.append({**cand, "reason": "cash_too_small"})
                 continue
-            cash -= cost
+            cash -= outlay
+            cost = shares * px
             buys_today += 1
             positions[code] = _Pos(
                 code=code,
@@ -717,7 +739,7 @@ def simulate_portfolio_3slots(
                         st.noted_first_exec = False
                         if nxt.get("hit") and float(nxt.get("fill_px") or 0) > 0:
                             fill = float(nxt["fill_px"])
-                            proceeds = float(fill) * int(pos.shares)
+                            proceeds = _sell_credit(fill, int(pos.shares), code)
                             cash += proceeds
                             trades.append(
                                 {
@@ -793,7 +815,7 @@ def simulate_portfolio_3slots(
                         fill = float(act["fill_px"])
                         sell_n = max(0, min(int(act["shares"]), int(pos.shares)))
                         if sell_n > 0:
-                            proceeds = float(fill) * sell_n
+                            proceeds = _sell_credit(fill, sell_n, code)
                             cash += proceeds
                             left_after = int(pos.shares) - sell_n
                             full_exit = left_after <= 0 or str(act.get("kind")) == "full"
@@ -848,7 +870,7 @@ def simulate_portfolio_3slots(
                                 if bar_o > 0 and bar_o <= stop + 1e-12
                                 else float(stop)
                             )
-                            proceeds = float(fill) * int(pos.shares)
+                            proceeds = _sell_credit(fill, int(pos.shares), code)
                             cash += proceeds
                             trades.append(
                                 {
@@ -965,18 +987,19 @@ def simulate_portfolio_3slots(
                     px = float(cand["px"])
                     eq = _equity_now()
                     budget = eq * float(slot_weight)
-                    shares = _lot_shares(budget, px)
+                    shares = _lot_shares(budget, _buy_unit(px))
                     if shares < 100:
                         skipped.append({**cand, "reason": "budget_too_small"})
                         continue
-                    cost = shares * px
-                    if cost > cash + 1e-6:
-                        shares = _lot_shares(cash, px)
-                        cost = shares * px
+                    outlay = _buy_outlay(px, shares)
+                    if outlay > cash + 1e-6:
+                        shares = _lot_shares(cash, _buy_unit(px))
+                        outlay = _buy_outlay(px, shares)
                     if shares < 100:
                         skipped.append({**cand, "reason": "cash_too_small"})
                         continue
-                    cash -= cost
+                    cash -= outlay
+                    cost = shares * px
                     buys_today += 1
                     positions[code] = _Pos(
                         code=code,
@@ -1027,7 +1050,7 @@ def simulate_portfolio_3slots(
             cands.sort(key=lambda x: x[0])
             _pnl, code, fill = cands[0]
             pos = positions[code]
-            proceeds = float(fill) * int(pos.shares)
+            proceeds = _sell_credit(fill, int(pos.shares), code)
             cash += proceeds
             trades.append(
                 {
@@ -1107,18 +1130,19 @@ def simulate_portfolio_3slots(
                 px = float(cand["px"])
                 eq = _equity_now()
                 budget = eq * float(slot_weight)
-                shares = _lot_shares(budget, px)
+                shares = _lot_shares(budget, _buy_unit(px))
                 if shares < 100:
                     skipped.append({**cand, "reason": "f22_budget_too_small"})
                     continue
-                cost = shares * px
-                if cost > cash + 1e-6:
-                    shares = _lot_shares(cash, px)
-                    cost = shares * px
+                outlay = _buy_outlay(px, shares)
+                if outlay > cash + 1e-6:
+                    shares = _lot_shares(cash, _buy_unit(px))
+                    outlay = _buy_outlay(px, shares)
                 if shares < 100:
                     skipped.append({**cand, "reason": "f22_cash_too_small"})
                     continue
-                cash -= cost
+                cash -= outlay
+                cost = shares * px
                 buys_today += 1
                 positions[code] = _Pos(
                     code=code,
@@ -1381,7 +1405,7 @@ def write_trade_ledger(
     lines = [
         f"# 交割单 · {title} 1m 三槽",
         "",
-        "> 研究用途，非投资建议。未计佣金/印花税/滑点。",
+        "> 研究用途，非投资建议。权益已按 strategy.costs 扣佣金/杂费/印花/滑点；成交价与止盈止损仍按触发价。",
         "",
         "## 摘要",
         "",

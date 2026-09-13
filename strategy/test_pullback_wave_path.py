@@ -641,6 +641,54 @@ def test_simulate_ladder_half_reduces_shares_then_peak_trail_clears_rest():
     assert int(sim.get("shares_out") or 0) == 0
 
 
+def test_working_stop_not_ladder_when_peak_already_extended():
+    """隔夜峰值已过 10%/15% 时，未触达的工作卖价必须是峰值回落 2%，不能是阶梯目标。"""
+    # 峰值 112、今日高未再过 10%、低未破 112×0.98
+    mid = path_dependent_pullback_hit(
+        _bars([(109.90, 109.85)]),
+        pullback_pct=0.025,
+        seed_high=112.0,
+        cost_px=100.0,
+    )
+    assert mid["hit_stop"] is False, mid
+    assert abs(float(mid["stop_px"]) - 109.76) < 1e-9, mid
+    assert mid["stop_kind"] == "peak_pullback"
+    # 峰值 116：无新 1m 时工作线必须是 113.68，不能是阶梯 115
+    kind, px = _m.working_stop_price(cost_px=100.0, peak_high=116.0)
+    assert kind == "peak_pullback"
+    assert abs(float(px) - 113.68) < 1e-9
+    empty = path_dependent_pullback_hit(
+        _bars([]),
+        pullback_pct=0.025,
+        seed_high=116.0,
+        cost_px=100.0,
+    )
+    assert empty["hit_stop"] is False, empty
+    assert abs(float(empty["stop_px"]) - 113.68) < 1e-9, empty
+    assert empty["stop_kind"] == "peak_pullback"
+
+
+def test_strategy_signal_hang_text_is_multi_tp():
+    """持仓挂单说明必须写多层止盈工作线，不能再写「回落波=分时最高×(1-2.5%)」。"""
+    sig = _m.strategy_signal(
+        open_px=100.0,
+        high_px=105.0,
+        low_px=104.0,
+        last_px=104.5,
+        session="2026-09-08",
+        qty=100,
+        buy_time="2026-09-07 10:00:00",
+        vs_open_pts=4.5,
+        cost_px=100.0,
+        peak_high=105.0,
+        t0=True,
+    )
+    note = str(sig.get("挂单说明") or "")
+    assert "回落波止损" not in note, note
+    assert "中赚回落一半" in note or "中赚波动回落" in note, note
+    assert sig.get("stop_kind") in ("half_gain", "vol_giveback")
+
+
 def test_simulate_ladder_half_only_keeps_remainder():
     """只触 10%、未触回落：应半仓后继续持有剩余。"""
     ts0 = pd.Timestamp("2026-09-09 09:31:00")
@@ -699,4 +747,6 @@ if __name__ == "__main__":
     test_first_session_exit_fill_uses_path_not_open_gap()
     test_simulate_ladder_half_reduces_shares_then_peak_trail_clears_rest()
     test_simulate_ladder_half_only_keeps_remainder()
+    test_working_stop_not_ladder_when_peak_already_extended()
+    test_strategy_signal_hang_text_is_multi_tp()
     print("ok")

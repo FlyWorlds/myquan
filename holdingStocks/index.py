@@ -1302,7 +1302,7 @@ def _ensure_signal_day_caches(*, force: bool = False) -> str:
 
 
 def _today_1m_bars(sina: str, session: str, *, force: bool = False) -> pd.DataFrame:
-    """拉取并缓存当日 1 分钟 K（未复权），供回落波止损 path-dependent 判定。"""
+    """拉取并缓存当日 1 分钟 K（未复权），供因子26 多层止盈 path-dependent 判定。"""
     key = str(sina).lower()
     now = time.monotonic()
     hit = _M1_CACHE.get(key)
@@ -1429,6 +1429,7 @@ def _resolve_hit_stop_path_dependent(
             "stop_px": float(pd_hit.get("stop_px") or stop_px or 0),
             "running_high": float(pd_hit.get("running_high") or 0),
             "source": str(pd_hit.get("source") or "1m"),
+            "stop_kind": str(pd_hit.get("stop_kind") or ""),
         }
 
     stop_now = float(stop_px or 0)
@@ -1441,6 +1442,7 @@ def _resolve_hit_stop_path_dependent(
         "stop_px": stop_now,
         "running_high": float(seed_high or 0),
         "source": "last_vs_stop",
+        "stop_kind": "",
     }
 
 
@@ -3951,6 +3953,9 @@ def collect_rows(
                             if path_stop > 0:
                                 lv["stop"] = path_stop
                                 lv_base["stop"] = path_stop
+                            sk = str(path_res.get("stop_kind") or "")
+                            if sk:
+                                lv["stop_kind"] = sk
                         except (TypeError, ValueError):
                             pass
                     # 刷新持仓峰值：只用 1m 顺序 running_high，禁止并入快照 high
@@ -4540,6 +4545,9 @@ def collect_rows(
                 hit_stop=bool(hit_stop_show),
                 hit_buy=bool(hit_buy),
                 allow_attack=DEFAULT_ALLOW_ATTACK,
+                cost_px=cost_h if cost_h else None,
+                peak_high=seed_h if seed_h else None,
+                stop_kind=str(lv.get("stop_kind") or "") or None,
             )
             if not signal_ok:
                 if qty > 0 and hit_stop_show:

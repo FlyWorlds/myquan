@@ -3,7 +3,7 @@
 > 研究用途，不构成投资建议。  
 > 注册表与 API 细节见 [`strategy/README.md`](../strategy/README.md)；凯盛单票审计见 [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md)。
 
-**最后更新**：2026-09-09
+**最后更新**：2026-09-13
 
 ---
 
@@ -16,7 +16,7 @@
 | 决策 | `decision.py` | `MarketContext` → buy/sell/hold |
 | 执行 | `runner.py` / `backtest.py` / 盯盘 | 回测、下单模拟、预警 |
 
-**实盘盯盘默认**：**策略十六 = 因子27 核心龙头池 + 因子26 多层止盈 + 因子2 预警 + 因子22 收盘动量再买**（因子2 回测不注资）。
+**实盘盯盘默认**：**策略十六 = 因子27 核心龙头池 + 因子26 多层止盈 + 因子2 预警**（因子2 回测不注资；**因子22 默认关闭**）。算法审核见 [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md)。
 
 **动态选股（研究，已锁定）**：**因子13 · 熊市盾牌 thr\* Top3**，见 [`FACTOR13.md`](FACTOR13.md)。
 
@@ -40,9 +40,9 @@
 - 由历史最大回撤、年均最大回撤标定加减仓线（默认加仓≥20% / 减仓≤10%）。
 - **回测默认只预警不注资**；旧版 `dd_topup` 需显式开启。
 
-### 因子22 · 收盘动量（已绑策略一）
+### 因子22 · 收盘动量（策略十六默认关）
 
-- 因子26 当日止损后：三槽执行下**当日禁再买该票**（因子22 研究路径不覆盖槽位禁买）。
+- 因子26 当日止损后：三槽执行下**当日禁再买该票**；策略十六 bindings 默认 `enabled=False`。
 - **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 3。
 - 对照见 `holdingStocks/watch_config.py`：`MAX_PORTFOLIO_SLOTS` / `MAX_OVERNIGHT_SLOTS` / `MAX_BUYS_PER_DAY` / `RESERVE_EMPTY_SLOTS`（`MAX_ACTIVE_SLOTS` 兼容旧名=隔夜上限）。
 - 绑定：`strategy1/bindings`；决策见 `Strategy1Decision`；说明：[`FACTOR22.md`](FACTOR22.md)。

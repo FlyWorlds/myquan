@@ -1,6 +1,6 @@
 # 因子22 · 收盘动量
 
-> 研究用途，非投资建议。叠在策略一主止损（**因子26**，旧对照为因子1）上的同日再买规则，**已挂策略一**。
+> 研究用途，非投资建议。叠在主止损（**因子26**）上的同日再买规则。**策略十六默认关闭**；策略一 bindings 仍挂（研究）。三槽执行下当日已卖出禁再买。
 
 ## 规则
 
@@ -8,7 +8,7 @@
 2. 以当日**最低价** `low` 为锚，门槛 = `low × (1 + bounce_pct)`
 3. **收盘确认**（默认）：`收盘价 ≥ 门槛` 才再买；成交按门槛价（实盘更贴近收盘）。盯盘仅 **14:57 后**把现价当收盘；决策引擎 `meta.close_confirmed=False` 时不走因子22
 4. 可选阴阳过滤：收阳 `close>open` / 收阴 `close<open` / 不限
-5. 再买后仍走因子26 的 T+1 与次日回落波止损
+5. 再买后仍走因子26 的 T+1 与次日多层止盈
 
 默认参数（策略一 bindings）：`bounce_pct=0.01`（1%），`candle=any`，`mode=close`。
 
@@ -16,9 +16,9 @@
 
 ## 绑定
 
-- `strategy/strategies/strategy1/bindings.py` → `factor22`
-- 决策：`Strategy1Decision`（有仓触止损且收盘动量成立 → 隐含先止损再买；空仓当日已卖出后因子22 为额外再买路径；**因子26 开盘阈值亦可同日再买**）
-- 盯盘：生产三槽「当日卖出禁再买」，因子22 **不改变成交**；决策引擎仍保留同日再买路径（研究）。对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`。
+- `strategy/strategies/strategy1/bindings.py` → `factor22`（研究，enabled）
+- `strategy/strategies/strategy16/bindings.py` → `factor22`（**enabled=False**，生产不改成交）
+- 盯盘 / 默认 `pool_1m`：当日卖出禁再买。对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`。
 
 ## 验证（仅天通 2026）
 

@@ -3,14 +3,14 @@
 > 项目总览：[`READ.md`](../READ.md) · 策略专题：[`docs/STRATEGY.md`](../docs/STRATEGY.md) · 因子13：[`docs/FACTOR13.md`](../docs/FACTOR13.md) · 因子14：[`docs/FACTOR14.md`](../docs/FACTOR14.md) · 任务：[`TODO.MD`](../TODO.MD)  
 > **文档同步规则**见本文 [§ 文档维护规则](#文档维护规则)；Cursor 规则：`.cursor/rules/docs-sync.mdc`
 
-默认生效：**策略十六·核心龙头（strategy16）= 因子27（核心龙头池）+ 因子26（多层止盈）+ 因子2（回撤加减仓预警）+ 因子22（止损后收盘动量再买）**。
+默认生效：**策略十六·核心龙头（strategy16）= 因子27（核心龙头池）+ 因子26（多层止盈）+ 因子2（回撤加减仓预警）**。因子22 默认关闭，仅研究对照。
 
 动态选股（研究）：**因子13A 质量带 → 因子16 龙头排序 Top20**（[`backtest/s1_f13_refit_2025/`](../backtest/s1_f13_refit_2025/) · 主板剔ST/百元股 · 无置顶）
 
 因子13B 熊盾 Top3（🔒锁定对照）：东材 / 珠峰 / 雷赛（[`LOCKED.json`](../backtest/factor13_bear_shield/LOCKED.json)）
 
 - 默认交易池看因子27（核心龙头近3个月冻结池）∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖看因子26（**开盘阈值买**；卖=硬保护/中赚回落一半与波动回落谁先到走谁/大赚档位/未到3%次日峰值回落）；因子2 默认只挂预警阈值（**回测不注资**）。
-- 算法审核（2026-09-11）：[`docs/PROJECT_AUDIT.md`](../docs/PROJECT_AUDIT.md)。对账用 `backtest/strategy1_pool_1m/run.py --pool strategy16`，不要用 `run_strategy16()` 的日线简化内核。
+- 算法审核（2026-09-13）：[`docs/PROJECT_AUDIT.md`](../docs/PROJECT_AUDIT.md)。对账用 `backtest/strategy1_pool_1m/run.py --pool strategy16`（权益已扣 `strategy.costs`），不要用 `run_strategy16()` 的日线简化内核。
 - 仅开盘突破交易（旧因子1）：`run_open_break` 或切 bindings。
 - 旧版权益注资叠加：`run_strategy1(..., apply_factor2_overlay=True)`（`dd_topup`）。
 - **开闭调参**：改 `bindings.py` / `BacktestConfig` / `DEFAULT_*`，不必改算法。
@@ -93,7 +93,7 @@ strategy/
 | **factor19** | 因子19-低开反包 | 反转 | 旧假设 | 压力日低开开盘买；组合**未过关** |
 | **factor20** | 因子20-跌停次日开板 | 反转 | 已否决 | 昨收跌停今开未封；全样本约 −42% |
 | **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停且曾开板、今低开；上证昨收≤−2% 空仓；调参窗强、盲测回撤未过关 |
-| **factor22** | 因子22-收盘动量 | 动量 | 策略一（研究） | 止损后收盘≥low×(1+pct) 同日再买研究路径；**三槽执行下当日已卖出禁再买**；见 [`docs/FACTOR22.md`](../docs/FACTOR22.md) |
+| **factor22** | 因子22-收盘动量 | 动量 | 研究再买 | 止损后收盘≥low×(1+pct) 同日再买；**策略十六默认关**；三槽当日已卖出禁再买；见 [`docs/FACTOR22.md`](../docs/FACTOR22.md) |
 | **factor23** | 因子23-最高连板止盈 | 止盈持股 | 策略十五止盈形态 | 最高板≤2 早止盈；3～4 板 10%减半；≥5 放宽；见 [`docs/FACTOR23.md`](../docs/FACTOR23.md) |
 | **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五择时 | 低/中梯度开因子22；高梯度关因子22并上移止盈；见 [`docs/FACTOR24.md`](../docs/FACTOR24.md) |
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡叠加 | 30m 确认止损 + 动态半仓 + 卖飞回补；见 [`docs/FACTOR25.md`](../docs/FACTOR25.md) |
@@ -123,7 +123,7 @@ for f in list_factors():
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**（盯盘实时重算）→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2% 空仓；调参 2020–2024 +645%/夏普 1.23，盲测 2025→ +3.6%/回撤 55%；`backtest/strategy12_emotion_gate/` |
 | **strategy15** | 策略十五·连板减磨损 | factor1 + factor22 + factor23 + factor24 + factor25 | ✅ 盯盘 | 因子1 建仓；震荡 F25(30m) 确认止损/动态半仓/回补；高潮关接回；盯盘 Tab |
-| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor2 + factor22 | ✅ 默认 | 因子27近3个月池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖内核共用因子26（绑定独立，不调用策略一）；盯盘开盘阈值只认 `thr_2026.json`；作为默认三槽交易池 |
+| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor2（factor22 默认关） | ✅ 默认 | 因子27近3个月池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖内核共用因子26（绑定独立，不调用策略一）；盯盘开盘阈值只认 `thr_2026.json`；作为默认三槽交易池 |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
 策略九 CLI（`run_strategy9_emotion`）已归入 **因子18**，Web 策略栏不展示。
