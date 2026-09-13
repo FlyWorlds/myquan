@@ -25,7 +25,7 @@ const slotTrace = computed(
 
 const posChipStyle = computed(() => {
   const s = posStatus.value
-  if (s === '已经买入' || s === '持有' || s === '持有·T+1') {
+  if (s === '已经买入' || s === '持有' || s === '持有·T+1' || Boolean(props.row.半仓留仓)) {
     return {
       color: 'var(--watch-hold)',
       borderColor: 'color-mix(in srgb, var(--watch-hold) 45%, transparent)',
@@ -106,6 +106,11 @@ const cardClass = computed(() => {
               class="rounded-full border px-2 py-0.5 text-xs font-medium"
               :style="posChipStyle"
             >{{ posStatus }}</span>
+            <span
+              v-if="row.半仓留仓 && Number(row.持仓) > 0"
+              class="rounded-full px-2 py-0.5 text-xs font-medium"
+              style="color: var(--watch-hold); border: 1px solid color-mix(in srgb, var(--watch-hold) 50%, transparent); background: color-mix(in srgb, var(--watch-hold) 16%, transparent)"
+            >半仓留仓</span>
           </div>
           <h2 class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-bold">
             <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ row.名称 }}</a>

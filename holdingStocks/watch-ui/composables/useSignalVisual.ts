@@ -73,8 +73,16 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   const sellTriggered =
     !stopClosed &&
     (alert.includes('已触止损') ||
+      alert.includes('半仓止盈') ||
+      alert.includes('剩余全平') ||
+      alert.includes('15%全清') ||
       trig.startsWith('策略止损') ||
-      (pos === '待卖出' && (trig.startsWith('已触发') || alert.includes('止损'))))
+      (pos === '待卖出' &&
+        (trig.startsWith('已触发') ||
+          alert.includes('止损') ||
+          alert.includes('半仓') ||
+          alert.includes('全平') ||
+          alert.includes('全清'))))
 
   const buyWarn =
     bg === 'warn-buy' ||
@@ -89,6 +97,9 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     pos === '待卖出' ||
     alert.includes('将止损') ||
     alert.includes('将卖出') ||
+    alert.includes('将半仓') ||
+    alert.includes('将剩余全平') ||
+    alert.includes('将15%全清') ||
     Boolean(row.近止损) ||
     (side === '卖出' && trig === '接近') ||
     (paperHold && trig === '接近') ||
@@ -201,14 +212,24 @@ export function collectLegendIds(row: HoldingRow): SignalLegendId[] {
     !stopClosed &&
     (String(row.已触止损 || '') === '是' ||
       alert.includes('已触止损') ||
-      (pos === '待卖出' && alert.includes('止损')))
+      alert.includes('半仓止盈') ||
+      alert.includes('剩余全平') ||
+      alert.includes('15%全清') ||
+      (pos === '待卖出' &&
+        (alert.includes('止损') || alert.includes('半仓') || alert.includes('全平') || alert.includes('全清'))))
   ) {
     ids.push('trigger-sell')
   } else if (
     !t1Locked &&
     !stopClosed &&
     qty <= 0 &&
-    (pos === '待卖出' || alert.includes('将止损') || alert.includes('将卖出') || Boolean(row.近止损))
+    (pos === '待卖出' ||
+      alert.includes('将止损') ||
+      alert.includes('将卖出') ||
+      alert.includes('将半仓') ||
+      alert.includes('将剩余全平') ||
+      alert.includes('将15%全清') ||
+      Boolean(row.近止损))
   ) {
     ids.push('warn-sell')
   }

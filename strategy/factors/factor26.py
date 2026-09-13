@@ -45,8 +45,8 @@ SPEC = FactorSpec(
     name=FACTOR_NAME,
     description=(
         "多层止盈：买=开盘阈值 ceil(open×(1+entry))；"
-        f"卖=阶梯{DEFAULT_LADDER_HALF_PCT*100:.0f}%半仓/"
-        f"{DEFAULT_LADDER_FULL_PCT*100:.0f}%全清 + 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + "
+        f"卖=按个股阶梯{DEFAULT_LADDER_HALF_PCT*100:.0f}%半仓/"
+        f"{DEFAULT_LADDER_FULL_PCT*100:.0f}%全清（未到15%则最高点回落把剩余全平） + 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + "
         f"大赚后峰值回落{DEFAULT_PEAK_PULLBACK_X*100:.0f}%清仓 + 买入日未到3%则次日峰值回落2.5%；"
         "买入日盈利≥3%不记、其余都记；"
         "成交触达按 1 分钟顺序；选股/回撤用日线；池回测近 7 日 1m；"
