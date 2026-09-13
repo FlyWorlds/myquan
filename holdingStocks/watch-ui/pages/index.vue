@@ -144,7 +144,7 @@ const closedCount = computed(() => closedHoldings.value.length)
                   占槽 {{ slotMeta?.occupiedCount ?? 0 }}/{{ slotMeta?.max ?? 3 }}
                 </span>
               </h2>
-              <p class="text-xs text-ui-text-3">已经买入 / 待卖出 · 仅默认策略池入槽</p>
+              <p class="text-xs text-ui-text-3">模拟持仓 · 槽满挂触发价 · 回落到价/后触买按成交先后补槽</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in slotHoldings" :key="'slot-' + String(row.代码)" :row="row" />

@@ -2,7 +2,7 @@
 
 设计：
   · 信号：过门 + 触买点 → 必须预警（哪怕槽满未成交）
-  · 成交：空槽自动入三槽 →「已触买·已入槽」
+  · 成交：全部触买先入队；从触买/腾槽分钟扫 1m，第一根碰到挂单价入槽（与 pool_1m 同一套）
   · 未过门：不算触买、不预警、不推送（价到买点也忽略）
 
 研究用途，非投资建议。
@@ -189,7 +189,10 @@ def annotate_unfilled_buy_signals(
             tip = f"买入信号已触发·未入三槽（{tag}）"
             if buy_px is not None:
                 try:
-                    tip += f"@{float(buy_px):.{int(r.get('价位小数') or 2)}f}"
+                    px_txt = f"{float(buy_px):.{int(r.get('价位小数') or 2)}f}"
+                    tip += f"@{px_txt}"
+                    if tag == "槽满":
+                        tip += f"；限价挂@{px_txt}·回落到价才补槽"
                 except (TypeError, ValueError):
                     pass
             _append_note(r, tip)
