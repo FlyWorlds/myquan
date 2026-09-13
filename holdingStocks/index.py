@@ -102,6 +102,11 @@ from strategy.open_break import (
     strategy_levels as _levels_f1,
     strategy_signal as _signal_f1,
 )
+from strategy.slot_limit_fill import (  # noqa: E402
+    first_1m_limit_buy_fill,
+    limit_buy_fill_from_bar,
+    rank_1m_slot_fills,
+)
 from strategy.pullback_wave_stop import (
     DEFAULT_ALLOW_ATTACK,
     DEFAULT_GIVEBACK_ARM_PCT,
@@ -2145,6 +2150,7 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
     _purge_stale_realized(data, sess)
     data["alert_sticky"] = {}
     data["pending_buys"] = {}
+    data["slot_freed_at"] = None
     data["watch_status_reset_session"] = sess
     # 非实仓仓位：清掉策略展示用粘滞字段（不改 qty>0）
     for code, pos in list((data.get("positions") or {}).items()):
@@ -3170,17 +3176,21 @@ def _apply_portfolio_slots(
             queued_while_full=free_at_book <= 0,
         )
         rec = book.get(code) or {}
-        last_q, bar_low_q = _row_last_and_bar_low(r)
         queued = bool(rec.get("queued_while_full"))
-        can_now = limit_buy_can_fill(
-            limit_px=float(rec.get("px") or limit_px),
-            last=last_q,
-            bar_low=bar_low_q,
-            queued_while_full=queued,
-            hit_buy=True,
-        )
         r["限价挂单"] = True
         r["限价挂单价"] = rec.get("px") or limit_px
+        bars_q = r.get("_day_bars")
+        since_q = str(rec.get("trigger_ts") or now_ts)
+        freed_q = str(data.get("slot_freed_at") or "")
+        if queued and freed_q:
+            since_q = max(since_q, freed_q)
+        hit_q = first_1m_limit_buy_fill(
+            bars_q if isinstance(bars_q, pd.DataFrame) else None,
+            limit_px=float(rec.get("px") or limit_px),
+            since_ts=since_q,
+            require_pullback=queued,
+        )
+        can_now = hit_q is not None
         if queued and not can_now:
             px_digits = int(r.get("价位小数") or 2)
             hang = f"限价挂买点@{float(r['限价挂单价']):.{px_digits}f}·待回落到价"
@@ -3191,8 +3201,10 @@ def _apply_portfolio_slots(
 
     bought_codes: list[str] = []
     if phase_now == "continuous" and free > 0 and buys_left > 0:
-        # 入槽：槽满时挂过的单须回落到价；空槽新触买按突破当根；谁先成交谁入槽
-        orders: list[dict[str, Any]] = []
+        # 入槽：按 1m K 回落到价 / 空槽新突破；谁先碰到挂单价谁入槽
+        fills: list[dict[str, Any]] = []
+        data_now = load_holdings()
+        freed_at = str(data_now.get("slot_freed_at") or "")
         for _rank, _dist, code, r in candidates:
             if not _row_hit_buy(r):
                 continue
@@ -3200,24 +3212,45 @@ def _apply_portfolio_slots(
             limit_px = _num_or_none((rec or {}).get("px")) or row_limit_buy_px(r)
             if limit_px is None:
                 continue
-            last_q, bar_low_q = _row_last_and_bar_low(r)
-            orders.append(
+            queued = bool((rec or {}).get("queued_while_full"))
+            trigger_ts = str((rec or {}).get("trigger_ts") or now_ts)
+            since = trigger_ts
+            if queued and freed_at:
+                since = max(since, freed_at)
+            bars = r.get("_day_bars")
+            hit = first_1m_limit_buy_fill(
+                bars if isinstance(bars, pd.DataFrame) else None,
+                limit_px=float(limit_px),
+                since_ts=since,
+                require_pullback=queued,
+            )
+            if hit is None and (
+                bars is None or getattr(bars, "empty", True)
+            ):
+                last_q, bar_low_q = _row_last_and_bar_low(r)
+                if queued:
+                    fb = limit_buy_fill_from_bar(
+                        float(limit_px), bar_open=last_q, bar_low=bar_low_q or last_q
+                    )
+                    if fb is not None:
+                        hit = {"fill_px": fb, "fill_ts": now_ts}
+                elif _row_hit_buy(r):
+                    hit = {"fill_px": float(limit_px), "fill_ts": trigger_ts}
+            if not hit:
+                continue
+            fills.append(
                 {
                     "code": code,
                     "row": r,
-                    "limit_px": float(limit_px),
-                    "last": last_q,
-                    "bar_low": bar_low_q,
-                    "trigger_ts": str((rec or {}).get("trigger_ts") or now_ts),
-                    "queued_while_full": bool((rec or {}).get("queued_while_full")),
-                    "hit_buy": True,
+                    "fill_px": float(hit["fill_px"]),
+                    "fill_ts": str(hit.get("fill_ts") or now_ts),
+                    "trigger_ts": trigger_ts,
                 }
             )
-        picks = pick_slot_limit_fills(
-            orders,
+        picks = rank_1m_slot_fills(
+            fills,
             free=free_buy_slot_count(load_holdings()),
             buys_left=max(0, int(MAX_BUYS_PER_DAY) - today_slot_buy_count(session)),
-            now_ts=now_ts,
         )
         budget = _slot_notional_budget(account_total, rows, occupied)
         for o in picks:
@@ -3436,6 +3469,7 @@ def apply_exit_fill(
         pos["stop_noted_px"] = None
         pos["stop_noted_session"] = None
         pos["note"] = f"{reason}@{rec['price']} ({session})"
+        data["slot_freed_at"] = _bar_ts_str(first_hit_ts) or rec["time"]
     else:
         raw_avail = pos.get("available")
         if raw_avail is not None:
@@ -6550,6 +6584,7 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
     data["closed_today"] = {}
     data["alert_sticky"] = {}
     data["pending_buys"] = {}
+    data["slot_freed_at"] = None
     data["factor_memory"] = {}
     data["account_total"] = float(DEFAULT_ACCOUNT_TOTAL)
     data["account_cash"] = float(DEFAULT_ACCOUNT_TOTAL)

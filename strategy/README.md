@@ -123,7 +123,7 @@ for f in list_factors():
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**（盯盘实时重算）→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2% 空仓；调参 2020–2024 +645%/夏普 1.23，盲测 2025→ +3.6%/回撤 55%；`backtest/strategy12_emotion_gate/` |
 | **strategy15** | 策略十五·连板减磨损 | factor1 + factor22 + factor23 + factor24 + factor25 | ✅ 盯盘 | 因子1 建仓；震荡 F25(30m) 确认止损/动态半仓/回补；高潮关接回；盯盘 Tab |
-| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor2（factor22 默认关） | ✅ 默认 | 因子27近3个月池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖内核共用因子26（绑定独立，不调用策略一）；盯盘开盘阈值只认 `thr_2026.json`；默认三槽；槽满触买挂触发价、回落到价/后触买按成交先后补槽 |
+| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor2（factor22 默认关） | ✅ 默认 | 因子27近3个月池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖内核共用因子26（绑定独立，不调用策略一）；盯盘开盘阈值只认 `thr_2026.json`；默认三槽；槽满挂触发价，盯盘与 `pool_1m` 按 1m K 回落到价补槽 |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
 策略九 CLI（`run_strategy9_emotion`）已归入 **因子18**，Web 策略栏不展示。
