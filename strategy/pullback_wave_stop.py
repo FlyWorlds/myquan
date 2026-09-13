@@ -3,7 +3,7 @@
 买入：当日最高 ≥ ceil(open×(1+entry_pct))（过滤同因子1）。
 攻击波（研究对照 `--buy-mode open_or_attack`）：先用此前分钟最低算买点，再更新本分钟最低。
 卖出（止盈/保护）：
-  · 盈利 >10%：分段止盈（10% 半仓 / 15% 全清；过 10% 后峰值回落 2% 清）
+  · 盈利 >10%（按个股）：10% 只平一半；15% 该股全清；未到 15% 则最高点回落 2% 把剩余全平
   · 盈利 3%～10%：回落一半 与 动态高点回落「0.5×近20日日频σ」并行，谁先碰到走谁
   · 买入日收盘盈利 <3%：次日按当日动态峰值回落 2.5% 立即止损；
     盘中浮盈到 3% 改走中段，到 10% 改走分段
@@ -30,6 +30,10 @@ from strategy.open_break import (
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
     NEAR_FACTOR_PCT,
+    REASON_HALF,
+    REASON_LADDER_15,
+    REASON_REMAIN_CLEAR,
+    REASON_STOP,
     TICK_SIZE,
     bar_shape,
     ceil_to_tick,
@@ -77,8 +81,8 @@ STRATEGY_RULES = """
   3) 中赚（浮盈 >3% 且 <10%）：回落一半 与 峰值回落 0.5×20日日频σ 并行，
      从动态高点往下谁先碰到走谁（同分钟价高者先触）
   4) 硬保护：盘中亏损达 2.5%（未进中赚/大赚档时）
-  5) 大赚：阶梯 10% 半仓；≥10% 后峰值回落 2% 清仓
-     （已半仓后再触 10% / 回落 → 剩余全清）
+  5) 大赚（按个股）：浮盈 ≥10% → 只平一半；≥15% → 该股全清。
+     已半仓后不再因仍在 10% 上清剩余；未到 15% 则最高点回落 2% 把剩余当该股全平。
   · 未触达时的「工作卖价」走 working_stop_price：过 10% 展示峰值回落 2%，
     禁止用 dummy OHLC 去撞 10%/15% 阶梯目标（否则盯盘会把阶梯价当止损）
   · 买入当日不可卖；次日未过 3% 走峰值回落 2.5%；过 3% 走中段（一半/波动先到先卖）；过 10% 走分段
@@ -484,12 +488,34 @@ def is_half_stop_kind(
     return str(stop_kind or "").strip() in HALF_STOP_KINDS
 
 
+def paper_exit_reason(
+    stop_kind: str | None = None,
+    action_kind: str | None = None,
+) -> str:
+    """纸面成交原因：10% 半仓 / 15% 全清 / 峰值回落剩余全平 / 其余止损。"""
+    if is_half_stop_kind(stop_kind, action_kind):
+        return REASON_HALF
+    sk = str(stop_kind or "").strip()
+    if sk == "ladder_full_15":
+        return REASON_LADDER_15
+    if sk in {"peak_pullback_clear", "peak_pullback"}:
+        return REASON_REMAIN_CLEAR
+    return REASON_STOP
+
+
 def hit_stop_alert(
     stop_kind: str | None = None,
     action_kind: str | None = None,
 ) -> str:
-    """盯盘预警：半仓写「半仓止盈」，其余写「已触止损」。"""
-    return "半仓止盈" if is_half_stop_kind(stop_kind, action_kind) else "已触止损"
+    """盯盘预警：半仓 / 15%全清 / 剩余全平 / 已触止损。"""
+    reason = paper_exit_reason(stop_kind, action_kind)
+    if reason == REASON_HALF:
+        return REASON_HALF
+    if reason == REASON_LADDER_15:
+        return REASON_LADDER_15
+    if reason == REASON_REMAIN_CLEAR:
+        return REASON_REMAIN_CLEAR
+    return "已触止损"
 
 
 def ladder_target_price(
@@ -1168,11 +1194,11 @@ def strategy_signal(
             "t1_peak_trail": "未到3%峰值回落2.5%",
             "half_gain": "中赚回落一半",
             "vol_giveback": "中赚波动回落",
-            "peak_pullback": "大赚后峰值回落2%",
-            "peak_pullback_clear": "大赚后峰值回落2%",
-            "ladder_half_10": "阶梯10%半仓",
-            "ladder_half_10_clear": "阶梯10%后清剩余",
-            "ladder_full_15": "阶梯15%全清",
+            "peak_pullback": "未到15%·最高点回落2%个股全平",
+            "peak_pullback_clear": "未到15%·最高点回落2%个股全平",
+            "ladder_half_10": "个股浮盈10%半仓",
+            "ladder_half_10_clear": "10%半仓后剩余全平",
+            "ladder_full_15": "个股浮盈15%全清",
         }
         label = labels.get(kind_now, "多层止盈")
         if holding_idle:
@@ -1364,11 +1390,18 @@ def strategy_signal(
             )
             return _finish(base)
         if near_stop_band:
+            near_alert = "将止损"
+            if kind_now in {"peak_pullback", "peak_pullback_clear"}:
+                near_alert = "将剩余全平"
+            elif kind_now == "ladder_full_15":
+                near_alert = "将15%全清"
+            elif kind_now == "ladder_half_10":
+                near_alert = "将半仓"
             base.update(
                 {
                     "near_stop": True,
                     "pending_sell": True,
-                    "alert": "将止损",
+                    "alert": near_alert,
                     "bg_class": "warn-sell",
                     "建议挂单": stop_px,
                     "挂单说明": _sell_note(near=True),
@@ -2248,6 +2281,7 @@ __all__ = [
     "lot_half_shares",
     "HALF_STOP_KINDS",
     "is_half_stop_kind",
+    "paper_exit_reason",
     "hit_stop_alert",
     "ladder_target_price",
     "peak_pullback_half_price",

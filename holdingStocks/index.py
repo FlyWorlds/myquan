@@ -85,6 +85,8 @@ from strategy.open_break import (
     NEAR_FACTOR_PCT,
     REASON_EOD_RESERVE,
     REASON_HALF,
+    REASON_LADDER_15,
+    REASON_REMAIN_CLEAR,
     REASON_STOP,
     TICK_SIZE,
     bar_shape,
@@ -111,6 +113,7 @@ from strategy.pullback_wave_stop import (
     first_session_exit_fill,
     hit_stop_alert,
     is_half_stop_kind,
+    paper_exit_reason,
     lot_half_shares,
     overnight_open_protect_px,
     path_dependent_buy_hit,
@@ -2413,6 +2416,30 @@ def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
             out["挂单说明"] = (
                 (note + "；" if note else "") + "9:30 连续竞价起才结算半仓"
             )
+    elif alert in {REASON_REMAIN_CLEAR, "剩余全平"} or alert.startswith("剩余全平"):
+        out["alert"] = "将剩余全平"
+        out["pending_sell"] = True
+        out["near_stop"] = True
+        out["bg_class"] = out.get("bg_class") or "warn-sell"
+        out["持仓状态"] = "待卖出"
+        out["因子触发"] = "接近"
+        note = str(out.get("挂单说明") or "")
+        if "9:30" not in note:
+            out["挂单说明"] = (
+                (note + "；" if note else "") + "9:30 连续竞价起才结算剩余全平"
+            )
+    elif alert in {REASON_LADDER_15, "15%全清"} or alert.startswith("15%全清"):
+        out["alert"] = "将15%全清"
+        out["pending_sell"] = True
+        out["near_stop"] = True
+        out["bg_class"] = out.get("bg_class") or "warn-sell"
+        out["持仓状态"] = "待卖出"
+        out["因子触发"] = "接近"
+        note = str(out.get("挂单说明") or "")
+        if "9:30" not in note:
+            out["挂单说明"] = (
+                (note + "；" if note else "") + "9:30 连续竞价起才结算15%全清"
+            )
     elif trig == "已触发" or trig.startswith("已触发"):
         out["因子触发"] = "接近"
     return out
@@ -3244,7 +3271,7 @@ def apply_exit_fill(
             ts = _bar_ts_str(first_hit_ts) or _now()
             pos["last_tp_ts"] = ts
         # 已兑现止损备注则清已记
-        if reason in (REASON_STOP, REASON_HALF):
+        if reason in EXIT_REASONS:
             pos["stop_noted"] = False
             pos["stop_noted_px"] = None
             pos["stop_noted_session"] = None
@@ -3268,7 +3295,7 @@ def apply_exit_fill(
             "note": trade_note,
         }
     )
-    if reason in (REASON_STOP, REASON_HALF):
+    if reason in EXIT_REASONS:
         remember_factor_trigger(code, side="sell", px=fill_px, session=session)
     return rec
 
@@ -3294,7 +3321,7 @@ def apply_stop_fill(
     half = is_half_stop_kind(stop_kind, action_kind)
     if half:
         sell_qty = lot_half_shares(sell_qty)
-    reason = REASON_HALF if half else REASON_STOP
+    reason = paper_exit_reason(stop_kind, action_kind)
     return apply_exit_fill(
         code=code,
         meta=meta,
@@ -4498,6 +4525,10 @@ def collect_rows(
                         if reason == REASON_STOP
                         else (reason or SIGNAL_STOP_HIT)
                     )
+                    if reason == REASON_REMAIN_CLEAR:
+                        alert0 = REASON_REMAIN_CLEAR
+                    elif reason == REASON_LADDER_15:
+                        alert0 = REASON_LADDER_15
                     bg0 = sig0.get("bg_class") or "status-flat"
                     hang0 = None
                     note0 = (
@@ -4534,7 +4565,10 @@ def collect_rows(
                         "因子4": f4_tag,
                         "牛市": ("是" if bull else "否") if USE_FACTOR4 else "-",
                         "已触买": "是" if rebuy_hit else "否",
-                        "已触止损": "是" if hit_stop or reason == REASON_STOP else "否",
+                        "已触止损": "是"
+                        if hit_stop or reason in EXIT_REASONS
+                        else "否",
+                        "半仓留仓": False,
                         "因子侧": "买入" if rebuy_hit else "空仓",
                         "因子价": buy_show if rebuy_hit else sig0.get("因子价"),
                         "因子触发": (
@@ -4666,6 +4700,10 @@ def collect_rows(
                         str(lv.get("stop_kind") or ""),
                         path_action_kind,
                     )
+                    _exit_reason = paper_exit_reason(
+                        str(lv.get("stop_kind") or ""),
+                        path_action_kind,
+                    )
                     sig = dict(sig)
                     sig["hit_stop"] = True
                     sig["pending_sell"] = True
@@ -4674,24 +4712,33 @@ def collect_rows(
                     sig["持仓状态"] = "待卖出"
                     sig["因子触发"] = "已触发" if preview_ok else "接近"
                     if preview_ok:
-                        sig["alert"] = (
-                            "半仓止盈·待盘中结算" if _half_show else "已触止损·待盘中结算"
-                        )
+                        if _half_show:
+                            pend_alert = "半仓止盈·待盘中结算"
+                            pend_note = "已触个股10%半仓，待 9:30–11:30 / 13:00–15:00 记减半"
+                        elif _exit_reason == REASON_REMAIN_CLEAR:
+                            pend_alert = "剩余全平·待盘中结算"
+                            pend_note = "已触最高点回落，待连续竞价把该股剩余全平"
+                        elif _exit_reason == REASON_LADDER_15:
+                            pend_alert = "15%全清·待盘中结算"
+                            pend_note = "已触个股15%，待连续竞价全清"
+                        else:
+                            pend_alert = "已触止损·待盘中结算"
+                            pend_note = "已破止损价，待 9:30–11:30 / 13:00–15:00 自动结算"
+                        sig["alert"] = pend_alert
                         note = str(sig.get("挂单说明") or "")
                         if "连续竞价" not in note:
                             sig["挂单说明"] = (
-                                (note + "；" if note else "")
-                                + (
-                                    "已触10%半仓，待 9:30–11:30 / 13:00–15:00 记减半"
-                                    if _half_show
-                                    else "已破止损价，待 9:30–11:30 / 13:00–15:00 自动结算"
-                                )
+                                (note + "；" if note else "") + pend_note
                             )
                     else:
                         sig = _demote_pre_signal_window(sig)
                         sig["hit_stop"] = True
                         if _half_show:
                             sig["alert"] = "将半仓"
+                        elif _exit_reason == REASON_REMAIN_CLEAR:
+                            sig["alert"] = "将剩余全平"
+                        elif _exit_reason == REASON_LADDER_15:
+                            sig["alert"] = "将15%全清"
                         elif "止损" in str(sig.get("alert") or ""):
                             sig["alert"] = "将止损"
                         sig["bg_class"] = "warn-sell"
@@ -4984,6 +5031,8 @@ def collect_rows(
                     "市值": None if market_value is None else round(float(market_value), 2),
                     "成本额": None if cost_value is None else round(float(cost_value), 2),
                     "已实现": False,
+                    "半仓留仓": bool(qty > 0 and int(pos.get("tp_stage") or 0) >= 1),
+                    "止盈档": int(pos.get("tp_stage") or 0) if qty > 0 else 0,
                     "价位小数": px_digits,
                     "更新": q["last_ts"][11:19]
                     if len(q["last_ts"]) >= 19
@@ -5094,6 +5143,13 @@ def collect_rows(
                     "市值": None,
                     "成本额": None,
                     "已实现": False,
+                    "半仓留仓": bool(
+                        int(pos.get("qty") or 0) > 0
+                        and int(pos.get("tp_stage") or 0) >= 1
+                    ),
+                    "止盈档": int(pos.get("tp_stage") or 0)
+                    if int(pos.get("qty") or 0) > 0
+                    else 0,
                     "价位小数": px_digits,
                     "更新": "-",
                     "error": str(e),
@@ -6031,7 +6087,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
     print("     当日盈亏: 今买=(现价或平仓价-买入价)×股数；昨仓=(现价或平仓价-昨收)×股数")
     print("     已平仓浮亏: 昨仓=(平仓价-昨收)×卖出股数；今买当日=(平仓价-成本)×股数；成交价锁定后不再随现价")
-    print("     因子26卖出: 多层止盈；10%半仓止盈（减半留仓）；其余止损/止盈全清")
+    print("     因子26卖出: 模拟持仓；个股10%半仓 / 15%全清 / 未到15%峰值回落清剩余")
     print("     买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
     _f2 = load_holdings().get("factor2")
     print(f"     {format_factor2_summary(_f2 if isinstance(_f2, dict) else None)}")

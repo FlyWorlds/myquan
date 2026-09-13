@@ -741,7 +741,47 @@ def test_strategy_signal_half_alert_not_full_stop():
         stop_px=110.0,
     )
     assert sig.get("alert") == "半仓止盈", sig
-    assert "阶梯10%半仓" in str(sig.get("挂单说明") or ""), sig
+    assert "10%半仓" in str(sig.get("挂单说明") or ""), sig
+
+
+def test_strategy_signal_remain_clear_and_ladder15():
+    remain = _m.strategy_signal(
+        open_px=110.0,
+        high_px=111.0,
+        low_px=107.7,
+        last_px=107.8,
+        session="2026-09-08",
+        qty=200,
+        buy_time="2026-09-07 10:00:00",
+        vs_open_pts=7.8,
+        cost_px=100.0,
+        peak_high=111.0,
+        t0=True,
+        hit_stop=True,
+        stop_kind="peak_pullback_clear",
+        stop_px=108.78,
+    )
+    assert remain.get("alert") == "剩余全平", remain
+    full15 = _m.strategy_signal(
+        open_px=114.0,
+        high_px=116.0,
+        low_px=115.0,
+        last_px=115.2,
+        session="2026-09-08",
+        qty=400,
+        buy_time="2026-09-07 10:00:00",
+        vs_open_pts=15.2,
+        cost_px=100.0,
+        peak_high=116.0,
+        t0=True,
+        hit_stop=True,
+        stop_kind="ladder_full_15",
+        stop_px=115.0,
+    )
+    assert full15.get("alert") == "15%全清", full15
+    assert _m.paper_exit_reason("peak_pullback_clear", "full") == "剩余全平"
+    assert _m.paper_exit_reason("ladder_full_15", "full") == "15%全清"
+    assert _m.paper_exit_reason("ladder_half_10", "half") == "半仓止盈"
 
 
 def test_strategy_signal_hang_text_is_multi_tp():
@@ -827,5 +867,6 @@ if __name__ == "__main__":
     test_working_stop_not_ladder_when_peak_already_extended()
     test_path_dependent_ladder_half_uses_real_shares_and_stage()
     test_strategy_signal_half_alert_not_full_stop()
+    test_strategy_signal_remain_clear_and_ladder15()
     test_strategy_signal_hang_text_is_multi_tp()
     print("ok")

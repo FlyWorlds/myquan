@@ -112,6 +112,29 @@ class TestWatchHalfTp(unittest.TestCase):
         self.assertEqual(int(pos.get("qty") or 0), 0)
         self.assertTrue(bool(rec2.get("full_exit")))
         self.assertEqual(int(pos.get("tp_stage") or 0), 0)
+        self.assertEqual(rec2.get("reason"), self.idx.REASON_REMAIN_CLEAR)
+
+    def test_fifteen_pct_full_clears_that_stock(self) -> None:
+        rec = self.idx.apply_stop_fill(
+            code="600000",
+            meta={"name": "测试", "market": "上证"},
+            stop_px=11.5,
+            qty=400,
+            cost=10.0,
+            session="2026-09-12",
+            buy_time="2026-09-11 09:35:00",
+            prev_close=10.2,
+            open_px=10.3,
+            px_digits=2,
+            action_kind="full",
+            stop_kind="ladder_full_15",
+            first_hit_ts="2026-09-12 10:40:00",
+        )
+        pos = self.data["positions"]["600000"]
+        self.assertEqual(int(rec.get("qty") or 0), 400)
+        self.assertTrue(bool(rec.get("full_exit")))
+        self.assertEqual(int(pos.get("qty") or 0), 0)
+        self.assertEqual(rec.get("reason"), self.idx.REASON_LADDER_15)
 
     def test_legacy_full_exit_still_idempotent(self) -> None:
         self.data["realized_today"]["600000"] = {
