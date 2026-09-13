@@ -8,7 +8,8 @@
   · 物理槽 max_slots=3：盘中/隔夜均可同时持仓 3
   · 当日最多买入 3 次（MAX_BUYS_PER_DAY，与三槽对齐）
   · 尾盘不再强制空槽（RESERVE_EMPTY_SLOTS=0 → 隔夜最多 3）
-  · 先触发买点的先买；槽满后触买挂触发价，释放后须当根 1m 最低打到挂单价才按成交价补仓
+  · 所有触买先入队；腾槽前信号须 1m ``low≤挂单价`` 才补（价用成交价）；
+    腾槽后新突破当根仍可买；再按队列补到满槽（与盯盘同一套 ``slot_limit_fill``）
   · T+1：买入当日不可卖；每槽约 3 成仓（权益×slot_weight）
   · 当日止损/已记卖出的标的：当日禁止再买
 
@@ -73,7 +74,11 @@ from strategy.costs import (  # noqa: E402
     SLIPPAGE_VALUE,
     stamp_tax_for_code,
 )
-from strategy.slot_limit_fill import limit_buy_fill_from_bar, rank_1m_slot_fills  # noqa: E402
+from strategy.slot_limit_fill import (  # noqa: E402
+    eval_queue_fill_on_bar,
+    rank_1m_slot_fills,
+    slot_queue_window,
+)
 from strategy.pullback_wave_stop import (  # noqa: E402
     DEFAULT_ENTRY_PCT,
     DEFAULT_PULLBACK_PCT,
@@ -479,8 +484,9 @@ def simulate_portfolio_3slots(
     trades: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     equity_rows: list[dict[str, Any]] = []
-    wait_q: list[dict[str, Any]] = []  # 触买但当时无槽：按触发时间排队
+    wait_q: list[dict[str, Any]] = []  # 全部触买入队，按触买先后 + 1m 成交时钟补槽
     buys_today = 0
+    slot_freed_at: str | None = None
 
     def _equity_now() -> float:
         return _mark_equity(cash, positions, last_px)
@@ -502,7 +508,7 @@ def simulate_portfolio_3slots(
         return len(positions) < _buy_cap_at(ts) and buys_today < max_buys
 
     def _try_fill_from_queue(sess: str, at_ts: str) -> None:
-        """槽满挂单：本分钟 1m 最低打到挂单价才补；不成交的仍留在队列。"""
+        """与盯盘同一套：从触买/腾槽分钟起，本分钟碰到挂单价才补。"""
         nonlocal cash, buys_today
         bar_by_code = {c: (h, lo, o) for _, c, h, lo, o in bucket}
         remain: list[dict[str, Any]] = []
@@ -522,8 +528,27 @@ def simulate_portfolio_3slots(
             if bar is None:
                 remain.append(cand)
                 continue
-            _h, lo, o = bar
-            fill_px = limit_buy_fill_from_bar(float(cand["px"]), bar_open=o, bar_low=lo)
+            h, lo, o = bar
+            trig = str(cand.get("ts") or "")
+            since_ts, need_pb = slot_queue_window(
+                trigger_ts=trig,
+                slot_freed_at=slot_freed_at,
+                queued_while_full=bool(cand.get("queued_while_full")),
+            )
+            if since_ts and str(at_ts)[:19] < str(since_ts)[:19]:
+                remain.append(cand)
+                continue
+            allow_breakout = (not need_pb) and (
+                not trig or str(at_ts)[:19] == trig[:19]
+            )
+            fill_px = eval_queue_fill_on_bar(
+                float(cand["px"]),
+                bar_open=o,
+                bar_high=h,
+                bar_low=lo,
+                require_pullback=need_pb,
+                allow_breakout=allow_breakout,
+            )
             if fill_px is None:
                 remain.append(cand)
                 continue
@@ -671,6 +696,7 @@ def simulate_portfolio_3slots(
             for cand in wait_q:
                 skipped.append({**cand, "reason": "queue_expired_next_day"})
             wait_q.clear()
+        slot_freed_at = None
 
         states: dict[str, _DayState] = {c: _DayState() for c in day_map}
         buys_today = 0
@@ -792,11 +818,11 @@ def simulate_portfolio_3slots(
                                 }
                             )
                             del positions[code]
+                            slot_freed_at = str(ts)
                             st.sold_today = True
                             st.buy_armed = bool(allow_open_rebuy)
                             st.pending_buy = None
                             last_px[code] = float(fill)
-                            _try_fill_from_queue(sess, str(ts))
                             continue
 
                 # 多层止盈：可卖则成交；T+1 只记 tp_marked / stop_noted
@@ -874,6 +900,7 @@ def simulate_portfolio_3slots(
                             st.buy_armed = bool(allow_open_rebuy) and full_exit
                             if full_exit:
                                 del positions[code]
+                                slot_freed_at = str(ts)
                                 st.pending_buy = None
                                 st.overnight_armed = False
                             else:
@@ -882,7 +909,6 @@ def simulate_portfolio_3slots(
                                 st.buy_armed = False
                             last_px[code] = float(fill)
                             if code not in positions:
-                                _try_fill_from_queue(sess, str(ts))
                                 continue
                 elif (
                     can_sell
@@ -923,11 +949,11 @@ def simulate_portfolio_3slots(
                                 }
                             )
                             del positions[code]
+                            slot_freed_at = str(ts)
                             st.sold_today = True
                             st.buy_armed = bool(allow_open_rebuy)
                             st.pending_buy = None
                             last_px[code] = float(fill)
-                            _try_fill_from_queue(sess, str(ts))
                             continue
                 elif (
                     (not can_sell)
@@ -1007,8 +1033,9 @@ def simulate_portfolio_3slots(
                 new_hits.append(st.pending_buy)
                 st.running_high = max(st.running_high, h)
 
-            # 先触发先买：同一分钟内按代码稳定序（时间戳已相同）
+            # 全部触买先入队：槽满挂回落单；腾槽后新突破也进队列，再按队列+1m 成交
             new_hits.sort(key=lambda x: (str(x["ts"]), str(x["code"])))
+            slots_free_now = _can_open_buy(ts)
             for cand in new_hits:
                 code = cand["code"]
                 if code in positions:
@@ -1017,55 +1044,17 @@ def simulate_portfolio_3slots(
                 if st_c is not None and st_c.sold_today and (not allow_open_rebuy):
                     skipped.append({**cand, "reason": "sold_today_no_rebuy"})
                     continue
-                if _can_open_buy(ts):
-                    px = float(cand["px"])
-                    eq = _equity_now()
-                    budget = eq * float(slot_weight)
-                    shares = _lot_shares(budget, _buy_unit(px))
-                    if shares < 100:
-                        skipped.append({**cand, "reason": "budget_too_small"})
-                        continue
-                    outlay = _buy_outlay(px, shares)
-                    if outlay > cash + 1e-6:
-                        shares = _lot_shares(cash, _buy_unit(px))
-                        outlay = _buy_outlay(px, shares)
-                    if shares < 100:
-                        skipped.append({**cand, "reason": "cash_too_small"})
-                        continue
-                    cash -= outlay
-                    cost = shares * px
-                    buys_today += 1
-                    positions[code] = _Pos(
-                        code=code,
-                        name=str(cand["name"]),
-                        buy_day=sess,
-                        buy_px=px,
-                        buy_ts=str(cand["ts"]),
-                        shares=shares,
-                        cost=cost,
-                        kind=cand.get("kind"),
-                        peak_high=px,
-                        held_low=px,
-                    )
-                    trades.append(
-                        {
-                            "date": sess,
-                            "ts": str(cand["ts"]),
-                            "side": "buy",
-                            "code": code,
-                            "name": cand["name"],
-                            "px": px,
-                            "shares": shares,
-                            "kind": cand.get("kind"),
-                            "source": cand.get("source") or "trigger",
-                            "slots_after": len(positions),
-                        }
-                    )
-                else:
-                    if buys_today >= max_buys:
-                        skipped.append({**cand, "reason": "max_buys_per_day"})
-                    else:
-                        wait_q.append({**cand, "queued_at": str(ts)})
+                if buys_today >= max_buys:
+                    skipped.append({**cand, "reason": "max_buys_per_day"})
+                    continue
+                wait_q.append(
+                    {
+                        **cand,
+                        "queued_at": str(ts),
+                        "queued_while_full": not slots_free_now,
+                    }
+                )
+            _try_fill_from_queue(sess, str(ts))
 
         # 日末：未成交等待作废；持仓市值按收盘
         # 尾盘空槽：隔夜最多 max_overnight；超出则强制卖出可卖仓中浮盈最差一只

@@ -30,6 +30,7 @@ strategy/
 ├── akq_math.py           # akquant vec_returns / 波动 / 今日盈亏唯一入口
 ├── binding_filters.py    # 无策略编号的基础过滤（策略各自绑定，禁止 strategyN 互调）
 ├── pullback_wave_stop.py # 因子26 买卖真源；平仓价 first_session_exit_fill
+├── slot_limit_fill.py    # 三槽补槽真源（盯盘生产）；pool_1m 共用 1m 限价成交
 ├── core/                 # 协议 / MarketContext / Decision / 注册表
 ├── strategies/
 │   ├── _factor26_decision.py / _factor26_runner.py  # 因子26 共用内核，不含策略编号
@@ -123,7 +124,7 @@ for f in list_factors():
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**（盯盘实时重算）→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2% 空仓；调参 2020–2024 +645%/夏普 1.23，盲测 2025→ +3.6%/回撤 55%；`backtest/strategy12_emotion_gate/` |
 | **strategy15** | 策略十五·连板减磨损 | factor1 + factor22 + factor23 + factor24 + factor25 | ✅ 盯盘 | 因子1 建仓；震荡 F25(30m) 确认止损/动态半仓/回补；高潮关接回；盯盘 Tab |
-| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor2（factor22 默认关） | ✅ 默认 | 因子27近3个月池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖内核共用因子26（绑定独立，不调用策略一）；盯盘开盘阈值只认 `thr_2026.json`；默认三槽；槽满挂触发价，盯盘与 `pool_1m` 按 1m K 回落到价补槽 |
+| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor2（factor22 默认关） | ✅ 默认 | 因子27近3个月池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖内核共用因子26（绑定独立，不调用策略一）；盯盘开盘阈值只认 `thr_2026.json`；默认三槽；**补槽真源=盯盘**，全部触买入队，从触买/腾槽分钟扫 1m 碰到挂单价才补，`pool_1m` 同一套 |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
 策略九 CLI（`run_strategy9_emotion`）已归入 **因子18**，Web 策略栏不展示。

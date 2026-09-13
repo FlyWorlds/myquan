@@ -14,9 +14,11 @@ _spec = importlib.util.spec_from_file_location(
 assert _spec and _spec.loader
 _m = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_m)
+first_1m_buy_trigger_ts = _m.first_1m_buy_trigger_ts
 first_1m_limit_buy_fill = _m.first_1m_limit_buy_fill
 limit_buy_fill_from_bar = _m.limit_buy_fill_from_bar
 rank_1m_slot_fills = _m.rank_1m_slot_fills
+slot_queue_window = _m.slot_queue_window
 
 
 def test_bar_no_fill_when_low_above_limit():
@@ -106,6 +108,97 @@ def test_rank_same_minute_earlier_trigger_wins():
     assert [x["code"] for x in two] == ["002068", "000021"]
 
 
+def test_missed_slot_after_breakout_requires_pullback():
+    """空槽时触买没排上，之后再腾槽必须回落到价。"""
+    since, need_pb = slot_queue_window(
+        trigger_ts="2026-09-15 10:05:00",
+        slot_freed_at="2026-09-15 11:00:00",
+        queued_while_full=False,
+    )
+    assert need_pb is True
+    assert since == "2026-09-15 11:00:00"
+    bars = pd.DataFrame(
+        [
+            {"ts": "2026-09-15 10:05:00", "open": 16.10, "high": 16.20, "low": 16.08},
+            {"ts": "2026-09-15 11:01:00", "open": 16.30, "high": 16.40, "low": 16.20},
+        ]
+    )
+    miss = first_1m_limit_buy_fill(
+        bars,
+        limit_px=16.05,
+        trigger_ts="2026-09-15 10:05:00",
+        slot_freed_at="2026-09-15 11:00:00",
+        queued_while_full=False,
+    )
+    assert miss is None
+    bars2 = bars.copy()
+    bars2.loc[1, "low"] = 16.00
+    hit = first_1m_limit_buy_fill(
+        bars2,
+        limit_px=16.05,
+        trigger_ts="2026-09-15 10:05:00",
+        slot_freed_at="2026-09-15 11:00:00",
+        queued_while_full=False,
+    )
+    assert hit is not None
+    assert hit["fill_ts"] == "2026-09-15 11:01:00"
+
+
+def test_queue_window_full_uses_max_trigger_and_free():
+    since, need_pb = slot_queue_window(
+        trigger_ts="2026-09-15 09:35:00",
+        slot_freed_at="2026-09-15 10:05:00",
+        queued_while_full=True,
+    )
+    assert need_pb is True
+    assert since == "2026-09-15 10:05:00"
+
+
+def test_trigger_ts_is_first_high_not_early_dip():
+    """触买分钟=第一根 high≥买点；早盘回落不能当触发时钟。"""
+    bars = pd.DataFrame(
+        [
+            {"ts": "2026-09-15 09:31:00", "open": 10.00, "high": 10.02, "low": 9.90},
+            {"ts": "2026-09-15 09:40:00", "open": 10.03, "high": 10.12, "low": 10.01},
+        ]
+    )
+    assert first_1m_buy_trigger_ts(bars, limit_px=10.05) == "2026-09-15 09:40:00"
+    hit = first_1m_limit_buy_fill(
+        bars,
+        limit_px=10.05,
+        trigger_ts="2026-09-15 09:40:00",
+        slot_freed_at="2026-09-15 10:00:00",
+        queued_while_full=True,
+    )
+    assert hit is None
+    bars2 = pd.concat(
+        [
+            bars,
+            pd.DataFrame(
+                [
+                    {
+                        "ts": "2026-09-15 10:01:00",
+                        "open": 10.20,
+                        "high": 10.30,
+                        "low": 10.04,
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    hit2 = first_1m_limit_buy_fill(
+        bars2,
+        limit_px=10.05,
+        trigger_ts="2026-09-15 09:40:00",
+        slot_freed_at="2026-09-15 10:00:00",
+        queued_while_full=True,
+    )
+    assert hit2 is not None
+    assert hit2["fill_ts"] == "2026-09-15 10:01:00"
+    assert hit2["fill_px"] == 10.05
+
+
 if __name__ == "__main__":
     test_bar_no_fill_when_low_above_limit()
     test_bar_fills_at_open_when_gap_through_limit()
@@ -113,4 +206,7 @@ if __name__ == "__main__":
     test_queued_walks_1m_after_slot_free()
     test_fresh_breakout_uses_high_not_pullback()
     test_rank_same_minute_earlier_trigger_wins()
+    test_missed_slot_after_breakout_requires_pullback()
+    test_queue_window_full_uses_max_trigger_and_free()
+    test_trigger_ts_is_first_high_not_early_dip()
     print("ok")

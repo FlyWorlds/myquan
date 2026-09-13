@@ -20,7 +20,7 @@
   · 阈值与信号：因子26 多层止盈（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
   · 有仓：动态止盈触达自动结算；**阶梯 10% 减半**（持仓记 tp_stage + last_tp_ts，半仓后从触达分钟下一根继续盯 15%/峰值回落）。不接券商，本地只记信号与纸面数量。
-  · **信号≠入槽**：触买预警见 `watch_buy_signal.py`（须过门）；槽满仍发「已触买·槽满」并按触发价挂限价；未过门不算触买、不预警；现价回到挂单价（或空槽时新突破）才按成交价入槽
+  · **信号≠入槽**：触买预警见 `watch_buy_signal.py`（须过门）；全部触买先入队挂触发价；从触买/腾槽分钟扫 1m，第一根碰到挂单价才按成交价入槽（与 pool_1m 同一套）
   · 本地 JSON 记录持仓（含 peak_high）；T+1 买入日不可卖
 
 用法：
@@ -103,9 +103,11 @@ from strategy.open_break import (
     strategy_signal as _signal_f1,
 )
 from strategy.slot_limit_fill import (  # noqa: E402
+    first_1m_buy_trigger_ts,
     first_1m_limit_buy_fill,
     limit_buy_fill_from_bar,
     rank_1m_slot_fills,
+    slot_queue_window,
 )
 from strategy.pullback_wave_stop import (
     DEFAULT_ALLOW_ATTACK,
@@ -3079,8 +3081,9 @@ def _apply_portfolio_slots(
     """三槽：盘中可持 3；当日最多买 3；尾盘窗口按隔夜上限（现同为 3）。
 
     · 用户实仓 qty>0 占槽；可买空槽见 free_buy_slot_count（盘中/隔夜均为 3）
-    · 触买写入 pending_buys 限价本（首次触发锁定买点）；槽满挂单须回落到价
-    · 空槽时新突破可成交；多票按成交时间再按触买时间补槽
+    · 触买写入 pending_buys 限价本（首次触发锁定买点）；全部入队
+    · 从 max(触买分钟, 腾槽分钟) 扫 1m：腾槽前须回落到价；空槽新突破当根可成
+    · 成交时钟=第一根碰到挂单价的 1m，与 pool_1m 同一套 slot_limit_fill
     · 当日止损/已记卖出禁再买
     """
     data = load_holdings()
@@ -3166,32 +3169,35 @@ def _apply_portfolio_slots(
         limit_px = row_limit_buy_px(r)
         if limit_px is None:
             continue
+        bars_q = r.get("_day_bars") if isinstance(r.get("_day_bars"), pd.DataFrame) else None
+        trig_ts = first_1m_buy_trigger_ts(bars_q, limit_px=limit_px) or now_ts
         upsert_pending_buy_order(
             book,
             code=code,
             px=limit_px,
             session=session,
             name=str(r.get("名称") or code),
-            trigger_ts=now_ts,
+            trigger_ts=trig_ts,
             queued_while_full=free_at_book <= 0,
         )
         rec = book.get(code) or {}
         queued = bool(rec.get("queued_while_full"))
         r["限价挂单"] = True
         r["限价挂单价"] = rec.get("px") or limit_px
-        bars_q = r.get("_day_bars")
-        since_q = str(rec.get("trigger_ts") or now_ts)
-        freed_q = str(data.get("slot_freed_at") or "")
-        if queued and freed_q:
-            since_q = max(since_q, freed_q)
         hit_q = first_1m_limit_buy_fill(
-            bars_q if isinstance(bars_q, pd.DataFrame) else None,
+            bars_q,
             limit_px=float(rec.get("px") or limit_px),
-            since_ts=since_q,
-            require_pullback=queued,
+            trigger_ts=str(rec.get("trigger_ts") or trig_ts),
+            slot_freed_at=str(data.get("slot_freed_at") or "") or None,
+            queued_while_full=queued,
         )
         can_now = hit_q is not None
-        if queued and not can_now:
+        _since_q, need_pb = slot_queue_window(
+            trigger_ts=str(rec.get("trigger_ts") or trig_ts),
+            slot_freed_at=str(data.get("slot_freed_at") or "") or None,
+            queued_while_full=queued,
+        )
+        if need_pb and not can_now:
             px_digits = int(r.get("价位小数") or 2)
             hang = f"限价挂买点@{float(r['限价挂单价']):.{px_digits}f}·待回落到价"
             note = str(r.get("挂单说明") or "")
@@ -3214,15 +3220,13 @@ def _apply_portfolio_slots(
                 continue
             queued = bool((rec or {}).get("queued_while_full"))
             trigger_ts = str((rec or {}).get("trigger_ts") or now_ts)
-            since = trigger_ts
-            if queued and freed_at:
-                since = max(since, freed_at)
             bars = r.get("_day_bars")
             hit = first_1m_limit_buy_fill(
                 bars if isinstance(bars, pd.DataFrame) else None,
                 limit_px=float(limit_px),
-                since_ts=since,
-                require_pullback=queued,
+                trigger_ts=trigger_ts,
+                slot_freed_at=freed_at or None,
+                queued_while_full=queued,
             )
             if hit is None and (
                 bars is None or getattr(bars, "empty", True)
