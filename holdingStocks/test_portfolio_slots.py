@@ -363,6 +363,54 @@ def test_pin_top3_slots():
     assert picked[3].get("置顶") is False
 
 
+def test_filter_half_remain_stays_pinned_not_closed():
+    """10% 半仓后剩余仓仍占三槽，不进已平仓留痕。"""
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {
+            "代码": "002068",
+            "名称": "黑猫股份",
+            "持仓": 5200,
+            "可用": 5200,
+            "持仓状态": "持有",
+            "预警": "持有",
+            "挂单说明": "半仓止盈@9.36×5200 剩5200",
+            "距买点%": 8.0,
+            "当日禁买": True,
+            "已实现": False,
+            "卖出数量": 0,
+        },
+        {
+            "代码": "600330",
+            "名称": "天通股份",
+            "持仓": 0,
+            "持仓状态": "已平仓",
+            "预警": "已触止损",
+            "已实现": True,
+            "卖出数量": 3100,
+            "三槽平仓": True,
+            "距买点%": 0,
+        },
+    ]
+    picked = filter_portfolio_holdings(
+        rows,
+        portfolio_codes={"002068", "600330"},
+        strategy_codes={"002068", "600330"},
+        phase="closed",
+    )
+    remain = next(r for r in picked if r["代码"] == "002068")
+    closed = next(r for r in picked if r["代码"] == "600330")
+    assert remain.get("置顶") is True
+    assert remain.get("槽位占用") is True
+    assert remain.get("槽位留痕") is False
+    assert int(remain.get("持仓") or 0) == 5200
+    assert remain.get("持仓状态") == "持有"
+    assert closed.get("置顶") is False
+    assert closed.get("槽位留痕") is True
+    assert int(closed.get("持仓") or 0) == 0
+
+
 def test_demote_pre_signal_window():
     from index import _demote_pre_signal_window
 

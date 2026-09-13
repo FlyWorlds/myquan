@@ -13,6 +13,14 @@ const posStatus = computed(() => String(props.row.持仓状态 || '').trim() || 
 const pinned = computed(
   () => Boolean(props.row.置顶) && Number(props.row.持仓) > 0,
 )
+const halfRemain = computed(() => {
+  const alert = String(props.row.预警 || '')
+  const note = String(props.row.挂单说明 || '')
+  return (
+    Number(props.row.持仓) > 0 &&
+    (alert.includes('半仓') || note.includes('半仓'))
+  )
+})
 const slotTrace = computed(
   () =>
     Boolean(props.row.槽位留痕) ||
@@ -97,6 +105,11 @@ const cardClass = computed(() => {
               class="rounded-full px-2 py-0.5 text-xs font-medium"
               style="color: var(--watch-hold); border: 1px solid color-mix(in srgb, var(--watch-hold) 50%, transparent); background: color-mix(in srgb, var(--watch-hold) 16%, transparent)"
             >置顶·三槽</span>
+            <span
+              v-if="halfRemain"
+              class="rounded-full px-2 py-0.5 text-xs font-medium"
+              style="color: var(--watch-down); border: 1px solid color-mix(in srgb, var(--watch-down) 45%, transparent); background: color-mix(in srgb, var(--watch-down) 12%, transparent)"
+            >半仓留仓</span>
             <span
               v-else-if="slotTrace"
               class="rounded-full px-2 py-0.5 text-xs font-medium text-ui-text-2"

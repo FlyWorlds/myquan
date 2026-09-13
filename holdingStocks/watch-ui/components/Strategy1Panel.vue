@@ -25,7 +25,7 @@ const legend = [
   { id: 'warn-buy', cls: 'signal-badge signal-badge-warn-buy', label: '买入预警' },
   { id: 'trigger-buy', cls: 'signal-badge signal-badge-trigger-buy', label: '已触买（含策略持有叠买）' },
   { id: 'warn-sell', cls: 'signal-badge signal-badge-warn-sell', label: '卖出预警' },
-  { id: 'trigger-sell', cls: 'signal-badge signal-badge-trigger-sell', label: '已触止损' },
+  { id: 'trigger-sell', cls: 'signal-badge signal-badge-trigger-sell', label: '已触止损/半仓' },
   { id: 'flat', cls: 'signal-badge signal-badge-flat', label: '空仓' },
 ] as const
 
@@ -143,7 +143,7 @@ function tradeIncomePct(r: HoldingRow): number | null {
       <div class="mt-1 text-xs text-ui-text-3">
         策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）；
         单笔收入%=(现价或成交价)/成本−1（含策略持有/实仓）；图例可点筛选，可多选。
-        已经买入=三槽实仓；已触买含今日已入槽；T+1 止损已记不算已触止损。
+        已经买入=三槽实仓；已触买含今日已入槽；T+1 止损已记不算已触止损；10% 半仓是「半仓止盈」，剩余仍占槽。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button

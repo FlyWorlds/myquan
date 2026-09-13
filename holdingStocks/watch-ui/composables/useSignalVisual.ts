@@ -22,6 +22,14 @@ function qtyOf(row: HoldingRow): number {
   return Number(row.持仓) || 0
 }
 
+function isHalfHit(alert: string): boolean {
+  return alert.includes('半仓止盈')
+}
+
+function isHalfWarn(alert: string): boolean {
+  return alert.includes('将半仓')
+}
+
 /** 策略1/持仓：买=红、卖=绿、实仓底=#5eead4、策略持有=紫。 */
 export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   const bg = String(row.bgClass || '')
@@ -73,8 +81,10 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
   const sellTriggered =
     !stopClosed &&
     (alert.includes('已触止损') ||
+      isHalfHit(alert) ||
       trig.startsWith('策略止损') ||
-      (pos === '待卖出' && (trig.startsWith('已触发') || alert.includes('止损'))))
+      (pos === '待卖出' &&
+        (trig.startsWith('已触发') || alert.includes('止损') || isHalfHit(alert))))
 
   const buyWarn =
     bg === 'warn-buy' ||
@@ -88,6 +98,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     bg === 'warn-sell' ||
     pos === '待卖出' ||
     alert.includes('将止损') ||
+    isHalfWarn(alert) ||
     alert.includes('将卖出') ||
     Boolean(row.近止损) ||
     (side === '卖出' && trig === '接近') ||
@@ -104,7 +115,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
         ? alert
         : '持有·T+1'
       : sellHit
-        ? alert || '已触止损'
+        ? alert || (isHalfHit(alert) ? '半仓止盈' : '已触止损')
         : alert && alert !== '-'
           ? alert
           : '已经买入'
@@ -124,7 +135,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     return mk('trigger-buy', tag)
   }
   if (sellTriggered && !buyTriggered) {
-    return mk('trigger-sell', alert || '已触止损')
+    return mk('trigger-sell', alert || (isHalfHit(alert) ? '半仓止盈' : '已触止损'))
   }
   if (buyTriggered && sellTriggered) {
     return mk('trigger-buy', alert.includes('已触买') ? alert : '已触买')
@@ -135,7 +146,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     return mk('warn-buy', alert || '将买入')
   }
   if (sellWarn && !buyWarn && (paperHold || pos === '待卖出')) {
-    return mk('warn-sell', alert || '将止损')
+    return mk('warn-sell', alert || (isHalfWarn(alert) ? '将半仓' : '将止损'))
   }
   if (buyWarn && sellWarn) {
     return mk('warn-buy', alert || '将买入')
@@ -201,14 +212,19 @@ export function collectLegendIds(row: HoldingRow): SignalLegendId[] {
     !stopClosed &&
     (String(row.已触止损 || '') === '是' ||
       alert.includes('已触止损') ||
-      (pos === '待卖出' && alert.includes('止损')))
+      isHalfHit(alert) ||
+      (pos === '待卖出' && (alert.includes('止损') || isHalfHit(alert))))
   ) {
     ids.push('trigger-sell')
   } else if (
     !t1Locked &&
     !stopClosed &&
     qty <= 0 &&
-    (pos === '待卖出' || alert.includes('将止损') || alert.includes('将卖出') || Boolean(row.近止损))
+    (pos === '待卖出' ||
+      alert.includes('将止损') ||
+      isHalfWarn(alert) ||
+      alert.includes('将卖出') ||
+      Boolean(row.近止损))
   ) {
     ids.push('warn-sell')
   }
