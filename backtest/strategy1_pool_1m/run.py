@@ -245,6 +245,11 @@ def _prep_minutes(minutes: pd.DataFrame) -> pd.DataFrame:
     m["day"] = m["ts"].dt.strftime("%Y-%m-%d")
     m = m.dropna(subset=["open", "high", "low", "close"])
     m = m[(m["high"] > 0) & (m["low"] > 0)]
+    # 东财 09:30 / 14:58–14:59 常见 open=0 的集合竞价残片；用收盘补开盘，避免 bar_open=0 干扰缺口判定
+    bad_open = m["open"] <= 0
+    if bad_open.any():
+        m.loc[bad_open, "open"] = m.loc[bad_open, "close"]
+    m = m[m["open"] > 0]
     return m.sort_values("ts")
 
 
