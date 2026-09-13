@@ -70,7 +70,7 @@ FACTOR_BINDINGS = (
         bounce_pct=0.01,
         candle="any",
         mode="close",
-        filter_desc="研究路径：止损后收盘≥low×(1+1%) 同日再买；生产三槽当日卖出禁再买，不改变成交",
-        enabled=True,
+        filter_desc="研究对照：止损后收盘≥low×(1+1%) 同日再买。生产默认关闭——三槽当日卖出禁再买，不改变成交",
+        enabled=False,
     ),
 )

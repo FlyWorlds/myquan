@@ -126,7 +126,9 @@ class Factor26Decision(BaseDecisionEngine):
         if meta.get("path_hit_stop") is not None:
             path_stop = bool(meta.get("path_hit_stop"))
         else:
-            path_stop = low <= stop_px + 1e-12
+            # 无 1m 路径时不用全日 low 成交：同 bar 高低次序未知，会把「先高后低」
+            # 误判成已触卖。盯盘不走本引擎；本引擎只在明确 path_hit_stop 时卖。
+            path_stop = False
         if meta.get("path_hit_buy") is not None:
             path_buy = bool(meta.get("path_hit_buy"))
         else:

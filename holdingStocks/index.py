@@ -19,7 +19,7 @@
   · 因子26 实仓：按成本+持仓峰值算动态止盈价；1 分钟顺序判触达
   · 阈值与信号：因子26 多层止盈（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
-  · 有仓：动态止盈触达自动结算；**阶梯 10% 在盯盘仍按全清**（1m 每次从买入时刻回放，无 tp_stage；见 docs/PROJECT_AUDIT.md）。三槽 1m 回测才真正半仓后继续止盈剩余。
+  · 有仓：动态止盈触达自动结算；**阶梯 10% 减半**（持仓记 tp_stage + last_tp_ts，半仓后从触达分钟下一根继续盯 15%/峰值回落）。不接券商，本地只记信号与纸面数量。
   · **信号≠入槽**：触买预警见 `watch_buy_signal.py`（须过门）；槽满仍发「已触买·槽满」；未过门不算触买、不预警；自动入槽才是成交
   · 本地 JSON 记录持仓（含 peak_high）；T+1 买入日不可卖
 
@@ -84,6 +84,7 @@ from strategy.open_break import (
     LOT_SIZE,
     NEAR_FACTOR_PCT,
     REASON_EOD_RESERVE,
+    REASON_HALF,
     REASON_STOP,
     TICK_SIZE,
     bar_shape,
@@ -108,6 +109,9 @@ from strategy.pullback_wave_stop import (
     DEFAULT_T1_PEAK_TRAIL_PCT,
     cost_hard_stop_px,
     first_session_exit_fill,
+    hit_stop_alert,
+    is_half_stop_kind,
+    lot_half_shares,
     overnight_open_protect_px,
     path_dependent_buy_hit,
     path_dependent_pullback_hit,
@@ -296,6 +300,7 @@ _STOP_CLOSED_STATUSES = frozenset(
     {STATUS_STOP_CLOSED, "已止损", "已触止损平仓"}  # 后两者兼容旧文案
 )
 SIGNAL_STOP_HIT = "已触止损"
+SIGNAL_HALF_HIT = "半仓止盈"
 
 
 def _is_stop_closed_status(pos: str | None) -> bool:
@@ -1302,7 +1307,7 @@ def _ensure_signal_day_caches(*, force: bool = False) -> str:
 
 
 def _today_1m_bars(sina: str, session: str, *, force: bool = False) -> pd.DataFrame:
-    """拉取并缓存当日 1 分钟 K（未复权），供回落波止损 path-dependent 判定。"""
+    """拉取并缓存当日 1 分钟 K（未复权），供因子26 多层止盈 path-dependent 判定。"""
     key = str(sina).lower()
     now = time.monotonic()
     hit = _M1_CACHE.get(key)
@@ -1384,12 +1389,16 @@ def _resolve_hit_stop_path_dependent(
     vol20_daily: float | None = None,
     overnight_armed: bool = False,
     day_open: float | None = None,
+    shares: int = 1000,
+    tp_stage: int = 0,
+    since_exclusive: bool = False,
 ) -> dict[str, Any]:
     """动态止盈触达：优先 1 分钟顺序；无分钟时仅 last≤当前卖价。
 
-    since_ts：实仓从买入时刻起算。
+    since_ts：实仓从买入时刻起算；半仓后改 last_tp_ts 且 since_exclusive。
     seed_high：持仓峰值初值（成本/隔夜已记 peak；不含当日快照 high）。
     cost_px：买入成本（浮盈回落一半锚；勿把 peak 当成本）。
+    shares / tp_stage：对齐 eval_multi_tp_bar，10% 只减半。
     """
     bars = quote.get("_day_bars")
     if not isinstance(bars, pd.DataFrame) or bars.empty:
@@ -1418,6 +1427,9 @@ def _resolve_hit_stop_path_dependent(
             vol20_daily=vol20_daily,
             overnight_armed=bool(overnight_armed),
             day_open=day_open,
+            shares=max(0, int(shares or 0)),
+            tp_stage=max(0, int(tp_stage or 0)),
+            since_exclusive=bool(since_exclusive),
         )
         touch = float(pd_hit.get("touch_stop") or 0)
         if bool(pd_hit.get("hit_stop")) and touch <= 0:
@@ -1429,6 +1441,10 @@ def _resolve_hit_stop_path_dependent(
             "stop_px": float(pd_hit.get("stop_px") or stop_px or 0),
             "running_high": float(pd_hit.get("running_high") or 0),
             "source": str(pd_hit.get("source") or "1m"),
+            "stop_kind": str(pd_hit.get("stop_kind") or ""),
+            "action_kind": str(pd_hit.get("action_kind") or ""),
+            "sell_shares": int(pd_hit.get("sell_shares") or 0),
+            "touch_ts": pd_hit.get("touch_ts"),
         }
 
     stop_now = float(stop_px or 0)
@@ -1441,6 +1457,10 @@ def _resolve_hit_stop_path_dependent(
         "stop_px": stop_now,
         "running_high": float(seed_high or 0),
         "source": "last_vs_stop",
+        "stop_kind": "",
+        "action_kind": "full" if hit else "",
+        "sell_shares": 0,
+        "touch_ts": None,
     }
 
 
@@ -2381,6 +2401,18 @@ def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
             out["挂单说明"] = (
                 (note + "；" if note else "") + "9:30 连续竞价起才结算止损"
             )
+    elif alert == "半仓止盈" or alert.startswith("半仓止盈"):
+        out["alert"] = "将半仓"
+        out["pending_sell"] = True
+        out["near_stop"] = True
+        out["bg_class"] = out.get("bg_class") or "warn-sell"
+        out["持仓状态"] = "待卖出"
+        out["因子触发"] = "接近"
+        note = str(out.get("挂单说明") or "")
+        if "9:30" not in note:
+            out["挂单说明"] = (
+                (note + "；" if note else "") + "9:30 连续竞价起才结算半仓"
+            )
     elif trig == "已触发" or trig.startswith("已触发"):
         out["因子触发"] = "接近"
     return out
@@ -2723,6 +2755,8 @@ def apply_paper_slot_buy(
     pos["peak_high"] = round(price, 4)
     pos["available"] = 0
     pos["buy_time"] = _now()
+    pos["tp_stage"] = 0
+    pos["last_tp_ts"] = None
     pos["note"] = note
     pos["name"] = meta["name"]
     pos["market"] = meta["market"]
@@ -3077,6 +3111,20 @@ def _apply_portfolio_slots(
     return meta
 
 
+def _bar_ts_str(ts: Any) -> str | None:
+    """1m 触达时刻 → 可比较的本地时间串（半仓后 since_ts）。"""
+    if ts is None:
+        return None
+    try:
+        t = pd.Timestamp(ts)
+        if getattr(t, "tzinfo", None) is not None:
+            t = t.tz_convert("Asia/Shanghai").tz_localize(None)
+        return t.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:  # noqa: BLE001
+        s = str(ts).strip()
+        return s or None
+
+
 def apply_exit_fill(
     *,
     code: str,
@@ -3091,8 +3139,14 @@ def apply_exit_fill(
     px_digits: int,
     reason: str,
     trade_note: str,
+    action_kind: str = "",
+    first_hit_ts: str | None = None,
 ) -> dict[str, Any]:
-    """卖出视为已成交：按成交价锁定盈亏；可只卖可用股，剩余锁定仓继续持有。"""
+    """卖出视为已成交：按成交价锁定盈亏；可只卖可用股，剩余仓继续持有。
+
+    半仓（action_kind=half / reason=半仓止盈）后允许当日再卖剩余；
+    全清记录才短路。旧记录无 after_qty 一律当全清。
+    """
     data = load_holdings()
     _purge_stale_realized(data, session)
     realized = data.setdefault("realized_today", {})
@@ -3102,7 +3156,17 @@ def apply_exit_fill(
         and str(existing.get("session") or "") == session
         and existing.get("reason") in EXIT_REASONS
     ):
-        return existing
+        after = existing.get("after_qty")
+        full_exit = existing.get("full_exit")
+        if full_exit is True:
+            return existing
+        if after is None:
+            return existing
+        try:
+            if int(after) <= 0:
+                return existing
+        except (TypeError, ValueError):
+            return existing
 
     pos = data["positions"].setdefault(code, _empty_position(meta))
     old_qty = int(pos.get("qty") or 0)
@@ -3137,10 +3201,13 @@ def apply_exit_fill(
         "day_pnl_pct": None if day_pnl_pct is None else round(float(day_pnl_pct), 2),
         "reason": reason,
         "time": _now(),
+        "action_kind": str(action_kind or ""),
     }
     realized[code] = rec
 
     new_qty = old_qty - sell_qty
+    rec["after_qty"] = int(new_qty)
+    rec["full_exit"] = bool(new_qty <= 0)
     pos["qty"] = new_qty
     pos["name"] = meta["name"]
     pos["market"] = meta["market"]
@@ -3150,6 +3217,8 @@ def apply_exit_fill(
         pos["buy_time"] = None
         pos["available"] = None
         pos["today_cost"] = None
+        pos["tp_stage"] = 0
+        pos["last_tp_ts"] = None
         pos["stop_noted"] = False
         pos["stop_noted_px"] = None
         pos["stop_noted_session"] = None
@@ -3165,8 +3234,17 @@ def apply_exit_fill(
             pos["available"] = 0
         # 卖的是隔夜可用仓，今日买入成本保留
         pos["note"] = f"{reason}@{rec['price']}×{sell_qty} 剩{new_qty} ({session})"
+        half = bool(
+            str(action_kind or "") == "half"
+            or reason == REASON_HALF
+            or is_half_stop_kind(str(action_kind or ""), action_kind)
+        )
+        if half:
+            pos["tp_stage"] = 1
+            ts = _bar_ts_str(first_hit_ts) or _now()
+            pos["last_tp_ts"] = ts
         # 已兑现止损备注则清已记
-        if reason == REASON_STOP:
+        if reason in (REASON_STOP, REASON_HALF):
             pos["stop_noted"] = False
             pos["stop_noted_px"] = None
             pos["stop_noted_session"] = None
@@ -3190,7 +3268,7 @@ def apply_exit_fill(
             "note": trade_note,
         }
     )
-    if reason == REASON_STOP:
+    if reason in (REASON_STOP, REASON_HALF):
         remember_factor_trigger(code, side="sell", px=fill_px, session=session)
     return rec
 
@@ -3207,21 +3285,31 @@ def apply_stop_fill(
     prev_close: float | None,
     open_px: float,
     px_digits: int,
+    action_kind: str = "",
+    stop_kind: str = "",
+    first_hit_ts: str | None = None,
 ) -> dict[str, Any]:
-    """止损视为已成交：按止损价锁定盈亏、清仓，并写入当日已实现。"""
+    """止损/止盈视为已成交：10% 半仓只卖一半，其余全清。"""
+    sell_qty = int(qty)
+    half = is_half_stop_kind(stop_kind, action_kind)
+    if half:
+        sell_qty = lot_half_shares(sell_qty)
+    reason = REASON_HALF if half else REASON_STOP
     return apply_exit_fill(
         code=code,
         meta=meta,
         fill_px=float(stop_px),
-        qty=qty,
+        qty=sell_qty,
         cost=cost,
         session=session,
         buy_time=buy_time,
         prev_close=prev_close,
         open_px=open_px,
         px_digits=px_digits,
-        reason=REASON_STOP,
-        trade_note=f"{REASON_STOP}(自动)",
+        reason=reason,
+        trade_note=f"{reason}(自动)",
+        action_kind="half" if half else "full",
+        first_hit_ts=first_hit_ts,
     )
 
 
@@ -3794,8 +3882,21 @@ def collect_rows(
             cost_h = None
             seed_h = None
             since_stop = None
+            since_exclusive = False
+            path_action_kind = ""
+            path_touch_ts = None
+            tp_stage_early = 0
+            try:
+                tp_stage_early = max(0, int(pos_early.get("tp_stage") or 0))
+            except (TypeError, ValueError):
+                tp_stage_early = 0
             if qty_early > 0:
-                since_stop = str(buy_time_early) if buy_time_early else None
+                last_tp_early = pos_early.get("last_tp_ts")
+                if last_tp_early:
+                    since_stop = str(last_tp_early)
+                    since_exclusive = True
+                else:
+                    since_stop = str(buy_time_early) if buy_time_early else None
                 try:
                     cost_h = float(cost_early) if cost_early is not None else None
                 except (TypeError, ValueError):
@@ -3941,9 +4042,14 @@ def collect_rows(
                         vol20_daily=_vol20_daily_for(str(w["sina"]), str(q["session"])),
                         overnight_armed=overnight_armed_lv,
                         day_open=float(q.get("open") or 0) or None,
+                        shares=int(qty_early or 0) or 1000,
+                        tp_stage=tp_stage_early,
+                        since_exclusive=since_exclusive,
                     )
                     hit_eff_stop = bool(path_res.get("hit_stop"))
                     path_touch_stop = float(path_res.get("touch_stop") or 0)
+                    path_action_kind = str(path_res.get("action_kind") or "")
+                    path_touch_ts = path_res.get("touch_ts")
                     # 有仓：展示卖价与 path 一致（1m 峰值可能高于快照 high）
                     if qty_early > 0:
                         try:
@@ -3951,6 +4057,9 @@ def collect_rows(
                             if path_stop > 0:
                                 lv["stop"] = path_stop
                                 lv_base["stop"] = path_stop
+                            sk = str(path_res.get("stop_kind") or "")
+                            if sk:
+                                lv["stop_kind"] = sk
                         except (TypeError, ValueError):
                             pass
                     # 刷新持仓峰值：只用 1m 顺序 running_high，禁止并入快照 high
@@ -4133,7 +4242,10 @@ def collect_rows(
                     str(q["session"]),
                     {
                         "bg_class": "warn-sell",
-                        "alert": "已触止损",
+                        "alert": hit_stop_alert(
+                            str(lv.get("stop_kind") or ""),
+                            path_action_kind,
+                        ),
                         "pending_sell": True,
                         "stop_touched": True,
                         "touch_stop": float(path_touch_stop or _stop_chk or 0) or None,
@@ -4247,6 +4359,9 @@ def collect_rows(
                     prev_close=q.get("prev_close"),
                     open_px=float(q["open"]),
                     px_digits=px_digits,
+                    action_kind=path_action_kind,
+                    stop_kind=str(lv.get("stop_kind") or ""),
+                    first_hit_ts=_bar_ts_str(path_touch_ts),
                 )
                 stopped_this_scan = True
                 holdings = load_holdings()
@@ -4540,10 +4655,17 @@ def collect_rows(
                 hit_stop=bool(hit_stop_show),
                 hit_buy=bool(hit_buy),
                 allow_attack=DEFAULT_ALLOW_ATTACK,
+                cost_px=cost_h if cost_h else None,
+                peak_high=seed_h if seed_h else None,
+                stop_kind=str(lv.get("stop_kind") or "") or None,
             )
             if not signal_ok:
                 if qty > 0 and hit_stop_show:
-                    # 午休/收盘/盘前：保留「已触止损」展示，仅提示待连续竞价结算
+                    # 午休/收盘/盘前：保留触达展示，仅提示待连续竞价结算
+                    _half_show = is_half_stop_kind(
+                        str(lv.get("stop_kind") or ""),
+                        path_action_kind,
+                    )
                     sig = dict(sig)
                     sig["hit_stop"] = True
                     sig["pending_sell"] = True
@@ -4552,17 +4674,26 @@ def collect_rows(
                     sig["持仓状态"] = "待卖出"
                     sig["因子触发"] = "已触发" if preview_ok else "接近"
                     if preview_ok:
-                        sig["alert"] = "已触止损·待盘中结算"
+                        sig["alert"] = (
+                            "半仓止盈·待盘中结算" if _half_show else "已触止损·待盘中结算"
+                        )
                         note = str(sig.get("挂单说明") or "")
                         if "连续竞价" not in note:
                             sig["挂单说明"] = (
                                 (note + "；" if note else "")
-                                + "已破止损价，待 9:30–11:30 / 13:00–15:00 自动结算"
+                                + (
+                                    "已触10%半仓，待 9:30–11:30 / 13:00–15:00 记减半"
+                                    if _half_show
+                                    else "已破止损价，待 9:30–11:30 / 13:00–15:00 自动结算"
+                                )
                             )
                     else:
                         sig = _demote_pre_signal_window(sig)
                         sig["hit_stop"] = True
-                        sig["alert"] = "将止损" if "止损" in str(sig.get("alert") or "") else sig.get("alert")
+                        if _half_show:
+                            sig["alert"] = "将半仓"
+                        elif "止损" in str(sig.get("alert") or ""):
+                            sig["alert"] = "将止损"
                         sig["bg_class"] = "warn-sell"
                         sig["pending_sell"] = True
                 elif _should_demote_pre_signal(phase_now):
@@ -4877,6 +5008,12 @@ def collect_rows(
                 code=code,
                 allow_entry=allow_entry,
             )
+            if (
+                realized
+                and str(realized.get("session") or "") == q["session"]
+                and realized.get("reason") in EXIT_REASONS
+            ):
+                row["当日禁买"] = True
             _attach_strategy_pnl_fields(
                 row,
                 w=w,
@@ -5894,7 +6031,7 @@ def cmd_status(args: argparse.Namespace) -> None:
     print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
     print("     当日盈亏: 今买=(现价或平仓价-买入价)×股数；昨仓=(现价或平仓价-昨收)×股数")
     print("     已平仓浮亏: 昨仓=(平仓价-昨收)×卖出股数；今买当日=(平仓价-成本)×股数；成交价锁定后不再随现价")
-    print("     因子26卖出: 分时最高回落阈值止损；已触止损=视为成交并锁定盈亏")
+    print("     因子26卖出: 多层止盈；10%半仓止盈（减半留仓）；其余止损/止盈全清")
     print("     买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
     _f2 = load_holdings().get("factor2")
     print(f"     {format_factor2_summary(_f2 if isinstance(_f2, dict) else None)}")
@@ -6010,6 +6147,9 @@ def cmd_buy(args: argparse.Namespace) -> None:
     pos["cost"] = round(new_cost, 4)
     pos["available"] = int(old_avail)
     pos["buy_time"] = _now()
+    if old_qty <= 0:
+        pos["tp_stage"] = 0
+        pos["last_tp_ts"] = None
     if args.note:
         pos["note"] = args.note
     pos["name"] = meta["name"]
@@ -6070,44 +6210,58 @@ def cmd_sell(args: argparse.Namespace) -> None:
         pos["buy_time"] = None
         pos["available"] = None
         pos["today_cost"] = None
+        pos["tp_stage"] = 0
+        pos["last_tp_ts"] = None
+    else:
+        # 人工减半后必须落 stage，否则下一轮 1m 回放会在同一根 10% K 上清剩余
+        pos["tp_stage"] = 1
+        pos["last_tp_ts"] = _now()
     cash = _account_cash(data)
     if cash is not None:
         data["account_cash"] = round(cash + price * qty, 2)
 
-    # 全清时写入当日已实现，供合计盈亏/卡片锁定展示
+    # 全清或半仓都写入当日已实现：禁同日再买；半仓后允许再卖剩余
     session = str(pd.Timestamp.now().date())
     note = args.note or ""
+    _purge_stale_realized(data, session)
     if new_qty == 0:
-        _purge_stale_realized(data, session)
         reason = REASON_STOP if "止损" in note else "手动卖出"
-        bought_today = is_t1_buy_day(buy_time, session)
-        day_pnl, day_pnl_pct, day_base = session_day_pnl(
-            mark=price,
-            qty=qty,
-            cost=cost,
-            prev_close=_prev_close_from_snapshot(code),
-            bought_today=bool(bought_today),
-            fallback=None if not bought_today else cost,
-        )
-        px_digits = 3 if abs(price) < 10 else 2
-        rec_day_base = 0.0 if day_base is None else day_base
-        rec_day_pnl = 0.0 if day_pnl is None else day_pnl
-        data.setdefault("realized_today", {})[code] = {
-            "session": session,
-            "name": meta["name"],
-            "market": meta["market"],
-            "qty": int(qty),
-            "price": round(price, px_digits),
-            "cost": round(cost, 4),
-            "pnl": round(pnl, 2),
-            "pnl_pct": pnl_pct,
-            "day_base": round(rec_day_base, 2),
-            "day_pnl": round(rec_day_pnl, 2),
-            "day_pnl_pct": day_pnl_pct,
-            "reason": reason,
-            "time": _now(),
-        }
+    else:
+        reason = REASON_HALF
+    bought_today = is_t1_buy_day(buy_time, session)
+    day_pnl, day_pnl_pct, day_base = session_day_pnl(
+        mark=price,
+        qty=qty,
+        cost=cost,
+        prev_close=_prev_close_from_snapshot(code),
+        bought_today=bool(bought_today),
+        fallback=None if not bought_today else cost,
+    )
+    px_digits = 3 if abs(price) < 10 else 2
+    rec_day_base = 0.0 if day_base is None else day_base
+    rec_day_pnl = 0.0 if day_pnl is None else day_pnl
+    data.setdefault("realized_today", {})[code] = {
+        "session": session,
+        "name": meta["name"],
+        "market": meta["market"],
+        "qty": int(qty),
+        "price": round(price, px_digits),
+        "cost": round(cost, 4),
+        "pnl": round(pnl, 2),
+        "pnl_pct": pnl_pct,
+        "day_base": round(rec_day_base, 2),
+        "day_pnl": round(rec_day_pnl, 2),
+        "day_pnl_pct": day_pnl_pct,
+        "reason": reason,
+        "time": _now(),
+        "after_qty": int(new_qty),
+        "full_exit": bool(new_qty <= 0),
+        "action_kind": "half" if new_qty > 0 else "full",
+    }
+    if new_qty == 0:
         pos["note"] = f"{reason}@{price} ({session})"
+    else:
+        pos["note"] = f"{reason}@{price}×{qty} 剩{new_qty} ({session})"
 
     save_holdings(data)
     append_trade(
