@@ -738,9 +738,9 @@ def eval_multi_tp_bar(
     if hit_ladder10:
         if not can_sell:
             return {**empty, "peak_after": max(peak, h)}
-        if stage >= 1:
-            return _full("ladder_half_10_clear", ladder10, downside=False)
-        return _half("ladder_half_10", ladder10, downside=False)
+        if stage < 1:
+            return _half("ladder_half_10", ladder10, downside=False)
+        # 已半仓：10% 不再清剩余，留给 15% / 峰值回落 2%
     if hit_peak_trail:
         if not can_sell:
             return {**empty, "peak_after": max(peak, h)}

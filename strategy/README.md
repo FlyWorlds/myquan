@@ -255,6 +255,8 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 7 --refresh
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack   # 研究：加回攻击波
 # 策略十六核心龙头池（因子27）近 7 日 1m
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
+# 本周 5 日核对（不覆盖默认 REPORT）
+PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 5 --source ak --tag _week202609
 # 低开破硬保护：立刻卖 vs 开盘再下杀1%（全池等权）→ COMPARE_HARD_GAP.md
 PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7
 cd backtest && python run.py kaicheng --no-open

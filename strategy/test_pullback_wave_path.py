@@ -184,8 +184,8 @@ def test_multi_tp_ladder_and_peak_once():
     )
     assert both["action"]["kind"] == "half"
     assert both["action"]["reason"] == "ladder_half_10"
-    # 已半仓后再触 10% → 清剩余
-    clr = ev(
+    # 已半仓后再触 10%、未回落 2% → 继续持有剩余（留给 15% / 峰值回落）
+    hold = ev(
         bar_open=110.0,
         bar_high=111.0,
         bar_low=110.5,
@@ -195,8 +195,7 @@ def test_multi_tp_ladder_and_peak_once():
         can_sell=True,
         tp_stage=1,
     )
-    assert clr["action"]["kind"] == "full"
-    assert "clear" in clr["action"]["reason"]
+    assert hold["action"] is None, hold
 
 
 def test_mid_gain_race_half_vs_vol():
@@ -796,8 +795,9 @@ def test_simulate_ladder_half_only_keeps_remainder():
         tp_stage_in=1,
         shares_in=500,
     )
-    assert sim2.get("sell_reason") == "ladder_half_10_clear", sim2
-    assert sim2.get("holding_out") is False
+    assert sim2.get("holding_out") is True, sim2
+    assert sim2.get("sell_px") is None, sim2
+    assert int(sim2.get("shares_out") or 0) == 500
 
 
 if __name__ == "__main__":

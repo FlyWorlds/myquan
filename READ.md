@@ -189,6 +189,8 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 20 --source panda -
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack   # 研究：加回攻击波
 # 策略十六：核心龙头池近 7 日 1m（产物 backtest/strategy16_core_leader/）
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
+# 本周 5 日核对（不覆盖默认 REPORT；短窗不能当策略期望）
+PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 5 --source ak --tag _week202609
 # 策略十六：因子22 同日再买对照（生产禁再买 vs 研究开 F22）→ COMPARE_F22.md
 PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7
 # 卖出后开盘阈值同日再买对照 → COMPARE_OPEN_REBUY.md；全池等权加 --all-pool → COMPARE_OPEN_REBUY_ALL.md
