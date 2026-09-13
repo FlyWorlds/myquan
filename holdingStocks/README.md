@@ -89,7 +89,7 @@ WATCHLIST = list(S7_WATCHLIST)
 
 **持仓 Tab（三槽池）**：物理 **3** 槽（仅 `qty>0` 占槽）；当日最多买 **3**。**入槽宇宙 = 当前默认策略池**（strategy16=因子27核心龙头，不含旧策略遗留 `portfolio_pool` 空壳）。**触买信号 ≠ 入槽成交**：过门触买未入槽仍进「预警」栏（`已触买·槽满/未入槽`）；**未过门不算触买、不进预警**。**信号**「已触止损」= 破卖价/路径触达；**已平仓** = 三槽实仓止损或止盈卖出清仓后的持仓态（释放槽位；**当日禁再买该票**）。持仓页分栏：**三槽持仓（置顶）** / **已平仓（当日）**（仅三槽实仓清仓或昨仓留痕，不含策略回放未入槽票；不占槽，**下一交易日清空**，不因成交流水隔日挂着）/ **预警（仅默认策略池买点）**。连续竞价按槽位触买填槽；刚平仓当轮不补仓。**9:15–9:30 竞价** 持仓 Tab 仍显示实仓 + 当日已平仓；**午休/收盘仍展示当日已触买预警**（当天一旦进预警栏不摘，将买入等接近信号收盘不留）。策略16 Tab 为默认池完整信号（已触买与持仓预警同一口径，午休/收盘不降成空仓）。
 
-登记示例：`python index.py set-cost 002015 --cost 16.122 --qty 600`；或在 `holdings.json` 加 `"portfolio_pool": ["002015"]`。
+登记示例：`python index.py set-cost 002015 --cost 16.122 --qty 600`；或在 `holdings.json` 加 `"portfolio_pool": ["002015"]`。云环境无本机实仓时，用最近一次三槽 1m 回测末日未平仓铺纸面账本：`python seed_from_pool_1m.py --tag _week202609`（当前产物 2026-09-11：特发信息 / 科新发展 / 远东股份；买入日 `available=0`，下一交易日 9:15 重置后可卖）。`holdings.json` 不入库。
 
 **策略16 Tab**：默认池信号表，按 **距买点% 升序**（最近在前）；状态列打「已触买·槽满/未入槽」等标记（与持仓预警同一口径）；**今日已入槽**另标「今日触买」，图例「已经买入」计三槽实仓、「已触买」含已入槽的当日触买，**T+1 止损已记不算「已触止损」筛选**。标「槽位候选」；展示日内涨跌、策略收益%（自 `STRATEGY_PNL_START`）与**单笔收入%**（现价或成交价相对买入成本）。状态图例可点筛选、可多选，旁有重置。买入信号口径真源：`watch_buy_signal.py`。
 
@@ -111,6 +111,7 @@ pip install -r ../requirements.txt
 | `factor2_watch.py` | 账户回撤预警 |
 | `factor4_watch.py` | 牛市 regime（策略三 + 因子4 时） |
 | `index.py` | 盯盘主程序 / JSON 推送 / 微信 / 买卖记账 |
+| `seed_from_pool_1m.py` | 用 `pool_1m` 末日三槽覆盖本地 `holdings.json`（不入库） |
 | `start_watch.py` | 一键启动 API+Nuxt；`--stop` / `--force` 回收端口 |
 | `watch_process.py` | Windows 端口/PID 回收（Ctrl+C 孤儿进程） |
 | `quote_feed.py` | 行情聚合 |
@@ -179,6 +180,8 @@ python index.py watch        # 仅数据后端（不启页面）
 python index.py clear-all    # 清仓+重置状态+归档当日成交；账户回到 DEFAULT_ACCOUNT_TOTAL（现 30 万）
 python index.py buy 600552 15.50 400
 python index.py sell 600552 16.20 400
+# 用 pool_1m 末日三槽覆盖本地账本（holdings.json 不入库；云环境无本机实仓时用）
+python seed_from_pool_1m.py --tag _week202609
 ```
 
 ## 如何扩展
