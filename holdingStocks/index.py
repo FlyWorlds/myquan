@@ -20,7 +20,7 @@
   · 阈值与信号：因子26 多层止盈（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
   · 有仓：动态止盈触达自动结算；**阶梯 10% 减半**（持仓记 tp_stage + last_tp_ts，半仓后从触达分钟下一根继续盯 15%/峰值回落）。不接券商，本地只记信号与纸面数量。
-  · **信号≠入槽**：触买预警见 `watch_buy_signal.py`（须过门）；槽满仍发「已触买·槽满」；未过门不算触买、不预警；自动入槽才是成交
+  · **信号≠入槽**：触买预警见 `watch_buy_signal.py`（须过门）；槽满仍发「已触买·槽满」并按触发价挂限价；未过门不算触买、不预警；现价回到挂单价（或空槽时新突破）才按成交价入槽
   · 本地 JSON 记录持仓（含 peak_high）；T+1 买入日不可卖
 
 用法：
@@ -2043,6 +2043,7 @@ def load_holdings() -> dict[str, Any]:
             },
             "realized_today": {},
             "closed_today": {},
+            "pending_buys": {},
         }
         save_holdings(data)
         return data
@@ -2058,6 +2059,7 @@ def load_holdings() -> dict[str, Any]:
     data.setdefault("account_total_open", None)
     data.setdefault("account_total_open_session", None)
     data.setdefault("alert_sticky", {})
+    data.setdefault("pending_buys", {})
     _HOLDINGS_CACHE["data"] = data
     _HOLDINGS_CACHE["mtime"] = _holdings_file_mtime()
     return data
@@ -2133,7 +2135,7 @@ def _save_alert_sticky(session: str, sticky: dict[str, Any]) -> None:
 def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, Any]:
     """每日 9:15：清空非实仓盯盘状态，只保留 qty>0 持仓。
 
-    · 清 alert_sticky / 非当日 realized / 回放与策略收益缓存
+    · 清 alert_sticky / pending_buys / 非当日 realized / 回放与策略收益缓存
     · 清日线相关缓存并在后续预热中按最新交易日重拉（过门/前日）
     · 清微信预警防抖状态（当日重新推）
     · 标记 watch_status_reset_session，持仓 Tab 在 9:30 前仅展示实仓
@@ -2142,6 +2144,7 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
     sess = normalize_signal_session(session)
     _purge_stale_realized(data, sess)
     data["alert_sticky"] = {}
+    data["pending_buys"] = {}
     data["watch_status_reset_session"] = sess
     # 非实仓仓位：清掉策略展示用粘滞字段（不改 qty>0）
     for code, pos in list((data.get("positions") or {}).items()):
@@ -2789,6 +2792,150 @@ def apply_paper_slot_buy(
     return pos
 
 
+def _num_or_none(v: Any) -> float | None:
+    try:
+        if v is None or v == "":
+            return None
+        f = float(v)
+        return f if f > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def row_limit_buy_px(row: dict[str, Any]) -> float | None:
+    """当日限价挂单价：开盘突破买点（不随现价改）。"""
+    for key in ("已触发因子价", "买点", "买入侧价"):
+        px = _num_or_none(row.get(key))
+        if px is not None:
+            return px
+    return None
+
+
+def _row_last_and_bar_low(row: dict[str, Any]) -> tuple[float | None, float | None]:
+    """现价 + 最近一根 1m 最低（不用全日最低，避免假回落到价）。"""
+    last = _num_or_none(row.get("现价"))
+    bar_low = None
+    bars = row.get("_day_bars")
+    if isinstance(bars, pd.DataFrame) and not bars.empty and "low" in bars.columns:
+        try:
+            bar_low = _num_or_none(bars.iloc[-1]["low"])
+        except Exception:  # noqa: BLE001
+            bar_low = None
+    return last, bar_low
+
+
+def price_reaches_limit_buy(
+    limit_px: float,
+    *,
+    last: float | None = None,
+    bar_low: float | None = None,
+) -> bool:
+    """限价买：现价或本分钟最低打到/低于挂单价才算可成交。"""
+    lp = float(limit_px)
+    if lp <= 0:
+        return False
+    if last is not None and last > 0 and last <= lp + 1e-12:
+        return True
+    if bar_low is not None and bar_low > 0 and bar_low <= lp + 1e-12:
+        return True
+    return False
+
+
+def limit_buy_can_fill(
+    *,
+    limit_px: float,
+    last: float | None,
+    bar_low: float | None,
+    queued_while_full: bool,
+    hit_buy: bool,
+) -> bool:
+    """槽满后挂过的单：必须回落到价；空槽时新触买：突破当根即可成交。"""
+    if float(limit_px) <= 0:
+        return False
+    if queued_while_full:
+        return price_reaches_limit_buy(limit_px, last=last, bar_low=bar_low)
+    return bool(hit_buy) or price_reaches_limit_buy(
+        limit_px, last=last, bar_low=bar_low
+    )
+
+
+def limit_buy_fill_px(limit_px: float, *, last: float | None = None) -> float:
+    """成交价：现价不高于挂单价则用现价，否则用挂单价。"""
+    lp = float(limit_px)
+    if last is not None and last > 0 and last <= lp + 1e-12:
+        return float(last)
+    return lp
+
+
+def upsert_pending_buy_order(
+    book: dict[str, Any],
+    *,
+    code: str,
+    px: float,
+    session: str,
+    name: str,
+    trigger_ts: str,
+    queued_while_full: bool,
+) -> dict[str, Any]:
+    """当日第一次触买锁定挂单价；不覆盖已有订单。"""
+    prev = book.get(code)
+    if (
+        isinstance(prev, dict)
+        and str(prev.get("session") or "") == session
+        and _num_or_none(prev.get("px")) is not None
+    ):
+        return prev
+    rec = {
+        "px": round(float(px), 4),
+        "session": session,
+        "name": name,
+        "trigger_ts": trigger_ts,
+        "queued_while_full": bool(queued_while_full),
+        "status": "working",
+    }
+    book[code] = rec
+    return rec
+
+
+def pick_slot_limit_fills(
+    orders: list[dict[str, Any]],
+    *,
+    free: int,
+    buys_left: int,
+    now_ts: str,
+) -> list[dict[str, Any]]:
+    """可成交限价单按成交时间、再按触买时间、再按代码取前 N 名补槽。"""
+    ranked: list[dict[str, Any]] = []
+    for o in orders:
+        limit_px = float(o["limit_px"])
+        last = o.get("last")
+        bar_low = o.get("bar_low")
+        queued = bool(o.get("queued_while_full"))
+        if not limit_buy_can_fill(
+            limit_px=limit_px,
+            last=last,
+            bar_low=bar_low,
+            queued_while_full=queued,
+            hit_buy=bool(o.get("hit_buy")),
+        ):
+            continue
+        trigger_ts = str(o.get("trigger_ts") or now_ts)
+        fill_ts = trigger_ts if not queued else str(now_ts)
+        ranked.append(
+            {
+                **o,
+                "fill_px": limit_buy_fill_px(limit_px, last=last),
+                "fill_ts": fill_ts,
+                "trigger_ts": trigger_ts,
+            }
+        )
+    ranked.sort(
+        key=lambda x: (str(x["fill_ts"]), str(x["trigger_ts"]), str(x["code"]))
+    )
+    n = max(0, min(int(free), int(buys_left)))
+    return ranked[:n]
+
+
 def _buy_distance_pct(row: dict[str, Any]) -> float:
     """距买点还差多少%（0=已到/越过）；无法计算返回很大值。"""
     buy = row.get("买点")
@@ -2926,8 +3073,9 @@ def _apply_portfolio_slots(
     """三槽：盘中可持 3；当日最多买 3；尾盘窗口按隔夜上限（现同为 3）。
 
     · 用户实仓 qty>0 占槽；可买空槽见 free_buy_slot_count（盘中/隔夜均为 3）
-    · 入槽顺序：当日「槽位触买」先后；当日止损/已记卖出禁再买
-    · 止损平仓后释放槽位，但该票当日不可再买
+    · 触买写入 pending_buys 限价本（首次触发锁定买点）；槽满挂单须回落到价
+    · 空槽时新突破可成交；多票按成交时间再按触买时间补槽
+    · 当日止损/已记卖出禁再买
     """
     data = load_holdings()
     try:
@@ -2995,17 +3143,86 @@ def _apply_portfolio_slots(
         if _row_hit_buy(r):
             r["槽位候选"] = True
 
+    data = load_holdings()
+    book_raw = data.get("pending_buys")
+    book: dict[str, Any] = book_raw if isinstance(book_raw, dict) else {}
+    book = {
+        str(k): v
+        for k, v in book.items()
+        if isinstance(v, dict) and str(v.get("session") or "") == session
+    }
+    data["pending_buys"] = book
+    free_at_book = free_buy_slot_count(data)
+    now_ts = _now()
+    for _rank, _dist, code, r in candidates:
+        if not _row_hit_buy(r):
+            continue
+        limit_px = row_limit_buy_px(r)
+        if limit_px is None:
+            continue
+        upsert_pending_buy_order(
+            book,
+            code=code,
+            px=limit_px,
+            session=session,
+            name=str(r.get("名称") or code),
+            trigger_ts=now_ts,
+            queued_while_full=free_at_book <= 0,
+        )
+        rec = book.get(code) or {}
+        last_q, bar_low_q = _row_last_and_bar_low(r)
+        queued = bool(rec.get("queued_while_full"))
+        can_now = limit_buy_can_fill(
+            limit_px=float(rec.get("px") or limit_px),
+            last=last_q,
+            bar_low=bar_low_q,
+            queued_while_full=queued,
+            hit_buy=True,
+        )
+        r["限价挂单"] = True
+        r["限价挂单价"] = rec.get("px") or limit_px
+        if queued and not can_now:
+            px_digits = int(r.get("价位小数") or 2)
+            hang = f"限价挂买点@{float(r['限价挂单价']):.{px_digits}f}·待回落到价"
+            note = str(r.get("挂单说明") or "")
+            if hang not in note:
+                r["挂单说明"] = f"{hang}；{note}" if note else hang
+    save_holdings(data)
+
     bought_codes: list[str] = []
     if phase_now == "continuous" and free > 0 and buys_left > 0:
-        # 入槽：只吃「已触买」，按当日先买顺序，最多 free 只
-        hit_queue = [
-            (rank, dist, code, r)
-            for rank, dist, code, r in candidates
-            if _row_hit_buy(r)
-        ]
-        hit_queue.sort(key=lambda x: (x[0], x[1], x[2]))
+        # 入槽：槽满时挂过的单须回落到价；空槽新触买按突破当根；谁先成交谁入槽
+        orders: list[dict[str, Any]] = []
+        for _rank, _dist, code, r in candidates:
+            if not _row_hit_buy(r):
+                continue
+            rec = book.get(code) if isinstance(book.get(code), dict) else {}
+            limit_px = _num_or_none((rec or {}).get("px")) or row_limit_buy_px(r)
+            if limit_px is None:
+                continue
+            last_q, bar_low_q = _row_last_and_bar_low(r)
+            orders.append(
+                {
+                    "code": code,
+                    "row": r,
+                    "limit_px": float(limit_px),
+                    "last": last_q,
+                    "bar_low": bar_low_q,
+                    "trigger_ts": str((rec or {}).get("trigger_ts") or now_ts),
+                    "queued_while_full": bool((rec or {}).get("queued_while_full")),
+                    "hit_buy": True,
+                }
+            )
+        picks = pick_slot_limit_fills(
+            orders,
+            free=free_buy_slot_count(load_holdings()),
+            buys_left=max(0, int(MAX_BUYS_PER_DAY) - today_slot_buy_count(session)),
+            now_ts=now_ts,
+        )
         budget = _slot_notional_budget(account_total, rows, occupied)
-        for rank, dist, code, r in hit_queue:
+        for o in picks:
+            code = str(o["code"])
+            r = o["row"]
             data = load_holdings()
             if free_buy_slot_count(data) <= 0:
                 break
@@ -3028,16 +3245,7 @@ def _apply_portfolio_slots(
                 pass
             if budget is None or budget <= 0:
                 break
-            try:
-                price = float(
-                    r.get("已触发因子价")
-                    or r.get("买点")
-                    or r.get("买入侧价")
-                    or r.get("现价")
-                    or 0
-                )
-            except (TypeError, ValueError):
-                continue
+            price = float(o["fill_px"])
             if price <= 0:
                 continue
             qty = int(budget // (price * 100.0)) * 100
@@ -3054,17 +3262,22 @@ def _apply_portfolio_slots(
                     meta=meta,
                     price=price,
                     qty=qty,
-                    note="槽位触买(自动·预留空槽)",
+                    note="槽位触买(限价成交)",
                 )
             except Exception as e:  # noqa: BLE001
                 print(f"[{_now()}] 槽位自动买入失败 {code}: {e}")
                 continue
+            book.pop(code, None)
+            data = load_holdings()
+            data["pending_buys"] = book
+            save_holdings(data)
             bought_codes.append(code)
             r["持仓"] = int(pos.get("qty") or qty)
             r["成本"] = pos.get("cost")
             r["可用"] = int(pos.get("available") or 0)
             r["槽位占用"] = True
             r["槽位候选"] = False
+            r["限价挂单"] = False
             r["已实现"] = False
             r["持仓状态"] = "已经买入"
             r["预警"] = ALERT_FILLED
@@ -3094,7 +3307,7 @@ def _apply_portfolio_slots(
                 except (TypeError, ValueError):
                     pass
             note = str(r.get("挂单说明") or "")
-            fill_note = f"槽位自动买入{qty}股@{price:.{px_digits}f}"
+            fill_note = f"槽位限价成交{qty}股@{price:.{px_digits}f}"
             r["挂单说明"] = f"{fill_note}；{note}" if note else fill_note
             remember_factor_trigger(
                 code,
@@ -5161,18 +5374,11 @@ def collect_rows(
     if eod_sold:
         stopped_this_scan = True
 
-    if stopped_this_scan or phase_now != "continuous":
-        slot_info = _slot_meta_from_holdings(load_holdings())
-        slot_info["candidates"] = []
-        slot_info["bought"] = []
-        if eod_sold:
-            slot_info["eodReserveSold"] = eod_sold
-        if stopped_this_scan:
-            slot_info["deferred"] = "stop_same_scan"
-    else:
-        slot_info = _apply_portfolio_slots(
-            rows, account_total=account_total, phase_now=phase_now
-        )
+    slot_info = _apply_portfolio_slots(
+        rows, account_total=account_total, phase_now=phase_now
+    )
+    if eod_sold:
+        slot_info["eodReserveSold"] = eod_sold
     # 自动入仓后重算仓位%
     if slot_info.get("bought"):
         holdings = load_holdings()
@@ -6343,6 +6549,7 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
     data["realized_today"] = {}
     data["closed_today"] = {}
     data["alert_sticky"] = {}
+    data["pending_buys"] = {}
     data["factor_memory"] = {}
     data["account_total"] = float(DEFAULT_ACCOUNT_TOTAL)
     data["account_cash"] = float(DEFAULT_ACCOUNT_TOTAL)

@@ -1195,3 +1195,131 @@ def test_account_summary_sums_hold_and_closed_day_pnl():
     assert acc["settledCount"] == 2
     assert acc["settledDayPnl"] == round(0.0 - 2136.0, 2)
 
+
+def test_limit_buy_queued_needs_pullback():
+    """槽满时挂过的单：现价高于买点不能按旧价入账。"""
+    from index import limit_buy_can_fill, limit_buy_fill_px, pick_slot_limit_fills
+
+    assert (
+        limit_buy_can_fill(
+            limit_px=10.0,
+            last=10.50,
+            bar_low=10.40,
+            queued_while_full=True,
+            hit_buy=True,
+        )
+        is False
+    )
+    assert (
+        limit_buy_can_fill(
+            limit_px=10.0,
+            last=9.95,
+            bar_low=9.90,
+            queued_while_full=True,
+            hit_buy=True,
+        )
+        is True
+    )
+    assert limit_buy_fill_px(10.0, last=9.95) == 9.95
+    assert limit_buy_fill_px(10.0, last=10.50) == 10.0
+
+
+def test_limit_buy_fresh_breakout_fills_with_free_slot():
+    """空槽时新触买：现价已越过买点仍按突破成交。"""
+    from index import limit_buy_can_fill
+
+    assert (
+        limit_buy_can_fill(
+            limit_px=10.0,
+            last=10.20,
+            bar_low=10.05,
+            queued_while_full=False,
+            hit_buy=True,
+        )
+        is True
+    )
+    assert (
+        limit_buy_can_fill(
+            limit_px=10.0,
+            last=10.20,
+            bar_low=10.05,
+            queued_while_full=False,
+            hit_buy=False,
+        )
+        is False
+    )
+
+
+def test_pick_slot_limit_fills_earliest_fill_wins():
+    """多票都可成交时，按成交时间再按触买时间取前 N。"""
+    from index import pick_slot_limit_fills
+
+    orders = [
+        {
+            "code": "600869",
+            "limit_px": 23.78,
+            "last": 25.00,
+            "bar_low": 24.80,
+            "trigger_ts": "2026-09-15 09:35:00",
+            "queued_while_full": True,
+            "hit_buy": True,
+        },
+        {
+            "code": "000021",
+            "limit_px": 16.00,
+            "last": 16.10,
+            "bar_low": 15.90,
+            "trigger_ts": "2026-09-15 10:05:00",
+            "queued_while_full": False,
+            "hit_buy": True,
+        },
+        {
+            "code": "002068",
+            "limit_px": 8.50,
+            "last": 8.48,
+            "bar_low": 8.47,
+            "trigger_ts": "2026-09-15 09:40:00",
+            "queued_while_full": True,
+            "hit_buy": True,
+        },
+    ]
+    picks = pick_slot_limit_fills(
+        orders, free=1, buys_left=3, now_ts="2026-09-15 10:05:00"
+    )
+    # 远东现价已离开挂单价，不成交；黑猫回落到价与深科技新突破同分钟，先挂的黑猫优先
+    assert [p["code"] for p in picks] == ["002068"]
+    assert picks[0]["fill_px"] == 8.48
+
+    both = pick_slot_limit_fills(
+        orders, free=2, buys_left=3, now_ts="2026-09-15 10:05:00"
+    )
+    assert [p["code"] for p in both] == ["002068", "000021"]
+    assert both[1]["fill_px"] == 16.0
+
+
+def test_upsert_pending_buy_keeps_first_trigger():
+    from index import upsert_pending_buy_order
+
+    book: dict = {}
+    first = upsert_pending_buy_order(
+        book,
+        code="600869",
+        px=23.78,
+        session="2026-09-15",
+        name="远东",
+        trigger_ts="2026-09-15 09:35:00",
+        queued_while_full=True,
+    )
+    again = upsert_pending_buy_order(
+        book,
+        code="600869",
+        px=24.10,
+        session="2026-09-15",
+        name="远东",
+        trigger_ts="2026-09-15 10:00:00",
+        queued_while_full=False,
+    )
+    assert again["px"] == 23.78
+    assert again["queued_while_full"] is True
+    assert again["trigger_ts"] == first["trigger_ts"]
+
