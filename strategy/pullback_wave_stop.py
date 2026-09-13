@@ -471,6 +471,27 @@ def lot_half_shares(shares: int) -> int:
     return (sh // 2 // 100) * 100
 
 
+HALF_STOP_KINDS = frozenset({"ladder_half_10"})
+
+
+def is_half_stop_kind(
+    stop_kind: str | None = None,
+    action_kind: str | None = None,
+) -> bool:
+    """10% 阶梯半仓（不是 15%/峰值回落/硬保护等全清）。"""
+    if str(action_kind or "").strip().lower() == "half":
+        return True
+    return str(stop_kind or "").strip() in HALF_STOP_KINDS
+
+
+def hit_stop_alert(
+    stop_kind: str | None = None,
+    action_kind: str | None = None,
+) -> str:
+    """盯盘预警：半仓写「半仓止盈」，其余写「已触止损」。"""
+    return "半仓止盈" if is_half_stop_kind(stop_kind, action_kind) else "已触止损"
+
+
 def ladder_target_price(
     cost_px: float,
     *,
@@ -747,11 +768,16 @@ def path_dependent_pullback_hit(
     day_open: float | None = None,
     giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
     t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
+    shares: int = 1000,
+    tp_stage: int = 0,
+    since_exclusive: bool = False,
 ) -> dict[str, Any]:
     """按分钟 K 时间顺序判定多层止盈是否曾触达。
 
     每根 bar：先用此前峰值算卖价，再抬升 peak。
     since_ts：只统计该时刻之后的触达（实仓用买入时间）。
+    since_exclusive：True 时不含 since_ts 当根（半仓后从触达分钟的下一根继续）。
+    shares / tp_stage：与 eval_multi_tp_bar 对齐；10% 半仓后须传剩余股数与 stage=1。
     seed_high：持仓峰值初值（成本或已记录 peak）。
     overnight_armed：买入日收盘未到 3% → 次日峰值回落 2.5%。
     """
@@ -796,7 +822,10 @@ def path_dependent_pullback_hit(
                     ts_p = pd.Timestamp(ts)
                     if ts_p.tzinfo is not None:
                         ts_p = ts_p.tz_convert("Asia/Shanghai").tz_localize(None)
-                    if ts_p < since:
+                    if since_exclusive:
+                        if ts_p <= since:
+                            continue
+                    elif ts_p < since:
                         continue
                 except Exception:  # noqa: BLE001
                     pass
@@ -815,7 +844,8 @@ def path_dependent_pullback_hit(
             bar_low=bar_lo,
             cost_px=cost if cost > 0 else peak,
             peak_before=peak,
-            shares=1000,
+            shares=max(0, int(shares or 0)),
+            tp_stage=max(0, int(tp_stage or 0)),
             can_sell=True,
             overnight_armed=bool(overnight_armed),
             day_open=day_o if day_o > 0 else (bar_o if bar_o > 0 else None),
@@ -841,6 +871,8 @@ def path_dependent_pullback_hit(
             "touch_stop": fill,
             "source": source,
             "stop_kind": str(act.get("reason") or "vol_giveback"),
+            "action_kind": str(act.get("kind") or ""),
+            "sell_shares": int(act.get("shares") or 0),
             "cost_px": cost,
         }
 
@@ -892,6 +924,8 @@ def path_dependent_pullback_hit(
         "touch_stop": touch_stop,
         "source": "1m" if peak_now > 0 else "empty",
         "stop_kind": kind_now or "vol_giveback",
+        "action_kind": "",
+        "sell_shares": 0,
         "cost_px": cost,
     }
 
@@ -1137,6 +1171,7 @@ def strategy_signal(
             "peak_pullback": "大赚后峰值回落2%",
             "peak_pullback_clear": "大赚后峰值回落2%",
             "ladder_half_10": "阶梯10%半仓",
+            "ladder_half_10_clear": "阶梯10%后清剩余",
             "ladder_full_15": "阶梯15%全清",
         }
         label = labels.get(kind_now, "多层止盈")
@@ -1321,7 +1356,7 @@ def strategy_signal(
             base.update(
                 {
                     "pending_sell": True,
-                    "alert": "已触止损",
+                    "alert": hit_stop_alert(kind_now),
                     "bg_class": "warn-sell",
                     "建议挂单": stop_px,
                     "挂单说明": _sell_note(),
@@ -2211,6 +2246,9 @@ __all__ = [
     "stop_note_invalidated_by_recovery",
     "exit_stop_price",
     "lot_half_shares",
+    "HALF_STOP_KINDS",
+    "is_half_stop_kind",
+    "hit_stop_alert",
     "ladder_target_price",
     "peak_pullback_half_price",
     "working_stop_price",

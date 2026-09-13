@@ -773,6 +773,8 @@ def empty_position(meta: dict[str, Any]) -> dict[str, Any]:
         "cost": None,
         "today_cost": None,
         "buy_time": None,
+        "tp_stage": 0,
+        "last_tp_ts": None,
         "note": "",
     }
 
