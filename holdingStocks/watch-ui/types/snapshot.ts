@@ -339,6 +339,11 @@ export interface WatchSnapshot {
   phase?: string
   phaseKey?: string
   refreshSec?: number
+  quoteStale?: boolean
+  feedOk?: boolean
+  /** 最近一次外网行情成功时刻；中断后时钟仍走，此字段停住 */
+  quoteAt?: string | null
+  quoteAgeSec?: number | null
   strategy?: {
     id?: string
     name?: string

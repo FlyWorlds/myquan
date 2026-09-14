@@ -1,4 +1,5 @@
 import type { WatchSnapshot } from '~/types/snapshot'
+import { parseSnapshotClockMs, wsStatusFromSnapshot } from '~/utils/format'
 
 /** 开发模式直连 Python :8765，绕过 Vite/Nuxt WS 代理（易 ECONNRESET 导致整站重启）。 */
 function wsUrl(): string {
@@ -21,8 +22,19 @@ let lastTs: number | null = null
 let lastUpdatedAt: string | null = null
 let started = false
 
+const STALE_PAGE_MS = 20000
+
 export function useWatchWs() {
   const store = useWatchStore()
+
+  function applyStatus(data: WatchSnapshot) {
+    const alert = wsStatusFromSnapshot(data)
+    if (alert) {
+      store.setWsStatus(alert)
+      return
+    }
+    store.setWsStatus('实时 ' + (data.updatedAt || data.clock || ''))
+  }
 
   function applySnapshot(data: WatchSnapshot) {
     if (data.type !== 'snapshot') return
@@ -31,10 +43,14 @@ export function useWatchWs() {
       data.updatedAt != null &&
       lastUpdatedAt != null &&
       data.updatedAt === lastUpdatedAt
-    if (sameTs && sameAt) return
+    if (sameTs && sameAt) {
+      applyStatus(data)
+      return
+    }
     lastTs = data.ts ?? lastTs
     lastUpdatedAt = data.updatedAt ?? lastUpdatedAt
     store.setSnapshot(data)
+    applyStatus(data)
   }
 
   async function fallbackSync() {
@@ -48,14 +64,9 @@ export function useWatchWs() {
         cache: 'no-store',
       })
       applySnapshot(data)
-      if (data.boot) {
-        store.setWsStatus('行情加载中…')
-        return
-      }
-      store.setWsStatus('兜底同步 ' + (data.updatedAt || ''))
     } catch {
       if (ws?.readyState === WebSocket.OPEN) {
-        store.setWsStatus('行情加载中…')
+        store.setWsStatus('网络异常，HTTP 拉快照失败')
         return
       }
       store.setWsStatus('推送断开，等待重连…')
@@ -79,7 +90,9 @@ export function useWatchWs() {
     }
     ws.onopen = () => {
       retry = 0
-      store.setWsStatus('WebSocket 已连接')
+      if (!wsStatusFromSnapshot(store.snapshot)) {
+        store.setWsStatus('WebSocket 已连接')
+      }
       if (pingTimer) window.clearInterval(pingTimer)
       // 浏览器端不发帧时，部分代理/服务端会 idle 断连；轻量 ping 保活
       pingTimer = window.setInterval(() => {
@@ -95,7 +108,6 @@ export function useWatchWs() {
     ws.onmessage = (ev) => {
       try {
         applySnapshot(JSON.parse(ev.data || '{}') as WatchSnapshot)
-        store.setWsStatus('实时 ' + (store.snapshot?.updatedAt || ''))
       } catch {
         /* ignore */
       }
@@ -118,9 +130,8 @@ export function useWatchWs() {
 
   function snapshotAgeMs(): number {
     const raw = lastUpdatedAt || store.snapshot?.updatedAt || store.snapshot?.clock
-    if (!raw) return Number.POSITIVE_INFINITY
-    const t = Date.parse(String(raw).replace(/-/g, '/'))
-    if (Number.isNaN(t)) return Number.POSITIVE_INFINITY
+    const t = parseSnapshotClockMs(raw)
+    if (t == null) return Number.POSITIVE_INFINITY
     return Date.now() - t
   }
 
@@ -131,8 +142,12 @@ export function useWatchWs() {
         void fallbackSync()
         return
       }
-      // WS 假连接（热更新后常见）：超过 15s 没新快照则 HTTP 拉一次
-      if (snapshotAgeMs() > 15000) void fallbackSync()
+      const age = snapshotAgeMs()
+      if (age > 15000) void fallbackSync()
+      if (age > STALE_PAGE_MS && !wsStatusFromSnapshot(store.snapshot)) {
+        const stopped = lastUpdatedAt || store.snapshot?.clock || ''
+        store.setWsStatus('服务停滞，数据停在 ' + stopped)
+      }
     }, Math.max(5000, refreshSec * 1000))
   }
 

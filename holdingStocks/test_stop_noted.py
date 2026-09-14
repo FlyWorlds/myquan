@@ -109,6 +109,23 @@ class TestPaperExitDecision(unittest.TestCase):
         self.assertEqual(dec["kind"], "last")
         self.assertAlmostEqual(dec["fill_px"], 9.75, places=2)
 
+    def test_last_fill_is_trigger_stop_not_last_px(self) -> None:
+        """现价已破卖价：成交记触发点（卖点），滑点另计。"""
+        dec = paper_exit_decision(
+            qty=1000,
+            sellable=1000,
+            t1_today=False,
+            last=9.60,
+            open_px=10.20,
+            prev_close=10.00,
+            cost=10.00,
+            working_stop=9.75,
+            path_hit=False,
+            signal_ok=True,
+        )
+        self.assertEqual(dec["kind"], "last")
+        self.assertAlmostEqual(dec["fill_px"], 9.75, places=2)
+
     def test_yuandong_open_protect_fills_at_open(self) -> None:
         """远东：昨收 25.35 已过 3%，今开 24.10 低于回落一半 → 平仓价=开盘，不是盘后止损 24.6。"""
         dec = paper_exit_decision(

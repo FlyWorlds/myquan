@@ -97,7 +97,7 @@ const closedCount = computed(() => closedHoldings.value.length)
         <p class="text-sm text-ui-text-2">
           <span class="sensitive">{{ snapshot?.strategy?.name || '策略一' }}</span>
           · {{ snapshot?.strategy?.factorsLabel }}
-          · <span>{{ snapshot?.clock || '—' }}</span>
+          · <span :class="wsDisconnected ? 'font-semibold text-ui-danger' : ''">{{ snapshot?.clock || '—' }}</span>
           <span class="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">{{ snapshot?.phase }}</span>
           ·
           <span

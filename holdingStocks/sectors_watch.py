@@ -34,6 +34,7 @@ _last_member_stats: dict[str, dict[str, Any]] = {}
 _last_member_stats_ts: float = 0.0
 _last_main_flow: dict[str, float] = {}
 _last_main_flow_ts: float = 0.0
+_last_payload: dict[str, Any] = {}
 _MEMBER_STATS_INTERVAL = 30.0
 _MAIN_FLOW_INTERVAL = 60.0
 _tick = 0
@@ -73,10 +74,16 @@ def _focus_detail_cached() -> dict[str, Any] | None:
         return detail
 
 
+def peek_sectors_live_payload() -> dict[str, Any]:
+    """最近一次板块实时块（无网络）。盯盘主循环用它，避免和板块线程各拉一遍通达信。"""
+    with _lock:
+        return dict(_last_payload) if _last_payload else {}
+
+
 def build_sectors_live_payload() -> dict[str, Any]:
-    """构建 sectors 实时块（每轮盯盘 refresh 调用）。"""
+    """构建 sectors 实时块（板块线程 / CLI 调用）。"""
     global _last_spot, _last_spot_ts, _last_member_stats, _last_member_stats_ts
-    global _last_main_flow, _last_main_flow_ts, _tick
+    global _last_main_flow, _last_main_flow_ts, _last_payload, _tick
     _tick += 1
     err: str | None = None
     try:
@@ -139,4 +146,6 @@ def build_sectors_live_payload() -> dict[str, Any]:
         payload["quotes"] = quotes
         if detail:
             payload["segmentCount"] = len(detail.get("segments") or [])
+    with _lock:
+        _last_payload = payload
     return payload

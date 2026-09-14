@@ -270,13 +270,41 @@ def retain_last_snapshot(
 ) -> dict[str, Any]:
     """沿用上一份表，只刷新时钟/相位，并标行情未就绪。"""
     snap = dict(prev)
+    prev_quote_at = prev.get("quoteAt") or prev.get("clock")
     snap["clock"] = clock
     snap["updatedAt"] = clock
     snap["ts"] = int(datetime.now().timestamp() * 1000)
     snap["phase"] = phase
     snap["phaseKey"] = phase_key
     snap["quoteStale"] = True
+    snap["feedOk"] = False
+    if prev_quote_at:
+        snap["quoteAt"] = prev_quote_at
     snap.pop("boot", None)
+    return snap
+
+
+def apply_feed_health(
+    snap: dict[str, Any],
+    health: dict[str, Any] | None,
+    *,
+    keep_stale: bool = False,
+) -> dict[str, Any]:
+    """把行情源健康度打进快照。keep_stale 用于沿用旧表时强制 quoteStale。"""
+    health = health or {}
+    if "feedOk" in health:
+        snap["feedOk"] = bool(health.get("feedOk"))
+    if keep_stale or health.get("quoteStale"):
+        snap["quoteStale"] = True
+    else:
+        snap["quoteStale"] = False
+    quote_at = health.get("quoteAt")
+    if quote_at:
+        snap["quoteAt"] = quote_at
+    elif snap.get("quoteStale") and not snap.get("quoteAt"):
+        snap["quoteAt"] = snap.get("clock")
+    if health.get("quoteAgeSec") is not None:
+        snap["quoteAgeSec"] = health.get("quoteAgeSec")
     return snap
 
 
@@ -372,6 +400,9 @@ def build_watch_snapshot(
         "phase": meta.get("phase") or "",
         "phaseKey": meta.get("phaseKey") or "",
         "refreshSec": int(refresh_sec),
+        "quoteStale": False,
+        "feedOk": True,
+        "quoteAt": meta.get("quoteAt") or meta.get("clock") or "",
         "strategy": {
             "id": meta.get("strategyId") or "",
             "name": meta.get("strategyName") or "",

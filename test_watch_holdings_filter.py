@@ -321,6 +321,7 @@ class TestKeepLastSnapshot(unittest.TestCase):
     def _prev(self) -> dict:
         return {
             "type": "snapshot",
+            "clock": "2026-09-14 09:15:00",
             "holdings": [{"代码": "000070", "持仓": 5500}],
             "strategy16": [{"代码": "600869"}],
             "slotMeta": {"occupied": ["000070", "600522", "600869"]},
@@ -368,6 +369,8 @@ class TestKeepLastSnapshot(unittest.TestCase):
             phase_key="auction",
         )
         self.assertTrue(out["quoteStale"])
+        self.assertEqual(out["feedOk"], False)
+        self.assertEqual(out["quoteAt"], "2026-09-14 09:15:00")
         self.assertEqual(out["holdings"][0]["代码"], "000070")
         self.assertEqual(out["clock"], "2026-09-14 09:18:00")
 

@@ -42,6 +42,9 @@ _SINA_HEADERS = {
     "User-Agent": "Mozilla/5.0",
 }
 
+# 超过此时长没有 SSE tick / 新浪批量成功，视为外网行情中断（午休无成交仍会走新浪兜底）。
+QUOTE_STALE_AFTER_SEC = 40.0
+
 
 def sina_to_secid(sina: str) -> str:
     s = str(sina or "").strip().lower()
@@ -110,10 +113,21 @@ class QuoteHub:
         self._gen = 0
         self.sse_ok = False
         self.sse_last_ok_ts = 0.0
+        self.quote_last_ok_ts = 0.0
+        self.quote_last_ok_clock = ""
+
+    def mark_quote_ok(self, source: str = "") -> None:
+        """任意外网行情成功（SSE tick 或新浪批量）都刷新，供顶栏判断断网。"""
+        now = time.time()
+        clock = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.quote_last_ok_ts = now
+        self.quote_last_ok_clock = clock
+        if source in ("em_sse", "sse", ""):
+            self.sse_ok = True
+            self.sse_last_ok_ts = now
 
     def mark_sse_ok(self) -> None:
-        self.sse_ok = True
-        self.sse_last_ok_ts = time.time()
+        self.mark_quote_ok("em_sse")
 
     def mark_sse_down(self) -> None:
         self.sse_ok = False
@@ -122,6 +136,18 @@ class QuoteHub:
         if not self.sse_ok:
             return False
         return (time.time() - self.sse_last_ok_ts) <= max_age_sec
+
+    def quote_health(self, *, max_age_sec: float = QUOTE_STALE_AFTER_SEC) -> dict[str, Any]:
+        last = float(self.quote_last_ok_ts or 0.0)
+        had = last > 0
+        age = (time.time() - last) if had else None
+        ok = bool(had and age is not None and age <= float(max_age_sec))
+        return {
+            "feedOk": ok,
+            "quoteStale": bool(had and not ok),
+            "quoteAt": self.quote_last_ok_clock or None,
+            "quoteAgeSec": None if age is None else round(age, 1),
+        }
 
     def seed_from_quote(self, sina: str, quote: dict[str, Any]) -> None:
         sina = str(sina).lower()
@@ -495,6 +521,8 @@ class SinaBatchPoller:
                 self._fallback_active = True
             try:
                 batch = fetch_sina_batch(self.sinas)
+                if batch:
+                    self.hub.mark_quote_ok("sina_batch")
                 for sina, spot in batch.items():
                     self.hub.apply_tick(
                         sina,
@@ -564,6 +592,9 @@ class QuoteFeedManager:
 
     def wait_update(self, timeout: float | None = None) -> bool:
         return self.hub.wait_update(timeout=timeout)
+
+    def quote_health(self, *, max_age_sec: float = QUOTE_STALE_AFTER_SEC) -> dict[str, Any]:
+        return self.hub.quote_health(max_age_sec=max_age_sec)
 
 
 def ws_accept_key(sec_key: str) -> str:

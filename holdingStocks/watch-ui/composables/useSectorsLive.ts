@@ -152,10 +152,12 @@ export function useSectorsLive() {
     topN: number,
     metrics?: string[],
   ): SectorKindPayload | null {
+    const live = sectors.value?.conceptToday
+    const clock = store.snapshot?.clock || store.snapshot?.updatedAt
+    void store.snapshot?.ts
+    void sectors.value?.spotAt
     if (!base) return null
-    return mergeLiveTodayColumn(base, sectors.value?.conceptToday, topN, metrics, {
-      clock: store.snapshot?.clock || store.snapshot?.updatedAt,
-    })
+    return mergeLiveTodayColumn(base, live, topN, metrics, { clock })
   }
 
   return { sectors, liveAt, memberStatsAt, refreshSec, setFocus, mergedKind, formatMetricValue }

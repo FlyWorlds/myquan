@@ -185,6 +185,7 @@ from watch_config import (
 )
 from watch_snapshot import (
     SNAPSHOT_VERSION,
+    apply_feed_health,
     build_watch_snapshot,
     retain_last_snapshot,
     should_keep_last_snapshot,
@@ -318,6 +319,8 @@ def _is_stop_closed_status(pos: str | None) -> bool:
 
 # watch 模式本地 WebSocket 广播（/ws）；非 watch 为 None
 _ws_hub: LocalWsHub | None = None
+_watch_feed: Any = None
+_WATCH_SNAP_LOCK = threading.RLock()
 _last_watch_snapshot: dict[str, Any] | None = None
 _last_snapshot_digest: str | None = None
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
@@ -963,6 +966,76 @@ def _watch_tabs_with_live_s8(strategy8: dict[str, Any]) -> list[dict[str, Any]]:
     return tabs
 
 
+def _current_feed_health() -> dict[str, Any]:
+    feed = _watch_feed
+    if feed is None:
+        return {"feedOk": True, "quoteStale": False, "quoteAt": None, "quoteAgeSec": None}
+    try:
+        return feed.quote_health()
+    except Exception:  # noqa: BLE001
+        return {"feedOk": False, "quoteStale": True, "quoteAt": None, "quoteAgeSec": None}
+
+
+def _stamp_snapshot_liveness(snap: dict[str, Any], *, clock: str | None = None) -> dict[str, Any]:
+    """刷新进程时钟，并按行情源是否还在收外网数据打 quoteStale。"""
+    clock_now = clock or _now()
+    snap["clock"] = clock_now
+    snap["updatedAt"] = clock_now
+    snap["ts"] = int(datetime.now().timestamp() * 1000)
+    return apply_feed_health(snap, _current_feed_health())
+
+
+def _broadcast_watch_snapshot(snap: dict[str, Any]) -> None:
+    body = json.dumps(snap, ensure_ascii=False)
+    hub = _ws_hub
+    if hub is None:
+        return
+    try:
+        hub.broadcast_text(body)
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] WS 广播失败: {e}")
+
+
+def _heartbeat_watch_clock() -> None:
+    """刷新线程卡住时仍推时钟；外网行情停了则标 quoteStale 给顶栏红字。"""
+    global _last_watch_snapshot
+    with _WATCH_SNAP_LOCK:
+        prev = _last_watch_snapshot
+        if not prev or prev.get("type") != "snapshot":
+            return
+        try:
+            last_ts = int(prev.get("ts") or 0)
+        except (TypeError, ValueError):
+            last_ts = 0
+        now_ms = int(datetime.now().timestamp() * 1000)
+        if last_ts and now_ms - last_ts < 1500:
+            return
+        snap = _stamp_snapshot_liveness(dict(prev))
+        _last_watch_snapshot = snap
+    _broadcast_watch_snapshot(snap)
+
+
+def publish_sectors_live_patch() -> None:
+    """板块行情独立刷新并推 WS，不跟 collect_rows 绑死。"""
+    global _last_watch_snapshot
+    from sectors_watch import build_sectors_live_payload
+
+    try:
+        sectors = build_sectors_live_payload()
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 板块实时刷新失败: {e}")
+        return
+    with _WATCH_SNAP_LOCK:
+        prev = _last_watch_snapshot
+        if not prev or prev.get("type") != "snapshot":
+            return
+        snap = dict(prev)
+        snap["sectors"] = sectors
+        _stamp_snapshot_liveness(snap)
+        _last_watch_snapshot = snap
+    _broadcast_watch_snapshot(snap)
+
+
 def publish_watch_snapshot(
     rows: list[dict[str, Any]],
     indices: list[dict[str, Any]] | None = None,
@@ -972,7 +1045,7 @@ def publish_watch_snapshot(
 ) -> tuple[Path, bool]:
     """推送 JSON 快照（WebSocket + holdings_watch.json），盯盘模式不写 HTML。
 
-    返回 (路径, 是否已写盘并广播)；业务数据未变时跳过 I/O/WS。
+    返回 (路径, 是否已写盘并广播)；业务数据未变时跳过写盘，仍广播时钟与行情健康度。
     """
     global _last_watch_snapshot, _last_snapshot_digest
     indices = indices or []
@@ -990,7 +1063,7 @@ def publish_watch_snapshot(
     )
     from strategy3_watch import build_strategy3_payload
     from strategy8_watch import build_strategy8_payload
-    from sectors_watch import build_sectors_live_payload
+    from sectors_watch import build_sectors_live_payload, peek_sectors_live_payload
 
     def _batch_quote(sinas: list[str]) -> dict[str, dict[str, Any]]:
         batch = fetch_sina_batch([s.lower() for s in sinas])
@@ -1020,7 +1093,7 @@ def publish_watch_snapshot(
         print(f"[{_now()}] 策略八快照失败（继续盯盘）: {e}")
         strategy8 = {"error": str(e), "rows": []}
     try:
-        sectors = build_sectors_live_payload()
+        sectors = peek_sectors_live_payload() or build_sectors_live_payload()
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 板块快照失败（继续盯盘）: {e}")
         sectors = {"error": str(e), "rows": []}
@@ -1059,58 +1132,58 @@ def publish_watch_snapshot(
         portfolio_codes=portfolio_codes,
         strategy_codes=strategy_watchlist_codes(),
     )
-    if should_keep_last_snapshot(
-        rows=rows, snapshot=snapshot, prev=_last_watch_snapshot
-    ):
-        snap = retain_last_snapshot(
-            _last_watch_snapshot,
-            clock=clock_now,
-            phase=phase_label,
-            phase_key=phase_key,
-        )
-        _last_watch_snapshot = snap
-        body = json.dumps(snap, ensure_ascii=False)
-        hub = _ws_hub
-        if hub is not None:
-            try:
-                hub.broadcast_text(body)
-            except Exception as e:  # noqa: BLE001
-                print(f"[{_now()}] WS 广播失败: {e}")
+    apply_feed_health(snapshot, _current_feed_health())
+    keep_last = False
+    published = False
+    to_send: dict[str, Any]
+    with _WATCH_SNAP_LOCK:
+        if should_keep_last_snapshot(
+            rows=rows, snapshot=snapshot, prev=_last_watch_snapshot
+        ):
+            snap = retain_last_snapshot(
+                _last_watch_snapshot,
+                clock=clock_now,
+                phase=phase_label,
+                phase_key=phase_key,
+            )
+            apply_feed_health(snap, _current_feed_health(), keep_stale=True)
+            _last_watch_snapshot = snap
+            to_send = snap
+            keep_last = True
+        else:
+            digest = _snapshot_business_digest(snapshot)
+            if digest == _last_snapshot_digest and _last_watch_snapshot is not None:
+                snap = dict(_last_watch_snapshot)
+                snap["sectors"] = sectors
+                snap["strategies"] = (
+                    snapshot.get("strategies") or snap.get("strategies") or []
+                )
+                snap["strategy16"] = (
+                    snapshot.get("strategy16")
+                    if "strategy16" in snapshot
+                    else snap.get("strategy16") or []
+                )
+                _stamp_snapshot_liveness(snap, clock=clock_now)
+                _last_watch_snapshot = snap
+                to_send = snap
+            else:
+                _last_snapshot_digest = digest
+                _last_watch_snapshot = snapshot
+                to_send = snapshot
+                published = True
+    _broadcast_watch_snapshot(to_send)
+    if keep_last:
         _log_watch_snapshot_push(
             f"[{_now()}] 行情未就绪，沿用上次快照（不置空）",
         )
         return WATCH_META_FILE, False
-
-    digest = _snapshot_business_digest(snapshot)
-    if digest == _last_snapshot_digest and _last_watch_snapshot is not None:
-        snap = dict(_last_watch_snapshot)
-        snap["clock"] = clock_now
-        snap["updatedAt"] = clock_now
-        snap["ts"] = int(datetime.now().timestamp() * 1000)
-        snap["sectors"] = sectors
-        snap["strategies"] = snapshot.get("strategies") or snap.get("strategies") or []
-        snap["strategy16"] = snapshot.get("strategy16") if "strategy16" in snapshot else snap.get("strategy16") or []
-        _last_watch_snapshot = snap
-        body = json.dumps(snap, ensure_ascii=False)
-        hub = _ws_hub
-        if hub is not None:
-            try:
-                hub.broadcast_text(body)
-            except Exception as e:  # noqa: BLE001
-                print(f"[{_now()}] WS 广播失败: {e}")
-        return WATCH_META_FILE, False
-
-    _last_snapshot_digest = digest
-    _last_watch_snapshot = snapshot
-    body = json.dumps(snapshot, ensure_ascii=False)
-    _atomic_write_text(WATCH_META_FILE, body, encoding="utf-8")
-    hub = _ws_hub
-    if hub is not None:
-        try:
-            hub.broadcast_text(body)
-        except Exception as e:  # noqa: BLE001
-            print(f"[{_now()}] WS 广播失败: {e}")
-    return WATCH_META_FILE, True
+    if published:
+        _atomic_write_text(
+            WATCH_META_FILE,
+            json.dumps(to_send, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    return WATCH_META_FILE, published
 
 
 def _seed_boot_watch_snapshot() -> None:
@@ -2613,10 +2686,19 @@ def _fill_row_signal_times(
 ) -> None:
     """写入 信号时间（时分秒）供盯盘卡片/策略表展示。"""
     st = sticky.get(code) if isinstance(sticky.get(code), dict) else {}
-    buy_full = (st or {}).get("buy_hit_ts") or (buy_time if hit_buy else None)
-    stop_full = (st or {}).get("stop_hit_ts")
+    # 已入槽后本轮未必再算触买：买时分秒仍用粘滞 / 入槽 buy_time
+    buy_full = (
+        (st or {}).get("buy_hit_ts")
+        or buy_time
+        or row.get("信号时刻")
+        or row.get("_path_buy_ts")
+    )
+    stop_full = (st or {}).get("stop_hit_ts") or row.get("_path_ts")
     if not stop_full and realized:
-        stop_full = realized.get("time") or realized.get("first_hit_ts")
+        stop_full = (
+            realized.get("first_hit_ts")
+            or realized.get("time")
+        )
     buy_hms = _signal_hms(buy_full)
     stop_hms = _signal_hms(stop_full)
     if buy_hms:
@@ -3034,8 +3116,13 @@ def apply_paper_slot_buy(
     price: float,
     qty: int,
     note: str = "槽位触买(自动)",
+    buy_time: str | None = None,
 ) -> dict[str, Any]:
-    """纸面自动入仓：写 qty/成本/buy_time；扣减 account_cash（若有）。"""
+    """纸面自动入仓：写 qty/成本/buy_time；扣减 account_cash（若有）。
+
+    buy_time 用触发时刻（1m 触达或 5s 行情 last_ts），不是进程扫到的现在。
+    成交价=买点触发价；滑点在策略成本里，不另加。
+    """
     price = float(price)
     qty = int(qty)
     if qty <= 0 or price <= 0:
@@ -3050,7 +3137,12 @@ def apply_paper_slot_buy(
     pos["today_cost"] = round(price, 4)
     pos["peak_high"] = round(price, 4)
     pos["available"] = 0
-    pos["buy_time"] = _now()
+    raw_ts = str(buy_time or "").strip()
+    if raw_ts.startswith("9999"):
+        raw_ts = ""
+    hit_ts = _bar_ts_str(raw_ts) if raw_ts else None
+    hit_ts = hit_ts or _now()
+    pos["buy_time"] = hit_ts
     pos["tp_stage"] = 0
     pos["last_tp_ts"] = None
     pos["note"] = note
@@ -3071,7 +3163,7 @@ def apply_paper_slot_buy(
     save_holdings(data)
     append_trade(
         {
-            "time": _now(),
+            "time": hit_ts,
             "side": "buy",
             "code": code,
             "name": meta["name"],
@@ -3299,7 +3391,8 @@ def _apply_portfolio_slots(
             for rank, dist, code, r in candidates
             if _row_hit_buy(r)
         ]
-        hit_queue.sort(key=lambda x: (x[0], x[1], x[2]))
+        # 先按触发时刻（1m/5s），再距买点；成交价仍是买点
+        hit_queue.sort(key=lambda x: (_row_trigger_ts(x[3], side="buy"), x[1], x[2]))
         budget = _slot_notional_budget(account_total, rows, occupied)
         for rank, dist, code, r in hit_queue:
             data = load_holdings()
@@ -3351,6 +3444,7 @@ def _apply_portfolio_slots(
                     price=price,
                     qty=qty,
                     note="槽位触买(自动·预留空槽)",
+                    buy_time=_row_trigger_ts(r, side="buy"),
                 )
             except Exception as e:  # noqa: BLE001
                 print(f"[{_now()}] 槽位自动买入失败 {code}: {e}")
@@ -3449,6 +3543,29 @@ def _signal_hms(full: Any) -> str | None:
     return clock or None
 
 
+def _row_trigger_ts(row: dict[str, Any], *, side: str = "buy") -> str:
+    """入槽/平仓排序用的触发时刻。5s 行情或 1m 触达，缺则排最后。"""
+    sess = str(row.get("交易日") or "")[:10]
+    if side == "sell":
+        keys = ("信号时刻", "卖信号时间", "_path_ts")
+    else:
+        keys = ("信号时刻", "买信号时间", "_path_buy_ts")
+    for k in keys:
+        v = row.get(k)
+        if v is None or v == "":
+            continue
+        s = str(v).strip()
+        if not s:
+            continue
+        if " " not in s and sess and len(s) >= 8 and s[2:3] == ":":
+            return f"{sess} {s[:8]}"
+        parsed = _bar_ts_str(s)
+        if parsed:
+            return parsed
+        return s
+    return "9999-99-99 99:99:99"
+
+
 def _keep_first_signal_ts(prev: dict[str, Any], st: dict[str, Any]) -> None:
     for key in ("buy_hit_ts", "stop_hit_ts"):
         old = prev.get(key)
@@ -3531,7 +3648,8 @@ def apply_exit_fill(
         "day_pnl": None if day_pnl is None else round(float(day_pnl), 2),
         "day_pnl_pct": None if day_pnl_pct is None else round(float(day_pnl_pct), 2),
         "reason": reason,
-        "time": _now(),
+        "time": _bar_ts_str(first_hit_ts) or _now(),
+        "first_hit_ts": _bar_ts_str(first_hit_ts),
         "action_kind": str(action_kind or ""),
     }
     realized[code] = rec
@@ -3894,9 +4012,10 @@ def paper_exit_decision(
     path_stop_kind: str = "",
     signal_ok: bool = True,
 ) -> dict[str, Any]:
-    """纸面止损唯一口径：开盘保护 / 1m 路径 / 现价破当前卖价。
+    """纸面止损唯一口径：开盘保护 / 1m 路径 / 5s 现价破卖价。
 
-    展示 hit_show 与结算 hit 同源。T+1、锁仓、跌停封单只展示不平。
+    展示 hit_show 与结算 hit 同源。成交价=触发点（买点/卖点；开盘已破保护则开盘）。
+    滑点在策略成本里，不在触发价上另加。T+1、锁仓、跌停封单只展示不平。
     不用「全日最低 vs 盘中抬高后的止损」。
     """
     empty = {
@@ -4196,6 +4315,7 @@ def settle_due_paper_stops(
         code = _code_key(str(r.get("代码") or ""))
         if code:
             by_code[code] = r
+    due: list[tuple[str, str, dict[str, Any], dict[str, Any], dict[str, Any], int]] = []
     for code, pos in list(positions.items()):
         if not isinstance(pos, dict):
             continue
@@ -4214,6 +4334,13 @@ def settle_due_paper_stops(
             stop = float(row.get("止损") or 0)
         except (TypeError, ValueError):
             continue
+        try:
+            path_px = float(row.get("_path_fill_px") or 0)
+        except (TypeError, ValueError):
+            path_px = 0.0
+        path_hit = bool(row.get("_path_hit")) or (
+            str(row.get("已触止损") or "") == "是" and path_px > 0
+        )
         dec = paper_exit_decision(
             qty=qty,
             sellable=sellable,
@@ -4225,12 +4352,23 @@ def settle_due_paper_stops(
             cost=pos.get("cost") if pos.get("cost") is not None else row.get("成本"),
             peak_high=pos.get("peak_high"),
             working_stop=stop,
-            path_hit=False,
-            path_fill_px=0.0,
+            path_hit=path_hit,
+            path_fill_px=path_px,
+            path_action_kind=str(row.get("_path_action_kind") or ""),
+            path_stop_kind=str(row.get("_path_stop_kind") or ""),
             signal_ok=True,
         )
         if not dec.get("hit") or float(dec.get("fill_px") or 0) <= 0:
             continue
+        ts_key = _row_trigger_ts(row, side="sell")
+        due.append((ts_key, _code_key(code), pos, row, dec, sellable))
+    due.sort(key=lambda x: (x[0], x[1]))
+    for ts_key, code, pos, row, dec, sellable in due:
+        try:
+            open_px = float(row.get("开盘") or 0)
+        except (TypeError, ValueError):
+            open_px = 0.0
+        first_ts = ts_key if not str(ts_key).startswith("9999") else None
         apply_stop_fill(
             code=code,
             meta={
@@ -4248,6 +4386,7 @@ def settle_due_paper_stops(
             px_digits=int(row.get("价位小数") or 2),
             action_kind=str(dec.get("action_kind") or "full"),
             stop_kind=str(dec.get("stop_kind") or ""),
+            first_hit_ts=first_ts or _bar_ts_str(row.get("_path_ts")),
         )
         row["持仓"] = 0
         row["可用"] = 0
@@ -4634,6 +4773,8 @@ def collect_rows(
             since_exclusive = False
             path_action_kind = ""
             path_touch_ts = None
+            path_touch_stop = 0.0
+            hit_path_settle = False
             tp_stage_early = 0
             try:
                 tp_stage_early = max(0, int(pos_early.get("tp_stage") or 0))
@@ -5133,7 +5274,7 @@ def collect_rows(
                     stop_fill_px = float(_exit_dec["fill_px"])
                 if _exit_dec.get("action_kind"):
                     path_action_kind = str(_exit_dec["action_kind"])
-            # 已触止损且可卖 → 仅连续竞价结算（只卖券商可卖数量）
+            # 已触止损且可卖 → 本票先平（卡片走已实现分支）；漏平由 settle_due 按 5s/1m 补
             if qty > 0 and hit_stop_settle and sellable > 0 and not stop_locked:
                 apply_stop_fill(
                     code=code,
@@ -5148,7 +5289,8 @@ def collect_rows(
                     px_digits=px_digits,
                     action_kind=path_action_kind,
                     stop_kind=str(lv.get("stop_kind") or ""),
-                    first_hit_ts=_bar_ts_str(path_touch_ts),
+                    first_hit_ts=_bar_ts_str(path_touch_ts)
+                    or _bar_ts_str(q.get("last_ts")),
                 )
                 stopped_this_scan = True
                 holdings = load_holdings()
@@ -5653,6 +5795,18 @@ def collect_rows(
                     ts=path_buy_ts or (buy_time if qty > 0 else None),
                     quote=q,
                 )
+            elif (
+                qty > 0
+                and buy_time
+                and str(buy_time).startswith(str(q["session"])[:10])
+            ):
+                _stamp_buy_touched(
+                    sticky,
+                    code,
+                    session=str(q["session"]),
+                    ts=buy_time,
+                    quote=q,
+                )
             entry_for_overlay = bool(allow_entry and preview_ok and signal_ok)
             if not (_paper_hold and hit_stop_show):
                 sig = _overlay_buy_signal_on_hold(
@@ -5821,6 +5975,18 @@ def collect_rows(
                 buy_time=buy_time,
                 realized=realized if isinstance(realized, dict) else None,
             )
+            row["_path_hit"] = bool(hit_path_settle)
+            try:
+                row["_path_fill_px"] = float(path_touch_stop or 0)
+            except (TypeError, ValueError, NameError):
+                row["_path_fill_px"] = 0.0
+            row["_path_ts"] = _bar_ts_str(path_touch_ts) if path_touch_ts else None
+            row["_path_buy_ts"] = _bar_ts_str(path_buy_ts) if path_buy_ts else None
+            row["_path_action_kind"] = str(path_action_kind or "")
+            try:
+                row["_path_stop_kind"] = str(lv.get("stop_kind") or "")
+            except (TypeError, NameError):
+                row["_path_stop_kind"] = ""
             if (
                 realized
                 and str(realized.get("session") or "") == q["session"]
@@ -5918,7 +6084,8 @@ def collect_rows(
             rows, session=session_today, signal_ok=bool(signal_ok_global)
         )
         if n_due:
-            print(f"[{_now()}] 扫仓补平 {n_due} 只（开盘保护/现价破卖价）")
+            stopped_this_scan = True
+            print(f"[{_now()}] 扫仓补平 {n_due} 只（5s触发/1m路径/开盘保护，按时刻先后）")
             holdings = load_holdings()
             positions = holdings.get("positions", {})
             realized_map = holdings.get("realized_today", {})
@@ -7756,7 +7923,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 _HOLDINGS_CACHE.clear()
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 远程持仓拉取失败（继续用本机账本）: {e}")
-    global _ws_hub
+    global _ws_hub, _watch_feed
     interval = max(2, int(args.interval))
     host = str(args.host)
     port = int(args.port)
@@ -7806,6 +7973,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         sinas,
         on_log=lambda m: print(f"[{_now()}] {m}"),
     )
+    _watch_feed = feed
 
     def get_quote(sina: str) -> dict[str, Any]:
         q = feed.get_quote(sina)
@@ -7832,6 +8000,24 @@ def cmd_watch(args: argparse.Namespace) -> None:
         with refresh_lock:
             reseed_live()
             return _refresh_open_prices(interval, get_quote=get_quote)
+
+    def clock_heartbeat_loop() -> None:
+        while not stop.is_set():
+            if stop.wait(2.0):
+                break
+            try:
+                _heartbeat_watch_clock()
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 时钟心跳失败: {e}")
+
+    def sectors_live_loop() -> None:
+        while not stop.is_set():
+            try:
+                publish_sectors_live_patch()
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 板块实时刷新失败: {e}")
+            if stop.wait(5.0):
+                break
 
     def loop() -> None:
         last = 0.0
@@ -7883,6 +8069,12 @@ def cmd_watch(args: argparse.Namespace) -> None:
     worker = threading.Thread(target=loop, name="holdings-watch", daemon=True)
     milestone_worker = threading.Thread(
         target=auction_milestone_loop, name="holdings-auction-milestones", daemon=True
+    )
+    heartbeat_worker = threading.Thread(
+        target=clock_heartbeat_loop, name="holdings-clock-heartbeat", daemon=True
+    )
+    sectors_worker = threading.Thread(
+        target=sectors_live_loop, name="holdings-sectors-live", daemon=True
     )
 
     class _Handler(SimpleHTTPRequestHandler):
@@ -7987,7 +8179,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 self._send_json(_get_factors_api_cache())
                 return
             if path in ("/api/snapshot", f"/{WATCH_META_FILE.name}"):
-                snap = _last_watch_snapshot
+                with _WATCH_SNAP_LOCK:
+                    snap = _last_watch_snapshot
                 if snap is None and WATCH_META_FILE.is_file():
                     try:
                         snap = json.loads(
@@ -8027,7 +8220,10 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 self.wfile.flush()
             except Exception:  # noqa: BLE001
                 pass
-            snap = _last_watch_snapshot
+            snap = None
+            with _WATCH_SNAP_LOCK:
+                if _last_watch_snapshot is not None:
+                    snap = _last_watch_snapshot
             if snap is not None:
                 try:
                     self.connection.sendall(
@@ -8044,6 +8240,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     except OSError as e:
         feed.stop()
         _ws_hub = None
+        _watch_feed = None
         _release_watch_lock()
         raise SystemExit(
             f"端口 {host}:{port} 无法绑定（可能已有盯盘在跑）。\n"
@@ -8053,6 +8250,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
         target=server.serve_forever, name="watch-http", daemon=True
     )
     http_thread.start()
+    heartbeat_worker.start()
+    sectors_worker.start()
     url = _watch_browser_url(
         host=host,
         api_port=port,
@@ -8146,6 +8345,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     print(
         "行情: 东财 SSE + 新浪批量；因子26 实仓 1m path-dependent 止损 · "
         f"刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · "
+        "时钟心跳 2s · 板块实时 5s · "
         f"快照日志每 {_WATCH_SNAPSHOT_LOG_EVERY} 次 · Ctrl+C 停止"
     )
     print(
@@ -8191,6 +8391,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         stop.set()
         feed.stop()
         _ws_hub = None
+        _watch_feed = None
         _stop_watch_ui_dev(ui_dev_proc)
         try:
             server.shutdown()

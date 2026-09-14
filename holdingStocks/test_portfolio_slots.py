@@ -47,6 +47,15 @@ def test_today_slot_buy_ranks_first_touch_wins():
     assert ranks == {"002093": 0, "002104": 1, "002015": 2}
 
 
+def test_row_trigger_ts_orders_slot_queue():
+    from index import _row_trigger_ts
+
+    a = {"交易日": "2026-09-14", "信号时刻": "2026-09-14 09:31:02"}
+    b = {"交易日": "2026-09-14", "买信号时间": "09:40:17"}
+    c = {"交易日": "2026-09-14"}
+    assert _row_trigger_ts(a) < _row_trigger_ts(b) < _row_trigger_ts(c)
+
+
 def test_sellable_overnight_available_zero_unlocks():
     from watch_config import sellable_qty, unlock_overnight_available
 
@@ -466,6 +475,22 @@ def test_fill_row_signal_times_hms():
     _fill_row_signal_times(row, sticky, "600330", hit_buy=True)
     assert row["信号时间"] == "09:48:03"
     assert row["买信号时间"] == "09:48:03"
+
+
+def test_fill_row_signal_times_uses_buy_time_after_slot():
+    """已入槽后本轮未必再算触买，仍用 buy_time 出时分秒。"""
+    from index import _fill_row_signal_times
+
+    row: dict = {"已触买": "是", "持仓": 3200}
+    _fill_row_signal_times(
+        row,
+        {},
+        "600330",
+        hit_buy=False,
+        buy_time="2026-09-14 10:08:53",
+    )
+    assert row["信号时间"] == "10:08:53"
+    assert row["买信号时间"] == "10:08:53"
 
 
 def test_restore_session_buy_hit_ignores_1m_pullback():

@@ -2,7 +2,7 @@
 import type { SectorMember, SectorRotationPayload } from '~/types/sectors'
 
 const { fetchRotation, fetchConceptMembers } = useSectorsApi()
-const { mergedKind, liveAt, memberStatsAt, refreshSec } = useSectorsLive()
+const { mergedKind, liveAt, memberStatsAt, refreshSec, setFocus } = useSectorsLive()
 const router = useRouter()
 const store = useWatchStore()
 
@@ -21,9 +21,30 @@ const membersCache = new Map<string, { members: SectorMember[]; source: string; 
 
 const topN = computed(() => payload.value?.top_n || 10)
 const baseKind = computed(() => payload.value?.kinds?.概念 || null)
-const kindData = computed(() =>
-  mergedKind(baseKind.value, topN.value, payload.value?.metrics),
-)
+const kindData = computed(() => {
+  void store.snapshot?.ts
+  void store.snapshot?.sectors?.spotAt
+  return mergedKind(baseKind.value, topN.value, payload.value?.metrics)
+})
+
+function memberQuote(code: string | undefined) {
+  const raw = String(code || '').trim()
+  if (!raw) return null
+  const quotes = store.snapshot?.sectors?.quotes || {}
+  return quotes[raw] || quotes[raw.padStart(6, '0')] || null
+}
+
+const liveMembers = computed(() => {
+  return members.value.map((m) => {
+    const q = memberQuote(m.代码)
+    if (!q) return m
+    return {
+      ...m,
+      现价: q.price ?? m.现价,
+      涨跌幅: q.chgPct ?? m.涨跌幅,
+    }
+  })
+})
 
 const liveError = computed(() => store.snapshot?.sectors?.error || '')
 const heatmapEmpty = computed(() => {
@@ -97,6 +118,7 @@ async function load(refresh = false) {
 
 function onSelect(name: string) {
   selected.value = name
+  void setFocus(name)
   void loadMembers(name)
 }
 
@@ -117,6 +139,7 @@ function clearSelected() {
   membersSource.value = ''
   membersCount.value = 0
   heatmapRef.value?.clearSelection?.()
+  void setFocus(null)
 }
 
 function fmtChg(v: number | null | undefined) {
@@ -126,6 +149,9 @@ function fmtChg(v: number | null | undefined) {
 }
 
 onMounted(() => load())
+onBeforeUnmount(() => {
+  void setFocus(null)
+})
 </script>
 
 <template>
@@ -134,7 +160,7 @@ onMounted(() => load())
       <div>
         <h1 class="text-xl font-bold">板块轮动</h1>
         <p class="mt-1 text-sm text-ui-text-2">
-          {{ payload?.source || '通达信概念' }} · 今日列随盯盘 {{ refreshSec }}s 推送刷新；点击格子看成分股，再点一次进波段龙头
+          {{ payload?.source || '通达信概念' }} · 今日列随 WebSocket 自动刷新，不必点重载；点格子看成分股（现价同样跟推送）
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -214,7 +240,7 @@ onMounted(() => load())
             </thead>
             <tbody>
               <tr
-                v-for="m in members"
+                v-for="m in liveMembers"
                 :key="m.代码"
                 class="border-t border-ui-hairline"
               >
