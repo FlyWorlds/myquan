@@ -2002,8 +2002,8 @@ def _apply_trigger_date_fields(
             if realized_px is not None and float(realized_px) > 0
             else (float(stop_lv) if stop_lv is not None else None)
         )
-        if code and sell_mem_px is not None and (qty > 0 or sold_today):
-            # 实仓结算才写入卖出记忆；纸面仅展示
+        if code and sell_mem_px is not None and sold_today:
+            # 只在三槽真实卖出后写卖出记忆；持仓未平时禁止记 last_sell
             remember_factor_trigger(code, side="sell", px=sell_mem_px, session=session)
         if qty > 0 and code and buy_px is not None:
             remember_factor_trigger(
@@ -2482,10 +2482,10 @@ def _merge_path_buy_hit(
     open_px: float,
     entry_pct: float,
     tick: float,
-) -> tuple[bool, float | None]:
+) -> tuple[bool, float | None, Any]:
     """有分钟线走路径；日线最高已触开盘买点时，1m 不全或回退也不把已触买打成未触。"""
     if bars_buy is None or getattr(bars_buy, "empty", True):
-        return bool(hit_open), None
+        return bool(hit_open), None, None
     buy_path = path_dependent_buy_hit(
         bars_buy,
         open_px=float(open_px),
@@ -2500,7 +2500,8 @@ def _merge_path_buy_hit(
             px = float(buy_path["buy_px"])
         except (TypeError, ValueError):
             px = None
-    return bool(hit_open or hit), px
+    ts = buy_path.get("touch_ts") if hit else None
+    return bool(hit_open or hit), px, ts
 
 
 def _sticky_put(
@@ -2516,6 +2517,7 @@ def _sticky_put(
     st = dict(prev)
     st.update(payload)
     st["session"] = str(session)
+    _keep_first_signal_ts(prev, st)
     if bool(prev.get("buy_touched")) or bool(st.get("buy_touched")):
         st["buy_touched"] = True
     if bool(prev.get("stop_touched")) or bool(st.get("stop_touched")):
@@ -2537,7 +2539,10 @@ def _sticky_drop_sell_keep_buy(
         and bool(prev.get("buy_touched"))
         and str(prev.get("session") or "") == str(session)
     ):
-        sticky[code] = {"session": str(session), "buy_touched": True}
+        kept: dict[str, Any] = {"session": str(session), "buy_touched": True}
+        if prev.get("buy_hit_ts"):
+            kept["buy_hit_ts"] = prev.get("buy_hit_ts")
+        sticky[code] = kept
         return
     sticky.pop(code, None)
 
@@ -2566,9 +2571,70 @@ def _stamp_buy_touched(
     code: str,
     *,
     session: str,
+    ts: Any = None,
+    quote: dict[str, Any] | None = None,
 ) -> None:
-    """当日已触买粘滞，对标 stop_touched。"""
-    _sticky_put(sticky, code, session, {"buy_touched": True})
+    """当日已触买粘滞；第一次记下时分秒。"""
+    prev = sticky.get(code) if isinstance(sticky.get(code), dict) else {}
+    payload: dict[str, Any] = {"buy_touched": True}
+    if not (isinstance(prev, dict) and prev.get("buy_hit_ts")):
+        payload["buy_hit_ts"] = _signal_ts_text(ts, quote=quote)
+    _sticky_put(sticky, code, session, payload)
+
+
+def _stamp_stop_touched(
+    sticky: dict[str, Any],
+    code: str,
+    *,
+    session: str,
+    ts: Any = None,
+    quote: dict[str, Any] | None = None,
+    touch_stop: float | None = None,
+) -> None:
+    """当日已触止损粘滞；第一次记下时分秒。"""
+    prev = sticky.get(code) if isinstance(sticky.get(code), dict) else {}
+    payload: dict[str, Any] = {"stop_touched": True}
+    if touch_stop:
+        payload["touch_stop"] = float(touch_stop)
+    if not (isinstance(prev, dict) and prev.get("stop_hit_ts")):
+        payload["stop_hit_ts"] = _signal_ts_text(ts, quote=quote)
+    _sticky_put(sticky, code, session, payload)
+
+
+def _fill_row_signal_times(
+    row: dict[str, Any],
+    sticky: dict[str, Any],
+    code: str,
+    *,
+    hit_buy: bool = False,
+    hit_stop: bool = False,
+    buy_time: Any = None,
+    realized: dict[str, Any] | None = None,
+) -> None:
+    """写入 信号时间（时分秒）供盯盘卡片/策略表展示。"""
+    st = sticky.get(code) if isinstance(sticky.get(code), dict) else {}
+    buy_full = (st or {}).get("buy_hit_ts") or (buy_time if hit_buy else None)
+    stop_full = (st or {}).get("stop_hit_ts")
+    if not stop_full and realized:
+        stop_full = realized.get("time") or realized.get("first_hit_ts")
+    buy_hms = _signal_hms(buy_full)
+    stop_hms = _signal_hms(stop_full)
+    if buy_hms:
+        row["买信号时间"] = buy_hms
+    if stop_hms:
+        row["卖信号时间"] = stop_hms
+    if hit_stop and stop_hms:
+        row["信号时间"] = stop_hms
+        row["信号时刻"] = str(stop_full)
+    elif (hit_buy or str(row.get("已触买") or "") == "是") and buy_hms:
+        row["信号时间"] = buy_hms
+        row["信号时刻"] = str(buy_full)
+    elif stop_hms:
+        row["信号时间"] = stop_hms
+        row["信号时刻"] = str(stop_full)
+    elif buy_hms:
+        row["信号时间"] = buy_hms
+        row["信号时刻"] = str(buy_full)
 
 
 def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
@@ -2724,8 +2790,27 @@ def _overlay_buy_signal_on_hold(
     return sig
 
 
+def _freeze_closed_exit_levels(row: dict[str, Any]) -> None:
+    """已平仓：卖出侧/止损冻结为成交价，不用盘中抬高后的工作止损。"""
+    if row.get("error"):
+        return
+    if not (
+        _is_stop_closed_status(str(row.get("持仓状态") or "")) or bool(row.get("已实现"))
+    ):
+        return
+    fill = _as_money(row.get("成交价"))
+    if fill is None:
+        return
+    pdg = int(row.get("价位小数") or 2)
+    px = round(float(fill), pdg)
+    row["止损"] = px
+    row["基础止损"] = px
+    row["卖出侧价"] = px
+
+
 def _enrich_side_price_fields(row: dict[str, Any]) -> None:
     """写入买入侧/卖出侧展示价，并在说明中标注两侧挂单价。"""
+    _freeze_closed_exit_levels(row)
     if row.get("error") or not row.get("阈值就绪"):
         return
     pdg = int(row.get("价位小数") or 2)
@@ -3336,6 +3421,41 @@ def _bar_ts_str(ts: Any) -> str | None:
         return s or None
 
 
+def _signal_ts_text(ts: Any = None, *, quote: dict[str, Any] | None = None) -> str:
+    """触发时刻：优先 1m/传入 ts，否则行情 last_ts，再否则现在。含时分秒。"""
+    s = _bar_ts_str(ts) if ts is not None else None
+    if s:
+        return s
+    if quote:
+        last_ts = str(quote.get("last_ts") or quote.get("time") or "").strip()
+        parsed = _bar_ts_str(last_ts) if last_ts else None
+        if parsed:
+            return parsed
+        if last_ts:
+            return last_ts
+    return _now()
+
+
+def _signal_hms(full: Any) -> str | None:
+    """YYYY-MM-DD HH:MM:SS → HH:MM:SS。"""
+    if full is None:
+        return None
+    s = str(full).strip()
+    if not s:
+        return None
+    clock = s.split()[-1] if " " in s else s
+    if len(clock) >= 8 and clock[2:3] == ":":
+        return clock[:8]
+    return clock or None
+
+
+def _keep_first_signal_ts(prev: dict[str, Any], st: dict[str, Any]) -> None:
+    for key in ("buy_hit_ts", "stop_hit_ts"):
+        old = prev.get(key)
+        if old:
+            st[key] = old
+
+
 def apply_exit_fill(
     *,
     code: str,
@@ -3737,7 +3857,7 @@ def overnight_stop_should_fill(
     stop: float,
     sticky_touched: bool = False,
 ) -> bool:
-    """全持仓同一套：非 T+1 时现价或当日最低打到止损 → 应平仓。"""
+    """现价打到当前卖价才平。全日最低不与抬高后的止损比较（避免早盘低点假触）。"""
     try:
         stop_px = float(stop or 0)
     except (TypeError, ValueError):
@@ -3748,15 +3868,392 @@ def overnight_stop_should_fill(
         last_px = float(last or 0)
     except (TypeError, ValueError):
         last_px = 0.0
-    try:
-        low_px = float(low or 0)
-    except (TypeError, ValueError):
-        low_px = 0.0
     if last_px > 0 and last_px <= stop_px + 1e-12:
         return True
-    if low_px > 0 and low_px <= stop_px + 1e-12:
+    if bool(sticky_touched) and last_px > 0 and last_px <= stop_px * 1.003 + 1e-12:
         return True
-    return bool(sticky_touched)
+    return False
+
+
+def paper_exit_decision(
+    *,
+    qty: int,
+    sellable: int,
+    t1_today: bool,
+    hold_locked: bool = False,
+    stop_locked: bool = False,
+    last: float = 0.0,
+    open_px: float = 0.0,
+    prev_close: float | None = None,
+    cost: float | None = None,
+    peak_high: float | None = None,
+    working_stop: float = 0.0,
+    path_hit: bool = False,
+    path_fill_px: float = 0.0,
+    path_action_kind: str = "",
+    path_stop_kind: str = "",
+    signal_ok: bool = True,
+) -> dict[str, Any]:
+    """纸面止损唯一口径：开盘保护 / 1m 路径 / 现价破当前卖价。
+
+    展示 hit_show 与结算 hit 同源。T+1、锁仓、跌停封单只展示不平。
+    不用「全日最低 vs 盘中抬高后的止损」。
+    """
+    empty = {
+        "hit": False,
+        "hit_show": False,
+        "fill_px": 0.0,
+        "kind": "",
+        "action_kind": "",
+        "stop_kind": "",
+        "reason": "",
+    }
+    try:
+        qty_i = int(qty or 0)
+        sell_i = int(sellable or 0)
+    except (TypeError, ValueError):
+        return empty
+    if qty_i <= 0:
+        return empty
+
+    try:
+        last_px = float(last or 0)
+    except (TypeError, ValueError):
+        last_px = 0.0
+    try:
+        open_f = float(open_px or 0)
+    except (TypeError, ValueError):
+        open_f = 0.0
+    try:
+        stop_f = float(working_stop or 0)
+    except (TypeError, ValueError):
+        stop_f = 0.0
+    try:
+        cost_f = float(cost or 0)
+    except (TypeError, ValueError):
+        cost_f = 0.0
+    try:
+        path_px = float(path_fill_px or 0)
+    except (TypeError, ValueError):
+        path_px = 0.0
+
+    protect = 0.0
+    if cost_f > 0:
+        protect = float(
+            overnight_open_protect_px(cost_f, prev_close, peak_high=peak_high) or 0
+        )
+    open_hit = bool(open_f > 0 and protect > 0 and open_f <= protect + 1e-12)
+    last_hit = bool(stop_f > 0 and last_px > 0 and last_px <= stop_f + 1e-12)
+    path_ok = bool(path_hit and path_px > 0)
+    hit_show = bool(open_hit or last_hit or path_ok)
+    if not hit_show:
+        return empty
+
+    out = dict(empty)
+    out["hit_show"] = True
+    if t1_today:
+        out["reason"] = "t1"
+        return out
+    if hold_locked:
+        out["reason"] = "hold_lock"
+        return out
+    if stop_locked:
+        out["reason"] = "limit_down"
+        return out
+    if sell_i <= 0:
+        out["reason"] = "not_sellable"
+        return out
+    if not signal_ok:
+        out["reason"] = "wait_auction"
+        return out
+
+    if open_hit:
+        out.update(
+            {
+                "hit": True,
+                "fill_px": open_f,
+                "kind": "open_protect",
+                "action_kind": "full",
+                "reason": "open_protect",
+            }
+        )
+        return out
+    if path_ok:
+        half = is_half_stop_kind(path_stop_kind, path_action_kind)
+        out.update(
+            {
+                "hit": True,
+                "fill_px": path_px,
+                "kind": "path",
+                "action_kind": "half" if half else (path_action_kind or "full"),
+                "stop_kind": str(path_stop_kind or ""),
+                "reason": "path",
+            }
+        )
+        return out
+    out.update(
+        {
+            "hit": True,
+            "fill_px": stop_f,
+            "kind": "last",
+            "action_kind": "full",
+            "reason": "last",
+        }
+    )
+    return out
+
+
+def correct_realized_open_protect_fill(
+    *,
+    code: str,
+    session: str,
+    open_px: float,
+    prev_close: float | None,
+    cost: float | None,
+    peak_high: float | None,
+    px_digits: int,
+) -> dict[str, Any] | None:
+    """已记账卖出若本应按开盘保护成交、却写成了抬高后的止损，纠回开盘价。
+
+    不改 qty。现金按价差轧差。远东今开=24.10 已是开盘保护，不会动。
+    """
+    data = load_holdings()
+    _purge_stale_realized(data, session)
+    rec = (data.get("realized_today") or {}).get(code)
+    if not isinstance(rec, dict):
+        return None
+    if str(rec.get("session") or "") != str(session)[:10]:
+        return None
+    if rec.get("full_exit") is not True:
+        return None
+    try:
+        old_px = float(rec.get("price") or 0)
+        qty = int(rec.get("qty") or 0)
+        cost_f = float(cost if cost is not None else rec.get("cost") or 0)
+        open_f = float(open_px or 0)
+    except (TypeError, ValueError):
+        return None
+    if old_px <= 0 or qty <= 0 or cost_f <= 0 or open_f <= 0:
+        return None
+    dec = paper_exit_decision(
+        qty=qty,
+        sellable=qty,
+        t1_today=False,
+        last=old_px,
+        open_px=open_f,
+        prev_close=prev_close,
+        cost=cost_f,
+        peak_high=peak_high,
+        working_stop=old_px,
+        path_hit=False,
+        signal_ok=True,
+    )
+    if str(dec.get("kind") or "") != "open_protect":
+        return None
+    try:
+        new_px = round(float(dec.get("fill_px") or 0), int(px_digits or 2))
+    except (TypeError, ValueError):
+        return None
+    if new_px <= 0 or abs(new_px - old_px) <= 5e-3:
+        return rec
+    pnl, pnl_pct = mark_unrealized(new_px, cost_f, qty)
+    bought_today = False
+    day_pnl, day_pnl_pct, day_base = session_day_pnl(
+        mark=new_px,
+        qty=qty,
+        cost=cost_f,
+        prev_close=prev_close,
+        bought_today=bought_today,
+        fallback=open_f,
+    )
+    rec["price"] = new_px
+    rec["pnl"] = None if pnl is None else round(float(pnl), 2)
+    rec["pnl_pct"] = None if pnl_pct is None else round(float(pnl_pct), 2)
+    rec["day_base"] = None if day_base is None else round(float(day_base), 2)
+    rec["day_pnl"] = None if day_pnl is None else round(float(day_pnl), 2)
+    rec["day_pnl_pct"] = None if day_pnl_pct is None else round(float(day_pnl_pct), 2)
+    rec["note_fix"] = "开盘保护纠价"
+    pos = (data.get("positions") or {}).get(code)
+    if isinstance(pos, dict):
+        pos["note"] = f"止损成交@{new_px} ({session})"
+    cash = _account_cash(data)
+    if cash is not None:
+        data["account_cash"] = round(cash + (new_px - old_px) * qty, 2)
+    traces = data.get("closed_today")
+    if isinstance(traces, dict) and isinstance(traces.get(code), dict):
+        traces[code]["price"] = new_px
+        traces[code]["day_pnl"] = rec.get("day_pnl")
+        traces[code]["day_pnl_pct"] = rec.get("day_pnl_pct")
+    mem = data.setdefault("factor_memory", {})
+    mem_rec = mem.setdefault(code, {})
+    if isinstance(mem_rec, dict):
+        mem_rec["last_sell_factor_px"] = new_px
+        mem_rec["last_sell_factor_date"] = str(session)[:10]
+    sticky = data.get("alert_sticky")
+    if isinstance(sticky, dict) and isinstance(sticky.get(code), dict):
+        sticky[code]["touch_stop"] = new_px
+    save_holdings(data)
+    meta_name = str((pos or {}).get("name") or rec.get("name") or code)
+    append_trade(
+        {
+            "time": _now(),
+            "side": "sell",
+            "code": code,
+            "name": meta_name,
+            "price": new_px,
+            "qty": qty,
+            "after_qty": 0,
+            "cost": round(cost_f, 4),
+            "pnl": rec.get("pnl"),
+            "note": f"开盘保护纠价 {old_px}->{new_px}（原按抬高止损记账）",
+        }
+    )
+    return rec
+
+
+def _reconcile_realized_open_protects(
+    rows: list[dict[str, Any]],
+    *,
+    session: str,
+) -> int:
+    """已平仓票按开盘保护对账；错价当场改账本并回写当前行。"""
+    if not session:
+        return 0
+    data = load_holdings()
+    positions = data.get("positions") or {}
+    realized_map = data.get("realized_today") or {}
+    by_code: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        code = _code_key(str(r.get("代码") or ""))
+        if code:
+            by_code[code] = r
+    n = 0
+    for code, rec in list(realized_map.items()):
+        if not isinstance(rec, dict):
+            continue
+        ck = _code_key(code)
+        row = by_code.get(ck)
+        if not row or row.get("error"):
+            continue
+        pos = positions.get(ck) if isinstance(positions.get(ck), dict) else {}
+        try:
+            open_px = float(row.get("开盘") or 0)
+        except (TypeError, ValueError):
+            continue
+        cost = rec.get("cost")
+        if cost is None:
+            cost = row.get("成本")
+        old_px = rec.get("price")
+        fixed = correct_realized_open_protect_fill(
+            code=ck,
+            session=session,
+            open_px=open_px,
+            prev_close=row.get("昨收"),
+            cost=float(cost) if cost is not None else None,
+            peak_high=(pos or {}).get("peak_high"),
+            px_digits=int(row.get("价位小数") or 2),
+        )
+        if not isinstance(fixed, dict):
+            continue
+        try:
+            new_px = float(fixed.get("price") or 0)
+            old_f = float(old_px or 0)
+        except (TypeError, ValueError):
+            continue
+        if new_px <= 0:
+            continue
+        if abs(new_px - old_f) > 5e-3:
+            n += 1
+        row["成交价"] = new_px
+        if fixed.get("day_pnl") is not None:
+            row["当日盈亏"] = fixed.get("day_pnl")
+        if fixed.get("day_pnl_pct") is not None:
+            row["当日盈亏%"] = fixed.get("day_pnl_pct")
+        if fixed.get("pnl") is not None:
+            row["浮盈"] = fixed.get("pnl")
+        if fixed.get("pnl_pct") is not None:
+            row["浮盈%"] = fixed.get("pnl_pct")
+        _freeze_closed_exit_levels(row)
+    return n
+
+
+def settle_due_paper_stops(
+    rows: list[dict[str, Any]],
+    *,
+    session: str,
+    signal_ok: bool,
+) -> int:
+    """扫全部实仓：决策要平就平。不依赖单票分支有没有走到 apply_stop_fill。"""
+    n = 0
+    if session:
+        n += _reconcile_realized_open_protects(rows, session=session)
+    if not signal_ok or not session:
+        return n
+    data = load_holdings()
+    positions = data.get("positions") or {}
+    by_code: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        code = _code_key(str(r.get("代码") or ""))
+        if code:
+            by_code[code] = r
+    for code, pos in list(positions.items()):
+        if not isinstance(pos, dict):
+            continue
+        qty = int(pos.get("qty") or 0)
+        if qty <= 0:
+            continue
+        row = by_code.get(_code_key(code))
+        if not row or row.get("error"):
+            continue
+        t0 = False
+        t1_today = bool(pos.get("buy_time") and is_t1_buy_day(pos.get("buy_time"), session))
+        sellable = _sellable_qty(pos, qty, pos.get("buy_time"), session, t0=t0)
+        try:
+            last = float(row.get("现价") or 0)
+            open_px = float(row.get("开盘") or 0)
+            stop = float(row.get("止损") or 0)
+        except (TypeError, ValueError):
+            continue
+        dec = paper_exit_decision(
+            qty=qty,
+            sellable=sellable,
+            t1_today=t1_today,
+            hold_locked=bool(pos.get("hold_lock")),
+            last=last,
+            open_px=open_px,
+            prev_close=row.get("昨收"),
+            cost=pos.get("cost") if pos.get("cost") is not None else row.get("成本"),
+            peak_high=pos.get("peak_high"),
+            working_stop=stop,
+            path_hit=False,
+            path_fill_px=0.0,
+            signal_ok=True,
+        )
+        if not dec.get("hit") or float(dec.get("fill_px") or 0) <= 0:
+            continue
+        apply_stop_fill(
+            code=code,
+            meta={
+                "code": code,
+                "name": str(row.get("名称") or pos.get("name") or code),
+                "market": str(row.get("市场") or pos.get("market") or ""),
+            },
+            stop_px=float(dec["fill_px"]),
+            qty=sellable,
+            cost=float(pos["cost"]) if pos.get("cost") is not None else None,
+            session=session,
+            buy_time=pos.get("buy_time"),
+            prev_close=row.get("昨收"),
+            open_px=open_px,
+            px_digits=int(row.get("价位小数") or 2),
+            action_kind=str(dec.get("action_kind") or "full"),
+            stop_kind=str(dec.get("stop_kind") or ""),
+        )
+        row["持仓"] = 0
+        row["可用"] = 0
+        row["当日禁买"] = True
+        n += 1
+    return n
 
 
 def append_trade(record: dict[str, Any]) -> None:
@@ -4237,6 +4734,7 @@ def collect_rows(
             hit_open = q["high"] + 1e-12 >= open_buy
             hit_buy_raw = hit_open
             path_buy_px = None
+            path_buy_ts = None
             if (
                 str(FACTOR_ID).lower() in ("factor26", "f26", "26")
                 and threshold_ok
@@ -4247,7 +4745,7 @@ def collect_rows(
                 if not isinstance(bars_buy, pd.DataFrame) or bars_buy.empty:
                     bars_buy = _today_1m_bars(str(w["sina"]), str(q["session"]))
                     q["_day_bars"] = bars_buy
-                hit_buy_raw, path_buy_px = _merge_path_buy_hit(
+                hit_buy_raw, path_buy_px, path_buy_ts = _merge_path_buy_hit(
                     hit_open,
                     bars_buy,
                     open_px=float(q["open"]),
@@ -4487,6 +4985,15 @@ def collect_rows(
                 hit_path_settle and preview_ok and signal_ok and (not hold_locked)
             )
             hit_stop = hit_stop_settle  # 下文结算 / 纸面逻辑用结算口径
+            if hit_stop_show:
+                _stamp_stop_touched(
+                    sticky,
+                    code,
+                    session=str(q["session"]),
+                    ts=path_touch_ts,
+                    quote=q,
+                    touch_stop=float(path_touch_stop or _stop_chk or 0) or None,
+                )
             if hit_stop_show and qty_early > 0:
                 _sticky_put(
                     sticky,
@@ -4598,30 +5105,34 @@ def collect_rows(
                 stop_base_px = float(lv["stop"])
             # 盯盘按人工/云条件单的触发价记录，不对买卖触发价额外加滑点。
             stop_fill_px = stop_base_px
-            # 全持仓同一套：非 T+1、可卖、打到止损（现价/最低/粘滞）→ 按止损价平
-            if (
-                qty > 0
-                and sellable > 0
-                and (not t1_today)
-                and (not hold_locked)
-                and (not stop_locked)
-                and preview_ok
-                and signal_ok
-                and overnight_stop_should_fill(
-                    last=_last_chk,
-                    low=float(q.get("low") or 0),
-                    stop=_stop_chk,
-                    sticky_touched=bool(
-                        _st_prev
-                        and str(_st_prev.get("session") or "") == str(q["session"])
-                        and bool(_st_prev.get("stop_touched"))
-                    ),
-                )
-            ):
-                hit_stop_settle = True
+            # 纸面止损唯一口径：开盘保护 / 1m 路径 / 现价破卖价（不用全日最低撞抬高止损）
+            _exit_dec = paper_exit_decision(
+                qty=qty,
+                sellable=sellable,
+                t1_today=t1_today,
+                hold_locked=hold_locked,
+                stop_locked=stop_locked,
+                last=_last_chk,
+                open_px=float(q.get("open") or 0),
+                prev_close=q.get("prev_close"),
+                cost=cost,
+                peak_high=pos.get("peak_high") or seed_h,
+                working_stop=float(_stop_chk or stop_fill_px or 0),
+                path_hit=bool(hit_path_settle),
+                path_fill_px=float(path_touch_stop or stop_fill_px or 0),
+                path_action_kind=path_action_kind,
+                path_stop_kind=str(lv.get("stop_kind") or ""),
+                signal_ok=bool(preview_ok and signal_ok),
+            )
+            if _exit_dec.get("hit_show"):
                 hit_stop_show = True
+            if _exit_dec.get("hit"):
+                hit_stop_settle = True
                 hit_stop = True
-                stop_fill_px = float(_stop_chk or stop_fill_px or 0)
+                if float(_exit_dec.get("fill_px") or 0) > 0:
+                    stop_fill_px = float(_exit_dec["fill_px"])
+                if _exit_dec.get("action_kind"):
+                    path_action_kind = str(_exit_dec["action_kind"])
             # 已触止损且可卖 → 仅连续竞价结算（只卖券商可卖数量）
             if qty > 0 and hit_stop_settle and sellable > 0 and not stop_locked:
                 apply_stop_fill(
@@ -4805,8 +5316,10 @@ def collect_rows(
                         "池来源": pool_label or None,
                         "pool_src": pool_src or None,
                         "买点": buy_show,
-                        "止损": lv["stop"],
-                        "基础止损": lv_base["stop"],
+                        "止损": round(fill_px, px_digits) if not rebuy_hit else lv["stop"],
+                        "基础止损": (
+                            round(fill_px, px_digits) if not rebuy_hit else lv_base["stop"]
+                        ),
                         "因子4": f4_tag,
                         "牛市": ("是" if bull else "否") if USE_FACTOR4 else "-",
                         "已触买": "是" if rebuy_hit else "否",
@@ -4887,6 +5400,15 @@ def collect_rows(
                     row0["当日禁买"] = False
                     if _is_stop_closed_status(row0.get("持仓状态")):
                         row0["挂单说明"] = note + "；可再买·待触买点"
+                _fill_row_signal_times(
+                    row0,
+                    sticky,
+                    code,
+                    hit_buy=bool(rebuy_hit or str(row0.get("已触买") or "") == "是"),
+                    hit_stop=True,
+                    buy_time=None,
+                    realized=realized if isinstance(realized, dict) else None,
+                )
                 _attach_strategy_pnl_fields(
                     row0,
                     w=w,
@@ -5123,8 +5645,14 @@ def collect_rows(
                 sticky[code]["stop_touched"] = True
                 if path_touch_stop > 0:
                     sticky[code]["touch_stop"] = float(path_touch_stop)
-            if hit_buy and qty <= 0 and preview_ok:
-                _stamp_buy_touched(sticky, code, session=str(q["session"]))
+            if hit_buy and preview_ok:
+                _stamp_buy_touched(
+                    sticky,
+                    code,
+                    session=str(q["session"]),
+                    ts=path_buy_ts or (buy_time if qty > 0 else None),
+                    quote=q,
+                )
             entry_for_overlay = bool(allow_entry and preview_ok and signal_ok)
             if not (_paper_hold and hit_stop_show):
                 sig = _overlay_buy_signal_on_hold(
@@ -5284,6 +5812,15 @@ def collect_rows(
                 code=code,
                 allow_entry=allow_entry,
             )
+            _fill_row_signal_times(
+                row,
+                sticky,
+                code,
+                hit_buy=bool(hit_buy or str(row.get("已触买") or "") == "是"),
+                hit_stop=bool(hit_stop_show),
+                buy_time=buy_time,
+                realized=realized if isinstance(realized, dict) else None,
+            )
             if (
                 realized
                 and str(realized.get("session") or "") == q["session"]
@@ -5377,6 +5914,14 @@ def collect_rows(
             )
 
     if session_today:
+        n_due = settle_due_paper_stops(
+            rows, session=session_today, signal_ok=bool(signal_ok_global)
+        )
+        if n_due:
+            print(f"[{_now()}] 扫仓补平 {n_due} 只（开盘保护/现价破卖价）")
+            holdings = load_holdings()
+            positions = holdings.get("positions", {})
+            realized_map = holdings.get("realized_today", {})
         data = load_holdings()
         before = dict(data.get("realized_today") or {})
         _purge_stale_realized(data, session_today)
@@ -5669,13 +6214,14 @@ def _last_open_lots_from_trades(*, text: str | None = None) -> dict[str, dict[st
 def _closed_open_protect_px(
     cost: float | None,
     prev_close: float | None,
+    peak_high: float | None = None,
 ) -> float:
     """开盘时刻保护价：委托因子26 overnight_open_protect_px。"""
     try:
         cost_f = float(cost or 0)
     except (TypeError, ValueError):
         return 0.0
-    return overnight_open_protect_px(cost_f, prev_close)
+    return overnight_open_protect_px(cost_f, prev_close, peak_high=peak_high)
 
 
 def _peek_cached_today_1m(sina: str, session: str) -> pd.DataFrame | None:
@@ -5742,7 +6288,7 @@ def _closed_mark_px(
     cost: float | None = None,
     bars: pd.DataFrame | None = None,
 ) -> float | None:
-    """已平仓价：优先 1m 触达；低开破开盘时刻保护价用开盘。禁止用收盘后抬高的止损去撞今开。"""
+    """已平仓价：与 paper_exit_decision 同序——开盘保护优先，再 1m 触达。"""
     cost_f = cost if cost is not None else _as_money(row.get("成本"))
     try:
         cost_n = float(cost_f) if cost_f else 0.0
@@ -5750,12 +6296,15 @@ def _closed_mark_px(
         cost_n = 0.0
     open_px = _as_money(row.get("开盘"))
     prev = _as_money(row.get("昨收"))
+    peak = _as_money(row.get("峰值")) or _as_money(row.get("peak_high"))
+    open_prot = (
+        _closed_open_protect_px(cost_n, prev, peak_high=peak) if cost_n > 0 else 0.0
+    )
+    if open_px is not None and open_prot > 0 and open_px <= open_prot + 1e-12:
+        return open_px
     path_fill = _closed_path_fill(row, cost=cost_n, bars=bars) if cost_n > 0 else None
     if path_fill is not None:
         return path_fill
-    open_prot = _closed_open_protect_px(cost_n, prev) if cost_n > 0 else 0.0
-    if open_px is not None and open_prot > 0 and open_px <= open_prot + 1e-12:
-        return open_px
     stop = _as_money(row.get("止损"))
     low = _as_money(row.get("最低"))
     hit = str(row.get("已触止损") or "") == "是"
@@ -5825,6 +6374,7 @@ def _enrich_closed_day_pnl(
         if row.get("当日盈亏") is not None:
             if row.get("成本") is None and cost_f is not None:
                 row["成本"] = cost_f
+            _freeze_closed_exit_levels(row)
             _remember_slot_closed(row)
             return
         qty_slot = 0
@@ -5854,6 +6404,7 @@ def _enrich_closed_day_pnl(
     row["成交价"] = fill
     if path_fill is not None:
         row["止损"] = fill
+    _freeze_closed_exit_levels(row)
     prev = _as_money(row.get("昨收"))
     open_px = _as_money(row.get("开盘"))
     lot_day = str(lot.get("time") or "")[:10]

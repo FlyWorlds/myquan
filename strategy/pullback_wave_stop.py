@@ -140,6 +140,7 @@ def overnight_open_protect_px(
     cost_px: float,
     prev_close: float | None,
     *,
+    peak_high: float | None = None,
     hard_pct: float = DEFAULT_PULLBACK_PCT,
     giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
     t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
@@ -148,13 +149,18 @@ def overnight_open_protect_px(
     """开盘时刻保护价（策略统一）：硬保护 / T1 昨高回落 / 隔夜中段回落一半。
 
     不含盘中抬高后的展示止损，避免用收盘后卖价去撞今开。
+    昨收已过 3% 时，峰值取 max(昨收, 隔夜 peak_high)，避免中天这类「昨收刚过 3%、今开低于回落一半」漏平。
     """
     cost = float(cost_px or 0)
     if cost <= 0:
         return 0.0
     hard = cost_hard_stop_px(cost, hard_pct=hard_pct, tick=tick)
     prev = float(prev_close or 0)
-    peak = max(x for x in (cost, prev) if x > 0)
+    try:
+        peak_in = float(peak_high or 0)
+    except (TypeError, ValueError):
+        peak_in = 0.0
+    peak = max(x for x in (cost, prev, peak_in) if x > 0)
     if prev > 0 and pnl_exceeds(prev, cost, giveback_arm_pct):
         half = half_gain_stop_price(peak, cost, hard_pct=hard_pct, tick=tick)
         return max(x for x in (hard, half) if x and x > 0)

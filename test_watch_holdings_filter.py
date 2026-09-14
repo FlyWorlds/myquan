@@ -185,6 +185,52 @@ class TestTiantongAlertOnHoldings(unittest.TestCase):
         self.assertFalse(row.get("当日禁买"))
         self.assertNotEqual(row.get("持仓状态"), "已平仓")
 
+    def test_paper_hold_and_replay_stop_sync_to_holdings(self) -> None:
+        from watch_snapshot import filter_portfolio_holdings
+
+        rows = [
+            {
+                "代码": "600234",
+                "名称": "科新发展",
+                "持仓": 0,
+                "持仓状态": "策略持有",
+                "预警": "持有",
+                "过门OK": True,
+                "策略回放持有": True,
+            },
+            {
+                "代码": "603042",
+                "名称": "华脉科技",
+                "持仓": 0,
+                "持仓状态": "已平仓",
+                "预警": "策略回放·今日已止损",
+                "已触止损": "是",
+                "过门OK": False,
+            },
+            {
+                "代码": "000008",
+                "名称": "空仓无信号",
+                "持仓": 0,
+                "持仓状态": "空仓",
+                "预警": "空仓",
+                "过门OK": True,
+            },
+        ]
+        out = filter_portfolio_holdings(
+            rows,
+            phase="continuous",
+            strategy_codes={"600234", "603042", "000008"},
+        )
+        codes = [str(r["代码"]) for r in out]
+        self.assertIn("600234", codes)
+        self.assertIn("603042", codes)
+        self.assertNotIn("000008", codes)
+        paper = next(r for r in out if r["代码"] == "600234")
+        self.assertEqual(paper.get("盈亏说明"), "策略持有·未登记仓")
+        replay = next(r for r in out if r["代码"] == "603042")
+        self.assertTrue(replay.get("当日预警"))
+        self.assertNotEqual(replay.get("槽位留痕"), True)
+
 
 class TestWatchHeal(unittest.TestCase):
     def test_quotes_ready_requires_position_px(self) -> None:

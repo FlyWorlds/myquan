@@ -74,6 +74,10 @@ export interface HoldingRow {
   已触买?: string
   近买点?: boolean
   近止损?: boolean
+  信号时间?: string | null
+  信号时刻?: string | null
+  买信号时间?: string | null
+  卖信号时间?: string | null
   已触发因子侧?: string
   已触发因子价?: number | null
   未触发因子侧?: string

@@ -1,3 +1,11 @@
+export function fmtSignalClock(v?: string | null): string {
+  if (v == null) return ''
+  const s = String(v).trim()
+  if (!s) return ''
+  const clock = s.includes(' ') ? s.split(' ').pop() || s : s
+  return clock.slice(0, 8)
+}
+
 export function fmtNum(v?: number | null, digits = 2): string {
   if (v == null) return '-'
   return v.toFixed(digits)

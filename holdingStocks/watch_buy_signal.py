@@ -200,6 +200,46 @@ def annotate_unfilled_buy_signals(
     return n_hit, 0
 
 
+def is_paper_strategy_hold(row: dict[str, Any]) -> bool:
+    """策略 Tab「策略持有」：日线回放仍持有、未入三槽。"""
+    if int(row.get("持仓") or 0) > 0:
+        return False
+    if bool(row.get("已实现")) or bool(row.get("三槽平仓")):
+        return False
+    return str(row.get("持仓状态") or "") == "策略持有" or bool(row.get("策略回放持有"))
+
+
+def is_replay_stop_signal(row: dict[str, Any]) -> bool:
+    """策略 Tab 回放已止损（未入三槽）。进持仓预警栏，不进已平仓留痕。"""
+    if int(row.get("持仓") or 0) > 0:
+        return False
+    if bool(row.get("已实现")) or bool(row.get("三槽平仓")):
+        return False
+    try:
+        if int(row.get("卖出数量") or 0) > 0:
+            return False
+    except (TypeError, ValueError):
+        pass
+    alert = alert_text(row)
+    pos = str(row.get("持仓状态") or "")
+    if alert.startswith("策略回放"):
+        return True
+    return pos in ("已平仓", "已止损", "已触止损平仓") and str(row.get("已触止损") or "") == "是"
+
+
+def is_holdings_tab_signal_row(row: dict[str, Any]) -> bool:
+    """持仓「预警/其它」与默认策略 Tab 图例对齐（空仓信号，不含三槽实仓/留痕）。"""
+    if row.get("error"):
+        return False
+    if int(row.get("持仓") or 0) > 0:
+        return False
+    if bool(row.get("已实现")) or bool(row.get("三槽平仓")):
+        return False
+    if is_paper_strategy_hold(row) or is_replay_stop_signal(row):
+        return True
+    return is_today_alert_row(row)
+
+
 def is_today_alert_row(row: dict[str, Any]) -> bool:
     """持仓 Tab「当日预警」行（空仓信号，不含实仓；未过门不算）。"""
     if row.get("error"):
@@ -255,6 +295,9 @@ __all__ = [
     "is_buy_side_alert",
     "is_buy_signal_active",
     "is_filled_into_slot",
+    "is_holdings_tab_signal_row",
+    "is_paper_strategy_hold",
+    "is_replay_stop_signal",
     "is_today_alert_row",
     "is_weak_price_buy_alert",
     "price_touched_open_buy",

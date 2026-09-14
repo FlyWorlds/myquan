@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
-import { fmtNum, fmtSignedPct, stockLabel } from '~/utils/format'
+import { fmtNum, fmtSignedPct, fmtSignalClock, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual, collectLegendIds } from '~/composables/useSignalVisual'
 
@@ -240,6 +240,7 @@ function tradeIncomePct(r: HoldingRow): number | null {
                 <div v-if="Number(r.持仓) > 0 && String(r.已触买 || '') === '是'" class="mt-1 text-[10px] font-semibold text-up">今日触买</div>
                 <div v-if="r.槽位候选" class="mt-1 text-[10px] text-accent">槽位候选</div>
                 <div v-if="r.因子触发" class="mt-1 text-[10px] text-ui-text-3">{{ r.因子触发 }}</div>
+                <div v-if="r.信号时间" class="mt-0.5 font-mono text-[11px] font-semibold tabular-nums text-accent">{{ fmtSignalClock(r.信号时间) }}</div>
               </td>
               <td class="sensitive px-3 py-2.5 tabular-nums">
                 <span v-if="r['距买点%'] != null && Number(r['距买点%']) < 9000">

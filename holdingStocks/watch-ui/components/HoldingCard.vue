@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
-import { fmtNum, fmtSignedPct } from '~/utils/format'
+import { fmtNum, fmtSignedPct, fmtSignalClock } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 
@@ -117,6 +117,9 @@ const cardClass = computed(() => {
         </div>
         <span :class="visual.badgeClass" :title="visual.badgeText">{{ visual.badgeText }}</span>
       </header>
+      <p v-if="row.信号时间" class="mb-2 font-mono text-xs font-semibold tabular-nums text-accent">
+        触发 {{ fmtSignalClock(row.信号时间) }}
+      </p>
       <p v-if="row.当日预警 && !(row.持仓)" class="mb-2 text-xs text-accent">当日预警 · 未登记持仓</p>
       <p v-if="row.error" class="text-sm text-up">{{ row.error }}</p>
       <div v-else class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
@@ -133,6 +136,10 @@ const cardClass = computed(() => {
         <div v-else><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
         <div v-if="slotTrace"><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
         <div><span class="text-ui-text-2">因子触发</span> <b>{{ row.因子触发 || '-' }}</b></div>
+        <div v-if="row.信号时间">
+          <span class="text-ui-text-2">触发时刻</span>
+          <b class="ml-1 font-mono tabular-nums">{{ fmtSignalClock(row.信号时间) }}</b>
+        </div>
         <div v-if="row.阈值就绪" class="col-span-2 grid grid-cols-2 gap-x-3 text-sm">
           <div>
             <span class="text-ui-text-2">买入侧</span>

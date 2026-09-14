@@ -47,7 +47,9 @@ def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
 
 from watch_buy_signal import (
     is_buy_hit as _is_buy_hit,
-    is_today_alert_row as _is_today_alert_row,
+    is_holdings_tab_signal_row as _is_holdings_tab_signal_row,
+    is_paper_strategy_hold as _is_paper_strategy_hold,
+    is_replay_stop_signal as _is_replay_stop_signal,
 )
 
 
@@ -124,7 +126,7 @@ def filter_portfolio_holdings(
             and qty <= 0
             and (not closed_trace)
             and c in strategy_codes
-            and _is_today_alert_row(r)
+            and _is_holdings_tab_signal_row(r)
         )
         if qty <= 0 and not closed_trace and not alert_only:
             continue
@@ -157,7 +159,12 @@ def filter_portfolio_holdings(
             out["浮盈"] = None
             out["浮盈%"] = None
             out["盈亏状态"] = None
-            out["盈亏说明"] = "当日预警·未登记持仓"
+            if _is_paper_strategy_hold(r):
+                out["盈亏说明"] = "策略持有·未登记仓"
+            elif _is_replay_stop_signal(r):
+                out["盈亏说明"] = "策略回放止损·未入三槽"
+            else:
+                out["盈亏说明"] = "当日预警·未登记持仓"
             out["市值"] = None
             out["成本额"] = None
             out["仓位%"] = None

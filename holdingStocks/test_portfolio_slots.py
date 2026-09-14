@@ -410,17 +410,18 @@ def test_empty_1m_keeps_daily_high_buy_hit():
     import pandas as pd
     from index import _merge_path_buy_hit
 
-    hit, px = _merge_path_buy_hit(True, None, open_px=10.0, entry_pct=0.025, tick=0.01)
+    hit, px, ts = _merge_path_buy_hit(True, None, open_px=10.0, entry_pct=0.025, tick=0.01)
     assert hit is True
     assert px is None
+    assert ts is None
     empty = pd.DataFrame(columns=["ts", "high", "low"])
-    hit2, _ = _merge_path_buy_hit(True, empty, open_px=10.0, entry_pct=0.025, tick=0.01)
+    hit2, _, _ = _merge_path_buy_hit(True, empty, open_px=10.0, entry_pct=0.025, tick=0.01)
     assert hit2 is True
-    miss, _ = _merge_path_buy_hit(False, None, open_px=10.0, entry_pct=0.025, tick=0.01)
+    miss, _, _ = _merge_path_buy_hit(False, None, open_px=10.0, entry_pct=0.025, tick=0.01)
     assert miss is False
     # 1m 未走过买点时，仍保留日线最高已触（预警当天不摘）
     miss_1m = pd.DataFrame({"ts": [1, 2], "high": [10.1, 10.05], "low": [10.0, 10.0]})
-    keep, _ = _merge_path_buy_hit(
+    keep, _, _ = _merge_path_buy_hit(
         True, miss_1m, open_px=10.0, entry_pct=0.025, tick=0.01
     )
     assert keep is True
@@ -430,13 +431,41 @@ def test_stamp_buy_touched_sticky():
     from index import _stamp_buy_touched
 
     sticky: dict = {}
-    _stamp_buy_touched(sticky, "600552", session="2026-09-11")
+    _stamp_buy_touched(
+        sticky,
+        "600552",
+        session="2026-09-11",
+        ts="2026-09-11 09:41:07",
+    )
     assert sticky["600552"]["buy_touched"] is True
     assert sticky["600552"]["session"] == "2026-09-11"
+    assert sticky["600552"]["buy_hit_ts"].endswith("09:41:07")
     sticky["600552"]["stop_touched"] = True
-    _stamp_buy_touched(sticky, "600552", session="2026-09-11")
+    _stamp_buy_touched(
+        sticky,
+        "600552",
+        session="2026-09-11",
+        ts="2026-09-11 10:00:00",
+    )
     assert sticky["600552"]["stop_touched"] is True
     assert sticky["600552"]["buy_touched"] is True
+    assert sticky["600552"]["buy_hit_ts"].endswith("09:41:07")
+
+
+def test_fill_row_signal_times_hms():
+    from index import _fill_row_signal_times
+
+    sticky = {
+        "600330": {
+            "session": "2026-09-14",
+            "buy_touched": True,
+            "buy_hit_ts": "2026-09-14 09:48:03",
+        }
+    }
+    row: dict = {"已触买": "是"}
+    _fill_row_signal_times(row, sticky, "600330", hit_buy=True)
+    assert row["信号时间"] == "09:48:03"
+    assert row["买信号时间"] == "09:48:03"
 
 
 def test_restore_session_buy_hit_ignores_1m_pullback():
@@ -838,7 +867,7 @@ def test_closed_trace_first_detect_today_without_stamp():
 
 
 def test_filter_skips_paper_replay_closed():
-    """策略回放已平仓、从未入三槽：不进持仓 Tab 已平仓栏。"""
+    """策略回放已平仓、从未入三槽：进预警栏，不进已平仓留痕。"""
     from watch_snapshot import filter_portfolio_holdings
 
     rows = [
@@ -871,7 +900,10 @@ def test_filter_skips_paper_replay_closed():
     codes = [str(r["代码"]) for r in picked]
     assert "000070" in codes
     assert "601208" in codes
-    assert "000657" not in codes
+    assert "000657" in codes
+    replay = next(r for r in picked if r["代码"] == "000657")
+    assert replay.get("槽位留痕") is not True
+    assert replay.get("当日预警") is True
     assert next(r for r in picked if r["代码"] == "601208").get("槽位留痕") is True
 
 

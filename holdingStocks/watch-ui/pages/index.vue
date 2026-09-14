@@ -62,9 +62,24 @@ const closedHoldings = computed(() =>
   }),
 )
 
-const otherHoldings = computed(() => {
+function isPaperHoldRow(r: (typeof slotHoldings.value)[number]) {
+  return Number(r.持仓) <= 0 && String(r.持仓状态 || '') === '策略持有'
+}
+
+const paperHoldings = computed(() => {
   const taken = new Set(
     [...slotHoldings.value, ...closedHoldings.value].map((r) => String(r.代码 || '')),
+  )
+  return (snapshot.value?.holdings || []).filter(
+    (r) => !taken.has(String(r.代码 || '')) && isPaperHoldRow(r),
+  )
+})
+
+const otherHoldings = computed(() => {
+  const taken = new Set(
+    [...slotHoldings.value, ...closedHoldings.value, ...paperHoldings.value].map((r) =>
+      String(r.代码 || ''),
+    ),
   )
   return (snapshot.value?.holdings || []).filter(
     (r) => !taken.has(String(r.代码 || '')),
@@ -165,11 +180,27 @@ const closedCount = computed(() => closedHoldings.value.length)
             </div>
           </div>
           <div v-if="otherHoldings.length" class="space-y-2">
-            <h2 class="text-sm font-semibold text-ui-text-2">
-              {{ slotHoldings.length || closedHoldings.length ? '预警 / 其它' : '持仓列表' }}
-            </h2>
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="text-sm font-semibold text-ui-text-2">
+                {{ slotHoldings.length || closedHoldings.length || paperHoldings.length ? '预警' : '持仓列表' }}
+                <span class="ml-1 font-normal text-ui-text-3">{{ otherHoldings.length }}</span>
+              </h2>
+              <p class="text-xs text-ui-text-3">与策略十六图例同步：已触买 / 将买入 / 回放止损</p>
+            </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in otherHoldings" :key="'other-' + String(row.代码)" :row="row" />
+            </div>
+          </div>
+          <div v-if="paperHoldings.length" class="space-y-2">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="text-sm font-semibold text-ui-text-2">
+                策略持有
+                <span class="ml-1 font-normal text-ui-text-3">{{ paperHoldings.length }}</span>
+              </h2>
+              <p class="text-xs text-ui-text-3">日线回放仍持有、未入三槽 · 与策略十六「策略持有」同步</p>
+            </div>
+            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <HoldingCard v-for="row in paperHoldings" :key="'paper-' + String(row.代码)" :row="row" />
             </div>
           </div>
         </template>
