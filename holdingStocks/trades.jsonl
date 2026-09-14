@@ -1,0 +1,40 @@
+{"time": "2026-08-06 09:15:01", "side": "sell", "code": "600552", "name": "凯盛科技", "price": 15.37, "qty": 900, "after_qty": 0, "cost": 15.43, "pnl": -54.0, "note": "止损成交(自动)"}
+{"time": "2026-08-07 12:02:43", "side": "sell", "code": "600330", "name": "天通股份", "price": 21.1, "qty": 1000, "after_qty": 0, "cost": 17.28, "pnl": 3820.0, "note": "止损成交(自动)"}
+{"time": "2026-08-07 12:03:58", "side": "sell", "code": "600330", "name": "天通股份", "price": 21.1, "qty": 1000, "after_qty": 0, "cost": 17.28, "pnl": 3820.0, "note": "止损成交(自动)"}
+{"time": "2026-08-07 12:38:08", "side": "sell", "code": "600330", "name": "天通股份", "price": 21.1, "qty": 1000, "after_qty": 0, "cost": 17.28, "pnl": 3820.0, "note": "止损成交(自动)"}
+{"time": "2026-08-10 09:36:20", "side": "sell", "code": "600552", "name": "凯盛科技", "price": 17.75, "qty": 900, "after_qty": 0, "cost": 15.445, "pnl": 2074.5, "note": "止损成交(自动)"}
+{"time": "2026-08-13 14:47:15", "side": "sell", "code": "600552", "name": "凯盛科技", "price": 17.85, "qty": 800, "after_qty": 0, "cost": 18.02, "pnl": -136.0, "note": "止损成交(自动)"}
+{"time": "2026-09-01 09:34:07", "side": "sell", "code": "600330", "name": "天通股份", "price": 27.55, "qty": 300, "after_qty": 0, "cost": 29.054, "pnl": -451.2, "note": "止损成交(自动)"}
+{"time": "2026-09-01 09:35:21", "side": "sell", "code": "600552", "name": "凯盛科技", "price": 17.94, "qty": 500, "after_qty": 0, "cost": 18.112, "pnl": -86.0, "note": "止损成交(自动)"}
+{"time": "2026-09-02 10:05:14", "side": "sell", "code": "600338", "name": "西藏珠峰", "price": 13.44, "qty": 700, "after_qty": 0, "cost": 13.918, "pnl": -334.6, "note": "止损成交(自动)"}
+{"time": "2026-09-02 18:43:33", "side": "sell", "code": "002015", "name": "协鑫能科", "price": 16.98, "qty": 600, "after_qty": 0, "cost": 16.122, "pnl": 514.8, "note": "止损成交(自动)"}
+{"time": "2026-09-07 09:31:58", "side": "buy", "code": "600330", "name": "天通股份", "price": 28.2, "qty": 200, "after_qty": 200, "avg_cost": 28.2, "note": "槽位触买(自动·3成)"}
+{"time": "2026-09-07 09:32:36", "side": "buy", "code": "600353", "name": "旭光电子", "price": 32.86, "qty": 100, "after_qty": 100, "avg_cost": 32.86, "note": "槽位触买(自动·3成)"}
+{"time": "2026-09-07 14:01:26", "side": "sell", "code": "600552", "name": "凯盛科技", "price": 16.82, "qty": 1700, "after_qty": 0, "cost": null, "pnl": null, "note": "止损成交(自动)"}
+{"time": "2026-09-07 14:01:26", "side": "buy", "code": "002273", "name": "水晶光电", "price": 25.48, "qty": 1100, "after_qty": 1100, "avg_cost": 25.48, "note": "槽位触买(自动·3成)"}
+{"time": "2026-09-08 09:46:03", "side": "sell", "code": "600330", "name": "天通股份", "price": 29.6, "qty": 1000, "after_qty": 0, "cost": 28.2, "pnl": 1400.0, "note": "止损成交(自动)"}
+{"time": "2026-09-08 09:46:29", "side": "sell", "code": "600353", "name": "旭光电子", "price": 33.18, "qty": 900, "after_qty": 0, "cost": 32.86, "pnl": 288.0, "note": "止损成交(自动)"}
+{"time": "2026-09-08 09:46:57", "side": "sell", "code": "002273", "name": "水晶光电", "price": 25.63, "qty": 1100, "after_qty": 0, "cost": 25.48, "pnl": 165.0, "note": "止损成交(自动)"}
+{"time": "2026-09-08 09:47:34", "side": "buy", "code": "002093", "name": "国脉科技", "price": 7.19, "qty": 4100, "after_qty": 4100, "avg_cost": 7.19, "note": "槽位触买(自动·3成)"}
+{"time": "2026-09-08 09:47:34", "side": "buy", "code": "002104", "name": "恒宝股份", "price": 13.38, "qty": 2200, "after_qty": 2200, "avg_cost": 13.38, "note": "槽位触买(自动·3成)"}
+{"time": "2026-09-08 09:47:34", "side": "buy", "code": "002015", "name": "协鑫能科", "price": 17.03, "qty": 1700, "after_qty": 1700, "avg_cost": 17.03, "note": "槽位触买(自动·3成)"}
+{"time": "2026-09-08 10:58:56", "side": "sell", "code": "600330", "name": "天通股份", "price": 29.6, "qty": 1000, "after_qty": 0, "cost": 28.2, "pnl": 1400.0, "note": "止损成交(自动)"}
+{"time": "2026-09-08 11:02:00", "side": "buy", "code": "600330", "name": "天通股份", "price": 28.2, "qty": 1000, "after_qty": 1000, "avg_cost": 28.2, "note": "误剔仓恢复(快照高点种进止损·非实盘成交)"}
+{"time": "2026-09-08 11:04:53", "side": "sell", "code": "600330", "name": "天通股份", "price": 29.6, "qty": 1000, "after_qty": 0, "cost": 28.2, "pnl": 1400.0, "note": "止损成交(自动)"}
+{"time": "2026-09-08 11:07:00", "side": "sell", "code": "002093", "name": "国脉科技", "price": 7.19, "qty": 4100, "after_qty": 0, "cost": 7.19, "pnl": 0, "note": "撤纸面补仓(天通占槽·非实盘)"}
+{"time": "2026-09-08 11:07:00", "side": "sell", "code": "002104", "name": "恒宝股份", "price": 13.38, "qty": 2200, "after_qty": 0, "cost": 13.38, "pnl": 0, "note": "撤纸面补仓(天通占槽·非实盘)"}
+{"time": "2026-09-08 11:07:00", "side": "sell", "code": "002015", "name": "协鑫能科", "price": 17.03, "qty": 1700, "after_qty": 0, "cost": 17.03, "pnl": 0, "note": "撤纸面补仓(天通占槽·非实盘)"}
+{"time": "2026-09-08 11:07:00", "side": "buy", "code": "600330", "name": "天通股份", "price": 28.2, "qty": 1000, "after_qty": 1000, "avg_cost": 28.2, "note": "用户确认持有·占1槽·hold_lock"}
+{"time": "2026-09-08 11:11:57", "side": "buy", "code": "002093", "name": "国脉科技", "price": 7.19, "qty": 4100, "after_qty": 4100, "avg_cost": 7.19, "note": "槽位触买(自动·3成)"}
+{"time": "2026-09-08 11:11:57", "side": "buy", "code": "002104", "name": "恒宝股份", "price": 13.38, "qty": 2200, "after_qty": 2200, "avg_cost": 13.38, "note": "槽位触买(自动·3成)"}
+{"time": "2026-09-08 15:39:17", "side": "sell", "code": "600330", "name": "天通股份", "price": 30.08, "qty": 1000, "after_qty": 0, "avg_cost": 28.2, "realized_pnl": 1880.0, "note": "现价平仓结算"}
+{"time": "2026-09-08 15:39:17", "side": "sell", "code": "002104", "name": "恒宝股份", "price": 13.28, "qty": 2200, "after_qty": 0, "avg_cost": 13.38, "realized_pnl": -220.0, "note": "现价平仓结算"}
+{"time": "2026-09-08 15:39:17", "side": "sell", "code": "002093", "name": "国脉科技", "price": 7.69, "qty": 4100, "after_qty": 0, "avg_cost": 7.19, "realized_pnl": 2050.0, "note": "现价平仓结算"}
+{"time": "2026-09-09 15:02:17", "side": "buy", "code": "600353", "name": "旭光电子", "price": 32.96, "qty": 900, "after_qty": 900, "avg_cost": 32.96, "note": "槽位触买(自动·预留空槽)"}
+{"time": "2026-09-09 15:02:17", "side": "buy", "code": "600552", "name": "凯盛科技", "price": 17.28, "qty": 1700, "after_qty": 1700, "avg_cost": 17.28, "note": "槽位触买(自动·预留空槽)"}
+{"time": "2026-09-10 13:02:00", "side": "buy", "code": "000021", "name": "深科技", "price": 36.35, "qty": 800, "after_qty": 800, "avg_cost": 36.35, "note": "槽位触买(自动·预留空槽)"}
+{"time": "2026-09-10 13:42:30", "side": "buy", "code": "002636", "name": "金安国纪", "price": 70.21, "qty": 400, "after_qty": 400, "avg_cost": 70.21, "note": "槽位触买(自动·预留空槽)"}
+{"time": "2026-09-10 13:42:30", "side": "buy", "code": "601208", "name": "东材科技", "price": 47.67, "qty": 600, "after_qty": 600, "avg_cost": 47.67, "note": "槽位触买(自动·预留空槽)"}
+{"time": "2026-09-11 09:30:37", "side": "buy", "code": "600869", "name": "远东股份", "price": 23.78, "qty": 3700, "after_qty": 3700, "avg_cost": 23.78, "note": "槽位触买(自动·预留空槽)"}
+{"time": "2026-09-11 09:43:32", "side": "buy", "code": "000070", "name": "特发信息", "price": 16.29, "qty": 5500, "after_qty": 5500, "avg_cost": 16.29, "note": "槽位触买(自动·预留空槽)"}
+{"time": "2026-09-11 09:43:32", "side": "buy", "code": "600522", "name": "中天科技", "price": 33.48, "qty": 2600, "after_qty": 2600, "avg_cost": 33.48, "note": "槽位触买(自动·预留空槽)"}
