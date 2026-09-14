@@ -72,6 +72,8 @@ def _run(
         cwd=str(cwd),
         env=merged,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         check=check,
     )
@@ -104,7 +106,7 @@ def _show_file(repo: Path, spec: str, dest: Path) -> bool:
     if r.returncode != 0:
         return False
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(r.stdout, encoding="utf-8")
+    dest.write_text(r.stdout or "", encoding="utf-8")
     return True
 
 
