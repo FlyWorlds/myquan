@@ -164,6 +164,7 @@ from watch_config import (
     market_phase,
     market_phase_label,
     sellable_qty as _sellable_qty,
+    unlock_overnight_available,
     sina_of as _sina_of,
     watchlist_codes_label as _watchlist_codes_label,
     _clock_minutes,
@@ -1952,10 +1953,10 @@ def _apply_trigger_date_fields(
     # 实仓触止损但仍持有（含 T+1 暂不可卖）≠ 已平仓；仅已卖出/纸面触止损算「当日退出」
     hit_stop_while_held = bool(qty > 0 and hit_stop)
     paper_stopped = bool(replay.get("holding")) and qty <= 0 and hit_stop
-    stop_exit_today = bool(sold_today or paper_stopped)
-    # 三槽执行：当日止损/已记卖出（含纸面止损）→ 当日禁买该票（含因子22）
-    row["当日禁买"] = bool(stop_exit_today)
-    if paper_stopped and not sold_today:
+    # 仅三槽真实卖出禁买；回放止损不当当日禁买，否则天通等自选票触买进不了预警栏
+    stop_exit_today = bool(sold_today)
+    row["当日禁买"] = bool(sold_today)
+    if paper_stopped and not sold_today and not hit_buy:
         row["持仓状态"] = STATUS_STOP_CLOSED
         if str(row.get("预警") or "") in ("", "-", "空仓", "待买入", "策略持有"):
             row["预警"] = "策略回放·今日已止损"
@@ -2252,6 +2253,38 @@ def _ensure_account_open_session(
     save_holdings(data)
 
 
+def heal_watch_ledger(*, session: str | None = None) -> dict[str, Any]:
+    """每轮自愈：隔夜解锁、修复仅现金日初。不改 qty / 成本 / 买入时间。"""
+    data = load_holdings()
+    sess = normalize_signal_session(session or trading_session_date())
+    changed = unlock_overnight_available(data, sess)
+    existing = _account_total_open(data)
+    if _equity_is_cash_only(data, existing):
+        data["account_total_open"] = round(float(DEFAULT_ACCOUNT_TOTAL), 2)
+        if not data.get("account_total_open_session"):
+            data["account_total_open_session"] = sess
+        changed = True
+    if changed:
+        save_holdings(data)
+        data = load_holdings()
+    return data
+
+
+def _position_quotes_ready(rows: list[dict[str, Any]]) -> bool:
+    """实仓都有现价/市值才允许回写总资产、自动入槽。"""
+    pos = [
+        r
+        for r in rows
+        if int(r.get("持仓") or 0) > 0
+    ]
+    if not pos:
+        return True
+    return all(
+        (not r.get("error")) and r.get("市值") is not None and r.get("现价") is not None
+        for r in pos
+    )
+
+
 def _as_money(v: Any) -> float | None:
     if v is None or v == "":
         return None
@@ -2321,6 +2354,7 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
         # 新交易日：隔夜仓可卖=持仓（对齐券商 T+1 交收后）
         if not is_t1_buy_day(pos.get("buy_time"), sess):
             pos["available"] = int(pos.get("qty") or 0)
+    unlock_overnight_available(data, sess)
     save_holdings(data)
     _ensure_signal_day_caches(force=True)
     # 微信防抖：跨日/早盘重置，避免旧「已触止损」键挡住新信号
@@ -3696,6 +3730,35 @@ def resolve_stop_noted_hit(
     return out
 
 
+def overnight_stop_should_fill(
+    *,
+    last: float,
+    low: float,
+    stop: float,
+    sticky_touched: bool = False,
+) -> bool:
+    """全持仓同一套：非 T+1 时现价或当日最低打到止损 → 应平仓。"""
+    try:
+        stop_px = float(stop or 0)
+    except (TypeError, ValueError):
+        return False
+    if stop_px <= 0:
+        return False
+    try:
+        last_px = float(last or 0)
+    except (TypeError, ValueError):
+        last_px = 0.0
+    try:
+        low_px = float(low or 0)
+    except (TypeError, ValueError):
+        low_px = 0.0
+    if last_px > 0 and last_px <= stop_px + 1e-12:
+        return True
+    if low_px > 0 and low_px <= stop_px + 1e-12:
+        return True
+    return bool(sticky_touched)
+
+
 def append_trade(record: dict[str, Any]) -> None:
     with TRADES_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -3998,7 +4061,7 @@ def collect_rows(
     """
     _ensure_signal_day_caches(force=False)
     quote_fn = get_quote or fetch_today_quote
-    holdings = load_holdings()
+    holdings = heal_watch_ledger()
     positions = holdings.get("positions", {})
     realized_map = holdings.get("realized_today", {})
     sticky = _alert_sticky_map(holdings)
@@ -4535,6 +4598,30 @@ def collect_rows(
                 stop_base_px = float(lv["stop"])
             # 盯盘按人工/云条件单的触发价记录，不对买卖触发价额外加滑点。
             stop_fill_px = stop_base_px
+            # 全持仓同一套：非 T+1、可卖、打到止损（现价/最低/粘滞）→ 按止损价平
+            if (
+                qty > 0
+                and sellable > 0
+                and (not t1_today)
+                and (not hold_locked)
+                and (not stop_locked)
+                and preview_ok
+                and signal_ok
+                and overnight_stop_should_fill(
+                    last=_last_chk,
+                    low=float(q.get("low") or 0),
+                    stop=_stop_chk,
+                    sticky_touched=bool(
+                        _st_prev
+                        and str(_st_prev.get("session") or "") == str(q["session"])
+                        and bool(_st_prev.get("stop_touched"))
+                    ),
+                )
+            ):
+                hit_stop_settle = True
+                hit_stop_show = True
+                hit_stop = True
+                stop_fill_px = float(_stop_chk or stop_fill_px or 0)
             # 已触止损且可卖 → 仅连续竞价结算（只卖券商可卖数量）
             if qty > 0 and hit_stop_settle and sellable > 0 and not stop_locked:
                 apply_stop_fill(
@@ -5314,7 +5401,11 @@ def collect_rows(
         for r in rows
         if r.get("市值") is not None and int(r.get("持仓") or 0) > 0
     )
-    account_total = _sync_account_total(rows)
+    quotes_ok = _position_quotes_ready(rows)
+    if quotes_ok:
+        account_total = _sync_account_total(rows)
+    else:
+        account_total = _account_total(rows, load_holdings())
     pos_base = account_total if account_total and account_total > 0 else (
         total_mv if total_mv > 0 else None
     )
@@ -5329,13 +5420,21 @@ def collect_rows(
     # 因子2：按账户总资产同步（可选预警；与 dd_alert 同源）
     session_f2 = session_today or str(pd.Timestamp.now().date())
     data_f2 = load_holdings()
-    f2_status = sync_factor2(
-        data_f2,
-        equity=account_total,
-        session=str(session_f2),
-        strategy_id=STRATEGY_ID,
+    f2_raw = (
+        data_f2.get("factor2")
+        if isinstance(data_f2.get("factor2"), dict)
+        else {}
     )
-    save_holdings(data_f2)
+    if quotes_ok:
+        f2_status = sync_factor2(
+            data_f2,
+            equity=account_total,
+            session=str(session_f2),
+            strategy_id=STRATEGY_ID,
+        )
+        save_holdings(data_f2)
+    else:
+        f2_status = f2_raw
     for r in rows:
         r["因子2动作"] = f2_status.get("action")
         r["因子2"] = f2_status.get("label")
@@ -5344,19 +5443,23 @@ def collect_rows(
         r["因子2档位"] = f2_status.get("layers")
 
     # 尾盘空槽：持仓>隔夜上限时强制卖最弱可卖仓（纸面）
-    eod_sold = force_eod_reserve_slot(
-        rows, session=str(session_f2), now=pd.Timestamp.now()
-    )
-    if eod_sold:
-        stopped_this_scan = True
+    eod_sold: list[str] = []
+    if quotes_ok:
+        eod_sold = force_eod_reserve_slot(
+            rows, session=str(session_f2), now=pd.Timestamp.now()
+        )
+        if eod_sold:
+            stopped_this_scan = True
 
-    if stopped_this_scan or phase_now != "continuous":
+    if (not quotes_ok) or stopped_this_scan or phase_now != "continuous":
         slot_info = _slot_meta_from_holdings(load_holdings())
         slot_info["candidates"] = []
         slot_info["bought"] = []
         if eod_sold:
             slot_info["eodReserveSold"] = eod_sold
-        if stopped_this_scan:
+        if not quotes_ok:
+            slot_info["deferred"] = "quotes_not_ready"
+        elif stopped_this_scan:
             slot_info["deferred"] = "stop_same_scan"
     else:
         slot_info = _apply_portfolio_slots(

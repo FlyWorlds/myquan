@@ -115,6 +115,94 @@ class TestPreopenQuote(unittest.TestCase):
         )
 
 
+class TestTiantongAlertOnHoldings(unittest.TestCase):
+    def test_hit_buy_shows_in_holdings_alert(self) -> None:
+        from watch_buy_signal import is_today_alert_row
+        from watch_snapshot import filter_portfolio_holdings
+
+        row = {
+            "代码": "600330",
+            "名称": "天通股份",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "已触买",
+            "已触买": "是",
+            "过门OK": True,
+            "当日禁买": False,
+            "pool_src": "self",
+        }
+        self.assertTrue(is_today_alert_row(row))
+        out = filter_portfolio_holdings(
+            [row],
+            phase="continuous",
+            strategy_codes={"600330"},
+        )
+        self.assertIn("600330", [str(r["代码"]) for r in out])
+
+    def test_replay_stop_does_not_hide_hit_buy(self) -> None:
+        from watch_buy_signal import is_today_alert_row
+
+        row = {
+            "代码": "600330",
+            "持仓": 0,
+            "持仓状态": "已平仓",
+            "预警": "已触买",
+            "已触买": "是",
+            "过门OK": True,
+            "当日禁买": False,
+        }
+        self.assertTrue(is_today_alert_row(row))
+
+    def test_apply_trigger_replay_stop_not_ban_when_hit_buy(self) -> None:
+        from index import _apply_trigger_date_fields
+
+        row = {
+            "持仓状态": "待买入",
+            "预警": "已触买",
+            "已触买": "是",
+            "已触止损": "是",
+            "买点": 27.81,
+            "止损": 26.0,
+        }
+        sig = {
+            "hit_buy": True,
+            "hit_stop": True,
+            "因子触发": "已触发",
+            "持仓状态": "待买入",
+        }
+        _apply_trigger_date_fields(
+            row,
+            sig=sig,
+            session="2026-09-14",
+            last_px=29.61,
+            px_digits=2,
+            buy_time=None,
+            qty=0,
+            replay={"holding": True},
+            code="600330",
+            allow_entry=True,
+        )
+        self.assertFalse(row.get("当日禁买"))
+        self.assertNotEqual(row.get("持仓状态"), "已平仓")
+
+
+class TestWatchHeal(unittest.TestCase):
+    def test_quotes_ready_requires_position_px(self) -> None:
+        from index import _position_quotes_ready
+
+        self.assertTrue(_position_quotes_ready([{"持仓": 0}]))
+        self.assertFalse(
+            _position_quotes_ready(
+                [{"持仓": 5500, "error": "无实时行情", "市值": None, "现价": None}]
+            )
+        )
+        self.assertTrue(
+            _position_quotes_ready(
+                [{"持仓": 5500, "市值": 90000.0, "现价": 16.4}]
+            )
+        )
+
+
 class TestIndexAndAccount(unittest.TestCase):
     def test_index_code_match_strips_prefix(self) -> None:
         from index import _index_codes_match

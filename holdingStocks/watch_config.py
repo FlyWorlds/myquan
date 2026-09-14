@@ -791,8 +791,8 @@ def sellable_qty(
 
     - T+0：整仓可卖
     - 买入当日（T+1）：以 available 为准（通常 0）；未填则整仓不可卖
-    - 非买入日（隔夜仓）：available>0 取其与 qty 较小值；
-      available 为 0 视为不可卖（对齐券商）；未填 available 才回退整仓
+    - 非买入日（隔夜仓）：纸面 T+1 已过，可卖=持仓。
+      available=0 视为买入日残留锁，不当券商不可卖。
     """
     if qty <= 0:
         return 0
@@ -810,9 +810,43 @@ def sellable_qty(
             return 0
         return max(0, min(avail, int(qty)))
 
-    if avail is None:
+    if avail is None or avail <= 0:
         return int(qty)
     return max(0, min(avail, int(qty)))
+
+
+def unlock_overnight_available(data: dict[str, Any], session: str) -> bool:
+    """隔夜仓：把买入日残留的 available=0 改成可卖=持仓。"""
+    changed = False
+    sess = str(session or "")[:10]
+    if not sess:
+        return False
+    for pos in (data.get("positions") or {}).values():
+        if not isinstance(pos, dict):
+            continue
+        try:
+            qty = int(pos.get("qty") or 0)
+        except (TypeError, ValueError):
+            continue
+        if qty <= 0:
+            continue
+        if is_t1_buy_day(pos.get("buy_time"), sess):
+            continue
+        raw = pos.get("available")
+        if raw is None:
+            pos["available"] = qty
+            changed = True
+            continue
+        try:
+            avail = int(raw)
+        except (TypeError, ValueError):
+            pos["available"] = qty
+            changed = True
+            continue
+        if avail <= 0 or avail > qty:
+            pos["available"] = qty
+            changed = True
+    return changed
 
 
 def calc_day_pnl(

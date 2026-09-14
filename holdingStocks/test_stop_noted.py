@@ -7,8 +7,26 @@ from datetime import datetime
 
 import pandas as pd
 
-from index import resolve_stop_noted_hit
+from index import overnight_stop_should_fill, resolve_stop_noted_hit
 from strategy.pullback_wave_stop import simulate_factor26_day_1m
+
+
+class TestOvernightStopFillAllHoldings(unittest.TestCase):
+    def test_last_or_low_hits_stop(self) -> None:
+        self.assertTrue(
+            overnight_stop_should_fill(last=33.23, low=33.10, stop=34.02)
+        )
+        self.assertTrue(
+            overnight_stop_should_fill(last=34.50, low=33.90, stop=34.02)
+        )
+        self.assertFalse(
+            overnight_stop_should_fill(last=34.50, low=34.20, stop=34.02)
+        )
+        self.assertTrue(
+            overnight_stop_should_fill(
+                last=34.50, low=34.20, stop=34.02, sticky_touched=True
+            )
+        )
 
 
 class TestStopNoted(unittest.TestCase):

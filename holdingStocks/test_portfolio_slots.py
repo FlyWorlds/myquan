@@ -47,13 +47,20 @@ def test_today_slot_buy_ranks_first_touch_wins():
     assert ranks == {"002093": 0, "002104": 1, "002015": 2}
 
 
-def test_sellable_overnight_available_zero_not_fallback():
-    from watch_config import sellable_qty
+def test_sellable_overnight_available_zero_unlocks():
+    from watch_config import sellable_qty, unlock_overnight_available
 
     pos = {"qty": 1000, "available": 0, "buy_time": "2026-09-07 09:31:00"}
-    assert sellable_qty(pos, 1000, pos["buy_time"], "2026-09-08") == 0
-    pos_na = {"qty": 1000, "available": None, "buy_time": "2026-09-07 09:31:00"}
-    assert sellable_qty(pos_na, 1000, pos_na["buy_time"], "2026-09-08") == 1000
+    assert sellable_qty(pos, 1000, pos["buy_time"], "2026-09-08") == 1000
+    pos_t1 = {"qty": 1000, "available": 0, "buy_time": "2026-09-08 09:31:00"}
+    assert sellable_qty(pos_t1, 1000, pos_t1["buy_time"], "2026-09-08") == 0
+    data = {
+        "positions": {
+            "000070": {"qty": 5500, "available": 0, "buy_time": "2026-09-11 09:43:32"}
+        }
+    }
+    assert unlock_overnight_available(data, "2026-09-14") is True
+    assert data["positions"]["000070"]["available"] == 5500
 
 
 def test_market_phase_lunch_and_close():
