@@ -18,7 +18,7 @@ if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
 from strategy.akq_math import session_day_pnl
-from strategy.open_break import DEFAULT_PCT, TICK_SIZE, is_t1_buy_day
+from strategy.open_break import DEFAULT_PCT, TICK_SIZE, floor_to_tick, is_t1_buy_day
 
 # 默认定盘：策略十六 + 因子27/因子26/因子2/因子22
 STRATEGY_ID = "strategy16"
@@ -39,6 +39,17 @@ AUCTION_OPEN_HOUR = 9
 AUCTION_OPEN_MINUTE = 25  # 9:25 开盘价确定 → 算过门/买点/止损
 SIGNAL_ACTIVE_HOUR = 9
 SIGNAL_ACTIVE_MINUTE = 30  # 9:30 连续竞价 → 触发买卖/止损结算/微信
+
+# 集合竞价确认成交（开盘保护）：官方开盘价、时刻固定 09:30:00
+OPEN_BELL_HOUR = SIGNAL_ACTIVE_HOUR
+OPEN_BELL_MINUTE = SIGNAL_ACTIVE_MINUTE
+
+
+def session_open_bell_ts(session: str | None) -> str:
+    """竞价核/开盘保护成交时刻：YYYY-MM-DD 09:30:00。"""
+    sess = str(session or "")[:10]
+    clock = f"{OPEN_BELL_HOUR:02d}:{OPEN_BELL_MINUTE:02d}:00"
+    return f"{sess} {clock}" if sess else clock
 
 # 策略一盯盘：单票策略收益统计起点（含费用、T+1；自该交易日起空仓起算）
 STRATEGY_PNL_START = "2026-09-01"
@@ -910,6 +921,8 @@ RESERVE_SLOT_HOUR = 14
 RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓（现与盘中同为 3）
 SLOT_WEIGHT = 0.30  # 每槽约 3 成仓
 DEFAULT_ACCOUNT_TOTAL = 300_000.0  # 纸面默认总资产；clear-all / 无登记时按此估槽金额
+# 平仓腾槽后：第一梯队（平仓前已触买）用现价成交，现价不得超过买点 +1%；其后新触发仍按买点
+SLOT_FIRST_TIER_MAX_OVERSHOOT = 0.01
 
 
 def occupied_slot_codes(holdings: dict[str, Any]) -> list[str]:
@@ -969,3 +982,98 @@ def slot_meta(holdings: dict[str, Any], *, now: Any | None = None) -> dict[str, 
         "free": max(0, int(MAX_PORTFOLIO_SLOTS) - n),
         "freeBuy": free_buy_slot_count(holdings, now=now),
     }
+
+
+def _slot_ts_key(ts: Any) -> str:
+    s = str(ts or "").strip()
+    if not s or s.startswith("9999"):
+        return ""
+    if len(s) >= 19 and s[4:5] == "-" and s[10:11] == " ":
+        return s[:19]
+    return s
+
+
+def slot_fill_decision(
+    *,
+    signal_px: float,
+    last_px: float | None,
+    trigger_ts: str = "",
+    freed_at: str | None = None,
+    overshoot: float = SLOT_FIRST_TIER_MAX_OVERSHOOT,
+    tick: float = TICK_SIZE,
+) -> dict[str, Any] | None:
+    """空槽成交价：平仓腾出 vs 新触发。
+
+    · 无平仓时刻（开盘空槽/从未腾槽）：按买点成交
+    · 触发早于平仓（第一梯队）：现价成交，且现价 ≤ 买点×(1+overshoot)；超限本轮不买
+    · 平仓后才触发：按买点成交
+    """
+    try:
+        sig = float(signal_px or 0)
+    except (TypeError, ValueError):
+        return None
+    try:
+        last = float(last_px or 0)
+    except (TypeError, ValueError):
+        last = 0.0
+    if sig <= 0 or last <= 0:
+        return None
+    trig = _slot_ts_key(trigger_ts)
+    freed = _slot_ts_key(freed_at)
+    cap = sig * (1.0 + float(overshoot))
+    if freed and trig and trig < freed:
+        if last > cap + 1e-12:
+            return None
+        px = floor_to_tick(last, tick)
+        if px <= 0:
+            return None
+        return {"fill_px": round(float(px), 4), "kind": "last"}
+    px = floor_to_tick(sig, tick)
+    if px <= 0:
+        return None
+    return {"fill_px": round(float(px), 4), "kind": "signal"}
+
+
+def _slot_queue_blob(holdings: dict[str, Any], session: str) -> dict[str, Any]:
+    day = str(session or "")[:10]
+    raw = holdings.get("slot_queue")
+    if not isinstance(raw, dict) or str(raw.get("session") or "")[:10] != day:
+        blob = {"session": day, "freed_at": []}
+        holdings["slot_queue"] = blob
+        return blob
+    times = raw.get("freed_at")
+    if not isinstance(times, list):
+        raw["freed_at"] = []
+    return raw
+
+
+def peek_slot_freed_at(holdings: dict[str, Any], session: str) -> str | None:
+    """下一笔入槽对应的平仓腾槽时刻；没有则空槽按新触发买点成交。"""
+    times = _slot_queue_blob(holdings, session).get("freed_at") or []
+    for ts in times:
+        key = _slot_ts_key(ts)
+        if key:
+            return key
+    return None
+
+
+def append_slot_freed_at(
+    holdings: dict[str, Any],
+    session: str,
+    ts: Any,
+) -> None:
+    """全清腾出一槽：记下平仓时刻，供后续入槽分第一梯队 / 新触发。"""
+    key = _slot_ts_key(ts)
+    if not key:
+        return
+    blob = _slot_queue_blob(holdings, session)
+    blob.setdefault("freed_at", []).append(key)
+
+
+def pop_slot_freed_at(holdings: dict[str, Any], session: str) -> str | None:
+    """入槽成交后消费一笔腾槽时刻。"""
+    blob = _slot_queue_blob(holdings, session)
+    times = blob.get("freed_at") or []
+    if not times:
+        return None
+    return times.pop(0)

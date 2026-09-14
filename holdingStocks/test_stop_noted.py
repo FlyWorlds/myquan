@@ -7,7 +7,14 @@ from datetime import datetime
 
 import pandas as pd
 
-from index import overnight_stop_should_fill, paper_exit_decision, resolve_stop_noted_hit
+from index import (
+    overnight_stop_should_fill,
+    paper_exit_decision,
+    purge_illegal_t1_stop_notes,
+    resolve_stop_noted_hit,
+    t1_stop_note_allowed,
+    t1_stop_note_px_is_legal,
+)
 from strategy.pullback_wave_stop import simulate_factor26_day_1m
 
 
@@ -50,11 +57,36 @@ class TestPaperExitDecision(unittest.TestCase):
             working_stop=34.13,
             path_hit=False,
             signal_ok=True,
+            overnight_high_ok=True,
         )
         self.assertTrue(dec["hit"])
         self.assertTrue(dec["hit_show"])
         self.assertEqual(dec["kind"], "open_protect")
         self.assertAlmostEqual(dec["fill_px"], 33.84, places=2)
+
+    def test_today_buy_ignores_prev_high_even_if_sellable(self) -> None:
+        """天通今日新买：即使 t1_today=False（T+0），也不能用昨高/当日抬高峰去算开盘保护。"""
+        common = dict(
+            qty=3200,
+            sellable=3200,
+            t1_today=False,
+            last=30.23,
+            open_px=27.90,
+            prev_close=27.48,
+            cost=27.81,
+            peak_high=30.23,
+            working_stop=29.37,
+            path_hit=False,
+            signal_ok=True,
+        )
+        leaked = paper_exit_decision(**common)
+        self.assertFalse(leaked["hit"])
+        self.assertFalse(leaked["hit_show"])
+        gated = paper_exit_decision(**common, overnight_high_ok=False)
+        self.assertFalse(gated["hit"])
+        armed = paper_exit_decision(**common, overnight_high_ok=True)
+        self.assertTrue(armed["hit"])
+        self.assertEqual(armed["kind"], "open_protect")
 
     def test_t1_shows_but_does_not_fill(self) -> None:
         dec = paper_exit_decision(
@@ -73,6 +105,144 @@ class TestPaperExitDecision(unittest.TestCase):
         self.assertTrue(dec["hit_show"])
         self.assertFalse(dec["hit"])
         self.assertEqual(dec["reason"], "t1")
+
+    def test_t1_buy_day_open_vs_raised_peak_not_noted(self) -> None:
+        """天通：买入日今开低于后来抬高的中段卖价，涨停现价不得记止损。"""
+        dec = paper_exit_decision(
+            qty=3200,
+            sellable=0,
+            t1_today=True,
+            last=30.23,
+            open_px=27.81,
+            prev_close=27.48,
+            cost=27.81,
+            peak_high=30.23,
+            working_stop=29.37,
+            path_hit=False,
+            signal_ok=True,
+        )
+        self.assertFalse(dec["hit"])
+        self.assertFalse(dec["hit_show"])
+
+    def test_limit_up_and_profit_voids_t1_note(self) -> None:
+        from index import t1_buy_day_should_void_stop_note
+
+        self.assertTrue(
+            t1_buy_day_should_void_stop_note(
+                last_px=30.23,
+                cost_px=27.81,
+                prev_close=27.48,
+                noted_px=29.37,
+            )
+        )
+        self.assertTrue(
+            t1_buy_day_should_void_stop_note(
+                last_px=28.70,
+                cost_px=27.81,
+                prev_close=27.48,
+                noted_px=None,
+            )
+        )
+        self.assertFalse(
+            t1_buy_day_should_void_stop_note(
+                last_px=27.20,
+                cost_px=27.81,
+                prev_close=27.48,
+                noted_px=27.11,
+            )
+        )
+
+    def test_t1_mid_gain_path_recovered_not_shown(self) -> None:
+        """买入日 1m 曾触中段 29.37，现价已涨停：不得 hit_show。"""
+        dec = paper_exit_decision(
+            qty=3200,
+            sellable=0,
+            t1_today=True,
+            last=30.23,
+            open_px=27.81,
+            prev_close=27.48,
+            cost=27.81,
+            peak_high=30.23,
+            working_stop=29.37,
+            path_hit=True,
+            path_fill_px=29.37,
+            signal_ok=True,
+        )
+        self.assertFalse(dec["hit"])
+        self.assertFalse(dec["hit_show"])
+
+    def test_t1_note_gate_rejects_mid_gain_and_limit_up(self) -> None:
+        self.assertFalse(
+            t1_stop_note_px_is_legal(stop_px=29.37, cost_px=27.81)
+        )
+        self.assertTrue(
+            t1_stop_note_px_is_legal(stop_px=27.11, cost_px=27.81)
+        )
+        self.assertTrue(
+            t1_stop_note_px_is_legal(stop_px=27.81, cost_px=27.81)
+        )
+        self.assertFalse(
+            t1_stop_note_allowed(
+                reason="path",
+                stop_px=27.11,
+                cost_px=27.81,
+            )
+        )
+        self.assertFalse(
+            t1_stop_note_allowed(
+                reason="hard_from_cost",
+                stop_px=29.37,
+                cost_px=27.81,
+                last_px=30.23,
+                prev_close=27.48,
+            )
+        )
+        self.assertFalse(
+            t1_stop_note_allowed(
+                reason="hard_from_cost",
+                stop_px=27.11,
+                cost_px=27.81,
+                last_px=30.23,
+                prev_close=27.48,
+            )
+        )
+        self.assertTrue(
+            t1_stop_note_allowed(
+                reason="hard_from_cost",
+                stop_px=27.11,
+                cost_px=27.81,
+                last_px=27.00,
+                prev_close=27.48,
+            )
+        )
+
+    def test_purge_illegal_mid_gain_note(self) -> None:
+        data = {
+            "positions": {
+                "600330": {
+                    "qty": 3200,
+                    "cost": 27.81,
+                    "stop_noted": True,
+                    "stop_noted_px": 29.37,
+                    "stop_noted_session": "2026-09-14",
+                },
+                "000034": {
+                    "qty": 3900,
+                    "cost": 23.09,
+                    "stop_noted": True,
+                    "stop_noted_px": 22.51,
+                    "stop_noted_session": "2026-09-14",
+                },
+            }
+        }
+        n = purge_illegal_t1_stop_notes(data)
+        self.assertEqual(n, 1)
+        self.assertFalse(data["positions"]["600330"]["stop_noted"])
+        self.assertIsNone(data["positions"]["600330"]["stop_noted_px"])
+        self.assertTrue(data["positions"]["000034"]["stop_noted"])
+        self.assertAlmostEqual(
+            float(data["positions"]["000034"]["stop_noted_px"]), 22.51, places=2
+        )
 
     def test_raised_stop_vs_morning_low_no_fill_if_open_safe(self) -> None:
         """开盘高于保护、现价也高于当前卖价：早盘低点不能事后拿来平仓。"""
@@ -140,6 +310,7 @@ class TestPaperExitDecision(unittest.TestCase):
             working_stop=24.6,
             path_hit=False,
             signal_ok=True,
+            overnight_high_ok=True,
         )
         self.assertTrue(dec["hit"])
         self.assertEqual(dec["kind"], "open_protect")
@@ -159,9 +330,39 @@ class TestPaperExitDecision(unittest.TestCase):
             working_stop=16.5,
             path_hit=False,
             signal_ok=True,
+            overnight_high_ok=True,
         )
         self.assertEqual(dec["kind"], "open_protect")
         self.assertAlmostEqual(dec["fill_px"], 16.93, places=2)
+        self.assertTrue(dec["open_bell"])
+
+    def test_open_protect_hit_ts_rewrites_first_1m_label(self) -> None:
+        from index import _keep_first_signal_ts, _open_protect_hit_ts
+
+        self.assertEqual(
+            _open_protect_hit_ts(
+                session="2026-09-14",
+                fill_px=16.93,
+                open_px=16.93,
+                existing="2026-09-14 09:32:00",
+            ),
+            "2026-09-14 09:30:00",
+        )
+        self.assertEqual(
+            _open_protect_hit_ts(
+                session="2026-09-14",
+                fill_px=16.93,
+                open_px=16.93,
+                existing="2026-09-14 10:05:00",
+            ),
+            "2026-09-14 10:05:00",
+        )
+        kept = {"stop_hit_ts": "2026-09-14 09:30:00"}
+        _keep_first_signal_ts(
+            {"stop_hit_ts": "2026-09-14 09:32:00"},
+            kept,
+        )
+        self.assertEqual(kept["stop_hit_ts"], "2026-09-14 09:30:00")
 
 
 class TestClosedExitFreeze(unittest.TestCase):
@@ -306,6 +507,28 @@ class TestStopNoted(unittest.TestCase):
                 now=datetime(2026, 9, 9, 9, 31),
             )["hit"]
         )
+
+    def test_today_buy_does_not_use_overnight_peak_trail(self):
+        """今日新买不合格：残留已记也不能按昨高/当日高峰回落 2.5%。"""
+        pos = {
+            "stop_noted": True,
+            "stop_noted_px": 27.81,
+            "cost": 27.81,
+            "peak_high": 30.23,
+        }
+        hit = resolve_stop_noted_hit(
+            pos,
+            open_px=28.50,
+            low_px=28.40,
+            last_px=28.50,
+            high_px=30.23,
+            cost_px=27.81,
+            sellable=3200,
+            t1_buy_day=False,
+            overnight_high_ok=False,
+            now=datetime(2026, 9, 14, 10, 30),
+        )
+        self.assertFalse(hit["hit"])
 
     def test_gap_down_fills_open_dump(self):
         """低开已破买点硬保护：按开盘卖，不是继续等到 T1 回落。"""

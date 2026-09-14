@@ -82,7 +82,9 @@ STRATEGY_RULES = """
   · 未触达时的「工作卖价」走 working_stop_price：过 10% 展示峰值回落 2%，
     禁止用 dummy OHLC 去撞 10%/15% 阶梯目标（否则盯盘会把阶梯价当止损）
   · 买入当日不可卖；次日未过 3% 走峰值回落 2.5%；过 3% 走中段（一半/波动先到先卖）；过 10% 走分段
-  · 峰值只从买入之后算，未卖出前创新高则抬升；T1 回落峰值=max(隔夜持仓高点, 当日高点)，不得低于买点硬保护；低开已破硬保护按开盘卖
+  · 峰值只从买入之后算，未卖出前创新高则抬升；T1 回落峰值=max(隔夜持仓高点, 当日高点)
+  · 昨收/昨高只经 overnight_peak_px：函数看买入日（昨天已持有或昨天买入才并入）；漏传买入日不用昨收/昨高
+  · 不得低于买点硬保护；低开已破硬保护按开盘卖（竞价核=09:30，不用首根 1m 标签）
   · 半仓不足 200 股则改为全清
 
 【默认】entry 2.5%；中段门槛 3%；阶梯 10%/15%；大赚回落 2%；回落一半 50%；波动回落 50%×20日日频σ；
@@ -136,6 +138,85 @@ def t1_trail_stop_px(
     return max(trail, hard)
 
 
+def _pos_px(raw: Any) -> float:
+    try:
+        x = float(raw or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return x if x > 0 else 0.0
+
+
+def _resolve_overnight_high_ok(
+    *,
+    overnight_high_ok: bool | None = None,
+    use_prev_session_high: bool | None = None,
+    buy_time: Any = None,
+    session: str = "",
+    qty: int = 0,
+    t0: bool = False,
+    replay_holding: bool = False,
+    last_buy_date: str | None = None,
+    last_sell_date: str | None = None,
+) -> bool:
+    """昨收/昨高资格：优先看买入时间；布尔开关只给测例覆盖。漏传且没有买入日 → 关。"""
+    if overnight_high_ok is not None:
+        return bool(overnight_high_ok)
+    if use_prev_session_high is not None:
+        return bool(use_prev_session_high)
+    sess = str(session or "")[:10]
+    if not sess:
+        return False
+    return overnight_session_high_ok(
+        qty=qty,
+        buy_time=buy_time,
+        session=sess,
+        t0=t0,
+        replay_holding=replay_holding,
+        last_buy_date=last_buy_date,
+        last_sell_date=last_sell_date,
+    )
+
+
+def overnight_peak_px(
+    cost_px: float = 0.0,
+    prev_close: float | None = None,
+    peak_high: float | None = None,
+    *,
+    overnight_high_ok: bool | None = None,
+    use_prev_session_high: bool | None = None,
+    buy_time: Any = None,
+    session: str = "",
+    qty: int = 0,
+    t0: bool = False,
+    replay_holding: bool = False,
+    last_buy_date: str | None = None,
+    last_sell_date: str | None = None,
+) -> float:
+    """隔夜峰值唯一入口：用买入日判断，不要让调用方手填开关。
+
+    昨天已持有/已买入 → max(成本, 昨收, 昨高)；否则返回 0（调用方只用成本）。
+    """
+    ok = _resolve_overnight_high_ok(
+        overnight_high_ok=overnight_high_ok,
+        use_prev_session_high=use_prev_session_high,
+        buy_time=buy_time,
+        session=session,
+        qty=qty,
+        t0=t0,
+        replay_holding=replay_holding,
+        last_buy_date=last_buy_date,
+        last_sell_date=last_sell_date,
+    )
+    if not ok:
+        return 0.0
+    vals = [
+        x
+        for x in (_pos_px(cost_px), _pos_px(prev_close), _pos_px(peak_high))
+        if x > 0
+    ]
+    return max(vals) if vals else 0.0
+
+
 def overnight_open_protect_px(
     cost_px: float,
     prev_close: float | None,
@@ -145,22 +226,41 @@ def overnight_open_protect_px(
     giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
     t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
     tick: float = TICK_SIZE,
+    overnight_high_ok: bool | None = None,
+    use_prev_session_high: bool | None = None,
+    buy_time: Any = None,
+    session: str = "",
+    qty: int = 0,
+    t0: bool = False,
+    replay_holding: bool = False,
+    last_buy_date: str | None = None,
+    last_sell_date: str | None = None,
 ) -> float:
-    """开盘时刻保护价（策略统一）：硬保护 / T1 昨高回落 / 隔夜中段回落一半。
+    """开盘时刻保护价：硬保护 / T1 昨高回落 / 隔夜中段回落一半。
 
-    不含盘中抬高后的展示止损，避免用收盘后卖价去撞今开。
-    昨收已过 3% 时，峰值取 max(昨收, 隔夜 peak_high)，避免中天这类「昨收刚过 3%、今开低于回落一半」漏平。
+    昨收/昨高走 overnight_peak_px（看买入日，不是看调用方有没有记得传开关）。
     """
     cost = float(cost_px or 0)
     if cost <= 0:
         return 0.0
     hard = cost_hard_stop_px(cost, hard_pct=hard_pct, tick=tick)
+    peak = overnight_peak_px(
+        cost,
+        prev_close,
+        peak_high,
+        overnight_high_ok=overnight_high_ok,
+        use_prev_session_high=use_prev_session_high,
+        buy_time=buy_time,
+        session=session,
+        qty=qty,
+        t0=t0,
+        replay_holding=replay_holding,
+        last_buy_date=last_buy_date,
+        last_sell_date=last_sell_date,
+    )
+    if peak <= 0:
+        return hard
     prev = float(prev_close or 0)
-    try:
-        peak_in = float(peak_high or 0)
-    except (TypeError, ValueError):
-        peak_in = 0.0
-    peak = max(x for x in (cost, prev, peak_in) if x > 0)
     if prev > 0 and pnl_exceeds(prev, cost, giveback_arm_pct):
         half = half_gain_stop_price(peak, cost, hard_pct=hard_pct, tick=tick)
         return max(x for x in (hard, half) if x and x > 0)
@@ -168,6 +268,75 @@ def overnight_open_protect_px(
         peak, cost_px=cost, t1_trail_pct=t1_trail_pct, hard_pct=hard_pct, tick=tick
     )
     return max(x for x in (hard, trail) if x and x > 0)
+
+
+def open_auction_touch_ts(
+    ts: Any,
+    *,
+    fill_px: float,
+    day_open: float,
+    first_bar: bool,
+) -> Any:
+    """竞价核：开盘价成交记 09:30，不用缺 09:30 的首根 1m 标签（常见 09:31/09:32）。"""
+    try:
+        fill = float(fill_px or 0)
+        open_px = float(day_open or 0)
+    except (TypeError, ValueError):
+        return ts
+    if not first_bar or fill <= 0 or open_px <= 0:
+        return ts
+    if abs(fill - open_px) > 1e-6:
+        return ts
+    sess = ""
+    if ts is not None:
+        try:
+            t = pd.Timestamp(ts)
+            if getattr(t, "tzinfo", None) is not None:
+                t = t.tz_convert("Asia/Shanghai").tz_localize(None)
+            sess = str(t.date())
+        except Exception:  # noqa: BLE001
+            sess = str(ts)[:10]
+    clock = "09:30:00"
+    return f"{sess} {clock}" if sess else clock
+
+
+def overnight_session_high_ok(
+    *,
+    qty: int = 0,
+    buy_time: Any = None,
+    session: str,
+    t0: bool = False,
+    replay_holding: bool = False,
+    last_buy_date: str | None = None,
+    last_sell_date: str | None = None,
+) -> bool:
+    """隔夜高点资格：上一交易日已是策略持有，或上一交易日发生策略买入。
+
+    今日新买不合格，不得用昨收/昨高去记保护或武装 T1 峰值回落。
+    已平仓隔夜仓（买入日早于今日）仍合格。
+    """
+    sess = str(session or "")[:10]
+    if not sess:
+        return False
+    buy_d = str(buy_time or "")[:10]
+    if buy_d:
+        if buy_d == sess:
+            return False
+        if buy_d < sess:
+            return True
+    try:
+        qty_i = int(qty or 0)
+    except (TypeError, ValueError):
+        qty_i = 0
+    if qty_i > 0 and buy_d:
+        return not ((not t0) and is_t1_buy_day(str(buy_time), sess))
+    last_buy_d = str(last_buy_date or "")[:10]
+    last_sell_d = str(last_sell_date or "")[:10]
+    if not (replay_holding and last_buy_d and last_buy_d < sess):
+        return False
+    if last_sell_d and last_sell_d >= last_buy_d:
+        return False
+    return True
 
 
 def pnl_exceeds(px: float, cost_px: float, thresh: float) -> bool:
@@ -395,9 +564,9 @@ def resolve_t1_overnight_note(
 ) -> dict[str, Any]:
     """买入当日日末：是否把已记带到次日。
 
-    · 收盘盈利 ≥ 3%：不记（次日走中段一半/波动赛跑 / 分段）
-    · 收盘盈利 < 3%（含小亏）：记 T1 峰值回落，次日按当日动态峰值回落 2.5%
-    · 收盘/最低亏损 ≥ hard_pct（默认 2.5%）：记硬保护
+    · 收盘盈利 ≥ 3%：不记（含盘中曾刺硬保护后又收回；次日走中段/分段）
+    · 收盘盈利 < 3% 且收盘/最低亏损 ≥ hard_pct：记硬保护
+    · 其余（含小亏、盈利 <3%）：记 T1 峰值回落哨兵（价=成本），次日按动态峰值回落 2.5%
     """
     cost = float(cost_px or 0)
     close = float(close_px or 0)
@@ -405,12 +574,12 @@ def resolve_t1_overnight_note(
     if cost <= 0 or close <= 0:
         return empty
     lo = float(bar_low) if bar_low is not None and float(bar_low) > 0 else close
-    hard_px = floor_to_tick(cost * (1.0 - float(hard_pct)), tick)
-    if lo <= hard_px + 1e-12 or close <= hard_px + 1e-12:
-        return {"noted_px": float(hard_px), "reason": "hard_from_cost"}
     pnl = close / cost - 1.0
     if pnl >= float(note_profit_lt) - 1e-12:
         return {"noted_px": None, "reason": "profit_ge_3pct"}
+    hard_px = floor_to_tick(cost * (1.0 - float(hard_pct)), tick)
+    if lo <= hard_px + 1e-12 or close <= hard_px + 1e-12:
+        return {"noted_px": float(hard_px), "reason": "hard_from_cost"}
     # 哨兵价=成本：只作「已记」开关，次日不按该价成交，改走峰值回落 2.5%
     arm_px = floor_to_tick(cost, tick)
     return {
@@ -882,12 +1051,19 @@ def path_dependent_pullback_hit(
             "cost_px": cost,
         }
 
-    for row in _iter_rows():
+    for i, row in enumerate(_iter_rows()):
         ev = _eval(float(row.get("open") or 0), float(row["high"]), float(row["low"]))
-        hit = _hit(ev, row.get("ts"), "1m")
+        ts_hit = row.get("ts")
+        hit = _hit(ev, ts_hit, "1m")
         running_high = float(ev.get("peak_after") or running_high)
         session_peak = float(ev.get("session_peak_after") or session_peak)
         if hit:
+            hit["touch_ts"] = open_auction_touch_ts(
+                ts_hit,
+                fill_px=float(hit.get("touch_stop") or 0),
+                day_open=day_o,
+                first_bar=bool(i == 0),
+            )
             return hit
 
     if live_low is not None and float(live_low) > 0:
@@ -947,14 +1123,45 @@ def first_session_exit_fill(
     giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
     t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
     tick: float = TICK_SIZE,
+    overnight_high_ok: bool | None = None,
+    peak_high: float | None = None,
+    buy_time: Any = None,
+    session: str = "",
+    qty: int = 0,
+    t0: bool = False,
+    replay_holding: bool = False,
+    last_buy_date: str | None = None,
+    last_sell_date: str | None = None,
 ) -> float | None:
-    """隔夜仓当日第一次可执行卖出成交价（1 分钟顺序）。策略统一入口，无个股特例。"""
+    """隔夜仓当日第一次可执行卖出成交价（1 分钟顺序）。策略统一入口，无个股特例。
+
+    昨收/昨高只经 overnight_peak_px（看买入日）。
+    """
     cost = float(cost_px or 0)
     if cost <= 0 or bars is None or getattr(bars, "empty", True):
         return None
-    prev = float(prev_close or 0)
-    armed = bool(prev > 0) and not pnl_exceeds(prev, cost, giveback_arm_pct)
-    seed = max(x for x in (cost, prev) if x > 0)
+    ok = _resolve_overnight_high_ok(
+        overnight_high_ok=overnight_high_ok,
+        buy_time=buy_time,
+        session=session,
+        qty=qty,
+        t0=t0,
+        replay_holding=replay_holding,
+        last_buy_date=last_buy_date,
+        last_sell_date=last_sell_date,
+    )
+    prev = float(prev_close or 0) if ok else 0.0
+    armed = bool(ok and prev > 0) and not pnl_exceeds(
+        prev, cost, giveback_arm_pct
+    )
+    seed = overnight_peak_px(
+        cost,
+        prev_close,
+        peak_high,
+        overnight_high_ok=ok,
+    )
+    if seed <= 0:
+        seed = cost
     hit = path_dependent_pullback_hit(
         bars,
         pullback_pct=pullback_pct,
@@ -1741,14 +1948,15 @@ def simulate_factor26_day_1m(
     hard_gap_dump_pct: float = DEFAULT_HARD_GAP_DUMP_PCT,
     tp_stage_in: int = 0,
     shares_in: int = 1000,
+    overnight_high_ok: bool | None = None,
+    buy_time: Any = None,
+    session: str = "",
 ) -> dict[str, Any]:
     """单日 1 分钟路径：买入（默认开盘阈值）+ 多层止盈卖出。
 
     · holding_in：昨收仍持仓
     · can_sell：非 T+1（买入当日 False）
-    · stop_noted_px_in：昨日 T+1 已记；默认次日走峰值回落 2.5%（gap_dump 生产口径）
-    · noted_mode：sell_open / gap_dump / continue_f26 / wait_noted（后三者为研究对照）
-    · vol20_daily：近 20 日日频实现波动（中段回落距离 = 其一半）
+    · 昨收/昨高：overnight_peak_px 看买入日；未传买入日时持仓日才算隔夜资格
     """
     pb = float(pullback_pct)
     gb = float(giveback_ratio)
@@ -1763,11 +1971,21 @@ def simulate_factor26_day_1m(
     cost = float(cost_px) if cost_px is not None and float(cost_px) > 0 else 0.0
     if holding and cost <= 0:
         cost = float(o)  # 隔夜未传成本时退回开盘价作保护锚
-    running_high = (
-        float(peak_high_in)
-        if peak_high_in is not None and float(peak_high_in) > 0
-        else (cost if holding and cost > 0 else 0.0)
+    ov_ok = _resolve_overnight_high_ok(
+        overnight_high_ok=overnight_high_ok,
+        buy_time=buy_time,
+        session=session,
+        qty=shares_in if holding else 0,
     )
+    if overnight_high_ok is None and not session and not buy_time:
+        ov_ok = bool(holding)
+    ov_peak = overnight_peak_px(
+        cost, prev_close, peak_high_in, overnight_high_ok=ov_ok
+    )
+    if holding:
+        running_high = ov_peak if ov_peak > 0 else (cost if cost > 0 else 0.0)
+    else:
+        running_high = 0.0
     running_low = float("inf")
     held_low = float("inf")
     open_buy = entry_trigger_price(o, entry_pct=entry_pct, tick=tick)
@@ -1785,7 +2003,7 @@ def simulate_factor26_day_1m(
     prev_c = float(prev_close) if prev_close is not None and float(prev_close) > 0 else 0.0
     ld_pct = float(limit_down_pct) if limit_down_pct is not None else 0.1
     use_legacy_noted = nmode != NOTED_MODE_GAP_DUMP
-    t1_armed = bool(noted > 0 and (not use_legacy_noted))
+    t1_armed = bool(noted > 0 and holding and ov_ok and (not use_legacy_noted))
     session_peak = 0.0
     tp_stage = max(0, int(tp_stage_in or 0))
     sh = max(100, int(shares_in or 1000))
@@ -2131,6 +2349,9 @@ def replay_factor26_1m(
             cost_px=cost_px if holding else None,
             peak_high_in=peak_high if holding else None,
             stop_noted_px_in=stop_noted_px if holding else None,
+            prev_close=float(prev["close"]) if holding else None,
+            buy_time=buy_time,
+            session=sess,
             allow_attack=allow_attack,
             vol20_daily=vol20,
             tp_stage_in=tp_stage if holding else 0,
@@ -2239,6 +2460,9 @@ __all__ = [
     "cost_hard_stop_px",
     "t1_trail_stop_px",
     "overnight_open_protect_px",
+    "overnight_peak_px",
+    "open_auction_touch_ts",
+    "overnight_session_high_ok",
     "first_session_exit_fill",
     "half_gain_stop_price",
     "pnl_exceeds",

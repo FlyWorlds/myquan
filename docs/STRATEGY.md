@@ -176,7 +176,7 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 
 - **选股（因子27）**：通达信概念成交额 ≥ 截面中位数（最多扫 Top40）；每概念至多 2 只龙头；去重后约 **30** 只；剔创业/科创/北交/ST、现价 < 100；**滚动近 3 个月冻结**（非自然季度）。
 - **自选池**：`SELF_WATCHLIST_PICKS`（天通 / 凯盛 / 东材 / 金安）为**公共池**，与因子27分开维护；策略一/十五/十六与盯盘 `effective_watchlist` 均并入（非仅策略十六）。
-- **买卖**：同策略一（因子26 多层止盈 + 因子2 预警 + 因子22 再买）。
+- **买卖**：同策略一（因子26 多层止盈 + 因子2 预警 + 因子22 再买）。三槽 **先平再买**；腾槽第一梯队（平仓前已触买）现价 ≤ 买点 +1% 按现价成交，其后新触发按买点。
 - **因子22 与三槽**：生产三槽「当日卖出禁再买」下 factor22 **不改变成交**；对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`（近7日：禁再买约 +4.6%，开同日再买约 +7.65%，差约 3.05pp，研究用途）。
 - **刷新池**：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json`。
 - **近 7 日 1m 回测**（开盘阈值=2026至今 {2/2.5/3}% 日线夏普择优；卖同策略一；独立三槽）：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr` → `backtest/strategy16_core_leader/REPORT.md`。

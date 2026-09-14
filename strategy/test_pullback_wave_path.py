@@ -490,6 +490,15 @@ def test_t1_overnight_note_profit_gates():
     ge = fn(cost_px=100.0, peak_high=110.0, close_px=103.0, hard_pct=0.025)
     assert ge["noted_px"] is None
     assert ge["reason"] == "profit_ge_3pct"
+    wick_then_win = fn(
+        cost_px=100.0,
+        peak_high=110.0,
+        close_px=110.0,
+        hard_pct=0.025,
+        bar_low=97.0,
+    )
+    assert wick_then_win["reason"] == "profit_ge_3pct"
+    assert wick_then_win["noted_px"] is None
     lt = fn(cost_px=100.0, peak_high=102.0, close_px=100.5, hard_pct=0.025)
     assert lt["reason"] == "t1_trail"
     assert abs(float(lt["noted_px"]) - 100.0) < 1e-9
@@ -499,6 +508,221 @@ def test_t1_overnight_note_profit_gates():
     small = fn(cost_px=100.0, peak_high=100.0, close_px=99.0, hard_pct=0.025, bar_low=99.0)
     assert small["noted_px"] is not None
     assert small["reason"] == "t1_trail"
+
+
+def test_overnight_session_high_requires_prev_strategy_position():
+    """隔夜高点：只有昨日策略持有或策略买入才启用。天通今日新买不合格。"""
+    fn = _m.overnight_session_high_ok
+    assert (
+        fn(
+            qty=3200,
+            buy_time="2026-09-14 10:08:53",
+            session="2026-09-14",
+        )
+        is False
+    )
+    assert (
+        fn(
+            qty=0,
+            buy_time=None,
+            session="2026-09-14",
+            replay_holding=False,
+            last_buy_date="2026-09-14",
+            last_sell_date="2026-09-07",
+        )
+        is False
+    )
+    assert (
+        fn(
+            qty=2600,
+            buy_time="2026-09-11 09:43:32",
+            session="2026-09-14",
+        )
+        is True
+    )
+    assert (
+        fn(
+            qty=0,
+            buy_time="2026-09-11 09:43:32",
+            session="2026-09-14",
+        )
+        is True
+    )
+    assert (
+        fn(
+            qty=0,
+            session="2026-09-14",
+            replay_holding=True,
+            last_buy_date="2026-09-11",
+            last_sell_date="2026-09-07",
+        )
+        is True
+    )
+
+
+def test_today_buy_open_protect_ignores_prev_high():
+    """今日新买：开盘保护只用硬保护，不用昨收/昨高。"""
+    hard = _m.overnight_open_protect_px(
+        27.81,
+        27.48,
+        peak_high=30.23,
+        use_prev_session_high=False,
+    )
+    overnight = _m.overnight_open_protect_px(
+        27.81,
+        27.48,
+        peak_high=30.23,
+        use_prev_session_high=True,
+    )
+    omitted = _m.overnight_open_protect_px(27.81, 27.48, peak_high=30.23)
+    assert abs(hard - _m.cost_hard_stop_px(27.81)) < 1e-9
+    assert abs(omitted - hard) < 1e-9
+    assert overnight > hard + 0.2
+
+
+def test_overnight_peak_px_requires_gate():
+    """昨收/昨高只经 overnight_peak_px；看买入日，不必再传开关。"""
+    assert _m.overnight_peak_px(27.81, 27.48, 30.23) == 0.0
+    assert (
+        _m.overnight_peak_px(
+            27.81,
+            27.48,
+            30.23,
+            buy_time="2026-09-14 10:08:53",
+            session="2026-09-14",
+        )
+        == 0.0
+    )
+    peak = _m.overnight_peak_px(
+        33.48,
+        34.49,
+        34.78,
+        buy_time="2026-09-11 09:43:32",
+        session="2026-09-14",
+    )
+    assert abs(peak - 34.78) < 1e-9
+    assert _m.overnight_peak_px(
+        27.81, 27.48, 30.23, overnight_high_ok=False
+    ) == 0.0
+    assert abs(
+        _m.overnight_peak_px(
+            27.81, 27.48, 30.23, overnight_high_ok=True
+        )
+        - 30.23
+    ) < 1e-9
+
+
+def test_simulate_flat_ignores_injected_prev_peak():
+    """空仓不得把传入的昨高/昨收种进峰值。"""
+    ts0 = pd.Timestamp("2026-09-14 09:31:00")
+    bars = pd.DataFrame(
+        [
+            {
+                "ts": ts0,
+                "open": 27.90,
+                "high": 28.00,
+                "low": 27.65,
+                "close": 27.80,
+            }
+        ]
+    )
+    out = _m.simulate_factor26_day_1m(
+        bars,
+        open_px=27.90,
+        holding_in=False,
+        can_sell=False,
+        allow_entry=False,
+        peak_high_in=30.23,
+        prev_close=27.48,
+        overnight_high_ok=True,
+    )
+    assert out.get("bought_today") is False
+    assert float(out.get("peak_high_out") or 0) == 0.0
+    assert out.get("sell_px") is None
+
+
+def test_open_auction_touch_ts_rewrites_first_bar_label():
+    """竞价核：首根 1m 标成 09:32、成交价=开盘 → 记 09:30。"""
+    ts = pd.Timestamp("2026-09-14 09:32:00")
+    assert (
+        _m.open_auction_touch_ts(
+            ts, fill_px=16.93, day_open=16.93, first_bar=True
+        )
+        == "2026-09-14 09:30:00"
+    )
+    assert (
+        _m.open_auction_touch_ts(
+            ts, fill_px=16.80, day_open=16.93, first_bar=True
+        )
+        == ts
+    )
+    later = pd.Timestamp("2026-09-14 09:45:00")
+    assert (
+        _m.open_auction_touch_ts(
+            later, fill_px=16.93, day_open=16.93, first_bar=False
+        )
+        == later
+    )
+
+
+def test_path_hit_open_fill_uses_0930_not_first_1m_label():
+    """特发：今开已破回落一半，第一根 1m 即使标 09:32 也记 09:30 开盘成交。"""
+    ts0 = pd.Timestamp("2026-09-14 09:32:00")
+    bars = pd.DataFrame(
+        [
+            {
+                "ts": ts0,
+                "open": 16.93,
+                "high": 16.95,
+                "low": 16.80,
+                "close": 16.88,
+            }
+        ]
+    )
+    hit = _m.path_dependent_pullback_hit(
+        bars,
+        seed_high=17.65,
+        cost_px=16.29,
+        day_open=16.93,
+        overnight_armed=False,
+    )
+    assert hit.get("hit_stop") is True
+    assert abs(float(hit.get("touch_stop") or 0) - 16.93) < 1e-6
+    ts_s = str(hit.get("touch_ts") or "")
+    assert "09:30:00" in ts_s
+    assert "09:32" not in ts_s
+
+
+def test_today_buy_first_session_fill_ignores_prev_close():
+    """今日新买：1m 第一次成交不得把昨收当隔夜峰值去武装 T1。"""
+    ts0 = pd.Timestamp("2026-09-14 09:31:00")
+    bars = pd.DataFrame(
+        [
+            {
+                "ts": ts0,
+                "open": 27.90,
+                "high": 28.00,
+                "low": 27.65,
+                "close": 27.80,
+            }
+        ]
+    )
+    leaked = _m.first_session_exit_fill(
+        bars,
+        cost_px=27.81,
+        prev_close=28.40,
+        day_open=27.90,
+        overnight_high_ok=True,
+    )
+    gated = _m.first_session_exit_fill(
+        bars,
+        cost_px=27.81,
+        prev_close=28.40,
+        day_open=27.90,
+        overnight_high_ok=False,
+    )
+    assert leaked is not None
+    assert gated is None
 
 
 def test_limit_up_clears_t1_note():
@@ -600,7 +824,11 @@ def test_first_session_exit_fill_uses_path_not_open_gap():
         ]
     )
     fill = _m.first_session_exit_fill(
-        bars, cost_px=70.21, prev_close=76.45, day_open=76.0
+        bars,
+        cost_px=70.21,
+        prev_close=76.45,
+        day_open=76.0,
+        overnight_high_ok=True,
     )
     assert fill is not None
     assert abs(float(fill) - 77.23) < 0.02
@@ -820,6 +1048,13 @@ if __name__ == "__main__":
     test_since_buy_ignores_pre_entry_dip()
     test_micro_peak_giveback_does_not_note()
     test_t1_overnight_note_profit_gates()
+    test_overnight_session_high_requires_prev_strategy_position()
+    test_today_buy_open_protect_ignores_prev_high()
+    test_overnight_peak_px_requires_gate()
+    test_simulate_flat_ignores_injected_prev_peak()
+    test_open_auction_touch_ts_rewrites_first_bar_label()
+    test_path_hit_open_fill_uses_0930_not_first_1m_label()
+    test_today_buy_first_session_fill_ignores_prev_close()
     test_limit_up_clears_t1_note()
     test_first_session_exit_fill_uses_path_not_open_gap()
     test_simulate_ladder_half_reduces_shares_then_peak_trail_clears_rest()

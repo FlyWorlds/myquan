@@ -135,6 +135,27 @@ export function mergeLiveTodayColumn(
   return { ...base, dates, by_metric: byMetric }
 }
 
+export function kindFromLiveToday(
+  conceptToday: Record<string, SectorsConceptToday> | undefined,
+  topN: number,
+  metrics: string[] = [...ROTATION_METRICS],
+  opts?: { clock?: string },
+): SectorKindPayload | null {
+  if (!conceptToday || !Object.keys(conceptToday).length) return null
+  return mergeLiveTodayColumn(
+    {
+      dates: [],
+      by_metric: {},
+      members: {},
+      board_count: Object.keys(conceptToday).length,
+    },
+    conceptToday,
+    topN,
+    metrics,
+    opts,
+  )
+}
+
 export function useSectorsLive() {
   const store = useWatchStore()
   const sectors = computed(() => store.snapshot?.sectors)
@@ -156,8 +177,8 @@ export function useSectorsLive() {
     const clock = store.snapshot?.clock || store.snapshot?.updatedAt
     void store.snapshot?.ts
     void sectors.value?.spotAt
-    if (!base) return null
-    return mergeLiveTodayColumn(base, live, topN, metrics, { clock })
+    if (base) return mergeLiveTodayColumn(base, live, topN, metrics, { clock })
+    return kindFromLiveToday(live, topN, metrics || [...ROTATION_METRICS], { clock })
   }
 
   return { sectors, liveAt, memberStatsAt, refreshSec, setFocus, mergedKind, formatMetricValue }

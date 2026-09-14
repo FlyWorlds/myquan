@@ -326,6 +326,8 @@ export interface SectorsLivePayload {
   quotes?: Record<string, SectorsLiveQuote>
   segmentCount?: number
   error?: string | null
+  /** 盯盘首屏先推策略，板块稍后由独立线程补上 */
+  deferred?: boolean
 }
 
 export interface WatchSnapshot {

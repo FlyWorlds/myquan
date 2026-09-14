@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from watch_config import (
     MAX_PORTFOLIO_SLOTS,
+    SLOT_FIRST_TIER_MAX_OVERSHOOT,
     SLOT_WEIGHT,
+    append_slot_freed_at,
     free_slot_count,
     occupied_slot_codes,
+    peek_slot_freed_at,
+    pop_slot_freed_at,
+    slot_fill_decision,
     slot_meta,
 )
 
@@ -29,6 +34,70 @@ def test_occupied_ignores_realized_and_zero_qty():
     assert meta["weight"] == SLOT_WEIGHT
     assert meta["free"] == 2
     assert meta["occupiedCount"] == 1
+
+
+def test_slot_fill_fresh_empty_uses_signal_px():
+    dec = slot_fill_decision(
+        signal_px=10.0,
+        last_px=9.80,
+        trigger_ts="2026-09-14 09:40:00",
+        freed_at=None,
+    )
+    assert dec is not None
+    assert dec["kind"] == "signal"
+    assert abs(float(dec["fill_px"]) - 10.0) < 1e-9
+
+
+def test_slot_fill_first_tier_uses_last_within_1pct():
+    assert abs(SLOT_FIRST_TIER_MAX_OVERSHOOT - 0.01) < 1e-12
+    dec = slot_fill_decision(
+        signal_px=10.0,
+        last_px=9.85,
+        trigger_ts="2026-09-14 09:40:00",
+        freed_at="2026-09-14 10:30:00",
+    )
+    assert dec is not None
+    assert dec["kind"] == "last"
+    assert abs(float(dec["fill_px"]) - 9.85) < 1e-9
+    over = slot_fill_decision(
+        signal_px=10.0,
+        last_px=10.08,
+        trigger_ts="2026-09-14 09:40:00",
+        freed_at="2026-09-14 10:30:00",
+    )
+    assert over is not None
+    assert over["kind"] == "last"
+    assert abs(float(over["fill_px"]) - 10.08) < 1e-9
+    too_high = slot_fill_decision(
+        signal_px=10.0,
+        last_px=10.11,
+        trigger_ts="2026-09-14 09:40:00",
+        freed_at="2026-09-14 10:30:00",
+    )
+    assert too_high is None
+
+
+def test_slot_fill_after_close_uses_signal_px():
+    dec = slot_fill_decision(
+        signal_px=21.07,
+        last_px=21.20,
+        trigger_ts="2026-09-14 09:40:17",
+        freed_at="2026-09-14 09:30:00",
+    )
+    assert dec is not None
+    assert dec["kind"] == "signal"
+    assert abs(float(dec["fill_px"]) - 21.07) < 1e-9
+
+
+def test_slot_queue_freed_at_fifo():
+    h: dict = {}
+    append_slot_freed_at(h, "2026-09-14", "2026-09-14 09:30:00")
+    append_slot_freed_at(h, "2026-09-14", "2026-09-14 10:08:00")
+    assert peek_slot_freed_at(h, "2026-09-14") == "2026-09-14 09:30:00"
+    assert pop_slot_freed_at(h, "2026-09-14") == "2026-09-14 09:30:00"
+    assert peek_slot_freed_at(h, "2026-09-14") == "2026-09-14 10:08:00"
+    pop_slot_freed_at(h, "2026-09-14")
+    assert peek_slot_freed_at(h, "2026-09-14") is None
 
 
 def test_today_slot_buy_ranks_first_touch_wins():

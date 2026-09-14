@@ -8,7 +8,7 @@
   · 物理槽 max_slots=3：盘中/隔夜均可同时持仓 3
   · 当日最多买入 3 次（MAX_BUYS_PER_DAY，与三槽对齐）
   · 尾盘不再强制空槽（RESERVE_EMPTY_SLOTS=0 → 隔夜最多 3）
-  · 先触发买点的先买；槽满后触买进入等待队列，释放后再按触发先后补仓
+  · 先平再买；平仓前已触买且现价≤买点+1% 优先、成交价=现价；否则平仓后新触发按时间、成交价=买点
   · T+1：买入当日不可卖；每槽约 3 成仓（权益×slot_weight）
   · 当日止损/已记卖出的标的：当日禁止再买
 
@@ -44,10 +44,12 @@ from holdingStocks.watch_config import (  # noqa: E402
     RESERVE_EMPTY_SLOTS,
     RESERVE_SLOT_HOUR,
     RESERVE_SLOT_MINUTE,
+    SLOT_FIRST_TIER_MAX_OVERSHOOT,
     SLOT_WEIGHT,
     load_core_leader_payload,
     load_strategy16_thr_map,
     meta_for_code,
+    slot_fill_decision,
     strategy1_watchlist,
     strategy_watchlist,
 )
@@ -89,6 +91,7 @@ from strategy.pullback_wave_stop import (  # noqa: E402
     eval_multi_tp_bar,
     is_one_word_bar,
     noted_next_day_fill,
+    overnight_peak_px,
     pnl_exceeds,
     pullback_stop_price,
     realized_vol_daily,
@@ -500,11 +503,56 @@ def simulate_portfolio_3slots(
     def _can_open_buy(ts: pd.Timestamp | None = None) -> bool:
         return len(positions) < _buy_cap_at(ts) and buys_today < max_buys
 
+    def _bar_last(code: str, at_ts: str) -> float:
+        px = float(last_px.get(code) or 0)
+        sd = day_map.get(code)
+        if sd is None or sd.bars is None or getattr(sd.bars, "empty", True):
+            return px
+        if "close" not in sd.bars.columns or "ts" not in sd.bars.columns:
+            return px
+        try:
+            tss = pd.to_datetime(sd.bars["ts"])
+            mask = tss == pd.Timestamp(at_ts)
+            if not bool(mask.any()):
+                return px
+            c = float(sd.bars.loc[mask, "close"].iloc[0] or 0)
+            return c if c > 0 else px
+        except Exception:
+            return px
+
     def _try_fill_from_queue(sess: str, at_ts: str) -> None:
         nonlocal cash, buys_today
         wait_q.sort(key=lambda x: (str(x["ts"]), str(x["code"])))
         while wait_q and _can_open_buy(pd.Timestamp(at_ts)):
-            cand = wait_q.pop(0)
+            picked_i = None
+            picked_dec: dict[str, Any] | None = None
+            for i, cand in enumerate(wait_q):
+                code = cand["code"]
+                if code in positions:
+                    continue
+                st_q = states.get(code)
+                if st_q is not None and st_q.sold_today and (not allow_open_rebuy):
+                    continue
+                if cand.get("day") != sess:
+                    continue
+                last = _bar_last(code, at_ts)
+                dec = slot_fill_decision(
+                    signal_px=float(cand["px"]),
+                    last_px=last,
+                    trigger_ts=str(cand["ts"]),
+                    freed_at=str(at_ts),
+                    overshoot=SLOT_FIRST_TIER_MAX_OVERSHOOT,
+                )
+                if dec is None:
+                    continue
+                if str(dec.get("kind") or "") != "last":
+                    continue
+                picked_i = i
+                picked_dec = dec
+                break
+            if picked_i is None or picked_dec is None:
+                break
+            cand = wait_q.pop(picked_i)
             code = cand["code"]
             if code in positions:
                 continue
@@ -515,7 +563,7 @@ def simulate_portfolio_3slots(
             if cand.get("day") != sess:
                 skipped.append({**cand, "reason": "queue_expired_next_day"})
                 continue
-            px = float(cand["px"])
+            px = float(picked_dec["fill_px"])
             eq = _equity_now()
             budget = eq * float(slot_weight)
             shares = _lot_shares(budget, _buy_unit(px))
@@ -555,8 +603,7 @@ def simulate_portfolio_3slots(
                     "px": px,
                     "shares": shares,
                     "kind": cand.get("kind"),
-                    # 保留 pending 来源（如 open_rebuy_after_sell）；无则记排队成交
-                    "source": cand.get("source") or "queue_fill",
+                    "source": "queue_fill_last",
                     "slots_after": len(positions),
                 }
             )
@@ -648,7 +695,18 @@ def simulate_portfolio_3slots(
             states[code].buy_armed = False
             # 买入日收盘未到 3% 已记 → 次日峰值回落 2.5%；不再用昨亏武装开盘−1%
             noted0 = float(pos.stop_noted_px or 0) if pos.stop_noted_px else 0.0
-            states[code].overnight_armed = bool(noted0 > 0)
+            sd0 = day_map.get(code)
+            ov_peak = overnight_peak_px(
+                float(pos.buy_px or pos.cost or 0),
+                sd0.prev_close if sd0 is not None else None,
+                pos.peak_high,
+                buy_time=pos.buy_day,
+                session=sess,
+                qty=int(pos.shares or 0),
+            )
+            states[code].overnight_armed = bool(noted0 > 0 and ov_peak > 0)
+            if ov_peak > 0:
+                pos.peak_high = ov_peak
             pos.tp_marked = False  # 当日重新累计；武装已吃进 overnight_armed
 
         # 合并时间线
@@ -679,6 +737,15 @@ def simulate_portfolio_3slots(
             while i < n and timeline[i][0] == ts:
                 bucket.append(timeline[i])
                 i += 1
+
+            for _, code, h, lo, bar_o in bucket:
+                close_px = _bar_last(code, str(ts))
+                if close_px <= 0:
+                    close_px = (
+                        (h + lo) / 2.0 if h > 0 and lo > 0 else float(bar_o or 0)
+                    )
+                if close_px > 0:
+                    last_px[code] = float(close_px)
 
             # —— 卖 ——
             for _, code, h, lo, bar_o in bucket:
@@ -1285,6 +1352,7 @@ LEDGER_REASON_ZH = {
     "attack": "攻击波买",
     "open": "开盘突破买",
     "queue_fill": "排队补仓",
+    "queue_fill_last": "排队补仓·现价（平仓前已触买且未过买点1%）",
     "t1_peak_trail": "未到3%·次日动态峰值回落2.5%全清",
     "vol_giveback": "中赚（3–10%）动态高点回落0.5×20日日频σ全清（与回落一半谁先到走谁）",
     "noted_open_dump": "已记·开盘下杀1%全清（研究对照）",
@@ -1305,10 +1373,11 @@ def _ledger_buy_logic(t: dict[str, Any]) -> str:
     kind = str(t.get("kind") or "attack")
     src = str(t.get("source") or "")
     base = LEDGER_REASON_ZH.get(kind, kind or "买入")
-    if src == "queue_fill":
+    if src in ("queue_fill", "queue_fill_last"):
         trig = str(t.get("trigger_ts") or "")
         hhmm = trig[11:16] if len(trig) >= 16 else trig
-        return f"{base}·排队补仓（触{hhmm}）" if hhmm else f"{base}·排队补仓"
+        tag = "排队补仓·现价" if src == "queue_fill_last" else "排队补仓"
+        return f"{base}·{tag}（触{hhmm}）" if hhmm else f"{base}·{tag}"
     return base
 
 
@@ -1428,7 +1497,8 @@ def write_trade_ledger(
         "|------|------|",
         "| `attack` | 攻击波买 |",
         "| `open` | 开盘突破买 |",
-        "| `queue_fill` | 槽满后排队，释放再补 |",
+        "| `queue_fill` | 槽满后排队；平仓后新触发按买点补 |",
+        "| `queue_fill_last` | 平仓前已触买、现价≤买点+1%，按现价补 |",
         "| `t1_peak_trail` | 买入日未到 3% 已记且当日尚未 >3% → 次日动态峰值回落 2.5% 全清 |",
         "| `vol_giveback` | 中赚 >3% 且 <10% → 峰值回落 0.5×近20日日频σ 全清（与回落一半谁先到走谁） |",
         "| `noted_open_dump` | 研究对照：已记开盘下杀 1%（生产不用） |",
@@ -1770,8 +1840,8 @@ def run(
             if int(RESERVE_EMPTY_SLOTS) <= 0
             else f"尾盘空 **{RESERVE_EMPTY_SLOTS}**（隔夜最多 {MAX_OVERNIGHT_SLOTS}）；"
         )
-        + "**先触发买点的先买**；"
-        f"每槽约 {SLOT_WEIGHT*100:.0f}% 仓；T+1；槽满触买入队，释放后再按触发先后补；"
+        + "**先平再买**；平仓前已触买且现价≤买点+1% 优先（成交价=现价），否则其后新触发按时间（成交价=买点）；"
+        f"每槽约 {SLOT_WEIGHT*100:.0f}% 仓；T+1；"
         f"**当日止损/已记卖出禁再买**",
         f"- 窗长：{days} 交易日；日历：{', '.join(cal) if cal else '—'}",
         (
@@ -1806,8 +1876,9 @@ def run(
     ]
     for t in port.get("trades") or []:
         note = t.get("kind") or t.get("source") or ""
-        if t.get("source") == "queue_fill" and t.get("trigger_ts"):
-            note = f"排队补仓(触{str(t['trigger_ts'])[11:16]})"
+        if t.get("source") in ("queue_fill", "queue_fill_last") and t.get("trigger_ts"):
+            tag = "现价补" if t.get("source") == "queue_fill_last" else "排队补仓"
+            note = f"{tag}(触{str(t['trigger_ts'])[11:16]})"
         if t.get("pnl_pct") is not None:
             er = t.get("exit_reason") or ""
             note = f"{er} pnl {float(t['pnl_pct'])*100:.2f}%".strip()

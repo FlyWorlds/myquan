@@ -7,6 +7,7 @@ const router = useRouter()
 const store = useWatchStore()
 
 const loading = ref(true)
+const historyLoading = ref(true)
 const error = ref('')
 const payload = ref<SectorRotationPayload | null>(null)
 const metric = ref('涨幅')
@@ -47,12 +48,18 @@ const liveMembers = computed(() => {
 })
 
 const liveError = computed(() => store.snapshot?.sectors?.error || '')
+const sectorsDeferred = computed(() => Boolean(store.snapshot?.sectors?.deferred))
 const heatmapEmpty = computed(() => {
   const k = kindData.value
   if (!k) return true
   const cols = k.by_metric?.[metric.value]?.top || []
   return !cols.some((col) => Array.isArray(col) && col.length)
 })
+const waitingSectors = computed(
+  () =>
+    heatmapEmpty.value &&
+    (sectorsDeferred.value || (!payload.value && historyLoading.value)),
+)
 
 const wsLabel = computed(() => {
   const st = store.wsStatus
@@ -103,7 +110,8 @@ async function loadMembers(name: string) {
 }
 
 async function load(refresh = false) {
-  loading.value = true
+  historyLoading.value = true
+  if (!kindData.value) loading.value = true
   error.value = ''
   try {
     payload.value = await fetchRotation(20, 10, refresh)
@@ -113,6 +121,7 @@ async function load(refresh = false) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {
     loading.value = false
+    historyLoading.value = false
   }
 }
 
@@ -160,19 +169,22 @@ onBeforeUnmount(() => {
       <div>
         <h1 class="text-xl font-bold">板块轮动</h1>
         <p class="mt-1 text-sm text-ui-text-2">
-          {{ payload?.source || '通达信概念' }} · 今日列随 WebSocket 自动刷新，不必点重载；点格子看成分股（现价同样跟推送）
+          {{ payload?.source || '通达信概念' }} · 盯盘先出，板块随后推送；今日列走 WebSocket，历史列后台加载
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-xs text-ui-text-3">{{ wsLabel }}</span>
-        <button class="btn btn-ghost" :disabled="loading" @click="load(true)">重载历史</button>
+        <button class="btn btn-ghost" :disabled="historyLoading" @click="load(true)">重载历史</button>
       </div>
     </div>
 
-    <div v-if="loading" class="rounded-xl border border-ui-hairline bg-ui-surface p-8 text-center text-ui-text-2">
-      正在拉取概念轮动（首次较慢）…
+    <div
+      v-if="waitingSectors"
+      class="rounded-xl border border-ui-hairline bg-ui-surface p-8 text-center text-ui-text-2"
+    >
+      盯盘已在更新，板块轮动后台加载中…
     </div>
-    <div v-else-if="error" class="rounded-xl border border-ui-hairline bg-ui-surface p-6 text-watch-up">
+    <div v-else-if="error && heatmapEmpty" class="rounded-xl border border-ui-hairline bg-ui-surface p-6 text-watch-up">
       {{ error }}
     </div>
     <div
@@ -207,7 +219,9 @@ onBeforeUnmount(() => {
       />
 
       <p class="text-xs text-ui-text-3">
-        历史 {{ payload?.updated_at }} · {{ kindData.fund_note }} · 共 {{ kindData.board_count }} 个概念
+        <span v-if="historyLoading">历史列加载中… · </span>
+        <span v-else>历史 {{ payload?.updated_at }} · </span>
+        {{ kindData.fund_note }} · 共 {{ kindData.board_count }} 个概念
         <span v-if="memberStatsAt" class="text-ui-text-3"> · 涨停/涨跌比 {{ memberStatsAt }}</span>
       </p>
 
