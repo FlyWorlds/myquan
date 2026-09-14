@@ -342,19 +342,58 @@ class EastmoneySseFeed:
                         if not data:
                             continue
                         tick = _em_tick_from_data(data)
-                        if tick["last"] is None or tick["last"] <= 0:
-                            continue
+                        last = tick["last"]
+                        prev = tick["prev_close"]
+                        # 盘前东财现价常为 0，用昨收垫上，否则 SSE 已连也 seed 不进 hub
+                        if last is None or last <= 0:
+                            if prev is None or prev <= 0:
+                                continue
+                            last = prev
+                        open_px = tick["open"]
+                        if open_px is None or open_px <= 0:
+                            open_px = last
                         self.hub.mark_sse_ok()
                         self.hub.apply_tick(
                             self.sina,
-                            last=tick["last"],
+                            last=last,
                             high=tick["high"],
                             low=tick["low"],
-                            open_px=tick["open"],
-                            prev_close=tick["prev_close"],
+                            open_px=open_px,
+                            prev_close=prev,
                             last_ts=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             source="em_sse",
                         )
+
+
+def fill_preopen_ohlc(
+    *,
+    open_px: float,
+    high_px: float,
+    low_px: float,
+    last_px: float,
+    bid: float = 0.0,
+    ask: float = 0.0,
+    prev_close: float = 0.0,
+) -> tuple[float, float, float, float] | None:
+    """竞价前 open/last 常为 0：买卖一价 → 昨收。无昨收则放弃。"""
+    if open_px <= 0:
+        open_px = bid or ask or last_px
+    if last_px <= 0:
+        last_px = open_px or bid or ask
+    if prev_close > 0:
+        if last_px <= 0:
+            last_px = prev_close
+        if open_px <= 0:
+            open_px = last_px
+    if high_px <= 0:
+        highs = [x for x in (open_px, last_px) if x > 0]
+        high_px = max(highs) if highs else 0.0
+    if low_px <= 0:
+        lows = [x for x in (open_px, last_px) if x > 0]
+        low_px = min(lows) if lows else 0.0
+    if open_px <= 0 or last_px <= 0 or prev_close <= 0:
+        return None
+    return open_px, high_px, low_px, last_px
 
 
 def fetch_sina_batch(sinas: list[str]) -> dict[str, dict[str, Any]]:
@@ -393,24 +432,19 @@ def fetch_sina_batch(sinas: list[str]) -> dict[str, dict[str, Any]]:
                 except (TypeError, ValueError):
                     return 0.0
 
-            open_px = _f(1)
-            prev_close = _f(2)
-            last_px = _f(3)
-            high_px = _f(4)
-            low_px = _f(5)
-            bid = _f(6)
-            ask = _f(7)
-            if open_px <= 0:
-                open_px = bid or ask or last_px
-            if last_px <= 0:
-                last_px = open_px or bid or ask
-            if high_px <= 0:
-                high_px = max(open_px, last_px)
-            if low_px <= 0:
-                lows = [x for x in (open_px, last_px) if x > 0]
-                low_px = min(lows) if lows else 0.0
-            if open_px <= 0 or last_px <= 0 or prev_close <= 0:
+            filled = fill_preopen_ohlc(
+                open_px=_f(1),
+                high_px=_f(4),
+                low_px=_f(5),
+                last_px=_f(3),
+                bid=_f(6),
+                ask=_f(7),
+                prev_close=_f(2),
+            )
+            if filled is None:
                 continue
+            open_px, high_px, low_px, last_px = filled
+            prev_close = _f(2)
             session = parts[30] or datetime.now().strftime("%Y-%m-%d")
             stamp = f"{session} {parts[31]}" if parts[31] else f"{session} 09:25:00"
             stock_name = str(parts[0] or "").strip()

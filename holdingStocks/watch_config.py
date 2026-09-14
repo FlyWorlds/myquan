@@ -159,7 +159,7 @@ def market_phase_label(phase: str | None = None, *, now: Any | None = None) -> s
         "pre_auction": "盘前（9:15 前）",
         "auction_cancel": "集合竞价·可撤单（9:15–9:20）",
         "auction_locked": "集合竞价·不可撤单（9:20–9:25）",
-        "open_set": "开盘价已出·阈值盯盘（9:25–9:30）",
+        "open_set": "开盘价已出·可挂单（9:25–9:30）",
         "continuous": "连续竞价·信号触发（9:30–11:30 / 13:00–15:00）",
         "lunch": "午休（11:30–13:00）",
         "closed": "收盘（15:00 后）",

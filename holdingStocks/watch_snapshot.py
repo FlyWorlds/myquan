@@ -109,11 +109,12 @@ def filter_portfolio_holdings(
     picked: list[dict[str, Any]] = []
     seen: set[str] = set()
     for r in rows:
-        if r.get("error"):
-            continue
         c = code_key(str(r.get("代码") or ""))
         qty = int(r.get("持仓") or 0)
         closed_trace = qty <= 0 and _is_closed_trace(r)
+        # 行情失败仍留实仓/当日平仓留痕；空仓 error 行不进持仓 Tab
+        if r.get("error") and qty <= 0 and not closed_trace:
+            continue
         # 买点预警：仅默认策略池；不把旧池空壳/别的策略票灌进持仓 Tab
         keep_empty_alert = phase_now in ("continuous", "lunch") or (
             phase_now == "closed" and _is_buy_hit(r)
@@ -215,6 +216,62 @@ def filter_portfolio_holdings(
     return ordered
 
 
+def _occupied_codes(snap: dict[str, Any] | None) -> set[str]:
+    if not snap:
+        return set()
+    occ = (snap.get("slotMeta") or {}).get("occupied") or []
+    return {str(c).zfill(6) for c in occ if c}
+
+
+def should_keep_last_snapshot(
+    *,
+    rows: list[dict[str, Any]],
+    snapshot: dict[str, Any],
+    prev: dict[str, Any] | None,
+) -> bool:
+    """先记录再更新：新快照未就绪时不得把上一份可用表置空。
+
+    账本槽位变了必须出新快照（成交优先于行情）。
+    启动占位 / 上一份本身是空表则不保留。
+    """
+    if not prev or prev.get("type") != "snapshot" or prev.get("boot"):
+        return False
+    prev_h = prev.get("holdings") or []
+    prev_s16 = prev.get("strategy16") or []
+    if not prev_h and not prev_s16:
+        return False
+    if _occupied_codes(snapshot) != _occupied_codes(prev):
+        return False
+    new_h = snapshot.get("holdings") or []
+    new_s16 = snapshot.get("strategy16") or []
+    live = [r for r in rows if not r.get("error")]
+    if rows and not live:
+        return True
+    if _occupied_codes(snapshot) and prev_h and not new_h:
+        return True
+    if prev_s16 and not new_s16:
+        return True
+    return False
+
+
+def retain_last_snapshot(
+    prev: dict[str, Any],
+    *,
+    clock: str,
+    phase: str,
+    phase_key: str,
+) -> dict[str, Any]:
+    """沿用上一份表，只刷新时钟/相位，并标行情未就绪。"""
+    snap = dict(prev)
+    snap["clock"] = clock
+    snap["updatedAt"] = clock
+    snap["ts"] = int(datetime.now().timestamp() * 1000)
+    snap["phase"] = phase
+    snap["phaseKey"] = phase_key
+    snap["quoteStale"] = True
+    snap.pop("boot", None)
+    return snap
+
 
 def build_watch_snapshot(
     *,
@@ -270,7 +327,7 @@ def build_watch_snapshot(
         [
             _strip_holdings_pnl(r)
             for r in rows
-            if not r.get("error") and code_key(str(r.get("代码") or "")) in strategy_codes
+            if code_key(str(r.get("代码") or "")) in strategy_codes
         ]
     )
     try:
@@ -283,7 +340,7 @@ def build_watch_snapshot(
         [
             _strip_holdings_pnl(r)
             for r in rows
-            if not r.get("error") and code_key(str(r.get("代码") or "")) in s16_codes
+            if code_key(str(r.get("代码") or "")) in s16_codes
         ]
     )
     slot_meta = None

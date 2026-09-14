@@ -379,7 +379,7 @@ def test_demote_pre_signal_window():
     assert buy["hit_buy"] is False
     assert buy["alert"] == "将买入"
     assert buy["因子触发"] == "接近"
-    assert "9:30" in str(buy.get("挂单说明") or "")
+    assert "9:25 可挂单" in str(buy.get("挂单说明") or "")
 
     sell = _demote_pre_signal_window(
         {"alert": "已触止损", "hit_buy": False, "hit_stop": True, "因子触发": "已触发"}

@@ -6,7 +6,7 @@
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
   · **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 3
-  · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值；9:30 起触发结算
+  · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值并可挂单；9:30 起触发结算
   · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票不可再待买入
   · 默认交易宇宙：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用，见 watch_config.SELF_WATCHLIST_PICKS）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
@@ -70,6 +70,7 @@ from quote_feed import (
     LocalWsHub,
     QuoteFeedManager,
     fetch_sina_batch,
+    fill_preopen_ohlc,
     ws_accept_key,
     ws_pack_text,
 )
@@ -181,7 +182,12 @@ from watch_config import (
     occupied_slot_codes,
     slot_meta as _slot_meta_from_holdings,
 )
-from watch_snapshot import SNAPSHOT_VERSION, build_watch_snapshot
+from watch_snapshot import (
+    SNAPSHOT_VERSION,
+    build_watch_snapshot,
+    retain_last_snapshot,
+    should_keep_last_snapshot,
+)
 from watch_buy_signal import (
     ALERT_FILLED,
     ALERT_HIT_BUY,
@@ -854,9 +860,13 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 total_mv_no_cost += mv
         if r.get("成本额") is not None and qty > 0:
             total_cost += float(r["成本额"])
-    total_pnl_pct = (total_pnl / total_cost * 100.0) if total_cost > 0 else None
+    total_pnl_pct = (
+        round(total_pnl / total_cost * 100.0, 2) if total_cost > 0 else None
+    )
     total_day_pct = (
-        (total_day_pnl / total_day_base * 100.0) if has_day and total_day_base > 0 else None
+        round(total_day_pnl / total_day_base * 100.0, 2)
+        if has_day and total_day_base > 0
+        else None
     )
     holdings_meta = load_holdings()
     account_total = _account_total(rows, holdings_meta)
@@ -872,12 +882,6 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
     holdings_meta = load_holdings()
     account_open = _account_total_open(holdings_meta)
-    if account_total is not None and account_open is not None:
-        total_pnl = round(float(account_total) - float(account_open) + closed_extra, 2)
-        has_pos = True
-        total_pnl_pct = round(total_pnl / float(account_open) * 100.0, 2)
-    if has_day and account_open is not None and account_open > 0:
-        total_day_pct = round(total_day_pnl / float(account_open) * 100.0, 2)
     position_pct = (
         round(total_mv / account_total * 100.0, 1)
         if account_total and account_total > 0 and total_mv > 0
@@ -1054,6 +1058,28 @@ def publish_watch_snapshot(
         portfolio_codes=portfolio_codes,
         strategy_codes=strategy_watchlist_codes(),
     )
+    if should_keep_last_snapshot(
+        rows=rows, snapshot=snapshot, prev=_last_watch_snapshot
+    ):
+        snap = retain_last_snapshot(
+            _last_watch_snapshot,
+            clock=clock_now,
+            phase=phase_label,
+            phase_key=phase_key,
+        )
+        _last_watch_snapshot = snap
+        body = json.dumps(snap, ensure_ascii=False)
+        hub = _ws_hub
+        if hub is not None:
+            try:
+                hub.broadcast_text(body)
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] WS 广播失败: {e}")
+        _log_watch_snapshot_push(
+            f"[{_now()}] 行情未就绪，沿用上次快照（不置空）",
+        )
+        return WATCH_META_FILE, False
+
     digest = _snapshot_business_digest(snapshot)
     if digest == _last_snapshot_digest and _last_watch_snapshot is not None:
         snap = dict(_last_watch_snapshot)
@@ -1158,13 +1184,66 @@ def _seed_boot_watch_snapshot() -> None:
 _strategy1_factor1_params = _factor1_binding_params
 
 
+def _index_codes_match(raw: str, wanted: str) -> bool:
+    a = str(raw or "").strip().lower()
+    b = str(wanted or "").strip().lower()
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    da = "".join(ch for ch in a if ch.isdigit())
+    db = "".join(ch for ch in b if ch.isdigit())
+    return bool(da) and da == db
+
+
+def _index_from_sina_spot(item: dict[str, str], spot: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        last = float(spot.get("last") or 0)
+        prev = float(spot.get("prev_close") or 0)
+    except (TypeError, ValueError):
+        return None
+    if last <= 0 or prev <= 0:
+        return None
+    chg = last - prev
+    return {
+        "code": item["code"],
+        "name": item["name"],
+        "market": item["market"],
+        "price": last,
+        "chg_points": chg,
+        "chg_pct": chg / prev * 100.0,
+        "error": None,
+    }
+
+
+def _merge_index_keep_last(
+    fresh: list[dict[str, Any]],
+    prev: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """单边失败时沿用上次点数，避免上证/深证整卡「获取失败」。"""
+    last_map = {
+        str(x.get("code") or ""): x
+        for x in (prev or [])
+        if isinstance(x, dict) and x.get("price") and not x.get("error")
+    }
+    out: list[dict[str, Any]] = []
+    for item in fresh:
+        ok = item.get("price") and not item.get("error")
+        if ok:
+            out.append(item)
+            continue
+        kept = last_map.get(str(item.get("code") or ""))
+        out.append(dict(kept) if kept else item)
+    return out
+
+
 def fetch_indices_cached(*, ttl_sec: float = _INDEX_CACHE_TTL_SEC) -> list[dict[str, Any]]:
     """盯盘高频刷新时缓存大盘指数，避免每次重拉拖慢推送。"""
     now = time.monotonic()
     cached = _INDEX_CACHE.get("data") or []
     if cached and (now - float(_INDEX_CACHE.get("t") or 0.0)) < float(ttl_sec):
         return list(cached)
-    data = fetch_indices()
+    data = _merge_index_keep_last(fetch_indices(), cached)
     _INDEX_CACHE["t"] = now
     _INDEX_CACHE["data"] = data
     return data
@@ -1232,6 +1311,35 @@ def _quote_from_sina_spot(spot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _quote_from_daily_prev(daily: pd.DataFrame | None) -> dict[str, Any] | None:
+    """无实时成交时用最近日线收盘垫现价（盘前/新浪失败）。"""
+    if daily is None or getattr(daily, "empty", True):
+        return None
+    if "close" not in daily.columns:
+        return None
+    last = daily.iloc[-1]
+    try:
+        close = float(last.get("close") or 0)
+    except (TypeError, ValueError):
+        return None
+    if close <= 0:
+        return None
+    date = str(last.get("date") or "")
+    return {
+        "session": str(pd.Timestamp.now().date()),
+        "open": close,
+        "high": close,
+        "low": close,
+        "last": close,
+        "prev_close": close,
+        "day_chg_pct": 0.0,
+        "last_ts": f"{date} 15:00:00" if date else _now(),
+        "name": "",
+        "_day_bars": pd.DataFrame(),
+        "_quote_source": "daily_prev",
+    }
+
+
 def _reseed_sina_batch(
     feed: QuoteFeedManager,
     watchlist: list[dict[str, Any]] | None = None,
@@ -1247,15 +1355,27 @@ def _reseed_sina_batch(
             continue
         feed.seed(w["sina"], _quote_from_sina_spot(spot))
         n += 1
+    # 盘前新浪/批量失败时用已预热日线昨收垫上，避免 collect_rows 逐只 8s 超时
+    for w in items:
+        if feed.get_quote(w["sina"]):
+            continue
+        q = _quote_from_daily_prev(_watch_daily(w["sina"]))
+        if q is None:
+            continue
+        feed.seed(w["sina"], q)
+        n += 1
     return n
 
 
 def fetch_today_quote_live(sina: str) -> dict[str, Any]:
     """盯盘专用：仅新浪实时快照，不请求东财历史分钟 K。"""
     spot = fetch_sina_spot(sina)
-    if spot is None:
-        raise RuntimeError(f"无实时行情: {sina}")
-    return _quote_from_sina_spot(spot)
+    if spot is not None:
+        return _quote_from_sina_spot(spot)
+    q = _quote_from_daily_prev(_watch_daily(sina))
+    if q is not None:
+        return q
+    raise RuntimeError(f"无实时行情: {sina}")
 
 
 def _reseed_live_batch(
@@ -2083,17 +2203,49 @@ def _account_total_open(data: dict[str, Any] | None = None) -> float | None:
     return _as_money(data.get("account_total_open"))
 
 
+def _account_has_open_qty(data: dict[str, Any] | None = None) -> bool:
+    data = data if data is not None else load_holdings()
+    for pos in (data.get("positions") or {}).values():
+        if not isinstance(pos, dict):
+            continue
+        try:
+            if int(pos.get("qty") or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def _equity_is_cash_only(
+    data: dict[str, Any],
+    account_total: float | None,
+) -> bool:
+    """有实仓但总资产≈现金：行情市值没进来，不能当日子/总资产真源。"""
+    cash = _account_cash(data)
+    if cash is None or account_total is None:
+        return False
+    if abs(float(account_total) - float(cash)) > 1.0:
+        return False
+    return _account_has_open_qty(data)
+
+
 def _ensure_account_open_session(
     data: dict[str, Any],
     *,
     session: str,
     account_total: float | None,
 ) -> None:
-    """跨日或首次：锁定日初总资产，供合计/当日盈亏%分母。"""
+    """跨日或首次：锁定日初总资产。有实仓时禁止把「仅现金」写成日初。"""
     open_session = str(data.get("account_total_open_session") or "")
-    if open_session == session and _account_total_open(data) is not None:
+    existing = _account_total_open(data)
+    if open_session == session and existing is not None:
+        if _equity_is_cash_only(data, existing):
+            data["account_total_open"] = round(float(DEFAULT_ACCOUNT_TOTAL), 2)
+            save_holdings(data)
         return
     if account_total is None or account_total <= 0:
+        return
+    if _equity_is_cash_only(data, account_total):
         return
     data["account_total_open"] = round(float(account_total), 2)
     data["account_total_open_session"] = session
@@ -2386,7 +2538,7 @@ def _stamp_buy_touched(
 
 
 def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
-    """9:30 连续竞价前：可展示阈值/接近，禁止『已触发』买卖信号。"""
+    """9:30 连续竞价前：9:25 起可挂单预览，禁止『已触发』记账/结算。"""
     out = dict(sig)
     out["hit_buy"] = False
     out["hit_stop"] = False
@@ -2400,9 +2552,9 @@ def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
         out["持仓状态"] = "待买入"
         out["因子触发"] = "接近"
         note = str(out.get("挂单说明") or "")
-        if "9:30" not in note:
+        if "可挂单" not in note:
             out["挂单说明"] = (
-                (note + "；" if note else "") + "9:30 连续竞价起才计已触发"
+                (note + "；" if note else "") + "9:25 可挂单；9:30 起才计已触发"
             )
     elif alert == "已触止损" or alert.startswith("已触止损"):
         out["alert"] = "将止损"
@@ -2412,9 +2564,9 @@ def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
         out["持仓状态"] = "待卖出"
         out["因子触发"] = "接近"
         note = str(out.get("挂单说明") or "")
-        if "9:30" not in note:
+        if "可挂单" not in note:
             out["挂单说明"] = (
-                (note + "；" if note else "") + "9:30 连续竞价起才结算止损"
+                (note + "；" if note else "") + "9:25 可挂单；9:30 起才结算止损"
             )
     elif alert == "半仓止盈" or alert.startswith("半仓止盈"):
         out["alert"] = "将半仓"
@@ -2424,9 +2576,9 @@ def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
         out["持仓状态"] = "待卖出"
         out["因子触发"] = "接近"
         note = str(out.get("挂单说明") or "")
-        if "9:30" not in note:
+        if "可挂单" not in note:
             out["挂单说明"] = (
-                (note + "；" if note else "") + "9:30 连续竞价起才结算半仓"
+                (note + "；" if note else "") + "9:25 可挂单；9:30 起才结算半仓"
             )
     elif trig == "已触发" or trig.startswith("已触发"):
         out["因子触发"] = "接近"
@@ -2576,12 +2728,16 @@ def _account_total(
     rows: list[dict[str, Any]] | None = None,
     data: dict[str, Any] | None = None,
 ) -> float | None:
-    """总资产：优先 现金+市值；否则用登记的 account_total。"""
+    """总资产：优先 现金+市值；有实仓但市值未到则沿用登记值，不退回仅现金。"""
     data = data if data is not None else load_holdings()
     cash = _account_cash(data)
+    registered = _as_money(data.get("account_total"))
     if cash is not None and rows is not None:
-        return round(cash + _holdings_market_value(rows), 2)
-    return _as_money(data.get("account_total"))
+        mv = _holdings_market_value(rows)
+        if mv > 0 or not _account_has_open_qty(data):
+            return round(cash + mv, 2)
+        return registered if registered is not None else round(float(cash), 2)
+    return registered
 
 
 def _available_cash(
@@ -2628,7 +2784,10 @@ def _sync_account_total(rows: list[dict[str, Any]]) -> float | None:
     cash = _account_cash(data)
     if cash is None:
         return _as_money(data.get("account_total"))
-    total = round(cash + _holdings_market_value(rows), 2)
+    mv = _holdings_market_value(rows)
+    if _account_has_open_qty(data) and mv <= 0:
+        return _as_money(data.get("account_total"))
+    total = round(cash + mv, 2)
     if data.get("account_total") != total:
         data["account_total"] = total
         save_holdings(data)
@@ -3586,24 +3745,19 @@ def fetch_sina_spot(sina: str) -> dict[str, Any] | None:
         except (TypeError, ValueError):
             return 0.0
 
-    open_px = _f(1)
-    prev_close = _f(2)
-    last_px = _f(3)
-    high_px = _f(4)
-    low_px = _f(5)
-    bid = _f(6)
-    ask = _f(7)
-    # 竞价阶段 open/last 常为 0，用买卖一价作撮合参考
-    if open_px <= 0:
-        open_px = bid or ask or last_px
-    if last_px <= 0:
-        last_px = open_px or bid or ask
-    if high_px <= 0:
-        high_px = max(open_px, last_px)
-    if low_px <= 0:
-        low_px = min(x for x in (open_px, last_px) if x > 0) if open_px or last_px else 0.0
-    if open_px <= 0 or last_px <= 0 or prev_close <= 0:
+    filled = fill_preopen_ohlc(
+        open_px=_f(1),
+        high_px=_f(4),
+        low_px=_f(5),
+        last_px=_f(3),
+        bid=_f(6),
+        ask=_f(7),
+        prev_close=_f(2),
+    )
+    if filled is None:
         return None
+    open_px, high_px, low_px, last_px = filled
+    prev_close = _f(2)
     session = parts[30] or str(pd.Timestamp.now().date())
     stamp = f"{session} {parts[31]}" if parts[31] else f"{session} 09:25:00"
     return {
@@ -3765,56 +3919,73 @@ def pct_vs_open(open_px: float, px: float) -> float | None:
 
 
 def fetch_indices() -> list[dict[str, Any]]:
-    """拉取上证指数 / 深证成指：最新点数、涨跌点数、涨跌幅。"""
+    """拉取上证指数 / 深证成指：最新点数、涨跌点数、涨跌幅。
+
+    优先新浪批量（与个股同一通道）；akshare 表代码常不带 sh/sz 前缀，对不上就「未找到」。
+    """
+    blanks = [
+        {
+            "code": x["code"],
+            "name": x["name"],
+            "market": x["market"],
+            "price": None,
+            "chg_points": None,
+            "chg_pct": None,
+            "error": None,
+        }
+        for x in INDEX_WATCH
+    ]
+    batch: dict[str, dict[str, Any]] = {}
+    try:
+        batch = fetch_sina_batch([x["code"] for x in INDEX_WATCH])
+    except Exception:  # noqa: BLE001
+        batch = {}
+    out: list[dict[str, Any]] = []
+    missing: list[dict[str, str]] = []
+    for item, blank in zip(INDEX_WATCH, blanks, strict=True):
+        spot = batch.get(str(item["code"]).lower())
+        parsed = _index_from_sina_spot(item, spot) if spot else None
+        if parsed is not None:
+            out.append(parsed)
+        else:
+            missing.append(item)
+            out.append(dict(blank, error="未找到指数"))
+    if not missing:
+        return out
+
     try:
         with AKSHARE_CALL_LOCK:
-            spot = ak.stock_zh_index_spot_sina()
+            spot_df = ak.stock_zh_index_spot_sina()
     except Exception as e:  # noqa: BLE001
-        return [
-            {
-                "code": x["code"],
-                "name": x["name"],
-                "market": x["market"],
-                "price": None,
-                "chg_points": None,
-                "chg_pct": None,
-                "error": str(e),
-            }
-            for x in INDEX_WATCH
+        if not any(x.get("price") for x in out):
+            return [dict(b, error=str(e)) for b in blanks]
+        return out
+    if spot_df is None or getattr(spot_df, "empty", True):
+        return out
+    code_col = "代码" if "代码" in spot_df.columns else spot_df.columns[0]
+    by_code = {str(item["code"]): i for i, item in enumerate(INDEX_WATCH)}
+    for item in missing:
+        row = spot_df[
+            spot_df[code_col].astype(str).map(lambda c: _index_codes_match(c, item["code"]))
         ]
-
-    out: list[dict[str, Any]] = []
-    code_col = "代码" if "代码" in spot.columns else spot.columns[0]
-    for item in INDEX_WATCH:
-        row = spot[spot[code_col].astype(str) == item["code"]]
+        idx = by_code[item["code"]]
         if row.empty:
-            out.append(
-                {
-                    "code": item["code"],
-                    "name": item["name"],
-                    "market": item["market"],
-                    "price": None,
-                    "chg_points": None,
-                    "chg_pct": None,
-                    "error": "未找到指数",
-                }
-            )
             continue
         r = row.iloc[0]
         price = pd.to_numeric(r.get("最新价"), errors="coerce")
         chg_pts = pd.to_numeric(r.get("涨跌额"), errors="coerce")
         chg_pct = pd.to_numeric(r.get("涨跌幅"), errors="coerce")
-        out.append(
-            {
-                "code": item["code"],
-                "name": item["name"],
-                "market": item["market"],
-                "price": None if pd.isna(price) else float(price),
-                "chg_points": None if pd.isna(chg_pts) else float(chg_pts),
-                "chg_pct": None if pd.isna(chg_pct) else float(chg_pct),
-                "error": None,
-            }
-        )
+        if pd.isna(price):
+            continue
+        out[idx] = {
+            "code": item["code"],
+            "name": item["name"],
+            "market": item["market"],
+            "price": float(price),
+            "chg_points": None if pd.isna(chg_pts) else float(chg_pts),
+            "chg_pct": None if pd.isna(chg_pct) else float(chg_pct),
+            "error": None,
+        }
     return out
 
 
@@ -6006,18 +6177,10 @@ def cmd_status(args: argparse.Namespace) -> None:
     holdings_meta = load_holdings()
     account_total = _account_total(rows, holdings_meta)
     account_open = _account_total_open(holdings_meta)
-    if account_total is not None and account_open is not None:
-        eq_pnl = round(float(account_total) - float(account_open), 2)
-        eq_pct = round(eq_pnl / float(account_open) * 100.0, 2)
-        print(f"合计盈亏: {eq_pnl:+.2f} ({eq_pct:+.2f}%)  [总资产 {account_total:.2f} vs 日初 {account_open:.2f}]")
-    elif stock_n:
+    if stock_n:
         print(f"合计盈亏: {stock_pnl:+.2f}  [持股浮盈+已结算]")
     if day_n:
-        if account_open is not None and account_open > 0:
-            day_pct = day_total / float(account_open) * 100.0
-            pct_txt = f"{day_pct:+.2f}%"
-        else:
-            pct_txt = "-"
+        pct_txt = "-"
         print(f"合计当日盈亏: {day_total:+.2f} ({pct_txt})")
     else:
         print("合计当日盈亏: -")
@@ -6992,9 +7155,16 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
     def get_quote(sina: str) -> dict[str, Any]:
         q = feed.get_quote(sina)
-        if q is None:
-            q = fetch_today_quote_live(sina)
-            feed.seed(sina, q)
+        if q is not None:
+            return q
+        # 盘前先垫昨收，避免新浪单只 8s×N 卡住首屏
+        if market_phase() == "pre_auction":
+            q = _quote_from_daily_prev(_watch_daily(sina))
+            if q is not None:
+                feed.seed(sina, q)
+                return q
+        q = fetch_today_quote_live(sina)
+        feed.seed(sina, q)
         return q
 
     def reseed_live() -> int:
