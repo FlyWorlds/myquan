@@ -111,7 +111,8 @@ pip install -r ../requirements.txt
 | `factor2_watch.py` | 账户回撤预警 |
 | `factor4_watch.py` | 牛市 regime（策略三 + 因子4 时） |
 | `index.py` | 盯盘主程序 / JSON 推送 / 微信 / 买卖记账 |
-| `start_watch.py` | 一键启动 API+Nuxt；`--stop` / `--force` 回收端口 |
+| `holdings_sync.py` | Win/Mac 账本：`holdings-push` / `holdings-pull` → `origin/holdings-ledger` |
+| `start_watch.py` | 一键启动 API+Nuxt；默认先拉远程持仓；`--stop` / `--force` 回收端口 |
 | `watch_process.py` | Windows 端口/PID 回收（Ctrl+C 孤儿进程） |
 | `quote_feed.py` | 行情聚合 |
 | `wechat_notify.py` | 微信推送 |
@@ -142,7 +143,7 @@ cd holdingStocks && python index.py watch --no-wechat
 cd holdingStocks/watch-ui && npm install && npm run dev
 ```
 
-**启动顺序**：`watch` **先绑定并开始接受** `:8765`（HTTP `/api` + WebSocket `/ws`），再后台做冷启动（新浪批量、**强制按信号交易日重拉日线**、东财 SSE、首屏快照）。日线末根须覆盖「最近已收盘工作日」（15:15 前不含当日）；缺则增量/全量补拉，避免过门/前日沿用旧 parquet。周六日信号日锚定上周五；周一「前日」自然为上周五。`start_watch.py` 等 API 端口就绪后再自己开 Nuxt（并传 `--no-ui-dev`，避免两套前端抢 `:3000`）。此前若等首屏算完才绑端口，池子变大后会超过 120s，页面红字「推送断开，等待重连…」。冷启动期间若有上次 `holdings_watch.json` 会先展示旧快照，否则推 `boot` 占位。
+**启动顺序**：`watch` **先绑定并开始接受** `:8765`（HTTP `/api` + WebSocket `/ws`），再后台做冷启动（新浪批量、**强制按信号交易日重拉日线**、东财 SSE、首屏快照）。日线末根须覆盖「最近已收盘工作日」（15:15 前不含当日）；缺则增量/全量补拉，避免过门/前日沿用旧 parquet。周六日信号日锚定上周五；周一「前日」自然为上周五。`start_watch.py` 等 API 端口就绪后再自己开 Nuxt（并传 `--no-ui-dev`，避免两套前端抢 `:3000`）。此前若等首屏算完才绑端口，池子变大后会超过 120s，页面红字「推送断开，等待重连…」。冷启动期间若有上次 `holdings_watch.json` **且不比 `holdings.json` 旧** 会先展示旧快照，否则丢掉过期缓存并推 `boot` 占位。
 
 loop 内「快照已推送」默认**每 12 次**输出一条（冷启动仍打印；业务无变化跳过写盘/WS 时不计次）；恢复每次：`WATCH_SNAPSHOT_LOG_EVERY=1 python index.py watch …`
 
@@ -179,7 +180,11 @@ python index.py watch        # 仅数据后端（不启页面）
 python index.py clear-all    # 清仓+重置状态+归档当日成交；账户回到 DEFAULT_ACCOUNT_TOTAL（现 30 万）
 python index.py buy 600552 15.50 400
 python index.py sell 600552 16.20 400
+python index.py holdings-push   # 本机账本 → origin/holdings-ledger（给另一台 Mac/Win）
+python index.py holdings-pull   # 远程账本 → 本机；丢掉 holdings_watch.json 旧缓存
 ```
+
+**Win / Mac 同一份持仓**：真源是 `holdings.json` + `trades.jsonl`，推到独立分支 `holdings-ledger`（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。离线用 `--no-ledger-pull`。
 
 ## 如何扩展
 

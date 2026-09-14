@@ -278,6 +278,9 @@ cd backtest && python strategy2.py mine --panel ../data_cache/strategy2_chan/fea
 # 因子13：熊市盾牌 WF（thr* Top3，锁定配置）
 python strategy/run_factor13_bear_shield_wf.py
 python strategy/run_factor13_bear_shield_tune_pit.py   # VALID 调参（锁定前）
+# 盯盘账本 Win↔Mac（独立分支 holdings-ledger，不进 main）
+cd holdingStocks && python index.py holdings-push
+cd holdingStocks && python index.py holdings-pull
 ```
 
 ## 如何扩展（开闭）

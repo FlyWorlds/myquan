@@ -232,6 +232,11 @@ def main() -> int:
         help="关闭微信（传给 index.py watch）",
     )
     parser.add_argument(
+        "--no-ledger-pull",
+        action="store_true",
+        help="启动时不拉取远程持仓（本机 holdings.json 为准）",
+    )
+    parser.add_argument(
         "extra",
         nargs="*",
         help="传给 index.py watch 的额外参数；可用 -- 分隔",
@@ -245,6 +250,16 @@ def main() -> int:
         raise SystemExit(f"[start_watch] 缺少 {INDEX}")
 
     _prepare_start(force=bool(args.force))
+    if not args.no_ledger_pull:
+        try:
+            if str(ROOT) not in sys.path:
+                sys.path.insert(0, str(ROOT))
+            from holdings_sync import pull_holdings
+
+            print("[start_watch] 拉取远程持仓（holdings-ledger）…")
+            pull_holdings(quiet=False)
+        except Exception as e:  # noqa: BLE001
+            print(f"[start_watch] 远程持仓拉取失败（继续本机账本）: {e}")
     py = _resolve_python()
     npm = _resolve_npm()
     _ensure_node_modules(npm)
@@ -264,6 +279,8 @@ def main() -> int:
         watch_args.append("--force")
     if args.no_wechat:
         watch_args.append("--no-wechat")
+    if args.no_ledger_pull:
+        watch_args.append("--no-ledger-pull")
     watch_args.extend(extra)
 
     env = _loopback_env()

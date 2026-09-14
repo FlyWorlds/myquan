@@ -1,5 +1,6 @@
 ### P0（剩余）
 - [ ] **持仓手工录入进数据库**：持仓、盈亏、总金额、统计（非代码录入）
+- [x] **Win/Mac 持仓远程同步**：账本 `holdings.json`+`trades.jsonl` 走 `origin/holdings-ledger`（`holdings-push` / `holdings-pull`）；`holdings_watch.json` 只当本机缓存，过期丢弃
 
 ### P1 · 策略十六算法审核跟进（2026-09-13，见 [`docs/PROJECT_AUDIT.md`](docs/PROJECT_AUDIT.md)）
 - [x] **盯盘 10% 仍全清**：持仓记 `tp_stage` / `last_tp_ts`；10% 只卖一半并写「半仓止盈」；半仓后从触达分钟下一根继续盯剩余；`realized_today` 允许当日第二笔。不接券商，只出信号 + 纸面数量。

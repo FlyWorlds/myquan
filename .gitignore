@@ -17,7 +17,10 @@ backtest/*_monthly.csv
 backtest/_*.txt
 backtest/*_out.txt
 
-# 持仓盯盘运行时数据（本地状态，勿入库）
+# 持仓盯盘运行时数据（勿进 main）
+# holdings.json / trades.jsonl 走独立分支 holdings-ledger：
+#   python index.py holdings-push / holdings-pull
+# holdings_watch.json 是本机展示缓存，不是账本，禁止当跨机真源
 holdingStocks/holdings.json
 holdingStocks/holdings_report.html
 holdingStocks/holdings_watch.json
@@ -27,6 +30,7 @@ holdingStocks/wechat_alert_state.json
 holdingStocks/wechat_notify.json
 holdingStocks/market_review_latest.txt
 holdingStocks/market_review_latest.json
+holdingStocks/.ledger_git_index
 holdingStocks/logs/
 holdingStocks/watch_stdout.log
 holdingStocks/watch_stderr.log

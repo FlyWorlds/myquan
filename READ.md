@@ -216,6 +216,9 @@ cd myquan && python -m unittest -v test_strategy_rules.py
 # 持仓盯盘（Web 页面 + Python 数据）
 cd myquan/holdingStocks && python start_watch.py --no-wechat
 # 浏览器 http://127.0.0.1:3000/  ·  API/WS :8765
+# Win↔Mac 持仓：真源 holdings.json，远程分支 holdings-ledger（不是 holdings_watch.json 缓存）
+python index.py holdings-push
+python index.py holdings-pull
 
 # 或分两终端
 cd myquan/holdingStocks && python index.py watch --no-wechat
@@ -274,7 +277,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 - 规则与 **因子1** 同源（`strategy/open_break.py`）；盯盘首页 Tab 为 **策略1 / 3 / 8 / 15 / 16**；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。策略十二在 `/strategies` 因子组合栏。
 - 早盘节点：9:15 竞价+**全日状态重置**（sticky/缓存/微信防抖，只留实仓；启动过点补跑；**并强制重拉日线供过门/前日**）→ 9:20 不可撤 → 9:25 算阈值/过门 → 9:30 触发信号（`watch_config.py`）。因子26 止盈触达按 **1 分钟 path-dependent**（禁止全日 low×抬高后卖价假触）。周六日信号日锚定上周五；周一前日=上周五。
 - 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
-- 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。**先绑 `:8765` 再后台冷启动**（避免首屏超过 `start_watch.py` 120s 等待、页面「推送断开」）。一键启动：`python start_watch.py`。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
+- 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。**先绑 `:8765` 再后台冷启动**（避免首屏超过 `start_watch.py` 120s 等待、页面「推送断开」）。一键启动：`python start_watch.py`。**Win/Mac 持仓**走 `origin/holdings-ledger`（`holdings-push` / 启动默认 `holdings-pull`）；`holdings_watch.json` 是本机缓存，账本更新后丢弃。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
 - 股票名/代码外链：百度财经 `finance.baidu.com/stock/ab-{code}`。
 - 微信预警：OpenClaw（P0 ✅）；自动结算不下真实委托。
 

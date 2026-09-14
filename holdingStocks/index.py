@@ -33,6 +33,8 @@
   python index.py review       # 行情复盘并推送微信
   python index.py review-schedule install  # 周一/周五 15:00 定时推送
   python index.py history
+  python index.py holdings-push   # 本机账本推到 origin/holdings-ledger（给另一台 Mac/Win）
+  python index.py holdings-pull   # 拉取远程账本；丢掉本机 holdings_watch.json 旧缓存
 """
 
 from __future__ import annotations
@@ -1085,11 +1087,24 @@ def publish_watch_snapshot(
 
 
 def _seed_boot_watch_snapshot() -> None:
-    """HTTP/WS 先于冷启动就绪：复用上次快照，没有则占位，避免前端 503。"""
+    """HTTP/WS 先于冷启动就绪：复用上次快照，没有则占位，避免前端 503。
+
+    若 holdings.json 比 holdings_watch.json 新，视为本机展示缓存过期
+    （Win/Mac 各一份），不得用旧快照当持仓真源。
+    """
     global _last_watch_snapshot
     if _last_watch_snapshot is not None:
         return
-    if WATCH_META_FILE.is_file():
+    from holdings_sync import snapshot_cache_stale
+
+    if snapshot_cache_stale():
+        if WATCH_META_FILE.is_file():
+            print(f"[{_now()}] 丢弃过期 holdings_watch.json（账本更新）")
+            try:
+                WATCH_META_FILE.unlink()
+            except OSError:
+                pass
+    elif WATCH_META_FILE.is_file():
         try:
             snap = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
             if isinstance(snap, dict) and snap.get("type") == "snapshot":
@@ -2622,6 +2637,9 @@ def _sync_account_total(rows: list[dict[str, Any]]) -> float | None:
 
 def save_holdings(data: dict[str, Any]) -> None:
     data["updated_at"] = _now()
+    from holdings_sync import current_host
+
+    data["updated_host"] = current_host()
     with HOLDINGS_FILE.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     _HOLDINGS_CACHE["data"] = data
@@ -6888,6 +6906,22 @@ def cmd_watch_stop(_: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def cmd_holdings_push(args: argparse.Namespace) -> None:
+    from holdings_sync import push_holdings
+
+    push_holdings(force=bool(getattr(args, "force", False)))
+
+
+def cmd_holdings_pull(args: argparse.Namespace) -> None:
+    from holdings_sync import pull_holdings
+
+    global _HOLDINGS_CACHE
+    result = pull_holdings(force=bool(getattr(args, "force", False)))
+    _HOLDINGS_CACHE.clear()
+    if result == "missing-remote":
+        raise SystemExit(2)
+
+
 def cmd_watch(args: argparse.Namespace) -> None:
     """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。
 
@@ -6896,6 +6930,15 @@ def cmd_watch(args: argparse.Namespace) -> None:
     import atexit
 
     atexit.register(_release_watch_lock)
+    if not bool(getattr(args, "no_ledger_pull", False)):
+        try:
+            from holdings_sync import pull_holdings
+
+            result = pull_holdings(quiet=False)
+            if result == "pulled":
+                _HOLDINGS_CACHE.clear()
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 远程持仓拉取失败（继续用本机账本）: {e}")
     global _ws_hub
     interval = max(2, int(args.interval))
     host = str(args.host)
@@ -7426,6 +7469,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="强制停止旧实例并回收端口后启动（Windows Ctrl+C 遗留进程时有用）",
     )
+    w.add_argument(
+        "--no-ledger-pull",
+        action="store_true",
+        help="启动时不拉取 origin/holdings-ledger（离线或本机为准）",
+    )
     w.set_defaults(func=cmd_watch)
 
     ws = sub.add_parser(
@@ -7482,6 +7530,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     h = sub.add_parser("history", help="查看成交流水")
     h.set_defaults(func=cmd_history)
+
+    hp = sub.add_parser(
+        "holdings-push",
+        help="把本机 holdings.json/trades.jsonl 推到 origin/holdings-ledger（Win↔Mac）",
+    )
+    hp.add_argument(
+        "--force",
+        action="store_true",
+        help="即使远程更新也覆盖推送",
+    )
+    hp.set_defaults(func=cmd_holdings_push)
+
+    hl = sub.add_parser(
+        "holdings-pull",
+        help="拉取远程账本并丢掉本机 holdings_watch.json 旧缓存",
+    )
+    hl.add_argument(
+        "--force",
+        action="store_true",
+        help="即使本机更新也覆盖为远程",
+    )
+    hl.set_defaults(func=cmd_holdings_pull)
     return p
 
 
