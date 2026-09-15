@@ -1023,13 +1023,15 @@ def test_filter_skips_paper_replay_closed():
 
 
 def test_closed_day_pnl_gap_open():
-    """已平仓：低开跌破止损，平仓价=开盘，当日浮亏相对昨收。"""
-    from index import _enrich_closed_day_pnl
+    """今日平仓：低开跌破止损，平仓价=开盘，当日浮亏相对昨收。"""
+    from index import _enrich_closed_day_pnl, _paper_slot_qty
 
+    qty = _paper_slot_qty(47.67)
     row = {
         "代码": "601208",
         "持仓": 0,
-        "持仓状态": "已平仓",
+        "已实现": True,
+        "持仓状态": "今日平仓",
         "当日禁买": True,
         "已触止损": "是",
         "现价": 47.07,
@@ -1037,13 +1039,12 @@ def test_closed_day_pnl_gap_open():
         "开盘": 46.97,
         "最低": 46.88,
         "止损": 47.71,
+        "卖出数量": qty,
+        "成本": 47.67,
     }
     _enrich_closed_day_pnl(
-        row, lots={"601208": {"qty": 600, "cost": 47.67}}
+        row, lots={"601208": {"qty": qty, "cost": 47.67}}
     )
-    from index import _paper_slot_qty
-
-    qty = _paper_slot_qty(47.67)
     assert qty == 1800
     assert row["成交价"] == 46.97
     assert row["卖出数量"] == qty
@@ -1053,27 +1054,28 @@ def test_closed_day_pnl_gap_open():
 
 
 def test_closed_day_pnl_path_stop():
-    """已平仓：开盘已破买点硬保护，平仓价=开盘，不是更低的 T1 回落。"""
-    from index import _enrich_closed_day_pnl
+    """今日平仓：开盘已破买点硬保护，平仓价=开盘，不是更低的 T1 回落。"""
+    from index import _enrich_closed_day_pnl, _paper_slot_qty
 
+    qty = _paper_slot_qty(36.35)
     row = {
         "代码": "000021",
         "持仓": 0,
+        "已实现": True,
         "槽位留痕": True,
-        "持仓状态": "已平仓",
+        "持仓状态": "今日平仓",
         "已触止损": "是",
         "现价": 34.43,
         "昨收": 36.5,
         "开盘": 35.21,
         "最低": 34.08,
         "止损": 34.32,
+        "卖出数量": qty,
+        "成本": 36.35,
     }
     _enrich_closed_day_pnl(
-        row, lots={"000021": {"qty": 800, "cost": 36.35}}
+        row, lots={"000021": {"qty": qty, "cost": 36.35}}
     )
-    from index import _paper_slot_qty
-
-    qty = _paper_slot_qty(36.35)
     assert qty == 2400
     assert row["成交价"] == 35.21
     assert row["卖出数量"] == qty
@@ -1082,12 +1084,14 @@ def test_closed_day_pnl_path_stop():
 
 def test_closed_day_pnl_locks_stop_not_last():
     """已触止损但日线最低未到：仍按止损锁定，不跟现价。"""
-    from index import _enrich_closed_day_pnl
+    from index import _enrich_closed_day_pnl, _paper_slot_qty
 
+    qty = _paper_slot_qty(70.21)
     row = {
         "代码": "002636",
         "持仓": 0,
-        "持仓状态": "已平仓",
+        "已实现": True,
+        "持仓状态": "今日平仓",
         "当日禁买": True,
         "已触止损": "是",
         "现价": 75.38,
@@ -1095,20 +1099,19 @@ def test_closed_day_pnl_locks_stop_not_last():
         "开盘": 76.0,
         "最低": 75.18,
         "止损": 74.1,
+        "卖出数量": qty,
+        "成本": 70.21,
     }
     _enrich_closed_day_pnl(
-        row, lots={"002636": {"qty": 400, "cost": 70.21}}
+        row, lots={"002636": {"qty": qty, "cost": 70.21}}
     )
-    from index import _paper_slot_qty
-
-    qty = _paper_slot_qty(70.21)
     assert qty == 1200
     assert row["成交价"] == 74.1
     locked = row["当日盈亏"]
     assert locked == round((74.1 - 76.45) * qty, 2)
     row["现价"] = 80.0
     _enrich_closed_day_pnl(
-        row, lots={"002636": {"qty": 400, "cost": 70.21}}
+        row, lots={"002636": {"qty": qty, "cost": 70.21}}
     )
     assert row["成交价"] == 74.1
     assert row["当日盈亏"] == locked
@@ -1121,7 +1124,8 @@ def test_closed_jinan_rejects_eod_stop_vs_open():
     row = {
         "代码": "002636",
         "持仓": 0,
-        "持仓状态": "已平仓",
+        "已实现": True,
+        "持仓状态": "今日平仓",
         "当日禁买": True,
         "已触止损": "是",
         "现价": 82.46,
@@ -1165,7 +1169,8 @@ def test_closed_jinan_path_ladder_not_open():
     row = {
         "代码": "002636",
         "持仓": 0,
-        "持仓状态": "已平仓",
+        "已实现": True,
+        "持仓状态": "今日平仓",
         "当日禁买": True,
         "已触止损": "是",
         "现价": 82.46,
@@ -1387,31 +1392,37 @@ def test_record_daily_settlement_once_final():
     from index import record_daily_settlement, load_holdings, save_holdings
 
     data = load_holdings()
+    backup = dict(data.get("daily_settlements") or {})
     data["daily_settlements"] = {}
     save_holdings(data)
-    acc = {
-        "accountTotal": 301000.0,
-        "accountOpen": 300000.0,
-        "paperEquityBase": 300000.0,
-        "totalPnlStart": "2026-09-09",
-        "dayPnl": 1000.0,
-        "dayPnlPct": 0.33,
-        "equityDayPnl": 1000.0,
-        "totalPnl": 1000.0,
-        "totalPnlPct": 0.33,
-        "settledCount": 1,
-        "settledDayPnl": 200.0,
-    }
-    assert record_daily_settlement(
-        session="2026-09-12", account=acc, rows=[], force=True
-    )
-    assert not record_daily_settlement(
-        session="2026-09-12", account=acc, rows=[], force=False
-    )
-    book = load_holdings().get("daily_settlements") or {}
-    rec = book["2026-09-12"]
-    assert rec["final"] is True
-    assert rec["day_pnl"] == 1000.0
-    assert rec["day_pnl_vs_equity"] == 0.0
-    assert rec["total_pnl"] == 1000.0
+    try:
+        acc = {
+            "accountTotal": 301000.0,
+            "accountOpen": 300000.0,
+            "paperEquityBase": 300000.0,
+            "totalPnlStart": "2026-09-09",
+            "dayPnl": 1000.0,
+            "dayPnlPct": 0.33,
+            "equityDayPnl": 1000.0,
+            "totalPnl": 1000.0,
+            "totalPnlPct": 0.33,
+            "settledCount": 1,
+            "settledDayPnl": 200.0,
+        }
+        assert record_daily_settlement(
+            session="2026-09-12", account=acc, rows=[], force=True
+        )
+        assert not record_daily_settlement(
+            session="2026-09-12", account=acc, rows=[], force=False
+        )
+        book = load_holdings().get("daily_settlements") or {}
+        rec = book["2026-09-12"]
+        assert rec["final"] is True
+        assert rec["day_pnl"] == 1000.0
+        assert rec["day_pnl_vs_equity"] == 0.0
+        assert rec["total_pnl"] == 1000.0
+    finally:
+        data = load_holdings()
+        data["daily_settlements"] = backup
+        save_holdings(data)
 

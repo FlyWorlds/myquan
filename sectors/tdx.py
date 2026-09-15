@@ -50,18 +50,41 @@ TDX_SERVERS: tuple[tuple[str, int], ...] = (
     ("114.80.63.12", 7709),
 )
 
-# 连不上时短路一段时间，避免盯盘每轮卡 30s+
+# 连不上时短路一段时间，避免盯盘每轮卡在 pytdx 超时上
 _TDX_FAIL_UNTIL = 0.0
-_TDX_RETRY_SEC = 45.0
+_TDX_RETRY_SEC = 600.0  # 全挂后 10 分钟内不再重试（实时列走东财对齐通达信名单）
+_TDX_LAST_OK_TS = 0.0
+_TDX_LAST_ERR = ""
 
 
 def tdx_hq_available() -> bool:
+    """通达信行情是否可试连。失败冷却期内直接 False，禁止每轮扫服务器。"""
     return time.time() >= _TDX_FAIL_UNTIL
 
 
-def _mark_tdx_down() -> None:
-    global _TDX_FAIL_UNTIL
+def tdx_hq_state() -> dict[str, Any]:
+    now = time.time()
+    return {
+        "available": now >= _TDX_FAIL_UNTIL,
+        "fail_until": _TDX_FAIL_UNTIL,
+        "retry_in_sec": max(0.0, round(_TDX_FAIL_UNTIL - now, 1)),
+        "last_ok_ts": _TDX_LAST_OK_TS,
+        "last_error": _TDX_LAST_ERR or None,
+    }
+
+
+def _mark_tdx_down(err: str | None = None) -> None:
+    global _TDX_FAIL_UNTIL, _TDX_LAST_ERR
     _TDX_FAIL_UNTIL = time.time() + _TDX_RETRY_SEC
+    if err:
+        _TDX_LAST_ERR = str(err)[:200]
+
+
+def _mark_tdx_up() -> None:
+    global _TDX_FAIL_UNTIL, _TDX_LAST_OK_TS, _TDX_LAST_ERR
+    _TDX_FAIL_UNTIL = 0.0
+    _TDX_LAST_OK_TS = time.time()
+    _TDX_LAST_ERR = ""
 
 
 def _windows_tdx_homes() -> list[Path]:
@@ -202,25 +225,26 @@ def _clean(v: Any) -> float | None:
 
 
 def _connect_api():
-    global _TDX_FAIL_UNTIL
     if time.time() < _TDX_FAIL_UNTIL:
-        raise ConnectionError("无法连接通达信行情服务器")
+        raise ConnectionError(_TDX_LAST_ERR or "无法连接通达信行情服务器")
     try:
         from pytdx.hq import TdxHq_API
     except ImportError as e:
-        _mark_tdx_down()
+        _mark_tdx_down("未安装 pytdx，请 pip install pytdx")
         raise ImportError("未安装 pytdx，请 pip install pytdx") from e
 
     api = TdxHq_API()
+    last_err = "无法连接通达信行情服务器"
     for ip, port in TDX_SERVERS:
         try:
-            if api.connect(ip, port, time_out=2):
-                _TDX_FAIL_UNTIL = 0.0
+            if api.connect(ip, port, time_out=1.2):
+                _mark_tdx_up()
                 return api
-        except Exception:
+        except Exception as e:  # noqa: BLE001
+            last_err = f"{ip}:{port} {e}"
             continue
-    _mark_tdx_down()
-    raise ConnectionError("无法连接通达信行情服务器")
+    _mark_tdx_down(last_err)
+    raise ConnectionError(last_err)
 
 
 def _parse_breedconst(path: Path) -> dict[str, list[dict[str, str]]]:
@@ -986,9 +1010,18 @@ def tdx_availability() -> dict[str, Any]:
     except Exception as e:
         info["concept_error"] = str(e)
     try:
-        api = _connect_api()
-        api.disconnect()
-        info["pytdx_ok"] = True
+        # 冷却期内不要真连，避免 /api/sectors/status 卡死 HTTP 线程
+        from .tdx import tdx_hq_available, tdx_hq_state
+
+        st = tdx_hq_state()
+        info["pytdx"] = st
+        if not tdx_hq_available():
+            info["pytdx_ok"] = False
+            info["pytdx_error"] = st.get("last_error") or "行情冷却中（跳过重连）"
+        else:
+            api = _connect_api()
+            api.disconnect()
+            info["pytdx_ok"] = True
     except Exception as e:
         info["pytdx_ok"] = False
         info["pytdx_error"] = str(e)

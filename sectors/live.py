@@ -1,10 +1,18 @@
-"""概念盘中实时行情（通达信优先，连不上则东财回退）。"""
+"""概念盘中实时行情（通达信优先，连不上则东财回退并对齐通达信概念名单）。"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from .tdx import _clean, _connect_api, _stock_market, load_concepts, resolve_concept_by_name, tdx_hq_available
+from .tdx import (
+    _clean,
+    _connect_api,
+    _stock_market,
+    load_concepts,
+    resolve_concept_by_name,
+    tdx_hq_available,
+    tdx_hq_state,
+)
 
 _concept_boards: list[dict[str, str]] | None = None
 _live_source = "通达信概念"
@@ -18,6 +26,13 @@ def _boards() -> list[dict[str, str]]:
     global _concept_boards
     if _concept_boards is None:
         _concept_boards = load_concepts()
+    return _concept_boards
+
+
+def reload_concept_boards() -> list[dict[str, str]]:
+    """强制重读通达信概念表（本地 cache / tdxzs），供名单更新后调用。"""
+    global _concept_boards
+    _concept_boards = load_concepts()
     return _concept_boards
 
 
@@ -84,8 +99,32 @@ def _spot_from_em() -> dict[str, dict[str, Any]]:
     return out
 
 
+def _align_em_to_tdx_boards(em: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """东财行情按通达信概念名单对齐：保留 TDX 代码，名称对得上的才进表。"""
+    boards = _boards()
+    if not boards:
+        return em
+    out: dict[str, dict[str, Any]] = {}
+    for b in boards:
+        name = str(b.get("name") or "").strip()
+        if not name:
+            continue
+        row = em.get(name)
+        if not row:
+            continue
+        aligned = dict(row)
+        aligned["code"] = str(b.get("code") or aligned.get("code") or "")
+        aligned["name"] = name
+        out[name] = aligned
+    return out if out else em
+
+
 def fetch_concept_index_spot_live() -> dict[str, dict[str, Any]]:
-    """概念指数现价（name -> 涨跌幅/资金/code）。通达信失败则东财。"""
+    """概念指数现价（name -> 涨跌幅/资金/code）。
+
+    1) 通达信行情可用 → 直拉 pytdx
+    2) 否则东财现价，并尽量对齐通达信概念名单（结构用 TDX，价格实时）
+    """
     global _live_source
     if tdx_hq_available():
         try:
@@ -97,7 +136,15 @@ def fetch_concept_index_spot_live() -> dict[str, dict[str, Any]]:
             pass
     spot = _spot_from_em()
     if not spot:
-        raise RuntimeError("概念行情不可用：通达信连不上，东财也无数据")
+        st = tdx_hq_state()
+        raise RuntimeError(
+            "概念行情不可用：通达信连不上，东财也无数据"
+            + (f"（tdx={st.get('last_error')}）" if st.get("last_error") else "")
+        )
+    aligned = _align_em_to_tdx_boards(spot)
+    if len(aligned) >= max(50, int(len(_boards()) * 0.3)):
+        _live_source = "东财行情·对齐通达信名单"
+        return aligned
     _live_source = "东财概念"
     return spot
 

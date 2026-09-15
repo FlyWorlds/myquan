@@ -8211,6 +8211,9 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
     data["account_cash"] = float(DEFAULT_ACCOUNT_TOTAL)
     data["account_total_open"] = float(DEFAULT_ACCOUNT_TOTAL)
     data["account_total_open_session"] = sess
+    data["paper_equity_base"] = float(DEFAULT_ACCOUNT_TOTAL)
+    data["paper_pnl_start"] = str(PAPER_PNL_START)[:10]
+    data["daily_settlements"] = data.get("daily_settlements") or {}
     data["last_session"] = None
     data["watch_status_reset_session"] = sess
 
@@ -9149,33 +9152,39 @@ def cmd_watch(args: argparse.Namespace) -> None:
             worker.start()
         if not milestone_worker.is_alive():
             milestone_worker.start()
-        print("冷启动：新浪批量实时 + 行情源 → 首屏快照；日线强制预热…")
+        print("冷启动：先上首屏快照，日线预热放后台（避免页面卡在「连接中」）")
         feed_started = False
 
         try:
             ensure_watch_status_reset_today()
-            # 启动必刷：按信号交易日重拉日线，过门/前日不沿用旧 parquet 截断
-            _ensure_signal_day_caches(force=True)
-            print(
-                f"[{_now()}] 冷启动强制刷新日线"
-                f"（session={trading_session_date()} · "
-                f"已收盘日线截至 {latest_completed_weekday()}）…"
-            )
             t0 = time.perf_counter()
             n_fast = reseed_live()
             feed.start()
             feed_started = True
-            try:
-                _daily_cache_warm(force=True)
-                print(f"[{_now()}] 日线缓存预热完成")
-            except Exception as e:  # noqa: BLE001
-                print(f"[{_now()}] 日线预热失败（继续按票补拉）: {e}")
+            # 关键：行情源就绪后立刻推一版非 boot 快照，前端可进持仓/策略 Tab
             report, _ = safe_refresh()
             elapsed = time.perf_counter() - t0
             _log_watch_snapshot_push(
-                f"快照已推送: {report}（实时 {n_fast} 只 · {elapsed:.1f}s）",
+                f"首屏快照已推送: {report}（实时 {n_fast} 只 · {elapsed:.1f}s）",
                 force=True,
             )
+            # 日线强制预热放后面：午休/收盘也常要几分钟，不能挡首屏
+            try:
+                print(
+                    f"[{_now()}] 后台强制刷新日线"
+                    f"（session={trading_session_date()} · "
+                    f"已收盘日线截至 {latest_completed_weekday()}）…"
+                )
+                _ensure_signal_day_caches(force=True)
+                _daily_cache_warm(force=True)
+                print(f"[{_now()}] 日线缓存预热完成")
+                report2, _ = safe_refresh()
+                _log_watch_snapshot_push(
+                    f"预热后快照已推送: {report2}",
+                    force=True,
+                )
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 日线预热失败（继续按票补拉）: {e}")
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 首次更新失败（API 已就绪，继续后台刷新）: {e}")
             if not feed_started:

@@ -61,9 +61,12 @@ const waitingSectors = computed(
     (sectorsDeferred.value || (!payload.value && historyLoading.value)),
 )
 
+const liveSource = computed(
+  () => store.snapshot?.sectors?.source || payload.value?.source || '通达信概念',
+)
 const wsLabel = computed(() => {
   const st = store.wsStatus
-  if (liveAt.value) return `实时 ${liveAt.value} · ${refreshSec.value}s`
+  if (liveAt.value) return `实时 ${liveAt.value} · ${refreshSec.value}s · ${liveSource.value}`
   return st
 })
 
@@ -169,7 +172,7 @@ onBeforeUnmount(() => {
       <div>
         <h1 class="text-xl font-bold">板块轮动</h1>
         <p class="mt-1 text-sm text-ui-text-2">
-          {{ payload?.source || '通达信概念' }} · 盯盘先出，板块随后推送；今日列走 WebSocket，历史列后台加载
+          {{ liveSource }} · 今日列 WebSocket 约 {{ refreshSec }}s 刷新；历史列通达信日线缓存（可点重载）
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">

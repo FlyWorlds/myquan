@@ -43,7 +43,16 @@ python index.py --days 5 --no-members --no-open
 | `snapshots/` | 按日快照 |
 | `cache/` | 同花顺代码映射、涨停缓存 |
 
-**Web 行情（盯盘 `/sectors`）**：**一律优先通达信概念**（本地 `tdxhy.cfg` / `block_gn` 同步进 `sectors/cache` + pytdx）。Mac/Win 展示不一致时，优先复用未过期太久的通达信轮动磁盘缓存（≤2 天），避免 Win 掉行情后整表切成东财名单。行情彻底失败才回退东财。
+**Web 行情（盯盘 `/sectors`）**：
+
+1. **结构**：通达信概念名单 + 成分（`sectors/cache` 的 `tdxzs.cfg` / `block_gn`；本机通达信安装目录可同步进 cache）
+2. **今日列实时**：后台线程约 5s 拉一次现价 → 写入 `snapshot.sectors.conceptToday` → WS 推前端重排最左「今日」列  
+   - pytdx 通 → 直拉通达信概念指数  
+   - pytdx 挂 → **东财现价对齐通达信名单**（冷却 10 分钟内不再扫服务器，避免卡死）
+3. **历史列**：通达信日线排行缓存（磁盘 `tdx_rotation_api.json`，约 1h；点「重载历史」强制刷新）
+4. **概念 K 线/波段**：磁盘缓存 + stale-while-revalidate（研究用，不是盘中 tick）
+
+Mac/Win 名单不一致时优先复用未过期太久的通达信轮动磁盘缓存（≤2 天）。行情彻底失败才整表回退东财。
 
 `holdingStocks` watch 服务提供 API，Nuxt 前端 `/sectors` 热力表 + 概念 K 线龙头图。
 

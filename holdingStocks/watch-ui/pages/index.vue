@@ -42,11 +42,12 @@ const strategy3Tab = computed(() => strategyTabs.value.find((t) => t.id === 'str
 const strategy8Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy8'))
 const strategy15Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy15'))
 const strategy16Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16'))
-const loading = computed(
-  () =>
-    Boolean(snapshot.value?.boot) ||
-    (!snapshot.value && wsStatus.value.includes('连接')),
-)
+const loading = computed(() => {
+  // 仅「还没有任何快照」时全屏挡；boot 预热中仍展示 Tab，避免午休/收盘卡死在连接页
+  if (snapshot.value) return false
+  return wsStatus.value.includes('连接') || wsStatus.value.includes('加载')
+})
+const bootWarming = computed(() => Boolean(snapshot.value?.boot))
 
 const slotHoldings = computed(() =>
   (snapshot.value?.holdings || []).filter(
@@ -145,7 +146,15 @@ const closedCount = computed(() => closedHoldings.value.length)
       正在连接盯盘服务…
     </div>
 
-    <template v-else>
+    <div
+      v-else-if="bootWarming"
+      class="mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-ui-text-2"
+    >
+      <span class="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-ui-text-3 border-t-accent" />
+      行情预热中（午休/收盘也可用）· 首屏数据稍后自动刷新
+    </div>
+
+    <template v-if="!loading">
       <section v-show="activeTab === 'holdings'" class="space-y-4">
         <IndexBar v-if="snapshot" :indices="snapshot.indices" />
         <AccountSummary v-if="snapshot" :account="snapshot.account" />

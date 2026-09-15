@@ -112,6 +112,7 @@ def _has_holding(row: dict[str, Any]) -> bool:
     return bool(row.get("策略回放持有")) and pos not in (
         "当日禁买",
         "已止损",
+        "今日平仓",
         "已平仓",
         "已触止损平仓",
     )
