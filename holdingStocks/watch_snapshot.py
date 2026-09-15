@@ -140,7 +140,7 @@ def filter_portfolio_holdings(
             out["槽位占用"] = False
             out["槽位留痕"] = True
             out["持仓"] = 0
-            out.setdefault("持仓状态", "已平仓")
+            out.setdefault("持仓状态", "今日平仓")
             alert0 = str(out.get("预警") or "").strip()
             if (not alert0) or alert0 in (
                 "-",
@@ -148,10 +148,11 @@ def filter_portfolio_holdings(
                 "已经买入",
                 "空仓",
                 "止损成交",
+                "今日平仓",
                 "已平仓",
                 "已触止损平仓",
             ):
-                out["预警"] = "已触止损"  # 信号；持仓态另见「已平仓」
+                out["预警"] = "已触止损"  # 信号；持仓态另见「今日平仓」
         elif alert_only:
             out["当日预警"] = True
             out["槽位留痕"] = False
@@ -183,7 +184,7 @@ def filter_portfolio_holdings(
             return 1
         if pos == "策略持有":
             return 2
-        if pos in ("已平仓", "已止损", "已触止损平仓", "当日禁买"):
+        if pos in ("今日平仓", "已平仓", "已止损", "已触止损平仓", "当日禁买"):
             return 3
         return 4
 

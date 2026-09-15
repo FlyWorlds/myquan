@@ -1,8 +1,11 @@
 export interface WatchAccount {
   totalPnl?: number | null
   totalPnlPct?: number | null
+  totalPnlStart?: string | null
+  paperEquityBase?: number | null
   dayPnl?: number | null
   dayPnlPct?: number | null
+  equityDayPnl?: number | null
   accountTotal?: number | null
   accountOpen?: number | null
   availableCash?: number | null

@@ -51,8 +51,10 @@ def session_open_bell_ts(session: str | None) -> str:
     clock = f"{OPEN_BELL_HOUR:02d}:{OPEN_BELL_MINUTE:02d}:00"
     return f"{sess} {clock}" if sess else clock
 
-# 策略一盯盘：单票策略收益统计起点（含费用、T+1；自该交易日起空仓起算）
-STRATEGY_PNL_START = "2026-09-01"
+# 策略/账户总收益起算日（含费用、T+1；自该交易日空仓/纸面本金起算）
+STRATEGY_PNL_START = "2026-09-09"
+# 账户「总收益」基准日：相对 DEFAULT_ACCOUNT_TOTAL 纸面本金
+PAPER_PNL_START = STRATEGY_PNL_START
 
 # 开盘价强制刷新（与 9:25 对齐）
 OPEN_PRICE_REFRESH_HOUR = AUCTION_OPEN_HOUR

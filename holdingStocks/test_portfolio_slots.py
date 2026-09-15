@@ -672,7 +672,7 @@ def test_finalize_sold_today_is_stopped():
         "策略回放持有": False,
     }
     _finalize_position_row(row)
-    assert row["持仓状态"] == "已平仓"
+    assert row["持仓状态"] == "今日平仓"
 
 
 def test_finalize_slot_closed_not_paper_replay():
@@ -688,7 +688,7 @@ def test_finalize_slot_closed_not_paper_replay():
     }
     _finalize_position_row(row)
     assert row["预警"] == SIGNAL_STOP_HIT
-    assert row["持仓状态"] == "已平仓"
+    assert row["持仓状态"] == "今日平仓"
 
 
 def test_finalize_sold_today_rebuy_banned():
@@ -925,39 +925,60 @@ def test_closed_trace_cleared_next_session():
     """今日已平仓下一交易日不再展示，即使成交流水仍有昨仓。"""
     from index import _is_closed_trace_row
 
-    lots = {"601208": {"qty": 600, "cost": 47.67}}
     today = {
         "代码": "601208",
         "持仓": 0,
         "交易日": "2026-09-11",
-        "当日禁买": True,
-        "已触止损": "是",
+        "已实现": True,
     }
     traces_today = {"601208": {"session": "2026-09-11", "qty": 1800}}
-    assert _is_closed_trace_row(today, lots=lots, traces=traces_today) is True
+    assert _is_closed_trace_row(today, traces=traces_today) is True
 
     nxt = dict(today)
     nxt["交易日"] = "2026-09-14"
-    assert _is_closed_trace_row(nxt, lots=lots, traces=traces_today) is False
+    nxt["已实现"] = False
+    assert _is_closed_trace_row(nxt, traces=traces_today) is False
 
 
-def test_closed_trace_first_detect_today_without_stamp():
-    """当日尚未落库 closed_today：成交流水+当日禁买仍算今日平仓。"""
+def test_closed_trace_requires_realized_not_orphan_lot():
+    """旧买档 + 今日策略回放止损 ≠ 三槽平仓（东材误入已平仓栏）。"""
     from index import _is_closed_trace_row
 
     row = {
         "代码": "601208",
         "持仓": 0,
-        "交易日": "2026-09-11",
+        "交易日": "2026-09-15",
         "当日禁买": True,
         "已触止损": "是",
+        "预警": "策略回放·今日已止损",
     }
-    assert (
-        _is_closed_trace_row(
-            row, lots={"601208": {"qty": 600, "cost": 47.67}}, traces={}
-        )
-        is True
-    )
+    lots = {"601208": {"qty": 600, "cost": 47.67, "time": "2026-09-10 13:42:30"}}
+    assert _is_closed_trace_row(row, lots=lots, traces={}) is False
+    # 账本误写 closed_today、但当日没有 realized → 仍不算
+    traces = {"601208": {"session": "2026-09-15", "qty": 1800, "name": "东材科技"}}
+    assert _is_closed_trace_row(row, lots=lots, traces=traces) is False
+    # 真实纸面卖出才算
+    row_ok = dict(row)
+    row_ok["已实现"] = True
+    assert _is_closed_trace_row(row_ok, lots=lots, traces=traces) is True
+
+
+def test_purge_fake_slot_closed_drops_orphan():
+    from index import purge_fake_slot_closed
+
+    data = {
+        "realized_today": {
+            "600330": {"session": "2026-09-15", "qty": 1600, "reason": "止损成交"},
+        },
+        "closed_today": {
+            "600330": {"session": "2026-09-15", "qty": 1600, "name": "天通股份"},
+            "601208": {"session": "2026-09-15", "qty": 1800, "name": "东材科技"},
+        },
+    }
+    n = purge_fake_slot_closed(data, "2026-09-15")
+    assert n == 1
+    assert "601208" not in data["closed_today"]
+    assert "600330" in data["closed_today"]
 
 
 def test_filter_skips_paper_replay_closed():
@@ -1283,7 +1304,7 @@ def test_calc_day_pnl_overnight_vs_prev_close():
 
 
 def test_account_summary_sums_hold_and_closed_day_pnl():
-    """今日盈亏 = 三槽持仓当日盈亏 + 已平仓当日盈亏。"""
+    """今日盈亏 = 三槽持仓当日盈亏 + 今日平仓（已实现）当日盈亏。"""
     from index import _build_watch_account_summary
 
     acc = _build_watch_account_summary(
@@ -1299,6 +1320,7 @@ def test_account_summary_sums_hold_and_closed_day_pnl():
             {
                 "代码": "601208",
                 "持仓": 0,
+                "已实现": True,
                 "三槽平仓": True,
                 "浮盈": -1260.0,
                 "当日盈亏": 0.0,
@@ -1309,6 +1331,7 @@ def test_account_summary_sums_hold_and_closed_day_pnl():
             {
                 "代码": "000021",
                 "持仓": 0,
+                "已实现": True,
                 "三槽平仓": True,
                 "浮盈": -4872.0,
                 "当日盈亏": -2136.0,
@@ -1319,7 +1342,7 @@ def test_account_summary_sums_hold_and_closed_day_pnl():
             {
                 "代码": "000657",
                 "持仓": 0,
-                "持仓状态": "已平仓",
+                "持仓状态": "今日平仓",
                 "当日盈亏": -9999.0,
             },
         ]
@@ -1327,4 +1350,68 @@ def test_account_summary_sums_hold_and_closed_day_pnl():
     assert acc["dayPnl"] == round(3575.0 + 0.0 - 2136.0, 2)
     assert acc["settledCount"] == 2
     assert acc["settledDayPnl"] == round(0.0 - 2136.0, 2)
+    assert acc["totalPnlStart"] == "2026-09-09"
+    assert acc["paperEquityBase"] == 300000.0
+    # 总收益 = 当前总资产 − 纸面本金（非成本浮盈加总）
+    assert acc["totalPnl"] is not None
+
+
+def test_account_summary_ignores_fake_slot_closed_without_realized():
+    """无已实现的三槽平仓不进今日盈亏。"""
+    from index import _build_watch_account_summary
+
+    acc = _build_watch_account_summary(
+        [
+            {
+                "代码": "000070",
+                "持仓": 100,
+                "当日盈亏": 100.0,
+                "市值": 1000.0,
+                "成本额": 900.0,
+            },
+            {
+                "代码": "601208",
+                "持仓": 0,
+                "三槽平仓": True,
+                "当日盈亏": -999.0,
+                "浮盈": -999.0,
+                "卖出数量": 1800,
+            },
+        ]
+    )
+    assert acc["dayPnl"] == 100.0
+    assert acc["settledCount"] == 0
+
+
+def test_record_daily_settlement_once_final():
+    from index import record_daily_settlement, load_holdings, save_holdings
+
+    data = load_holdings()
+    data["daily_settlements"] = {}
+    save_holdings(data)
+    acc = {
+        "accountTotal": 301000.0,
+        "accountOpen": 300000.0,
+        "paperEquityBase": 300000.0,
+        "totalPnlStart": "2026-09-09",
+        "dayPnl": 1000.0,
+        "dayPnlPct": 0.33,
+        "equityDayPnl": 1000.0,
+        "totalPnl": 1000.0,
+        "totalPnlPct": 0.33,
+        "settledCount": 1,
+        "settledDayPnl": 200.0,
+    }
+    assert record_daily_settlement(
+        session="2026-09-12", account=acc, rows=[], force=True
+    )
+    assert not record_daily_settlement(
+        session="2026-09-12", account=acc, rows=[], force=False
+    )
+    book = load_holdings().get("daily_settlements") or {}
+    rec = book["2026-09-12"]
+    assert rec["final"] is True
+    assert rec["day_pnl"] == 1000.0
+    assert rec["day_pnl_vs_equity"] == 0.0
+    assert rec["total_pnl"] == 1000.0
 

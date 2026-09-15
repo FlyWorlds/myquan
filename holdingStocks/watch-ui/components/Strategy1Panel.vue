@@ -21,7 +21,7 @@ const steps = [
 const legend = [
   { id: 'hold-real', cls: 'signal-badge signal-badge-hold-real', label: '已经买入' },
   { id: 'hold-paper', cls: 'signal-badge signal-badge-hold-paper', label: '策略持有' },
-  { id: 'ban-buy', cls: 'signal-badge signal-badge-ban-buy', label: '已平仓' },
+  { id: 'ban-buy', cls: 'signal-badge signal-badge-ban-buy', label: '今日平仓' },
   { id: 'warn-buy', cls: 'signal-badge signal-badge-warn-buy', label: '买入预警' },
   { id: 'trigger-buy', cls: 'signal-badge signal-badge-trigger-buy', label: '已触买（含策略持有叠买）' },
   { id: 'warn-sell', cls: 'signal-badge signal-badge-warn-sell', label: '卖出预警' },

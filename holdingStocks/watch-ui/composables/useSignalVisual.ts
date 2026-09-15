@@ -49,6 +49,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
       pos !== '待买入' &&
       pos !== '当日禁买' &&
       pos !== '已止损' &&
+      pos !== '今日平仓' &&
       pos !== '已平仓' &&
       pos !== '已触止损平仓')
 
@@ -65,6 +66,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
           trig.includes('再触买') ||
           trig.includes('收盘动量'))))
   const stopClosed =
+    pos === '今日平仓' ||
     pos === '已平仓' ||
     pos === '已止损' ||
     pos === '已触止损平仓' ||
@@ -183,6 +185,7 @@ export function collectLegendIds(row: HoldingRow): SignalLegendId[] {
     alert.includes('再触买') ||
     alert.includes('收盘动量可再买')
   const stopClosed =
+    pos === '今日平仓' ||
     pos === '已平仓' ||
     pos === '已止损' ||
     pos === '已触止损平仓' ||

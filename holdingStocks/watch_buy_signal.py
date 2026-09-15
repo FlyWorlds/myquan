@@ -224,7 +224,7 @@ def is_replay_stop_signal(row: dict[str, Any]) -> bool:
     pos = str(row.get("持仓状态") or "")
     if alert.startswith("策略回放"):
         return True
-    return pos in ("已平仓", "已止损", "已触止损平仓") and str(row.get("已触止损") or "") == "是"
+    return pos in ("今日平仓", "已平仓", "已止损", "已触止损平仓") and str(row.get("已触止损") or "") == "是"
 
 
 def is_holdings_tab_signal_row(row: dict[str, Any]) -> bool:
@@ -258,7 +258,7 @@ def is_today_alert_row(row: dict[str, Any]) -> bool:
     # 过门触买必须进持仓预警栏（槽满/回放止损也不藏）
     if is_buy_hit(row):
         return True
-    if bool(row.get("当日禁买")) or pos0 in ("已平仓", "已止损", "已触止损平仓"):
+    if bool(row.get("当日禁买")) or pos0 in ("今日平仓", "已平仓", "已止损", "已触止损平仓"):
         return False
     if bool(row.get("槽位候选")):
         return True

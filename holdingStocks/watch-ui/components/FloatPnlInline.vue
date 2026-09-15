@@ -11,7 +11,8 @@ const closed = computed(() => {
     Boolean(props.row.已实现) ||
     Boolean(props.row.槽位留痕) ||
     (qty <= 0 &&
-      (pos === '已平仓' ||
+      (pos === '今日平仓' ||
+        pos === '已平仓' ||
         pos === '已触止损平仓' ||
         pos === '已止损' ||
         pos === '当日禁买'))
@@ -71,8 +72,8 @@ const title = computed(() => {
     if (prev != null && fill != null && qty != null) {
       return `昨收 ${prev} → 平仓 ${fill} × ${qty} 股，锁定不再随现价`
     }
-    if (fill != null) return `已平仓成交价 ${fill}`
-    return '已平仓锁定'
+    if (fill != null) return `今日平仓成交价 ${fill}`
+    return '今日平仓锁定'
   }
   if (boughtToday.value) {
     const cost = props.row.成本

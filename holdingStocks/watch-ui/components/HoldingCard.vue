@@ -18,6 +18,7 @@ const slotTrace = computed(
     Boolean(props.row.槽位留痕) ||
     (Number(props.row.持仓) <= 0 &&
       (Boolean(props.row.已实现) ||
+        posStatus.value === '今日平仓' ||
         posStatus.value === '已平仓' ||
         posStatus.value === '已触止损平仓' ||
         posStatus.value === '已止损')),
@@ -39,7 +40,7 @@ const posChipStyle = computed(() => {
       background: 'color-mix(in srgb, var(--watch-down) 12%, transparent)',
     }
   }
-  if (s === '已平仓' || s === '已触止损平仓' || s === '已止损' || s === '当日禁买') {
+  if (s === '今日平仓' || s === '已平仓' || s === '已触止损平仓' || s === '已止损' || s === '当日禁买') {
     return {
       color: 'var(--ui-text-2)',
       borderColor: 'var(--ui-hairline)',
@@ -101,7 +102,7 @@ const cardClass = computed(() => {
               v-else-if="slotTrace"
               class="rounded-full px-2 py-0.5 text-xs font-medium text-ui-text-2"
               style="border: 1px solid var(--ui-hairline); background: color-mix(in srgb, var(--ui-text-2) 8%, transparent)"
-            >已平仓·不占槽</span>
+            >今日平仓·不占槽</span>
             <span
               class="rounded-full border px-2 py-0.5 text-xs font-medium"
               :style="posChipStyle"

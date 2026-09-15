@@ -150,6 +150,7 @@ from watch_config import (
     STRATEGY_ID,
     STRATEGY_NAME,
     STRATEGY_PNL_START,
+    PAPER_PNL_START,
     USE_FACTOR4,
     WATCHLIST,
     effective_watchlist,
@@ -311,11 +312,10 @@ WATCH_UI_DIST = ROOT / "watch-ui" / "dist"
 WATCH_UI_DIR = ROOT / "watch-ui"
 WATCH_UI_DEV_PORT = 3000
 
-# 止损已平仓展示态（旧文案「已止损」仍兼容识别）
-# 持仓态：止损后已平仓（与信号「已触止损」分离）
-STATUS_STOP_CLOSED = "已平仓"
+# 持仓态：三槽当日纸面卖出 →「今日平仓」（旧文案「已平仓/已止损」仍兼容）
+STATUS_STOP_CLOSED = "今日平仓"
 _STOP_CLOSED_STATUSES = frozenset(
-    {STATUS_STOP_CLOSED, "已止损", "已触止损平仓"}  # 后两者兼容旧文案
+    {STATUS_STOP_CLOSED, "已平仓", "已止损", "已触止损平仓"}
 )
 SIGNAL_STOP_HIT = "已触止损"
 SIGNAL_HALF_HIT = "半仓止盈"
@@ -802,19 +802,211 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
 
 
 def _row_counts_in_watch_pnl(row: dict[str, Any]) -> bool:
-    """账户今日/合计：实仓 + 已实现成交 + 当日三槽平仓。"""
+    """账户今日盈亏：仅实仓 + 当日真实纸面卖出（已实现）。不含策略回放/假三槽平仓。"""
     if row.get("error"):
         return False
     try:
         qty = int(row.get("持仓") or 0)
     except (TypeError, ValueError):
         qty = 0
-    return qty > 0 or bool(row.get("已实现")) or bool(row.get("三槽平仓"))
+    return qty > 0 or bool(row.get("已实现"))
+
+
+def _paper_equity_base(data: dict[str, Any] | None = None) -> float:
+    """总收益基准本金：自 PAPER_PNL_START 起相对 DEFAULT_ACCOUNT_TOTAL。"""
+    book = data if data is not None else load_holdings()
+    locked = _as_money(book.get("paper_equity_base"))
+    if locked is not None and locked > 0:
+        return float(locked)
+    return float(DEFAULT_ACCOUNT_TOTAL)
+
+
+def _ensure_paper_equity_base(data: dict[str, Any]) -> bool:
+    """首次锁定纸面本金与起算日（不覆盖已有）。返回是否改写。"""
+    changed = False
+    if _as_money(data.get("paper_equity_base")) is None:
+        data["paper_equity_base"] = round(float(DEFAULT_ACCOUNT_TOTAL), 2)
+        changed = True
+    if not data.get("paper_pnl_start"):
+        data["paper_pnl_start"] = str(PAPER_PNL_START)[:10]
+        changed = True
+    return changed
+
+
+def record_daily_settlement(
+    *,
+    session: str,
+    account: dict[str, Any],
+    rows: list[dict[str, Any]] | None = None,
+    force: bool = False,
+) -> bool:
+    """每个交易日最多记一次终稿结算核对（收盘后或次日 9:15 补记）。
+
+    盘中可写/更新草稿（不刷屏）；已有 final 且非 force 则跳过。
+    """
+    day = str(session or "")[:10]
+    if len(day) < 10:
+        return False
+    data = load_holdings()
+    if _ensure_paper_equity_base(data):
+        pass  # 与结算一并落盘
+    book = data.get("daily_settlements")
+    if not isinstance(book, dict):
+        book = {}
+    existing = book.get(day) if isinstance(book.get(day), dict) else None
+    if existing and existing.get("final") and not force:
+        return False
+    phase = market_phase()
+    is_final = phase == "closed" or force
+
+    pos_lines: list[dict[str, Any]] = []
+    closed_lines: list[dict[str, Any]] = []
+    for r in rows or []:
+        try:
+            qty = int(r.get("持仓") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        code = _code_key(str(r.get("代码") or ""))
+        if not code:
+            continue
+        if qty > 0:
+            pos_lines.append(
+                {
+                    "code": code,
+                    "name": r.get("名称"),
+                    "qty": qty,
+                    "cost": r.get("成本"),
+                    "last": r.get("现价"),
+                    "day_pnl": r.get("当日盈亏"),
+                    "upnl": r.get("浮盈"),
+                }
+            )
+        elif bool(r.get("已实现")):
+            closed_lines.append(
+                {
+                    "code": code,
+                    "name": r.get("名称"),
+                    "qty": r.get("卖出数量"),
+                    "price": r.get("成交价") or r.get("平仓价"),
+                    "cost": r.get("成本"),
+                    "day_pnl": r.get("当日盈亏"),
+                    "pnl": r.get("浮盈"),
+                }
+            )
+    day_pnl = account.get("dayPnl")
+    equity_day = account.get("equityDayPnl")
+    delta = None
+    if day_pnl is not None and equity_day is not None:
+        delta = round(float(day_pnl) - float(equity_day), 2)
+    rec = {
+        "session": day,
+        "recorded_at": _now(),
+        "final": bool(is_final),
+        "draft": not is_final,
+        "account_total": account.get("accountTotal"),
+        "account_open": account.get("accountOpen"),
+        "paper_equity_base": account.get("paperEquityBase") or _paper_equity_base(data),
+        "paper_pnl_start": account.get("totalPnlStart") or PAPER_PNL_START,
+        "day_pnl": day_pnl,
+        "day_pnl_pct": account.get("dayPnlPct"),
+        "equity_day_pnl": equity_day,
+        "day_pnl_vs_equity": delta,
+        "total_pnl": account.get("totalPnl"),
+        "total_pnl_pct": account.get("totalPnlPct"),
+        "settled_count": account.get("settledCount") or 0,
+        "settled_day_pnl": account.get("settledDayPnl"),
+        "positions": pos_lines,
+        "closed_today": closed_lines,
+    }
+    # 草稿无变化则不写盘
+    if existing and not is_final:
+        keys = (
+            "day_pnl",
+            "equity_day_pnl",
+            "total_pnl",
+            "account_total",
+            "settled_count",
+        )
+        if all(existing.get(k) == rec.get(k) for k in keys):
+            return False
+    book[day] = rec
+    data["daily_settlements"] = book
+    save_holdings(data)
+    if is_final:
+        print(
+            f"[{_now()}] 日结算终稿 {day} · 今日盈亏={day_pnl} · "
+            f"权益日变={equity_day} · 差额={delta} · 总收益={account.get('totalPnl')}"
+        )
+    return True
+
+
+def maybe_record_daily_settlement(
+    rows: list[dict[str, Any]],
+    account: dict[str, Any],
+    *,
+    session: str | None = None,
+) -> None:
+    """收盘后记终稿；盘中仅在数字变化时更新草稿。"""
+    sess = normalize_signal_session(session or trading_session_date())
+    record_daily_settlement(session=sess, account=account, rows=rows, force=False)
+
+
+def settle_previous_session_if_needed(*, session: str | None = None) -> None:
+    """9:15 重置前：若上一交易日无终稿结算，用草稿/账本补记一笔 final。"""
+    sess = normalize_signal_session(session or trading_session_date())
+    data = load_holdings()
+    book = data.get("daily_settlements")
+    if not isinstance(book, dict):
+        book = {}
+    candidates: list[str] = []
+    open_sess = str(data.get("account_total_open_session") or "")[:10]
+    last_sess = str(data.get("last_session") or "")[:10]
+    for s in (open_sess, last_sess):
+        if len(s) >= 10 and s < sess:
+            candidates.append(s)
+    for day, rec in book.items():
+        if isinstance(rec, dict) and not rec.get("final") and str(day)[:10] < sess:
+            candidates.append(str(day)[:10])
+    prev = max(candidates) if candidates else None
+    if not prev:
+        return
+    existing = book.get(prev)
+    if isinstance(existing, dict) and existing.get("final"):
+        return
+    acc = {
+        "accountTotal": data.get("account_total"),
+        "accountOpen": data.get("account_total_open"),
+        "paperEquityBase": _paper_equity_base(data),
+        "totalPnlStart": data.get("paper_pnl_start") or PAPER_PNL_START,
+        "dayPnl": (existing or {}).get("day_pnl") if isinstance(existing, dict) else None,
+        "dayPnlPct": (existing or {}).get("day_pnl_pct") if isinstance(existing, dict) else None,
+        "equityDayPnl": (existing or {}).get("equity_day_pnl")
+        if isinstance(existing, dict)
+        else None,
+        "totalPnl": (existing or {}).get("total_pnl") if isinstance(existing, dict) else None,
+        "totalPnlPct": (existing or {}).get("total_pnl_pct")
+        if isinstance(existing, dict)
+        else None,
+        "settledCount": (existing or {}).get("settled_count")
+        if isinstance(existing, dict)
+        else 0,
+        "settledDayPnl": (existing or {}).get("settled_day_pnl")
+        if isinstance(existing, dict)
+        else None,
+    }
+    if acc["totalPnl"] is None and acc["accountTotal"] is not None:
+        base = float(acc["paperEquityBase"] or DEFAULT_ACCOUNT_TOTAL)
+        acc["totalPnl"] = round(float(acc["accountTotal"]) - base, 2)
+        acc["totalPnlPct"] = round(acc["totalPnl"] / base * 100.0, 2) if base else None
+    record_daily_settlement(session=prev, account=acc, rows=[], force=True)
 
 
 def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """账户合计（JSON 快照 / CLI 共用口径）。"""
-    total_pnl = 0.0
+    """账户合计（JSON 快照 / CLI 共用口径）。
+
+    · 今日盈亏：实仓 session_day_pnl + 当日已实现 day_pnl（只认今日平仓）
+    · 总收益：当前总资产 − 纸面本金（自 PAPER_PNL_START / 默认 9/9）
+    """
     total_day_pnl = 0.0
     total_mv = 0.0
     total_mv_no_cost = 0.0
@@ -823,17 +1015,11 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     settled_pnl = 0.0
     settled_day = 0.0
     settled_n = 0
-    closed_extra = 0.0
-    has_pos = False
     has_day = False
     for r in rows:
         qty = int(r.get("持仓") or 0)
         realized = bool(r.get("已实现"))
-        slot_closed = bool(r.get("三槽平仓"))
         in_pnl = _row_counts_in_watch_pnl(r)
-        if r.get("浮盈") is not None and in_pnl:
-            total_pnl += float(r["浮盈"])
-            has_pos = True
         if r.get("当日盈亏") is not None and in_pnl:
             total_day_pnl += float(r["当日盈亏"])
             has_day = True
@@ -846,7 +1032,7 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                     total_day_base += float(r["当日盈亏"]) / (float(dpct) / 100.0)
                 elif r.get("市值") is not None and qty > 0:
                     total_day_base += float(r["市值"]) - float(r["当日盈亏"])
-                elif slot_closed:
+                elif realized:
                     prev = _as_money(r.get("昨收"))
                     open_px = _as_money(r.get("开盘"))
                     base_px = prev if prev is not None and prev > 0 else open_px
@@ -856,7 +1042,7 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                         sold = 0
                     if base_px is not None and base_px > 0 and sold > 0:
                         total_day_base += float(base_px) * sold
-        if realized or slot_closed:
+        if realized:
             settled_n += 1
             if r.get("浮盈") is not None:
                 settled_pnl += float(r["浮盈"])
@@ -864,8 +1050,6 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 settled_day += float(r["当日盈亏"])
             if r.get("成本") is not None and r.get("卖出数量"):
                 total_cost += float(r["成本"]) * int(r["卖出数量"])
-            if slot_closed and not realized and r.get("浮盈") is not None:
-                closed_extra += float(r["浮盈"])
         if r.get("市值") is not None and qty > 0:
             mv = float(r["市值"])
             total_mv += mv
@@ -873,15 +1057,15 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 total_mv_no_cost += mv
         if r.get("成本额") is not None and qty > 0:
             total_cost += float(r["成本额"])
-    total_pnl_pct = (
-        round(total_pnl / total_cost * 100.0, 2) if total_cost > 0 else None
-    )
     total_day_pct = (
         round(total_day_pnl / total_day_base * 100.0, 2)
         if has_day and total_day_base > 0
         else None
     )
     holdings_meta = load_holdings()
+    if _ensure_paper_equity_base(holdings_meta):
+        save_holdings(holdings_meta)
+        holdings_meta = load_holdings()
     account_total = _account_total(rows, holdings_meta)
     available_cash = _available_cash(rows, holdings_meta)
     session_for_open = next(
@@ -895,6 +1079,26 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
     holdings_meta = load_holdings()
     account_open = _account_total_open(holdings_meta)
+    equity_base = _paper_equity_base(holdings_meta)
+    total_pnl = (
+        round(float(account_total) - float(equity_base), 2)
+        if account_total is not None and equity_base > 0
+        else None
+    )
+    total_pnl_pct = (
+        round(float(total_pnl) / float(equity_base) * 100.0, 2)
+        if total_pnl is not None and equity_base > 0
+        else None
+    )
+    # 有日初锁定时，用权益日变化做结算核对（展示仍用分票加总）
+    equity_day = None
+    if (
+        account_total is not None
+        and account_open is not None
+        and str(holdings_meta.get("account_total_open_session") or "")[:10]
+        == str(session_for_open)[:10]
+    ):
+        equity_day = round(float(account_total) - float(account_open), 2)
     position_pct = (
         round(total_mv / account_total * 100.0, 1)
         if account_total and account_total > 0 and total_mv > 0
@@ -906,11 +1110,17 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         if isinstance(holdings_meta.get("factor2"), dict)
         else None
     )
+    day_pnl_out = round(total_day_pnl, 2) if has_day else None
     return {
-        "totalPnl": total_pnl if has_pos else None,
+        "totalPnl": total_pnl,
         "totalPnlPct": total_pnl_pct,
-        "dayPnl": round(total_day_pnl, 2) if has_day else None,
+        "totalPnlStart": str(
+            holdings_meta.get("paper_pnl_start") or PAPER_PNL_START
+        )[:10],
+        "paperEquityBase": equity_base,
+        "dayPnl": day_pnl_out,
         "dayPnlPct": total_day_pct,
+        "equityDayPnl": equity_day,
         "accountTotal": account_total,
         "accountOpen": account_open,
         "availableCash": available_cash,
@@ -1109,6 +1319,12 @@ def publish_watch_snapshot(
         (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
         "",
     )
+    try:
+        maybe_record_daily_settlement(
+            rows, account, session=session_today or None
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 日结算记录失败（继续）: {e}")
     from strategy3_watch import build_strategy3_payload
     from strategy8_watch import build_strategy8_payload
 
@@ -2306,10 +2522,13 @@ def load_holdings() -> dict[str, Any]:
         positions.setdefault(w["code"], _empty_position(w))
     data.setdefault("realized_today", {})
     data.setdefault("closed_today", {})
+    data.setdefault("daily_settlements", {})
     data.setdefault("account_total", None)
     data.setdefault("account_cash", None)
     data.setdefault("account_total_open", None)
     data.setdefault("account_total_open_session", None)
+    data.setdefault("paper_equity_base", None)
+    data.setdefault("paper_pnl_start", None)
     data.setdefault("alert_sticky", {})
     _HOLDINGS_CACHE["data"] = data
     _HOLDINGS_CACHE["mtime"] = _holdings_file_mtime()
@@ -2370,12 +2589,36 @@ def _ensure_account_open_session(
     save_holdings(data)
 
 
+def purge_fake_slot_closed(data: dict[str, Any], session: str) -> int:
+    """清掉冒充三槽平仓的 closed_today：当日没有 realized_today 卖出的一律删。
+
+    例：东材仅有历史买档 + 今日策略回放止损，从未纸面占槽卖出。
+    """
+    day = str(session or "")[:10]
+    traces = data.get("closed_today")
+    if not isinstance(traces, dict) or len(day) < 10:
+        return 0
+    real = _realized_today_codes(day, data=data)
+    drop = [
+        code
+        for code, rec in list(traces.items())
+        if isinstance(rec, dict)
+        and str(rec.get("session") or "")[:10] == day
+        and _code_key(str(code)) not in real
+    ]
+    for code in drop:
+        del traces[code]
+    return len(drop)
+
+
 def heal_watch_ledger(*, session: str | None = None) -> dict[str, Any]:
-    """每轮自愈：隔夜解锁、修复仅现金日初、清掉非法「止损已记」。不改 qty / 成本 / 买入时间。"""
+    """每轮自愈：隔夜解锁、修复仅现金日初、清掉非法「止损已记」/假三槽平仓。不改 qty / 成本 / 买入时间。"""
     data = load_holdings()
     sess = normalize_signal_session(session or trading_session_date())
     changed = unlock_overnight_available(data, sess)
     if purge_illegal_t1_stop_notes(data) > 0:
+        changed = True
+    if purge_fake_slot_closed(data, sess) > 0:
         changed = True
     existing = _account_total_open(data)
     if _equity_is_cash_only(data, existing):
@@ -2463,6 +2706,7 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
     """
     data = load_holdings()
     sess = normalize_signal_session(session)
+    settle_previous_session_if_needed(session=sess)
     _purge_stale_realized(data, sess)
     data["alert_sticky"] = {}
     data["watch_status_reset_session"] = sess
@@ -6832,16 +7076,40 @@ def _enrich_float_pnl(row: dict[str, Any]) -> None:
 _LOTS_CACHE: dict[str, Any] = {"mtime": None, "lots": {}}
 
 
+def _realized_today_codes(
+    session: str,
+    *,
+    data: dict[str, Any] | None = None,
+) -> set[str]:
+    """当日纸面真实卖出（realized_today）代码集。"""
+    day = str(session or "")[:10]
+    if len(day) < 10:
+        return set()
+    book = data if data is not None else load_holdings()
+    out: set[str] = set()
+    for code, rec in (book.get("realized_today") or {}).items():
+        if not isinstance(rec, dict):
+            continue
+        if str(rec.get("session") or "")[:10] != day:
+            continue
+        ck = _code_key(str(code))
+        if ck:
+            out.add(ck)
+    return out
+
+
 def _is_closed_trace_row(
     row: dict[str, Any],
     *,
     lots: dict[str, dict[str, Any]] | None = None,
     traces: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
-    """三槽实仓清仓留痕：仅当日。下一交易日 session 对不上即清空，不因昨仓流水复活。
+    """三槽实仓清仓留痕：仅当日、仅真实占槽后卖出。
 
-    不含策略回放未入槽。
+    只认「已实现」或 closed_today 且当日有 realized_today。
+    禁止：成交流水旧买档 + 今日策略回放止损 → 冒充三槽平仓（东材 601208）。
     """
+    _ = lots  # 旧调用方仍可传；不再用未平买档推断平仓
     if int(row.get("持仓") or 0) > 0:
         return False
     if bool(row.get("已实现")):
@@ -6853,15 +7121,9 @@ def _is_closed_trace_row(
     book_traces = traces if traces is not None else _slot_closed_map()
     rec = book_traces.get(code) if isinstance(book_traces, dict) else None
     rec_sess = str((rec or {}).get("session") or "")[:10]
-    if sess:
-        if rec_sess == sess:
-            return True
-        if rec_sess and rec_sess != sess:
-            return False
-    book = lots if lots is not None else _last_open_lots_from_trades()
-    if code not in book:
+    if not sess or rec_sess != sess:
         return False
-    return bool(row.get("当日禁买")) or str(row.get("已触止损") or "") == "是"
+    return code in _realized_today_codes(sess)
 
 
 def _parse_open_lots(text: str) -> dict[str, dict[str, Any]]:
@@ -7582,31 +7844,27 @@ def cmd_status(args: argparse.Namespace) -> None:
     print("-" * 108)
     day_total = 0.0
     day_n = 0
-    stock_pnl = 0.0
-    stock_n = 0
     for r in show_rows:
         raw = next((x for x in rows if x["代码"] == r["代码"]), {})
-        if raw.get("浮盈") is not None and (
-            int(raw.get("持仓") or 0) > 0 or raw.get("已实现") or raw.get("三槽平仓")
+        if r["当日盈亏"] != "-" and (
+            int(raw.get("持仓") or 0) > 0 or raw.get("已实现")
         ):
-            stock_pnl += float(raw["浮盈"])
-            stock_n += 1
-        if r["当日盈亏"] != "-":
             try:
                 day_total += float(r["当日盈亏"])
                 day_n += 1
             except (TypeError, ValueError):
                 pass
-    holdings_meta = load_holdings()
-    account_total = _account_total(rows, holdings_meta)
-    account_open = _account_total_open(holdings_meta)
-    if stock_n:
-        print(f"合计盈亏: {stock_pnl:+.2f}  [持股浮盈+已结算]")
+    acc = _build_watch_account_summary(rows)
+    if acc.get("totalPnl") is not None:
+        start = acc.get("totalPnlStart") or PAPER_PNL_START
+        print(
+            f"总收益(自{start}): {acc['totalPnl']:+.2f}  "
+            f"[总资产−纸面本金{acc.get('paperEquityBase')}]"
+        )
     if day_n:
-        pct_txt = "-"
-        print(f"合计当日盈亏: {day_total:+.2f} ({pct_txt})")
+        print(f"今日盈亏: {day_total:+.2f}  [持仓+今日平仓]")
     else:
-        print("合计当日盈亏: -")
+        print("今日盈亏: -")
 
     lock = _read_watch_lock()
     if lock:
