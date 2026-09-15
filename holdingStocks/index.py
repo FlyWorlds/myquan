@@ -4038,3 +4038,5175 @@ def persist_stop_noted(
     pos["stop_noted_px"] = px
     pos["stop_noted_session"] = str(session)
     save_holdings(data)
+    return True
+
+
+def clear_stop_noted(code: str) -> None:
+    """现价已收回/涨停：作废 T+1 落库已记，避免次日仍隔夜武装。"""
+    data = load_holdings()
+    pos = data.get("positions", {}).get(code)
+    if not pos:
+        return
+    if not (pos.get("stop_noted") or pos.get("stop_noted_px")):
+        return
+    pos["stop_noted"] = False
+    pos["stop_noted_px"] = None
+    pos["stop_noted_session"] = None
+    save_holdings(data)
+
+
+def resolve_stop_noted_hit(
+    pos: dict[str, Any],
+    *,
+    open_px: float,
+    low_px: float,
+    last_px: float,
+    sellable: int,
+    t1_buy_day: bool,
+    locked: bool = False,
+    now: Any | None = None,
+    dump_pct: float | None = None,
+    cost_px: float | None = None,
+    high_px: float | None = None,
+    giveback_arm_pct: float | None = None,
+    overnight_high_ok: bool = True,
+) -> dict[str, Any]:
+    """隔夜仓：昨日 T+1 已记 → 次日可卖后的离场。
+
+    · 浮盈尚未 >3%：次日动态峰值回落 2.5% 全清
+    · 浮盈 >3%：不强制峰值回落 2.5%，交给波动回落 / 档位
+    · 一字跌停封死：locked=True 则等开板
+    · overnight_high_ok=False（今日新买）不走隔夜峰值回落
+    """
+    out = {"hit": False, "fill_px": 0.0, "kind": ""}
+    if t1_buy_day or (not overnight_high_ok) or int(sellable or 0) <= 0:
+        return out
+    if not bool(pos.get("stop_noted")):
+        return out
+    try:
+        noted = float(pos.get("stop_noted_px") or 0)
+    except (TypeError, ValueError):
+        noted = 0.0
+    if noted <= 0:
+        return out
+    if locked:
+        return out
+    o = float(open_px or 0)
+    last = float(last_px or 0)
+    lo = float(low_px or 0)
+    if o <= 0:
+        return out
+    try:
+        cost = float(
+            cost_px if cost_px is not None else (pos.get("cost") or 0)
+        )
+    except (TypeError, ValueError):
+        cost = 0.0
+    try:
+        hi = float(high_px or 0)
+    except (TypeError, ValueError):
+        hi = 0.0
+    arm = (
+        float(giveback_arm_pct)
+        if giveback_arm_pct is not None
+        else DEFAULT_GIVEBACK_ARM_PCT
+    )
+    if pnl_exceeds(max(o, hi, last, cost if cost > 0 else 0), cost, arm):
+        return out
+    hard = cost_hard_stop_px(cost)
+    if hard > 0 and o <= hard + 1e-12:
+        return {"hit": True, "fill_px": o, "kind": "hard_from_cost"}
+    try:
+        peak_pos = float(pos.get("peak_high") or 0)
+    except (TypeError, ValueError):
+        peak_pos = 0.0
+    peaks = [x for x in (o, hi, last, peak_pos, cost) if x > 0]
+    sess_peak = max(peaks) if peaks else 0.0
+    k = float(dump_pct) if dump_pct is not None else DEFAULT_T1_PEAK_TRAIL_PCT
+    trail_stop = t1_trail_stop_px(
+        sess_peak,
+        cost_px=cost,
+        t1_trail_pct=k,
+        hard_pct=DEFAULT_PULLBACK_PCT,
+    )
+    if trail_stop <= 0:
+        return out
+    if (lo > 0 and lo <= trail_stop + 1e-12) or (last > 0 and last <= trail_stop + 1e-12):
+        fill = o if o <= trail_stop + 1e-12 else trail_stop
+        kind = "hard_from_cost" if abs(trail_stop - hard) <= 1e-9 and hard > 0 else "t1_peak_trail"
+        return {"hit": True, "fill_px": fill, "kind": kind}
+    return out
+
+
+def overnight_stop_should_fill(
+    *,
+    last: float,
+    low: float,
+    stop: float,
+    sticky_touched: bool = False,
+) -> bool:
+    """现价打到当前卖价才平。全日最低不与抬高后的止损比较（避免早盘低点假触）。"""
+    try:
+        stop_px = float(stop or 0)
+    except (TypeError, ValueError):
+        return False
+    if stop_px <= 0:
+        return False
+    try:
+        last_px = float(last or 0)
+    except (TypeError, ValueError):
+        last_px = 0.0
+    if last_px > 0 and last_px <= stop_px + 1e-12:
+        return True
+    if bool(sticky_touched) and last_px > 0 and last_px <= stop_px * 1.003 + 1e-12:
+        return True
+    return False
+
+
+def t1_buy_day_should_void_stop_note(
+    *,
+    last_px: float,
+    cost_px: float | None,
+    prev_close: float | None,
+    noted_px: float | None,
+    limit_up_pct: float = 0.10,
+) -> bool:
+    """买入日：现价盈≥3%、涨停、或已远离已记价 → 不得落库/展示「止损已记」。"""
+    try:
+        last = float(last_px or 0)
+    except (TypeError, ValueError):
+        last = 0.0
+    try:
+        cost = float(cost_px or 0)
+    except (TypeError, ValueError):
+        cost = 0.0
+    if last > 0 and cost > 0 and pnl_exceeds(last, cost, DEFAULT_GIVEBACK_ARM_PCT):
+        return True
+    return bool(
+        stop_note_invalidated_by_recovery(
+            last_px=last,
+            noted_px=noted_px,
+            prev_close=prev_close,
+            limit_up_pct=float(limit_up_pct or 0.10),
+        )
+    )
+
+
+def t1_stop_note_px_is_legal(*, stop_px: float, cost_px: float | None) -> bool:
+    """已记价只能 ≤ 成本：硬保护在成本下，T1 哨兵=成本。中段/抬高卖价非法。"""
+    try:
+        px = float(stop_px or 0)
+        cost = float(cost_px or 0)
+    except (TypeError, ValueError):
+        return False
+    if px <= 0 or cost <= 0:
+        return False
+    return px <= cost + 1e-6
+
+
+def t1_stop_note_allowed(
+    *,
+    reason: str,
+    stop_px: float,
+    cost_px: float | None,
+    last_px: float | None = None,
+    prev_close: float | None = None,
+    limit_up_pct: float = 0.10,
+) -> bool:
+    """唯一门禁：原因合法 + 已记价≤成本 + 现价未涨停/未盈≥3%/未收回。"""
+    if str(reason or "") not in ("hard_from_cost", "t1_trail"):
+        return False
+    if not t1_stop_note_px_is_legal(stop_px=stop_px, cost_px=cost_px):
+        return False
+    try:
+        last = float(last_px or 0)
+    except (TypeError, ValueError):
+        last = 0.0
+    if last > 0 and t1_buy_day_should_void_stop_note(
+        last_px=last,
+        cost_px=cost_px,
+        prev_close=prev_close,
+        noted_px=stop_px,
+        limit_up_pct=limit_up_pct,
+    ):
+        return False
+    return True
+
+
+def purge_illegal_t1_stop_notes(data: dict[str, Any]) -> int:
+    """清掉已记价高于成本的账（中段卖价误写入）。返回清理条数。"""
+    n = 0
+    positions = data.get("positions") or {}
+    if not isinstance(positions, dict):
+        return 0
+    for pos in positions.values():
+        if not isinstance(pos, dict):
+            continue
+        if not (pos.get("stop_noted") or pos.get("stop_noted_px")):
+            continue
+        if t1_stop_note_px_is_legal(
+            stop_px=float(pos.get("stop_noted_px") or 0),
+            cost_px=pos.get("cost"),
+        ):
+            continue
+        pos["stop_noted"] = False
+        pos["stop_noted_px"] = None
+        pos["stop_noted_session"] = None
+        n += 1
+    return n
+
+
+def paper_exit_decision(
+    *,
+    qty: int,
+    sellable: int,
+    t1_today: bool,
+    hold_locked: bool = False,
+    stop_locked: bool = False,
+    last: float = 0.0,
+    open_px: float = 0.0,
+    prev_close: float | None = None,
+    cost: float | None = None,
+    peak_high: float | None = None,
+    working_stop: float = 0.0,
+    path_hit: bool = False,
+    path_fill_px: float = 0.0,
+    path_action_kind: str = "",
+    path_stop_kind: str = "",
+    signal_ok: bool = True,
+    overnight_high_ok: bool | None = None,
+    buy_time: Any = None,
+    session: str = "",
+) -> dict[str, Any]:
+    """纸面止损唯一口径：开盘保护 / 1m 路径 / 5s 现价破卖价。
+
+    展示 hit_show 与结算 hit 同源。成交价=触发点（买点/卖点；开盘已破保护则开盘）。
+    滑点在策略成本里，不在触发价上另加。T+1、锁仓、跌停封单只展示不平。
+    不用「全日最低 vs 盘中抬高后的止损」。
+    买入日不算隔夜开盘保护，且只把硬保护触达算 hit_show（中段/抬高卖价不可记）。
+    昨收/昨高由 overnight_open_protect_px 按买入日判断。
+    """
+    empty = {
+        "hit": False,
+        "hit_show": False,
+        "fill_px": 0.0,
+        "kind": "",
+        "action_kind": "",
+        "stop_kind": "",
+        "reason": "",
+        "open_bell": False,
+    }
+    try:
+        qty_i = int(qty or 0)
+        sell_i = int(sellable or 0)
+    except (TypeError, ValueError):
+        return empty
+    if qty_i <= 0:
+        return empty
+
+    try:
+        last_px = float(last or 0)
+    except (TypeError, ValueError):
+        last_px = 0.0
+    try:
+        open_f = float(open_px or 0)
+    except (TypeError, ValueError):
+        open_f = 0.0
+    try:
+        stop_f = float(working_stop or 0)
+    except (TypeError, ValueError):
+        stop_f = 0.0
+    try:
+        cost_f = float(cost or 0)
+    except (TypeError, ValueError):
+        cost_f = 0.0
+    try:
+        path_px = float(path_fill_px or 0)
+    except (TypeError, ValueError):
+        path_px = 0.0
+
+    protect = 0.0
+    if cost_f > 0:
+        protect = float(
+            overnight_open_protect_px(
+                cost_f,
+                prev_close,
+                peak_high=peak_high,
+                overnight_high_ok=overnight_high_ok,
+                buy_time=buy_time,
+                session=session,
+                qty=qty_i,
+            )
+            or 0
+        )
+    open_hit = bool(open_f > 0 and protect > 0 and open_f <= protect + 1e-12)
+    last_hit = bool(stop_f > 0 and last_px > 0 and last_px <= stop_f + 1e-12)
+    path_ok = bool(path_hit and path_px > 0)
+    open_bell = bool(open_hit)
+    if t1_today and cost_f > 0:
+        hard = float(cost_hard_stop_px(cost_f) or 0)
+        open_hit = False
+        open_bell = False
+        last_hit = bool(hard > 0 and last_px > 0 and last_px <= hard + 1e-12)
+        path_ok = bool(
+            path_hit
+            and path_px > 0
+            and hard > 0
+            and path_px <= hard + 1e-6
+            and last_px > 0
+            and last_px <= hard * 1.003 + 1e-12
+        )
+    hit_show = bool(open_hit or last_hit or path_ok)
+    if not hit_show:
+        return empty
+
+    out = dict(empty)
+    out["hit_show"] = True
+    out["open_bell"] = bool(open_bell)
+    if t1_today:
+        out["reason"] = "t1"
+        return out
+    if hold_locked:
+        out["reason"] = "hold_lock"
+        return out
+    if stop_locked:
+        out["reason"] = "limit_down"
+        return out
+    if sell_i <= 0:
+        out["reason"] = "not_sellable"
+        return out
+    if not signal_ok:
+        out["reason"] = "wait_auction"
+        return out
+
+    if open_hit:
+        out.update(
+            {
+                "hit": True,
+                "fill_px": open_f,
+                "kind": "open_protect",
+                "action_kind": "full",
+                "reason": "open_protect",
+            }
+        )
+        return out
+    if path_ok:
+        half = is_half_stop_kind(path_stop_kind, path_action_kind)
+        out.update(
+            {
+                "hit": True,
+                "fill_px": path_px,
+                "kind": "path",
+                "action_kind": "half" if half else (path_action_kind or "full"),
+                "stop_kind": str(path_stop_kind or ""),
+                "reason": "path",
+            }
+        )
+        return out
+    out.update(
+        {
+            "hit": True,
+            "fill_px": stop_f,
+            "kind": "last",
+            "action_kind": "full",
+            "reason": "last",
+        }
+    )
+    return out
+
+
+def correct_realized_open_protect_fill(
+    *,
+    code: str,
+    session: str,
+    open_px: float,
+    prev_close: float | None,
+    cost: float | None,
+    peak_high: float | None,
+    px_digits: int,
+) -> dict[str, Any] | None:
+    """已记账卖出若本应按开盘保护成交、却写成了抬高后的止损，纠回开盘价。
+
+    不改 qty。现金按价差轧差。远东今开=24.10 已是开盘保护，不会动。
+    """
+    data = load_holdings()
+    _purge_stale_realized(data, session)
+    rec = (data.get("realized_today") or {}).get(code)
+    if not isinstance(rec, dict):
+        return None
+    if str(rec.get("session") or "") != str(session)[:10]:
+        return None
+    if rec.get("full_exit") is not True:
+        return None
+    try:
+        old_px = float(rec.get("price") or 0)
+        qty = int(rec.get("qty") or 0)
+        cost_f = float(cost if cost is not None else rec.get("cost") or 0)
+        open_f = float(open_px or 0)
+    except (TypeError, ValueError):
+        return None
+    if old_px <= 0 or qty <= 0 or cost_f <= 0 or open_f <= 0:
+        return None
+    dec = paper_exit_decision(
+        qty=qty,
+        sellable=qty,
+        t1_today=False,
+        last=old_px,
+        open_px=open_f,
+        prev_close=prev_close,
+        cost=cost_f,
+        peak_high=peak_high,
+        working_stop=old_px,
+        path_hit=False,
+        signal_ok=True,
+        overnight_high_ok=True,
+    )
+    if str(dec.get("kind") or "") != "open_protect":
+        return None
+    try:
+        new_px = round(float(dec.get("fill_px") or 0), int(px_digits or 2))
+    except (TypeError, ValueError):
+        return None
+    if new_px <= 0 or abs(new_px - old_px) <= 5e-3:
+        return rec
+    pnl, pnl_pct = mark_unrealized(new_px, cost_f, qty)
+    bought_today = False
+    day_pnl, day_pnl_pct, day_base = session_day_pnl(
+        mark=new_px,
+        qty=qty,
+        cost=cost_f,
+        prev_close=prev_close,
+        bought_today=bought_today,
+        fallback=open_f,
+    )
+    rec["price"] = new_px
+    rec["pnl"] = None if pnl is None else round(float(pnl), 2)
+    rec["pnl_pct"] = None if pnl_pct is None else round(float(pnl_pct), 2)
+    rec["day_base"] = None if day_base is None else round(float(day_base), 2)
+    rec["day_pnl"] = None if day_pnl is None else round(float(day_pnl), 2)
+    rec["day_pnl_pct"] = None if day_pnl_pct is None else round(float(day_pnl_pct), 2)
+    rec["note_fix"] = "开盘保护纠价"
+    pos = (data.get("positions") or {}).get(code)
+    if isinstance(pos, dict):
+        pos["note"] = f"止损成交@{new_px} ({session})"
+    cash = _account_cash(data)
+    if cash is not None:
+        data["account_cash"] = round(cash + (new_px - old_px) * qty, 2)
+    traces = data.get("closed_today")
+    if isinstance(traces, dict) and isinstance(traces.get(code), dict):
+        traces[code]["price"] = new_px
+        traces[code]["day_pnl"] = rec.get("day_pnl")
+        traces[code]["day_pnl_pct"] = rec.get("day_pnl_pct")
+    mem = data.setdefault("factor_memory", {})
+    mem_rec = mem.setdefault(code, {})
+    if isinstance(mem_rec, dict):
+        mem_rec["last_sell_factor_px"] = new_px
+        mem_rec["last_sell_factor_date"] = str(session)[:10]
+    sticky = data.get("alert_sticky")
+    if isinstance(sticky, dict) and isinstance(sticky.get(code), dict):
+        sticky[code]["touch_stop"] = new_px
+    save_holdings(data)
+    meta_name = str((pos or {}).get("name") or rec.get("name") or code)
+    append_trade(
+        {
+            "time": _now(),
+            "side": "sell",
+            "code": code,
+            "name": meta_name,
+            "price": new_px,
+            "qty": qty,
+            "after_qty": 0,
+            "cost": round(cost_f, 4),
+            "pnl": rec.get("pnl"),
+            "note": f"开盘保护纠价 {old_px}->{new_px}（原按抬高止损记账）",
+        }
+    )
+    return rec
+
+
+def _reconcile_realized_open_protects(
+    rows: list[dict[str, Any]],
+    *,
+    session: str,
+) -> int:
+    """已平仓票按开盘保护对账；错价当场改账本并回写当前行。"""
+    if not session:
+        return 0
+    data = load_holdings()
+    positions = data.get("positions") or {}
+    realized_map = data.get("realized_today") or {}
+    by_code: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        code = _code_key(str(r.get("代码") or ""))
+        if code:
+            by_code[code] = r
+    n = 0
+    for code, rec in list(realized_map.items()):
+        if not isinstance(rec, dict):
+            continue
+        ck = _code_key(code)
+        row = by_code.get(ck)
+        if not row or row.get("error"):
+            continue
+        pos = positions.get(ck) if isinstance(positions.get(ck), dict) else {}
+        try:
+            open_px = float(row.get("开盘") or 0)
+        except (TypeError, ValueError):
+            continue
+        cost = rec.get("cost")
+        if cost is None:
+            cost = row.get("成本")
+        old_px = rec.get("price")
+        fixed = correct_realized_open_protect_fill(
+            code=ck,
+            session=session,
+            open_px=open_px,
+            prev_close=row.get("昨收"),
+            cost=float(cost) if cost is not None else None,
+            peak_high=(pos or {}).get("peak_high"),
+            px_digits=int(row.get("价位小数") or 2),
+        )
+        if not isinstance(fixed, dict):
+            continue
+        try:
+            new_px = float(fixed.get("price") or 0)
+            old_f = float(old_px or 0)
+        except (TypeError, ValueError):
+            continue
+        if new_px <= 0:
+            continue
+        if abs(new_px - old_f) > 5e-3:
+            n += 1
+        row["成交价"] = new_px
+        if fixed.get("day_pnl") is not None:
+            row["当日盈亏"] = fixed.get("day_pnl")
+        if fixed.get("day_pnl_pct") is not None:
+            row["当日盈亏%"] = fixed.get("day_pnl_pct")
+        if fixed.get("pnl") is not None:
+            row["浮盈"] = fixed.get("pnl")
+        if fixed.get("pnl_pct") is not None:
+            row["浮盈%"] = fixed.get("pnl_pct")
+        _freeze_closed_exit_levels(row)
+    n += _heal_open_protect_hit_times(rows, session=session)
+    return n
+
+
+def _heal_open_protect_hit_times(
+    rows: list[dict[str, Any]],
+    *,
+    session: str,
+) -> int:
+    """开盘保护成交时刻纠成 09:30（竞价核），覆盖缺 09:30 的首根 1m 标签。"""
+    if not session:
+        return 0
+    bell = session_open_bell_ts(session)
+    data = load_holdings()
+    realized_map = data.get("realized_today") or {}
+    sticky = data.get("alert_sticky") if isinstance(data.get("alert_sticky"), dict) else {}
+    traces = data.get("closed_today") if isinstance(data.get("closed_today"), dict) else {}
+    by_code: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        code = _code_key(str(r.get("代码") or ""))
+        if code:
+            by_code[code] = r
+    n = 0
+    changed = False
+    for code, rec in list(realized_map.items()):
+        if not isinstance(rec, dict):
+            continue
+        if str(rec.get("session") or "")[:10] != str(session)[:10]:
+            continue
+        ck = _code_key(code)
+        row = by_code.get(ck) or {}
+        open_px = _as_money(row.get("开盘"))
+        fill = _as_money(rec.get("price"))
+        new_ts = _open_protect_hit_ts(
+            session=session,
+            fill_px=fill,
+            open_px=open_px,
+            existing=rec.get("first_hit_ts") or rec.get("time"),
+            open_bell=bool(row.get("_open_bell")),
+        )
+        if not new_ts or new_ts != bell:
+            continue
+        if str(rec.get("time") or "") != bell or str(rec.get("first_hit_ts") or "") != bell:
+            rec["time"] = bell
+            rec["first_hit_ts"] = bell
+            changed = True
+            n += 1
+        st = sticky.get(ck) if isinstance(sticky.get(ck), dict) else None
+        if st is not None and str(st.get("stop_hit_ts") or "") != bell:
+            st["stop_hit_ts"] = bell
+            changed = True
+        tr = traces.get(ck) if isinstance(traces.get(ck), dict) else None
+        if tr is not None and str(tr.get("time") or "") != bell:
+            tr["time"] = bell
+            changed = True
+        if row:
+            row["_open_bell"] = True
+            row["信号时刻"] = bell
+            row["信号时间"] = "09:30:00"
+            row["卖信号时间"] = "09:30:00"
+    if changed:
+        save_holdings(data)
+    return n
+
+
+def settle_due_paper_stops(
+    rows: list[dict[str, Any]],
+    *,
+    session: str,
+    signal_ok: bool,
+) -> int:
+    """扫全部实仓：决策要平就平。不依赖单票分支有没有走到 apply_stop_fill。"""
+    n = 0
+    if session:
+        n += _reconcile_realized_open_protects(rows, session=session)
+    if not signal_ok or not session:
+        return n
+    data = load_holdings()
+    positions = data.get("positions") or {}
+    by_code: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        code = _code_key(str(r.get("代码") or ""))
+        if code:
+            by_code[code] = r
+    due: list[tuple[str, str, dict[str, Any], dict[str, Any], dict[str, Any], int]] = []
+    for code, pos in list(positions.items()):
+        if not isinstance(pos, dict):
+            continue
+        qty = int(pos.get("qty") or 0)
+        if qty <= 0:
+            continue
+        row = by_code.get(_code_key(code))
+        if not row or row.get("error"):
+            continue
+        t0 = False
+        t1_today = bool(pos.get("buy_time") and is_t1_buy_day(pos.get("buy_time"), session))
+        sellable = _sellable_qty(pos, qty, pos.get("buy_time"), session, t0=t0)
+        try:
+            last = float(row.get("现价") or 0)
+            open_px = float(row.get("开盘") or 0)
+            stop = float(row.get("止损") or 0)
+        except (TypeError, ValueError):
+            continue
+        try:
+            path_px = float(row.get("_path_fill_px") or 0)
+        except (TypeError, ValueError):
+            path_px = 0.0
+        path_hit = bool(row.get("_path_hit")) or (
+            str(row.get("已触止损") or "") == "是" and path_px > 0
+        )
+        dec = paper_exit_decision(
+            qty=qty,
+            sellable=sellable,
+            t1_today=t1_today,
+            hold_locked=bool(pos.get("hold_lock")),
+            last=last,
+            open_px=open_px,
+            prev_close=row.get("昨收"),
+            cost=pos.get("cost") if pos.get("cost") is not None else row.get("成本"),
+            peak_high=pos.get("peak_high"),
+            working_stop=stop,
+            path_hit=path_hit,
+            path_fill_px=path_px,
+            path_action_kind=str(row.get("_path_action_kind") or ""),
+            path_stop_kind=str(row.get("_path_stop_kind") or ""),
+            signal_ok=True,
+            buy_time=pos.get("buy_time"),
+            session=session,
+        )
+        if not dec.get("hit") or float(dec.get("fill_px") or 0) <= 0:
+            continue
+        ts_key = _row_trigger_ts(row, side="sell")
+        due.append((ts_key, _code_key(code), pos, row, dec, sellable))
+    due.sort(key=lambda x: (x[0], x[1]))
+    for ts_key, code, pos, row, dec, sellable in due:
+        try:
+            open_px = float(row.get("开盘") or 0)
+        except (TypeError, ValueError):
+            open_px = 0.0
+        first_ts = ts_key if not str(ts_key).startswith("9999") else None
+        if str(dec.get("kind") or "") == "open_protect" or dec.get("open_bell"):
+            first_ts = session_open_bell_ts(session)
+        apply_stop_fill(
+            code=code,
+            meta={
+                "code": code,
+                "name": str(row.get("名称") or pos.get("name") or code),
+                "market": str(row.get("市场") or pos.get("market") or ""),
+            },
+            stop_px=float(dec["fill_px"]),
+            qty=sellable,
+            cost=float(pos["cost"]) if pos.get("cost") is not None else None,
+            session=session,
+            buy_time=pos.get("buy_time"),
+            prev_close=row.get("昨收"),
+            open_px=open_px,
+            px_digits=int(row.get("价位小数") or 2),
+            action_kind=str(dec.get("action_kind") or "full"),
+            stop_kind=str(dec.get("stop_kind") or ""),
+            first_hit_ts=first_ts or _bar_ts_str(row.get("_path_ts")),
+        )
+        if str(dec.get("kind") or "") == "open_protect" or dec.get("open_bell"):
+            row["_open_bell"] = True
+            row["信号时刻"] = session_open_bell_ts(session)
+            row["信号时间"] = "09:30:00"
+            row["卖信号时间"] = "09:30:00"
+        row["持仓"] = 0
+        row["可用"] = 0
+        row["当日禁买"] = True
+        n += 1
+    return n
+
+
+def append_trade(record: dict[str, Any]) -> None:
+    with TRADES_FILE.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def extremes_after_stop_touch(
+    day: pd.DataFrame, stop_px: float
+) -> tuple[float | None, float | None]:
+    """触及止损后（含触及那根分钟）到现在的最高价、最低价。"""
+    if day is None or getattr(day, "empty", True):
+        return None, None
+    stop_px = float(stop_px)
+    touched = day[day["low"] <= stop_px + 1e-12]
+    if touched.empty:
+        return None, None
+    first_ts = touched.iloc[0]["ts"]
+    after = day[day["ts"] >= first_ts]
+    if after.empty:
+        return None, None
+    return float(after["high"].max()), float(after["low"].min())
+
+
+def fetch_sina_spot(sina: str) -> dict[str, Any] | None:
+    """新浪实时行情（竞价/开盘后分钟线未到时可用）。"""
+    try:
+        resp = requests.get(
+            f"https://hq.sinajs.cn/list={sina}",
+            headers={
+                "Referer": "https://finance.sina.com.cn",
+                "User-Agent": "Mozilla/5.0",
+            },
+            timeout=8,
+        )
+        text = resp.content.decode("gbk", "ignore").strip()
+    except Exception:  # noqa: BLE001
+        return None
+    if '="' not in text:
+        return None
+    payload = text.split('="', 1)[1].rstrip('";')
+    parts = payload.split(",")
+    if len(parts) < 32:
+        return None
+
+    def _f(i: int) -> float:
+        try:
+            return float(parts[i])
+        except (TypeError, ValueError):
+            return 0.0
+
+    filled = fill_preopen_ohlc(
+        open_px=_f(1),
+        high_px=_f(4),
+        low_px=_f(5),
+        last_px=_f(3),
+        bid=_f(6),
+        ask=_f(7),
+        prev_close=_f(2),
+    )
+    if filled is None:
+        return None
+    open_px, high_px, low_px, last_px = filled
+    prev_close = _f(2)
+    session = parts[30] or str(pd.Timestamp.now().date())
+    stamp = f"{session} {parts[31]}" if parts[31] else f"{session} 09:25:00"
+    return {
+        "session": session,
+        "open": open_px,
+        "high": high_px,
+        "low": low_px,
+        "last": last_px,
+        "prev_close": prev_close,
+        "last_ts": stamp,
+        "name": str(parts[0] or "").strip(),
+    }
+
+
+def _day_key_series(ts: pd.Series) -> pd.Series:
+    """统一按日历日比较，避免 datetime64[us] 与 Timestamp 直接比较报错。"""
+    return pd.to_datetime(ts).dt.strftime("%Y-%m-%d")
+
+
+def fetch_today_quote(sina: str) -> dict[str, Any]:
+    """用1分钟线拼当日开高低；现价优先新浪实时，避免分钟末根滞后。
+
+    分钟线优先框架 akshare：东财 `stock_zh_a_hist_min_em` → 新浪备用。
+    """
+    today = str(pd.Timestamp.now().date())
+    spot = fetch_sina_spot(sina)
+
+    day = pd.DataFrame()
+    prev_close: float | None = None
+    em_code = sina[2:] if len(sina) >= 8 and sina[:2].lower() in ("sh", "sz") else sina
+    # 盯盘用未复权更贴近盘面现价；失败则 pull 内部仍会尝试新浪
+    df = pull_akshare_1m(em_symbol=em_code, sina_symbol=sina, adjust="")
+
+    if not df.empty:
+        day_keys = _day_key_series(df["ts"])
+        day = df[day_keys == today].copy()
+        if not day.empty:
+            day = day.dropna(subset=["open", "high", "low", "close"]).sort_values("ts")
+            # 开盘初偶发 open=0 的脏分钟，丢掉无效价
+            day = day[
+                (day["open"] > 0) & (day["high"] > 0) & (day["low"] > 0) & (day["close"] > 0)
+            ]
+
+        prev = df[day_keys < today].copy()
+        if not prev.empty:
+            prev = prev.dropna(subset=["close"]).sort_values("ts")
+            if not prev.empty:
+                prev_last = _day_key_series(prev["ts"]).iloc[-1]
+                prev_day = prev[_day_key_series(prev["ts"]) == prev_last]
+                if not prev_day.empty:
+                    prev_close = float(prev_day.iloc[-1]["close"])
+
+    spot_ok = spot is not None and str(spot.get("session") or "") == today
+
+    # 当日分钟线已到：OHLC 用分钟，现价优先新浪实时
+    if not day.empty:
+        open_px = float(day.iloc[0]["open"])
+        high_px = float(day["high"].max())
+        low_px = float(day["low"].min())
+        last_px = float(day.iloc[-1]["close"])
+        last_ts = str(day.iloc[-1]["ts"])
+        if spot_ok:
+            # 实时现价覆盖滞后的分钟收盘；开盘价固定用首根分钟，避免新浪 open 抖动导致阴/阳翻转（绿底闪没）
+            last_px = float(spot["last"])
+            last_ts = str(spot["last_ts"])
+            high_px = max(high_px, float(spot["high"]) if float(spot["high"]) > 0 else high_px)
+            low_cand = float(spot["low"])
+            if low_cand > 0:
+                low_px = min(low_px, low_cand)
+            if prev_close is None:
+                prev_close = float(spot["prev_close"])
+            # 仅当分钟开盘异常时才用新浪开盘兜底
+            if open_px <= 0 and float(spot["open"]) > 0:
+                open_px = float(spot["open"])
+        elif prev_close is None and spot is not None:
+            prev_close = float(spot["prev_close"])
+        day_chg = price_chg_pct(last_px, prev_close)
+        return {
+            "session": today,
+            "open": open_px,
+            "high": high_px,
+            "low": low_px,
+            "last": last_px,
+            "prev_close": prev_close,
+            "day_chg_pct": day_chg,
+            "last_ts": last_ts,
+            "_day_bars": day,
+        }
+
+    # 竞价/开盘初：分钟线尚无今日，用新浪现价
+    if spot_ok:
+        prev_close = float(spot["prev_close"])
+        last_px = float(spot["last"])
+        day_chg = price_chg_pct(last_px, prev_close)
+        return {
+            "session": today,
+            "open": float(spot["open"]),
+            "high": float(spot["high"]),
+            "low": float(spot["low"]),
+            "last": last_px,
+            "prev_close": prev_close,
+            "day_chg_pct": day_chg,
+            "last_ts": str(spot["last_ts"]),
+            "_day_bars": pd.DataFrame(),
+        }
+
+    # 非交易时段：退回最近一个交易日全日分钟线
+    if df.empty:
+        raise RuntimeError(f"无分钟行情: {sina}")
+    df = df.copy()
+    day_keys = _day_key_series(df["ts"])
+    last_day = day_keys.max()
+    day = df[day_keys == last_day].copy()
+    for col in ("open", "high", "low", "close"):
+        day[col] = pd.to_numeric(day[col], errors="coerce")
+    day = day.dropna(subset=["open", "high", "low", "close"]).sort_values("ts")
+    day = day[(day["open"] > 0) & (day["high"] > 0) & (day["low"] > 0) & (day["close"] > 0)]
+    if day.empty:
+        raise RuntimeError(f"当日无有效分钟线: {sina}")
+    prev = df[day_keys < last_day].copy()
+    if not prev.empty:
+        prev["close"] = pd.to_numeric(prev["close"], errors="coerce")
+        prev = prev.dropna(subset=["close"]).sort_values("ts")
+        if not prev.empty:
+            prev_last = _day_key_series(prev["ts"]).iloc[-1]
+            prev_day = prev[_day_key_series(prev["ts"]) == prev_last]
+            if not prev_day.empty:
+                prev_close = float(prev_day.iloc[-1]["close"])
+    open_px = float(day.iloc[0]["open"])
+    high_px = float(day["high"].max())
+    low_px = float(day["low"].min())
+    last_px = float(day.iloc[-1]["close"])
+    last_ts = day.iloc[-1]["ts"]
+    day_chg = price_chg_pct(last_px, prev_close)
+    return {
+        "session": last_day,
+        "open": open_px,
+        "high": high_px,
+        "low": low_px,
+        "last": last_px,
+        "prev_close": prev_close,
+        "day_chg_pct": day_chg,
+        "last_ts": str(last_ts),
+        "_day_bars": day,
+    }
+
+
+def points_vs_open(open_px: float, px: float) -> float:
+    r = simple_return(px, open_px)
+    return float("nan") if r is None else r * 100.0
+
+
+def pct_vs_open(open_px: float, px: float) -> float | None:
+    """较开盘涨幅% = (现价/开盘-1)×100。"""
+    v = points_vs_open(open_px, px)
+    if v != v:
+        return None
+    return round(float(v), 2)
+
+
+def fetch_indices() -> list[dict[str, Any]]:
+    """拉取上证指数 / 深证成指：最新点数、涨跌点数、涨跌幅。
+
+    优先新浪批量（与个股同一通道）；akshare 表代码常不带 sh/sz 前缀，对不上就「未找到」。
+    """
+    blanks = [
+        {
+            "code": x["code"],
+            "name": x["name"],
+            "market": x["market"],
+            "price": None,
+            "chg_points": None,
+            "chg_pct": None,
+            "error": None,
+        }
+        for x in INDEX_WATCH
+    ]
+    batch: dict[str, dict[str, Any]] = {}
+    try:
+        batch = fetch_sina_batch([x["code"] for x in INDEX_WATCH])
+    except Exception:  # noqa: BLE001
+        batch = {}
+    out: list[dict[str, Any]] = []
+    missing: list[dict[str, str]] = []
+    for item, blank in zip(INDEX_WATCH, blanks, strict=True):
+        spot = batch.get(str(item["code"]).lower())
+        parsed = _index_from_sina_spot(item, spot) if spot else None
+        if parsed is not None:
+            out.append(parsed)
+        else:
+            missing.append(item)
+            out.append(dict(blank, error="未找到指数"))
+    if not missing:
+        return out
+
+    try:
+        with AKSHARE_CALL_LOCK:
+            spot_df = ak.stock_zh_index_spot_sina()
+    except Exception as e:  # noqa: BLE001
+        if not any(x.get("price") for x in out):
+            return [dict(b, error=str(e)) for b in blanks]
+        return out
+    if spot_df is None or getattr(spot_df, "empty", True):
+        return out
+    code_col = "代码" if "代码" in spot_df.columns else spot_df.columns[0]
+    by_code = {str(item["code"]): i for i, item in enumerate(INDEX_WATCH)}
+    for item in missing:
+        row = spot_df[
+            spot_df[code_col].astype(str).map(lambda c: _index_codes_match(c, item["code"]))
+        ]
+        idx = by_code[item["code"]]
+        if row.empty:
+            continue
+        r = row.iloc[0]
+        price = pd.to_numeric(r.get("最新价"), errors="coerce")
+        chg_pts = pd.to_numeric(r.get("涨跌额"), errors="coerce")
+        chg_pct = pd.to_numeric(r.get("涨跌幅"), errors="coerce")
+        if pd.isna(price):
+            continue
+        out[idx] = {
+            "code": item["code"],
+            "name": item["name"],
+            "market": item["market"],
+            "price": float(price),
+            "chg_points": None if pd.isna(chg_pts) else float(chg_pts),
+            "chg_pct": None if pd.isna(chg_pct) else float(chg_pct),
+            "error": None,
+        }
+    return out
+
+
+def _pos_overnight_high_ok(
+    pos: dict[str, Any] | None,
+    session: str,
+    *,
+    t0: bool = False,
+    replay: dict[str, Any] | None = None,
+    qty: int | None = None,
+) -> bool:
+    """实仓：昨日策略持有或策略买入才允许用昨高。"""
+    pos = pos if isinstance(pos, dict) else {}
+    replay = replay if isinstance(replay, dict) else {}
+    try:
+        q = int(qty if qty is not None else (pos.get("qty") or 0))
+    except (TypeError, ValueError):
+        q = 0
+    return overnight_session_high_ok(
+        qty=q,
+        buy_time=pos.get("buy_time"),
+        session=str(session or "")[:10],
+        t0=bool(t0),
+        replay_holding=bool(replay.get("holding")),
+        last_buy_date=str(replay.get("last_buy_date") or "") or None,
+        last_sell_date=str(replay.get("last_sell_date") or "") or None,
+    )
+
+
+def collect_rows(
+    get_quote: Callable[[str], dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """拉取行情并合并持仓；已触止损视为成交并锁定当日收益。
+
+    get_quote: 可选行情供给（watch 传入 QuoteHub）；默认 fetch_today_quote。
+    """
+    _ensure_signal_day_caches(force=False)
+    quote_fn = get_quote or fetch_today_quote
+    holdings = heal_watch_ledger()
+    positions = holdings.get("positions", {})
+    realized_map = holdings.get("realized_today", {})
+    sticky = _alert_sticky_map(holdings)
+    from watch_config import is_close_confirmed, portfolio_pool_codes
+
+    portfolio_codes = {_code_key(c) for c in portfolio_pool_codes(holdings)}
+    rows: list[dict[str, Any]] = []
+    session_today: str | None = None
+    phase_now = market_phase()
+    phase_label = market_phase_label(phase_now)
+    threshold_ok = is_threshold_ready()
+    signal_ok_global = is_signal_window()
+    stopped_this_scan = False
+
+    for w in effective_watchlist(holdings):
+        code = w["code"]
+        pool_src = str(w.get("pool_src") or "")
+        if not pool_src:
+            if w.get("self_watch") or w.get("manual_add"):
+                pool_src = "self"
+            elif str(w.get("universe") or "") == "strategy16":
+                pool_src = "factor27"
+        pool_label = str(
+            w.get("池来源")
+            or ("自选" if pool_src == "self" else ("因子27" if pool_src == "factor27" else ""))
+        )
+        entry_pct = _watch_pct(w)
+        base_stop_pct = _watch_stop_pct(w)
+        tick = _watch_tick(w)
+        limit_down_pct = _watch_limit_down_pct(w)
+        prev_entry_mode = str(w.get("prev_entry_mode") or "yin_or_small_yang")
+        px_digits = _px_digits(tick)
+        if abs(entry_pct - base_stop_pct) < 1e-12:
+            pct_label = f"±{entry_pct * 100:.1f}"
+        else:
+            pct_label = f"+{entry_pct * 100:.1f}/-{base_stop_pct * 100:.1f}"
+        pct_pct = pct_label  # 卡片「阈值%」展示文案
+        try:
+            q = dict(quote_fn(w["sina"]) or {})
+            q["session"] = normalize_signal_session(q.get("session"))
+            session_today = q["session"]
+            daily = _watch_daily(w["sina"])
+            if USE_FACTOR4:
+                f4_kind, f4_params, f4_widen = resolve_factor4_spec(w)
+                bull = bull_exec_today(
+                    w["sina"],
+                    str(q["session"]),
+                    daily,
+                    kind=f4_kind,
+                    params=f4_params,
+                )
+                stop_pct, f4_mode = effective_stop_pct(
+                    base_stop_pct, bull=bull, widen_mult=f4_widen
+                )
+                # 展示/成交用有效止损；暂停止损时仍展示基础止损价，但不自动结算
+                stop_pct_for_levels = (
+                    base_stop_pct if f4_mode == "suppressed" else stop_pct
+                )
+            else:
+                bull = False
+                f4_widen = 1.0
+                stop_pct = base_stop_pct
+                f4_mode = "off"
+                stop_pct_for_levels = base_stop_pct
+            pos_early = positions.get(code, {})
+            qty_early = int(pos_early.get("qty") or 0)
+            buy_time_early = pos_early.get("buy_time")
+            cost_early = pos_early.get("cost")
+            peak_early = pos_early.get("peak_high")
+            cost_h = None
+            seed_h = None
+            since_stop = None
+            since_exclusive = False
+            path_action_kind = ""
+            path_touch_ts = None
+            path_touch_stop = 0.0
+            hit_path_settle = False
+            tp_stage_early = 0
+            try:
+                tp_stage_early = max(0, int(pos_early.get("tp_stage") or 0))
+            except (TypeError, ValueError):
+                tp_stage_early = 0
+            if qty_early > 0:
+                last_tp_early = pos_early.get("last_tp_ts")
+                if last_tp_early:
+                    since_stop = str(last_tp_early)
+                    since_exclusive = True
+                else:
+                    since_stop = str(buy_time_early) if buy_time_early else None
+                try:
+                    cost_h = float(cost_early) if cost_early is not None else None
+                except (TypeError, ValueError):
+                    cost_h = None
+                try:
+                    peak_h = float(peak_early) if peak_early is not None else None
+                except (TypeError, ValueError):
+                    peak_h = None
+                if cost_h and cost_h > 0:
+                    seed_h = overnight_peak_px(
+                        cost_h,
+                        q.get("prev_close"),
+                        peak_h,
+                        buy_time=buy_time_early,
+                        session=str(q["session"]),
+                        qty=qty_early,
+                        t0=bool(w.get("t0")),
+                    )
+                    if seed_h <= 0:
+                        seed_h = cost_h
+                        if peak_h and peak_h > 0:
+                            seed_h = max(seed_h, peak_h)
+                    # 禁止把当日快照 high 种进 seed：否则早盘低点会撞上尚未走完的高点
+                    # （天通 600330 曾因此被误剔仓）。今日高点只经 1m 顺序抬升。
+            # 买入当日 T+1：已记只武装次日，不当作今日已触止损
+            t1_today_early = bool(
+                qty_early > 0
+                and buy_time_early
+                and (not bool(w.get("t0")))
+                and is_t1_buy_day(buy_time_early, str(q["session"]))
+            )
+            overnight_armed_lv = bool(pos_early.get("stop_noted")) and _pos_overnight_high_ok(
+                pos_early,
+                str(q["session"]),
+                t0=bool(w.get("t0")),
+                qty=qty_early,
+            )
+            # 有仓：卖价锚也不用当日快照 high（否则 lv.stop 被抬高，无 1m 时 last 会假触）
+            # 无 1m 时禁止把昨收垫成峰值；昨收只经 overnight_peak_px。
+            snap_high = float(q["high"]) if threshold_ok else float(
+                seed_h or cost_h or 0
+            )
+            high_for_lv = float(seed_h) if (qty_early > 0 and seed_h) else snap_high
+            low_for_lv = float(q["low"]) if threshold_ok else float(
+                cost_h or q.get("prev_close") or 0
+            )
+            open_for_lv = float(q["open"]) if threshold_ok else float(
+                q.get("prev_close") or q.get("open") or 0
+            )
+            lv = strategy_levels(
+                open_for_lv if open_for_lv > 0 else float(q["open"]),
+                entry_pct=entry_pct,
+                stop_pct=stop_pct_for_levels,
+                tick=tick,
+                high_px=high_for_lv if high_for_lv > 0 else None,
+                low_px=low_for_lv if low_for_lv > 0 else None,
+                cost_px=cost_h,
+                peak_high=seed_h,
+                vol20_daily=_vol20_daily_for(str(w["sina"]), str(q["session"]))
+                if qty_early > 0
+                else None,
+                overnight_armed=overnight_armed_lv,
+                allow_attack=DEFAULT_ALLOW_ATTACK,
+            )
+            lv_base = strategy_levels(
+                open_for_lv if open_for_lv > 0 else float(q["open"]),
+                entry_pct=entry_pct,
+                stop_pct=base_stop_pct,
+                tick=tick,
+                high_px=high_for_lv if high_for_lv > 0 else None,
+                low_px=low_for_lv if low_for_lv > 0 else None,
+                cost_px=cost_h,
+                peak_high=seed_h,
+                allow_attack=DEFAULT_ALLOW_ATTACK,
+            )
+            vs = points_vs_open(q["open"], q["last"])
+            vs_pct = pct_vs_open(q["open"], q["last"])
+            day_chg = q.get("day_chg_pct")
+            prev_o, prev_c, prev2_o, prev2_c = _prev_bars_from_daily(daily, q["session"])
+            f1p = _factor1_binding_params()
+            allow_entry, gate_label, prev_shape = _entry_gate_detail(
+                prev_o,
+                prev_c,
+                prev2_o,
+                prev2_c,
+                entry_pct=entry_pct,
+                prev_entry_mode=prev_entry_mode,
+                tick=tick,
+                f1p=f1p,
+            )
+            auction_ref = round(float(q["last"]), px_digits)
+            replay = _replay_last_factor_triggers_cached(
+                w["sina"],
+                daily,
+                entry_pct=entry_pct,
+                stop_pct=base_stop_pct,
+                tick=tick,
+                prev_entry_mode=prev_entry_mode,
+                limit_down_pct=limit_down_pct,
+            )
+            overnight_armed_lv = bool(pos_early.get("stop_noted")) and _pos_overnight_high_ok(
+                pos_early,
+                str(q["session"]),
+                t0=bool(w.get("t0")),
+                replay=replay,
+                qty=qty_early,
+            )
+            open_buy = float(lv.get("open_buy") or lv["buy_trigger"])
+            hit_open = q["high"] + 1e-12 >= open_buy
+            hit_buy_raw = hit_open
+            path_buy_px = None
+            path_buy_ts = None
+            if (
+                str(FACTOR_ID).lower() in ("factor26", "f26", "26")
+                and threshold_ok
+                and hit_buy_raw
+                and qty_early <= 0
+            ):
+                bars_buy = q.get("_day_bars")
+                if not isinstance(bars_buy, pd.DataFrame) or bars_buy.empty:
+                    bars_buy = _today_1m_bars(str(w["sina"]), str(q["session"]))
+                    q["_day_bars"] = bars_buy
+                hit_buy_raw, path_buy_px, path_buy_ts = _merge_path_buy_hit(
+                    hit_open,
+                    bars_buy,
+                    open_px=float(q["open"]),
+                    entry_pct=float(entry_pct),
+                    tick=tick,
+                )
+            # 当日粘滞：已触买进预警后整天保留（有 1m / 现价离开买点也不摘）
+            _st_buy = sticky.get(code) if isinstance(sticky.get(code), dict) else None
+            hit_buy_raw = _restore_session_buy_hit(
+                hit_buy_raw,
+                qty=qty_early,
+                sticky_row=_st_buy,
+                session=str(q["session"]),
+            )
+            hit_buy = bool(allow_entry) and hit_buy_raw
+            _replay_holding_early = bool(replay.get("holding")) and qty_early <= 0
+            # 因子26：止损必须 1 分钟 path-dependent；禁止全日 low × 抬高后止损
+            path_touch_stop = 0.0
+            if str(FACTOR_ID).lower() in ("factor26", "f26", "26"):
+                # 9:15–9:25 竞价：不拉分钟、不判触达、不回写峰值（开盘价未定）
+                if not threshold_ok:
+                    hit_eff_stop = False
+                    hit_base_stop = False
+                    path_touch_stop = 0.0
+                elif qty_early <= 0 and not _replay_holding_early:
+                    # 空仓无止损语义：勿用「现价≤开盘派生卖价」标已触止损
+                    hit_eff_stop = False
+                    hit_base_stop = False
+                    path_touch_stop = 0.0
+                else:
+                    # 仅实仓/纸面持仓拉 1m。空仓勿拉（akshare 单票超时可达 ~90s）。
+                    need_m1 = True
+                    path_res = _resolve_hit_stop_path_dependent(
+                        sina=str(w["sina"]),
+                        session=str(q["session"]),
+                        quote=q,
+                        pullback_pct=float(stop_pct),
+                        tick=tick,
+                        need_accurate=need_m1,
+                        stop_px=float(lv["stop"]),
+                        since_ts=since_stop,
+                        seed_high=seed_h,
+                        cost_px=cost_h,
+                        vol20_daily=_vol20_daily_for(str(w["sina"]), str(q["session"])),
+                        overnight_armed=overnight_armed_lv,
+                        day_open=float(q.get("open") or 0) or None,
+                        shares=int(qty_early or 0) or 1000,
+                        tp_stage=tp_stage_early,
+                        since_exclusive=since_exclusive,
+                    )
+                    hit_eff_stop = bool(path_res.get("hit_stop"))
+                    path_touch_stop = float(path_res.get("touch_stop") or 0)
+                    path_action_kind = str(path_res.get("action_kind") or "")
+                    path_touch_ts = path_res.get("touch_ts")
+                    # 有仓：展示卖价与 path 一致（1m 峰值可能高于快照 high）
+                    if qty_early > 0:
+                        try:
+                            path_stop = float(path_res.get("stop_px") or 0)
+                            if path_stop > 0:
+                                lv["stop"] = path_stop
+                                lv_base["stop"] = path_stop
+                            sk = str(path_res.get("stop_kind") or "")
+                            if sk:
+                                lv["stop_kind"] = sk
+                        except (TypeError, ValueError):
+                            pass
+                    # 刷新持仓峰值：只用 1m 顺序 running_high，禁止并入快照 high
+                    if qty_early > 0:
+                        try:
+                            rh = float(path_res.get("running_high") or 0)
+                            new_peak = max(float(seed_h or 0), rh)
+                            old_peak = float(pos_early.get("peak_high") or 0)
+                            if new_peak > old_peak + 1e-9:
+                                pos_early["peak_high"] = round(new_peak, 4)
+                                _holdings_data = load_holdings()
+                                _p = (_holdings_data.get("positions") or {}).get(code)
+                                if isinstance(_p, dict):
+                                    _p["peak_high"] = round(new_peak, 4)
+                                    save_holdings(_holdings_data)
+                        except (TypeError, ValueError, KeyError):
+                            pass
+                    if USE_FACTOR4:
+                        base_res = _resolve_hit_stop_path_dependent(
+                            sina=str(w["sina"]),
+                            session=str(q["session"]),
+                            quote=q,
+                            pullback_pct=float(base_stop_pct),
+                            tick=tick,
+                            need_accurate=need_m1,
+                            stop_px=float(lv_base["stop"]),
+                            since_ts=since_stop,
+                            seed_high=seed_h,
+                            cost_px=cost_h,
+                        )
+                        hit_base_stop = bool(base_res.get("hit_stop"))
+                    else:
+                        hit_base_stop = hit_eff_stop
+            else:
+                if not threshold_ok:
+                    hit_base_stop = False
+                    hit_eff_stop = False
+                    path_touch_stop = 0.0
+                else:
+                    hit_base_stop = q["low"] <= lv_base["stop"] + 1e-12
+                    hit_eff_stop = q["low"] <= lv["stop"] + 1e-12
+                    path_touch_stop = float(lv["stop"]) if hit_eff_stop else 0.0
+            # 因子4（可选）：牛市暂停止损 → 不自动结算；放宽 → 仅触放宽价才结算
+            if USE_FACTOR4 and f4_mode == "suppressed":
+                hit_stop = False
+            else:
+                hit_stop = hit_eff_stop
+            # 今日买入 T+1：盈利≥3%不记；其余收到日末才落库武装次日。
+            # 盘中「盈<3%」只是预告，不得把 hit_stop 打成真（否则假已触止损）。
+            if (
+                qty_early > 0
+                and buy_time_early
+                and (not bool(w.get("t0")))
+                and is_t1_buy_day(buy_time_early, str(q["session"]))
+            ):
+                try:
+                    last_n = float(q["last"])
+                    stop_n = float(lv["stop"] or 0)
+                except (TypeError, ValueError):
+                    last_n, stop_n = 0.0, 0.0
+                try:
+                    low_n = float(q.get("low") or 0)
+                except (TypeError, ValueError):
+                    low_n = 0.0
+                peak_n = float(seed_h or cost_h or 0)
+                try:
+                    rh_n = float(path_res.get("running_high") or 0) if (
+                        str(FACTOR_ID).lower() in ("factor26", "f26", "26")
+                        and threshold_ok
+                    ) else 0.0
+                    peak_n = max(peak_n, rh_n)
+                except (TypeError, ValueError, NameError):
+                    pass
+                dec = resolve_t1_overnight_note(
+                    cost_px=float(cost_h or 0),
+                    peak_high=peak_n,
+                    close_px=last_n,
+                    hard_pct=float(stop_pct),
+                    bar_low=low_n if low_n > 0 else None,
+                )
+                note_reason = str(dec.get("reason") or "")
+                allow_note = dec.get("noted_px") is not None
+                try:
+                    prev_c_n = float(q.get("prev_close") or 0)
+                except (TypeError, ValueError):
+                    prev_c_n = 0.0
+                if note_reason == "profit_ge_3pct":
+                    clear_stop_noted(code)
+                    hit_stop = False
+                    hit_eff_stop = False
+                    if isinstance(sticky, dict):
+                        sticky.pop(code, None)
+                elif allow_note:
+                    # 硬亏当日可记；t1_trail 仅收盘确认后落库。一律不把「盈<3%」抬成今日 hit_stop。
+                    if note_reason == "hard_from_cost" or is_close_confirmed():
+                        persisted = persist_stop_noted(
+                            code,
+                            stop_px=float(dec["noted_px"]),
+                            session=str(q["session"]),
+                            px_digits=px_digits,
+                            reason=note_reason,
+                            last_px=last_n,
+                            cost_px=float(cost_h or 0),
+                            prev_close=prev_c_n if prev_c_n > 0 else None,
+                            limit_up_pct=float(limit_down_pct or 0.10),
+                        )
+                        if persisted:
+                            pos_early["stop_noted"] = True
+                            pos_early["stop_noted_px"] = float(dec["noted_px"])
+                            pos_early["stop_noted_session"] = str(q["session"])
+                try:
+                    noted_n = float(pos_early.get("stop_noted_px") or 0)
+                except (TypeError, ValueError):
+                    noted_n = 0.0
+                sealed_limit_up = stop_note_invalidated_by_recovery(
+                    last_px=last_n,
+                    noted_px=noted_n if noted_n > 0 else None,
+                    prev_close=prev_c_n if prev_c_n > 0 else None,
+                    limit_up_pct=float(limit_down_pct or 0.10),
+                )
+                if sealed_limit_up:
+                    clear_stop_noted(code)
+                    hit_stop = False
+                    hit_eff_stop = False
+                    path_touch_stop = 0.0
+                    if isinstance(sticky, dict):
+                        sticky.pop(code, None)
+            f4_tag = (
+                format_factor4_tag(bull=bull, mode=f4_mode, widen_mult=f4_widen)
+                if USE_FACTOR4
+                else "-"
+            )
+            # 9:25 前：仅竞价参考；9:25–9:30：算阈值/过门/接近预警，不触发；
+            # 9:30 起才「已触发」买卖与止损结算
+            # 展示与结算拆开：路径/现价破卖价 → 始终可显示「已触止损」；
+            # 仅连续竞价才自动结算（午休/收盘后不再把展示清成「否」）。
+            # 已触买同理：午休/收盘保留盘中触达，9:30 前仍可降成「将买入」。
+            preview_ok = threshold_ok
+            signal_ok = signal_ok_global
+            hit_path_settle = bool(hit_stop)  # 仅 1m/路径；现价旁路只用于展示
+            hit_path = bool(hit_stop)
+            try:
+                _last_chk = float(q["last"])
+                _stop_chk = float(lv.get("stop") or 0)
+            except (TypeError, ValueError):
+                _last_chk, _stop_chk = 0.0, 0.0
+            # 有仓：现价已破当前卖价 → 立即标展示触达（不限时段；结算仍要路径+连续竞价）
+            if (
+                qty_early > 0
+                and _stop_chk > 0
+                and _last_chk > 0
+                and _last_chk <= _stop_chk + 1e-12
+            ):
+                hit_path = True
+                if path_touch_stop <= 0:
+                    path_touch_stop = _stop_chk
+            # 当日粘滞：盘中已触过后，午休/收盘后仍保持「已触止损」展示
+            _st_prev = sticky.get(code) if isinstance(sticky.get(code), dict) else None
+            if (
+                qty_early > 0
+                and _st_prev
+                and str(_st_prev.get("session") or "") == str(q["session"])
+                and bool(_st_prev.get("stop_touched"))
+            ):
+                if _stop_chk <= 0 or _last_chk <= _stop_chk * 1.003 + 1e-12:
+                    hit_path = True
+                    if path_touch_stop <= 0:
+                        try:
+                            path_touch_stop = float(
+                                _st_prev.get("touch_stop") or _stop_chk or 0
+                            )
+                        except (TypeError, ValueError):
+                            path_touch_stop = _stop_chk
+            if not preview_ok:
+                hit_buy = False
+            elif not signal_ok and _should_demote_pre_signal(phase_now):
+                hit_buy = False
+            # 用户确认仍持有：不自动止损清槽（天通误剔后曾按 3 空槽补仓）
+            hold_locked = bool(qty_early > 0 and pos_early.get("hold_lock"))
+            if hold_locked:
+                hit_path = False
+                hit_path_settle = False
+                hit_eff_stop = False
+                hit_base_stop = False
+                path_touch_stop = 0.0
+            # 买入日：中段/抬高卖价触达不记、不展示已触止损；只认硬保护
+            if t1_today_early and qty_early > 0 and not hold_locked:
+                try:
+                    hard_px = float(cost_hard_stop_px(float(cost_h or 0)) or 0)
+                except (TypeError, ValueError):
+                    hard_px = 0.0
+                hard_now = bool(
+                    hard_px > 0
+                    and _last_chk > 0
+                    and _last_chk <= hard_px * 1.003 + 1e-12
+                )
+                if not hard_now:
+                    hit_path = False
+                    hit_path_settle = False
+                    path_touch_stop = 0.0
+                    st_clr = sticky.get(code) if isinstance(sticky, dict) else None
+                    if isinstance(st_clr, dict):
+                        st_clr.pop("stop_touched", None)
+                        st_clr.pop("touch_stop", None)
+            hit_stop_show = bool(hit_path)
+            hit_stop_settle = bool(
+                hit_path_settle and preview_ok and signal_ok and (not hold_locked)
+            )
+            hit_stop = hit_stop_settle  # 下文结算 / 纸面逻辑用结算口径
+            if hit_stop_show:
+                _open_bell_ts = None
+                try:
+                    _o_chk = float(q.get("open") or 0)
+                    _c_chk = float(cost_h or 0)
+                except (TypeError, ValueError):
+                    _o_chk, _c_chk = 0.0, 0.0
+                if qty_early > 0 and _o_chk > 0 and _c_chk > 0:
+                    _prot_chk = float(
+                        overnight_open_protect_px(
+                            _c_chk,
+                            q.get("prev_close"),
+                            peak_high=seed_h,
+                            buy_time=buy_time_early,
+                            session=str(q["session"]),
+                            qty=qty_early,
+                            t0=bool(w.get("t0")),
+                            replay_holding=bool(replay.get("holding")),
+                            last_buy_date=str(replay.get("last_buy_date") or "")
+                            or None,
+                            last_sell_date=str(replay.get("last_sell_date") or "")
+                            or None,
+                        )
+                        or 0
+                    )
+                    if _prot_chk > 0 and _o_chk <= _prot_chk + 1e-12:
+                        _open_bell_ts = session_open_bell_ts(str(q["session"]))
+                _stamp_stop_touched(
+                    sticky,
+                    code,
+                    session=str(q["session"]),
+                    ts=_open_bell_ts or path_touch_ts,
+                    quote=q,
+                    touch_stop=float(path_touch_stop or _stop_chk or 0) or None,
+                    force_ts=_open_bell_ts,
+                )
+            if hit_stop_show and qty_early > 0:
+                _sticky_put(
+                    sticky,
+                    code,
+                    str(q["session"]),
+                    {
+                        "bg_class": "warn-sell",
+                        "alert": hit_stop_alert(
+                            str(lv.get("stop_kind") or ""),
+                            path_action_kind,
+                        ),
+                        "pending_sell": True,
+                        "stop_touched": True,
+                        "touch_stop": float(path_touch_stop or _stop_chk or 0) or None,
+                        "near_stop": True,
+                    },
+                )
+            # 当日止损/已结算卖出 → 三槽规则下当日禁再买（含因子22）
+            _realized_pre = realized_map.get(code)
+            _sold_today_pre = bool(
+                _realized_pre
+                and str(_realized_pre.get("session") or "") == q["session"]
+                and _realized_pre.get("reason") in EXIT_REASONS
+            )
+            _replay_holding = bool(replay.get("holding")) and int(
+                (positions.get(code) or {}).get("qty") or 0
+            ) <= 0
+            # 回放触止损：不再当策略持有（避免「策略持有+已触止损」）
+            _paper_hold = bool(
+                _replay_holding and not (hit_stop_show and (signal_ok or hit_path))
+            )
+            _f22_pre = None
+            if _sold_today_pre or (_replay_holding and hit_stop_show):
+                # 因子22：收盘确认后才允许再买（盘中 last 不当收盘）
+                if is_close_confirmed():
+                    _f22_pre = _factor22_rebuy_ok(
+                        open_px=float(q["open"]),
+                        high_px=float(q["high"]),
+                        low_px=float(q["low"]),
+                        close_px=float(q["last"]),
+                        tick=tick,
+                    )
+                    if _f22_pre:
+                        allow_entry = True
+                        if signal_ok:
+                            hit_buy = True
+                    # 9:30 前仅预览收盘动量，不算已触发
+                # 不再因「当日已卖」清空 allow_entry / hit_buy（门禁打开）
+            limit_state = limit_down_state(
+                prev_close=q.get("prev_close"),
+                open_px=float(q["open"]),
+                high_px=float(q["high"]),
+                low_px=float(q["low"]),
+                close_px=float(q["last"]),
+                limit_down_pct=limit_down_pct,
+                tick=tick,
+            )
+            pos = positions.get(code, {})
+            qty = int(pos.get("qty") or 0)
+            buy_time = pos.get("buy_time")
+            cost = pos.get("cost")
+            t0 = bool(w.get("t0"))
+            sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
+            # 一字跌停封单不可卖；触及跌停后开板则按跌停价成交。
+            stop_locked = bool(limit_state["locked"])
+            # 隔夜：昨日 T+1 已记 → 次日浮盈未过 3% 则峰值回落 2.5%；过 3% 走中段（一半/波动）/档位
+            t1_today = bool(
+                qty > 0
+                and buy_time
+                and (not t0)
+                and is_t1_buy_day(buy_time, str(q["session"]))
+            )
+            try:
+                hi_q = float(q.get("high") or 0)
+            except (TypeError, ValueError):
+                hi_q = 0.0
+            try:
+                cost_q = float(cost or 0)
+            except (TypeError, ValueError):
+                cost_q = 0.0
+            noted_hit = resolve_stop_noted_hit(
+                pos,
+                open_px=float(q["open"]),
+                low_px=float(q["low"]),
+                last_px=float(q["last"]),
+                high_px=hi_q,
+                cost_px=cost_q,
+                sellable=sellable,
+                t1_buy_day=t1_today,
+                locked=stop_locked,
+                overnight_high_ok=_pos_overnight_high_ok(
+                    pos, str(q["session"]), t0=t0, replay=replay, qty=qty
+                ),
+            )
+            if (
+                bool(noted_hit.get("hit"))
+                and not bool(pos.get("hold_lock"))
+            ):
+                hit_stop_show = True
+                path_touch_stop = float(
+                    noted_hit.get("fill_px") or path_touch_stop or 0
+                )
+                if signal_ok:
+                    hit_stop_settle = True
+                    hit_stop = True
+            # 结算价：优先 path 触达当时止损；跌停开板则用跌停价
+            if bool(limit_state["opened"]):
+                stop_base_px = float(limit_state["limit_px"])
+            elif path_touch_stop > 0 and hit_stop_show:
+                stop_base_px = float(path_touch_stop)
+            else:
+                stop_base_px = float(lv["stop"])
+            # 盯盘按人工/云条件单的触发价记录，不对买卖触发价额外加滑点。
+            stop_fill_px = stop_base_px
+            # 纸面止损唯一口径：开盘保护 / 1m 路径 / 现价破卖价（不用全日最低撞抬高止损）
+            _exit_dec = paper_exit_decision(
+                qty=qty,
+                sellable=sellable,
+                t1_today=t1_today,
+                hold_locked=hold_locked,
+                stop_locked=stop_locked,
+                last=_last_chk,
+                open_px=float(q.get("open") or 0),
+                prev_close=q.get("prev_close"),
+                cost=cost,
+                peak_high=pos.get("peak_high") or seed_h,
+                working_stop=float(_stop_chk or stop_fill_px or 0),
+                path_hit=bool(hit_path_settle),
+                path_fill_px=float(path_touch_stop or stop_fill_px or 0),
+                path_action_kind=path_action_kind,
+                path_stop_kind=str(lv.get("stop_kind") or ""),
+                signal_ok=bool(preview_ok and signal_ok),
+                buy_time=buy_time,
+                session=str(q["session"]),
+            )
+            if _exit_dec.get("open_bell"):
+                _bell = session_open_bell_ts(str(q["session"]))
+                row["_open_bell"] = True
+                _stamp_stop_touched(
+                    sticky,
+                    code,
+                    session=str(q["session"]),
+                    ts=_bell,
+                    quote=q,
+                    touch_stop=float(_exit_dec.get("fill_px") or path_touch_stop or 0)
+                    or None,
+                    force_ts=_bell,
+                )
+            if _exit_dec.get("hit_show"):
+                hit_stop_show = True
+            if _exit_dec.get("hit"):
+                hit_stop_settle = True
+                hit_stop = True
+                if float(_exit_dec.get("fill_px") or 0) > 0:
+                    stop_fill_px = float(_exit_dec["fill_px"])
+                if _exit_dec.get("action_kind"):
+                    path_action_kind = str(_exit_dec["action_kind"])
+            # 买入日涨停/盈≥3%/现价已收回：作废已记，禁止后面再 persist 写回
+            if t1_today and qty > 0:
+                try:
+                    _void_noted = float(
+                        pos.get("stop_noted_px")
+                        or path_touch_stop
+                        or lv.get("stop")
+                        or 0
+                    )
+                except (TypeError, ValueError):
+                    _void_noted = 0.0
+                try:
+                    _void_prev = float(q.get("prev_close") or 0)
+                except (TypeError, ValueError):
+                    _void_prev = 0.0
+                if t1_buy_day_should_void_stop_note(
+                    last_px=_last_chk,
+                    cost_px=cost,
+                    prev_close=_void_prev if _void_prev > 0 else None,
+                    noted_px=_void_noted if _void_noted > 0 else None,
+                    limit_up_pct=float(limit_down_pct or 0.10),
+                ):
+                    hit_stop_show = False
+                    hit_stop_settle = False
+                    hit_stop = False
+                    clear_stop_noted(code)
+                    if isinstance(sticky, dict):
+                        sticky.pop(code, None)
+            # 已触止损且可卖 → 本票先平（卡片走已实现分支）；漏平由 settle_due 按 5s/1m 补
+            if qty > 0 and hit_stop_settle and sellable > 0 and not stop_locked:
+                apply_stop_fill(
+                    code=code,
+                    meta=w,
+                    stop_px=stop_fill_px,
+                    qty=sellable,
+                    cost=float(cost) if cost is not None else None,
+                    session=q["session"],
+                    buy_time=buy_time,
+                    prev_close=q.get("prev_close"),
+                    open_px=float(q["open"]),
+                    px_digits=px_digits,
+                    action_kind=path_action_kind,
+                    stop_kind=str(lv.get("stop_kind") or ""),
+                    first_hit_ts=_open_protect_hit_ts(
+                        session=str(q["session"]),
+                        fill_px=stop_fill_px,
+                        open_px=q.get("open"),
+                        existing=_bar_ts_str(path_touch_ts) or _bar_ts_str(q.get("last_ts")),
+                        open_bell=bool(_exit_dec.get("open_bell")),
+                    )
+                    or _bar_ts_str(path_touch_ts)
+                    or _bar_ts_str(q.get("last_ts")),
+                )
+                stopped_this_scan = True
+                holdings = load_holdings()
+                positions = holdings.get("positions", {})
+                realized_map = holdings.get("realized_today", {})
+                pos = positions.get(code, {})
+                qty = int(pos.get("qty") or 0)
+                cost = pos.get("cost")
+                buy_time = pos.get("buy_time")
+                sellable = _sellable_qty(pos, qty, buy_time, q["session"], t0=t0)
+
+            # 当日已卖出结算：全清时冻结收益；部分卖出则继续展示剩余仓
+            realized = realized_map.get(code)
+            if (
+                realized
+                and str(realized.get("session") or "") == q["session"]
+                and realized.get("reason") in EXIT_REASONS
+                and qty <= 0
+            ):
+                fill_px = float(realized["price"])
+                sold_qty = int(realized.get("qty") or 0)
+                reason = str(realized.get("reason") or "")
+                # 兼容旧记录：补当日基数
+                if realized.get("day_base") is None and realized.get("day_pnl") is not None:
+                    dpct = realized.get("day_pnl_pct")
+                    if dpct is not None and abs(float(dpct)) > 1e-12:
+                        realized["day_base"] = round(
+                            float(realized["day_pnl"]) / (float(dpct) / 100.0), 2
+                        )
+                ha_show = None
+                la_show = None
+                rebound = None
+                miss = None
+                if reason == REASON_STOP:
+                    ha, la = extremes_after_stop_touch(
+                        q.get("_day_bars"), float(lv["stop"])
+                    )
+                    # 无分钟线时用 hub/快照当日 high/low 退化
+                    if ha is None:
+                        try:
+                            ha = float(q["high"]) if float(q["high"]) > 0 else None
+                            la = float(q["low"]) if float(q["low"]) > 0 else None
+                        except (TypeError, ValueError, KeyError):
+                            ha, la = None, None
+                    updated = update_high_after_stop(
+                        code=code,
+                        stop_px=float(lv["stop"]),
+                        high_after=ha,
+                        low_after=la,
+                        qty=sold_qty,
+                        px_digits=px_digits,
+                    )
+                    if updated:
+                        realized = updated
+                        realized_map[code] = updated
+                    ha_show = realized.get("high_after_stop")
+                    la_show = realized.get("low_after_stop")
+                    rebound = realized.get("rebound_pct")
+                    miss = realized.get("miss_pnl")
+                live_last = round(q["last"], px_digits)
+                note = (
+                    f"已按{reason}@{fill_px:.{px_digits}f}，盈亏已锁定；现价仍实时更新"
+                )
+                if ha_show is not None:
+                    note += f"；止损后最高{float(ha_show):.{px_digits}f}"
+                    if rebound is not None:
+                        note += f"（回抽{float(rebound):+.2f}%）"
+                if la_show is not None:
+                    note += f"；最低{float(la_show):.{px_digits}f}"
+                f22 = _factor22_rebuy_ok(
+                    open_px=float(q["open"]),
+                    high_px=float(q["high"]),
+                    low_px=float(q["low"]),
+                    close_px=float(q["last"]),
+                    tick=tick,
+                )
+                # 三槽：当日已止损/已记卖出 → 禁止同日再买（含因子22）
+                f26_rebuy = bool(allow_entry and hit_buy and (not _sold_today_pre))
+                rebuy_ok = bool(
+                    allow_entry and (not _sold_today_pre) and (f26_rebuy or f22)
+                )
+                f22_px = (
+                    round(float(f22["fill_px"]), px_digits)
+                    if f22 and f22.get("fill_px") is not None
+                    else None
+                )
+                buy_show = float(lv.get("open_buy") or lv["buy_trigger"])
+                if _sold_today_pre:
+                    note += "；当日已卖出·禁再买"
+                elif f22 and not f26_rebuy:
+                    buy_show = f22_px if f22_px is not None else buy_show
+                    note += f"；收盘动量可再买@{buy_show:.{px_digits}f}"
+                elif f26_rebuy:
+                    note += f"；卖出后再触买点@{buy_show:.{px_digits}f}"
+                rebuy_hit = bool(rebuy_ok and signal_ok)
+                # 已清仓：因子侧/持仓状态按空仓规则重算（可再进待买入）
+                sig0 = strategy_signal(
+                    open_px=q["open"],
+                    high_px=q["high"],
+                    low_px=q["low"],
+                    last_px=q["last"],
+                    session=q["session"],
+                    buy_trigger=float(buy_show),
+                    stop_px=lv["stop"],
+                    qty=0,
+                    buy_time=None,
+                    vs_open_pts=vs,
+                    entry_pct=entry_pct,
+                    stop_pct=stop_pct,
+                    px_digits=px_digits,
+                    t0=t0,
+                    allow_entry=bool(rebuy_ok) and preview_ok,
+                    hit_stop=False,
+                    allow_attack=DEFAULT_ALLOW_ATTACK,
+                )
+                if not signal_ok:
+                    sig0 = _demote_pre_signal_window(sig0)
+                    rebuy_hit = False
+                if rebuy_hit:
+                    pos_st0 = "待买入"
+                    alert0 = (
+                        "止损后·收盘动量可再买"
+                        if (f22 and not f26_rebuy)
+                        else "卖出后再触买"
+                    )
+                    bg0 = "status-buy"
+                    hang0 = float(buy_show) if buy_show is not None else None
+                    note0 = note
+                else:
+                    pos_st0 = STATUS_STOP_CLOSED
+                    # 信号=已触止损；持仓态=已平仓
+                    alert0 = (
+                        SIGNAL_STOP_HIT
+                        if reason == REASON_STOP
+                        else (reason or SIGNAL_STOP_HIT)
+                    )
+                    bg0 = sig0.get("bg_class") or "status-flat"
+                    hang0 = None
+                    note0 = (
+                        note + "；当日禁再买"
+                        if _sold_today_pre
+                        else (note + "；可再买·待触买点" if allow_entry else note)
+                    )
+                row0 = {
+                        "市场": str(pos.get("market") or w["market"]),
+                        "代码": code,
+                        "名称": str(pos.get("name") or w["name"]),
+                        "交易日": q["session"],
+                        "开盘": round(q["open"], px_digits),
+                        "最高": round(q["high"], px_digits),
+                        "最低": round(q["low"], px_digits),
+                        "现价": live_last,
+                        "成交价": round(fill_px, px_digits),
+                        "止损后最高": ha_show,
+                        "止损后最低": la_show,
+                        "回抽%": rebound,
+                        "踏空金额": miss,
+                        "昨收": None
+                        if q.get("prev_close") is None
+                        else round(float(q["prev_close"]), px_digits),
+                        "当日涨幅": None if day_chg is None else round(float(day_chg), 2),
+                        "较开盘点": vs,
+                        "较开盘涨幅": vs_pct,
+                        "阈值%": pct_pct,
+                        "池来源": pool_label or None,
+                        "pool_src": pool_src or None,
+                        "买点": buy_show,
+                        "止损": round(fill_px, px_digits) if not rebuy_hit else lv["stop"],
+                        "基础止损": (
+                            round(fill_px, px_digits) if not rebuy_hit else lv_base["stop"]
+                        ),
+                        "因子4": f4_tag,
+                        "牛市": ("是" if bull else "否") if USE_FACTOR4 else "-",
+                        "已触买": "是" if rebuy_hit else "否",
+                        "已触止损": "是" if hit_stop or reason == REASON_STOP else "否",
+                        "因子侧": "买入" if rebuy_hit else "空仓",
+                        "因子价": buy_show if rebuy_hit else sig0.get("因子价"),
+                        "因子触发": (
+                            (
+                                f"收盘动量 {q['session'][5:7]}月{q['session'][8:10]}日"
+                                if (f22 and not f26_rebuy)
+                                else f"再触买 {q['session'][5:7]}月{q['session'][8:10]}日"
+                            )
+                            if rebuy_hit and len(str(q["session"])) >= 10
+                            else sig0.get("因子触发")
+                        ),
+                        "持仓状态": pos_st0,
+                        "已触发因子侧": "买入" if rebuy_hit else sig0.get("已触发因子侧"),
+                        "已触发因子价": buy_show if rebuy_hit else sig0.get("已触发因子价"),
+                        "未触发因子侧": sig0.get("未触发因子侧"),
+                        "未触发因子价": sig0.get("未触发因子价"),
+                        "距已触发价差": sig0.get("距已触发价差"),
+                        "距已触发%": sig0.get("距已触发%"),
+                        "距未触发价差": sig0.get("距未触发价差"),
+                        "距未触发%": sig0.get("距未触发%"),
+                        "距因子价差": sig0.get("距因子价差"),
+                        "距因子%": sig0.get("距因子%"),
+                        "形态": sig0.get("形态") or bar_shape(q["open"], q["last"]),
+                        "预警": alert0,
+                        "建议挂单": hang0,
+                        "挂单说明": note0,
+                        "近买点": bool(rebuy_ok and not rebuy_hit and preview_ok)
+                        or bool(rebuy_hit),
+                        "近止损": False,
+                        "bg_class": bg0,
+                        "持仓": 0,
+                        "卖出数量": sold_qty,
+                        "成本": realized.get("cost"),
+                        "浮盈": realized.get("pnl"),
+                        "浮盈%": realized.get("pnl_pct"),
+                        "当日盈亏": realized.get("day_pnl"),
+                        "当日盈亏%": realized.get("day_pnl_pct"),
+                        "当日基数": realized.get("day_base"),
+                        "市值": 0.0,
+                        "成本额": None,
+                        "已实现": True,
+                        "价位小数": px_digits,
+                        "更新": q["last_ts"][11:19]
+                        if len(q["last_ts"]) >= 19
+                        else q["last_ts"],
+                        "error": None,
+                }
+                _apply_trigger_date_fields(
+                    row0,
+                    sig=sig0,
+                    session=q["session"],
+                    last_px=float(q["last"]),
+                    px_digits=px_digits,
+                    buy_time=None,
+                    qty=0,
+                    replay=replay,
+                    code=code,
+                    allow_entry=bool(allow_entry),
+                )
+                # 再买信号：仅当日本票未因止损/已记卖出时放行
+                if rebuy_hit and not _sold_today_pre:
+                    row0["持仓状态"] = "待买入"
+                    row0["当日禁买"] = False
+                    row0["预警"] = alert0
+                    row0["建议挂单"] = hang0
+                    row0["近买点"] = True
+                    row0["已触买"] = "是"
+                    row0["bg_class"] = "status-buy"
+                elif _sold_today_pre:
+                    row0["当日禁买"] = True
+                    if str(row0.get("持仓状态") or "") in ("", "空仓", "待买入"):
+                        row0["持仓状态"] = STATUS_STOP_CLOSED
+                elif allow_entry:
+                    row0["当日禁买"] = False
+                    if _is_stop_closed_status(row0.get("持仓状态")):
+                        row0["挂单说明"] = note + "；可再买·待触买点"
+                _fill_row_signal_times(
+                    row0,
+                    sticky,
+                    code,
+                    hit_buy=bool(rebuy_hit or str(row0.get("已触买") or "") == "是"),
+                    hit_stop=True,
+                    buy_time=None,
+                    realized=realized if isinstance(realized, dict) else None,
+                )
+                _attach_strategy_pnl_fields(
+                    row0,
+                    w=w,
+                    daily=daily,
+                    q=q,
+                    entry_pct=entry_pct,
+                    stop_pct=base_stop_pct,
+                    tick=tick,
+                    prev_entry_mode=prev_entry_mode,
+                    limit_down_pct=limit_down_pct,
+                )
+                rows.append(row0)
+                continue
+
+            # 纸面回放持有：按虚拟有仓算止损侧信号（不自动成交）；真仓仍用实际 qty
+            paper_active = bool(_paper_hold and qty <= 0 and not _sold_today_pre)
+            sig_qty = 1 if paper_active else qty
+            if paper_active:
+                sig_buy_time = str(replay.get("last_buy_date") or "")[:10] or None
+            else:
+                # 有可卖股时不当作整仓 T+1，避免「持有·T+1」误锁信号
+                sig_buy_time = None if sellable > 0 else buy_time
+            sig = strategy_signal(
+                open_px=q["open"],
+                high_px=q["high"],
+                low_px=q["low"],
+                last_px=q["last"],
+                session=q["session"],
+                buy_trigger=path_buy_px
+                if path_buy_px
+                else float(lv.get("open_buy") or lv["buy_trigger"]),
+                stop_px=lv["stop"],
+                qty=sig_qty,
+                buy_time=sig_buy_time,
+                vs_open_pts=vs,
+                entry_pct=entry_pct,
+                stop_pct=stop_pct,
+                px_digits=px_digits,
+                t0=t0,
+                # 纸面仓禁止买入预警；9:30 前允许接近预警，已触买由下方 demote
+                allow_entry=False if paper_active else (allow_entry and preview_ok),
+                hit_stop=bool(hit_stop_show),
+                hit_buy=bool(hit_buy),
+                allow_attack=DEFAULT_ALLOW_ATTACK,
+                cost_px=cost_h if cost_h else None,
+                peak_high=seed_h if seed_h else None,
+                stop_kind=str(lv.get("stop_kind") or "") or None,
+            )
+            if not signal_ok:
+                if qty > 0 and hit_stop_show:
+                    # 午休/收盘/盘前：保留触达展示，仅提示待连续竞价结算
+                    _half_show = is_half_stop_kind(
+                        str(lv.get("stop_kind") or ""),
+                        path_action_kind,
+                    )
+                    sig = dict(sig)
+                    sig["hit_stop"] = True
+                    sig["pending_sell"] = True
+                    sig["near_stop"] = True
+                    sig["bg_class"] = "warn-sell"
+                    sig["持仓状态"] = "待卖出"
+                    sig["因子触发"] = "已触发" if preview_ok else "接近"
+                    if preview_ok:
+                        sig["alert"] = (
+                            "半仓止盈·待盘中结算" if _half_show else "已触止损·待盘中结算"
+                        )
+                        note = str(sig.get("挂单说明") or "")
+                        if "连续竞价" not in note:
+                            sig["挂单说明"] = (
+                                (note + "；" if note else "")
+                                + (
+                                    "已触10%半仓，待 9:30–11:30 / 13:00–15:00 记减半"
+                                    if _half_show
+                                    else "已破止损价，待 9:30–11:30 / 13:00–15:00 自动结算"
+                                )
+                            )
+                    else:
+                        sig = _demote_pre_signal_window(sig)
+                        sig["hit_stop"] = True
+                        if _half_show:
+                            sig["alert"] = "将半仓"
+                        elif "止损" in str(sig.get("alert") or ""):
+                            sig["alert"] = "将止损"
+                        sig["bg_class"] = "warn-sell"
+                        sig["pending_sell"] = True
+                elif _should_demote_pre_signal(phase_now):
+                    sig = _demote_pre_signal_window(sig)
+                if _should_demote_pre_signal(phase_now):
+                    hit_buy = False
+                # 结算口径保持 False；展示口径 hit_stop_show / hit_buy 不变
+                hit_stop = False
+            if qty > 0 and hit_stop_show and stop_locked:
+                limit_px = float(limit_state["limit_px"])
+                sig = dict(sig)
+                sig.update(
+                    {
+                        "alert": "一字跌停封单·不可卖",
+                        "bg_class": "warn-sell",
+                        "pending_sell": True,
+                        "建议挂单": None,
+                        "挂单说明": (
+                            f"跌停价{limit_px:.{px_digits}f}封单，"
+                            "止损触发但不可成交；持仓延续，待开板"
+                        ),
+                        "因子触发": "不可成交",
+                        "hit_stop": True,
+                    }
+                )
+            elif qty > 0 and hit_stop_show and sellable <= 0 and not stop_locked:
+                # 典型：买入当日 T+1；持仓状态仍「已经买入」，预警提示明日可卖
+                sig = dict(sig)
+                t1_today = (not t0) and is_t1_buy_day(buy_time, q["session"])
+                touch_show = (
+                    float(path_touch_stop)
+                    if path_touch_stop > 0
+                    else float(lv["stop"])
+                )
+                if t1_today:
+                    # 三槽：当日不可卖 → 不进「待卖出」。展示已记只认账本，禁止再用中段卖价写回。
+                    try:
+                        _led_px = float(pos.get("stop_noted_px") or 0)
+                    except (TypeError, ValueError):
+                        _led_px = 0.0
+                    try:
+                        _led_last = float(q.get("last") or 0)
+                    except (TypeError, ValueError):
+                        _led_last = 0.0
+                    ledger_ok = bool(pos.get("stop_noted")) and t1_stop_note_px_is_legal(
+                        stop_px=_led_px,
+                        cost_px=cost,
+                    ) and not t1_buy_day_should_void_stop_note(
+                        last_px=_led_last,
+                        cost_px=cost,
+                        prev_close=q.get("prev_close"),
+                        noted_px=_led_px if _led_px > 0 else None,
+                        limit_up_pct=float(limit_down_pct or 0.10),
+                    )
+                    if not ledger_ok:
+                        if pos.get("stop_noted") or pos.get("stop_noted_px"):
+                            clear_stop_noted(code)
+                        sig.update(
+                            {
+                                "alert": "持有·T+1",
+                                "bg_class": "status-hold",
+                                "pending_sell": False,
+                                "持仓状态": "已经买入",
+                                "建议挂单": None,
+                                "hit_stop": False,
+                            }
+                        )
+                        if isinstance(sticky, dict):
+                            sticky.pop(code, None)
+                    else:
+                        show_px = _led_px if _led_px > 0 else touch_show
+                        sig.update(
+                            {
+                                "alert": "持有·T+1·止损已记",
+                                "bg_class": "status-hold",
+                                "pending_sell": False,
+                                "持仓状态": "已经买入",
+                                "建议挂单": None,
+                                "挂单说明": (
+                                    f"今日买入不可卖；买入后曾触硬保护"
+                                    f"@{show_px:.{px_digits}f}。"
+                                    "下一交易日：浮盈未过3%则动态峰值回落2.5%全清；"
+                                    "过3%走中段（回落一半与波动回落谁先到走谁），过10%走档位/回落2个点"
+                                ),
+                                "因子触发": format_trigger_md(buy_time)
+                                or format_trigger_md(q["session"])
+                                or "持有",
+                                "hit_stop": True,
+                            }
+                        )
+                else:
+                    sig.update(
+                        {
+                            "alert": "已触止损·暂不可卖",
+                            "bg_class": "warn-sell",
+                            "pending_sell": True,
+                            "持仓状态": "待卖出",
+                            "建议挂单": None,
+                            "挂单说明": "无可卖数量，请核对 available / 买入日",
+                            "因子触发": "已触发",
+                            "hit_stop": True,
+                        }
+                    )
+            # T+1 实仓未触止损：强制持有态并清卖出粘滞
+            elif (
+                qty > 0
+                and sellable <= 0
+                and (not t0)
+                and is_t1_buy_day(buy_time, q["session"])
+                and not hit_stop_show
+            ):
+                sig = dict(sig)
+                alert0 = str(sig.get("alert") or "")
+                if (
+                    not alert0.startswith("持有")
+                    and "已触买" not in alert0
+                    and "将买入" not in alert0
+                ):
+                    sig["alert"] = "持有·T+1"
+                sig["bg_class"] = "status-hold"
+                sig["pending_sell"] = False
+                sig["持仓状态"] = "已经买入"
+                sig["hit_stop"] = False
+                if isinstance(sticky, dict):
+                    sticky.pop(code, None)
+            elif (
+                USE_FACTOR4
+                and qty > 0
+                and f4_mode == "suppressed"
+                and hit_base_stop
+                and signal_ok
+                and not stop_locked
+            ):
+                # 因子4 牛市：基础止损已触但不结算
+                sig = dict(sig)
+                sig.update(
+                    {
+                        "alert": "已经买入·因子4牛市暂停止损",
+                        "bg_class": "status-hold",
+                        "pending_sell": False,
+                        "持仓状态": "已经买入",
+                        "建议挂单": None,
+                        "挂单说明": (
+                            f"{f4_tag}；基础止损{lv_base['stop']:.{px_digits}f}"
+                            "已触，暂不结算"
+                        ),
+                        "因子触发": "暂停",
+                    }
+                )
+            elif (
+                USE_FACTOR4
+                and qty > 0
+                and f4_mode == "widened"
+                and hit_base_stop
+                and not hit_eff_stop
+                and signal_ok
+            ):
+                sig = dict(sig)
+                alert0 = str(sig.get("alert") or "持有")
+                if alert0.startswith("持有"):
+                    sig["alert"] = f"持有·{f4_tag}"
+                sig["挂单说明"] = (
+                    f"{f4_tag}；基础止损{lv_base['stop']:.{px_digits}f}已触，"
+                    f"放宽止损{lv['stop']:.{px_digits}f}未触"
+                )
+            sig = _stabilize_sell_warn(
+                code=code,
+                session=q["session"],
+                sig=sig,
+                open_px=float(q["open"]),
+                last_px=float(q["last"]),
+                stop_px=float(lv["stop"]),
+                vs_open_pts=float(vs) if vs == vs else 0.0,
+                stop_lvl=-stop_pct * 100.0,
+                sticky=sticky,
+            )
+            # 稳定化后仍保留「当日已触止损」粘滞标记，避免午休被洗掉
+            if hit_stop_show and qty > 0 and isinstance(sticky.get(code), dict):
+                sticky[code]["stop_touched"] = True
+                if path_touch_stop > 0:
+                    sticky[code]["touch_stop"] = float(path_touch_stop)
+            if hit_buy and preview_ok:
+                _stamp_buy_touched(
+                    sticky,
+                    code,
+                    session=str(q["session"]),
+                    ts=path_buy_ts or (buy_time if qty > 0 else None),
+                    quote=q,
+                )
+            elif (
+                qty > 0
+                and buy_time
+                and str(buy_time).startswith(str(q["session"])[:10])
+            ):
+                _stamp_buy_touched(
+                    sticky,
+                    code,
+                    session=str(q["session"]),
+                    ts=buy_time,
+                    quote=q,
+                )
+            entry_for_overlay = bool(allow_entry and preview_ok and signal_ok)
+            if not (_paper_hold and hit_stop_show):
+                sig = _overlay_buy_signal_on_hold(
+                    sig,
+                    hit_buy=hit_buy if (signal_ok or not _should_demote_pre_signal(phase_now)) else False,
+                    allow_entry=entry_for_overlay,
+                    paper_active=paper_active,
+                    qty=qty,
+                    buy_time=buy_time,
+                    session=str(q["session"]),
+                    buy_trigger=float(lv.get("open_buy") or lv["buy_trigger"]),
+                    stop_px=float(lv["stop"]),
+                    last_px=float(q["last"]),
+                    px_digits=px_digits,
+                )
+                # 已触止损展示中：勿再 demote 成「持有」；午休/收盘勿把已触买降成将买入
+                if (
+                    not signal_ok
+                    and not (qty > 0 and hit_stop_show)
+                    and _should_demote_pre_signal(phase_now)
+                ):
+                    sig = _demote_pre_signal_window(sig)
+            if qty > 0 and sellable > 0 and sellable < qty:
+                # 部分 T+1：状态标为持有·部分T+1
+                alert = str(sig.get("alert") or "")
+                if alert.startswith("持有"):
+                    sig = dict(sig)
+                    rest = alert[len("持有") :]
+                    sig["alert"] = f"持有·部分T+1{rest}" if rest else "持有·部分T+1"
+            pnl = None
+            pnl_pct = None
+            market_value = (q["last"] * qty) if qty > 0 else None
+            cost_value = None
+            day_pnl = None
+            day_pnl_pct = None
+            day_base = None
+            if cost is not None and qty > 0:
+                pnl, pnl_pct = mark_unrealized(q["last"], cost, qty)
+                cost_value = float(cost) * qty
+
+            if qty > 0:
+                today_cost = pos.get("today_cost")
+                day_pnl, day_pnl_pct, day_base = _calc_day_pnl(
+                    last=float(q["last"]),
+                    qty=qty,
+                    available=sellable,
+                    cost=float(cost) if cost is not None else None,
+                    prev_close=q.get("prev_close"),
+                    open_px=float(q["open"]),
+                    today_cost=float(today_cost) if today_cost is not None else None,
+                    buy_time=buy_time,
+                    session=str(q["session"]),
+                    t0=t0,
+                )
+                # 同日已部分卖出：把已实现当日盈亏并入
+                if (
+                    realized
+                    and str(realized.get("session") or "") == q["session"]
+                    and realized.get("reason") in EXIT_REASONS
+                ):
+                    rd = realized.get("day_pnl")
+                    rb = realized.get("day_base")
+                    if rd is not None:
+                        day_pnl = round(float(day_pnl or 0) + float(rd), 2)
+                    if rb is not None:
+                        day_base = round(float(day_base or 0) + float(rb), 2)
+                    if day_base and day_base > 0 and day_pnl is not None:
+                        day_pnl_pct = round(float(day_pnl) / float(day_base) * 100.0, 2)
+
+            row = {
+                    "市场": str(pos.get("market") or w["market"]),
+                    "代码": code,
+                    "名称": str(pos.get("name") or w["name"]),
+                    "交易日": q["session"],
+                    "开盘": round(q["open"], px_digits),
+                    "最高": round(q["high"], px_digits),
+                    "最低": round(q["low"], px_digits),
+                    "现价": round(q["last"], px_digits),
+                    "昨收": None
+                    if q.get("prev_close") is None
+                    else round(float(q["prev_close"]), px_digits),
+                    "当日涨幅": None if day_chg is None else round(float(day_chg), 2),
+                    "较开盘点": vs,
+                    "较开盘涨幅": vs_pct,
+                    "阈值%": pct_pct,
+                    "池来源": pool_label or None,
+                    "pool_src": pool_src or None,
+                    "买点": float(lv.get("open_buy") or lv["buy_trigger"]),
+                    "止损": lv["stop"],
+                    "基础止损": lv_base["stop"],
+                    "因子4": f4_tag,
+                    "牛市": ("是" if bull else "否") if USE_FACTOR4 else "-",
+                    "已触买": "是" if sig.get("hit_buy") else "否",
+                    "已触止损": "是" if hit_stop_show else (
+                        "触基础·暂停"
+                        if (USE_FACTOR4 and f4_mode == "suppressed" and hit_base_stop)
+                        else "否"
+                    ),
+                    "因子侧": sig.get("因子侧"),
+                    "因子价": sig.get("因子价"),
+                    "因子触发": sig.get("因子触发"),
+                    "持仓状态": sig.get("持仓状态") or (
+                        "已经买入" if qty > 0 else "空仓"
+                    ),
+                    "已触发因子侧": sig.get("已触发因子侧"),
+                    "已触发因子价": sig.get("已触发因子价"),
+                    "未触发因子侧": sig.get("未触发因子侧"),
+                    "未触发因子价": sig.get("未触发因子价"),
+                    "距已触发价差": sig.get("距已触发价差"),
+                    "距已触发%": sig.get("距已触发%"),
+                    "距未触发价差": sig.get("距未触发价差"),
+                    "距未触发%": sig.get("距未触发%"),
+                    "距因子价差": sig.get("距因子价差"),
+                    "距因子%": sig.get("距因子%"),
+                    "形态": sig["形态"],
+                    "预警": sig["alert"],
+                    "建议挂单": sig["建议挂单"],
+                    "挂单说明": sig["挂单说明"],
+                    "近买点": sig["pending_buy"],
+                    "近止损": sig["pending_sell"],
+                    "bg_class": sig["bg_class"],
+                    "持仓": qty,
+                    "可用": sellable if qty > 0 else 0,
+                    "成本": None if cost is None else float(cost),
+                    "买入时间": buy_time,
+                    "浮盈": None if pnl is None else round(float(pnl), 2),
+                    "浮盈%": None if pnl_pct is None else round(float(pnl_pct), 2),
+                    "当日盈亏": None if day_pnl is None else round(float(day_pnl), 2),
+                    "当日盈亏%": None
+                    if day_pnl_pct is None
+                    else round(float(day_pnl_pct), 2),
+                    "当日基数": None if day_base is None else round(float(day_base), 2),
+                    "市值": None if market_value is None else round(float(market_value), 2),
+                    "成本额": None if cost_value is None else round(float(cost_value), 2),
+                    "已实现": False,
+                    "价位小数": px_digits,
+                    "更新": q["last_ts"][11:19]
+                    if len(q["last_ts"]) >= 19
+                    else q["last_ts"],
+                    "market_phase": phase_label,
+                    "过门": gate_label,
+                    "过门OK": allow_entry,
+                    "前日形态": prev_shape,
+                    "阈值就绪": preview_ok,
+                    "竞价参考": auction_ref,
+                    "error": None,
+            }
+            _apply_trigger_date_fields(
+                row,
+                sig=sig,
+                session=q["session"],
+                last_px=float(q["last"]),
+                px_digits=px_digits,
+                buy_time=buy_time,
+                qty=qty,
+                replay=replay,
+                code=code,
+                allow_entry=allow_entry,
+            )
+            _fill_row_signal_times(
+                row,
+                sticky,
+                code,
+                hit_buy=bool(hit_buy or str(row.get("已触买") or "") == "是"),
+                hit_stop=bool(hit_stop_show),
+                buy_time=buy_time,
+                realized=realized if isinstance(realized, dict) else None,
+            )
+            row["_path_hit"] = bool(hit_path_settle)
+            try:
+                row["_path_fill_px"] = float(path_touch_stop or 0)
+            except (TypeError, ValueError, NameError):
+                row["_path_fill_px"] = 0.0
+            row["_path_ts"] = _bar_ts_str(path_touch_ts) if path_touch_ts else None
+            row["_path_buy_ts"] = _bar_ts_str(path_buy_ts) if path_buy_ts else None
+            row["_path_action_kind"] = str(path_action_kind or "")
+            try:
+                row["_path_stop_kind"] = str(lv.get("stop_kind") or "")
+            except (TypeError, NameError):
+                row["_path_stop_kind"] = ""
+            if (
+                realized
+                and str(realized.get("session") or "") == q["session"]
+                and realized.get("reason") in EXIT_REASONS
+            ):
+                row["当日禁买"] = True
+            _attach_strategy_pnl_fields(
+                row,
+                w=w,
+                daily=daily,
+                q=q,
+                entry_pct=entry_pct,
+                stop_pct=base_stop_pct,
+                tick=tick,
+                prev_entry_mode=prev_entry_mode,
+                limit_down_pct=limit_down_pct,
+            )
+            try:
+                from strategy3_watch import enrich_first_board_row
+
+                row["_s3_fb"] = enrich_first_board_row(
+                    code=code,
+                    daily=daily,
+                    session=str(q["session"]),
+                    open_px=float(q["open"]) if q.get("open") else 0.0,
+                )
+            except Exception:  # noqa: BLE001
+                row["_s3_fb"] = {}
+            rows.append(row)
+        except Exception as e:  # noqa: BLE001
+            pos = positions.get(code, {})
+            rows.append(
+                {
+                    "市场": str(pos.get("market") or w["market"]),
+                    "代码": code,
+                    "名称": str(pos.get("name") or w["name"]),
+                    "交易日": "-",
+                    "开盘": None,
+                    "最高": None,
+                    "最低": None,
+                    "现价": None,
+                    "当日涨幅": None,
+                    "较开盘点": None,
+                    "较开盘涨幅": None,
+                    "阈值%": pct_pct,
+                    "池来源": pool_label or None,
+                    "pool_src": pool_src or None,
+                    "买点": None,
+                    "止损": None,
+                    "基础止损": None,
+                    "因子4": "-",
+                    "牛市": "-",
+                    "已触买": "-",
+                    "已触止损": "-",
+                    "因子侧": "-",
+                    "因子价": None,
+                    "因子触发": "-",
+                    "持仓状态": "-",
+                    "已触发因子侧": "-",
+                    "已触发因子价": None,
+                    "未触发因子侧": "-",
+                    "未触发因子价": None,
+                    "距已触发价差": None,
+                    "距已触发%": None,
+                    "距未触发价差": None,
+                    "距未触发%": None,
+                    "距因子价差": None,
+                    "距因子%": None,
+                    "形态": "-",
+                    "预警": "",
+                    "建议挂单": None,
+                    "挂单说明": "",
+                    "近买点": False,
+                    "近止损": False,
+                    "bg_class": "",
+                    "持仓": int(pos.get("qty") or 0),
+                    "可用": 0,
+                    "成本": pos.get("cost"),
+                    "浮盈": None,
+                    "浮盈%": None,
+                    "昨收": None,
+                    "当日盈亏": None,
+                    "当日盈亏%": None,
+                    "市值": None,
+                    "成本额": None,
+                    "已实现": False,
+                    "价位小数": px_digits,
+                    "更新": "-",
+                    "error": str(e),
+                }
+            )
+
+    if session_today:
+        n_due = settle_due_paper_stops(
+            rows, session=session_today, signal_ok=bool(signal_ok_global)
+        )
+        if n_due:
+            stopped_this_scan = True
+            print(f"[{_now()}] 扫仓补平 {n_due} 只（5s触发/1m路径/开盘保护，按时刻先后）")
+            holdings = load_holdings()
+            positions = holdings.get("positions", {})
+            realized_map = holdings.get("realized_today", {})
+        data = load_holdings()
+        before = dict(data.get("realized_today") or {})
+        _purge_stale_realized(data, session_today)
+        if data.get("realized_today") != before:
+            save_holdings(data)
+        _save_alert_sticky(session_today, sticky)
+
+    for r in rows:
+        _enrich_side_price_fields(r)
+        _finalize_position_row(r)
+        code = _code_key(str(r.get("代码") or ""))
+        if code in portfolio_codes:
+            _enrich_float_pnl(r)
+        else:
+            r["浮盈"] = None
+            r["浮盈%"] = None
+            r["盈亏状态"] = None
+            r["盈亏说明"] = None
+
+    total_mv = sum(
+        float(r["市值"])
+        for r in rows
+        if r.get("市值") is not None and int(r.get("持仓") or 0) > 0
+    )
+    quotes_ok = _position_quotes_ready(rows)
+    if quotes_ok:
+        account_total = _sync_account_total(rows)
+    else:
+        account_total = _account_total(rows, load_holdings())
+    pos_base = account_total if account_total and account_total > 0 else (
+        total_mv if total_mv > 0 else None
+    )
+    for r in rows:
+        qty = int(r.get("持仓") or 0)
+        mv = r.get("市值")
+        if qty > 0 and mv is not None and pos_base and pos_base > 0:
+            r["仓位%"] = round(float(mv) / pos_base * 100.0, 1)
+        else:
+            r["仓位%"] = 0.0 if r.get("已实现") else None
+
+    # 因子2：按账户总资产同步（可选预警；与 dd_alert 同源）
+    session_f2 = session_today or str(pd.Timestamp.now().date())
+    data_f2 = load_holdings()
+    f2_raw = (
+        data_f2.get("factor2")
+        if isinstance(data_f2.get("factor2"), dict)
+        else {}
+    )
+    if quotes_ok:
+        f2_status = sync_factor2(
+            data_f2,
+            equity=account_total,
+            session=str(session_f2),
+            strategy_id=STRATEGY_ID,
+        )
+        save_holdings(data_f2)
+    else:
+        f2_status = f2_raw
+    for r in rows:
+        r["因子2动作"] = f2_status.get("action")
+        r["因子2"] = f2_status.get("label")
+        r["因子2建议额"] = f2_status.get("suggest_amount")
+        r["因子2回撤%"] = f2_status.get("dd_pct")
+        r["因子2档位"] = f2_status.get("layers")
+
+    # 尾盘空槽：持仓>隔夜上限时强制卖最弱可卖仓（纸面）
+    eod_sold: list[str] = []
+    if quotes_ok:
+        eod_sold = force_eod_reserve_slot(
+            rows, session=str(session_f2), now=pd.Timestamp.now()
+        )
+        if eod_sold:
+            stopped_this_scan = True
+
+    if (not quotes_ok) or phase_now != "continuous":
+        slot_info = _slot_meta_from_holdings(load_holdings())
+        slot_info["candidates"] = []
+        slot_info["bought"] = []
+        if eod_sold:
+            slot_info["eodReserveSold"] = eod_sold
+        if not quotes_ok:
+            slot_info["deferred"] = "quotes_not_ready"
+        else:
+            slot_info["deferred"] = "not_continuous"
+    else:
+        # 本轮已平也立刻补槽：先平再买，不隔一轮 5s
+        slot_info = _apply_portfolio_slots(
+            rows, account_total=account_total, phase_now=phase_now
+        )
+        if stopped_this_scan:
+            slot_info["closedThenBuy"] = True
+    # 自动入仓后重算仓位%
+    if slot_info.get("bought"):
+        holdings = load_holdings()
+        portfolio_codes.update(occupied_slot_codes(holdings))
+        total_mv = sum(
+            float(r["市值"])
+            for r in rows
+            if r.get("市值") is not None and int(r.get("持仓") or 0) > 0
+        )
+        account_total = _sync_account_total(rows)
+        pos_base = account_total if account_total and account_total > 0 else (
+            total_mv if total_mv > 0 else None
+        )
+        for r in rows:
+            qty = int(r.get("持仓") or 0)
+            mv = r.get("市值")
+            if qty > 0 and mv is not None and pos_base and pos_base > 0:
+                r["仓位%"] = round(float(mv) / pos_base * 100.0, 1)
+            else:
+                r["仓位%"] = 0.0 if r.get("已实现") else None
+            code = _code_key(str(r.get("代码") or ""))
+            if code in portfolio_codes:
+                _enrich_float_pnl(r)
+
+    for r in rows:
+        r["槽位信息"] = (
+            f"{slot_info.get('occupiedCount', 0)}/{slot_info.get('max', MAX_PORTFOLIO_SLOTS)}"
+        )
+    # 信号层（触买预警）在成交层（入槽）之后；finalize 再收敛持仓态
+    _annotate_unfilled_buy_signals(rows, slot_info)
+    for r in rows:
+        _finalize_position_row(r)
+    for r in rows:
+        if int(r.get("持仓") or 0) > 0:
+            _forget_slot_closed(str(r.get("代码") or ""))
+        _enrich_closed_day_pnl(r)
+        _finalize_position_row(r)
+    if rows:
+        rows[0]["_slot_meta"] = slot_info
+    return sort_watch_rows(rows)
+
+
+def _enrich_float_pnl(row: dict[str, Any]) -> None:
+    """策略一口径浮盈：买入成本起算；持仓动态、卖出结算。"""
+    if row.get("error"):
+        return
+    last = row.get("现价")
+    if last is None:
+        return
+    try:
+        last_f = float(last)
+    except (TypeError, ValueError):
+        return
+    if last_f <= 0:
+        return
+
+    qty = int(row.get("持仓") or 0)
+    if row.get("已实现"):
+        if row.get("浮盈") is not None:
+            row["盈亏状态"] = "结算"
+        return
+
+    cost = row.get("成本")
+    if qty > 0 and cost is not None:
+        pnl, pnl_pct = mark_unrealized(last_f, cost, qty)
+        row["浮盈"] = pnl
+        row["浮盈%"] = pnl_pct
+        row["盈亏状态"] = "浮盈"
+        return
+
+    paper = bool(row.get("策略回放持有")) or str(row.get("持仓状态") or "") == "策略持有"
+    if paper and qty <= 0:
+        buy_px = row.get("已触发因子价")
+        if buy_px is None:
+            buy_px = row.get("因子价")
+        if buy_px is not None:
+            pnl, pnl_pct = mark_unrealized(last_f, buy_px, 1)
+            if pnl is not None:
+                row["浮盈"] = pnl
+                row["浮盈%"] = pnl_pct
+                row["盈亏状态"] = "浮盈"
+                row["盈亏说明"] = "策略买入价·单股"
+        return
+
+    if qty <= 0:
+        if _is_closed_trace_row(row):
+            _enrich_closed_day_pnl(row)
+            return
+        row["浮盈"] = None
+        row["浮盈%"] = None
+        row["盈亏状态"] = None
+
+
+_LOTS_CACHE: dict[str, Any] = {"mtime": None, "lots": {}}
+
+
+def _is_closed_trace_row(
+    row: dict[str, Any],
+    *,
+    lots: dict[str, dict[str, Any]] | None = None,
+    traces: dict[str, dict[str, Any]] | None = None,
+) -> bool:
+    """三槽实仓清仓留痕：仅当日。下一交易日 session 对不上即清空，不因昨仓流水复活。
+
+    不含策略回放未入槽。
+    """
+    if int(row.get("持仓") or 0) > 0:
+        return False
+    if bool(row.get("已实现")):
+        return True
+    code = _code_key(str(row.get("代码") or ""))
+    if not code:
+        return False
+    sess = str(row.get("交易日") or "")[:10]
+    book_traces = traces if traces is not None else _slot_closed_map()
+    rec = book_traces.get(code) if isinstance(book_traces, dict) else None
+    rec_sess = str((rec or {}).get("session") or "")[:10]
+    if sess:
+        if rec_sess == sess:
+            return True
+        if rec_sess and rec_sess != sess:
+            return False
+    book = lots if lots is not None else _last_open_lots_from_trades()
+    if code not in book:
+        return False
+    return bool(row.get("当日禁买")) or str(row.get("已触止损") or "") == "是"
+
+
+def _parse_open_lots(text: str) -> dict[str, dict[str, Any]]:
+    """成交流水推到当前未平买档：code → {qty, cost, time}。"""
+    lots: dict[str, dict[str, Any]] = {}
+    for line in str(text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        note = str(rec.get("note") or "")
+        if "非实盘" in note:
+            continue
+        code = _code_key(str(rec.get("code") or ""))
+        if not code:
+            continue
+        side = str(rec.get("side") or "").lower()
+        if side in ("buy", "买入"):
+            try:
+                qty = int(rec.get("after_qty") if rec.get("after_qty") is not None else rec.get("qty") or 0)
+            except (TypeError, ValueError):
+                qty = 0
+            cost = rec.get("avg_cost")
+            if cost is None:
+                cost = rec.get("price")
+            try:
+                cost_f = float(cost) if cost is not None else 0.0
+            except (TypeError, ValueError):
+                cost_f = 0.0
+            if qty > 0 and cost_f > 0:
+                lots[code] = {
+                    "qty": qty,
+                    "cost": cost_f,
+                    "time": rec.get("time"),
+                }
+        elif side in ("sell", "卖出", "stop"):
+            after = rec.get("after_qty")
+            try:
+                after_n = int(after) if after is not None else 0
+            except (TypeError, ValueError):
+                after_n = 0
+            if after_n <= 0:
+                lots.pop(code, None)
+            elif code in lots:
+                lots[code]["qty"] = after_n
+    return lots
+
+
+def _last_open_lots_from_trades(*, text: str | None = None) -> dict[str, dict[str, Any]]:
+    """昨仓未记账卖出时，用 trades.jsonl 最后一档买量估已平仓当日盈亏。"""
+    if text is not None:
+        return _parse_open_lots(text)
+    try:
+        mtime = TRADES_FILE.stat().st_mtime if TRADES_FILE.exists() else None
+    except OSError:
+        return {}
+    if _LOTS_CACHE.get("mtime") == mtime and isinstance(_LOTS_CACHE.get("lots"), dict):
+        return _LOTS_CACHE["lots"]
+    raw = ""
+    if TRADES_FILE.exists():
+        try:
+            raw = TRADES_FILE.read_text(encoding="utf-8")
+        except OSError:
+            return {}
+    lots = _parse_open_lots(raw)
+    _LOTS_CACHE["mtime"] = mtime
+    _LOTS_CACHE["lots"] = lots
+    return lots
+
+
+def _row_overnight_high_ok(row: dict[str, Any]) -> bool:
+    """已平仓/实仓行：昨日策略持有或策略买入才允许用昨高。
+
+    旧已平仓行可能没有买入时间，默认按隔夜仓；今日新买必须带买入时间。
+    """
+    buy_time = row.get("买入时间") or row.get("buy_time")
+    session = str(row.get("交易日") or row.get("session") or "")[:10]
+    if not buy_time:
+        return True
+    try:
+        qty = int(row.get("持仓") or row.get("qty") or 0)
+    except (TypeError, ValueError):
+        qty = 0
+    return overnight_session_high_ok(
+        qty=qty,
+        buy_time=buy_time,
+        session=session,
+        replay_holding=bool(row.get("策略回放持有")),
+        last_buy_date=str(row.get("last_buy_date") or "") or None,
+        last_sell_date=str(row.get("last_sell_date") or "") or None,
+    )
+
+
+def _closed_open_protect_px(
+    cost: float | None,
+    prev_close: float | None,
+    peak_high: float | None = None,
+    *,
+    overnight_high_ok: bool = False,
+) -> float:
+    """开盘时刻保护价：委托因子26 overnight_open_protect_px。"""
+    try:
+        cost_f = float(cost or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return overnight_open_protect_px(
+        cost_f,
+        prev_close,
+        peak_high=peak_high,
+        overnight_high_ok=bool(overnight_high_ok),
+    )
+
+
+def _peek_cached_today_1m(sina: str, session: str) -> pd.DataFrame | None:
+    """只读 1m 缓存，不拉网（单测/无缓存时返回 None）。"""
+    key = str(sina or "").lower()
+    sess = str(session or "")[:10]
+    if not key or not sess:
+        return None
+    hit = _M1_CACHE.get(key)
+    if hit and str(hit[1])[:10] == sess and isinstance(hit[2], pd.DataFrame) and not hit[2].empty:
+        return hit[2]
+    look = _M1_CACHE.get(f"lookback:{key}")
+    if look and isinstance(look[2], pd.DataFrame) and not look[2].empty and "ts" in look[2].columns:
+        day = look[2][_day_key_series(look[2]["ts"]) == sess]
+        if not day.empty:
+            return day
+    return None
+
+
+def _closed_1m_bars(row: dict[str, Any]) -> pd.DataFrame | None:
+    bars = row.get("_day_bars")
+    if isinstance(bars, pd.DataFrame) and not bars.empty:
+        return bars
+    code = _code_key(str(row.get("代码") or ""))
+    sess = str(row.get("交易日") or "")[:10]
+    if not code or not sess:
+        return None
+    sina = _sina_of(code)
+    cached = _peek_cached_today_1m(sina, sess)
+    if cached is not None:
+        return cached
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return None
+    day = _today_1m_bars(sina, sess)
+    if isinstance(day, pd.DataFrame) and not day.empty:
+        return day
+    return None
+
+
+def _closed_path_fill(
+    row: dict[str, Any],
+    *,
+    cost: float,
+    bars: pd.DataFrame | None,
+) -> float | None:
+    """已平仓成交价：因子26 first_session_exit_fill（1 分钟第一次触达）。"""
+    sina = _sina_of(_code_key(str(row.get("代码") or "")))
+    sess = str(row.get("交易日") or "")[:10]
+    vol = None
+    if sina and sess and not os.environ.get("PYTEST_CURRENT_TEST"):
+        vol = _vol20_daily_for(sina, sess)
+    return first_session_exit_fill(
+        bars,
+        cost_px=cost,
+        prev_close=_as_money(row.get("昨收")),
+        day_open=_as_money(row.get("开盘")),
+        vol20_daily=vol,
+        overnight_high_ok=_row_overnight_high_ok(row),
+        peak_high=_as_money(row.get("峰值")) or _as_money(row.get("peak_high")),
+        buy_time=row.get("买入时间") or row.get("buy_time"),
+        session=sess,
+    )
+
+
+def _closed_mark_px(
+    row: dict[str, Any],
+    *,
+    cost: float | None = None,
+    bars: pd.DataFrame | None = None,
+) -> float | None:
+    """已平仓价：与 paper_exit_decision 同序——开盘保护优先，再 1m 触达。"""
+    cost_f = cost if cost is not None else _as_money(row.get("成本"))
+    try:
+        cost_n = float(cost_f) if cost_f else 0.0
+    except (TypeError, ValueError):
+        cost_n = 0.0
+    open_px = _as_money(row.get("开盘"))
+    prev = _as_money(row.get("昨收"))
+    peak = _as_money(row.get("峰值")) or _as_money(row.get("peak_high"))
+    overnight_ok = _row_overnight_high_ok(row)
+    open_prot = (
+        _closed_open_protect_px(
+            cost_n, prev, peak_high=peak, overnight_high_ok=overnight_ok
+        )
+        if cost_n > 0
+        else 0.0
+    )
+    if open_px is not None and open_prot > 0 and open_px <= open_prot + 1e-12:
+        return open_px
+    path_fill = _closed_path_fill(row, cost=cost_n, bars=bars) if cost_n > 0 else None
+    if path_fill is not None:
+        return path_fill
+    stop = _as_money(row.get("止损"))
+    low = _as_money(row.get("最低"))
+    hit = str(row.get("已触止损") or "") == "是"
+    hard = cost_hard_stop_px(cost_n) if cost_n > 0 else 0.0
+    # 展示止损 ≤ 开盘：才是开盘时刻就能碰到的下行保护；高于开盘的是盘中抬高后的价，禁止拿去撞今开。
+    display_ok = bool(stop) and open_px is not None and float(stop) <= float(open_px) + 1e-12
+    prot = None
+    if display_ok:
+        prot = max(x for x in (float(stop), hard) if x > 0)
+    elif hard > 0:
+        prot = hard
+    protective_fill = None
+    if hit and prot is not None:
+        if open_px is not None and open_px <= prot + 1e-12:
+            protective_fill = open_px
+        elif low is not None and low <= prot + 1e-12:
+            protective_fill = prot
+        elif display_ok:
+            protective_fill = prot
+    existing = _as_money(row.get("成交价"))
+    fake_gap = bool(
+        existing is not None
+        and open_px is not None
+        and abs(float(existing) - float(open_px)) <= 1e-6
+        and open_prot > 0
+        and float(existing) > open_prot + 1e-12
+    )
+    if fake_gap:
+        existing = None
+    if existing is not None and protective_fill is not None:
+        if existing + 1e-9 < float(protective_fill):
+            return protective_fill
+        return existing
+    if existing is not None:
+        return existing
+    return protective_fill
+
+
+def _enrich_closed_day_pnl(
+    row: dict[str, Any],
+    *,
+    lots: dict[str, dict[str, Any]] | None = None,
+    traces: dict[str, dict[str, Any]] | None = None,
+) -> None:
+    """已平仓卡片：今买相对买入价、昨仓相对昨收；30万×30%槽位；已实现保留记账当日盈亏。"""
+    if row.get("error") or not _is_closed_trace_row(row, lots=lots, traces=traces):
+        return
+    code = _code_key(str(row.get("代码") or ""))
+    lot = (lots if lots is not None else _last_open_lots_from_trades()).get(code) or {}
+    cost = lot.get("cost")
+    try:
+        cost_f = float(cost) if cost is not None else None
+    except (TypeError, ValueError):
+        cost_f = None
+    if cost_f is None:
+        cost_f = _as_money(row.get("成本"))
+    try:
+        qty_lot = int(lot.get("qty") or row.get("卖出数量") or 0)
+    except (TypeError, ValueError):
+        qty_lot = 0
+    # 已实现成交：用记账股数，不要被 30 万×30% 纸面槽位覆盖
+    if bool(row.get("已实现")):
+        qty = qty_lot if qty_lot > 0 else int(row.get("卖出数量") or 0)
+        if qty > 0:
+            row["卖出数量"] = qty
+        row["三槽平仓"] = True
+        if row.get("当日盈亏") is not None:
+            if row.get("成本") is None and cost_f is not None:
+                row["成本"] = cost_f
+            _freeze_closed_exit_levels(row)
+            _remember_slot_closed(row)
+            return
+        qty_slot = 0
+    else:
+        qty_slot = _paper_slot_qty(cost_f, account_total=DEFAULT_ACCOUNT_TOTAL) if cost_f else 0
+        qty = qty_slot if qty_slot > 0 else qty_lot
+    if qty <= 0:
+        return
+    bars = row.pop("_day_bars", None)
+    if not isinstance(bars, pd.DataFrame) or bars.empty:
+        bars = _closed_1m_bars(row)
+    path_fill = _closed_path_fill(row, cost=float(cost_f), bars=bars)
+    fill = _closed_mark_px(row, cost=cost_f, bars=bars)
+    if fill is None:
+        open_px = _as_money(row.get("开盘"))
+        existing = _as_money(row.get("成交价"))
+        open_prot = _closed_open_protect_px(
+            float(cost_f),
+            _as_money(row.get("昨收")),
+            overnight_high_ok=_row_overnight_high_ok(row),
+        )
+        if (
+            existing is not None
+            and open_px is not None
+            and abs(float(existing) - float(open_px)) <= 1e-6
+            and open_prot > 0
+            and float(existing) > open_prot + 1e-12
+        ):
+            row["成交价"] = None
+        return
+    row["成交价"] = fill
+    if path_fill is not None:
+        row["止损"] = fill
+    _freeze_closed_exit_levels(row)
+    prev = _as_money(row.get("昨收"))
+    open_px = _as_money(row.get("开盘"))
+    lot_day = str(lot.get("time") or "")[:10]
+    sess = str(row.get("交易日") or "")[:10]
+    bought_today = bool(lot_day and sess and lot_day == sess)
+    day_pnl, day_pct, day_base = session_day_pnl(
+        mark=fill,
+        qty=qty,
+        cost=cost_f,
+        prev_close=prev,
+        bought_today=bought_today,
+        fallback=open_px,
+    )
+    if day_pnl is None:
+        return
+    row["当日盈亏"] = day_pnl
+    row["当日盈亏%"] = day_pct
+    row["当日基数"] = day_base
+    row["卖出数量"] = qty
+    row["三槽平仓"] = True
+    if row.get("成本") is None and cost_f is not None:
+        row["成本"] = cost_f
+    if cost_f is not None:
+        upnl, upct = mark_unrealized(fill, cost_f, qty)
+        row["浮盈"] = upnl
+        row["浮盈%"] = upct
+        row["盈亏状态"] = "结算"
+        base_note = "买入价" if bought_today else "昨收"
+        row["盈亏说明"] = (
+            f"已平仓·相对{base_note}；槽位股数"
+            if qty_slot > 0
+            else f"已平仓·相对{base_note}"
+        )
+    _remember_slot_closed(row)
+
+
+def _finalize_position_row(row: dict[str, Any]) -> None:
+    """收敛持仓状态：已经买入 / 待卖出 / 已平仓；信号「已触止损」另见预警/角标。"""
+    if row.get("error"):
+        row["可执行"] = False
+        return
+    qty = int(row.get("持仓") or 0)
+    paper = bool(row.get("策略回放持有"))
+    no_buy = bool(row.get("当日禁买"))
+    alert = str(row.get("预警") or "")
+    pos = str(row.get("持仓状态") or "")
+    t1 = "T+1" in alert
+
+    if no_buy and qty <= 0:
+        # 当日已平仓/禁买：持仓态「已平仓」；信号「已触止损」
+        row["持仓状态"] = STATUS_STOP_CLOSED
+        row["因子侧"] = "空仓"
+        row["建议挂单"] = None
+        row["近买点"] = False
+        row["可执行"] = False
+        row["bg_class"] = "status-flat"
+        if alert in (
+            "",
+            "-",
+            "空仓",
+            "待买入",
+            "当日禁买",
+            "止损成交",
+            "已平仓",
+            "已触止损平仓",
+        ) or (
+            (bool(row.get("已实现")) or bool(row.get("三槽平仓")) or int(row.get("卖出数量") or 0) > 0)
+            and alert.startswith("策略回放")
+        ):
+            row["预警"] = SIGNAL_STOP_HIT
+        # 主展示价：保留上次买入触发价
+        if row.get("已触发因子侧") == "买入" and row.get("已触发因子价") is not None:
+            row["因子价"] = row["已触发因子价"]
+        return
+
+    if paper and qty <= 0:
+        # 已触止损：禁止再标策略持有
+        if (
+            str(row.get("已触止损") or "") == "是"
+            or "已触止损" in alert
+            or "今日已止损" in alert
+            or "策略回放·今日已止损" in alert
+        ):
+            row["策略回放持有"] = False
+            row["持仓状态"] = STATUS_STOP_CLOSED
+            row["因子侧"] = "空仓"
+            row["建议挂单"] = None
+            row["近买点"] = False
+            row["可执行"] = False
+            row["bg_class"] = "status-flat"
+            if alert in ("", "-", "空仓", "待买入", "策略持有", "已触止损"):
+                row["预警"] = "策略回放·今日已止损"
+            return
+        if _buy_signal_active(row):
+            row["可执行"] = is_actionable_unfilled_buy(row) or alert.startswith(
+                ALERT_HIT_BUY
+            )
+            if str(row.get("bg_class") or "") in ("", "status-hold", "status-flat"):
+                row["bg_class"] = "warn-buy"
+            if row.get("买点") is not None:
+                row["因子价"] = row["买点"]
+            return
+        row["持仓状态"] = "策略持有"
+        row["因子侧"] = "持有"
+        row["建议挂单"] = None
+        row["近买点"] = False
+        row["可执行"] = False
+        if alert in ("", "-", "空仓"):
+            row["预警"] = "策略回放持有·未登记仓"
+        # 下一动作是止损
+        if row.get("未触发因子侧") == "卖出" and row.get("未触发因子价") is not None:
+            row["因子价"] = row["未触发因子价"]
+        # 接近止损时标近止损，便于排序/推送
+        near_stop = bool(row.get("近止损"))
+        try:
+            stop_px = float(row.get("止损") or row.get("未触发因子价") or 0)
+            last = float(row.get("现价") or 0)
+            if stop_px > 0 and last > 0:
+                r = simple_return(last, stop_px)
+                dist_pct = None if r is None else abs(r) * 100.0
+                if dist_pct is not None and (
+                    dist_pct <= float(NEAR_FACTOR_PCT) + 1e-12
+                    or str(row.get("已触止损") or "") == "是"
+                ):
+                    near_stop = True
+                    row["近止损"] = True
+        except (TypeError, ValueError):
+            pass
+        row["bg_class"] = "warn-sell" if near_stop else "status-hold"
+        return
+
+    if qty > 0:
+        sellable = int(row.get("可用") or 0)
+        hit_stop = str(row.get("已触止损") or "") == "是"
+        buy_time = row.get("买入时间")
+        session = str(row.get("交易日") or "")
+        t1_day = bool(
+            session
+            and buy_time
+            and is_t1_buy_day(buy_time, session)
+            and not bool(row.get("t0"))
+        )
+        # T+1 当日不可卖：三槽状态固定「已经买入」，不进待卖出/已止损
+        if t1_day and sellable <= 0:
+            row["持仓状态"] = "已经买入"
+            row["可执行"] = False
+            row["因子侧"] = "持有"
+            if hit_stop:
+                if "止损已记" not in alert and "持有·T+1" not in alert:
+                    row["预警"] = "持有·T+1·止损已记"
+                row["bg_class"] = "status-hold"
+            else:
+                if (
+                    alert in ("", "-", "空仓", "待买入", "待卖出", "已触止损", "将止损", "已经买入")
+                    or "已触止损" in alert
+                    or alert.startswith("将止损")
+                ):
+                    row["预警"] = "持有·T+1"
+                row["已触止损"] = "否"
+                row["bg_class"] = "status-hold"
+            return
+        # 实仓：仅可卖且触止损 → 待卖出；否则已经买入
+        if hit_stop and sellable > 0 and "不可卖" not in alert and not t1:
+            row["持仓状态"] = "待卖出"
+            pos = "待卖出"
+        else:
+            row["持仓状态"] = "已经买入"
+            pos = "已经买入"
+        row["可执行"] = (
+            pos == "待卖出"
+            and (not t1)
+            and sellable > 0
+            and "不可卖" not in alert
+        )
+        if hit_stop and sellable <= 0 and "不可卖" not in alert and not t1:
+            row["可执行"] = False
+            if alert in (
+                "",
+                "-",
+                "待卖出",
+                "已触止损",
+                "已经买入",
+                "持有",
+                ALERT_HIT_BUY,
+                ALERT_FILLED,
+            ) or alert.startswith("已触买"):
+                row["预警"] = "已触止损·暂不可卖"
+        elif (
+            alert in ("", "-", "空仓", "待买入", ALERT_HIT_BUY, ALERT_FILLED)
+            or alert.startswith("已触买")
+        ) and pos == "已经买入":
+            row["预警"] = "已经买入"
+        row["因子侧"] = "持有" if pos == "已经买入" else row.get("因子侧") or "卖出"
+        return
+
+    # 真·空仓：保留 annotate 后的触买信号，勿冲回空仓（未过门不算触买）
+    if alert.startswith("已触买·") and alert != ALERT_FILLED:
+        row["持仓状态"] = "待买入"
+        row["可执行"] = True
+        row["bg_class"] = row.get("bg_class") or "warn-buy"
+        return
+    if ALERT_PRICE_NO_GATE in alert or alert.startswith("触买价"):
+        # 废弃弱信号：恢复空仓，不预警
+        row["预警"] = "空仓"
+        row["持仓状态"] = "空仓"
+        row["可执行"] = False
+        row["近买点"] = False
+        row["槽位候选"] = False
+        row["当日预警"] = False
+        if str(row.get("bg_class") or "") == "warn-buy":
+            row["bg_class"] = ""
+        return
+    row["可执行"] = pos == "待买入"
+
+
+def _ever_held_codes() -> set[str]:
+    """曾经实盘持仓过的代码：成交流水 / 止损备注 / 卖出因子记忆 / 当日已实现。"""
+    codes: set[str] = set()
+    data = load_holdings()
+    for code, pos in (data.get("positions") or {}).items():
+        if not isinstance(pos, dict):
+            continue
+        note = str(pos.get("note") or "")
+        if any(k in note for k in ("止损", "卖出", "成交", "清仓")):
+            codes.add(_code_key(code))
+    for code, mem in (data.get("factor_memory") or {}).items():
+        if isinstance(mem, dict) and mem.get("last_sell_factor_px") is not None:
+            codes.add(_code_key(code))
+    for code in data.get("realized_today") or {}:
+        codes.add(_code_key(code))
+    if TRADES_FILE.exists():
+        try:
+            for line in TRADES_FILE.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                c = rec.get("code")
+                if c:
+                    codes.add(_code_key(str(c)))
+        except OSError:
+            pass
+    return codes
+
+
+def sort_watch_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """策略一排序：实仓 → 当日留痕 → 槽位候选 → 其余按距买点升序（最近在前）。"""
+
+    def _tier(r: dict[str, Any]) -> int:
+        qty = int(r.get("持仓") or 0)
+        if qty > 0:
+            return 0
+        if bool(r.get("已实现")):
+            return 1
+        if bool(r.get("槽位候选")):
+            return 2
+        return 3
+
+    def _urgency(r: dict[str, Any]) -> int:
+        hit = str(r.get("因子触发") or "")
+        pos = str(r.get("持仓状态") or "")
+        if pos == "待卖出" or hit.startswith("已触发") or hit.startswith("策略止损"):
+            return 0
+        if _row_hit_buy(r) or pos == "待买入":
+            return 1
+        if r.get("近买点") or r.get("近止损") or hit == "接近":
+            return 2
+        return 3
+
+    def key(r: dict[str, Any]) -> tuple[int, int, float, str]:
+        code = _code_key(str(r.get("代码") or ""))
+        dist = r.get("距买点%")
+        if dist is None:
+            dist = _buy_distance_pct(r)
+        try:
+            dist_f = float(dist)
+        except (TypeError, ValueError):
+            dist_f = 9_999.0
+        return (_tier(r), _urgency(r), dist_f, code)
+
+    return sorted(rows, key=key)
+
+
+def _fmt_num(v: Any, digits: int = 2) -> str:
+    if v is None or v == "-":
+        return "-"
+    try:
+        return f"{float(v):.{digits}f}"
+    except (TypeError, ValueError):
+        return str(v)
+
+
+
+
+def cmd_status(args: argparse.Namespace) -> None:
+    rows = collect_rows()
+    indices = fetch_indices()
+    print(f"\n持仓盯盘  {_now()}")
+    print(
+        f"策略: {STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL} "
+        f"（卖出仅保留止损）"
+    )
+    print(
+        f"  卖出全清: 仅止损"
+    )
+    print(f"持仓文件: {HOLDINGS_FILE}")
+    holdings_meta = load_holdings()
+    account_total = _account_total(rows, holdings_meta)
+    available = _available_cash(rows, holdings_meta)
+    total_mv = _holdings_market_value(rows)
+    position_pct = (
+        round(total_mv / account_total * 100.0, 1)
+        if account_total and account_total > 0 and total_mv > 0
+        else None
+    )
+    session_for_open = next(
+        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
+        str(pd.Timestamp.now().date()),
+    )
+    today_opened = _today_opened_cost(rows, session_for_open)
+    if account_total is not None:
+        print(
+            f"总资产: {account_total:.2f} 元 · 可用: "
+            f"{available if available is not None else '-'} 元 · "
+            f"仓位: {('-' if position_pct is None else f'{position_pct:.1f}%')} · "
+            f"当日开仓: {today_opened:.2f} 元"
+        )
+    print("-" * 108)
+    print("【大盘】")
+    for ix in indices:
+        if ix.get("error"):
+            print(f"  {ix['name']}: 失败 {ix['error']}")
+            continue
+        pts = ix["chg_points"]
+        pct = ix["chg_pct"]
+        print(
+            f"  {ix['market']}{ix['name']}: 点数 {_fmt_num(ix['price'])} | "
+            f"涨跌点数 {('-' if pts is None else f'{pts:+.2f}')} | "
+            f"涨跌幅 {('-' if pct is None else f'{pct:+.2f}%')}"
+        )
+    print("-" * 108)
+
+    show_rows = []
+    for r in rows:
+        pdg = int(r.get("价位小数") or 2)
+
+        def _p(v: Any, d: int = pdg) -> str:
+            return "-" if v is None else _fmt_num(v, d)
+
+        show_rows.append(
+            {
+                "市场": r["市场"],
+                "代码": r["代码"],
+                "名称": r["名称"],
+                "开盘": _p(r["开盘"]),
+                "现价": _p(r["现价"]),
+                "当日涨幅": "-" if r["当日涨幅"] is None else r["当日涨幅"],
+                "较开盘点": "-" if r["较开盘点"] is None else r["较开盘点"],
+                "较开盘涨幅": "-"
+                if r.get("较开盘涨幅") is None
+                else f"{float(r['较开盘涨幅']):+.2f}%",
+                "阈值%": r.get("阈值%"),
+                "因子4": r.get("因子4") or "-",
+                "牛市": r.get("牛市") or "-",
+                "最高": _p(r["最高"]),
+                "最低": _p(r["最低"]),
+                "买点": _p(r["买点"]),
+                "止损": _p(r["止损"]),
+                "基础止损": _p(r.get("基础止损")),
+                "已触买": r["已触买"],
+                "已触止损": r["已触止损"],
+                "形态": r.get("形态") or "-",
+                "状态": (
+                    (r.get("预警") or "-")
+                    + (
+                        f" {float(r['仓位%']):.1f}%"
+                        if r.get("仓位%") is not None
+                        else ""
+                    )
+                ),
+                "建议挂单": _p(r.get("建议挂单")),
+                "挂单说明": r.get("挂单说明") or "-",
+                "持仓": r["持仓"],
+                "成本": _p(r["成本"], max(3, pdg)),
+                "浮盈": r["error"] if r.get("error") else ("-" if r["浮盈"] is None else r["浮盈"]),
+                "浮盈%": "-" if r["浮盈%"] is None else r["浮盈%"],
+                "当日盈亏": "-" if r.get("当日盈亏") is None else r["当日盈亏"],
+                "当日盈亏%": "-" if r.get("当日盈亏%") is None else r["当日盈亏%"],
+                "止损后最高": _p(r.get("止损后最高")),
+                "止损后最低": _p(r.get("止损后最低")),
+                "回抽%": "-" if r.get("回抽%") is None else r.get("回抽%"),
+                "踏空": "-" if r.get("踏空金额") is None else r.get("踏空金额"),
+                "更新": r["更新"],
+            }
+        )
+    cols = [
+        "市场", "代码", "名称", "开盘", "现价", "当日涨幅", "较开盘点", "较开盘涨幅", "阈值%",
+        "因子4", "牛市", "最高", "最低", "买点", "止损", "基础止损", "已触买", "已触止损", "形态", "状态",
+        "建议挂单", "挂单说明", "持仓", "成本", "浮盈", "浮盈%", "当日盈亏", "当日盈亏%",
+        "止损后最高", "止损后最低", "回抽%", "踏空", "更新",
+    ]
+    print(pd.DataFrame(show_rows)[cols].to_string(index=False))
+    print("-" * 108)
+    day_total = 0.0
+    day_n = 0
+    stock_pnl = 0.0
+    stock_n = 0
+    for r in show_rows:
+        raw = next((x for x in rows if x["代码"] == r["代码"]), {})
+        if raw.get("浮盈") is not None and (
+            int(raw.get("持仓") or 0) > 0 or raw.get("已实现") or raw.get("三槽平仓")
+        ):
+            stock_pnl += float(raw["浮盈"])
+            stock_n += 1
+        if r["当日盈亏"] != "-":
+            try:
+                day_total += float(r["当日盈亏"])
+                day_n += 1
+            except (TypeError, ValueError):
+                pass
+    holdings_meta = load_holdings()
+    account_total = _account_total(rows, holdings_meta)
+    account_open = _account_total_open(holdings_meta)
+    if stock_n:
+        print(f"合计盈亏: {stock_pnl:+.2f}  [持股浮盈+已结算]")
+    if day_n:
+        pct_txt = "-"
+        print(f"合计当日盈亏: {day_total:+.2f} ({pct_txt})")
+    else:
+        print("合计当日盈亏: -")
+
+    lock = _read_watch_lock()
+    if lock:
+        refresh_sec = 5
+        try:
+            meta = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
+            refresh_sec = int(meta.get("refreshSec") or meta.get("refresh_sec") or refresh_sec)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            pass
+        path = publish_watch_snapshot(rows, indices=indices, refresh_sec=refresh_sec)[0]
+        print(f"检测到盯盘进程 (pid={lock.get('pid')})，已推送 JSON 快照: {path.name}")
+        url = _report_url_if_watching()
+        if url:
+            print(f"前端: {url}")
+            if not getattr(args, "no_open", False):
+                webbrowser.open(url)
+    elif _watch_ui_dist_ready():
+        print("提示: 启动 Web 盯盘 → python index.py watch  （生产静态页 watch-ui/dist）")
+    else:
+        print(
+            "提示: 开发前端无需 build → "
+            "python index.py watch --ui-dev  （或单独 npm run dev，见 holdingStocks/README.md）"
+        )
+
+    print(f"策略: {STRATEGY_NAME}（{_STRATEGY_SYNC_NOTE}）")
+    print("说明: 当日涨幅=(现价/昨收-1)×100；较开盘涨幅=(现价/开盘-1)×100")
+    print("     当日盈亏: 今买=(现价或平仓价-买入价)×股数；昨仓=(现价或平仓价-昨收)×股数")
+    print("     已平仓浮亏: 昨仓=(平仓价-昨收)×卖出股数；今买当日=(平仓价-成本)×股数；成交价锁定后不再随现价")
+    print("     因子26卖出: 多层止盈；10%半仓止盈（减半留仓）；其余止损/止盈全清")
+    print("     买入过滤: 前日阴/小阳 + 禁双阳跨日≥5%；T+1 当日不可卖")
+    _f2 = load_holdings().get("factor2")
+    print(f"     {format_factor2_summary(_f2 if isinstance(_f2, dict) else None)}")
+
+
+
+def cmd_set_account(args: argparse.Namespace) -> None:
+    total = float(args.total)
+    if total <= 0:
+        raise ValueError("总资产必须 > 0")
+    data = load_holdings()
+    data["account_total"] = round(total, 2)
+    # 若未单独登记现金，用总资产反推（需已有市值时更准，此处仅记总值）
+    save_holdings(data)
+    print(f"已设总资产: {data['account_total']:.2f} 元")
+
+
+def cmd_set_cash(args: argparse.Namespace) -> None:
+    cash = float(args.cash)
+    if cash < 0:
+        raise ValueError("可用现金不能为负")
+    data = load_holdings()
+    data["account_cash"] = round(cash, 2)
+    save_holdings(data)
+    print(f"已设可用现金: {data['account_cash']:.2f} 元")
+
+
+def cmd_set_cost(args: argparse.Namespace) -> None:
+    """仅登记/修改成本价（可不填数量）。"""
+    meta = _find_meta(args.code)
+    code = meta["code"]
+    cost = float(args.cost)
+    if cost <= 0:
+        raise ValueError("成本价必须 > 0")
+    data = load_holdings()
+    pos = data["positions"].setdefault(code, _empty_position(meta))
+    pos["cost"] = round(cost, 4)
+    pos["name"] = meta["name"]
+    pos["market"] = meta["market"]
+    if args.qty is not None:
+        pos["qty"] = int(args.qty)
+    if getattr(args, "available", None) is not None:
+        avail = int(args.available)
+        qty_now = int(pos.get("qty") or 0)
+        if avail < 0 or (qty_now > 0 and avail > qty_now):
+            raise ValueError(f"可用数量须在 0..持仓({qty_now}) 之间")
+        pos["available"] = avail
+    if getattr(args, "today_cost", None) is not None:
+        tc = float(args.today_cost)
+        if tc <= 0:
+            raise ValueError("今日买入价必须 > 0")
+        pos["today_cost"] = round(tc, 4)
+    if not pos.get("buy_time"):
+        pos["buy_time"] = _now()
+    if args.note:
+        pos["note"] = args.note
+    save_holdings(data)
+    avail_s = pos.get("available")
+    tc_s = pos.get("today_cost")
+    print(
+        f"已设成本: {meta['market']}{code} {meta['name']} "
+        f"成本={pos['cost']} 持仓={pos.get('qty', 0)}"
+        + (f" 可用={avail_s}" if avail_s is not None else "")
+        + (f" 今买价={tc_s}" if tc_s is not None else "")
+    )
+
+
+def cmd_buy(args: argparse.Namespace) -> None:
+    meta = _find_meta(args.code)
+    code = meta["code"]
+    price = float(args.price)
+    qty = int(args.qty)
+    if qty <= 0 or price <= 0:
+        raise ValueError("价格/数量必须 > 0")
+
+    data = load_holdings()
+    pos = data["positions"].setdefault(code, _empty_position(meta))
+    old_qty = int(pos.get("qty") or 0)
+    old_cost = float(pos["cost"]) if pos.get("cost") is not None else None
+    # 加仓前可卖股保留；新买部分 T+1 锁定
+    if old_qty > 0:
+        if pos.get("available") is not None:
+            try:
+                old_avail = max(0, min(int(pos["available"]), old_qty))
+            except (TypeError, ValueError):
+                old_avail = old_qty
+        else:
+            session = str(pd.Timestamp.now().date())
+            old_avail = (
+                0
+                if is_t1_buy_day(pos.get("buy_time"), session)
+                else old_qty
+            )
+    else:
+        old_avail = 0
+    locked_before = max(0, old_qty - old_avail)
+    old_today = (
+        float(pos["today_cost"]) if pos.get("today_cost") is not None else None
+    )
+    new_qty = old_qty + qty
+    if old_qty > 0 and old_cost is not None:
+        new_cost = (old_cost * old_qty + price * qty) / new_qty
+    else:
+        new_cost = price
+    # 今日买入均价（仅锁定股的成交价加权）
+    if locked_before > 0 and old_today is not None:
+        pos["today_cost"] = round(
+            (old_today * locked_before + price * qty) / (locked_before + qty), 4
+        )
+    else:
+        pos["today_cost"] = round(price, 4)
+    pos["qty"] = new_qty
+    pos["cost"] = round(new_cost, 4)
+    pos["available"] = int(old_avail)
+    pos["buy_time"] = _now()
+    if old_qty <= 0:
+        pos["tp_stage"] = 0
+        pos["last_tp_ts"] = None
+    if args.note:
+        pos["note"] = args.note
+    pos["name"] = meta["name"]
+    pos["market"] = meta["market"]
+    cash = _account_cash(data)
+    if cash is not None:
+        data["account_cash"] = round(cash - price * qty, 2)
+    save_holdings(data)
+    append_trade(
+        {
+            "time": _now(),
+            "side": "buy",
+            "code": code,
+            "name": meta["name"],
+            "price": price,
+            "qty": qty,
+            "after_qty": new_qty,
+            "avg_cost": pos["cost"],
+            "note": args.note or "",
+        }
+    )
+    print(
+        f"买入记录: {meta['market']}{code} {meta['name']} "
+        f"{qty}股 @ {price:.2f} → 持仓{new_qty} 可用{pos['available']} "
+        f"成本{pos['cost']:.4f} 今买价{pos['today_cost']:.4f}"
+    )
+
+
+def cmd_sell(args: argparse.Namespace) -> None:
+    meta = _find_meta(args.code)
+    code = meta["code"]
+    price = float(args.price)
+    qty = int(args.qty)
+    if qty <= 0 or price <= 0:
+        raise ValueError("价格/数量必须 > 0")
+
+    data = load_holdings()
+    pos = data["positions"].get(code)
+    if not pos or int(pos.get("qty") or 0) <= 0:
+        raise RuntimeError(f"{code} 当前无持仓")
+    old_qty = int(pos["qty"])
+    if qty > old_qty:
+        raise RuntimeError(f"卖出数量 {qty} > 持仓 {old_qty}")
+    cost = float(pos["cost"]) if pos.get("cost") is not None else price
+    buy_time = pos.get("buy_time")
+    pnl, pnl_pct = mark_unrealized(price, cost, qty)
+    pnl = 0.0 if pnl is None else pnl
+    new_qty = old_qty - qty
+    pos["qty"] = new_qty
+    raw_avail = pos.get("available")
+    if raw_avail is not None:
+        try:
+            pos["available"] = max(0, min(int(raw_avail) - qty, new_qty))
+        except (TypeError, ValueError):
+            pos["available"] = 0 if new_qty > 0 else None
+    if new_qty == 0:
+        pos["cost"] = None
+        pos["buy_time"] = None
+        pos["available"] = None
+        pos["today_cost"] = None
+        pos["tp_stage"] = 0
+        pos["last_tp_ts"] = None
+    else:
+        # 人工减半后必须落 stage，否则下一轮 1m 回放会在同一根 10% K 上清剩余
+        pos["tp_stage"] = 1
+        pos["last_tp_ts"] = _now()
+    cash = _account_cash(data)
+    if cash is not None:
+        data["account_cash"] = round(cash + price * qty, 2)
+
+    # 全清或半仓都写入当日已实现：禁同日再买；半仓后允许再卖剩余
+    session = str(pd.Timestamp.now().date())
+    note = args.note or ""
+    _purge_stale_realized(data, session)
+    if new_qty == 0:
+        reason = REASON_STOP if "止损" in note else "手动卖出"
+    else:
+        reason = REASON_HALF
+    bought_today = is_t1_buy_day(buy_time, session)
+    day_pnl, day_pnl_pct, day_base = session_day_pnl(
+        mark=price,
+        qty=qty,
+        cost=cost,
+        prev_close=_prev_close_from_snapshot(code),
+        bought_today=bool(bought_today),
+        fallback=None if not bought_today else cost,
+    )
+    px_digits = 3 if abs(price) < 10 else 2
+    rec_day_base = 0.0 if day_base is None else day_base
+    rec_day_pnl = 0.0 if day_pnl is None else day_pnl
+    data.setdefault("realized_today", {})[code] = {
+        "session": session,
+        "name": meta["name"],
+        "market": meta["market"],
+        "qty": int(qty),
+        "price": round(price, px_digits),
+        "cost": round(cost, 4),
+        "pnl": round(pnl, 2),
+        "pnl_pct": pnl_pct,
+        "day_base": round(rec_day_base, 2),
+        "day_pnl": round(rec_day_pnl, 2),
+        "day_pnl_pct": day_pnl_pct,
+        "reason": reason,
+        "time": _now(),
+        "after_qty": int(new_qty),
+        "full_exit": bool(new_qty <= 0),
+        "action_kind": "half" if new_qty > 0 else "full",
+    }
+    if new_qty == 0:
+        pos["note"] = f"{reason}@{price} ({session})"
+        append_slot_freed_at(data, session, _now())
+    else:
+        pos["note"] = f"{reason}@{price}×{qty} 剩{new_qty} ({session})"
+
+    save_holdings(data)
+    append_trade(
+        {
+            "time": _now(),
+            "side": "sell",
+            "code": code,
+            "name": meta["name"],
+            "price": price,
+            "qty": qty,
+            "after_qty": new_qty,
+            "avg_cost": cost,
+            "realized_pnl": round(pnl, 2),
+            "note": note,
+        }
+    )
+    print(
+        f"卖出记录: {meta['market']}{code} {meta['name']} "
+        f"{qty}股 @ {price:.2f} 实现盈亏 {pnl:.2f} → 剩余{new_qty}"
+    )
+
+
+def cmd_clear(args: argparse.Namespace) -> None:
+    meta = _find_meta(args.code)
+    code = meta["code"]
+    data = load_holdings()
+    pos = data["positions"].get(code)
+    if not pos:
+        print("无记录")
+        return
+    pos["qty"] = 0
+    pos["cost"] = None
+    pos["buy_time"] = None
+    pos["available"] = None
+    pos["today_cost"] = None
+    pos["note"] = ""
+    sticky = data.get("alert_sticky")
+    if isinstance(sticky, dict):
+        sticky.pop(code, None)
+    save_holdings(data)
+    print(f"已清空持仓: {code} {meta['name']}")
+
+
+def cmd_clear_all(_: argparse.Namespace) -> None:
+    """清仓并重置全部盯盘状态，便于当日重新执行默认策略三槽。
+
+    · 全部 positions → 空仓；realized / alert_sticky / factor_memory 清空
+    · strategy 纸面持有复位；portfolio_pool 对齐默认策略池
+    · 当日 trades.jsonl 买卖行归档，避免「日最多买 / 当日禁买」挡住重跑
+    · 账户总资产回到默认纸面资金；清内存缓存与微信防抖
+    """
+    from watch_config import (
+        DEFAULT_ACCOUNT_TOTAL,
+        prune_portfolio_pool,
+        strategy_watchlist_codes,
+    )
+
+    global _HOLDINGS_CACHE
+
+    data = load_holdings()
+    sess = str(trading_session_date())
+    # 1) 所有票空仓（含非当前池遗留代码）
+    positions = data.setdefault("positions", {})
+    for code, pos in list(positions.items()):
+        name = ""
+        market = "深证"
+        if isinstance(pos, dict):
+            name = str(pos.get("name") or "")
+            market = str(pos.get("market") or market)
+        meta = {"code": _code_key(code), "name": name or _code_key(code), "market": market}
+        try:
+            meta = _find_meta(code) if code else meta
+        except Exception:  # noqa: BLE001
+            pass
+        positions[_code_key(code)] = _empty_position(meta)
+    for w in effective_watchlist(data):
+        positions[w["code"]] = _empty_position(w)
+
+    data["realized_today"] = {}
+    data["closed_today"] = {}
+    data["alert_sticky"] = {}
+    data["factor_memory"] = {}
+    data["account_total"] = float(DEFAULT_ACCOUNT_TOTAL)
+    data["account_cash"] = float(DEFAULT_ACCOUNT_TOTAL)
+    data["account_total_open"] = float(DEFAULT_ACCOUNT_TOTAL)
+    data["account_total_open_session"] = sess
+    data["last_session"] = None
+    data["watch_status_reset_session"] = sess
+
+    # 策略纸面持有复位
+    strat = data.get("strategy")
+    if isinstance(strat, dict):
+        for code, st in list(strat.items()):
+            if isinstance(st, dict):
+                st["holding"] = False
+                st["buy_time"] = None
+            else:
+                strat[code] = {"holding": False, "buy_time": None}
+
+    # 持仓池只留默认策略池
+    data["portfolio_pool"] = sorted(strategy_watchlist_codes())
+    prune_portfolio_pool(data)
+
+    # 2) 当日成交行移出 trades.jsonl（保留历史），否则日买次数仍占满
+    n_archived = 0
+    if TRADES_FILE.exists():
+        try:
+            lines = TRADES_FILE.read_text(encoding="utf-8").splitlines()
+            keep: list[str] = []
+            archived: list[str] = []
+            for line in lines:
+                s = line.strip()
+                if not s:
+                    continue
+                try:
+                    rec = json.loads(s)
+                except json.JSONDecodeError:
+                    keep.append(line)
+                    continue
+                ts = str(rec.get("time") or rec.get("ts") or "")
+                if ts.startswith(sess):
+                    archived.append(s)
+                else:
+                    keep.append(s)
+            if archived:
+                stamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+                arch = ROOT / f"trades_reset_{stamp}.jsonl"
+                arch.write_text("\n".join(archived) + "\n", encoding="utf-8")
+                n_archived = len(archived)
+            TRADES_FILE.write_text(("\n".join(keep) + ("\n" if keep else "")), encoding="utf-8")
+        except OSError as e:
+            print(f"归档当日成交失败（继续）: {e}")
+
+    save_holdings(data)
+    _HOLDINGS_CACHE.clear()
+    _ensure_signal_day_caches(force=True)
+    try:
+        from wechat_notify import STATE_FILE
+
+        if STATE_FILE.exists():
+            STATE_FILE.unlink()
+    except Exception as e:  # noqa: BLE001
+        print(f"清微信预警状态失败（继续）: {e}")
+
+    print(
+        f"已清仓并重置全部状态 · session={sess} · "
+        f"池 {len(data.get('portfolio_pool') or [])} 只 · "
+        f"归档当日成交 {n_archived} 笔 · 账户 {DEFAULT_ACCOUNT_TOTAL:.0f}"
+    )
+    print(f"盯盘下一轮将按默认策略重新扫描入槽（日最多买 {int(MAX_BUYS_PER_DAY)}）。")
+
+def cmd_history(_: argparse.Namespace) -> None:
+    if not TRADES_FILE.exists():
+        print("暂无成交记录")
+        return
+    lines = TRADES_FILE.read_text(encoding="utf-8").strip().splitlines()
+    rows = [json.loads(x) for x in lines if x.strip()]
+    if not rows:
+        print("暂无成交记录")
+        return
+    print(pd.DataFrame(rows).to_string(index=False))
+
+
+_last_auction_skip_log: float = 0.0
+
+
+def _refresh_once(
+    refresh_sec: int,
+    *,
+    get_quote: Callable[[str], dict[str, Any]] | None = None,
+    wechat: bool = False,
+) -> tuple[Path, bool]:
+    global _last_auction_skip_log
+    rows = collect_rows(get_quote=get_quote)
+    indices = fetch_indices_cached()
+    path, published = publish_watch_snapshot(
+        rows,
+        indices=indices,
+        refresh_sec=refresh_sec,
+        get_quote=get_quote,
+        fetch_sectors=False,
+    )
+    if wechat and is_signal_window():
+        try:
+            from wechat_notify import notify_watch_rows
+
+            from watch_config import is_strategy16_watch_only
+
+            notify_watch_rows(
+                [
+                    r
+                    for r in rows
+                    if not is_strategy16_watch_only(str(r.get("代码") or ""))
+                ]
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 微信预警推送异常: {e}")
+    elif wechat and is_auction_window():
+        now_m = time.monotonic()
+        if now_m - _last_auction_skip_log >= 60.0:
+            _last_auction_skip_log = now_m
+            ph = market_phase_label()
+            print(f"[{_now()}] 早盘 {ph}；微信推送待 9:30 连续竞价")
+    return path, published
+
+
+def _parse_hhmm(text: str) -> tuple[int, int]:
+    parts = str(text).strip().replace("：", ":").split(":")
+    if len(parts) != 2:
+        raise ValueError(f"时间格式应为 HH:MM，收到: {text!r}")
+    hour, minute = int(parts[0]), int(parts[1])
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError(f"非法时间: {text!r}")
+    return hour, minute
+
+
+def _next_auction_milestone(
+    now: datetime | None = None,
+) -> tuple[datetime, str, str]:
+    """下一早盘里程碑：(时刻, 标签, 动作 reseed|open|refresh)。"""
+    now = now or datetime.now()
+    candidates: list[tuple[datetime, str, str]] = []
+    for h, m, label, action in AUCTION_MILESTONES:
+        t = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        if t <= now:
+            t += timedelta(days=1)
+        candidates.append((t, label, action))
+    return min(candidates, key=lambda x: x[0])
+
+
+def _log_watchlist_opens(rows: list[dict[str, Any]]) -> None:
+    by_code = {str(r.get("代码")): r for r in rows}
+    print(f"[{_now()}] 开盘价定时刷新 · 盯盘 {_watchlist_codes_label()}")
+    for w in effective_watchlist():
+        r = by_code.get(w["code"], {})
+        open_px = r.get("开盘")
+        stop_px = r.get("止损")
+        last_px = r.get("现价")
+        print(
+            f"  {w['name']}({w['code']}) "
+            f"开盘={open_px if open_px is not None else '-'} "
+            f"止损={stop_px if stop_px is not None else '-'} "
+            f"现价={last_px if last_px is not None else '-'}"
+        )
+
+
+def _refresh_open_prices(
+    refresh_sec: int,
+    *,
+    get_quote: Callable[[str], dict[str, Any]] | None = None,
+) -> tuple[Path, bool]:
+    """强制拉一次行情，用最新开盘重算买点/止损并推送 JSON 快照。"""
+    rows = collect_rows(get_quote=get_quote)
+    indices = fetch_indices()
+    path, published = publish_watch_snapshot(
+        rows,
+        indices=indices,
+        refresh_sec=refresh_sec,
+        get_quote=get_quote,
+        fetch_sectors=False,
+    )
+    _log_watchlist_opens(rows)
+    return path, published
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259
+            handle = ctypes.windll.kernel32.OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid)
+            )
+            if not handle:
+                return False
+            code = ctypes.c_ulong()
+            ok = ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return bool(ok) and int(code.value) == STILL_ACTIVE
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _read_watch_lock() -> dict[str, Any] | None:
+    if not WATCH_PID_FILE.exists():
+        return None
+    try:
+        raw = WATCH_PID_FILE.read_text(encoding="utf-8").strip()
+        if raw.startswith("{"):
+            data = json.loads(raw)
+            pid = int(data.get("pid") or 0)
+        else:
+            pid = int(raw)
+            data = {"pid": pid}
+        if pid and _pid_alive(pid):
+            return data
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return None
+
+
+def _acquire_watch_lock(
+    *,
+    host: str,
+    port: int,
+    ui_dev_port: int | None = None,
+    force: bool = False,
+) -> None:
+    """防止多个 watch 同时写快照，页面会来回跳变。"""
+    from watch_process import (
+        clear_lock,
+        describe_listeners,
+        read_lock,
+        reclaim_ports,
+        stop_watch,
+    )
+
+    ports = [int(port)]
+    if ui_dev_port:
+        ports.append(int(ui_dev_port))
+    existing = read_lock()
+    blocked = describe_listeners(host, ports)
+
+    if force and (existing or blocked):
+        stop_watch(
+            api_port=int(port),
+            ui_port=int(ui_dev_port or WATCH_UI_DEV_PORT),
+            host=host,
+            force=True,
+        )
+        existing = None
+        blocked = describe_listeners(host, ports)
+
+    if existing:
+        old = int(existing.get("pid") or 0)
+        if old and old != os.getpid():
+            raise SystemExit(
+                f"盯盘已在运行 (pid={old})。\n"
+                f"请先运行: python start_watch.py --stop\n"
+                f"或强制: python index.py watch --force / python start_watch.py --force"
+            )
+
+    clear_lock(only_if_stale=False)
+    if blocked:
+        reclaim_ports(list(blocked.keys()), host=host, force=True)
+        blocked = describe_listeners(host, ports)
+        if blocked:
+            parts = [f":{p}→pid{'/'.join(str(x) for x in ps)}" for p, ps in blocked.items()]
+            raise SystemExit(
+                "端口仍被占用: " + ", ".join(parts) + "\n"
+                "请运行: python start_watch.py --stop"
+            )
+
+    payload: dict[str, Any] = {
+        "pid": os.getpid(),
+        "host": host,
+        "port": int(port),
+    }
+    if ui_dev_port:
+        payload["uiDevPort"] = int(ui_dev_port)
+    WATCH_PID_FILE.write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def _release_watch_lock() -> None:
+    try:
+        if not WATCH_PID_FILE.exists():
+            return
+        raw = WATCH_PID_FILE.read_text(encoding="utf-8").strip()
+        if raw.startswith("{"):
+            cur = int(json.loads(raw).get("pid") or 0)
+        else:
+            cur = int(raw)
+        if cur == os.getpid():
+            WATCH_PID_FILE.unlink(missing_ok=True)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        pass
+
+
+def _watch_page_url(host: str, port: int) -> str:
+    return f"http://{host}:{int(port)}/"
+
+
+def _tcp_port_open(host: str, port: int, *, timeout: float = 0.4) -> bool:
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _watch_ui_dist_ready() -> bool:
+    return (WATCH_UI_DIST / "index.html").is_file()
+
+
+def _resolve_watch_ui_mode(args: argparse.Namespace) -> tuple[bool, int]:
+    """是否走 Nuxt dev（:3000）及端口。无 dist 时默认 dev，无需 build。"""
+    dev_port = int(getattr(args, "ui_dev_port", None) or WATCH_UI_DEV_PORT)
+    force_dev = bool(getattr(args, "ui_dev", False))
+    force_static = bool(getattr(args, "ui_static", False))
+    no_ui_dev = bool(getattr(args, "no_ui_dev", False))
+    env_dev = os.environ.get("WATCH_UI_DEV", "").strip().lower() in ("1", "true", "yes")
+    if no_ui_dev or force_static:
+        return False, dev_port
+    if force_dev or env_dev or not _watch_ui_dist_ready():
+        return True, dev_port
+    return False, dev_port
+
+
+def _start_watch_ui_dev(
+    *,
+    port: int,
+    api_port: int,
+    on_log: Callable[[str], None] | None = None,
+) -> subprocess.Popen[str] | None:
+    """启动 watch-ui 的 npm run dev（Nuxt 代理 /api、/ws → api_port）。"""
+    if not (WATCH_UI_DIR / "package.json").is_file():
+        if on_log:
+            on_log("未找到 watch-ui/package.json，跳过前端 dev")
+        return None
+    if _tcp_port_open("127.0.0.1", port):
+        if on_log:
+            on_log(f"前端 dev 已在 http://127.0.0.1:{port}/ 运行（API :{api_port}）")
+        return None
+    if not (WATCH_UI_DIR / "node_modules").is_dir():
+        if on_log:
+            on_log("请先: cd holdingStocks/watch-ui && npm install")
+        return None
+    npm = shutil.which("npm") or shutil.which("npm.cmd") or shutil.which("npm.exe")
+    if not npm:
+        if on_log:
+            on_log("未找到 npm，请另开终端: cd holdingStocks/watch-ui && npm run dev")
+        return None
+    if on_log:
+        on_log(
+            f"启动 Nuxt dev → http://127.0.0.1:{port}/ "
+            f"（代理 /api、/ws → :{api_port}）"
+        )
+    env = os.environ.copy()
+    env["WATCH_API_PORT"] = str(int(api_port))
+    env["NUXT_PORT"] = str(int(port))
+    popen_kw: dict[str, Any] = {
+        "cwd": str(WATCH_UI_DIR),
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+        "env": env,
+    }
+    if sys.platform == "win32":
+        popen_kw["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_kw["start_new_session"] = True
+    try:
+        proc = subprocess.Popen([npm, "run", "dev"], **popen_kw)
+    except OSError as e:
+        if on_log:
+            on_log(f"启动 watch-ui 失败（Python API 继续）: {e}")
+        return None
+
+    def _pipe() -> None:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            if on_log and line.strip():
+                on_log(f"[watch-ui] {line.rstrip()}")
+
+    threading.Thread(target=_pipe, daemon=True).start()
+    for _ in range(60):
+        if proc.poll() is not None:
+            if on_log:
+                on_log("watch-ui dev 进程已退出，请手动 cd watch-ui && npm run dev")
+            return None
+        if _tcp_port_open("127.0.0.1", port):
+            return proc
+        time.sleep(0.5)
+    if on_log:
+        on_log(f"等待 http://127.0.0.1:{port}/ 超时，请检查 watch-ui 终端输出")
+    _stop_watch_ui_dev(proc)
+    return None
+
+
+def _stop_watch_ui_dev(proc: subprocess.Popen[str] | None) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        if sys.platform == "win32":
+            proc.terminate()
+        else:
+            os.killpg(os.getpgid(proc.pid), 15)
+        proc.wait(timeout=5)
+    except (OSError, ProcessLookupError, subprocess.TimeoutExpired, AttributeError):
+        try:
+            proc.kill()
+        except (OSError, ProcessLookupError):
+            pass
+
+
+def _watch_browser_url(*, host: str, api_port: int, ui_dev_port: int | None) -> str:
+    page_host = host if host != "0.0.0.0" else "127.0.0.1"
+    if ui_dev_port:
+        return _watch_page_url(page_host, ui_dev_port)
+    return _watch_page_url(page_host, api_port)
+
+
+def _report_url_if_watching() -> str | None:
+    lock = _read_watch_lock()
+    if not lock:
+        return None
+    host = str(lock.get("host") or "127.0.0.1")
+    port = lock.get("port")
+    if port is None:
+        return None
+    ui_dev = lock.get("uiDevPort")
+    return _watch_browser_url(
+        host=host,
+        api_port=int(port),
+        ui_dev_port=int(ui_dev) if ui_dev else None,
+    )
+
+
+def cmd_review(args: argparse.Namespace) -> None:
+    """拉取行情，生成文字复盘，默认推送微信机器人。"""
+    from market_review import (
+        build_review,
+        format_review_text,
+        save_review,
+        send_review_wechat,
+    )
+
+    rows = collect_rows()
+    indices = fetch_indices()
+    holdings_meta = load_holdings()
+    account_total = _account_total(rows, holdings_meta)
+    available = _available_cash(rows, holdings_meta)
+    session_for_open = next(
+        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
+        str(pd.Timestamp.now().date()),
+    )
+    _ensure_account_open_session(
+        holdings_meta,
+        session=session_for_open,
+        account_total=account_total,
+    )
+    holdings_meta = load_holdings()
+    account_open = _account_total_open(holdings_meta)
+
+    review = build_review(
+        rows,
+        indices,
+        account_total=account_total,
+        account_open=account_open,
+        available_cash=available,
+        strategy=f"{STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL}",
+    )
+    text = format_review_text(review)
+    text_path, json_path = save_review(review, text)
+    print(text)
+    print("-" * 48)
+    print(f"已保存: {text_path.name} / {json_path.name}")
+
+    if getattr(args, "no_wechat", False):
+        print("已跳过微信推送（--no-wechat）")
+        return
+
+    ok, detail = send_review_wechat(review, text=text)
+    if ok:
+        print(f"[{_now()}] 微信复盘已推送")
+    else:
+        print(f"[{_now()}] 微信复盘推送失败: {detail[:300]}")
+        raise SystemExit(1)
+
+
+def cmd_wechat_test(_: argparse.Namespace) -> None:
+    from wechat_notify import send_test_alert
+
+    ok, detail = send_test_alert()
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+
+    def _out(s: str) -> None:
+        print(s.encode(enc, "replace").decode(enc, "replace"))
+
+    if ok:
+        _out(f"[{_now()}] 微信自检成功")
+        if detail and detail != "ok":
+            _out(detail[:300])
+    else:
+        _out(f"[{_now()}] 微信自检失败: {(detail or '')[:400]}")
+        raise SystemExit(1)
+
+
+def cmd_review_schedule(args: argparse.Namespace) -> None:
+    """安装/卸载/查看：周一、周五 15:00 复盘微信推送（Windows 计划任务）。"""
+    action = str(getattr(args, "action", "status") or "status")
+    script = ROOT / "install_review_schedule.ps1"
+    if not script.is_file():
+        raise SystemExit(f"缺少 {script.name}")
+    ps = Path(os.environ.get("SystemRoot", r"C:\Windows")) / (
+        r"System32\WindowsPowerShell\v1.0\powershell.exe"
+    )
+    cmd = [
+        str(ps),
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script),
+        action,
+    ]
+    proc = subprocess.run(cmd, check=False)
+    raise SystemExit(proc.returncode)
+
+
+def cmd_watch_stop(_: argparse.Namespace) -> None:
+    from watch_process import format_stop_report, stop_watch
+
+    report = stop_watch(
+        api_port=8765,
+        ui_port=WATCH_UI_DEV_PORT,
+        force=True,
+    )
+    print(format_stop_report(report))
+    if report.get("remaining"):
+        raise SystemExit(1)
+
+
+def cmd_holdings_push(args: argparse.Namespace) -> None:
+    from holdings_sync import push_holdings
+
+    push_holdings(force=bool(getattr(args, "force", False)))
+
+
+def cmd_holdings_pull(args: argparse.Namespace) -> None:
+    from holdings_sync import pull_holdings
+
+    global _HOLDINGS_CACHE
+    result = pull_holdings(force=bool(getattr(args, "force", False)))
+    _HOLDINGS_CACHE.clear()
+    if result == "missing-remote":
+        raise SystemExit(2)
+
+
+def cmd_watch(args: argparse.Namespace) -> None:
+    """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。
+
+    默认与微信套件一体：先启动 OpenClaw Gateway → 微信自检 → 再盯盘。
+    """
+    import atexit
+
+    atexit.register(_release_watch_lock)
+    if not bool(getattr(args, "no_ledger_pull", False)):
+        try:
+            from holdings_sync import pull_holdings
+
+            result = pull_holdings(quiet=False)
+            if result == "pulled":
+                _HOLDINGS_CACHE.clear()
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 远程持仓拉取失败（继续用本机账本）: {e}")
+    global _ws_hub, _watch_feed
+    interval = max(2, int(args.interval))
+    host = str(args.host)
+    port = int(args.port)
+    use_ui_dev, ui_dev_port = _resolve_watch_ui_mode(args)
+    ui_dev_proc: subprocess.Popen[str] | None = None
+    wechat = not bool(getattr(args, "no_wechat", False))
+    skip_wechat_check = bool(getattr(args, "skip_wechat_check", False))
+    wechat_optional = bool(getattr(args, "wechat_optional", False))
+
+    if wechat and not skip_wechat_check:
+        print("=" * 48)
+        print("盯盘启动套件：OpenClaw → 微信自检 → 盯盘")
+        print("=" * 48)
+        try:
+            from wechat_notify import prepare_wechat_for_watch
+
+            ok, detail = prepare_wechat_for_watch(
+                restart_gateway=bool(getattr(args, "restart_gateway", False)),
+            )
+        except Exception as e:  # noqa: BLE001
+            ok, detail = False, str(e)
+        if not ok:
+            print(f"[{_now()}] 微信套件失败:\n{detail[:600]}")
+            if wechat_optional:
+                print(f"[{_now()}] --wechat-optional：继续盯盘，但关闭微信推送")
+                wechat = False
+            else:
+                print(
+                    "中止盯盘。修好通道后重试；或临时："
+                    "watch --wechat-optional / --skip-wechat-check / --no-wechat"
+                )
+                raise SystemExit(1)
+
+    _acquire_watch_lock(
+        host=host,
+        port=port,
+        ui_dev_port=ui_dev_port if use_ui_dev else None,
+        force=bool(getattr(args, "force", False)),
+    )
+    stop = threading.Event()
+    refresh_lock = threading.Lock()
+    ws_hub = LocalWsHub()
+    _ws_hub = ws_hub
+
+    sinas = [str(w["sina"]).lower() for w in effective_watchlist()]
+    feed = QuoteFeedManager(
+        sinas,
+        on_log=lambda m: print(f"[{_now()}] {m}"),
+    )
+    _watch_feed = feed
+
+    def get_quote(sina: str) -> dict[str, Any]:
+        q = feed.get_quote(sina)
+        if q is not None:
+            return q
+        # 盘前先垫昨收，避免新浪单只 8s×N 卡住首屏
+        if market_phase() == "pre_auction":
+            q = _quote_from_daily_prev(_watch_daily(sina))
+            if q is not None:
+                feed.seed(sina, q)
+                return q
+        q = fetch_today_quote_live(sina)
+        feed.seed(sina, q)
+        return q
+
+    def reseed_live() -> int:
+        return _reseed_live_batch(feed)
+
+    def safe_refresh() -> tuple[Path, bool]:
+        with refresh_lock:
+            return _refresh_once(interval, get_quote=get_quote, wechat=wechat)
+
+    def safe_open_refresh() -> tuple[Path, bool]:
+        with refresh_lock:
+            reseed_live()
+            return _refresh_open_prices(interval, get_quote=get_quote)
+
+    def clock_heartbeat_loop() -> None:
+        while not stop.is_set():
+            if stop.wait(2.0):
+                break
+            try:
+                _heartbeat_watch_clock()
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 时钟心跳失败: {e}")
+
+    def sectors_live_loop() -> None:
+        while not stop.is_set() and not _WATCH_FRONT_READY.is_set():
+            if stop.wait(0.25):
+                return
+        if stop.is_set():
+            return
+        print(f"[{_now()}] 板块轮动：盯盘已就绪，开始后台加载")
+        while not stop.is_set():
+            try:
+                publish_sectors_live_patch()
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 板块实时刷新失败: {e}")
+            if stop.wait(5.0):
+                break
+
+    def loop() -> None:
+        last = 0.0
+        while not stop.is_set():
+            feed.wait_update(timeout=float(interval))
+            if stop.is_set():
+                break
+            wait_more = _MIN_WATCH_REFRESH_SEC - (time.monotonic() - last)
+            if wait_more > 0 and stop.wait(wait_more):
+                break
+            last = time.monotonic()
+            try:
+                _, published = safe_refresh()
+                if published:
+                    _log_watch_snapshot_push(
+                        f"[{_now()}] 快照已推送 → {WATCH_META_FILE.name}",
+                    )
+            except Exception as e:
+                print(f"[{_now()}] 更新失败: {e}")
+
+    def auction_milestone_loop() -> None:
+        """每日 9:15 / 9:20 / 9:25 / 9:30 定时动作。"""
+        while not stop.is_set():
+            nxt, label, action = _next_auction_milestone()
+            wait = (nxt - datetime.now()).total_seconds()
+            print(
+                f"[{_now()}] 下次早盘节点 [{label}] "
+                f"@ {nxt.strftime('%Y-%m-%d %H:%M:%S')}（约 {wait:.0f}s）"
+            )
+            if stop.wait(max(1.0, wait)):
+                break
+            try:
+                if action == "reseed":
+                    reset_watch_status_at_auction()
+                    try:
+                        _daily_cache_warm(force=True)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[{_now()}] 9:15 日线重拉失败（继续）: {e}")
+                    reseed_live()
+                    safe_refresh()
+                elif action == "open":
+                    safe_open_refresh()
+                else:
+                    safe_refresh()
+                print(f"[{_now()}] 早盘节点 · {label}")
+            except Exception as e:
+                print(f"[{_now()}] 早盘节点失败 [{label}]: {e}")
+
+    worker = threading.Thread(target=loop, name="holdings-watch", daemon=True)
+    milestone_worker = threading.Thread(
+        target=auction_milestone_loop, name="holdings-auction-milestones", daemon=True
+    )
+    heartbeat_worker = threading.Thread(
+        target=clock_heartbeat_loop, name="holdings-clock-heartbeat", daemon=True
+    )
+    sectors_worker = threading.Thread(
+        target=sectors_live_loop, name="holdings-sectors-live", daemon=True
+    )
+
+    class _Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *a: Any, **kw: Any) -> None:
+            super().__init__(*a, directory=str(ROOT), **kw)
+
+        def log_message(self, fmt: str, *log_args: Any) -> None:
+            path = getattr(self, "path", "") or ""
+            if WATCH_META_FILE.name in path or path.startswith("/api/"):
+                return
+            if path.split("?", 1)[0] == "/ws":
+                return
+            super().log_message(fmt, *log_args)
+
+        def _send_cors_if_dev(self) -> None:
+            origin = self.headers.get("Origin", "")
+            if origin in ("http://127.0.0.1:3000", "http://localhost:3000"):
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
+
+        def do_OPTIONS(self) -> None:
+            path = self.path.split("?", 1)[0]
+            if path.startswith("/api/") or path == f"/{WATCH_META_FILE.name}":
+                self.send_response(204)
+                self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self._send_cors_if_dev()
+                self.end_headers()
+                return
+            self.send_error(404)
+
+        def end_headers(self) -> None:
+            path = self.path.split("?", 1)[0]
+            if path.startswith("/api/") or path == f"/{WATCH_META_FILE.name}":
+                self._send_cors_if_dev()
+            if path in (
+                f"/{WATCH_META_FILE.name}",
+                "/api/snapshot",
+            ):
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+            super().end_headers()
+
+        def _send_json(self, data: Any, *, status: int = 200) -> None:
+            body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        @staticmethod
+        def _content_type(path: Path) -> str:
+            ext = path.suffix.lower()
+            return {
+                ".html": "text/html; charset=utf-8",
+                ".js": "application/javascript; charset=utf-8",
+                ".css": "text/css; charset=utf-8",
+                ".svg": "image/svg+xml",
+                ".json": "application/json; charset=utf-8",
+                ".ico": "image/x-icon",
+                ".png": "image/png",
+                ".woff2": "font/woff2",
+            }.get(ext, "application/octet-stream")
+
+        def _serve_path(self, file_path: Path) -> None:
+            if not file_path.is_file():
+                self.send_error(404, "Not Found")
+                return
+            data = file_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", self._content_type(file_path))
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _resolve_ui_file(self, path: str) -> Path | None:
+            if not _watch_ui_dist_ready():
+                return None
+            rel = path.split("?", 1)[0].lstrip("/") or "index.html"
+            candidate = (WATCH_UI_DIST / rel).resolve()
+            try:
+                candidate.relative_to(WATCH_UI_DIST.resolve())
+            except ValueError:
+                return None
+            return candidate if candidate.is_file() else None
+
+        def do_GET(self) -> None:  # noqa: N802
+            path = self.path.split("?", 1)[0]
+            if path == "/ws":
+                self._handle_ws_upgrade()
+                return
+            if path.startswith("/api/sectors/"):
+                status, data = _handle_sectors_api(self.path)
+                self._send_json(data, status=status)
+                return
+            if path == "/api/strategies":
+                self._send_json(_get_strategies_api_cache())
+                return
+            if path == "/api/factors":
+                self._send_json(_get_factors_api_cache())
+                return
+            if path in ("/api/snapshot", f"/{WATCH_META_FILE.name}"):
+                with _WATCH_SNAP_LOCK:
+                    snap = _last_watch_snapshot
+                if snap is None and WATCH_META_FILE.is_file():
+                    try:
+                        snap = json.loads(
+                            WATCH_META_FILE.read_text(encoding="utf-8")
+                        )
+                    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                        snap = None
+                if snap is None:
+                    self._send_json({"error": "snapshot unavailable"}, status=503)
+                    return
+                self._send_json(snap)
+                return
+            ui_file = self._resolve_ui_file(path)
+            if ui_file is not None:
+                self._serve_path(ui_file)
+                return
+            if _watch_ui_dist_ready() and path != f"/{WATCH_META_FILE.name}":
+                self._serve_path(WATCH_UI_DIST / "index.html")
+                return
+            self.send_error(404, "Not Found")
+
+        def _handle_ws_upgrade(self) -> None:
+            key = self.headers.get("Sec-WebSocket-Key")
+            if not key:
+                self.send_error(400, "Missing Sec-WebSocket-Key")
+                return
+            if (self.headers.get("Upgrade") or "").lower() != "websocket":
+                self.send_error(400, "Expected Upgrade: websocket")
+                return
+            accept = ws_accept_key(key)
+            self.send_response(101, "Switching Protocols")
+            self.send_header("Upgrade", "websocket")
+            self.send_header("Connection", "Upgrade")
+            self.send_header("Sec-WebSocket-Accept", accept)
+            self.end_headers()
+            try:
+                self.wfile.flush()
+            except Exception:  # noqa: BLE001
+                pass
+            snap = None
+            with _WATCH_SNAP_LOCK:
+                if _last_watch_snapshot is not None:
+                    snap = _last_watch_snapshot
+            if snap is not None:
+                try:
+                    self.connection.sendall(
+                        ws_pack_text(json.dumps(snap, ensure_ascii=False))
+                    )
+                except OSError:
+                    pass
+            self.close_connection = True
+            ws_hub.serve_client(self.connection)
+
+    _seed_boot_watch_snapshot()
+    try:
+        server = ThreadingHTTPServer((host, port), _Handler)
+    except OSError as e:
+        feed.stop()
+        _ws_hub = None
+        _watch_feed = None
+        _release_watch_lock()
+        raise SystemExit(
+            f"端口 {host}:{port} 无法绑定（可能已有盯盘在跑）。\n"
+            f"请先停掉旧进程再启动，避免抢写报告。\n{e}"
+        ) from e
+    http_thread = threading.Thread(
+        target=server.serve_forever, name="watch-http", daemon=True
+    )
+    http_thread.start()
+    heartbeat_worker.start()
+    sectors_worker.start()
+    url = _watch_browser_url(
+        host=host,
+        api_port=port,
+        ui_dev_port=ui_dev_port if use_ui_dev else None,
+    )
+    print(f"盯盘 API 已启动: http://{host}:{port}/")
+    print("冷启动放到后台：新浪批量 + 预热日线 + 东财 SSE（页面可先连上）")
+
+    def _watch_cold_boot() -> None:
+        try:
+            from stock_names import warm_name_cache
+
+            n_names = warm_name_cache()
+            print(f"[{_now()}] 股票名称缓存已预热（{n_names} 条）")
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 名称缓存预热失败（继续）: {e}")
+        # 先起刷新线程 + 行情源：日线预热常因缺 panda_data/网络挂住，
+        # 若堵在 feed.start() 之前，worker 一直 wait_update，快照永不更新。
+        if not worker.is_alive():
+            worker.start()
+        if not milestone_worker.is_alive():
+            milestone_worker.start()
+        print("冷启动：新浪批量实时 + 行情源 → 首屏快照；日线强制预热…")
+        feed_started = False
+
+        try:
+            ensure_watch_status_reset_today()
+            # 启动必刷：按信号交易日重拉日线，过门/前日不沿用旧 parquet 截断
+            _ensure_signal_day_caches(force=True)
+            print(
+                f"[{_now()}] 冷启动强制刷新日线"
+                f"（session={trading_session_date()} · "
+                f"已收盘日线截至 {latest_completed_weekday()}）…"
+            )
+            t0 = time.perf_counter()
+            n_fast = reseed_live()
+            feed.start()
+            feed_started = True
+            try:
+                _daily_cache_warm(force=True)
+                print(f"[{_now()}] 日线缓存预热完成")
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 日线预热失败（继续按票补拉）: {e}")
+            report, _ = safe_refresh()
+            elapsed = time.perf_counter() - t0
+            _log_watch_snapshot_push(
+                f"快照已推送: {report}（实时 {n_fast} 只 · {elapsed:.1f}s）",
+                force=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 首次更新失败（API 已就绪，继续后台刷新）: {e}")
+            if not feed_started:
+                try:
+                    feed.start()
+                    feed_started = True
+                except Exception as e2:  # noqa: BLE001
+                    print(f"[{_now()}] 行情源启动失败: {e2}")
+        if stop.is_set():
+            return
+        if not worker.is_alive():
+            worker.start()
+        if not milestone_worker.is_alive():
+            milestone_worker.start()
+
+    threading.Thread(
+        target=_watch_cold_boot, name="watch-cold-boot", daemon=True
+    ).start()
+    if use_ui_dev:
+        ui_dev_proc = _start_watch_ui_dev(
+            port=ui_dev_port,
+            api_port=port,
+            on_log=lambda m: print(f"[{_now()}] {m}"),
+        )
+        print(
+            f"前端 dev: http://127.0.0.1:{ui_dev_port}/ "
+            f"（Nuxt 代理 /api、/ws → :{port}）"
+        )
+    elif _watch_ui_dist_ready():
+        print(f"前端静态: http://{host}:{port}/ （watch-ui/dist）")
+    elif bool(getattr(args, "no_ui_dev", False)):
+        print("前端: 由 start_watch / 外部 Nuxt 提供 http://127.0.0.1:3000/")
+    else:
+        print(
+            "提示: 无 watch-ui/dist；开发请 python index.py watch --ui-dev "
+            "或另开终端 cd watch-ui && npm run dev"
+        )
+    print(f"本地 WebSocket: ws://{host}:{port}/ws")
+    print(
+        f"策略同步: {STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL}"
+    )
+    print(
+        "行情: 东财 SSE + 新浪批量；因子26 实仓 1m path-dependent 止损 · "
+        f"刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · "
+        "时钟心跳 2s · 板块在盯盘首屏之后后台加载 · "
+        f"快照日志每 {_WATCH_SNAPSHOT_LOG_EVERY} 次 · Ctrl+C 停止"
+    )
+    print(
+        f"开盘价定时: 每日 9:25 锁定开盘并算阈值；里程碑 "
+        f"{', '.join(f'{h:02d}:{m:02d}' for h, m, _, _ in AUCTION_MILESTONES)}"
+    )
+    print(
+        "信号窗口: 9:15 拉竞价 · 9:25 算阈值/过门 · 9:30 起触发买卖/止损/微信；"
+        "9:15–9:30 不结算止损"
+    )
+    print(f"当前阶段: {market_phase_label()}")
+    pct_note = " / ".join(
+        f"{w['code']}±{float(w['pct'])*100:.1f}%"
+        for w in WATCHLIST
+        if abs(float(w["pct"]) - float(DEFAULT_PCT)) > 1e-12
+        or w["code"] in ("600552", "600330")
+    )
+    print(f"个股阈值: 默认±{DEFAULT_PCT*100:.1f}% · 焦点 {pct_note}")
+    print(
+        f"微信预警: {'开' if wechat else '关（--no-wechat）'} · "
+        "复盘可另跑: python index.py review"
+    )
+    print("展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）")
+    if wechat:
+        try:
+            from wechat_notify import send_startup_message
+
+            ok, detail = send_startup_message(url=url)
+            if ok:
+                print(f"[{_now()}] 微信启动通知已推送")
+            else:
+                print(f"[{_now()}] 微信启动通知失败: {detail[:200]}")
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 微信启动通知异常: {e}")
+    if not args.no_open:
+        webbrowser.open(url)
+    try:
+        while not stop.wait(1.0):
+            pass
+    except KeyboardInterrupt:
+        print("\n已停止盯盘")
+    finally:
+        stop.set()
+        feed.stop()
+        _ws_hub = None
+        _watch_feed = None
+        _stop_watch_ui_dev(ui_dev_proc)
+        try:
+            server.shutdown()
+        except Exception:  # noqa: BLE001
+            pass
+        _release_watch_lock()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="持仓记录与盯盘")
+    sub = p.add_subparsers(dest="cmd")
+
+    s = sub.add_parser("status", help="终端查看行情+持仓（默认）")
+    s.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
+    s.set_defaults(func=cmd_status)
+
+    rev = sub.add_parser(
+        "review",
+        help="行情复盘：大盘/账户/持仓/策略事件，默认推送微信",
+    )
+    rev.add_argument(
+        "--no-wechat",
+        action="store_true",
+        help="只生成本地复盘，不推送微信",
+    )
+    rev.set_defaults(func=cmd_review)
+
+    wt = sub.add_parser("wechat-test", help="微信通道自检（不走大模型）")
+    wt.set_defaults(func=cmd_wechat_test)
+
+    rs = sub.add_parser(
+        "review-schedule",
+        help="周一/周五 15:00 复盘推送：install / uninstall / status",
+    )
+    rs.add_argument(
+        "action",
+        nargs="?",
+        default="status",
+        choices=("install", "uninstall", "status"),
+        help="默认 status",
+    )
+    rs.set_defaults(func=cmd_review_schedule)
+
+    w = sub.add_parser(
+        "watch",
+        help="长驻盯盘：东财SSE/新浪兜底行情 + 本地WS推页",
+    )
+    w.add_argument(
+        "--interval",
+        type=int,
+        default=5,
+        help="无行情时的保底刷新秒数，默认5",
+    )
+    w.add_argument("--host", default="127.0.0.1", help="监听地址")
+    w.add_argument("--port", type=int, default=8765, help="端口，默认8765")
+    w.add_argument("--no-open", action="store_true", help="不自动打开浏览器")
+    w.add_argument(
+        "--no-ui-dev",
+        action="store_true",
+        help="不在 watch 进程内启动 Nuxt（start_watch.py 会自己开前端）",
+    )
+    w.add_argument(
+        "--ui-dev",
+        action="store_true",
+        help="Nuxt 开发服（默认 :3000，代理 API/WS）；无 dist 时自动启用",
+    )
+    w.add_argument(
+        "--ui-static",
+        action="store_true",
+        help="强制使用 watch-ui/dist 静态页（须先 npm run build）",
+    )
+    w.add_argument(
+        "--ui-dev-port",
+        type=int,
+        default=WATCH_UI_DEV_PORT,
+        help=f"Nuxt dev 端口，默认 {WATCH_UI_DEV_PORT}",
+    )
+    w.add_argument(
+        "--no-wechat",
+        action="store_true",
+        help="关闭微信（不启 OpenClaw、不自检、不推送）",
+    )
+    w.add_argument(
+        "--skip-wechat-check",
+        action="store_true",
+        help="跳过启动时的 OpenClaw/微信自检（仍推送预警）",
+    )
+    w.add_argument(
+        "--wechat-optional",
+        action="store_true",
+        help="微信套件失败时仍启动盯盘（自动关推送）",
+    )
+    w.add_argument(
+        "--restart-gateway",
+        action="store_true",
+        help="启动套件里强制 restart OpenClaw Gateway",
+    )
+    w.add_argument(
+        "--force",
+        action="store_true",
+        help="强制停止旧实例并回收端口后启动（Windows Ctrl+C 遗留进程时有用）",
+    )
+    w.add_argument(
+        "--no-ledger-pull",
+        action="store_true",
+        help="启动时不拉取 origin/holdings-ledger（离线或本机为准）",
+    )
+    w.set_defaults(func=cmd_watch)
+
+    ws = sub.add_parser(
+        "watch-stop",
+        help="停止盯盘并释放 8765/3000 端口",
+    )
+    ws.set_defaults(func=cmd_watch_stop)
+
+    b = sub.add_parser("buy", help="记录买入")
+    b.add_argument("code")
+    b.add_argument("price", type=float)
+    b.add_argument("qty", type=int)
+    b.add_argument("--note", default="")
+    b.set_defaults(func=cmd_buy)
+
+    e = sub.add_parser("sell", help="记录卖出")
+    e.add_argument("code")
+    e.add_argument("price", type=float)
+    e.add_argument("qty", type=int)
+    e.add_argument("--note", default="")
+    e.set_defaults(func=cmd_sell)
+
+    c = sub.add_parser("clear", help="清空某标的持仓")
+    c.add_argument("code")
+    c.set_defaults(func=cmd_clear)
+
+    ca = sub.add_parser(
+        "clear-all",
+        help="清仓并重置全部状态（含当日成交归档），便于重新执行策略三槽",
+    )
+    ca.set_defaults(func=cmd_clear_all)
+
+    sc = sub.add_parser("set-cost", help="登记/修改成本价")
+    sc.add_argument("code")
+    sc.add_argument("cost", type=float)
+    sc.add_argument("--qty", type=int, default=None, help="可选：同时登记数量")
+    sc.add_argument("--available", type=int, default=None, help="可选：可卖数量（T+1）")
+    sc.add_argument(
+        "--today-cost",
+        type=float,
+        default=None,
+        help="可选：今日买入成交价（当日盈亏用，非持仓均价）",
+    )
+    sc.add_argument("--note", default="")
+    sc.set_defaults(func=cmd_set_cost)
+
+    sa = sub.add_parser("set-account", help="登记账户总资产")
+    sa.add_argument("total", type=float, help="账户总资产（元）")
+    sa.set_defaults(func=cmd_set_account)
+
+    scash = sub.add_parser("set-cash", help="登记可用现金")
+    scash.add_argument("cash", type=float, help="可用现金（元）")
+    scash.set_defaults(func=cmd_set_cash)
+
+    h = sub.add_parser("history", help="查看成交流水")
+    h.set_defaults(func=cmd_history)
+
+    hp = sub.add_parser(
+        "holdings-push",
+        help="把本机 holdings.json/trades.jsonl 推到 origin/holdings-ledger（Win↔Mac）",
+    )
+    hp.add_argument(
+        "--force",
+        action="store_true",
+        help="即使远程更新也覆盖推送",
+    )
+    hp.set_defaults(func=cmd_holdings_push)
+
+    hl = sub.add_parser(
+        "holdings-pull",
+        help="拉取远程账本并丢掉本机 holdings_watch.json 旧缓存",
+    )
+    hl.add_argument(
+        "--force",
+        action="store_true",
+        help="即使本机更新也覆盖为远程",
+    )
+    hl.set_defaults(func=cmd_holdings_pull)
+    return p
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+    if not getattr(args, "cmd", None):
+        # 默认走 status，并打开 HTML
+        args.no_open = False
+        cmd_status(args)
+        return
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
