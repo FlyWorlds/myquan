@@ -188,7 +188,24 @@ def filter_portfolio_holdings(
             return 3
         return 4
 
-    def _sort_key(r: dict[str, Any]) -> tuple[int, int, float, str]:
+    def _alert_trigger_sort_ts(r: dict[str, Any]) -> str:
+        """预警栏：按触发时刻升序（早→晚）；无时刻排最后。"""
+        sess = str(r.get("交易日") or "")[:10]
+        for k in ("信号时刻", "买信号时间", "卖信号时间", "信号时间"):
+            v = r.get(k)
+            if v is None or v == "":
+                continue
+            s = str(v).strip()
+            if not s:
+                continue
+            if " " not in s and sess and len(s) >= 8 and s[2:3] == ":":
+                return f"{sess} {s[:8]}"
+            if len(s) >= 19 and s[4:5] == "-" and " " in s:
+                return s[:19]
+            return s
+        return "9999-99-99 99:99:99"
+
+    def _sort_key(r: dict[str, Any]) -> tuple:
         qty = int(r.get("持仓") or 0)
         pos = str(r.get("持仓状态") or "")
         if qty > 0 or bool(r.get("槽位占用")):
@@ -203,6 +220,8 @@ def filter_portfolio_holdings(
             dist = float(r.get("距买点%") if r.get("距买点%") is not None else 9_999.0)
         except (TypeError, ValueError):
             dist = 9_999.0
+        if tier == 2:
+            return (tier, _pos_rank(pos), _alert_trigger_sort_ts(r), str(r.get("代码") or ""))
         return (tier, _pos_rank(pos), dist, str(r.get("代码") or ""))
 
     ordered = sorted(picked, key=_sort_key)

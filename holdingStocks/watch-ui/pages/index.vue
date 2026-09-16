@@ -76,15 +76,29 @@ const paperHoldings = computed(() => {
   )
 })
 
+function alertTriggerSortKey(r: { 交易日?: string; 信号时刻?: string | null; 信号时间?: string | null; 买信号时间?: string | null; 卖信号时间?: string | null }) {
+  const sess = String(r.交易日 || '').slice(0, 10)
+  for (const k of ['信号时刻', '买信号时间', '卖信号时间', '信号时间'] as const) {
+    const v = r[k]
+    if (v == null || v === '') continue
+    const s = String(v).trim()
+    if (!s) continue
+    if (!s.includes(' ') && sess && s.length >= 8 && s[2] === ':') return `${sess} ${s.slice(0, 8)}`
+    return s
+  }
+  return '9999-99-99 99:99:99'
+}
+
 const otherHoldings = computed(() => {
   const taken = new Set(
     [...slotHoldings.value, ...closedHoldings.value, ...paperHoldings.value].map((r) =>
       String(r.代码 || ''),
     ),
   )
-  return (snapshot.value?.holdings || []).filter(
-    (r) => !taken.has(String(r.代码 || '')),
-  )
+  return (snapshot.value?.holdings || [])
+    .filter((r) => !taken.has(String(r.代码 || '')))
+    .slice()
+    .sort((a, b) => alertTriggerSortKey(a).localeCompare(alertTriggerSortKey(b)))
 })
 const slotMeta = computed(() => snapshot.value?.slotMeta)
 const closedCount = computed(() => closedHoldings.value.length)
@@ -194,7 +208,7 @@ const closedCount = computed(() => closedHoldings.value.length)
                 {{ slotHoldings.length || closedHoldings.length || paperHoldings.length ? '预警' : '持仓列表' }}
                 <span class="ml-1 font-normal text-ui-text-3">{{ otherHoldings.length }}</span>
               </h2>
-              <p class="text-xs text-ui-text-3">与策略十六图例同步：已触买 / 将买入 / 回放止损</p>
+              <p class="text-xs text-ui-text-3">与策略十六图例同步 · 按触发时间升序（早→晚）</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in otherHoldings" :key="'other-' + String(row.代码)" :row="row" />

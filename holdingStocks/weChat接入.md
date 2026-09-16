@@ -1,4 +1,5 @@
 # 微信接入（OpenClaw · 仅消息推送）
+`openclaw channels login --channel openclaw-weixin`
 
 盯盘预警 / 策略触发通过 **OpenClaw 微信通道**主动推送到手机，**不调用大模型**（不走 OpenAI 对话）。
 

@@ -450,6 +450,57 @@ def test_pin_top3_slots():
     assert picked[3].get("置顶") is False
 
 
+def test_alert_rows_sort_by_trigger_time():
+    """预警栏：按触发时刻升序，不再按距买点。"""
+    from watch_snapshot import filter_portfolio_holdings
+
+    rows = [
+        {
+            "代码": "000055",
+            "名称": "方大",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "已触买·槽满",
+            "当日预警": True,
+            "已触买": "是",
+            "信号时间": "09:56:00",
+            "交易日": "2026-09-16",
+            "距买点%": 0.0,
+        },
+        {
+            "代码": "600330",
+            "名称": "天通",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "已触买·槽满",
+            "当日预警": True,
+            "已触买": "是",
+            "信号时间": "09:30:00",
+            "交易日": "2026-09-16",
+            "距买点%": 5.0,
+        },
+        {
+            "代码": "000021",
+            "名称": "深科技",
+            "持仓": 0,
+            "持仓状态": "待买入",
+            "预警": "已触买·槽满",
+            "当日预警": True,
+            "已触买": "是",
+            "信号时刻": "2026-09-16 10:08:53",
+            "交易日": "2026-09-16",
+            "距买点%": 1.0,
+        },
+    ]
+    picked = filter_portfolio_holdings(
+        rows,
+        phase="continuous",
+        strategy_codes={"000055", "600330", "000021"},
+    )
+    alerts = [r for r in picked if int(r.get("持仓") or 0) <= 0]
+    assert [r["代码"] for r in alerts] == ["600330", "000055", "000021"]
+
+
 def test_demote_pre_signal_window():
     from index import _demote_pre_signal_window
 
