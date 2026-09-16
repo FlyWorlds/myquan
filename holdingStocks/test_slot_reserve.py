@@ -1,4 +1,4 @@
-"""当日止损禁再买 / 盘中隔夜均可持3 / 日最多2买 — 单测。"""
+"""四槽持仓 / 盘中隔夜均可持4 / 日最多4买 — 单测。"""
 from __future__ import annotations
 
 import unittest
@@ -18,36 +18,37 @@ from watch_config import (
 
 class TestSlotReserve(unittest.TestCase):
     def test_constants(self):
-        self.assertEqual(MAX_PORTFOLIO_SLOTS, 3)
+        self.assertEqual(MAX_PORTFOLIO_SLOTS, 4)
         self.assertEqual(RESERVE_EMPTY_SLOTS, 0)
-        self.assertEqual(MAX_OVERNIGHT_SLOTS, 3)
-        self.assertEqual(MAX_ACTIVE_SLOTS, 3)  # 兼容旧名=隔夜上限
-        self.assertEqual(MAX_BUYS_PER_DAY, 3)
+        self.assertEqual(MAX_OVERNIGHT_SLOTS, 4)
+        self.assertEqual(MAX_ACTIVE_SLOTS, 4)  # 兼容旧名=隔夜上限
+        self.assertEqual(MAX_BUYS_PER_DAY, 4)
 
     def test_free_buy_midday_allows_third(self):
-        """持 2 仍可再买 1（到 3）；尾盘与盘中同上限。"""
+        """持 2 仍可再买（到 4）；尾盘与盘中同上限。"""
         h = {
             "positions": {
                 "600330": {"qty": 100},
                 "002104": {"qty": 200},
             }
         }
-        self.assertEqual(free_slot_count(h), 1)
-        self.assertEqual(free_buy_slot_count(h, reserve_for_close=False), 1)
-        self.assertEqual(free_buy_slot_count(h, reserve_for_close=True), 1)
+        self.assertEqual(free_slot_count(h), 2)
+        self.assertEqual(free_buy_slot_count(h, reserve_for_close=False), 2)
+        self.assertEqual(free_buy_slot_count(h, reserve_for_close=True), 2)
         m = slot_meta(h, now=datetime(2026, 9, 8, 10, 0))
-        self.assertEqual(m["freeBuy"], 1)
-        self.assertEqual(m["overnightMax"], 3)
+        self.assertEqual(m["freeBuy"], 2)
+        self.assertEqual(m["overnightMax"], 4)
         m2 = slot_meta(h, now=datetime(2026, 9, 8, 14, 50))
-        self.assertEqual(m2["freeBuy"], 1)
+        self.assertEqual(m2["freeBuy"], 2)
         self.assertTrue(m2["reserveWindow"])
 
-    def test_three_holds_no_buy(self):
+    def test_four_holds_no_buy(self):
         h = {
             "positions": {
                 "600330": {"qty": 100},
                 "002104": {"qty": 200},
                 "600301": {"qty": 100},
+                "600552": {"qty": 100},
             }
         }
         self.assertEqual(free_buy_slot_count(h, reserve_for_close=False), 0)

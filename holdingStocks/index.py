@@ -5,7 +5,7 @@
   · 卖（因子26）：硬保护2.5%；中赚3–10%回落一半与0.5×20日日频σ谁先到走谁；阶梯10%/15%；未到3%次日峰值回落2.5%；1 分钟 path-dependent
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
-  · **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 3；**先平再买**；平仓前已触买且现价≤买点+1% 优先（成交价=现价），否则其后新触发按时间（成交价=买点）
+  · **仓位**：物理 4 槽（盘中/隔夜均可持 4）；当日最多买 4；每槽约 25%；**先平再买**；平仓前已触买且现价≤买点+1% 优先（成交价=现价），否则其后新触发按时间（成交价=买点）
   · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值并可挂单；9:30 起触发结算
   · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票不可再待买入
   · 默认交易宇宙：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用，见 watch_config.SELF_WATCHLIST_PICKS）
@@ -196,8 +196,10 @@ from watch_snapshot import (
     SNAPSHOT_VERSION,
     apply_feed_health,
     build_watch_snapshot,
+    rebase_snapshot_day_pnl,
     retain_last_snapshot,
     should_keep_last_snapshot,
+    snapshot_needs_day_pnl_rebase,
 )
 from watch_buy_signal import (
     ALERT_FILLED,
@@ -1319,6 +1321,11 @@ def publish_watch_snapshot(
         (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
         "",
     )
+    if not session_today:
+        try:
+            session_today = str(trading_session_date())
+        except Exception:  # noqa: BLE001
+            session_today = str(pd.Timestamp.now().date())
     try:
         maybe_record_daily_settlement(
             rows, account, session=session_today or None
@@ -1404,6 +1411,7 @@ def publish_watch_snapshot(
                 clock=clock_now,
                 phase=phase_label,
                 phase_key=phase_key,
+                session=session_today or None,
             )
             apply_feed_health(snap, _current_feed_health(), keep_stale=True)
             _last_watch_snapshot = snap
@@ -1422,6 +1430,11 @@ def publish_watch_snapshot(
                     if "strategy16" in snapshot
                     else snap.get("strategy16") or []
                 )
+                if session_today and snapshot_needs_day_pnl_rebase(
+                    snap, session=session_today
+                ):
+                    snap = rebase_snapshot_day_pnl(snap, session=session_today)
+                    _last_snapshot_digest = None
                 _stamp_snapshot_liveness(snap, clock=clock_now)
                 _last_watch_snapshot = snap
                 to_send = snap
@@ -1474,6 +1487,13 @@ def _seed_boot_watch_snapshot() -> None:
                 except Exception:  # noqa: BLE001
                     pass
                 snap.setdefault("strategy16", [])
+                try:
+                    sess = str(trading_session_date())
+                    if snapshot_needs_day_pnl_rebase(snap, session=sess):
+                        snap = rebase_snapshot_day_pnl(snap, session=sess)
+                        print(f"[{_now()}] 启动：跨日快照今日盈亏已按昨收重算 session={sess}")
+                except Exception as e:  # noqa: BLE001
+                    print(f"[{_now()}] 启动盈亏重算跳过: {e}")
                 _last_watch_snapshot = snap
                 return
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
@@ -1496,11 +1516,11 @@ def _seed_boot_watch_snapshot() -> None:
         },
         "account": {},
         "slotMeta": {
-            "max": 3,
-            "weight": 0.3,
+            "max": 4,
+            "weight": 0.25,
             "occupied": [],
             "occupiedCount": 0,
-            "free": 3,
+            "free": 4,
         },
         "indices": [],
         "holdings": [],
@@ -2703,7 +2723,9 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
     · 清日线相关缓存并在后续预热中按最新交易日重拉（过门/前日）
     · 清微信预警防抖状态（当日重新推）
     · 标记 watch_status_reset_session，持仓 Tab 在 9:30 前仅展示实仓
+    · 跨日快照：昨仓今日盈亏按昨收重算（不再沿用买入日相对成本）
     """
+    global _last_watch_snapshot, _last_snapshot_digest
     data = load_holdings()
     sess = normalize_signal_session(session)
     settle_previous_session_if_needed(session=sess)
@@ -2732,6 +2754,23 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
             STATE_FILE.unlink()
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 清微信预警状态失败（继续）: {e}")
+    # 9:15：沿用快照里的昨仓「今日盈亏」改按昨收；强制下一轮重新写盘
+    with _WATCH_SNAP_LOCK:
+        if _last_watch_snapshot and snapshot_needs_day_pnl_rebase(
+            _last_watch_snapshot, session=sess
+        ):
+            _last_watch_snapshot = rebase_snapshot_day_pnl(
+                _last_watch_snapshot, session=sess
+            )
+            _stamp_snapshot_liveness(_last_watch_snapshot)
+            _last_snapshot_digest = None
+            try:
+                _broadcast_watch_snapshot(_last_watch_snapshot)
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 9:15 盈亏重置广播失败（继续）: {e}")
+        elif _last_watch_snapshot:
+            # 交易日已对齐也清 digest，促使下一轮用新行情重算
+            _last_snapshot_digest = None
     print(f"[{_now()}] 9:15 状态重置 · 仅保留实仓 · session={sess}")
     return data
 
@@ -3628,7 +3667,7 @@ def _apply_portfolio_slots(
     account_total: float | None,
     phase_now: str,
 ) -> dict[str, Any]:
-    """三槽：盘中可持 3；当日最多买 3；尾盘窗口按隔夜上限（现同为 3）。
+    """四槽：盘中可持 4；当日最多买 4；尾盘窗口按隔夜上限（现同为 4）。
 
     · 用户实仓 qty>0 占槽；可买空槽见 free_buy_slot_count（盘中/隔夜均为 3）
     · 入槽顺序：先平再买；平仓前已触买且现价≤买点+1% 优先、按触发先后、成交价=现价；否则平仓后新触发按时间、成交价=买点
@@ -8347,12 +8386,18 @@ def _parse_hhmm(text: str) -> tuple[int, int]:
 def _next_auction_milestone(
     now: datetime | None = None,
 ) -> tuple[datetime, str, str]:
-    """下一早盘里程碑：(时刻, 标签, 动作 reseed|open|refresh)。"""
+    """下一早盘里程碑：(时刻, 标签, 动作 reseed|open|refresh)。
+
+    跳过周六日（A 股休市）；与 ``trading_session_date`` 对齐。
+    """
     now = now or datetime.now()
     candidates: list[tuple[datetime, str, str]] = []
     for h, m, label, action in AUCTION_MILESTONES:
         t = now.replace(hour=h, minute=m, second=0, microsecond=0)
         if t <= now:
+            t += timedelta(days=1)
+        # 落到下一交易日（跳过周末）
+        while t.weekday() >= 5:
             t += timedelta(days=1)
         candidates.append((t, label, action))
     return min(candidates, key=lambda x: x[0])
@@ -8936,11 +8981,16 @@ def cmd_watch(args: argparse.Namespace) -> None:
                         print(f"[{_now()}] 9:15 日线重拉失败（继续）: {e}")
                     reseed_live()
                     safe_refresh()
+                    print(
+                        f"[{_now()}] 早盘节点 · {label} · "
+                        "状态重置 + 昨仓今日盈亏按昨收重算"
+                    )
                 elif action == "open":
                     safe_open_refresh()
+                    print(f"[{_now()}] 早盘节点 · {label}")
                 else:
                     safe_refresh()
-                print(f"[{_now()}] 早盘节点 · {label}")
+                    print(f"[{_now()}] 早盘节点 · {label}")
             except Exception as e:
                 print(f"[{_now()}] 早盘节点失败 [{label}]: {e}")
 

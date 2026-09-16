@@ -163,9 +163,9 @@ const closedCount = computed(() => closedHoldings.value.length)
           <div v-if="slotHoldings.length" class="space-y-2">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <h2 class="text-sm font-semibold text-ui-text">
-                三槽持仓（置顶）
+                四槽持仓（置顶）
                 <span class="ml-1 font-normal text-ui-text-2">
-                  占槽 {{ slotMeta?.occupiedCount ?? 0 }}/{{ slotMeta?.max ?? 3 }}
+                  占槽 {{ slotMeta?.occupiedCount ?? 0 }}/{{ slotMeta?.max ?? 4 }}
                 </span>
               </h2>
               <p class="text-xs text-ui-text-3">已经买入 / 待卖出 · 仅默认策略池入槽</p>
@@ -182,7 +182,7 @@ const closedCount = computed(() => closedHoldings.value.length)
                   {{ closedCount }} · 不占槽
                 </span>
               </h2>
-              <p class="text-xs text-ui-text-3">仅当日三槽纸面卖出；下一交易日清空</p>
+              <p class="text-xs text-ui-text-3">仅当日四槽纸面卖出；下一交易日清空</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.代码)" :row="row" />
@@ -206,7 +206,7 @@ const closedCount = computed(() => closedHoldings.value.length)
                 策略持有
                 <span class="ml-1 font-normal text-ui-text-3">{{ paperHoldings.length }}</span>
               </h2>
-              <p class="text-xs text-ui-text-3">日线回放仍持有、未入三槽 · 与策略十六「策略持有」同步</p>
+              <p class="text-xs text-ui-text-3">日线回放仍持有、未入四槽 · 与策略十六「策略持有」同步</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in paperHoldings" :key="'paper-' + String(row.代码)" :row="row" />

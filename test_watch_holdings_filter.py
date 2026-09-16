@@ -374,6 +374,56 @@ class TestKeepLastSnapshot(unittest.TestCase):
         self.assertEqual(out["holdings"][0]["代码"], "000070")
         self.assertEqual(out["clock"], "2026-09-14 09:18:00")
 
+    def test_retain_rebases_overnight_day_pnl_vs_prev_close(self) -> None:
+        """跨日沿用：昨仓今日盈亏按昨收，不再挂买入日相对成本。"""
+        from watch_snapshot import rebase_snapshot_day_pnl, snapshot_needs_day_pnl_rebase
+
+        prev = {
+            "type": "snapshot",
+            "quoteAt": "2026-09-15 15:00:00",
+            "holdings": [
+                {
+                    "代码": "600403",
+                    "名称": "大有能源",
+                    "持仓": 12800,
+                    "现价": 6.45,
+                    "昨收": 6.69,
+                    "成本": 7.21,
+                    "买入时间": "2026-09-15 09:34:00",
+                    "交易日": "2026-09-15",
+                    # 买入日相对成本（错误地跨日残留）
+                    "当日盈亏": -9728.0,
+                    "当日盈亏%": -10.54,
+                    "浮盈": -9728.0,
+                    "浮盈%": -10.54,
+                }
+            ],
+            "account": {"dayPnl": -9728.0, "dayPnlPct": -10.54},
+            "slotMeta": {"occupied": ["600403"]},
+        }
+        self.assertTrue(
+            snapshot_needs_day_pnl_rebase(prev, session="2026-09-16")
+        )
+        out = retain_last_snapshot(
+            prev,
+            clock="2026-09-16 09:15:01",
+            phase="集合竞价·可撤单（9:15–9:20）",
+            phase_key="auction_cancel",
+            session="2026-09-16",
+        )
+        row = out["holdings"][0]
+        self.assertEqual(row["交易日"], "2026-09-16")
+        # (6.45 - 6.69) * 12800 = -3072
+        self.assertAlmostEqual(row["当日盈亏"], -3072.0)
+        self.assertAlmostEqual(row["当日盈亏%"], round((6.45 / 6.69 - 1) * 100, 2))
+        self.assertIn("昨收", str(row.get("盈亏说明") or ""))
+        self.assertAlmostEqual(out["account"]["dayPnl"], -3072.0)
+
+        same = rebase_snapshot_day_pnl(out, session="2026-09-16")
+        self.assertFalse(
+            snapshot_needs_day_pnl_rebase(same, session="2026-09-16")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

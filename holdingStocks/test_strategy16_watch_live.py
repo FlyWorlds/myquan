@@ -170,8 +170,8 @@ class TestStrategy16DefaultWiring(unittest.TestCase):
         self.assertEqual(FACTOR_ID, "factor26")
         self.assertEqual(FACTOR22_ID, "factor22")
         self.assertFalse(USE_FACTOR4)
-        self.assertEqual(MAX_PORTFOLIO_SLOTS, 3)
-        self.assertEqual(MAX_BUYS_PER_DAY, 3)
+        self.assertEqual(MAX_PORTFOLIO_SLOTS, 4)
+        self.assertEqual(MAX_BUYS_PER_DAY, 4)
         self.assertIn(("600330", "天通股份"), SELF_WATCHLIST_PICKS)
 
     def test_bindings_factor22_off_factor26_on(self) -> None:

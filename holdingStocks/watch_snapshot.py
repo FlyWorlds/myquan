@@ -62,8 +62,8 @@ def filter_portfolio_holdings(
 ) -> list[dict[str, Any]]:
     """持仓 Tab：实仓 + 当日已平仓留痕 + 默认策略池当日买点预警。
 
-    排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=3）→ 当日已平仓（不占槽）→ 预警/候选。
-    平仓 = 三槽实仓止损/止盈卖出清仓；当日留痕（槽位留痕=True）不占槽，下一交易日清空。
+    排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=4）→ 当日已平仓（不占槽）→ 预警/候选。
+    平仓 = 四槽实仓止损/止盈卖出清仓；当日留痕（槽位留痕=True）不占槽，下一交易日清空。
     买点预警仅默认策略池（strategy16=核心龙头）；旧 portfolio_pool 空壳不进持仓 Tab。
     竞价：仍展示实仓 + 当日已平仓；其它空仓预警不进持仓 Tab。
     连续竞价与午休：当日买点预警进持仓 Tab。
@@ -231,6 +231,127 @@ def _occupied_codes(snap: dict[str, Any] | None) -> set[str]:
     return {str(c).zfill(6) for c in occ if c}
 
 
+def _holding_session_dates(snap: dict[str, Any] | None) -> set[str]:
+    out: set[str] = set()
+    for r in (snap or {}).get("holdings") or []:
+        day = str(r.get("交易日") or "")[:10]
+        if len(day) >= 10:
+            out.add(day)
+    return out
+
+
+def _as_pos_float(v: Any) -> float | None:
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return None
+    if x != x or x <= 0:  # NaN / non-positive
+        return None
+    return x
+
+
+def rebase_holdings_day_pnl(
+    holdings: list[dict[str, Any]],
+    *,
+    session: str,
+) -> list[dict[str, Any]]:
+    """新交易日：昨仓今日盈亏按昨收重算；今买仍相对成本。
+
+    跨日沿用快照时，昨仓若仍挂着买入日「相对成本」的当日盈亏会错成「今日浮亏」。
+    """
+    sess = str(session or "")[:10]
+    if len(sess) < 10:
+        return [dict(r) for r in holdings]
+    out: list[dict[str, Any]] = []
+    for r in holdings:
+        row = dict(r)
+        qty = int(row.get("持仓") or 0)
+        row["交易日"] = sess
+        if qty <= 0:
+            out.append(row)
+            continue
+        buy = str(row.get("买入时间") or "")[:10]
+        bought_today = bool(buy and buy == sess)
+        last = _as_pos_float(row.get("现价"))
+        if last is None:
+            out.append(row)
+            continue
+        if bought_today:
+            cost = _as_pos_float(row.get("成本"))
+            if cost is None:
+                out.append(row)
+                continue
+            pnl = (last - cost) * qty
+            pct = (last / cost - 1.0) * 100.0
+            row["当日盈亏"] = round(pnl, 2)
+            row["当日盈亏%"] = round(pct, 2)
+            row["当日基数"] = round(cost * qty, 2)
+            row["盈亏说明"] = f"今买 {cost} × {qty} 股，现价相对买入价"
+        else:
+            prev = _as_pos_float(row.get("昨收"))
+            if prev is None:
+                # 无昨收时宁可清空，避免沿用买入日相对成本的旧「今日」数字
+                row["当日盈亏"] = None
+                row["当日盈亏%"] = None
+                row["当日基数"] = None
+                row["盈亏说明"] = "昨仓待昨收：9:15 后按昨收重算"
+            else:
+                pnl = (last - prev) * qty
+                pct = (last / prev - 1.0) * 100.0
+                row["当日盈亏"] = round(pnl, 2)
+                row["当日盈亏%"] = round(pct, 2)
+                row["当日基数"] = round(prev * qty, 2)
+                row["盈亏说明"] = f"昨收 {prev} × {qty} 股，现价相对昨收"
+        out.append(row)
+    return out
+
+
+def rebase_snapshot_day_pnl(snap: dict[str, Any], *, session: str) -> dict[str, Any]:
+    """对整份快照重算持仓今日盈亏，并刷新账户合计 dayPnl。"""
+    out = dict(snap)
+    holdings = rebase_holdings_day_pnl(list(out.get("holdings") or []), session=session)
+    out["holdings"] = holdings
+    day_sum = 0.0
+    day_base = 0.0
+    has_day = False
+    for r in holdings:
+        if int(r.get("持仓") or 0) <= 0:
+            continue
+        if r.get("当日盈亏") is None:
+            continue
+        has_day = True
+        day_sum += float(r["当日盈亏"])
+        db = r.get("当日基数")
+        if db is not None and float(db) > 0:
+            day_base += float(db)
+    acc = dict(out.get("account") or {})
+    if has_day:
+        acc["dayPnl"] = round(day_sum, 2)
+        acc["dayPnlPct"] = (
+            round(day_sum / day_base * 100.0, 2) if day_base > 0 else None
+        )
+    else:
+        acc["dayPnl"] = None
+        acc["dayPnlPct"] = None
+    out["account"] = acc
+    return out
+
+
+def snapshot_needs_day_pnl_rebase(
+    snap: dict[str, Any] | None,
+    *,
+    session: str,
+) -> bool:
+    """持仓行交易日与当前 session 不一致 → 需按昨收重算今日盈亏。"""
+    sess = str(session or "")[:10]
+    if len(sess) < 10 or not snap:
+        return False
+    days = _holding_session_dates(snap)
+    if not days:
+        return False
+    return days != {sess}
+
+
 def should_keep_last_snapshot(
     *,
     rows: list[dict[str, Any]],
@@ -268,8 +389,12 @@ def retain_last_snapshot(
     clock: str,
     phase: str,
     phase_key: str,
+    session: str | None = None,
 ) -> dict[str, Any]:
-    """沿用上一份表，只刷新时钟/相位，并标行情未就绪。"""
+    """沿用上一份表，只刷新时钟/相位，并标行情未就绪。
+
+    跨交易日时按昨收重算今日盈亏（避免昨仓仍显示买入日相对成本的浮亏）。
+    """
     snap = dict(prev)
     prev_quote_at = prev.get("quoteAt") or prev.get("clock")
     snap["clock"] = clock
@@ -282,6 +407,9 @@ def retain_last_snapshot(
     if prev_quote_at:
         snap["quoteAt"] = prev_quote_at
     snap.pop("boot", None)
+    sess = str(session or "")[:10]
+    if len(sess) >= 10 and snapshot_needs_day_pnl_rebase(snap, session=sess):
+        snap = rebase_snapshot_day_pnl(snap, session=sess)
     return snap
 
 
@@ -391,7 +519,7 @@ def build_watch_snapshot(
 
             slot_meta = _sm(load_holdings())
         except Exception:  # noqa: BLE001
-            slot_meta = {"max": 3, "weight": 0.3, "occupied": [], "occupiedCount": 0, "free": 3}
+            slot_meta = {"max": 4, "weight": 0.25, "occupied": [], "occupiedCount": 0, "free": 4}
     return {
         "v": SNAPSHOT_VERSION,
         "type": "snapshot",

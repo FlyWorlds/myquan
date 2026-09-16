@@ -135,7 +135,7 @@ function tradeIncomePct(r: HoldingRow): number | null {
       </div>
       <div class="mt-2 text-sm">当前：<strong>{{ phase || '-' }}</strong></div>
       <div v-if="slotMeta" class="mt-1 text-xs text-ui-text-2">
-        三槽持仓 {{ slotMeta.occupiedCount ?? 0 }}/{{ slotMeta.max ?? 3 }}
+        四槽持仓 {{ slotMeta.occupiedCount ?? 0 }}/{{ slotMeta.max ?? 4 }}
         · 空槽 {{ slotMeta.free ?? '-' }}
         · 每槽约 {{ Math.round((slotMeta.weight ?? 0.3) * 100) }}%
         · 列表按距买点升序（自选优先）
@@ -143,7 +143,7 @@ function tradeIncomePct(r: HoldingRow): number | null {
       <div class="mt-1 text-xs text-ui-text-3">
         策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）；
         单笔收入%=(现价或成交价)/成本−1（含策略持有/实仓）；图例可点筛选，可多选。
-        已经买入=三槽实仓；已触买含今日已入槽；T+1 止损已记不算已触止损。
+        已经买入=四槽实仓；已触买含今日已入槽；T+1 止损已记不算已触止损。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button

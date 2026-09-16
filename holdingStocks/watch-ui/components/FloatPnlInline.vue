@@ -19,35 +19,50 @@ const closed = computed(() => {
   )
 })
 
-const dayPnl = computed(() => {
-  const v = props.row.当日盈亏
-  if (v == null || Number.isNaN(Number(v))) return null
-  return Number(v)
-})
-
-const amount = computed(() => {
-  if (dayPnl.value != null) return dayPnl.value
-  const v = props.row.浮盈
-  if (v == null || Number.isNaN(Number(v))) return null
-  return Number(v)
-})
-
-const pct = computed(() => {
-  if (dayPnl.value != null) {
-    const v = props.row['当日盈亏%']
-    return v == null || Number.isNaN(Number(v)) ? null : Number(v)
-  }
-  const v = props.row['浮盈%']
-  return v == null || Number.isNaN(Number(v)) ? null : Number(v)
-})
-
-const visible = computed(() => amount.value != null)
-
 const boughtToday = computed(() => {
   const buy = String(props.row.买入时间 || '').slice(0, 10)
   const sess = String(props.row.交易日 || '').slice(0, 10)
   return Boolean(buy && sess && buy === sess)
 })
+
+/** 后端当日盈亏；跨日缺失时昨仓按昨收本地补算，绝不回退到成本浮盈。 */
+const dayPnl = computed(() => {
+  const v = props.row.当日盈亏
+  if (v != null && !Number.isNaN(Number(v))) return Number(v)
+  const qty = Number(props.row.持仓 || 0)
+  if (qty <= 0) return null
+  const last = Number(props.row.现价)
+  if (!Number.isFinite(last) || last <= 0) return null
+  if (boughtToday.value) {
+    const cost = Number(props.row.成本)
+    if (!Number.isFinite(cost) || cost <= 0) return null
+    return Math.round((last - cost) * qty * 100) / 100
+  }
+  const prev = Number(props.row.昨收)
+  if (!Number.isFinite(prev) || prev <= 0) return null
+  return Math.round((last - prev) * qty * 100) / 100
+})
+
+const amount = computed(() => dayPnl.value)
+
+const pct = computed(() => {
+  const v = props.row['当日盈亏%']
+  if (v != null && !Number.isNaN(Number(v))) return Number(v)
+  const qty = Number(props.row.持仓 || 0)
+  if (qty <= 0 || dayPnl.value == null) return null
+  const last = Number(props.row.现价)
+  if (!Number.isFinite(last) || last <= 0) return null
+  if (boughtToday.value) {
+    const cost = Number(props.row.成本)
+    if (!Number.isFinite(cost) || cost <= 0) return null
+    return Math.round((last / cost - 1) * 10000) / 100
+  }
+  const prev = Number(props.row.昨收)
+  if (!Number.isFinite(prev) || prev <= 0) return null
+  return Math.round((last / prev - 1) * 10000) / 100
+})
+
+const visible = computed(() => amount.value != null)
 
 const label = computed(() => {
   const v = amount.value

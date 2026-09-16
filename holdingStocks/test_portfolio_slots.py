@@ -30,9 +30,9 @@ def test_occupied_ignores_realized_and_zero_qty():
     assert occupied_slot_codes(holdings) == ["600552"]
     assert free_slot_count(holdings) == MAX_PORTFOLIO_SLOTS - 1
     meta = slot_meta(holdings)
-    assert meta["max"] == 3
+    assert meta["max"] == 4
     assert meta["weight"] == SLOT_WEIGHT
-    assert meta["free"] == 2
+    assert meta["free"] == 3
     assert meta["occupiedCount"] == 1
 
 
@@ -172,20 +172,22 @@ def test_full_slots():
             "600552": {"qty": 100},
             "600301": {"qty": 200},
             "002104": {"qty": 300},
+            "600330": {"qty": 100},
         }
     }
     assert free_slot_count(holdings) == 0
-    assert len(occupied_slot_codes(holdings)) == 3
+    assert len(occupied_slot_codes(holdings)) == 4
 
 
 def test_stop_trace_in_slot_area_not_occupying():
-    """已平仓：槽位留痕不占槽；实仓仍可满 3。"""
+    """已平仓：槽位留痕不占槽；实仓仍可满 4。"""
     from watch_snapshot import filter_portfolio_holdings
 
     rows = [
         {"代码": "600552", "名称": "凯盛", "持仓": 100, "持仓状态": "已经买入", "距买点%": 1},
         {"代码": "600301", "名称": "华锡", "持仓": 100, "持仓状态": "已经买入", "距买点%": 2},
         {"代码": "601020", "名称": "华钰", "持仓": 100, "持仓状态": "已经买入", "距买点%": 3},
+        {"代码": "600338", "名称": "珠峰", "持仓": 100, "持仓状态": "已经买入", "距买点%": 4},
         {
             "代码": "600330",
             "名称": "天通",
@@ -198,13 +200,13 @@ def test_stop_trace_in_slot_area_not_occupying():
     ]
     picked = filter_portfolio_holdings(
         rows,
-        portfolio_codes={"600552", "600301", "601020", "600330"},
-        strategy_codes={"600552", "600301", "601020", "600330"},
+        portfolio_codes={"600552", "600301", "601020", "600338", "600330"},
+        strategy_codes={"600552", "600301", "601020", "600338", "600330"},
         phase="continuous",
     )
     pinned = [r for r in picked if r.get("置顶")]
     traces = [r for r in picked if r.get("槽位留痕")]
-    assert len(pinned) == 3
+    assert len(pinned) == 4
     assert all(int(r.get("持仓") or 0) > 0 for r in pinned)
     assert len(traces) == 1
     assert traces[0]["代码"] == "600330"
@@ -1045,7 +1047,7 @@ def test_closed_day_pnl_gap_open():
     _enrich_closed_day_pnl(
         row, lots={"601208": {"qty": qty, "cost": 47.67}}
     )
-    assert qty == 1800
+    assert qty == 1500
     assert row["成交价"] == 46.97
     assert row["卖出数量"] == qty
     assert row["当日盈亏"] == round((46.97 - 48.59) * qty, 2)
@@ -1076,7 +1078,7 @@ def test_closed_day_pnl_path_stop():
     _enrich_closed_day_pnl(
         row, lots={"000021": {"qty": qty, "cost": 36.35}}
     )
-    assert qty == 2400
+    assert qty == 2000
     assert row["成交价"] == 35.21
     assert row["卖出数量"] == qty
     assert row["当日盈亏"] == round((35.21 - 36.5) * qty, 2)
@@ -1105,7 +1107,7 @@ def test_closed_day_pnl_locks_stop_not_last():
     _enrich_closed_day_pnl(
         row, lots={"002636": {"qty": qty, "cost": 70.21}}
     )
-    assert qty == 1200
+    assert qty == 1000
     assert row["成交价"] == 74.1
     locked = row["当日盈亏"]
     assert locked == round((74.1 - 76.45) * qty, 2)
@@ -1227,7 +1229,7 @@ def test_enrich_keeps_realized_ledger_qty():
     _enrich_closed_day_pnl(
         row, lots={"601208": {"qty": 600, "cost": 47.67}}
     )
-    assert _paper_slot_qty(47.67) == 1800
+    assert _paper_slot_qty(47.67) == 1500
     assert row["卖出数量"] == 600
     assert row["当日盈亏"] == -12.5
     assert row["三槽平仓"] is True

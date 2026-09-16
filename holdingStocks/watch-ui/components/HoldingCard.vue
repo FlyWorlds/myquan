@@ -97,7 +97,7 @@ const cardClass = computed(() => {
               v-if="pinned"
               class="rounded-full px-2 py-0.5 text-xs font-medium"
               style="color: var(--watch-hold); border: 1px solid color-mix(in srgb, var(--watch-hold) 50%, transparent); background: color-mix(in srgb, var(--watch-hold) 16%, transparent)"
-            >置顶·三槽</span>
+            >置顶·四槽</span>
             <span
               v-else-if="slotTrace"
               class="rounded-full px-2 py-0.5 text-xs font-medium text-ui-text-2"
