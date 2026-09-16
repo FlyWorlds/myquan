@@ -33,6 +33,12 @@ type LegendId = (typeof legend)[number]['id']
 
 const selectedFilters = ref<LegendId[]>([])
 
+/** 表头排序：默认无（后端距买点升序）；点列头 desc→asc→清 */
+type SortKey = 'dayChg' | 'strategyPnl'
+type SortDir = 'desc' | 'asc'
+const sortKey = ref<SortKey | null>(null)
+const sortDir = ref<SortDir>('desc')
+
 const decoratedRows = computed(() =>
   (props.rows || []).map((row) => {
     const visual = resolveSignalVisual(row)
@@ -51,10 +57,29 @@ const filterCounts = computed(() => {
   return counts
 })
 
+function sortValue(row: HoldingRow, key: SortKey): number | null {
+  if (key === 'dayChg') return asNum(row.当日涨幅)
+  return asNum(row['策略收益%'])
+}
+
 const filteredRows = computed(() => {
-  if (!selectedFilters.value.length) return decoratedRows.value
-  const on = new Set(selectedFilters.value)
-  return decoratedRows.value.filter((x) => x.tags.some((id) => on.has(id)))
+  let list = decoratedRows.value
+  if (selectedFilters.value.length) {
+    const on = new Set(selectedFilters.value)
+    list = list.filter((x) => x.tags.some((id) => on.has(id)))
+  }
+  const key = sortKey.value
+  if (!key) return list
+  const dir = sortDir.value === 'desc' ? -1 : 1
+  return [...list].sort((a, b) => {
+    const va = sortValue(a.row, key)
+    const vb = sortValue(b.row, key)
+    if (va == null && vb == null) return 0
+    if (va == null) return 1
+    if (vb == null) return -1
+    if (va === vb) return 0
+    return va < vb ? -dir : dir
+  })
 })
 
 function toggleFilter(id: LegendId) {
@@ -68,6 +93,31 @@ function resetFilters() {
 
 function isFilterOn(id: LegendId) {
   return selectedFilters.value.includes(id)
+}
+
+function toggleSort(key: SortKey) {
+  if (sortKey.value !== key) {
+    sortKey.value = key
+    sortDir.value = 'desc'
+    return
+  }
+  if (sortDir.value === 'desc') {
+    sortDir.value = 'asc'
+    return
+  }
+  sortKey.value = null
+  sortDir.value = 'desc'
+}
+
+function sortMark(key: SortKey): string {
+  if (sortKey.value !== key) return ''
+  return sortDir.value === 'desc' ? ' ↓' : ' ↑'
+}
+
+function sortTitle(key: SortKey, label: string): string {
+  if (sortKey.value !== key) return `按${label}排序（高→低）`
+  if (sortDir.value === 'desc') return `当前：${label}高→低，再点改为低→高`
+  return `当前：${label}低→高，再点恢复默认（距买点）`
 }
 
 function categoryOf(r: HoldingRow): string {
@@ -138,12 +188,14 @@ function tradeIncomePct(r: HoldingRow): number | null {
         四槽持仓 {{ slotMeta.occupiedCount ?? 0 }}/{{ slotMeta.max ?? 4 }}
         · 空槽 {{ slotMeta.free ?? '-' }}
         · 每槽约 {{ Math.round((slotMeta.weight ?? 0.3) * 100) }}%
-        · 列表按距买点升序（自选优先）
+        · 默认按距买点升序（自选优先）
+        <template v-if="sortKey === 'dayChg'"> · 已按日内涨跌{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
+        <template v-else-if="sortKey === 'strategyPnl'"> · 已按策略收益{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
       </div>
       <div class="mt-1 text-xs text-ui-text-3">
         策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）；
         单笔收入%=(现价或成交价)/成本−1（含策略持有/实仓）；图例可点筛选，可多选。
-        已经买入=四槽实仓；已触买含今日已入槽；T+1 止损已记不算已触止损。
+        点「日内涨跌 / 策略收益」表头可排序。已经买入=四槽实仓；已触买含今日已入槽；T+1 止损已记不算已触止损。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button
@@ -188,8 +240,28 @@ function tradeIncomePct(r: HoldingRow): number | null {
               <th class="px-3 py-2.5">距买点</th>
               <th class="px-3 py-2.5">竞价/开盘</th>
               <th class="px-3 py-2.5">现价</th>
-              <th class="px-3 py-2.5">日内涨跌</th>
-              <th class="px-3 py-2.5">策略收益</th>
+              <th class="px-3 py-2.5">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-0.5 font-semibold hover:text-accent"
+                  :class="sortKey === 'dayChg' ? 'text-accent' : ''"
+                  :title="sortTitle('dayChg', '日内涨跌')"
+                  @click="toggleSort('dayChg')"
+                >
+                  日内涨跌<span class="tabular-nums text-[10px]">{{ sortMark('dayChg') }}</span>
+                </button>
+              </th>
+              <th class="px-3 py-2.5">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-0.5 font-semibold hover:text-accent"
+                  :class="sortKey === 'strategyPnl' ? 'text-accent' : ''"
+                  :title="sortTitle('strategyPnl', '策略收益')"
+                  @click="toggleSort('strategyPnl')"
+                >
+                  策略收益<span class="tabular-nums text-[10px]">{{ sortMark('strategyPnl') }}</span>
+                </button>
+              </th>
               <th class="px-3 py-2.5">单笔收入</th>
               <th class="px-3 py-2.5">前日</th>
               <th class="px-3 py-2.5">过门</th>
