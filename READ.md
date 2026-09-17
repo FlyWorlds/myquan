@@ -20,7 +20,8 @@ cd holdingStocks && python start_watch.py --no-wechat
 **运行时依赖**：全局 / pip 安装的 `akquant`（见 `requirements.txt`，当前钉死 `0.3.21`）。  
 **旁挂源码**：同级目录 `../akquant/` 仅供阅读、对照实现，**不会**自动进入 `PYTHONPATH`。
 
-文档维护：改策略/因子/回测时同步更新本文、`TODO.MD`、`docs/`（规则见 `.cursor/rules/docs-sync.mdc`）。
+文档维护：改策略/因子/回测时同步更新本文、`TODO.MD`、`docs/`（规则见 `.cursor/rules/docs-sync.mdc`）。  
+架构与技术栈：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
 ---
 
