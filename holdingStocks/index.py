@@ -4747,7 +4747,7 @@ def purge_illegal_t1_stop_notes(data: dict[str, Any]) -> int:
     return n
 
 
-def paper_exit_decision(
+def _paper_exit_decision_legacy(
     *,
     qty: int,
     sellable: int,
@@ -4769,15 +4769,9 @@ def paper_exit_decision(
     buy_time: Any = None,
     session: str = "",
 ) -> dict[str, Any]:
-    """纸面止损唯一口径：开盘保护 / 1m 路径 / 5s 现价破卖价。
+    """纸面止损唯一口径（legacy 真源实现；勿直接改成交语义）。
 
-    展示 hit_show 与结算 hit 同源。成交价=触发点（买点/卖点；开盘已破保护则开盘）。
-    滑点在策略成本里，不在触发价上另加。T+1、锁仓、跌停封单只展示不平。
-    不用「全日最低 vs 盘中抬高后的止损」。
-    买入日不算隔夜开盘保护，且只把硬保护触达算 hit_show（中段/抬高卖价不可记）。
-    昨收/昨高由 overnight_open_protect_px 按买入日判断。
-    开盘保护峰值不得含今日开盘/盘中新高（涨停次日高开延续峰值≠开盘保护触发）。
-    9:15–9:25 竞价 K 不进 1m 路径；半仓成交价=阶梯策略价，不得与开盘保护价混用。
+    开盘保护 / 1m 路径 / 5s 现价破卖价。展示 hit_show 与结算 hit 同源。
     """
     empty = {
         "hit": False,
@@ -4925,6 +4919,85 @@ def paper_exit_decision(
         }
     )
     return out
+
+
+def paper_exit_decision(
+    *,
+    qty: int,
+    sellable: int,
+    t1_today: bool,
+    hold_locked: bool = False,
+    stop_locked: bool = False,
+    last: float = 0.0,
+    open_px: float = 0.0,
+    prev_close: float | None = None,
+    cost: float | None = None,
+    peak_high: float | None = None,
+    working_stop: float = 0.0,
+    path_hit: bool = False,
+    path_fill_px: float = 0.0,
+    path_action_kind: str = "",
+    path_stop_kind: str = "",
+    signal_ok: bool = True,
+    overnight_high_ok: bool | None = None,
+    buy_time: Any = None,
+    session: str = "",
+    symbol: str = "",
+) -> dict[str, Any]:
+    """纸面止损口径：默认走 legacy；可选 Shadow / 统一引擎（默认关）。
+
+    USE_UNIFIED_EXIT_ENGINE=False 时成交语义与历史完全一致。
+    SHADOW_UNIFIED_EXIT_ENGINE=True 时并行跑 ExitDecisionEngine，只记比较、不成交。
+    """
+    kw = dict(
+        qty=qty,
+        sellable=sellable,
+        t1_today=t1_today,
+        hold_locked=hold_locked,
+        stop_locked=stop_locked,
+        last=last,
+        open_px=open_px,
+        prev_close=prev_close,
+        cost=cost,
+        peak_high=peak_high,
+        working_stop=working_stop,
+        path_hit=path_hit,
+        path_fill_px=path_fill_px,
+        path_action_kind=path_action_kind,
+        path_stop_kind=path_stop_kind,
+        signal_ok=signal_ok,
+        overnight_high_ok=overnight_high_ok,
+        buy_time=buy_time,
+        session=session,
+        symbol=symbol,
+    )
+    legacy = _paper_exit_decision_legacy(
+        qty=qty,
+        sellable=sellable,
+        t1_today=t1_today,
+        hold_locked=hold_locked,
+        stop_locked=stop_locked,
+        last=last,
+        open_px=open_px,
+        prev_close=prev_close,
+        cost=cost,
+        peak_high=peak_high,
+        working_stop=working_stop,
+        path_hit=path_hit,
+        path_fill_px=path_fill_px,
+        path_action_kind=path_action_kind,
+        path_stop_kind=path_stop_kind,
+        signal_ok=signal_ok,
+        overnight_high_ok=overnight_high_ok,
+        buy_time=buy_time,
+        session=session,
+    )
+    try:
+        from strategy.exit_rules.shadow import maybe_shadow_and_select
+
+        return maybe_shadow_and_select(legacy, paper_kwargs=kw)
+    except Exception:  # noqa: BLE001
+        return legacy
 
 
 def correct_realized_open_protect_fill(
