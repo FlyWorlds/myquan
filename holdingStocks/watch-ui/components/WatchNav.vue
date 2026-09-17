@@ -12,6 +12,7 @@ function linkClass(path: string) {
     <div class="page-shell flex flex-wrap items-center justify-between gap-3 py-3">
       <div class="flex flex-wrap items-center gap-1">
         <NuxtLink to="/" :class="linkClass('/')">持仓盯盘</NuxtLink>
+        <NuxtLink to="/trades" :class="linkClass('/trades')">交割单</NuxtLink>
         <NuxtLink to="/sectors" :class="linkClass('/sectors')">板块轮动</NuxtLink>
         <NuxtLink to="/strategies" :class="linkClass('/strategies')">策略说明</NuxtLink>
         <NuxtLink to="/factors" :class="linkClass('/factors')">因子说明</NuxtLink>

@@ -3651,6 +3651,11 @@ def apply_paper_slot_buy(
     cash = _account_cash(data)
     if cash is not None:
         data["account_cash"] = round(cash - price * qty, 2)
+    # 负现金也要记交割余额
+    try:
+        cash_after = float(data.get("account_cash")) if data.get("account_cash") is not None else None
+    except (TypeError, ValueError):
+        cash_after = None
     pool = data.get("portfolio_pool")
     if isinstance(pool, list):
         ck = _code_key(code)
@@ -3669,13 +3674,34 @@ def apply_paper_slot_buy(
             "side": "buy",
             "code": code,
             "name": meta["name"],
+            "market": meta.get("market") or "",
             "price": price,
             "qty": qty,
             "after_qty": qty,
             "avg_cost": pos["cost"],
+            "cost": pos["cost"],
+            "amount": round(price * qty, 2),
+            "account_cash_after": cash_after,
+            "session": session,
+            "reason": "买入入槽",
             "note": note,
+            "reason_detail": note,
         }
     )
+    try:
+        from wechat_notify import notify_trade_fill
+
+        notify_trade_fill(
+            side="buy",
+            code=code,
+            name=str(meta.get("name") or code),
+            price=float(price),
+            qty=int(qty),
+            reason=note or "买入入槽",
+            after_qty=int(qty),
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 买入微信推送跳过: {e}")
     return pos
 
 
@@ -4271,6 +4297,14 @@ def apply_exit_fill(
     cash = _account_cash(data)
     if cash is not None:
         data["account_cash"] = round(cash + fill_px * sell_qty, 2)
+    try:
+        cash_after = (
+            float(data.get("account_cash"))
+            if data.get("account_cash") is not None
+            else None
+        )
+    except (TypeError, ValueError):
+        cash_after = None
 
     if new_qty <= 0:
         append_slot_freed_at(data, session, rec.get("time") or rec.get("first_hit_ts"))
@@ -4282,14 +4316,42 @@ def apply_exit_fill(
             "side": "sell",
             "code": code,
             "name": meta["name"],
+            "market": meta.get("market") or "",
             "price": rec["price"],
             "qty": sell_qty,
             "after_qty": int(pos["qty"]),
             "cost": rec["cost"],
             "pnl": rec["pnl"],
+            "pnl_pct": rec.get("pnl_pct"),
+            "day_pnl": rec.get("day_pnl"),
+            "day_pnl_pct": rec.get("day_pnl_pct"),
+            "amount": round(float(rec["price"]) * sell_qty, 2),
+            "account_cash_after": cash_after,
+            "session": str(session)[:10],
+            "action_kind": str(action_kind or ""),
+            "buy_time": str(buy_time or "") or None,
+            "reason": reason,
             "note": trade_note,
+            "reason_detail": trade_note,
         }
     )
+    try:
+        from wechat_notify import notify_trade_fill
+
+        notify_trade_fill(
+            side="sell",
+            code=code,
+            name=str(meta.get("name") or code),
+            price=float(rec["price"]),
+            qty=int(sell_qty),
+            reason=trade_note or reason,
+            pnl=rec.get("pnl"),
+            pnl_pct=rec.get("pnl_pct"),
+            after_qty=int(pos["qty"]),
+            action_kind=str(action_kind or ""),
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 卖出微信推送跳过: {e}")
     if reason in (REASON_STOP, REASON_HALF):
         remember_factor_trigger(code, side="sell", px=fill_px, session=session)
     return rec
@@ -5454,6 +5516,12 @@ def settle_due_paper_stops(
 def append_trade(record: dict[str, Any]) -> None:
     with TRADES_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    try:
+        from trade_ledger import record_trade_ledger
+
+        record_trade_ledger(record)
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 交割账本写入失败（继续）: {e}")
 
 
 def extremes_after_stop_touch(
@@ -8651,6 +8719,14 @@ def cmd_buy(args: argparse.Namespace) -> None:
     cash = _account_cash(data)
     if cash is not None:
         data["account_cash"] = round(cash - price * qty, 2)
+    try:
+        cash_after = (
+            float(data.get("account_cash"))
+            if data.get("account_cash") is not None
+            else None
+        )
+    except (TypeError, ValueError):
+        cash_after = None
     save_holdings(data)
     append_trade(
         {
@@ -8658,11 +8734,18 @@ def cmd_buy(args: argparse.Namespace) -> None:
             "side": "buy",
             "code": code,
             "name": meta["name"],
+            "market": meta.get("market") or "",
             "price": price,
             "qty": qty,
             "after_qty": new_qty,
             "avg_cost": pos["cost"],
-            "note": args.note or "",
+            "cost": pos["cost"],
+            "amount": round(price * qty, 2),
+            "account_cash_after": cash_after,
+            "session": str(_now())[:10],
+            "reason": "买入入槽",
+            "note": args.note or "手动买入",
+            "reason_detail": args.note or "手动买入",
         }
     )
     print(
@@ -8713,6 +8796,14 @@ def cmd_sell(args: argparse.Namespace) -> None:
     cash = _account_cash(data)
     if cash is not None:
         data["account_cash"] = round(cash + price * qty, 2)
+    try:
+        cash_after = (
+            float(data.get("account_cash"))
+            if data.get("account_cash") is not None
+            else None
+        )
+    except (TypeError, ValueError):
+        cash_after = None
 
     # 全清或半仓都写入当日已实现：禁同日再买；半仓后允许再卖剩余
     session = str(pd.Timestamp.now().date())
@@ -8765,12 +8856,24 @@ def cmd_sell(args: argparse.Namespace) -> None:
             "side": "sell",
             "code": code,
             "name": meta["name"],
+            "market": meta.get("market") or "",
             "price": price,
             "qty": qty,
             "after_qty": new_qty,
+            "cost": cost,
             "avg_cost": cost,
-            "realized_pnl": round(pnl, 2),
-            "note": note,
+            "pnl": round(pnl, 2),
+            "pnl_pct": pnl_pct,
+            "day_pnl": round(rec_day_pnl, 2),
+            "day_pnl_pct": day_pnl_pct,
+            "amount": round(price * qty, 2),
+            "account_cash_after": cash_after,
+            "session": session,
+            "action_kind": "half" if new_qty > 0 else "full",
+            "buy_time": str(buy_time or "") or None,
+            "reason": reason,
+            "note": note or reason,
+            "reason_detail": note or reason,
         }
     )
     print(
@@ -8944,18 +9047,31 @@ def _refresh_once(
     )
     if wechat and is_signal_window():
         try:
-            from wechat_notify import notify_watch_rows
-
-            from watch_config import is_default_strategy_pool_code
-
-            # 今日测试重点：默认策略池（策略十六）买卖/预警/触及 → 手机
-            notify_watch_rows(
-                [
-                    r
-                    for r in rows
-                    if is_default_strategy_pool_code(str(r.get("代码") or ""))
-                ]
+            from wechat_notify import notify_watch_rows, is_alert_row
+            from watch_config import (
+                is_default_strategy_pool_code,
+                portfolio_pool_codes,
             )
+
+            holdings = load_holdings()
+            port_codes = set(portfolio_pool_codes(holdings))
+            # 默认策略池 ∪ 四槽/已实现 ∪ 本轮可分类预警行（避免只推池内漏掉实仓）
+            notify_rows = []
+            for r in rows:
+                code = str(r.get("代码") or "")
+                if not code:
+                    continue
+                if (
+                    is_default_strategy_pool_code(code)
+                    or code in port_codes
+                    or int(r.get("持仓") or 0) > 0
+                    or bool(r.get("已实现"))
+                    or is_alert_row(r)
+                ):
+                    notify_rows.append(r)
+            pushed = notify_watch_rows(notify_rows)
+            if pushed:
+                print(f"[{_now()}] 微信本轮推送 {len(pushed)} 条")
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 微信预警推送异常: {e}")
     elif wechat and is_auction_window():
@@ -8964,6 +9080,9 @@ def _refresh_once(
             _last_auction_skip_log = now_m
             ph = market_phase_label()
             print(f"[{_now()}] 早盘 {ph}；微信推送待 9:30 连续竞价")
+    elif wechat:
+        # 收盘后/午休：扫描不推；成交即时推送见 notify_trade_fill
+        pass
     return path, published
 
 
@@ -9459,8 +9578,13 @@ def cmd_watch(args: argparse.Namespace) -> None:
         if not ok:
             print(f"[{_now()}] 微信套件失败:\n{detail[:600]}")
             if wechat_optional:
-                print(f"[{_now()}] --wechat-optional：继续盯盘，但关闭微信推送")
-                wechat = False
+                # 通道「running」≠能发：prepare failed 时常因会话 token 过期。
+                # 仍保持 wechat=True，盘中买卖/预警可在 token 恢复后发出；
+                # 不要静默关掉推送（否则通道修好了也不发）。
+                print(
+                    f"[{_now()}] --wechat-optional：继续盯盘并保留微信推送。"
+                    "请用微信给机器人发一条消息刷新会话；之后买卖/预警会自动推。"
+                )
             else:
                 print(
                     "中止盯盘。修好通道后重试；或临时："
@@ -9739,6 +9863,12 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 return
             if path == "/api/factors":
                 self._send_json(_get_factors_api_cache())
+                return
+            if path == "/api/trades":
+                from trade_ledger import api_trades_payload
+
+                status, payload = api_trades_payload(self.path)
+                self._send_json(payload, status=status)
                 return
             if path in ("/api/snapshot", f"/{WATCH_META_FILE.name}"):
                 with _WATCH_SNAP_LOCK:

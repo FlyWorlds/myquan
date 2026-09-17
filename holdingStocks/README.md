@@ -101,7 +101,7 @@ WATCHLIST = list(S7_WATCHLIST)
 
 **浮盈/结算（名称旁）**：**今日盈亏 / 今日浮亏** = 四槽持仓 `session_day_pnl`（**今买相对买入价，昨仓相对昨收**；9:15 / 跨日沿用快照时按昨收重置）+ **今日平仓**记账 `day_pnl`（只认 `已实现`）。卡片不回退展示「相对成本」的浮盈当今日浮亏。**总资产** = 日初锁定（优先昨收结算 `account_total`）+ **今日盈亏**（与分票加总同动）。**总收益** = 总资产 − 纸面本金（`paper_equity_base`，默认 30 万，自 **`PAPER_PNL_START`=2026-09-09**），即「昨收累计 + 今日盈亏」。每日收盘后写一次 `holdings.daily_settlements[交易日]`（终稿；盘中可更新草稿；次日 9:15 补记未终稿日），含今日盈亏 vs 权益日变差额核对。**今日平仓**卡片锁定平仓价；策略回放持有不进账户合计。
 
-**微信推送**：P0=因子已触发；P1=触发预警带。有仓只推止损；空仓只推买入。**策略回放持有若今日触买**，仍推买入侧 P0。
+**微信推送**：P0=因子已触发；P1=触发预警带。有仓只推止损；空仓只推买入。**策略回放持有若今日触买**，仍推买入侧 P0。**买卖成交即时推**（不依赖连续竞价扫描）。`start_watch` 默认 `--wechat-optional`：自检失败仍保留推送开关（勿静默关掉）；会话 token 过期时先给机器人发一条消息再等推送。预警扫描覆盖默认策略池∪四槽/已实现∪本轮可分类行。
 
 ## 依赖
 
@@ -116,6 +116,7 @@ pip install -r ../requirements.txt
 | `watch_config.py` | 策略 ID、定盘池 `_FIT_WATCH`、阈值、竞价窗口；S7 备用 |
 | `factor2_watch.py` | 账户回撤预警 |
 | `factor4_watch.py` | 牛市 regime（策略三 + 因子4 时） |
+| `trade_ledger.py` | 交割单 JSON 账本（`trade_ledger.json`）；买入入槽/卖出平仓落库 |
 | `index.py` | 盯盘主程序 / JSON 推送 / 微信 / 买卖记账 |
 | `holdings_sync.py` | Win/Mac 账本：`holdings-push` / `holdings-pull` → `origin/holdings-ledger` |
 | `start_watch.py` | 一键启动 API+Nuxt；默认先拉远程持仓；`--stop` / `--force` 回收端口 |
@@ -194,7 +195,9 @@ python index.py holdings-push   # 本机账本 → origin/holdings-ledger（给�
 python index.py holdings-pull   # 远程账本 → 本机；丢掉 holdings_watch.json 旧缓存
 ```
 
-**Win / Mac 同一份持仓**：真源是 `holdings.json` + `trades.jsonl`，推到独立分支 `holdings-ledger`（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。离线用 `--no-ledger-pull`。
+**Win / Mac 同一份持仓**：真源是 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细），推到独立分支 `holdings-ledger`（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。离线用 `--no-ledger-pull`。
+
+**交割单**：持仓卡片现价旁 **价格**（外网行情）/ **交割**（跳转 `/trades?code=`）；顶栏与账户卡也可进 `/trades`。明细含代码、名称、买卖价、仓位、金额、卖出单笔盈亏、账户余额、买卖理由；API `GET /api/trades`。
 
 ## 如何扩展
 

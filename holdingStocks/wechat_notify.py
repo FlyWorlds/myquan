@@ -580,6 +580,74 @@ def send_text(
     return False, last
 
 
+def notify_trade_fill(
+    *,
+    side: str,
+    code: str,
+    name: str,
+    price: float,
+    qty: int,
+    reason: str = "",
+    pnl: float | None = None,
+    pnl_pct: float | None = None,
+    after_qty: int | None = None,
+    action_kind: str = "",
+    config: dict[str, Any] | None = None,
+) -> bool:
+    """买卖成交即时推送（不依赖连续竞价扫描窗口）。
+
+    纸面入槽/止盈止损成交后调用；受 enabled 与短冷却约束。
+    """
+    cfg = config or load_config()
+    if not bool(cfg.get("enabled", True)):
+        return False
+    side_l = str(side or "").strip().lower()
+    if side_l in ("买", "买入"):
+        side_l = "buy"
+    elif side_l in ("卖", "卖出", "stop"):
+        side_l = "sell"
+    code_s = str(code or "").strip()
+    name_s = str(name or code_s)
+    typ = "买入入槽" if side_l == "buy" else (
+        "半仓止盈" if str(action_kind).lower() == "half" or "半仓" in str(reason)
+        else "卖出平仓"
+    )
+    lines = [
+        f"【P0】{name_s}({code_s})",
+        f"预警类型: P0·因子已触发·{typ}",
+        f"方向: {'买入' if side_l == 'buy' else '卖出'}",
+        f"成交价: {float(price):.2f}",
+        f"数量: {int(qty)}股",
+    ]
+    if after_qty is not None:
+        lines.append(f"成交后持仓: {int(after_qty)}股")
+    if side_l == "sell" and pnl is not None:
+        pct = f"（{float(pnl_pct):+.2f}%）" if pnl_pct is not None else ""
+        lines.append(f"单笔盈亏: {float(pnl):+.2f}{pct}")
+    if reason:
+        lines.append(f"理由: {reason}")
+    lines.append(f"时间: {_now()}")
+    msg = "\n".join(lines)
+    # 成交键含时刻，避免与扫描预警共用冷却误伤；同秒重复成交仍挡一下
+    key = f"fill|{code_s}|{side_l}|{typ}|{int(price*100)}|{int(qty)}|{_now()[:16]}"
+    state = _load_state()
+    sent: dict[str, Any] = state.setdefault("sent", {})
+    now_ts = time.time()
+    prev = float(sent.get(key) or 0)
+    if (now_ts - prev) < 30:
+        return False
+    ok, detail = send_text(msg, config=cfg)
+    if ok:
+        sent[key] = now_ts
+        state["sent"] = sent
+        state["updated_at"] = _now()
+        _save_state(state)
+        print(f"[{_now()}] 微信已推送成交: {name_s}({code_s}) {typ}")
+        return True
+    print(f"[{_now()}] 微信成交推送失败 {name_s}({code_s}): {(detail or '')[:200]}")
+    return False
+
+
 def notify_watch_rows(
     rows: list[dict[str, Any]],
     *,

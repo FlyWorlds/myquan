@@ -42,5 +42,8 @@ function fmt(v?: number | null, d = 2) {
       <template v-if="account.equityDayPnl != null"> · 权益日变 {{ fmt(account.equityDayPnl) }}</template>
     </div>
     <div v-if="account.factor2Summary" class="mt-2 text-xs text-ui-text-2">{{ account.factor2Summary }}</div>
+    <div class="mt-3">
+      <NuxtLink to="/trades" class="btn btn-ghost text-xs">查看交割单</NuxtLink>
+    </div>
   </section>
 </template>

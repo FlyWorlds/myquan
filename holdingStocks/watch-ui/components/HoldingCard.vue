@@ -111,6 +111,18 @@ const cardClass = computed(() => {
           <h2 class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-bold">
             <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ row.名称 }}</a>
             <b class="sensitive tabular-nums">{{ fmtNum(row.现价, pdg) }}</b>
+            <a
+              :href="baiduStockUrl(row.代码, row.名称)"
+              target="_blank"
+              rel="noopener"
+              class="rounded border border-ui-hairline px-1.5 py-0.5 text-[10px] font-normal text-ui-text-2 hover:border-accent hover:text-accent"
+              title="查看行情价格单"
+            >价格</a>
+            <NuxtLink
+              :to="`/trades?code=${row.代码}`"
+              class="rounded border border-ui-hairline px-1.5 py-0.5 text-[10px] font-normal text-ui-text-2 hover:border-accent hover:text-accent"
+              title="查看交割单买卖明细"
+            >交割</NuxtLink>
             <ChgText class="sensitive text-sm font-semibold tabular-nums" :chg="row.当日涨幅">{{ fmtSignedPct(row.当日涨幅) }}</ChgText>
             <FloatPnlInline :row="row" />
           </h2>

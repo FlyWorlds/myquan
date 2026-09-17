@@ -1,7 +1,8 @@
 """Win / Mac 持仓账本远程同步。
 
-真源是 ``holdings.json`` + ``trades.jsonl``，走独立 git 分支 ``holdings-ledger``，
-不进 ``main``（两文件仍在 .gitignore，避免随代码误提交）。
+真源是 ``holdings.json`` + ``trades.jsonl`` + ``trade_ledger.json``（交割明细），
+走独立 git 分支 ``holdings-ledger``，
+不进 ``main``（文件仍在 .gitignore，避免随代码误提交）。
 
 ``holdings_watch.json`` 只是本机盯盘展示缓存，**不是**账本；拉取后必须丢掉。
 """
@@ -19,11 +20,13 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
 TRADES_FILE = ROOT / "trades.jsonl"
+TRADE_LEDGER_FILE = ROOT / "trade_ledger.json"
 WATCH_META_FILE = ROOT / "holdings_watch.json"
 LEDGER_BRANCH = "holdings-ledger"
 LEDGER_REL_PATHS = (
     "holdingStocks/holdings.json",
     "holdingStocks/trades.jsonl",
+    "holdingStocks/trade_ledger.json",
 )
 
 
@@ -154,6 +157,13 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
             f"{remote_ref}:{LEDGER_REL_PATHS[1]}",
             TRADES_FILE,
         )
+        ledger_ok = False
+        if len(LEDGER_REL_PATHS) > 2:
+            ledger_ok = _show_file(
+                repo,
+                f"{remote_ref}:{LEDGER_REL_PATHS[2]}",
+                TRADE_LEDGER_FILE,
+            )
         invalidate_watch_cache()
         if not quiet:
             host = ""
@@ -162,10 +172,15 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
                 host = str((data or {}).get("updated_host") or "")
             except (OSError, TypeError, ValueError, json.JSONDecodeError):
                 pass
+            extra = ""
+            if not trades_ok:
+                extra += " · trades.jsonl 远程没有（保留本地）"
+            if len(LEDGER_REL_PATHS) > 2 and not ledger_ok:
+                extra += " · trade_ledger.json 远程没有（保留本地）"
             print(
                 f"已拉取远程持仓 · updated_at={remote_ts or '-'} "
                 f"host={host or '-'} · 已丢本机 holdings_watch.json"
-                + ("" if trades_ok else " · trades.jsonl 远程没有（保留本地）")
+                + extra
             )
         return "pulled"
     finally:
@@ -177,7 +192,7 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
 
 
 def push_holdings(*, force: bool = False) -> str:
-    """把本机 holdings.json + trades.jsonl 推到 origin/holdings-ledger。"""
+    """把本机 holdings.json + trades.jsonl + trade_ledger.json 推到 origin/holdings-ledger。"""
     if not HOLDINGS_FILE.is_file():
         raise SystemExit("没有 holdings.json，无法推送")
     repo = repo_root()
