@@ -238,6 +238,21 @@ def replay_symbol(
                 legacy.get("reason"), legacy.get("kind")
             ).value
             new_reason_code = decision.reason_code.value
+            legacy_price = (
+                float(legacy.get("fill_px") or 0) if legacy.get("hit") else None
+            )
+            new_price = (
+                float(decision.price)
+                if decision.action == ExitAction.SELL and decision.price is not None
+                else None
+            )
+            match_price_exact = (
+                legacy_price is None
+                and new_price is None
+                or legacy_price is not None
+                and new_price is not None
+                and abs(legacy_price - new_price) <= 1e-6
+            )
             legacy_factor = (
                 "factor26" if str(legacy.get("kind") or "") == "path" else None
             )
@@ -245,7 +260,7 @@ def replay_symbol(
             match_reason = legacy_reason_code == new_reason_code
             exact = (
                 compared.match_action
-                and compared.match_price
+                and match_price_exact
                 and compared.match_qty
                 and match_factor
                 and match_reason
@@ -266,16 +281,18 @@ def replay_symbol(
                         "interval": interval_no,
                         "legacy_reason_code": legacy_reason_code,
                         "new_reason_code": new_reason_code,
+                        "match_price_exact": match_price_exact,
                         "match_factor": match_factor,
                         "match_reason": match_reason,
                     }
                 )
             if legacy.get("hit"):
-                totals["legacy_sell_action_price_qty_match"] += int(
+                totals["legacy_sell_exact_action_price_quantity"] += int(
                     compared.match_action
-                    and compared.match_price
+                    and match_price_exact
                     and compared.match_qty
                 )
+                totals[f"legacy_sell_reason_{legacy_reason_code.lower()}"] += 1
             if not can_sell:
                 totals["t1_evaluations"] += 1
             if action:
@@ -335,6 +352,16 @@ def run_replay(
             {
                 "symbol": code,
                 "minute_rows": len(minutes),
+                "minute_start": (
+                    str(pd.to_datetime(minutes["ts"]).min())
+                    if not minutes.empty and "ts" in minutes
+                    else None
+                ),
+                "minute_end": (
+                    str(pd.to_datetime(minutes["ts"]).max())
+                    if not minutes.empty and "ts" in minutes
+                    else None
+                ),
                 **dict(symbol_totals),
             }
         )
