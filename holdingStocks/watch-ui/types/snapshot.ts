@@ -363,6 +363,7 @@ export interface WatchSnapshot {
   strategy8?: Strategy8Payload
   strategy15?: Strategy15Payload
   strategy16?: HoldingRow[]
+  strategy17?: HoldingRow[]
   sectors?: SectorsLivePayload
   strategies: StrategyTab[]
 }

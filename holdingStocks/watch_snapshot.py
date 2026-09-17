@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 
 
 SNAPSHOT_VERSION = 1
@@ -30,6 +30,20 @@ def _strip_holdings_pnl(row: dict[str, Any]) -> dict[str, Any]:
     out = _row_json(row)
     for k in ("浮盈", "浮盈%", "盈亏状态", "盈亏说明", "策略收益", "市值", "成本额", "当日基数"):
         out.pop(k, None)
+    return out
+
+
+def _retag_strategy1_row(row: dict[str, Any]) -> dict[str, Any]:
+    """策略一 Tab：非自选统一标「策略池」，避免热池因子27标签串台。"""
+    out = dict(row)
+    src = str(out.get("pool_src") or "")
+    label = str(out.get("池来源") or "")
+    if src == "self" or label == "自选":
+        out["pool_src"] = "self"
+        out["池来源"] = "自选"
+    else:
+        out["pool_src"] = "strategy1_pool"
+        out["池来源"] = "策略池"
     return out
 
 
@@ -325,8 +339,299 @@ def rebase_holdings_day_pnl(
     return out
 
 
+def apply_day_linked_account_equity(account: dict[str, Any]) -> dict[str, Any]:
+    """总资产/总收益随今日盈亏滚动：总资产 = 日初锁定 + 今日盈亏。
+
+    日初 `accountOpen` 应为昨收（或跨日结算）总资产；避免现金账本漂移时
+    总收益卡在昨收不动。
+    """
+    acc = dict(account or {})
+    day = acc.get("dayPnl")
+    open_eq = acc.get("accountOpen")
+    if day is None or open_eq is None:
+        return acc
+    try:
+        day_f = float(day)
+        open_f = float(open_eq)
+    except (TypeError, ValueError):
+        return acc
+    total = round(open_f + day_f, 2)
+    acc["accountTotal"] = total
+    acc["equityDayPnl"] = round(day_f, 2)
+    base = acc.get("paperEquityBase")
+    try:
+        base_f = float(base) if base is not None else 0.0
+    except (TypeError, ValueError):
+        base_f = 0.0
+    if base_f > 0:
+        tp = round(total - base_f, 2)
+        acc["totalPnl"] = tp
+        acc["totalPnlPct"] = round(tp / base_f * 100.0, 2)
+    mv = acc.get("marketValue")
+    if mv is not None:
+        try:
+            acc["availableCash"] = round(total - float(mv), 2)
+        except (TypeError, ValueError):
+            pass
+    if total and total > 0 and mv is not None:
+        try:
+            mv_f = float(mv)
+            if mv_f > 0:
+                acc["positionPct"] = round(mv_f / total * 100.0, 1)
+        except (TypeError, ValueError):
+            pass
+    return acc
+
+
+def _as_px_digits(row: dict[str, Any]) -> int:
+    try:
+        return max(0, int(row.get("价位小数") or 2))
+    except (TypeError, ValueError):
+        return 2
+
+
+def _quote_last(q: dict[str, Any] | None) -> float | None:
+    if not q:
+        return None
+    try:
+        last = float(q.get("last"))
+    except (TypeError, ValueError):
+        return None
+    return last if last > 0 else None
+
+
+def patch_row_live_quote(
+    row: dict[str, Any],
+    quote: dict[str, Any] | None,
+    *,
+    enrich_hold_pnl: bool = False,
+) -> bool:
+    """用最新 tick 覆盖现价/涨跌幅（可选实仓当日盈亏）。已实现平仓不改盈亏。"""
+    last = _quote_last(quote)
+    if last is None:
+        return False
+    digits = _as_px_digits(row)
+    prev_last = row.get("现价")
+    try:
+        same = prev_last is not None and abs(float(prev_last) - last) < 1e-9
+    except (TypeError, ValueError):
+        same = False
+    changed = not same
+    row["现价"] = round(last, digits)
+
+    open_px = _as_pos_float(quote.get("open") if quote else None) or _as_pos_float(
+        row.get("开盘")
+    )
+    prev = _as_pos_float(quote.get("prev_close") if quote else None) or _as_pos_float(
+        row.get("昨收")
+    )
+    high = _as_pos_float(quote.get("high") if quote else None)
+    low = _as_pos_float(quote.get("low") if quote else None)
+    if open_px is not None and row.get("开盘") is None:
+        row["开盘"] = round(open_px, digits)
+        changed = True
+    if prev is not None:
+        old_prev = row.get("昨收")
+        row["昨收"] = round(prev, digits)
+        if old_prev != row["昨收"]:
+            changed = True
+        chg = round((last / prev - 1.0) * 100.0, 2)
+        if row.get("当日涨幅") != chg:
+            row["当日涨幅"] = chg
+            changed = True
+    if open_px is not None and open_px > 0:
+        vs = round((last / open_px - 1.0) * 100.0, 2)
+        if row.get("较开盘涨幅") != vs:
+            row["较开盘涨幅"] = vs
+            changed = True
+        pts = round(last - open_px, digits)
+        if row.get("较开盘点") != pts:
+            row["较开盘点"] = pts
+            changed = True
+    if high is not None:
+        row["最高"] = round(max(high, last), digits)
+    if low is not None and low > 0:
+        row["最低"] = round(min(low, last), digits)
+
+    buy = _as_pos_float(row.get("买点"))
+    if buy is not None and buy > 0:
+        dist = round((last / buy - 1.0) * 100.0, 2)
+        if row.get("距买点%") != dist:
+            row["距买点%"] = dist
+            changed = True
+
+    if row.get("已实现"):
+        return changed
+
+    try:
+        qty = int(row.get("持仓") or 0)
+    except (TypeError, ValueError):
+        qty = 0
+    if qty > 0:
+        mv = round(last * qty, 2)
+        if row.get("市值") != mv:
+            row["市值"] = mv
+            changed = True
+        if enrich_hold_pnl:
+            cost = _as_pos_float(row.get("成本"))
+            sess = str(row.get("交易日") or "")[:10]
+            buy_t = str(row.get("买入时间") or "")[:10]
+            bought_today = bool(buy_t and sess and buy_t == sess)
+            try:
+                from strategy.akq_math import mark_unrealized, session_day_pnl
+
+                if cost is not None:
+                    pnl, pnl_pct = mark_unrealized(last, cost, qty)
+                    if row.get("浮盈") != pnl:
+                        row["浮盈"] = pnl
+                        row["浮盈%"] = pnl_pct
+                        changed = True
+                day_pnl, day_pct, day_base = session_day_pnl(
+                    mark=last,
+                    qty=qty,
+                    cost=cost,
+                    prev_close=prev,
+                    bought_today=bought_today,
+                    fallback=open_px,
+                )
+                if day_pnl is not None and row.get("当日盈亏") != day_pnl:
+                    row["当日盈亏"] = day_pnl
+                    row["当日盈亏%"] = day_pct
+                    row["当日基数"] = day_base
+                    changed = True
+            except Exception:  # noqa: BLE001
+                pass
+    return changed
+
+
+def _clone_row_list(rows: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    return [dict(r) for r in (rows or []) if isinstance(r, dict)]
+
+
+def clone_snapshot_for_quote_patch(snap: dict[str, Any]) -> dict[str, Any]:
+    """浅拷贝快照 + 深拷贝行情相关行，避免与全量扫描互相踩踏。"""
+    out = dict(snap)
+    for key in (
+        "holdings",
+        "strategy1",
+        "strategy3",
+        "strategy15",
+        "strategy16",
+        "strategy17",
+    ):
+        val = snap.get(key)
+        if isinstance(val, list):
+            out[key] = _clone_row_list(val)
+        elif isinstance(val, dict) and key == "strategy3":
+            # strategy3 可能是 dict 包 rows
+            out[key] = dict(val)
+            if isinstance(val.get("rows"), list):
+                out[key]["rows"] = _clone_row_list(val.get("rows"))
+            if isinstance(val.get("boards"), list):
+                out[key]["boards"] = _clone_row_list(val.get("boards"))
+        elif isinstance(val, dict) and key in ("strategy8", "strategy15"):
+            out[key] = dict(val)
+    if isinstance(snap.get("strategy8"), dict):
+        s8 = dict(snap["strategy8"])
+        themes = s8.get("themes")
+        if isinstance(themes, list):
+            s8["themes"] = [dict(t) if isinstance(t, dict) else t for t in themes]
+        out["strategy8"] = s8
+    if isinstance(snap.get("account"), dict):
+        out["account"] = dict(snap["account"])
+    if isinstance(snap.get("indices"), list):
+        out["indices"] = [dict(x) if isinstance(x, dict) else x for x in snap["indices"]]
+    return out
+
+
+def patch_snapshot_live_quotes(
+    snap: dict[str, Any],
+    *,
+    get_quote: Callable[[str], dict[str, Any] | None],
+    sina_of: Callable[[str], str] | None = None,
+) -> bool:
+    """盘中快刷：只改现价/涨跌幅/持仓市值盈亏，不重跑信号扫描。"""
+    if sina_of is None:
+        from watch_config import sina_of as _sina_of
+
+        sina_of = _sina_of
+
+    def _q_for(row: dict[str, Any]) -> dict[str, Any] | None:
+        code = str(row.get("代码") or "")
+        if not code:
+            return None
+        try:
+            return get_quote(sina_of(code))
+        except Exception:  # noqa: BLE001
+            return None
+
+    changed = False
+    holdings = list(snap.get("holdings") or [])
+    for r in holdings:
+        if patch_row_live_quote(r, _q_for(r), enrich_hold_pnl=True):
+            changed = True
+    snap["holdings"] = holdings
+
+    for key in ("strategy1", "strategy16", "strategy17"):
+        rows = list(snap.get(key) or [])
+        if not rows:
+            continue
+        for r in rows:
+            if patch_row_live_quote(r, _q_for(r), enrich_hold_pnl=False):
+                changed = True
+        snap[key] = rows
+
+    # strategy15 可能是 list 或 dict.rows
+    s15 = snap.get("strategy15")
+    if isinstance(s15, list):
+        for r in s15:
+            if isinstance(r, dict) and patch_row_live_quote(
+                r, _q_for(r), enrich_hold_pnl=False
+            ):
+                changed = True
+    elif isinstance(s15, dict):
+        rows = list(s15.get("rows") or s15.get("stocks") or [])
+        for r in rows:
+            if isinstance(r, dict) and patch_row_live_quote(
+                r, _q_for(r), enrich_hold_pnl=False
+            ):
+                changed = True
+
+    # 账户：按持仓行重加今日盈亏，并日初+今日滚动总收益
+    day_sum = 0.0
+    day_base = 0.0
+    has_day = False
+    total_mv = 0.0
+    for r in holdings:
+        try:
+            qty = int(r.get("持仓") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        if qty <= 0 and not r.get("已实现"):
+            continue
+        if r.get("当日盈亏") is not None:
+            has_day = True
+            day_sum += float(r["当日盈亏"])
+            db = r.get("当日基数")
+            if db is not None and float(db) > 0:
+                day_base += float(db)
+        if qty > 0 and r.get("市值") is not None:
+            total_mv += float(r["市值"])
+    acc = dict(snap.get("account") or {})
+    if has_day:
+        acc["dayPnl"] = round(day_sum, 2)
+        acc["dayPnlPct"] = (
+            round(day_sum / day_base * 100.0, 2) if day_base > 0 else None
+        )
+        changed = True
+    if total_mv > 0:
+        acc["marketValue"] = round(total_mv, 2)
+    snap["account"] = apply_day_linked_account_equity(acc)
+    return changed
+
+
 def rebase_snapshot_day_pnl(snap: dict[str, Any], *, session: str) -> dict[str, Any]:
-    """对整份快照重算持仓今日盈亏，并刷新账户合计 dayPnl。"""
+    """对整份快照重算持仓今日盈亏，并刷新账户合计 dayPnl/总收益。"""
     out = dict(snap)
     holdings = rebase_holdings_day_pnl(list(out.get("holdings") or []), session=session)
     out["holdings"] = holdings
@@ -334,7 +639,12 @@ def rebase_snapshot_day_pnl(snap: dict[str, Any], *, session: str) -> dict[str, 
     day_base = 0.0
     has_day = False
     for r in holdings:
-        if int(r.get("持仓") or 0) <= 0:
+        try:
+            qty = int(r.get("持仓") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        # 与账户合计口径一致：实仓 + 当日已实现平仓
+        if qty <= 0 and not r.get("已实现"):
             continue
         if r.get("当日盈亏") is None:
             continue
@@ -352,7 +662,7 @@ def rebase_snapshot_day_pnl(snap: dict[str, Any], *, session: str) -> dict[str, 
     else:
         acc["dayPnl"] = None
         acc["dayPnlPct"] = None
-    out["account"] = acc
+    out["account"] = apply_day_linked_account_equity(acc)
     return out
 
 
@@ -466,6 +776,7 @@ def build_watch_snapshot(
     strategy3: dict[str, Any] | None = None,
     strategy8: dict[str, Any] | None = None,
     strategy15: dict[str, Any] | None = None,
+    strategy17: list[dict[str, Any]] | None = None,
     sectors: dict[str, Any] | None = None,
     refresh_sec: int = 5,
     portfolio_codes: set[str] | None = None,
@@ -483,6 +794,8 @@ def build_watch_snapshot(
         if src == "self" or label == "自选":
             return 0
         if src == "factor27" or label == "因子27":
+            return 1
+        if src == "factor28" or label == "紫阳真君":
             return 1
         return 2
 
@@ -506,11 +819,17 @@ def build_watch_snapshot(
         _row_json(r)
         for r in filter_portfolio_holdings(rows, portfolio_codes=portfolio_codes)
     ]
+    try:
+        from watch_config import strategy1_codes as _s1_codes_fn
+
+        s1_codes = _s1_codes_fn()
+    except Exception:  # noqa: BLE001
+        s1_codes = set(strategy_codes)
     strategy1_rows = _sort_pool_rows(
         [
-            _strip_holdings_pnl(r)
+            _retag_strategy1_row(_strip_holdings_pnl(r))
             for r in rows
-            if code_key(str(r.get("代码") or "")) in strategy_codes
+            if code_key(str(r.get("代码") or "")) in s1_codes
         ]
     )
     try:
@@ -526,6 +845,22 @@ def build_watch_snapshot(
             if code_key(str(r.get("代码") or "")) in s16_codes
         ]
     )
+    try:
+        from watch_config import ziyang_codes
+
+        s17_codes = ziyang_codes()
+    except Exception:  # noqa: BLE001
+        s17_codes = set()
+    if strategy17 is not None:
+        strategy17_rows = list(strategy17)
+    else:
+        strategy17_rows = _sort_pool_rows(
+            [
+                _strip_holdings_pnl(r)
+                for r in rows
+                if code_key(str(r.get("代码") or "")) in s17_codes
+            ]
+        )
     slot_meta = None
     for r in rows:
         if isinstance(r.get("_slot_meta"), dict):
@@ -565,6 +900,7 @@ def build_watch_snapshot(
         "strategy8": strategy8 or {},
         "strategy15": strategy15 or {},
         "strategy16": strategy16_rows,
+        "strategy17": strategy17_rows,
         "sectors": sectors or {},
         "strategies": strategies or [],
     }

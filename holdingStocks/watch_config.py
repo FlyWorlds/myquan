@@ -277,6 +277,9 @@ def limit_down_pct_of(code: str) -> float:
 limit_up_pct_of = limit_down_pct_of
 
 
+# 行情分层硬帽：热池可 SSE；叠加池永不 SSE，且不进 collect_rows
+MAX_SSE_QUOTES = 48
+
 CORE_LEADER_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "picks_quarter.json"
 STRATEGY16_THR_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "thr_2026.json"
 
@@ -291,11 +294,15 @@ SELF_WATCHLIST_PICKS: tuple[tuple[str, str], ...] = (
 STRATEGY16_EXTRA_PICKS = SELF_WATCHLIST_PICKS
 
 POOL_SRC_FACTOR27 = "factor27"
+POOL_SRC_FACTOR28 = "factor28"
 POOL_SRC_SELF = "self"
 POOL_SRC_LABEL = {
     POOL_SRC_FACTOR27: "因子27",
+    POOL_SRC_FACTOR28: "紫阳真君",
     POOL_SRC_SELF: "自选",
 }
+
+ZIYANG_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy17_ziyang" / "picks_3m.json"
 
 
 def self_watchlist_pick_rows() -> list[dict[str, Any]]:
@@ -344,6 +351,34 @@ def factor27_codes() -> set[str]:
         if c and c != "000000":
             out.add(c)
     return out
+
+
+def load_ziyang_payload() -> dict[str, Any]:
+    """策略十七·紫阳真君池产物。"""
+    if not ZIYANG_PICKS_PATH.is_file():
+        return {"n_picks": 0, "picks": []}
+    try:
+        raw = json.loads(ZIYANG_PICKS_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {"n_picks": 0, "picks": []}
+    return dict(raw) if isinstance(raw, dict) else {"n_picks": 0, "picks": []}
+
+
+def factor28_codes() -> set[str]:
+    """仅因子28 紫阳真君席位池。"""
+    out: set[str] = set()
+    for it in load_ziyang_payload().get("picks") or []:
+        if not isinstance(it, dict):
+            continue
+        c = code_key(str(it.get("code") or it.get("symbol") or ""))
+        if c and c != "000000":
+            out.add(c)
+    return out
+
+
+def ziyang_codes() -> set[str]:
+    """策略十七展示宇宙 = 因子28 ∪ 公共自选池。"""
+    return factor28_codes() | self_watchlist_codes()
 
 
 def core_leader_codes() -> set[str]:
@@ -601,8 +636,17 @@ def strategy1_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
         if c in seen:
             continue
         seen.add(c)
-        out.append(w)
+        item = dict(w)
+        item["universe"] = "strategy1"
+        item.setdefault("pool_src", "strategy1_pool")
+        item.setdefault("池来源", "策略池")
+        out.append(item)
     return merge_self_watchlist(out, holdings)
+
+
+def strategy1_codes(holdings: dict[str, Any] | None = None) -> set[str]:
+    """策略一 Tab 宇宙（定盘池 ∪ 公共自选）。"""
+    return {code_key(w["code"]) for w in strategy1_watchlist(holdings)}
 
 
 def strategy_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -745,8 +789,8 @@ def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str
 WATCHLIST = strategy_watchlist()
 
 
-def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """盯盘拉行情/算信号：默认策略池 + 公共自选 + 其余核心龙头补集 + 用户持仓池（去重）。"""
+def primary_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """热池：默认策略 + 公共自选 + 用户持仓。行情 SSE / 首屏优先。"""
     if holdings is None:
         try:
             from index import load_holdings
@@ -774,8 +818,37 @@ def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
             continue
         seen.add(code)
         out.append(meta_for_code(code, holdings))
-    # 兜底：无论默认策略为何，公共自选始终在盯盘宇宙内
     return merge_self_watchlist(out, holdings)
+
+
+def overlay_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """叠加观察池（如紫阳真君）：仅新浪批量行情，不占东财 SSE。"""
+    primary_codes = {code_key(w["code"]) for w in primary_watchlist(holdings)}
+    out: list[dict[str, Any]] = []
+    for code in factor28_codes():
+        if code in primary_codes:
+            continue
+        item = meta_for_code(code, holdings)
+        item["universe"] = "strategy17"
+        item["pool_src"] = POOL_SRC_FACTOR28
+        item["池来源"] = POOL_SRC_LABEL[POOL_SRC_FACTOR28]
+        item["quote_tier"] = "overlay"
+        out.append(item)
+    return out
+
+
+def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """全量盯盘宇宙 = 热池 ∪ 叠加池（信号扫描）；SSE 只用 primary_watchlist。"""
+    base = primary_watchlist(holdings)
+    seen = {code_key(w["code"]) for w in base}
+    out = list(base)
+    for w in overlay_watchlist(holdings):
+        c = code_key(w["code"])
+        if c in seen:
+            continue
+        seen.add(c)
+        out.append(w)
+    return out
 
 
 def empty_position(meta: dict[str, Any]) -> dict[str, Any]:

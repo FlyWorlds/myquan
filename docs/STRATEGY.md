@@ -187,6 +187,18 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 
 ---
 
+## 4.7 策略十七 · 紫阳真君（strategy17）
+
+> 研究用途，不构成投资建议。盯盘有实时面板；**非默认交易池**（四槽仍只认策略十六）。
+
+- **选股（因子28）**：国泰海通/国泰君安**武汉紫阳东路**营业部近 **3 个月**龙虎榜成交并集（买或卖任一出现）；按上榜日数/买入额排序。
+- **席位说明**：东财营业部代码 `10026937`；b7 席位库民间映射「消闲派」（非官方认定）。
+- **买卖规则**：同策略十六内核（因子26 + 因子2；因子22 默认关）；本 Tab 仅叠加观察，**不自动入四槽**。
+- **刷新池**：`python strategy/run_ziyang_pool.py` → `backtest/strategy17_ziyang/picks_3m.json`。
+- 说明：[`FACTOR28.md`](FACTOR28.md)。
+
+---
+
 ## 5. 回测约定
 
 - 日线：前复权 qfq，缓存 `data_cache/`。
@@ -211,6 +223,7 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 | [`FACTOR24.md`](FACTOR24.md) | 因子24 连板梯度情绪 |
 | [`FACTOR25.md`](FACTOR25.md) | 因子25 30m 震荡减磨损 |
 | [`FACTOR27.md`](FACTOR27.md) | 因子27 核心龙头（策略十六宇宙） |
+| [`FACTOR28.md`](FACTOR28.md) | 因子28 紫阳真君（策略十七宇宙） |
 | [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md) | 策略十六/因子26 算法审核（2026-09-11） |
 | [`TODO.MD`](../TODO.MD) | 任务优先级 |
 | [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 凯盛 OpenBreak（因子1）底稿 |

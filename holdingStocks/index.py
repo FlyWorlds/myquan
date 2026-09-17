@@ -15,7 +15,7 @@
     （levels / signal / replay / first_session_exit_fill）。
 
 功能：
-  · 拉取当日实时行情（东财 SSE + 新浪批量；全池不串行拉历史分钟）
+  · 拉取当日实时行情（SSE 热池=持仓+默认策略；新浪批量=全池含叠加观察；叠加池延后）
   · 因子26 实仓：按成本+持仓峰值算动态止盈价；1 分钟顺序判触达
   · 阈值与信号：因子26 多层止盈（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
@@ -154,6 +154,8 @@ from watch_config import (
     USE_FACTOR4,
     WATCHLIST,
     effective_watchlist,
+    overlay_watchlist,
+    primary_watchlist,
     normalize_signal_session,
     trading_session_date,
     calc_day_pnl as _calc_day_pnl,
@@ -194,8 +196,11 @@ from watch_config import (
 )
 from watch_snapshot import (
     SNAPSHOT_VERSION,
+    apply_day_linked_account_equity,
     apply_feed_health,
     build_watch_snapshot,
+    clone_snapshot_for_quote_patch,
+    patch_snapshot_live_quotes,
     rebase_snapshot_day_pnl,
     retain_last_snapshot,
     should_keep_last_snapshot,
@@ -332,9 +337,34 @@ _ws_hub: LocalWsHub | None = None
 _watch_feed: Any = None
 _WATCH_SNAP_LOCK = threading.RLock()
 _WATCH_FRONT_READY = threading.Event()
+# 首屏只用热池；冷启动后再扫紫阳等叠加池，避免拖慢持仓/默认策略
+_WATCH_OVERLAY_READY = threading.Event()
 _last_watch_snapshot: dict[str, Any] | None = None
 _last_snapshot_digest: str | None = None
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
+
+
+def _scan_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """信号扫描：热池（默认交易）∪ 策略一盯盘池。
+
+    紫阳等大观察池不进此名单（独立轻量行情）。
+    """
+    from watch_config import strategy1_watchlist
+
+    base = primary_watchlist(holdings)
+    seen = {_code_key(w["code"]) for w in base}
+    out = list(base)
+    for w in strategy1_watchlist(holdings):
+        c = _code_key(w["code"])
+        if not c or c in seen:
+            continue
+        seen.add(c)
+        item = dict(w)
+        item["universe"] = "strategy1"
+        item.setdefault("pool_src", "strategy1_pool")
+        item.setdefault("池来源", "策略池")
+        out.append(item)
+    return out
 _REPLAY_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _STRATEGY_PNL_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _MIN_WATCH_REFRESH_SEC = 1.0
@@ -516,7 +546,9 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
 }
 
 # 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
-WATCH_LIVE_TAB_IDS = frozenset({"strategy1", "strategy3", "strategy8", "strategy15", "strategy16"})
+WATCH_LIVE_TAB_IDS = frozenset(
+    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy17"}
+)
 
 _REGISTRY_KIND_ZH = {
     "watch": "盯盘",
@@ -636,6 +668,8 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
             tabs[-1]["reportPath"] = "docs/STRATEGY.md"
         if spec.id == "strategy16":
             tabs[-1]["reportPath"] = "docs/FACTOR27.md"
+        if spec.id == "strategy17":
+            tabs[-1]["reportPath"] = "docs/FACTOR28.md"
         from strategy_picks_loader import load_strategy_picks
 
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
@@ -804,14 +838,18 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
 
 
 def _row_counts_in_watch_pnl(row: dict[str, Any]) -> bool:
-    """账户今日盈亏：仅实仓 + 当日真实纸面卖出（已实现）。不含策略回放/假三槽平仓。"""
+    """账户今日盈亏：仅实仓 + 当日真实纸面卖出（已实现/三槽平仓）。不含策略回放假平仓。"""
     if row.get("error"):
         return False
     try:
         qty = int(row.get("持仓") or 0)
     except (TypeError, ValueError):
         qty = 0
-    return qty > 0 or bool(row.get("已实现"))
+    if qty > 0:
+        return True
+    if bool(row.get("已实现")) or bool(row.get("三槽平仓")):
+        return True
+    return False
 
 
 def _paper_equity_base(data: dict[str, Any] | None = None) -> float:
@@ -1007,7 +1045,8 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """账户合计（JSON 快照 / CLI 共用口径）。
 
     · 今日盈亏：实仓 session_day_pnl + 当日已实现 day_pnl（只认今日平仓）
-    · 总收益：当前总资产 − 纸面本金（自 PAPER_PNL_START / 默认 9/9）
+    · 总资产：日初锁定 + 今日盈亏（与分票加总同动；回退现金+市值）
+    · 总收益：总资产 − 纸面本金（自 PAPER_PNL_START / 默认 9/9）
     """
     total_day_pnl = 0.0
     total_mv = 0.0
@@ -1113,7 +1152,7 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         else None
     )
     day_pnl_out = round(total_day_pnl, 2) if has_day else None
-    return {
+    summary = {
         "totalPnl": total_pnl,
         "totalPnlPct": total_pnl_pct,
         "totalPnlStart": str(
@@ -1136,6 +1175,15 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "settledDayPnl": settled_day if settled_n > 0 else None,
         "factor2Summary": format_factor2_summary(f2_raw),
     }
+    # 日初已锁定时：总资产/总收益 = 日初 + 今日盈亏（动态并入）
+    open_sess = str(holdings_meta.get("account_total_open_session") or "")[:10]
+    if (
+        day_pnl_out is not None
+        and account_open is not None
+        and open_sess == str(session_for_open)[:10]
+    ):
+        summary = apply_day_linked_account_equity(summary)
+    return summary
 
 
 def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
@@ -1153,6 +1201,7 @@ def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
         ),
         "strategy15": snapshot.get("strategy15"),
         "strategy16": snapshot.get("strategy16"),
+        "strategy17": snapshot.get("strategy17"),
         "phaseKey": snapshot.get("phaseKey"),
         "strategy": snapshot.get("strategy"),
         "strategyTabs": [
@@ -1215,6 +1264,51 @@ def _broadcast_watch_snapshot(snap: dict[str, Any]) -> None:
         hub.broadcast_text(body)
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] WS 广播失败: {e}")
+
+
+_QUOTE_PATCH_MIN_SEC = 0.4
+
+
+def publish_live_quote_patch() -> bool:
+    """盘中行情快刷：现价/涨跌幅/持仓盈亏，不重跑 collect_rows。
+
+    与全量扫描并行；若扫描已换了更新快照则丢弃本轮 patch，避免旧信号盖新。
+    """
+    global _last_watch_snapshot
+    feed = _watch_feed
+    if feed is None:
+        return False
+    base = _last_watch_snapshot
+    if not isinstance(base, dict) or base.get("type") != "snapshot":
+        return False
+    snap = clone_snapshot_for_quote_patch(base)
+    try:
+        from watch_config import sina_of
+
+        changed = patch_snapshot_live_quotes(
+            snap, get_quote=feed.get_quote, sina_of=sina_of
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 行情快刷失败: {e}")
+        return False
+    if not changed:
+        return False
+    # 叠加池独立缓存：有新行情则替换 strategy17 行
+    try:
+        from strategy17_watch import cached_strategy17_rows
+
+        s17 = cached_strategy17_rows()
+        if s17:
+            snap["strategy17"] = s17
+    except Exception:  # noqa: BLE001
+        pass
+    _stamp_snapshot_liveness(snap)
+    # 竞态：全量扫描已写入更新快照 → 放弃本轮
+    if _last_watch_snapshot is not base:
+        return False
+    _last_watch_snapshot = snap
+    _broadcast_watch_snapshot(snap)
+    return True
 
 
 def _deferred_sectors_placeholder(*, error: str | None = None) -> dict[str, Any]:
@@ -1377,6 +1471,12 @@ def publish_watch_snapshot(
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 策略十五快照失败（继续盯盘）: {e}")
         strategy15 = {"error": str(e), "rows": []}
+    try:
+        from strategy17_watch import cached_strategy17_rows
+
+        strategy17_rows = cached_strategy17_rows()
+    except Exception:  # noqa: BLE001
+        strategy17_rows = []
     snapshot = build_watch_snapshot(
         rows=rows,
         indices=indices,
@@ -1393,6 +1493,7 @@ def publish_watch_snapshot(
         strategy3=strategy3,
         strategy8=strategy8,
         strategy15=strategy15,
+        strategy17=strategy17_rows,
         sectors=sectors,
         refresh_sec=refresh_sec,
         portfolio_codes=portfolio_codes,
@@ -1529,6 +1630,7 @@ def _seed_boot_watch_snapshot() -> None:
         "strategy8": {},
         "strategy15": {},
         "strategy16": [],
+        "strategy17": [],
         "sectors": {},
         "strategies": _watch_tabs_with_live_s8({}),
     }
@@ -2586,13 +2688,38 @@ def _equity_is_cash_only(
     return _account_has_open_qty(data)
 
 
+def _prev_settlement_account_total(
+    data: dict[str, Any],
+    session: str,
+) -> float | None:
+    """上一交易日结算总资产（优先终稿），作今日日初锚。"""
+    day = str(session or "")[:10]
+    book = data.get("daily_settlements")
+    if not isinstance(book, dict) or len(day) < 10:
+        return None
+    prev_days = [str(d)[:10] for d in book if str(d)[:10] < day]
+    if not prev_days:
+        return None
+    prev = max(prev_days)
+    rec = book.get(prev)
+    if not isinstance(rec, dict):
+        # key 可能带完整日期外格式
+        for k, v in book.items():
+            if str(k)[:10] == prev and isinstance(v, dict):
+                rec = v
+                break
+    if not isinstance(rec, dict):
+        return None
+    return _as_money(rec.get("account_total"))
+
+
 def _ensure_account_open_session(
     data: dict[str, Any],
     *,
     session: str,
     account_total: float | None,
 ) -> None:
-    """跨日或首次：锁定日初总资产。有实仓时禁止把「仅现金」写成日初。"""
+    """跨日或首次：锁定日初总资产。优先昨收结算；有实仓时禁止「仅现金」日初。"""
     open_session = str(data.get("account_total_open_session") or "")
     existing = _account_total_open(data)
     if open_session == session and existing is not None:
@@ -2600,11 +2727,14 @@ def _ensure_account_open_session(
             data["account_total_open"] = round(float(DEFAULT_ACCOUNT_TOTAL), 2)
             save_holdings(data)
         return
-    if account_total is None or account_total <= 0:
+    lock_total = _prev_settlement_account_total(data, session)
+    if lock_total is None or lock_total <= 0:
+        lock_total = account_total
+    if lock_total is None or lock_total <= 0:
         return
-    if _equity_is_cash_only(data, account_total):
+    if _equity_is_cash_only(data, lock_total):
         return
-    data["account_total_open"] = round(float(account_total), 2)
+    data["account_total_open"] = round(float(lock_total), 2)
     data["account_total_open_session"] = session
     save_holdings(data)
 
@@ -2743,6 +2873,22 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
         # 新交易日：隔夜仓可卖=持仓（对齐券商 T+1 交收后）
         if not is_t1_buy_day(pos.get("buy_time"), sess):
             pos["available"] = int(pos.get("qty") or 0)
+        # 冻结隔夜峰值：盘中 peak_high 抬升不得再进开盘保护
+        if int(pos.get("qty") or 0) > 0:
+            try:
+                cost_f = float(pos.get("cost") or 0)
+            except (TypeError, ValueError):
+                cost_f = 0.0
+            if cost_f > 0:
+                freeze_overnight_peak_for_session(
+                    pos,
+                    session=sess,
+                    cost=cost_f,
+                    prev_close=None,
+                    open_px=None,
+                    t0=False,
+                    persist=False,
+                )
     unlock_overnight_available(data, sess)
     save_holdings(data)
     _ensure_signal_day_caches(force=True)
@@ -4568,6 +4714,8 @@ def paper_exit_decision(
     不用「全日最低 vs 盘中抬高后的止损」。
     买入日不算隔夜开盘保护，且只把硬保护触达算 hit_show（中段/抬高卖价不可记）。
     昨收/昨高由 overnight_open_protect_px 按买入日判断。
+    开盘保护峰值不得含今日开盘/盘中新高（涨停次日高开延续峰值≠开盘保护触发）。
+    9:15–9:25 竞价 K 不进 1m 路径；半仓成交价=阶梯策略价，不得与开盘保护价混用。
     """
     empty = {
         "hit": False,
@@ -4610,11 +4758,30 @@ def paper_exit_decision(
 
     protect = 0.0
     if cost_f > 0:
+        # 开盘保护只用隔夜峰值。调用方应传 freeze_overnight_peak_for_session 的结果。
+        # 兜底：高开且 peak≥今开 → 峰值含今日（黑猫），回退 max(成本, 昨收)；
+        # 低开仍保留昨高（真缺口保护，如中天）。
+        peak_for_open = None
+        try:
+            raw_peak = float(peak_high) if peak_high is not None else 0.0
+        except (TypeError, ValueError):
+            raw_peak = 0.0
+        prev_f = 0.0
+        try:
+            prev_f = float(prev_close) if prev_close is not None else 0.0
+        except (TypeError, ValueError):
+            prev_f = 0.0
+        if raw_peak > 0:
+            gap_up = bool(open_f > 0 and prev_f > 0 and open_f > prev_f + 1e-12)
+            if gap_up and raw_peak + 1e-12 >= open_f:
+                peak_for_open = max(x for x in (cost_f, prev_f) if x > 0) or None
+            else:
+                peak_for_open = raw_peak
         protect = float(
             overnight_open_protect_px(
                 cost_f,
                 prev_close,
-                peak_high=peak_high,
+                peak_high=peak_for_open,
                 overnight_high_ok=overnight_high_ok,
                 buy_time=buy_time,
                 session=session,
@@ -4980,6 +5147,22 @@ def settle_due_paper_stops(
         path_hit = bool(row.get("_path_hit")) or (
             str(row.get("已触止损") or "") == "是" and path_px > 0
         )
+        try:
+            cost_px = float(
+                pos.get("cost") if pos.get("cost") is not None else (row.get("成本") or 0)
+            )
+        except (TypeError, ValueError):
+            cost_px = 0.0
+        peak_for_exit = freeze_overnight_peak_for_session(
+            pos,
+            session=session,
+            cost=cost_px if cost_px > 0 else None,
+            prev_close=row.get("昨收"),
+            open_px=open_px,
+            qty=qty,
+            code=code,
+            persist=True,
+        )
         dec = paper_exit_decision(
             qty=qty,
             sellable=sellable,
@@ -4989,7 +5172,7 @@ def settle_due_paper_stops(
             open_px=open_px,
             prev_close=row.get("昨收"),
             cost=pos.get("cost") if pos.get("cost") is not None else row.get("成本"),
-            peak_high=pos.get("peak_high"),
+            peak_high=peak_for_exit if peak_for_exit > 0 else pos.get("peak_high"),
             working_stop=stop,
             path_hit=path_hit,
             path_fill_px=path_px,
@@ -5362,6 +5545,98 @@ def _pos_overnight_high_ok(
     )
 
 
+def freeze_overnight_peak_for_session(
+    pos: dict[str, Any],
+    *,
+    session: str,
+    cost: float | None = None,
+    prev_close: float | None = None,
+    open_px: float | None = None,
+    t0: bool = False,
+    qty: int | None = None,
+    code: str | None = None,
+    persist: bool = False,
+) -> float:
+    """冻结当日「隔夜峰值」，供开盘保护 / 1m seed 使用。
+
+    盘中 path 会把今日新高写进 ``peak_high``；若再用它算开盘保护，会出现
+    「涨停次日高开 → 盘中冲高 → 回用抬高峰值把保护抬到今开之上 → 假开盘保护」
+    （黑猫 002068）。9:15 或当日首次结算时冻结一次，全日不变。
+
+    高开且冻结值已 ≥ 今开：视为含今日行情，回退 max(成本, 昨收)。
+    低开仍保留昨高（真缺口保护）。
+    """
+    sess = str(session or "")[:10]
+    if not isinstance(pos, dict) or not sess:
+        return 0.0
+    try:
+        q = int(qty if qty is not None else (pos.get("qty") or 0))
+    except (TypeError, ValueError):
+        q = 0
+    try:
+        cost_f = float(cost if cost is not None else (pos.get("cost") or 0))
+    except (TypeError, ValueError):
+        cost_f = 0.0
+    if cost_f <= 0:
+        return 0.0
+
+    frozen_ok = str(pos.get("overnight_peak_session") or "") == sess
+    seed = 0.0
+    if frozen_ok:
+        try:
+            seed = float(pos.get("overnight_peak") or 0)
+        except (TypeError, ValueError):
+            seed = 0.0
+    if seed <= 0:
+        try:
+            peak_h = float(pos.get("peak_high") or 0) or None
+        except (TypeError, ValueError):
+            peak_h = None
+        seed = float(
+            overnight_peak_px(
+                cost_f,
+                prev_close,
+                peak_h,
+                buy_time=pos.get("buy_time"),
+                session=sess,
+                qty=q,
+                t0=bool(t0),
+            )
+            or 0
+        )
+        if seed <= 0:
+            seed = cost_f
+            if peak_h and peak_h > 0:
+                seed = max(seed, float(peak_h))
+        pos["overnight_peak"] = round(float(seed), 4)
+        pos["overnight_peak_session"] = sess
+        if persist:
+            ck = _code_key(str(code or ""))
+            if ck:
+                try:
+                    data = load_holdings()
+                    p = (data.get("positions") or {}).get(ck)
+                    if isinstance(p, dict):
+                        p["overnight_peak"] = pos["overnight_peak"]
+                        p["overnight_peak_session"] = sess
+                        save_holdings(data)
+                except Exception:  # noqa: BLE001
+                    pass
+
+    try:
+        open_f = float(open_px or 0)
+    except (TypeError, ValueError):
+        open_f = 0.0
+    try:
+        prev_f = float(prev_close or 0)
+    except (TypeError, ValueError):
+        prev_f = 0.0
+    # 高开且峰值已到/超过今开 → 含今日；开盘保护只用成本/昨收
+    if open_f > 0 and prev_f > 0 and open_f > prev_f + 1e-12 and seed + 1e-12 >= open_f:
+        seed = max(x for x in (cost_f, prev_f) if x > 0)
+    return float(seed) if seed > 0 else 0.0
+
+
 def collect_rows(
     get_quote: Callable[[str], dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
@@ -5386,7 +5661,7 @@ def collect_rows(
     signal_ok_global = is_signal_window()
     stopped_this_scan = False
 
-    for w in effective_watchlist(holdings):
+    for w in _scan_watchlist(holdings):
         code = w["code"]
         pool_src = str(w.get("pool_src") or "")
         if not pool_src:
@@ -5394,9 +5669,25 @@ def collect_rows(
                 pool_src = "self"
             elif str(w.get("universe") or "") == "strategy16":
                 pool_src = "factor27"
+            elif str(w.get("universe") or "") == "strategy1":
+                pool_src = "strategy1_pool"
+            elif str(w.get("universe") or "") == "strategy17":
+                pool_src = "factor28"
         pool_label = str(
             w.get("池来源")
-            or ("自选" if pool_src == "self" else ("因子27" if pool_src == "factor27" else ""))
+            or (
+                "自选"
+                if pool_src == "self"
+                else (
+                    "因子27"
+                    if pool_src == "factor27"
+                    else (
+                        "策略池"
+                        if pool_src == "strategy1_pool"
+                        else ("紫阳真君" if pool_src == "factor28" else "")
+                    )
+                )
+            )
         )
         entry_pct = _watch_pct(w)
         base_stop_pct = _watch_stop_pct(w)
@@ -5470,15 +5761,27 @@ def collect_rows(
                 except (TypeError, ValueError):
                     peak_h = None
                 if cost_h and cost_h > 0:
-                    seed_h = overnight_peak_px(
-                        cost_h,
-                        q.get("prev_close"),
-                        peak_h,
-                        buy_time=buy_time_early,
+                    seed_h = freeze_overnight_peak_for_session(
+                        pos_early,
                         session=str(q["session"]),
-                        qty=qty_early,
+                        cost=cost_h,
+                        prev_close=q.get("prev_close"),
+                        open_px=q.get("open"),
                         t0=bool(w.get("t0")),
+                        qty=qty_early,
+                        code=code,
+                        persist=True,
                     )
+                    if seed_h <= 0:
+                        seed_h = overnight_peak_px(
+                            cost_h,
+                            q.get("prev_close"),
+                            peak_h,
+                            buy_time=buy_time_early,
+                            session=str(q["session"]),
+                            qty=qty_early,
+                            t0=bool(w.get("t0")),
+                        )
                     if seed_h <= 0:
                         seed_h = cost_h
                         if peak_h and peak_h > 0:
@@ -6018,7 +6321,7 @@ def collect_rows(
                 open_px=float(q.get("open") or 0),
                 prev_close=q.get("prev_close"),
                 cost=cost,
-                peak_high=pos.get("peak_high") or seed_h,
+                peak_high=seed_h if seed_h else (pos.get("peak_high")),
                 working_stop=float(_stop_chk or stop_fill_px or 0),
                 path_hit=bool(hit_path_settle),
                 path_fill_px=float(path_touch_stop or stop_fill_px or 0),
@@ -6050,6 +6353,12 @@ def collect_rows(
                     stop_fill_px = float(_exit_dec["fill_px"])
                 if _exit_dec.get("action_kind"):
                     path_action_kind = str(_exit_dec["action_kind"])
+                # 开盘保护=全清；勿把 path 残留的 ladder_half_10 带进半仓
+                _exit_kind = str(_exit_dec.get("kind") or "")
+                _exit_sk = str(_exit_dec.get("stop_kind") or "")
+            else:
+                _exit_kind = ""
+                _exit_sk = str(lv.get("stop_kind") or "")
             # 买入日涨停/盈≥3%/现价已收回：作废已记，禁止后面再 persist 写回
             if t1_today and qty > 0:
                 try:
@@ -6080,6 +6389,11 @@ def collect_rows(
                         sticky.pop(code, None)
             # 已触止损且可卖 → 本票先平（卡片走已实现分支）；漏平由 settle_due 按 5s/1m 补
             if qty > 0 and hit_stop_settle and sellable > 0 and not stop_locked:
+                _fill_ak = path_action_kind
+                _fill_sk = _exit_sk if _exit_kind else str(lv.get("stop_kind") or "")
+                if _exit_kind == "open_protect" or _exit_dec.get("open_bell"):
+                    _fill_ak = "full"
+                    _fill_sk = ""
                 apply_stop_fill(
                     code=code,
                     meta=w,
@@ -6091,8 +6405,8 @@ def collect_rows(
                     prev_close=q.get("prev_close"),
                     open_px=float(q["open"]),
                     px_digits=px_digits,
-                    action_kind=path_action_kind,
-                    stop_kind=str(lv.get("stop_kind") or ""),
+                    action_kind=_fill_ak,
+                    stop_kind=_fill_sk,
                     first_hit_ts=_open_protect_hit_ts(
                         session=str(q["session"]),
                         fill_px=stop_fill_px,
@@ -7415,10 +7729,46 @@ def _enrich_closed_day_pnl(
     lots: dict[str, dict[str, Any]] | None = None,
     traces: dict[str, dict[str, Any]] | None = None,
 ) -> None:
-    """已平仓卡片：今买相对买入价、昨仓相对昨收；30万×30%槽位；已实现保留记账当日盈亏。"""
+    """已平仓卡片：今买相对买入价、昨仓相对昨收；已实现优先用 realized_today 记账。"""
     if row.get("error") or not _is_closed_trace_row(row, lots=lots, traces=traces):
         return
     code = _code_key(str(row.get("代码") or ""))
+    sess = str(row.get("交易日") or "")[:10]
+    book = load_holdings()
+    realized_rec = (book.get("realized_today") or {}).get(code)
+    if (
+        isinstance(realized_rec, dict)
+        and str(realized_rec.get("session") or "")[:10] == sess
+        and realized_rec.get("reason") in EXIT_REASONS
+    ):
+        # 账本已有纸面卖出：必须打上「已实现」，否则 UI 今日平仓栏 / 账户合计都会漏掉
+        row["已实现"] = True
+        row["三槽平仓"] = True
+        row["持仓"] = 0
+        try:
+            sold = int(realized_rec.get("qty") or 0)
+        except (TypeError, ValueError):
+            sold = 0
+        if sold > 0:
+            row["卖出数量"] = sold
+        if realized_rec.get("price") is not None:
+            row["成交价"] = realized_rec.get("price")
+        if realized_rec.get("cost") is not None:
+            row["成本"] = realized_rec.get("cost")
+        if realized_rec.get("pnl") is not None:
+            row["浮盈"] = realized_rec.get("pnl")
+        if realized_rec.get("pnl_pct") is not None:
+            row["浮盈%"] = realized_rec.get("pnl_pct")
+        if realized_rec.get("day_pnl") is not None:
+            row["当日盈亏"] = realized_rec.get("day_pnl")
+            row["当日盈亏%"] = realized_rec.get("day_pnl_pct")
+            row["当日基数"] = realized_rec.get("day_base")
+        if not _is_stop_closed_status(str(row.get("持仓状态") or "")):
+            row["持仓状态"] = STATUS_STOP_CLOSED
+        _freeze_closed_exit_levels(row)
+        _remember_slot_closed(row)
+        return
+
     lot = (lots if lots is not None else _last_open_lots_from_trades()).get(code) or {}
     cost = lot.get("cost")
     try:
@@ -7445,8 +7795,11 @@ def _enrich_closed_day_pnl(
             return
         qty_slot = 0
     else:
-        qty_slot = _paper_slot_qty(cost_f, account_total=DEFAULT_ACCOUNT_TOTAL) if cost_f else 0
-        qty = qty_slot if qty_slot > 0 else qty_lot
+        # 无 realized_today 时不要用假槽位股数冒充三槽平仓（会漏「已实现」且盈亏错）
+        qty_slot = 0
+        qty = qty_lot
+        if qty <= 0:
+            return
     if qty <= 0:
         return
     bars = row.pop("_day_bars", None)
@@ -7478,7 +7831,6 @@ def _enrich_closed_day_pnl(
     prev = _as_money(row.get("昨收"))
     open_px = _as_money(row.get("开盘"))
     lot_day = str(lot.get("time") or "")[:10]
-    sess = str(row.get("交易日") or "")[:10]
     bought_today = bool(lot_day and sess and lot_day == sess)
     day_pnl, day_pct, day_base = session_day_pnl(
         mark=fill,
@@ -8353,13 +8705,14 @@ def _refresh_once(
         try:
             from wechat_notify import notify_watch_rows
 
-            from watch_config import is_strategy16_watch_only
+            from watch_config import is_default_strategy_pool_code
 
+            # 今日测试重点：默认策略池（策略十六）买卖/预警/触及 → 手机
             notify_watch_rows(
                 [
                     r
                     for r in rows
-                    if not is_strategy16_watch_only(str(r.get("代码") or ""))
+                    if is_default_strategy_pool_code(str(r.get("代码") or ""))
                 ]
             )
         except Exception as e:  # noqa: BLE001
@@ -8885,12 +9238,33 @@ def cmd_watch(args: argparse.Namespace) -> None:
     ws_hub = LocalWsHub()
     _ws_hub = ws_hub
 
-    sinas = [str(w["sina"]).lower() for w in effective_watchlist()]
+    from watch_config import MAX_SSE_QUOTES, primary_watchlist, strategy1_watchlist
+
+    primary = primary_watchlist()
+    s1_wl = strategy1_watchlist()
+    # SSE 只挂热池；新浪批量 = 热池 ∪ 策略一（信号 Tab 需要对齐池名单）
+    sinas_sse = [str(w["sina"]).lower() for w in primary][: int(MAX_SSE_QUOTES)]
+    seen_s = set(sinas_sse)
+    sinas_batch = list(sinas_sse)
+    for w in s1_wl:
+        s = str(w["sina"]).lower()
+        if s in seen_s:
+            continue
+        seen_s.add(s)
+        sinas_batch.append(s)
     feed = QuoteFeedManager(
-        sinas,
+        sinas_batch,
+        sse_sinas=sinas_sse,
         on_log=lambda m: print(f"[{_now()}] {m}"),
+        sina_interval=1.0,
     )
     _watch_feed = feed
+    _WATCH_OVERLAY_READY.clear()
+    print(
+        f"[{_now()}] 行情分层: SSE热池 {len(sinas_sse)} 只"
+        f"（帽 {MAX_SSE_QUOTES}）· 新浪批量 {len(sinas_batch)} 只"
+        f"（含策略一）· 紫阳等大池独立轮询"
+    )
 
     def get_quote(sina: str) -> dict[str, Any]:
         q = feed.get_quote(sina)
@@ -8906,8 +9280,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
         feed.seed(sina, q)
         return q
 
-    def reseed_live() -> int:
-        return _reseed_live_batch(feed)
+    def reseed_live(watchlist: list[dict[str, Any]] | None = None) -> int:
+        return _reseed_live_batch(feed, watchlist)
 
     def safe_refresh() -> tuple[Path, bool]:
         with refresh_lock:
@@ -8961,6 +9335,22 @@ def cmd_watch(args: argparse.Namespace) -> None:
             except Exception as e:
                 print(f"[{_now()}] 更新失败: {e}")
 
+    def quote_patch_loop() -> None:
+        """现价/涨跌幅快刷：不跑 collect_rows，跟 SSE/新浪 tick 走。"""
+        last = 0.0
+        while not stop.is_set():
+            feed.wait_update(timeout=1.0)
+            if stop.is_set():
+                break
+            wait_more = _QUOTE_PATCH_MIN_SEC - (time.monotonic() - last)
+            if wait_more > 0 and stop.wait(wait_more):
+                break
+            last = time.monotonic()
+            try:
+                publish_live_quote_patch()
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 行情快刷异常: {e}")
+
     def auction_milestone_loop() -> None:
         """每日 9:15 / 9:20 / 9:25 / 9:30 定时动作。"""
         while not stop.is_set():
@@ -8995,6 +9385,9 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 print(f"[{_now()}] 早盘节点失败 [{label}]: {e}")
 
     worker = threading.Thread(target=loop, name="holdings-watch", daemon=True)
+    quote_patch_worker = threading.Thread(
+        target=quote_patch_loop, name="holdings-quote-patch", daemon=True
+    )
     milestone_worker = threading.Thread(
         target=auction_milestone_loop, name="holdings-auction-milestones", daemon=True
     )
@@ -9200,6 +9593,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
         # 若堵在 feed.start() 之前，worker 一直 wait_update，快照永不更新。
         if not worker.is_alive():
             worker.start()
+        if not quote_patch_worker.is_alive():
+            quote_patch_worker.start()
         if not milestone_worker.is_alive():
             milestone_worker.start()
         print("冷启动：先上首屏快照，日线预热放后台（避免页面卡在「连接中」）")
@@ -9208,17 +9603,29 @@ def cmd_watch(args: argparse.Namespace) -> None:
         try:
             ensure_watch_status_reset_today()
             t0 = time.perf_counter()
-            n_fast = reseed_live()
+            primary = primary_watchlist()
+            scan = _scan_watchlist()
+            n_fast = reseed_live(scan)
             feed.start()
             feed_started = True
-            # 关键：行情源就绪后立刻推一版非 boot 快照，前端可进持仓/策略 Tab
             report, _ = safe_refresh()
             elapsed = time.perf_counter() - t0
             _log_watch_snapshot_push(
-                f"首屏快照已推送: {report}（实时 {n_fast} 只 · {elapsed:.1f}s）",
+                f"首屏快照已推送: {report}（扫描 {n_fast}/{len(scan)} 只 · 热池 {len(primary)} · {elapsed:.1f}s）",
                 force=True,
             )
-            # 日线强制预热放后面：午休/收盘也常要几分钟，不能挡首屏
+            # 叠加池：后台独立轮询，不挡首屏、不进 collect_rows
+            try:
+                from strategy17_watch import start_overlay_poller
+
+                start_overlay_poller(
+                    stop=stop,
+                    on_log=lambda m: print(f"[{_now()}] {m}"),
+                )
+                _WATCH_OVERLAY_READY.set()
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 叠加池轮询未启动（继续）: {e}")
+                _WATCH_OVERLAY_READY.set()
             try:
                 print(
                     f"[{_now()}] 后台强制刷新日线"
@@ -9226,8 +9633,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
                     f"已收盘日线截至 {latest_completed_weekday()}）…"
                 )
                 _ensure_signal_day_caches(force=True)
-                _daily_cache_warm(force=True)
-                print(f"[{_now()}] 日线缓存预热完成")
+                _daily_cache_warm(scan, force=True)
+                print(f"[{_now()}] 扫描池日线预热完成（{len(scan)} 只）")
                 report2, _ = safe_refresh()
                 _log_watch_snapshot_push(
                     f"预热后快照已推送: {report2}",
@@ -9237,6 +9644,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 print(f"[{_now()}] 日线预热失败（继续按票补拉）: {e}")
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 首次更新失败（API 已就绪，继续后台刷新）: {e}")
+            _WATCH_OVERLAY_READY.set()
             if not feed_started:
                 try:
                     feed.start()
@@ -9247,6 +9655,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
             return
         if not worker.is_alive():
             worker.start()
+        if not quote_patch_worker.is_alive():
+            quote_patch_worker.start()
         if not milestone_worker.is_alive():
             milestone_worker.start()
 
@@ -9277,8 +9687,11 @@ def cmd_watch(args: argparse.Namespace) -> None:
         f"策略同步: {STRATEGY_NAME} · {_STRATEGY_FACTORS_LABEL}"
     )
     print(
-        "行情: 东财 SSE + 新浪批量；因子26 实仓 1m path-dependent 止损 · "
-        f"刷新节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · "
+        "行情: 热池（持仓+默认策略，≤48）SSE+新浪；"
+        "叠加观察池（紫阳等，可至数百只）独立新浪分块轮询、不进信号扫描/不挡启动；"
+        "因子26 实仓 1m path-dependent 止损 · "
+        f"现价快刷≥{_QUOTE_PATCH_MIN_SEC:.1f}s · "
+        f"信号扫描节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · "
         "时钟心跳 2s · 板块在盯盘首屏之后后台加载 · "
         f"快照日志每 {_WATCH_SNAPSHOT_LOG_EVERY} 次 · Ctrl+C 停止"
     )

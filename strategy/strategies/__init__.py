@@ -18,6 +18,7 @@
   strategy12 — 涨停次日低开：因子18 恐慌空仓 + 因子21 选股
   strategy15 — 连板减磨损：因子1 + 因子22（梯度门控）+ 因子23/24 止盈 + 因子25(30m)
   strategy16 — 核心龙头：因子27 季度宇宙 + 因子26/2/22 买卖（同策略一）
+  strategy17 — 紫阳真君：因子28 席位池 + 因子26/2（因子22 默认关；非默认交易池）
 """
 
 # 策略注册前先确保因子已注册（多策略共用因子）
@@ -35,6 +36,7 @@ from strategy.strategies import strategy9 as _s9e  # noqa: F401
 from strategy.strategies import strategy12 as _s12  # noqa: F401
 from strategy.strategies import strategy15 as _s15  # noqa: F401
 from strategy.strategies import strategy16 as _s16  # noqa: F401
+from strategy.strategies import strategy17 as _s17  # noqa: F401
 from strategy.core.strategy_registry import (
     STRATEGY_REGISTRY,
     get_strategy_spec,

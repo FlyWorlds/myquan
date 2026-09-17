@@ -488,7 +488,11 @@ def fetch_sina_batch(sinas: list[str]) -> dict[str, dict[str, Any]]:
 
 
 class SinaBatchPoller:
-    """SSE 不健康时的新浪批量兜底（约 2s）。"""
+    """新浪批量轮询。
+
+    - ``always=True``：持续刷新（覆盖无 SSE 的叠加池，并作 SSE 兜底）
+    - ``always=False``：仅当 SSE 不健康时启用（旧行为）
+    """
 
     def __init__(
         self,
@@ -497,26 +501,28 @@ class SinaBatchPoller:
         *,
         stop: threading.Event,
         interval: float = 2.0,
+        always: bool = True,
         on_log: Callable[[str], None] | None = None,
     ) -> None:
         self.hub = hub
         self.sinas = [s.lower() for s in sinas]
         self.stop = stop
         self.interval = max(1.0, float(interval))
+        self.always = bool(always)
         self.on_log = on_log or (lambda _m: None)
         self._fallback_active = False
 
     def run(self) -> None:
         while not self.stop.is_set():
             healthy = self.hub.sse_healthy()
-            if healthy:
+            if not self.always and healthy:
                 if self._fallback_active:
                     self.on_log("SSE 恢复，暂停新浪批量兜底")
                     self._fallback_active = False
                 if self.stop.wait(self.interval):
                     break
                 continue
-            if not self._fallback_active:
+            if not self.always and not self._fallback_active:
                 self.on_log("SSE 不健康，启用新浪批量兜底")
                 self._fallback_active = True
             try:
@@ -541,23 +547,43 @@ class SinaBatchPoller:
 
 
 class QuoteFeedManager:
-    """管理 SSE + 新浪兜底线程。"""
+    """管理 SSE（热池）+ 新浪批量（全池，含叠加观察池）。
+
+    同花顺/通达信用专有推送；免费源不能对上百只各开一条 SSE，否则连接风暴。
+    默认：SSE 只挂 ``sse_sinas``（持仓+默认策略）；``sinas`` 全量走新浪批量。
+    """
 
     def __init__(
         self,
         sinas: list[str],
         *,
+        sse_sinas: list[str] | None = None,
         on_log: Callable[[str], None] | None = None,
+        sina_interval: float = 1.0,
     ) -> None:
         self.sinas = [s.lower() for s in sinas]
+        self.on_log = on_log or (lambda m: print(m))
+        if sse_sinas is None:
+            self.sse_sinas = list(self.sinas)
+        else:
+            self.sse_sinas = [s.lower() for s in sse_sinas]
+        try:
+            from watch_config import MAX_SSE_QUOTES
+
+            cap = max(1, int(MAX_SSE_QUOTES))
+        except Exception:  # noqa: BLE001
+            cap = 48
+        if len(self.sse_sinas) > cap:
+            self.on_log(f"SSE 名单 {len(self.sse_sinas)}→{cap}（MAX_SSE_QUOTES）")
+            self.sse_sinas = self.sse_sinas[:cap]
         self.hub = QuoteHub()
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
-        self.on_log = on_log or (lambda m: print(m))
+        self.sina_interval = max(1.0, float(sina_interval))
 
     def start(self) -> None:
         self._stop.clear()
-        for sina in self.sinas:
+        for sina in self.sse_sinas:
             t = threading.Thread(
                 target=EastmoneySseFeed(
                     self.hub, sina, stop=self._stop, on_log=self.on_log
@@ -568,14 +594,21 @@ class QuoteFeedManager:
             t.start()
             self._threads.append(t)
         poller = SinaBatchPoller(
-            self.hub, self.sinas, stop=self._stop, interval=2.0, on_log=self.on_log
+            self.hub,
+            self.sinas,
+            stop=self._stop,
+            interval=self.sina_interval,
+            always=True,
+            on_log=self.on_log,
         )
         t2 = threading.Thread(target=poller.run, name="sina-batch", daemon=True)
         t2.start()
         self._threads.append(t2)
+        n_all = len(self.sinas)
+        n_sse = len(self.sse_sinas)
         self.on_log(
-            f"行情源已启动: SSE×{len(self.sinas)} + 新浪批量兜底 "
-            f"({', '.join(self.sinas)})"
+            f"行情源已启动: SSE×{n_sse} 热池 + 新浪批量×{n_all} "
+            f"（叠加池不占 SSE）"
         )
 
     def stop(self) -> None:

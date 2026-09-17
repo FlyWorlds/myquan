@@ -653,8 +653,15 @@ def is_half_stop_kind(
     stop_kind: str | None = None,
     action_kind: str | None = None,
 ) -> bool:
-    """10% 阶梯半仓（不是 15%/峰值回落/硬保护等全清）。"""
-    if str(action_kind or "").strip().lower() == "half":
+    """10% 阶梯半仓（不是 15%/峰值回落/硬保护等全清）。
+
+    action_kind=full（如开盘保护）时，即使 stop_kind 残留 ladder_half_10 也不得半仓，
+    否则会出现「开盘保护价 + 半仓股数」错单（黑猫 002068）。
+    """
+    ak = str(action_kind or "").strip().lower()
+    if ak == "full":
+        return False
+    if ak == "half":
         return True
     return str(stop_kind or "").strip() in HALF_STOP_KINDS
 
@@ -992,6 +999,16 @@ def path_dependent_pullback_hit(
             if h <= 0 or lo <= 0:
                 continue
             ts = row["ts"] if "ts" in df.columns else None
+            # 9:15–9:25 竞价 K 不参与峰值/止盈；连续竞价从 09:30 起
+            if ts is not None:
+                try:
+                    ts_p = pd.Timestamp(ts)
+                    if getattr(ts_p, "tzinfo", None) is not None:
+                        ts_p = ts_p.tz_convert("Asia/Shanghai").tz_localize(None)
+                    if (ts_p.hour, ts_p.minute) < (9, 30):
+                        continue
+                except Exception:  # noqa: BLE001
+                    pass
             if since is not None and ts is not None:
                 try:
                     ts_p = pd.Timestamp(ts)
@@ -1010,7 +1027,6 @@ def path_dependent_pullback_hit(
                 o_bar = 0.0
             out_rows.append({"high": h, "low": lo, "open": o_bar, "ts": ts})
         return out_rows
-
     def _eval(bar_o: float, bar_h: float, bar_lo: float) -> dict[str, Any]:
         peak = max(running_high, cost) if cost > 0 else running_high
         return eval_multi_tp_bar(

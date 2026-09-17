@@ -69,6 +69,12 @@ _PICK_SOURCES: dict[str, dict[str, Any]] = {
             _MYQUAN / "backtest/strategy16_core_leader/picks_quarter.json",
         ],
     },
+    "strategy17": {
+        "kind": "pool",
+        "paths": [
+            _MYQUAN / "backtest/strategy17_ziyang/picks_3m.json",
+        ],
+    },
 }
 
 
@@ -95,6 +101,7 @@ _POOL_CATEGORY: dict[str, str] = {
     "strategy12": "策略池",
     "strategy15": "策略池",
     "strategy16": "因子27",
+    "strategy17": "紫阳真君",
 }
 
 
@@ -499,6 +506,47 @@ def _load_s16_quarter(path: Path) -> dict[str, Any]:
     }
 
 
+def _load_s17_ziyang(path: Path) -> dict[str, Any]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    items: list[dict[str, Any]] = []
+    for it in raw.get("picks") or []:
+        if not isinstance(it, dict):
+            continue
+        code = _code_from_symbol(str(it.get("code") or it.get("symbol") or ""))
+        if not code:
+            continue
+        items.append(
+            {
+                "rank": int(it.get("rank") or len(items) + 1),
+                "symbol": code,
+                "code": code,
+                "name": _resolve_name(code=code, name=str(it.get("name") or "")),
+                "appearances": it.get("appearances"),
+                "buy_amt": it.get("buy_amt"),
+                "net": it.get("net"),
+                "last_date": it.get("last_date"),
+                "category": "紫阳真君",
+            }
+        )
+    window = str(raw.get("label") or "")
+    seat = str(raw.get("seat_name") or "武汉紫阳东路")
+    note = str(raw.get("note") or "")
+    if not note:
+        note = (
+            f"近3个月 {window} · {seat} 龙虎榜成交并集 · "
+            f"{int(raw.get('n_picks') or len(items))} 只"
+        )
+    if not items:
+        note = (note + " · 池为空，请先跑 python strategy/run_ziyang_pool.py").strip(" ·")
+    return {
+        "kind": "pool",
+        "asOf": raw.get("as_of") or window,
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": note,
+        "items": items,
+    }
+
+
 @lru_cache(maxsize=16)
 def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
     """返回策略最新选股/信号快照（始终并入公共自选并标分类）。"""
@@ -550,6 +598,8 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
             raw = _load_weekly_csv(path, symbol_col=col)
         elif sid == "strategy16":
             raw = _load_s16_quarter(path)
+        elif sid == "strategy17":
+            raw = _load_s17_ziyang(path)
         else:
             raw = _empty_picks()
     except Exception as e:  # noqa: BLE001

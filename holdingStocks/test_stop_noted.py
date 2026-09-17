@@ -85,8 +85,57 @@ class TestPaperExitDecision(unittest.TestCase):
         gated = paper_exit_decision(**common, overnight_high_ok=False)
         self.assertFalse(gated["hit"])
         armed = paper_exit_decision(**common, overnight_high_ok=True)
-        self.assertTrue(armed["hit"])
-        self.assertEqual(armed["kind"], "open_protect")
+        # 高开且 peak≥今开：峰值视为含今日，不得再抬开盘保护（黑猫同类）
+        self.assertFalse(armed["hit"])
+        self.assertFalse(armed["hit_show"])
+
+    def test_heimiao_gap_up_today_peak_not_open_protect(self) -> None:
+        """黑猫：昨涨停收、今高开；盘中 peak 被抬到 11.15 不得触发开盘保护。"""
+        dec = paper_exit_decision(
+            qty=7200,
+            sellable=7200,
+            t1_today=False,
+            last=10.60,
+            open_px=10.48,
+            prev_close=10.14,
+            cost=10.13,
+            peak_high=11.15,
+            working_stop=9.88,
+            path_hit=False,
+            signal_ok=True,
+            overnight_high_ok=True,
+            buy_time="2026-09-16 09:31:00",
+            session="2026-09-17",
+        )
+        self.assertFalse(dec.get("hit"))
+        self.assertFalse(dec.get("hit_show"))
+        self.assertNotEqual(dec.get("kind"), "open_protect")
+
+    def test_gap_down_keeps_overnight_peak_open_protect(self) -> None:
+        """低开：昨高仍可用于开盘保护（中天口径）。"""
+        dec = paper_exit_decision(
+            qty=2600,
+            sellable=2600,
+            t1_today=False,
+            last=34.59,
+            open_px=33.84,
+            prev_close=34.49,
+            cost=33.48,
+            peak_high=34.78,
+            working_stop=34.13,
+            path_hit=False,
+            signal_ok=True,
+            overnight_high_ok=True,
+        )
+        self.assertTrue(dec["hit"])
+        self.assertEqual(dec["kind"], "open_protect")
+
+    def test_open_protect_full_ignores_ladder_half_kind(self) -> None:
+        from strategy.pullback_wave_stop import is_half_stop_kind
+
+        self.assertFalse(is_half_stop_kind("ladder_half_10", "full"))
+        self.assertTrue(is_half_stop_kind("ladder_half_10", "half"))
+        self.assertTrue(is_half_stop_kind("ladder_half_10", ""))
 
     def test_t1_shows_but_does_not_fill(self) -> None:
         dec = paper_exit_decision(

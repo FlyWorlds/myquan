@@ -13,7 +13,7 @@ function fmt(v?: number | null, d = 2) {
   <section class="card p-4">
     <div class="text-sm text-ui-text-2">
       总收益
-      <span class="text-[10px] font-normal">自 {{ account.totalPnlStart || '2026-09-09' }} · 相对纸面本金</span>
+      <span class="text-[10px] font-normal">自 {{ account.totalPnlStart || '2026-09-09' }} · 日初+今日盈亏</span>
     </div>
     <div class="sensitive text-3xl font-bold">
       <ChgText :chg="account.totalPnl">{{ account.totalPnl == null ? '-' : `${account.totalPnl >= 0 ? '+' : ''}${fmt(account.totalPnl)}` }}</ChgText>

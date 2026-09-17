@@ -42,6 +42,7 @@ const strategy3Tab = computed(() => strategyTabs.value.find((t) => t.id === 'str
 const strategy8Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy8'))
 const strategy15Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy15'))
 const strategy16Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16'))
+const strategy17Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy17'))
 const loading = computed(() => {
   // 仅「还没有任何快照」时全屏挡；boot 预热中仍展示 Tab，避免午休/收盘卡死在连接页
   if (snapshot.value) return false
@@ -58,8 +59,8 @@ const slotHoldings = computed(() =>
 const closedHoldings = computed(() =>
   (snapshot.value?.holdings || []).filter((r) => {
     if (Number(r.持仓) > 0) return false
-    // 今日平仓：仅当日真实纸面卖出
-    return Boolean(r.已实现)
+    // 今日平仓：纸面卖出（已实现）或三槽留痕；策略回放止损不进
+    return Boolean(r.已实现) || Boolean(r.三槽平仓)
   }),
 )
 
@@ -276,10 +277,21 @@ const closedCount = computed(() => closedHoldings.value.length)
         />
         <StrategyPicksPanel :picks="strategy16Tab?.picks" />
       </section>
+      <section v-show="activeTab === 'strategy17'">
+        <StrategyInfoPanel v-if="strategy17Tab" :tab="strategy17Tab" class="mb-4" />
+        <Strategy1Panel
+          v-if="snapshot"
+          :rows="snapshot.strategy17 || []"
+          :phase="snapshot.phase"
+          :slot-meta="snapshot.slotMeta"
+          pool-category="紫阳真君"
+        />
+        <StrategyPicksPanel :picks="strategy17Tab?.picks" />
+      </section>
     </template>
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘 Tab 仅展示有实时面板的策略（策略1 / 3 / 8 / 15 / 16）。因子持有模板、研究型条目见
+      盯盘 Tab 仅展示有实时面板的策略（策略1 / 3 / 8 / 15 / 16 / 17）。因子持有模板、研究型条目见
       <NuxtLink to="/strategies" class="text-accent hover:underline">策略说明</NuxtLink>
       、
       <NuxtLink to="/factors" class="text-accent hover:underline">因子说明</NuxtLink>

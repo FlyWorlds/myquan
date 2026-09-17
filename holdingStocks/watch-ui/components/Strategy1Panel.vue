@@ -122,6 +122,7 @@ function sortTitle(key: SortKey, label: string): string {
 
 function categoryOf(r: HoldingRow): string {
   if (r.pool_src === 'self' || r.池来源 === '自选') return '自选'
+  if (r.pool_src === 'strategy1_pool' || r.池来源 === '策略池') return '策略池'
   if (r.pool_src === 'factor27' || r.池来源 === '因子27') return '因子27'
   if (r.池来源) return String(r.池来源)
   return props.poolCategory || '策略池'

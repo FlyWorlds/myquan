@@ -186,7 +186,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\review_push.ps1
 ```powershell
 cd D:\Akquan\myquan\holdingStocks
 
-# 微信自检
+# 微信自检（须先在微信里给机器人发任意一条，刷新 context_token）
 python index.py wechat-test
 
 # 行情复盘并推送微信
@@ -195,6 +195,7 @@ python index.py review
 python index.py review --no-wechat
 
 # 长驻数据后端（默认开微信推送；页面另开 start_watch / npm run dev）
+# 9:30 起对「默认策略池」推送：将买入/已触买/将止损/已触止损/半仓止盈/止盈
 python index.py watch --interval 5 --port 8765
 # Web 盯盘：http://127.0.0.1:3000/
 
@@ -204,6 +205,16 @@ python index.py watch --no-wechat
 # 一键：数据 API + Web 盯盘
 python start_watch.py
 ```
+
+**今日信号推送测试要点**
+
+| 项 | 说明 |
+|----|------|
+| 范围 | 仅**默认策略池**（策略十六·因子27 ∪ 自选） |
+| 内容 | P0 触及：已触买 / 已入槽 / 已触止损 / 半仓止盈 / 止盈；P1 预警：将买入 / 将止损；另因子2 账户级 |
+| 窗口 | **9:30–15:00** 连续竞价才推（竞价阶段日志会写「待 9:30」） |
+| 冷却 | `wechat_notify.json` 的 `cooldown_sec`（测试日可设 120） |
+| 阻塞 | `prepare failed` → 微信给机器人发「1」，或 `openclaw channels login --channel openclaw-weixin` |
 
 手工推送：
 

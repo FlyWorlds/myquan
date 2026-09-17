@@ -132,10 +132,10 @@ def _factor_px_for_push(row: dict[str, Any], *, holding: bool) -> Any:
 
 
 def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
-    """股票池推送分类。
+    """股票池推送分类（默认策略纸面信号 → 手机）。
 
-    - 有持仓：仅止损侧（P0 因子已触发 / P1 触发预警带）
-    - 无持仓：仅买入侧（P0 / P1）
+    - 空仓：已触买 / 将买入（含入槽·槽满·未入槽）
+    - 有仓：已触止损 / 将止损 / 半仓止盈 / 止盈卖出 / 持仓中再触买
     - 过门未过禁买空仓：不推买入；当日卖出后再触买仍推
     返回 None 表示不推；否则含 level/kind/type/factor_px。
     """
@@ -152,6 +152,13 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
     hit_stop = str(row.get("已触止损") or "") == "是"
     near_buy = bool(row.get("近买点"))
     near_stop = bool(row.get("近止损"))
+    half_or_tp = (
+        "半仓" in alert
+        or alert.startswith("将半仓")
+        or "止盈" in alert
+        or hit.startswith("半仓")
+        or "止盈" in hit
+    )
 
     def _pack(level: str, kind: str, typ: str, factor_px: Any) -> dict[str, Any]:
         return {
@@ -161,22 +168,39 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
             "factor_px": factor_px,
         }
 
-    # 有仓刚结算：P0 止损因子一次
+    # 有仓刚结算：P0 止损/止盈一次
     if row.get("已实现") and (
-        hit_stop or "止损" in alert or hit.startswith("策略止损")
+        hit_stop
+        or half_or_tp
+        or "止损" in alert
+        or "止盈" in alert
+        or hit.startswith("策略止损")
     ) and not (
         hit_buy or pos == "待买入" or "再触买" in alert or "可再买" in alert
     ):
+        typ = "半仓止盈" if ("半仓" in alert or "半仓" in hit) else (
+            "止盈" if ("止盈" in alert or "止盈" in hit) else "已触止损"
+        )
         return _pack(
             PRIORITY_P0,
             KIND_P0,
-            "已触止损",
+            typ,
             row.get("成交价")
             if row.get("成交价") is not None
             else _factor_px_for_push(row, holding=True),
         )
 
     if holding:
+        if half_or_tp:
+            typ = "半仓止盈" if "半仓" in alert or "半仓" in hit or "将半仓" in alert else "止盈"
+            return _pack(
+                PRIORITY_P0,
+                KIND_P0,
+                typ,
+                row.get("卖出价")
+                or row.get("止损")
+                or _factor_px_for_push(row, holding=True),
+            )
         if (
             hit_buy
             or "已触买" in alert
@@ -229,10 +253,17 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
         or "再触买" in alert
         or "收盘动量可再买" in alert
     ):
+        typ = "已触买"
+        if "已入槽" in alert:
+            typ = "已触买·已入槽"
+        elif "槽满" in alert:
+            typ = "已触买·槽满"
+        elif "未入槽" in alert:
+            typ = "已触买·未入槽"
         return _pack(
             PRIORITY_P0,
             KIND_P0,
-            "已触买",
+            typ,
             _factor_px_for_push(row, holding=False),
         )
     if (
