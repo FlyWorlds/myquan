@@ -5,39 +5,49 @@
   · decision.py  — 决策层：MarketContext → Decision（buy/sell/hold）
   · __init__.py  — 注册 StrategySpec（含 decision_factory / run）
 
-  strategy1 — 援军战法：因子26（买卖）+ 因子2（回撤预警）+ 因子13A/16 定盘池（研究）
-  strategy16 — 核心龙头（默认）：因子27 季度宇宙 + 因子26/2/22 买卖
-  strategy2 — 缠论选股：日线交易，30分钟小转大一买/二买，日线二/三卖退出
-  strategy3 — 首板晋级：昨日首板 → 次日因子1 开盘突破
-  strategy4 — 因子1 + 因子4 + 20%昨高止盈 + 因子10 周频动量选股（旧 strategy9）
-  strategy5 — 因子11 两段近高（3日动量→5日近高 Top5）等权持有（旧 strategy10）
-  strategy6 — 因子12 反转池近高 Top5 等权持有（研究候选）
-  strategy7 — CLI 兼容：缠论笔盈亏比已归因子17（Web 不展示）
-  strategy8 — 题材联动：涨停池同题材共振 + 联动补涨（因子14 + 因子1）
-  strategy9 — CLI：低开跌停情绪统计（因子18 研究入口，Web 不展示）
-  strategy12 — 涨停次日低开：因子18 恐慌空仓 + 因子21 选股
-  strategy15 — 连板减磨损：因子1 + 因子22（梯度门控）+ 因子23/24 止盈 + 因子25(30m)
-  strategy16 — 核心龙头：因子27 季度宇宙 + 因子26/2/22 买卖（同策略一）
-  strategy17 — 紫阳真君：因子28 席位池 + 因子26/2（因子22 默认关；非默认交易池）
+新增策略：在 strategies/ 下建 strategyN/ 包并 register_strategy；
+一般无需再改本文件（自动 discovery）。
+
+故意未纳入现行注册表的目录见 _SKIP_AUTO_IMPORT（如研究中的 strategy13）。
 """
+
+from __future__ import annotations
+
+import importlib
+import pkgutil
 
 # 策略注册前先确保因子已注册（多策略共用因子）
 import strategy.factors  # noqa: F401
 
-from strategy.strategies import strategy1 as _s1  # noqa: F401
-from strategy.strategies import strategy2 as _s2  # noqa: F401
-from strategy.strategies import strategy3 as _s3  # noqa: F401
-from strategy.strategies import strategy4 as _s4  # noqa: F401
-from strategy.strategies import strategy5 as _s5  # noqa: F401
-from strategy.strategies import strategy6 as _s6  # noqa: F401
-from strategy.strategies import strategy7 as _s7  # noqa: F401
-from strategy.strategies import strategy8 as _s8  # noqa: F401
-from strategy.strategies import strategy9 as _s9e  # noqa: F401
-from strategy.strategies import strategy12 as _s12  # noqa: F401
-from strategy.strategies import strategy15 as _s15  # noqa: F401
-from strategy.strategies import strategy16 as _s16  # noqa: F401
-from strategy.strategies import strategy17 as _s17  # noqa: F401
-from strategy.core.strategy_registry import (
+# 目录存在且含 register_strategy，但现行生产/文档未纳入注册表 → 跳过自动 import
+_SKIP_AUTO_IMPORT = frozenset(
+    {
+        "strategy11",  # 无完整包 / 未启用
+        "strategy13",  # 周频轮动研究包：有 register，但未进原手工列表
+    }
+)
+
+
+def _discover_and_import() -> tuple[str, ...]:
+    """扫描 strategies 子包并 import（副作用：register_strategy）。"""
+    loaded: list[str] = []
+    pkg_name = __name__
+    for info in pkgutil.iter_modules(__path__, prefix=f"{pkg_name}."):
+        short = info.name.rsplit(".", 1)[-1]
+        if short.startswith("_"):
+            continue
+        if short in _SKIP_AUTO_IMPORT:
+            continue
+        if not short.startswith("strategy"):
+            continue
+        importlib.import_module(info.name)
+        loaded.append(short)
+    return tuple(sorted(loaded))
+
+
+_DISCOVERED = _discover_and_import()
+
+from strategy.core.strategy_registry import (  # noqa: E402
     STRATEGY_REGISTRY,
     get_strategy_spec,
     list_strategy_specs,
@@ -47,4 +57,6 @@ __all__ = [
     "STRATEGY_REGISTRY",
     "get_strategy_spec",
     "list_strategy_specs",
+    "_DISCOVERED",
+    "_SKIP_AUTO_IMPORT",
 ]
