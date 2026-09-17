@@ -57,10 +57,10 @@ class FactorResult:
 
 @dataclass
 class DecisionContext:
-    """因子纯计算输入（尽量不读全局 / holdingStocks / akquant）。
+    """因子 / Exit 纯计算输入（尽量不读全局 / holdingStocks / akquant）。
 
-    与 MarketContext 并存：MarketContext 服务 DecisionEngine 日线/快照路径；
-    DecisionContext 服务单因子（尤其因子26 1m bar）characterization / 统一入口。
+    与 MarketContext 并存：MarketContext 服务旧 DecisionEngine 日线/快照路径；
+    DecisionContext 服务 Factor26 / ExitDecisionEngine 统一入口。
     """
 
     symbol: str = ""
@@ -70,7 +70,7 @@ class DecisionContext:
     position: dict[str, Any] | None = None
     config: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime | None = None
-    # 因子26 单 bar 常用字段（避免强行塞进 position）
+    # 因子26 单 bar 常用字段
     bar_open: float = 0.0
     bar_high: float = 0.0
     bar_low: float = 0.0
@@ -83,3 +83,23 @@ class DecisionContext:
     session_peak_before: float = 0.0
     vol20_daily: float | None = None
     meta: dict[str, Any] = field(default_factory=dict)
+    # ---- Phase 2：paper exit 对齐所需显式上下文（禁止读 holdingStocks 全局）----
+    working_stop: float | None = None
+    overnight_open_protect_px: float | None = None
+    prev_close: float | None = None
+    peak_high: float | None = None
+    open_px: float | None = None
+    path_hit: bool = False
+    path_fill_px: float | None = None
+    path_action_kind: str = ""
+    path_stop_kind: str = ""
+    path: Any | None = None  # 可选：完整 path 对象；当前以 path_* 标量为主
+    t1_today: bool = False
+    hold_locked: bool = False
+    stop_locked: bool = False
+    sellable: int = 0
+    signal_ok: bool = True
+    overnight_high_ok: bool | None = None
+    buy_time: str | None = None
+    session: str = ""
+    qty: int = 0

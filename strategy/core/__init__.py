@@ -7,6 +7,13 @@ from strategy.core.decision import (
     engine_from_spec,
     get_decision_engine,
 )
+from strategy.core.exit_decision import (
+    ExitAction,
+    ExitDecision,
+    ExitRuleResult,
+    ReasonCode,
+    paper_reason_to_code,
+)
 from strategy.core.factor_result import DecisionAction, DecisionContext, FactorResult
 from strategy.core.protocols import FactorBinding, FactorSpec, StrategySpec, bind_factor
 from strategy.core.factor_registry import (
@@ -27,8 +34,13 @@ __all__ = [
     "Decision",
     "DecisionAction",
     "DecisionContext",
+    "ExitAction",
+    "ExitDecision",
+    "ExitRuleResult",
     "FactorResult",
     "MarketContext",
+    "ReasonCode",
+    "paper_reason_to_code",
     "BaseDecisionEngine",
     "DecisionEngine",
     "engine_from_spec",
