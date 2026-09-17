@@ -25,11 +25,8 @@ if str(_MYQUAN) not in sys.path:
 warnings.filterwarnings("ignore")
 logging.disable(logging.CRITICAL)
 
-from holdingStocks.watch_config import (  # noqa: E402
-    WATCHLIST,
-    limit_down_pct_of,
-    sina_of,
-)
+from strategy.board_rules import limit_down_pct_of, sina_of  # noqa: E402
+from strategy.watch_universe import WATCHLIST  # noqa: E402
 from strategy import BacktestConfig  # noqa: E402
 from strategy.backtest import metric  # noqa: E402
 from strategy.ls_energy import (  # noqa: E402

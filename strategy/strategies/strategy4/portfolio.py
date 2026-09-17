@@ -8,7 +8,8 @@ from typing import Any
 
 import pandas as pd
 
-from holdingStocks.watch_config import WATCHLIST, limit_down_pct_of, sina_of
+from strategy.board_rules import limit_down_pct_of, sina_of
+from strategy.watch_universe import WATCHLIST
 from strategy.backtest import metric
 from strategy.config import BacktestConfig, resolve_factor4_repair
 from strategy.costs import stamp_tax_for_code

@@ -98,7 +98,7 @@ def picks_on(gate: dict[str, dict[str, bool]], date: str) -> list[str]:
 
 
 def _limit_pct_map(columns) -> dict[str, float]:
-    from holdingStocks.watch_config import limit_up_pct_of
+    from strategy.board_rules import limit_up_pct_of
 
     return {str(c): float(limit_up_pct_of(str(c))) for c in columns}
 

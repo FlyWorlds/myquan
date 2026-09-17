@@ -22,7 +22,7 @@ if str(_MYQUAN) not in sys.path:
 warnings.filterwarnings("ignore")
 logging.disable(logging.CRITICAL)
 
-from holdingStocks.watch_config import limit_down_pct_of  # noqa: E402
+from strategy.board_rules import limit_down_pct_of  # noqa: E402
 from strategy.costs import stamp_tax_for_code  # noqa: E402
 from strategy.config import KAICHENG, TIANTONG  # noqa: E402
 from strategy.s1_price_select import (  # noqa: E402

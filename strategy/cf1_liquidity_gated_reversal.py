@@ -96,7 +96,7 @@ def _soft_gate(rank: pd.DataFrame, lo: float) -> pd.DataFrame:
 
 
 def _limit_pct_row(columns: pd.Index) -> pd.Series:
-    from holdingStocks.watch_config import limit_up_pct_of
+    from strategy.board_rules import limit_up_pct_of
 
     return pd.Series({c: float(limit_up_pct_of(str(c))) for c in columns}, dtype=float)
 

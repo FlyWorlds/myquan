@@ -18,7 +18,34 @@ if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
 from strategy.akq_math import session_day_pnl
+from strategy.board_rules import (
+    code_key,
+    limit_down_pct_of,
+    limit_up_pct_of,
+    market_of,
+    sina_of,
+)
 from strategy.open_break import DEFAULT_PCT, TICK_SIZE, floor_to_tick, is_t1_buy_day
+from strategy.watch_universe import (
+    CORE_LEADER_PICKS_PATH,
+    POOL_SRC_FACTOR27,
+    POOL_SRC_FACTOR28,
+    POOL_SRC_LABEL,
+    POOL_SRC_SELF,
+    SELF_WATCHLIST_PICKS,
+    STRATEGY16_EXTRA_PICKS,
+    STRATEGY16_THR_PATH,
+    ZIYANG_PICKS_PATH,
+    core_leader_codes,
+    factor27_codes,
+    factor28_codes,
+    load_core_leader_payload,
+    load_strategy16_thr_map,
+    load_ziyang_payload,
+    self_watchlist_codes,
+    self_watchlist_pick_rows,
+    ziyang_codes,
+)
 
 # 默认定盘：策略十六 + 因子27/因子26/因子2/因子22
 STRATEGY_ID = "strategy16"
@@ -213,19 +240,6 @@ def is_auction_window(now: Any | None = None) -> bool:
     return start <= t < end
 
 
-def code_key(code: str) -> str:
-    return "".join(ch for ch in str(code) if ch.isdigit()).zfill(6)[-6:]
-
-
-def sina_of(code: str) -> str:
-    c = code_key(code)
-    return f"sh{c}" if c.startswith(("5", "6")) else f"sz{c}"
-
-
-def market_of(code: str) -> str:
-    return "上证" if sina_of(code).startswith("sh") else "深证"
-
-
 def watch_item(
     code: str,
     name: str,
@@ -266,150 +280,13 @@ def watch_item(
     return item
 
 
-def limit_down_pct_of(code: str) -> float:
-    """主板约10%；创业板/科创板约20%；ETF 约10%。涨停幅度相同。"""
-    c = code_key(code)
-    if c.startswith(("300", "301", "688", "689")):
-        return 0.20
-    return 0.10
-
-
-limit_up_pct_of = limit_down_pct_of
-
-
-# 行情分层硬帽：热池可 SSE；叠加池永不 SSE，且不进 collect_rows
-MAX_SSE_QUOTES = 48
-
-CORE_LEADER_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "picks_quarter.json"
-STRATEGY16_THR_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "thr_2026.json"
-
-# 公共自选池（非因子选股）：所有策略交易/盯盘宇宙均并入；可入三槽；UI 标「自选」。
-# 旧名 STRATEGY16_EXTRA_PICKS 仍兼容（历史曾只挂策略十六）。
-SELF_WATCHLIST_PICKS: tuple[tuple[str, str], ...] = (
-    ("600330", "天通股份"),
-    ("600552", "凯盛科技"),
-    ("601208", "东材科技"),
-    ("002636", "金安国纪"),
-)
-STRATEGY16_EXTRA_PICKS = SELF_WATCHLIST_PICKS
-
-POOL_SRC_FACTOR27 = "factor27"
-POOL_SRC_FACTOR28 = "factor28"
-POOL_SRC_SELF = "self"
-POOL_SRC_LABEL = {
-    POOL_SRC_FACTOR27: "因子27",
-    POOL_SRC_FACTOR28: "紫阳真君",
-    POOL_SRC_SELF: "自选",
-}
-
-ZIYANG_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy17_ziyang" / "picks_3m.json"
-
-
-def self_watchlist_pick_rows() -> list[dict[str, Any]]:
-    """公共自选池原始行（不含阈值；供各策略合并）。"""
-    rows: list[dict[str, Any]] = []
-    for code, name in SELF_WATCHLIST_PICKS:
-        rows.append(
-            {
-                "code": code_key(code),
-                "name": name,
-                "concept": "self_watch",
-                "pool_src": POOL_SRC_SELF,
-                "manual_add": True,  # 兼容旧字段
-            }
-        )
-    return rows
-
-
-def self_watchlist_codes() -> set[str]:
-    """公共自选池代码集合（6 位）。"""
-    return {
-        code_key(c)
-        for c, _ in SELF_WATCHLIST_PICKS
-        if code_key(c) and code_key(c) != "000000"
-    }
-
-
-def load_core_leader_payload() -> dict[str, Any]:
-    """因子27 近3个月冻结池（纯选股产物，不含自选）。"""
-    if not CORE_LEADER_PICKS_PATH.is_file():
-        return {}
-    try:
-        raw = json.loads(CORE_LEADER_PICKS_PATH.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        return {}
-    return dict(raw) if isinstance(raw, dict) else {}
-
-
-def factor27_codes() -> set[str]:
-    """仅因子27选股池。"""
-    out: set[str] = set()
-    for it in load_core_leader_payload().get("picks") or []:
-        if not isinstance(it, dict):
-            continue
-        c = code_key(str(it.get("code") or it.get("symbol") or ""))
-        if c and c != "000000":
-            out.add(c)
-    return out
-
-
-def load_ziyang_payload() -> dict[str, Any]:
-    """策略十七·紫阳真君池产物。"""
-    if not ZIYANG_PICKS_PATH.is_file():
-        return {"n_picks": 0, "picks": []}
-    try:
-        raw = json.loads(ZIYANG_PICKS_PATH.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        return {"n_picks": 0, "picks": []}
-    return dict(raw) if isinstance(raw, dict) else {"n_picks": 0, "picks": []}
-
-
-def factor28_codes() -> set[str]:
-    """仅因子28 紫阳真君席位池。"""
-    out: set[str] = set()
-    for it in load_ziyang_payload().get("picks") or []:
-        if not isinstance(it, dict):
-            continue
-        c = code_key(str(it.get("code") or it.get("symbol") or ""))
-        if c and c != "000000":
-            out.add(c)
-    return out
-
-
-def ziyang_codes() -> set[str]:
-    """策略十七展示宇宙 = 因子28 ∪ 公共自选池。"""
-    return factor28_codes() | self_watchlist_codes()
-
-
-def core_leader_codes() -> set[str]:
-    """策略十六交易宇宙 = 因子27 ∪ 公共自选池。"""
-    return factor27_codes() | self_watchlist_codes()
-
-
 def _strategy16_extra_pick_rows() -> list[dict[str, Any]]:
     """旧名：等同公共自选池行。"""
     return self_watchlist_pick_rows()
 
 
-def load_strategy16_thr_map() -> dict[str, float]:
-    """策略十六开盘买入阈值（2026 至今日线 {2/2.5/3}% 夏普择优）。"""
-    if not STRATEGY16_THR_PATH.is_file():
-        return {}
-    try:
-        raw = json.loads(STRATEGY16_THR_PATH.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        return {}
-    out: dict[str, float] = {}
-    for code, rec in (raw.get("thrs") or {}).items():
-        c = code_key(str(code))
-        if not c:
-            continue
-        thr = rec.get("thr") if isinstance(rec, dict) else rec
-        try:
-            out[c] = float(thr)
-        except (TypeError, ValueError):
-            continue
-    return out
+# 行情分层硬帽：热池可 SSE；叠加池永不 SSE，且不进 collect_rows
+MAX_SSE_QUOTES = 48
 
 
 def is_strategy16_watch_only(
