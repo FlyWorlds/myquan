@@ -4974,6 +4974,218 @@ def correct_realized_open_protect_fill(
     return rec
 
 
+def correct_realized_false_open_to_path_ladder(
+    *,
+    code: str,
+    session: str,
+    cost: float,
+    prev_close: float,
+    open_px: float,
+    half_px: float,
+    half_ts: str,
+    half_qty: int,
+    clear_px: float,
+    clear_ts: str,
+    clear_qty: int,
+    peak_high: float,
+    old_fill_px: float,
+    old_total_qty: int,
+    px_digits: int = 2,
+    name: str = "",
+    market: str = "深证",
+) -> dict[str, Any]:
+    """假开盘保护全清 → 纠成因子26路径：10% 半仓 + 峰值回落 2% 全清。
+
+    现金按新旧成交额轧差。用于黑猫 002068（2026-09-17）一类事故。
+    """
+    sess = str(session or "")[:10]
+    code = _code_key(code)
+    data = load_holdings()
+    _purge_stale_realized(data, sess)
+    pos = (data.get("positions") or {}).get(code)
+    if not isinstance(pos, dict):
+        pos = _empty_position({"name": name or code, "market": market})
+        data.setdefault("positions", {})[code] = pos
+
+    half_px_r = round(float(half_px), int(px_digits))
+    clear_px_r = round(float(clear_px), int(px_digits))
+    half_q = int(half_qty)
+    clear_q = int(clear_qty)
+    cost_f = float(cost)
+    prev_f = float(prev_close)
+    open_f = float(open_px)
+    old_px = float(old_fill_px)
+    old_q = int(old_total_qty)
+
+    old_proceeds = old_px * old_q
+    new_proceeds = half_px_r * half_q + clear_px_r * clear_q
+    # account_cash 可为负；_account_cash/_as_money 会把 ≤0 当成无现金
+    try:
+        raw_cash = float(data.get("account_cash"))
+        data["account_cash"] = round(raw_cash + (new_proceeds - old_proceeds), 2)
+    except (TypeError, ValueError):
+        pass
+
+    half_pnl, half_pnl_pct = mark_unrealized(half_px_r, cost_f, half_q)
+    clear_pnl, clear_pnl_pct = mark_unrealized(clear_px_r, cost_f, clear_q)
+    half_day, half_day_pct, half_base = session_day_pnl(
+        mark=half_px_r,
+        qty=half_q,
+        cost=cost_f,
+        prev_close=prev_f,
+        bought_today=False,
+        fallback=open_f,
+    )
+    clear_day, clear_day_pct, clear_base = session_day_pnl(
+        mark=clear_px_r,
+        qty=clear_q,
+        cost=cost_f,
+        prev_close=prev_f,
+        bought_today=False,
+        fallback=open_f,
+    )
+    tot_pnl = float(half_pnl or 0) + float(clear_pnl or 0)
+    tot_day = float(half_day or 0) + float(clear_day or 0)
+    tot_base = float(half_base or 0) + float(clear_base or 0)
+    tot_qty = half_q + clear_q
+    avg_px = (new_proceeds / tot_qty) if tot_qty > 0 else clear_px_r
+    pnl_pct = (avg_px / cost_f - 1.0) * 100.0 if cost_f > 0 else None
+    day_pct = (tot_day / tot_base * 100.0) if tot_base > 0 else None
+
+    disp_name = str(name or pos.get("name") or code)
+    disp_mkt = str(market or pos.get("market") or "深证")
+    rec = {
+        "session": sess,
+        "name": disp_name,
+        "market": disp_mkt,
+        "qty": int(clear_q),
+        "price": clear_px_r,
+        "cost": round(cost_f, 4),
+        "pnl": round(float(clear_pnl or 0), 2),
+        "pnl_pct": None if clear_pnl_pct is None else round(float(clear_pnl_pct), 2),
+        "day_base": None if clear_base is None else round(float(clear_base), 2),
+        "day_pnl": None if clear_day is None else round(float(clear_day), 2),
+        "day_pnl_pct": None if clear_day_pct is None else round(float(clear_day_pct), 2),
+        "reason": REASON_STOP,
+        "time": str(clear_ts),
+        "first_hit_ts": str(clear_ts),
+        "action_kind": "full",
+        "after_qty": 0,
+        "full_exit": True,
+        "note_fix": "假开盘保护→路径半仓+峰值回落纠价",
+        "path_half_px": half_px_r,
+        "path_half_ts": str(half_ts),
+        "path_half_qty": half_q,
+        "path_clear_px": clear_px_r,
+        "path_clear_ts": str(clear_ts),
+        "path_clear_qty": clear_q,
+        "path_total_pnl": round(tot_pnl, 2),
+        "path_total_day_pnl": round(tot_day, 2),
+        "path_avg_px": round(avg_px, px_digits),
+        "path_pnl_pct": None if pnl_pct is None else round(float(pnl_pct), 2),
+        "path_day_pnl_pct": None if day_pct is None else round(float(day_pct), 2),
+        "peak_high": round(float(peak_high), 4),
+    }
+    # 今日平仓栏展示用合计口径（两笔）
+    rec["qty"] = tot_qty
+    rec["price"] = round(avg_px, px_digits)
+    rec["pnl"] = round(tot_pnl, 2)
+    rec["pnl_pct"] = None if pnl_pct is None else round(float(pnl_pct), 2)
+    rec["day_base"] = round(tot_base, 2)
+    rec["day_pnl"] = round(tot_day, 2)
+    rec["day_pnl_pct"] = None if day_pct is None else round(float(day_pct), 2)
+
+    data.setdefault("realized_today", {})[code] = rec
+    pos["qty"] = 0
+    pos["cost"] = None
+    pos["buy_time"] = None
+    pos["available"] = None
+    pos["today_cost"] = None
+    pos["name"] = disp_name
+    pos["market"] = disp_mkt
+    pos["peak_high"] = round(float(peak_high), 4)
+    pos["tp_stage"] = 0
+    pos["last_tp_ts"] = str(half_ts)
+    pos["note"] = (
+        f"半仓止盈@{half_px_r}+峰值回落@{clear_px_r} ({sess}·纠假开盘保护)"
+    )
+    for bad_k in ("high_after_stop", "low_after_stop", "rebound_pct", "miss_pnl"):
+        rec.pop(bad_k, None)
+
+    traces = data.setdefault("closed_today", {})
+    if isinstance(traces, dict):
+        traces[code] = {
+            "session": sess,
+            "name": disp_name,
+            "market": disp_mkt,
+            "qty": tot_qty,
+            "price": rec["price"],
+            "cost": round(cost_f, 4),
+            "day_pnl": rec["day_pnl"],
+            "day_pnl_pct": rec["day_pnl_pct"],
+            "reason": REASON_STOP,
+            "time": str(clear_ts),
+            "已实现": True,
+            "三槽平仓": True,
+            "note_fix": rec["note_fix"],
+        }
+
+    mem = data.setdefault("factor_memory", {})
+    mem_rec = mem.setdefault(code, {})
+    if isinstance(mem_rec, dict):
+        mem_rec["last_sell_factor_px"] = clear_px_r
+        mem_rec["last_sell_factor_date"] = sess
+        mem_rec["last_half_px"] = half_px_r
+
+    save_holdings(data)
+    append_trade(
+        {
+            "time": str(half_ts),
+            "side": "sell",
+            "code": code,
+            "name": disp_name,
+            "price": half_px_r,
+            "qty": half_q,
+            "after_qty": clear_q,
+            "cost": round(cost_f, 4),
+            "pnl": None if half_pnl is None else round(float(half_pnl), 2),
+            "note": f"{REASON_HALF}(纠假开盘保护·路径)",
+        }
+    )
+    append_trade(
+        {
+            "time": str(clear_ts),
+            "side": "sell",
+            "code": code,
+            "name": disp_name,
+            "price": clear_px_r,
+            "qty": clear_q,
+            "after_qty": 0,
+            "cost": round(cost_f, 4),
+            "pnl": None if clear_pnl is None else round(float(clear_pnl), 2),
+            "note": f"{REASON_STOP}(纠假开盘保护·峰值回落)",
+        }
+    )
+    append_trade(
+        {
+            "time": _now(),
+            "side": "sell",
+            "code": code,
+            "name": disp_name,
+            "price": round(avg_px, px_digits),
+            "qty": tot_qty,
+            "after_qty": 0,
+            "cost": round(cost_f, 4),
+            "pnl": round(tot_pnl, 2),
+            "note": (
+                f"纠假开盘保护 {old_px}×{old_q}→半仓{half_px_r}+回落{clear_px_r}"
+                f"（现金轧差{new_proceeds - old_proceeds:+.2f}）"
+            ),
+        }
+    )
+    return rec
+
+
 def _reconcile_realized_open_protects(
     rows: list[dict[str, Any]],
     *,
@@ -5007,13 +5219,26 @@ def _reconcile_realized_open_protects(
         if cost is None:
             cost = row.get("成本")
         old_px = rec.get("price")
+        try:
+            cost_f = float(cost) if cost is not None else 0.0
+        except (TypeError, ValueError):
+            cost_f = 0.0
+        peak_for_fix = freeze_overnight_peak_for_session(
+            pos if isinstance(pos, dict) else {},
+            session=session,
+            cost=cost_f if cost_f > 0 else None,
+            prev_close=row.get("昨收"),
+            open_px=open_px,
+            code=ck,
+            persist=False,
+        )
         fixed = correct_realized_open_protect_fill(
             code=ck,
             session=session,
             open_px=open_px,
             prev_close=row.get("昨收"),
             cost=float(cost) if cost is not None else None,
-            peak_high=(pos or {}).get("peak_high"),
+            peak_high=peak_for_fix if peak_for_fix > 0 else (pos or {}).get("peak_high"),
             px_digits=int(row.get("价位小数") or 2),
         )
         if not isinstance(fixed, dict):
@@ -5631,9 +5856,25 @@ def freeze_overnight_peak_for_session(
         prev_f = float(prev_close or 0)
     except (TypeError, ValueError):
         prev_f = 0.0
-    # 高开且峰值已到/超过今开 → 含今日；开盘保护只用成本/昨收
+    # 高开且峰值已到/超过今开 → 含今日；开盘保护只用成本/昨收，并回写冻结值防再污染
     if open_f > 0 and prev_f > 0 and open_f > prev_f + 1e-12 and seed + 1e-12 >= open_f:
-        seed = max(x for x in (cost_f, prev_f) if x > 0)
+        clean = max(x for x in (cost_f, prev_f) if x > 0)
+        if clean > 0 and abs(clean - seed) > 1e-9:
+            seed = clean
+            pos["overnight_peak"] = round(float(seed), 4)
+            pos["overnight_peak_session"] = sess
+            if persist:
+                ck = _code_key(str(code or ""))
+                if ck:
+                    try:
+                        data = load_holdings()
+                        p = (data.get("positions") or {}).get(ck)
+                        if isinstance(p, dict):
+                            p["overnight_peak"] = pos["overnight_peak"]
+                            p["overnight_peak_session"] = sess
+                            save_holdings(data)
+                    except Exception:  # noqa: BLE001
+                        pass
     return float(seed) if seed > 0 else 0.0
 
 
