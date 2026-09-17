@@ -7,6 +7,7 @@ from strategy.core.decision import (
     engine_from_spec,
     get_decision_engine,
 )
+from strategy.core.factor_result import DecisionAction, DecisionContext, FactorResult
 from strategy.core.protocols import FactorBinding, FactorSpec, StrategySpec, bind_factor
 from strategy.core.factor_registry import (
     FACTOR_REGISTRY,
@@ -24,6 +25,9 @@ from strategy.core.strategy_registry import (
 
 __all__ = [
     "Decision",
+    "DecisionAction",
+    "DecisionContext",
+    "FactorResult",
     "MarketContext",
     "BaseDecisionEngine",
     "DecisionEngine",

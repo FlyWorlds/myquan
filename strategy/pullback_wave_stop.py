@@ -2453,6 +2453,78 @@ def replay_factor26_1m(
     return out
 
 
+def evaluate_pullback_wave_stop(ctx: Any, **overrides: Any) -> Any:
+    """因子26 统一评估入口（薄封装；算法仍在 eval_multi_tp_bar）。
+
+    接受 DecisionContext 或兼容对象；不改动交易规则，仅映射为 FactorResult。
+    """
+    from strategy.core.factor_result import FactorResult
+
+    def _g(name: str, default: Any = None) -> Any:
+        if name in overrides and overrides[name] is not None:
+            return overrides[name]
+        if isinstance(ctx, dict):
+            return ctx.get(name, default)
+        cfg = getattr(ctx, "config", None) or {}
+        if isinstance(cfg, dict) and name in cfg and cfg[name] is not None:
+            return cfg[name]
+        return getattr(ctx, name, default)
+
+    raw = eval_multi_tp_bar(
+        bar_open=float(_g("bar_open", 0) or 0),
+        bar_high=float(_g("bar_high", 0) or 0),
+        bar_low=float(_g("bar_low", 0) or 0),
+        cost_px=float(
+            _g("entry_price", None)
+            if _g("entry_price", None) is not None
+            else (_g("cost_px", 0) or 0)
+        ),
+        peak_before=float(_g("peak_before", 0) or 0),
+        shares=int(_g("shares", 0) or 0),
+        tp_stage=int(_g("tp_stage", 0) or 0),
+        can_sell=bool(_g("can_sell", True)),
+        overnight_armed=bool(_g("overnight_armed", False)),
+        day_open=_g("day_open", None),
+        giveback_ratio=float(_g("giveback_ratio", DEFAULT_GIVEBACK_RATIO)),
+        hard_pct=float(_g("hard_pct", DEFAULT_PULLBACK_PCT)),
+        ladder_half_pct=float(_g("ladder_half_pct", DEFAULT_LADDER_HALF_PCT)),
+        ladder_full_pct=float(_g("ladder_full_pct", DEFAULT_LADDER_FULL_PCT)),
+        peak_pullback_x=float(_g("peak_pullback_x", DEFAULT_PEAK_PULLBACK_X)),
+        dump_pct=float(_g("dump_pct", DEFAULT_NOTED_DUMP_PCT)),
+        giveback_arm_pct=float(_g("giveback_arm_pct", DEFAULT_GIVEBACK_ARM_PCT)),
+        t1_trail_pct=float(_g("t1_trail_pct", DEFAULT_T1_PEAK_TRAIL_PCT)),
+        vol20_daily=_g("vol20_daily", None),
+        vol_giveback_ratio=float(_g("vol_giveback_ratio", DEFAULT_VOL_GIVEBACK_RATIO)),
+        session_peak_before=float(_g("session_peak_before", 0) or 0),
+        hard_gap_mode=str(_g("hard_gap_mode", HARD_GAP_IMMEDIATE)),
+        hard_gap_dump_pct=float(_g("hard_gap_dump_pct", DEFAULT_HARD_GAP_DUMP_PCT)),
+        tick=float(_g("tick", TICK_SIZE)),
+    )
+    action = raw.get("action")
+    if not action:
+        return FactorResult.idle(
+            "factor26",
+            reason="",
+            raw=raw,
+            tp_marked=bool(raw.get("tp_marked")),
+            noted_px=raw.get("noted_px"),
+            peak_after=raw.get("peak_after"),
+            session_peak_after=raw.get("session_peak_after"),
+        )
+    return FactorResult.fire(
+        "factor26",
+        reason=str(action.get("reason") or ""),
+        price=float(action["fill_px"]) if action.get("fill_px") is not None else None,
+        raw=raw,
+        kind=action.get("kind"),
+        shares=action.get("shares"),
+        tp_marked=bool(raw.get("tp_marked")),
+        noted_px=raw.get("noted_px"),
+        peak_after=raw.get("peak_after"),
+        session_peak_after=raw.get("session_peak_after"),
+    )
+
+
 __all__ = [
     "DEFAULT_ENTRY_PCT",
     "DEFAULT_PULLBACK_PCT",
@@ -2500,6 +2572,7 @@ __all__ = [
     "working_stop_price",
     "overnight_open_dump_fill",
     "eval_multi_tp_bar",
+    "evaluate_pullback_wave_stop",
     "path_dependent_pullback_hit",
     "path_dependent_buy_hit",
     "attack_buy_trigger_price",
