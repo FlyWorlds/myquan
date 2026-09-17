@@ -12,6 +12,11 @@
 - [ ] **T1 已记依赖收盘进程仍活着**：买入日 `t1_trail` 只在收盘确认后落库；进程若提前退出，次日可能只剩硬保护。
 - [ ] **无券商报单/持仓对账**：本地触发价必成，不能当实盘成交。
 
+### Exit Decision 统一门槛（Phase 3A～3C，2026-09-17）
+- [x] **只读真实分钟 replay 入口**：`backtest/exit_decision_replay/run.py`；Legacy 与 Unified 同 Context 双跑，不成交、不写 ledger。
+- [x] **第一批严格 parity**：真实 1m OHLC 上 8,077 次 evaluation，Legacy/Unified 各 SELL 25，25/25 action/price/quantity 一致，Mismatch 0；见 [`docs/DECISION_PARITY_PHASE3_REPLAY.md`](docs/DECISION_PARITY_PHASE3_REPLAY.md)。
+- [ ] **Unified 正式接管 paper**：当前证据仍不足；累计至少 30,000 evaluation、200 SELL，并补齐真实 working-stop/半仓/锁仓覆盖后再评审。`USE_UNIFIED_EXIT_ENGINE` 继续保持 False。
+
 ### 锁定 · 盯盘可靠性（2026-09-14，禁止再犯）
 
 当日纸面盯盘事故（空表、假锁、该平未平、信号不同步、平仓价看起来不对、断网无红字）根因都是**失败行情/残留锁仓/抬高止损被当成账本真源，或把本机 WS 当成外网行情**。细节见 [`holdingStocks/README.md`](holdingStocks/README.md)「实时可靠性」。下列为合并后的事故→解法；禁止列与之对应，改盯盘不得绕过。

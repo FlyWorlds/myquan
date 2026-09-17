@@ -63,6 +63,7 @@ akshare DataFrame
 ```bash
 cd backtest && python strategy1.py --rules
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py   # 定盘池近7日1m·四槽·开盘阈值买；未到3%次日峰值回落2.5%
+python backtest/exit_decision_replay/run.py --days 10 --source ak --refresh  # Exit Legacy/Unified 只读真实分钟 parity
 # 交割注释：backtest/strategy1_pool_1m/TRADE_LEDGER.md
 python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
 python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）

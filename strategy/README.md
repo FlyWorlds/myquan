@@ -259,6 +259,8 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack 
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 # 本周 5 日核对（不覆盖默认 REPORT）
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 5 --source ak --tag _week202609
+# Legacy vs Unified Exit 真实分钟只读回放（不成交、不打开生产开关）
+python backtest/exit_decision_replay/run.py --days 10 --source ak --refresh
 # 低开破硬保护：立刻卖 vs 开盘再下杀1%（全池等权）→ COMPARE_HARD_GAP.md
 PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7
 cd backtest && python run.py kaicheng --no-open
