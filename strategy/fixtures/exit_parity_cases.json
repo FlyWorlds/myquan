@@ -1,0 +1,186 @@
+[
+  {
+    "name": "hold_mid_range",
+    "tags": ["hold"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 100.5, "open_px": 100.0, "prev_close": 99.5,
+    "cost": 100.0, "peak_high": 101.0, "working_stop": 97.5,
+    "path_hit": false
+  },
+  {
+    "name": "open_protect_zhongtian_like",
+    "tags": ["open_protect", "gap"],
+    "qty": 2600, "sellable": 2600, "t1_today": false,
+    "last": 34.59, "open_px": 33.84, "prev_close": 34.49,
+    "cost": 33.48, "peak_high": 34.78, "working_stop": 34.13,
+    "path_hit": false, "overnight_high_ok": true
+  },
+  {
+    "name": "heimiao_gap_up_no_open_protect",
+    "tags": ["open_protect", "gap", "hold"],
+    "qty": 7200, "sellable": 7200, "t1_today": false,
+    "last": 10.60, "open_px": 10.48, "prev_close": 10.14,
+    "cost": 10.13, "peak_high": 11.15, "working_stop": 9.88,
+    "path_hit": false, "overnight_high_ok": true,
+    "buy_time": "2026-09-16 09:31:00", "session": "2026-09-17"
+  },
+  {
+    "name": "working_stop_last_no_path",
+    "tags": ["working_stop", "no_path"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 96.0, "open_px": 100.0, "prev_close": 99.0,
+    "cost": 100.0, "peak_high": 101.0, "working_stop": 97.5,
+    "path_hit": false
+  },
+  {
+    "name": "path_full_half_gain",
+    "tags": ["factor26", "path"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 104.0, "open_px": 105.0, "prev_close": 104.5,
+    "cost": 100.0, "peak_high": 108.0, "working_stop": 104.0,
+    "path_hit": true, "path_fill_px": 104.0,
+    "path_stop_kind": "half_gain", "path_action_kind": "full"
+  },
+  {
+    "name": "path_half_ladder10",
+    "tags": ["factor26", "path", "half"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 110.0, "open_px": 110.0, "prev_close": 109.0,
+    "cost": 100.0, "peak_high": 112.0, "working_stop": 109.0,
+    "path_hit": true, "path_fill_px": 110.0,
+    "path_stop_kind": "ladder_half_10", "path_action_kind": "half"
+  },
+  {
+    "name": "t1_path_show_only",
+    "tags": ["t1", "path"],
+    "qty": 400, "sellable": 0, "t1_today": true,
+    "last": 97.0, "open_px": 100.0, "prev_close": 99.0,
+    "cost": 100.0, "peak_high": 100.0, "working_stop": 97.5,
+    "path_hit": true, "path_fill_px": 97.0
+  },
+  {
+    "name": "t1_hard_last_show",
+    "tags": ["t1", "working_stop"],
+    "qty": 400, "sellable": 0, "t1_today": true,
+    "last": 97.0, "open_px": 100.0, "prev_close": 99.0,
+    "cost": 100.0, "peak_high": 100.0, "working_stop": 97.5,
+    "path_hit": false
+  },
+  {
+    "name": "hold_lock_blocks_fill",
+    "tags": ["hold"],
+    "qty": 400, "sellable": 400, "t1_today": false, "hold_locked": true,
+    "last": 96.0, "open_px": 100.0, "prev_close": 99.0,
+    "cost": 100.0, "peak_high": 101.0, "working_stop": 97.5,
+    "path_hit": false
+  },
+  {
+    "name": "limit_down_blocks_fill",
+    "tags": ["hold"],
+    "qty": 400, "sellable": 400, "t1_today": false, "stop_locked": true,
+    "last": 96.0, "open_px": 100.0, "prev_close": 99.0,
+    "cost": 100.0, "peak_high": 101.0, "working_stop": 97.5,
+    "path_hit": false
+  },
+  {
+    "name": "wait_auction_blocks",
+    "tags": ["hold"],
+    "qty": 400, "sellable": 400, "t1_today": false, "signal_ok": false,
+    "last": 96.0, "open_px": 100.0, "prev_close": 99.0,
+    "cost": 100.0, "peak_high": 101.0, "working_stop": 97.5,
+    "path_hit": false
+  },
+  {
+    "name": "open_protect_beats_path",
+    "tags": ["open_protect", "path", "rule_order"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 97.0, "open_px": 97.0, "prev_close": 100.0,
+    "cost": 100.0, "peak_high": 100.0, "working_stop": 97.5,
+    "path_hit": true, "path_fill_px": 97.2,
+    "path_action_kind": "full", "path_stop_kind": "hard_from_cost",
+    "overnight_high_ok": true
+  },
+  {
+    "name": "path_beats_working_stop",
+    "tags": ["path", "working_stop", "rule_order"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 103.0, "open_px": 105.0, "prev_close": 104.0,
+    "cost": 100.0, "peak_high": 108.0, "working_stop": 104.0,
+    "path_hit": true, "path_fill_px": 103.5,
+    "path_action_kind": "full", "path_stop_kind": "half_gain"
+  },
+  {
+    "name": "yuandong_like_open_protect",
+    "tags": ["open_protect"],
+    "qty": 1000, "sellable": 1000, "t1_today": false,
+    "last": 24.50, "open_px": 24.10, "prev_close": 25.35,
+    "cost": 24.50, "peak_high": 25.80, "working_stop": 24.60,
+    "path_hit": false, "overnight_high_ok": true
+  },
+  {
+    "name": "empty_qty",
+    "tags": ["hold"],
+    "qty": 0, "sellable": 0, "t1_today": false,
+    "last": 96.0, "open_px": 100.0, "cost": 100.0,
+    "peak_high": 101.0, "working_stop": 97.5, "path_hit": false
+  },
+  {
+    "name": "working_stop_exact_touch",
+    "tags": ["working_stop"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 97.5, "open_px": 100.0, "prev_close": 99.0,
+    "cost": 100.0, "peak_high": 101.0, "working_stop": 97.5,
+    "path_hit": false
+  },
+  {
+    "name": "path_vol_giveback_full",
+    "tags": ["factor26", "path"],
+    "qty": 800, "sellable": 800, "t1_today": false,
+    "last": 105.0, "open_px": 106.0, "prev_close": 105.5,
+    "cost": 100.0, "peak_high": 107.0, "working_stop": 105.2,
+    "path_hit": true, "path_fill_px": 105.1,
+    "path_stop_kind": "vol_giveback", "path_action_kind": "full"
+  },
+  {
+    "name": "not_sellable_with_path",
+    "tags": ["t1", "path"],
+    "qty": 400, "sellable": 0, "t1_today": false,
+    "last": 104.0, "open_px": 105.0, "prev_close": 104.5,
+    "cost": 100.0, "peak_high": 108.0, "working_stop": 104.0,
+    "path_hit": true, "path_fill_px": 104.0,
+    "path_action_kind": "full", "path_stop_kind": "half_gain"
+  },
+  {
+    "name": "gap_up_peak_below_open_allows_protect_calc",
+    "tags": ["open_protect", "gap"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 10.20, "open_px": 10.50, "prev_close": 10.00,
+    "cost": 10.00, "peak_high": 10.20, "working_stop": 9.75,
+    "path_hit": false, "overnight_high_ok": true
+  },
+  {
+    "name": "hold_above_all_stops",
+    "tags": ["hold"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 102.0, "open_px": 101.0, "prev_close": 100.5,
+    "cost": 100.0, "peak_high": 103.0, "working_stop": 99.0,
+    "path_hit": false, "overnight_high_ok": true
+  },
+  {
+    "name": "half_then_full_semantics_half",
+    "tags": ["half", "path"],
+    "qty": 600, "sellable": 600, "t1_today": false,
+    "last": 111.0, "open_px": 110.0, "prev_close": 109.5,
+    "cost": 100.0, "peak_high": 112.0, "working_stop": 109.76,
+    "path_hit": true, "path_fill_px": 110.0,
+    "path_stop_kind": "ladder_half_10", "path_action_kind": "half"
+  },
+  {
+    "name": "open_protect_priority_over_last",
+    "tags": ["open_protect", "working_stop", "rule_order"],
+    "qty": 400, "sellable": 400, "t1_today": false,
+    "last": 96.0, "open_px": 97.0, "prev_close": 100.0,
+    "cost": 100.0, "peak_high": 100.0, "working_stop": 97.5,
+    "path_hit": false, "overnight_high_ok": true
+  }
+]
