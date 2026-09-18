@@ -92,3 +92,5 @@ working_stop / open_protect / Factor26 / T+1 / half 均有真实样本
 Mismatch = 0，或逐项分类并批准
 ```
 
+Phase 3C+ 已把门槛改成 **Exit Path Coverage Gate**（不再用单一 overall parity）。见 [`EXIT_COVERAGE_QUALIFICATION.md`](EXIT_COVERAGE_QUALIFICATION.md)。本文件保留 3A～3C 第一批数字作为基线。
+

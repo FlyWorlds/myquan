@@ -91,6 +91,11 @@ class ExitDecision:
     metadata: dict[str, Any] = field(default_factory=dict)
     trace: tuple[dict[str, Any], ...] = ()
 
+    @property
+    def rule_id(self) -> str:
+        """Stable exit-path id. Reuses reason_code; do not add a parallel field."""
+        return self.reason_code.value
+
     @staticmethod
     def hold(
         *,

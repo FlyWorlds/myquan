@@ -60,6 +60,8 @@ C. 可成交时的优先级（谁先触发谁成交）
 - **Factor26 数学**仍在 `eval_multi_tp_bar`；盯盘路径把结果以 `path_*` 喂入编排层。  
 - Engine 的 path 分支消费 `path_hit` / `path_fill_px` / `path_action_kind`，不在此重跑 1m。  
 - `quantity_ratio`：path 半仓 → `0.5`；其余全仓 → `1.0`。
+- **`rule_id` = `ReasonCode.value`**（`ExitDecision.rule_id` 只是 property，不另存字段）。PATH 的 Factor26 子类型用 `path_stop_kind` / `quantity_ratio` 区分。
+- 覆盖与资格：[`EXIT_COVERAGE_MATRIX.md`](EXIT_COVERAGE_MATRIX.md) · [`EXIT_COVERAGE_QUALIFICATION.md`](EXIT_COVERAGE_QUALIFICATION.md)
 
 ---
 

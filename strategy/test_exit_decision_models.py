@@ -37,6 +37,9 @@ class TestExitDecisionModels(unittest.TestCase):
         self.assertEqual(paper_reason_to_code("open_protect"), ReasonCode.OPEN_PROTECT)
         self.assertEqual(paper_reason_to_code("last"), ReasonCode.WORKING_STOP)
         self.assertEqual(paper_reason_to_code("t1"), ReasonCode.T1_BLOCK)
+        sell = ExitDecision.sell(price=10.0, reason_code=ReasonCode.WORKING_STOP)
+        self.assertEqual(sell.rule_id, ReasonCode.WORKING_STOP.value)
+        self.assertEqual(sell.rule_id, sell.reason_code.value)
 
 
 if __name__ == "__main__":

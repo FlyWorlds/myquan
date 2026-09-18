@@ -13,7 +13,6 @@ import argparse
 import json
 import sys
 from collections import Counter
-from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -26,102 +25,46 @@ for path in (ROOT, HOLDING):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+from backtest.exit_decision_replay.catalog import normalize_rule_id  # noqa: E402
+from backtest.exit_decision_replay.harness import (  # noqa: E402
+    HoldingInterval,
+    accumulate_row,
+    holding_intervals,
+    iter_symbol_evaluations,
+    row_in_window,
+    row_matches_rule,
+)
 from backtest.strategy1_pool_1m.run import (  # noqa: E402
     POOL_STRATEGY1,
     _daily,
     _load_pool,
     _minutes,
-    _prep_daily,
-    _prep_minutes,
     _sina,
 )
-from holdingStocks.index import _paper_exit_decision_legacy  # noqa: E402
-from strategy.core.exit_decision import ExitAction, paper_reason_to_code  # noqa: E402
-from strategy.exit_rules.engine import ExitDecisionEngine  # noqa: E402
-from strategy.exit_rules.shadow import (  # noqa: E402
-    build_exit_context_from_paper_kwargs,
-    compare_paper_vs_exit,
-)
-from strategy.open_break import is_t1_buy_day  # noqa: E402
 from strategy.pullback_wave_stop import (  # noqa: E402
     DEFAULT_ENTRY_PCT,
     DEFAULT_PULLBACK_PCT,
-    eval_multi_tp_bar,
-    realized_vol_daily,
-    replay_factor26_1m,
-    working_stop_price,
 )
 
 OUT = Path(__file__).resolve().parent
+CORPUS = OUT / "corpus"
 
 
-@dataclass(frozen=True)
-class HoldingInterval:
-    buy_ts: pd.Timestamp
-    buy_px: float
-    sell_ts: pd.Timestamp | None
+def load_corpus(path: Path) -> list[dict[str, Any]]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(data, list):
+        return data
+    return list(data.get("cases") or [])
 
 
-def _as_ts(value: Any) -> pd.Timestamp | None:
-    try:
-        ts = pd.Timestamp(value)
-    except (TypeError, ValueError):
-        return None
-    if pd.isna(ts):
-        return None
-    if ts.tzinfo is not None:
-        ts = ts.tz_convert("Asia/Shanghai").tz_localize(None)
-    return ts
-
-
-def holding_intervals(trades: list[dict[str, Any]]) -> list[HoldingInterval]:
-    """Convert existing Factor26 replay trades into buy-to-full-exit windows."""
-    ordered = sorted(
-        (t for t in trades if _as_ts(t.get("ts")) is not None),
-        key=lambda t: _as_ts(t.get("ts")),
-    )
-    intervals: list[HoldingInterval] = []
-    opened: tuple[pd.Timestamp, float] | None = None
-    for trade in ordered:
-        ts = _as_ts(trade.get("ts"))
-        if ts is None:
-            continue
-        side = str(trade.get("side") or "").lower()
-        if side == "buy":
-            if opened is not None:
-                intervals.append(HoldingInterval(opened[0], opened[1], None))
-            opened = (ts, float(trade.get("px") or 0))
-            continue
-        if side != "sell" or opened is None:
-            continue
-        if str(trade.get("note") or "") == "ladder_half_10":
-            continue
-        intervals.append(HoldingInterval(opened[0], opened[1], ts))
-        opened = None
-    if opened is not None:
-        intervals.append(HoldingInterval(opened[0], opened[1], None))
-    return intervals
-
-
-def _daily_by_session(daily: pd.DataFrame) -> dict[str, dict[str, float | None]]:
-    frame = _prep_daily(daily)
-    rows: dict[str, dict[str, float | None]] = {}
-    prev_close: float | None = None
-    for _, row in frame.iterrows():
-        session = pd.Timestamp(row["date"]).strftime("%Y-%m-%d")
-        rows[session] = {
-            "open": float(row["open"]),
-            "prev_close": prev_close,
-            "vol20": realized_vol_daily(
-                frame.loc[frame["date"] < row["date"], "close"].tolist()
-            ),
-        }
-        prev_close = float(row["close"])
-    return rows
-
-
-def _action_of_legacy(result: dict[str, Any]) -> str:
-    return "SELL" if result.get("hit") else "HOLD"
+def _corpus_keys(cases: list[dict[str, Any]]) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    for case in cases:
+        symbol = str(case.get("symbol") or "").zfill(6)
+        ts = str(case.get("timestamp") or "")
+        if symbol and ts:
+            keys.add((symbol, ts[:19]))
+    return keys
 
 
 def replay_symbol(
@@ -132,184 +75,47 @@ def replay_symbol(
     entry_pct: float,
     pullback_pct: float,
     days: int,
+    rule: str | None = None,
+    date: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    corpus_keys: set[tuple[str, str]] | None = None,
 ) -> tuple[Counter[str], list[dict[str, Any]]]:
-    """Replay all generated holding windows for one symbol."""
-    prepared_minutes = _prep_minutes(minutes)
-    report = replay_factor26_1m(
-        daily,
-        minutes,
-        entry_pct=entry_pct,
-        pullback_pct=pullback_pct,
-        last_n_days=days,
-        allow_attack=False,
-    )
-    intervals = holding_intervals(list(report.get("trades") or []))
-    sessions = _daily_by_session(daily)
-    engine = ExitDecisionEngine()
+    """Replay holding windows for one symbol, optionally filtered by rule/date/corpus."""
     totals: Counter[str] = Counter()
     mismatches: list[dict[str, Any]] = []
-
-    for interval_no, interval in enumerate(intervals, start=1):
-        bars = prepared_minutes[prepared_minutes["ts"] > interval.buy_ts]
-        if interval.sell_ts is not None:
-            bars = bars[bars["ts"] <= interval.sell_ts]
-        if bars.empty or interval.buy_px <= 0:
+    intervals_seen = 0
+    last_interval = 0
+    for row in iter_symbol_evaluations(
+        code=code,
+        daily=daily,
+        minutes=minutes,
+        entry_pct=entry_pct,
+        pullback_pct=pullback_pct,
+        days=days,
+    ):
+        last_interval = max(last_interval, row.interval_no)
+        if not row_in_window(row, symbol=code, date=date, start=start, end=end):
             continue
-
-        qty = 1000
-        tp_stage = 0
-        peak = float(interval.buy_px)
-        session_peak = 0.0
-        current_session = ""
-        for _, bar in bars.sort_values("ts").iterrows():
-            ts = _as_ts(bar["ts"])
-            if ts is None:
+        if rule and not row_matches_rule(row, rule):
+            continue
+        if corpus_keys is not None:
+            key = (str(row.symbol).zfill(6), row.timestamp.strftime("%Y-%m-%d %H:%M:%S"))
+            if key not in corpus_keys:
                 continue
-            session = ts.strftime("%Y-%m-%d")
-            if session != current_session:
-                current_session = session
-                session_peak = 0.0
-            day = sessions.get(session)
-            if day is None:
-                continue
-            can_sell = not is_t1_buy_day(
-                interval.buy_ts.strftime("%Y-%m-%d"), session
-            )
-            bar_open = float(bar["open"])
-            bar_high = float(bar["high"])
-            bar_low = float(bar["low"])
-            bar_close = float(bar["close"])
-            day_open = float(day["open"] or bar_open)
-            vol20 = day["vol20"]
-            ev = eval_multi_tp_bar(
-                bar_open=bar_open,
-                bar_high=bar_high,
-                bar_low=bar_low,
-                cost_px=interval.buy_px,
-                peak_before=peak,
-                shares=qty,
-                tp_stage=tp_stage,
-                can_sell=can_sell,
-                overnight_armed=False,
-                day_open=day_open,
-                hard_pct=pullback_pct,
-                vol20_daily=vol20,
-                session_peak_before=session_peak,
-            )
-            action = dict(ev.get("action") or {})
-            peak_after = float(ev.get("peak_after") or peak)
-            session_peak_after = float(ev.get("session_peak_after") or session_peak)
-            _, working_stop = working_stop_price(
-                cost_px=interval.buy_px,
-                peak_high=peak_after,
-                session_peak=session_peak_after,
-                day_open=day_open,
-                hard_pct=pullback_pct,
-                vol20_daily=vol20,
-            )
-            paper_kwargs = {
-                "symbol": code,
-                "qty": qty,
-                "sellable": qty if can_sell else 0,
-                "t1_today": not can_sell,
-                "last": bar_close,
-                "open_px": day_open,
-                "prev_close": day.get("prev_close"),
-                "cost": interval.buy_px,
-                "peak_high": peak,
-                "working_stop": working_stop,
-                "path_hit": bool(action),
-                "path_fill_px": float(action.get("fill_px") or 0),
-                "path_action_kind": str(action.get("kind") or ""),
-                "path_stop_kind": str(action.get("stop_kind") or action.get("reason") or ""),
-                "signal_ok": True,
-                "buy_time": interval.buy_ts.strftime("%Y-%m-%d"),
-                "session": session,
-            }
-            legacy_kwargs = {
-                key: value for key, value in paper_kwargs.items() if key != "symbol"
-            }
-            legacy = _paper_exit_decision_legacy(**legacy_kwargs)
-            ctx = build_exit_context_from_paper_kwargs(**paper_kwargs)
-            decision = engine.evaluate(ctx)
-            compared = compare_paper_vs_exit(legacy, decision, ctx)
+        mismatch = accumulate_row(totals, row)
+        if mismatch is not None:
+            mismatches.append(mismatch)
+        intervals_seen = last_interval
 
-            legacy_reason_code = paper_reason_to_code(
-                legacy.get("reason"), legacy.get("kind")
-            ).value
-            new_reason_code = decision.reason_code.value
-            legacy_price = (
-                float(legacy.get("fill_px") or 0) if legacy.get("hit") else None
-            )
-            new_price = (
-                float(decision.price)
-                if decision.action == ExitAction.SELL and decision.price is not None
-                else None
-            )
-            match_price_exact = (
-                legacy_price is None
-                and new_price is None
-                or legacy_price is not None
-                and new_price is not None
-                and abs(legacy_price - new_price) <= 1e-6
-            )
-            legacy_factor = (
-                "factor26" if str(legacy.get("kind") or "") == "path" else None
-            )
-            match_factor = legacy_factor == decision.factor_id
-            match_reason = legacy_reason_code == new_reason_code
-            exact = (
-                compared.match_action
-                and match_price_exact
-                and compared.match_qty
-                and match_factor
-                and match_reason
-            )
-
-            totals["evaluations"] += 1
-            totals[f"legacy_{_action_of_legacy(legacy).lower()}"] += 1
-            totals[f"unified_{decision.action.value.lower()}"] += 1
-            if exact:
-                totals["exact_match"] += 1
-            else:
-                totals["mismatch"] += 1
-                totals[f"mismatch_{compared.mismatch_class or 'G'}"] += 1
-                mismatches.append(
-                    {
-                        **asdict(compared),
-                        "timestamp": ts.isoformat(),
-                        "interval": interval_no,
-                        "legacy_reason_code": legacy_reason_code,
-                        "new_reason_code": new_reason_code,
-                        "match_price_exact": match_price_exact,
-                        "match_factor": match_factor,
-                        "match_reason": match_reason,
-                    }
-                )
-            if legacy.get("hit"):
-                totals["legacy_sell_exact_action_price_quantity"] += int(
-                    compared.match_action
-                    and match_price_exact
-                    and compared.match_qty
-                )
-                totals[f"legacy_sell_reason_{legacy_reason_code.lower()}"] += 1
-            if not can_sell:
-                totals["t1_evaluations"] += 1
-            if action:
-                totals["factor26_path_evaluations"] += 1
-            if str(action.get("kind") or "") == "half":
-                totals["half_position_evaluations"] += 1
-
-            peak = peak_after
-            session_peak = session_peak_after
-            if str(action.get("kind") or "") == "half":
-                qty = max(1, qty - int(action.get("shares") or qty // 2))
-                tp_stage = 1
-            if legacy.get("hit") and str(legacy.get("action_kind") or "") != "half":
-                break
-
-    totals["symbols_with_intervals"] = int(bool(intervals))
-    totals["holding_intervals"] = len(intervals)
+    totals["symbols_with_intervals"] = int(last_interval > 0)
+    totals["holding_intervals"] = last_interval if intervals_seen or last_interval else 0
+    if last_interval:
+        totals["holding_intervals"] = last_interval
+        totals["symbols_with_intervals"] = 1
+    else:
+        totals["symbols_with_intervals"] = 0
+        totals["holding_intervals"] = 0
     return totals, mismatches
 
 
@@ -321,10 +127,21 @@ def run_replay(
     refresh: bool,
     max_symbols: int | None = None,
     output_dir: Path = OUT,
+    rule: str | None = None,
+    symbol: str | None = None,
+    date: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    corpus: Path | None = None,
 ) -> dict[str, Any]:
     rows = _load_pool(pool)
+    if symbol:
+        want = str(symbol).zfill(6)
+        rows = [item for item in rows if str(item.get("code") or "").zfill(6) == want]
     if max_symbols is not None:
         rows = rows[: max(0, int(max_symbols))]
+    corpus_keys = _corpus_keys(load_corpus(corpus)) if corpus else None
+    rule_id = normalize_rule_id(rule) if rule else None
     totals: Counter[str] = Counter()
     mismatches: list[dict[str, Any]] = []
     symbols: list[dict[str, Any]] = []
@@ -345,6 +162,11 @@ def run_replay(
             entry_pct=entry_pct,
             pullback_pct=pullback_pct,
             days=days,
+            rule=rule_id,
+            date=date,
+            start=start,
+            end=end,
+            corpus_keys=corpus_keys,
         )
         totals.update(symbol_totals)
         mismatches.extend(symbol_mismatches)
@@ -378,8 +200,15 @@ def run_replay(
         "position_source": "factor26_1m_replay_generated_entries",
         "paper_execution": False,
         "use_unified_exit_engine": False,
+        "shadow_unified_exit_engine": False,
         "days": int(days),
         "pool": pool,
+        "rule": rule_id,
+        "symbol_filter": str(symbol).zfill(6) if symbol else None,
+        "date": date,
+        "start": start,
+        "end": end,
+        "corpus": str(corpus) if corpus else None,
         "symbols_requested": len(rows),
         "symbols": symbols,
         "totals": dict(totals),
@@ -396,6 +225,7 @@ def run_replay(
             "Real minute OHLC with replay-generated positions; not a historical paper-ledger replay.",
             "AKShare source is limited to its currently available recent minute window.",
             "Both engines receive identical normalized DecisionContext inputs.",
+            "Coverage-driven filters (--rule/--corpus) still walk bars to rebuild peak/working_stop.",
         ],
     }
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -418,6 +248,12 @@ def main() -> None:
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--max-symbols", type=int, default=None)
     parser.add_argument("--output-dir", type=Path, default=OUT)
+    parser.add_argument("--rule", default=None, help="WORKING_STOP / OPEN_PROTECT / PATH / ...")
+    parser.add_argument("--symbol", default=None)
+    parser.add_argument("--date", default=None, help="Single session YYYY-MM-DD")
+    parser.add_argument("--start", default=None, help="Inclusive session YYYY-MM-DD")
+    parser.add_argument("--end", default=None, help="Inclusive session YYYY-MM-DD")
+    parser.add_argument("--corpus", type=Path, default=None)
     args = parser.parse_args()
     result = run_replay(
         days=args.days,
@@ -426,6 +262,12 @@ def main() -> None:
         refresh=args.refresh,
         max_symbols=args.max_symbols,
         output_dir=args.output_dir,
+        rule=args.rule,
+        symbol=args.symbol,
+        date=args.date,
+        start=args.start,
+        end=args.end,
+        corpus=args.corpus,
     )
     print(json.dumps(result["totals"], ensure_ascii=False, indent=2))
 

@@ -1,0 +1,58 @@
+{
+  "rule_id": "PATH_HALF",
+  "evidence_grade": "historical",
+  "source": "factor26_1m_replay_generated_entries",
+  "generated_at": "2026-09-18T00:59:15.527710+00:00",
+  "note": "Candidates are historical bars where the rule signal is on. A higher-priority rule may still win. Prices are not synthesized.",
+  "candidate_count": 2,
+  "winner_count": 2,
+  "sell_count": 2,
+  "raw_candidate_count": 2,
+  "raw_winner_count": 2,
+  "cases": [
+    {
+      "symbol": "002636",
+      "date": "2026-09-11",
+      "timestamp": "2026-09-11T09:39:00",
+      "source": "factor26_1m_replay_generated_entries",
+      "expected_rule": "PATH_HALF",
+      "winner_rule": "PATH_HALF",
+      "legacy_action": "SELL",
+      "entry_price": 70.21,
+      "working_stop": 75.79,
+      "last": 77.3,
+      "path_available": true,
+      "position": 1000,
+      "can_sell": true,
+      "signals": {
+        "open_protect": false,
+        "working_stop": false,
+        "path": true,
+        "path_half": true,
+        "would_sell": true
+      }
+    },
+    {
+      "symbol": "600967",
+      "date": "2026-09-14",
+      "timestamp": "2026-09-14T09:32:00",
+      "source": "factor26_1m_replay_generated_entries",
+      "expected_rule": "PATH_HALF",
+      "winner_rule": "PATH_HALF",
+      "legacy_action": "SELL",
+      "entry_price": 13.93,
+      "working_stop": 15.16,
+      "last": 15.43,
+      "path_available": true,
+      "position": 1000,
+      "can_sell": true,
+      "signals": {
+        "open_protect": false,
+        "working_stop": false,
+        "path": true,
+        "path_half": true,
+        "would_sell": true
+      }
+    }
+  ]
+}
