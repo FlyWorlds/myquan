@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Any, Callable
 
@@ -339,15 +340,33 @@ def rebase_holdings_day_pnl(
     return out
 
 
+def account_today_return_pct(day_pnl: Any, account_open: Any) -> float | None:
+    """账户级今日收益率：day_pnl / 日初权益。分母缺省/非正/非有限 → None。
+
+    不用 Σ逐票当日基数，避免同日先卖后买把资金重复计入分母。
+    """
+    if day_pnl is None or account_open is None or account_open == "":
+        return None
+    try:
+        day = float(day_pnl)
+        open_f = float(account_open)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(day) or not math.isfinite(open_f) or open_f <= 0:
+        return None
+    return round(day / open_f * 100.0, 2)
+
+
 def apply_day_linked_account_equity(account: dict[str, Any]) -> dict[str, Any]:
     """总资产/总收益随今日盈亏滚动：总资产 = 日初锁定 + 今日盈亏。
 
     日初 `accountOpen` 应为昨收（或跨日结算）总资产；避免现金账本漂移时
-    总收益卡在昨收不动。
+    总收益卡在昨收不动。账户今日收益率分母同为日初权益。
     """
     acc = dict(account or {})
     day = acc.get("dayPnl")
     open_eq = acc.get("accountOpen")
+    acc["dayPnlPct"] = account_today_return_pct(day, open_eq)
     if day is None or open_eq is None:
         return acc
     try:
@@ -599,7 +618,6 @@ def patch_snapshot_live_quotes(
 
     # 账户：按持仓行重加今日盈亏，并日初+今日滚动总收益
     day_sum = 0.0
-    day_base = 0.0
     has_day = False
     total_mv = 0.0
     for r in holdings:
@@ -612,17 +630,11 @@ def patch_snapshot_live_quotes(
         if r.get("当日盈亏") is not None:
             has_day = True
             day_sum += float(r["当日盈亏"])
-            db = r.get("当日基数")
-            if db is not None and float(db) > 0:
-                day_base += float(db)
         if qty > 0 and r.get("市值") is not None:
             total_mv += float(r["市值"])
     acc = dict(snap.get("account") or {})
     if has_day:
         acc["dayPnl"] = round(day_sum, 2)
-        acc["dayPnlPct"] = (
-            round(day_sum / day_base * 100.0, 2) if day_base > 0 else None
-        )
         changed = True
     if total_mv > 0:
         acc["marketValue"] = round(total_mv, 2)
@@ -636,7 +648,6 @@ def rebase_snapshot_day_pnl(snap: dict[str, Any], *, session: str) -> dict[str, 
     holdings = rebase_holdings_day_pnl(list(out.get("holdings") or []), session=session)
     out["holdings"] = holdings
     day_sum = 0.0
-    day_base = 0.0
     has_day = False
     for r in holdings:
         try:
@@ -650,18 +661,11 @@ def rebase_snapshot_day_pnl(snap: dict[str, Any], *, session: str) -> dict[str, 
             continue
         has_day = True
         day_sum += float(r["当日盈亏"])
-        db = r.get("当日基数")
-        if db is not None and float(db) > 0:
-            day_base += float(db)
     acc = dict(out.get("account") or {})
     if has_day:
         acc["dayPnl"] = round(day_sum, 2)
-        acc["dayPnlPct"] = (
-            round(day_sum / day_base * 100.0, 2) if day_base > 0 else None
-        )
     else:
         acc["dayPnl"] = None
-        acc["dayPnlPct"] = None
     out["account"] = apply_day_linked_account_equity(acc)
     return out
 

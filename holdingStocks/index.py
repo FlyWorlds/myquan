@@ -194,6 +194,7 @@ from watch_config import (
 )
 from watch_snapshot import (
     SNAPSHOT_VERSION,
+    account_today_return_pct,
     apply_day_linked_account_equity,
     apply_feed_health,
     build_watch_snapshot,
@@ -1050,7 +1051,6 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     total_mv = 0.0
     total_mv_no_cost = 0.0
     total_cost = 0.0
-    total_day_base = 0.0
     settled_pnl = 0.0
     settled_day = 0.0
     settled_n = 0
@@ -1062,25 +1062,6 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         if r.get("当日盈亏") is not None and in_pnl:
             total_day_pnl += float(r["当日盈亏"])
             has_day = True
-            db = r.get("当日基数")
-            if db is not None and float(db) > 0:
-                total_day_base += float(db)
-            else:
-                dpct = r.get("当日盈亏%")
-                if dpct is not None and abs(float(dpct)) > 1e-12:
-                    total_day_base += float(r["当日盈亏"]) / (float(dpct) / 100.0)
-                elif r.get("市值") is not None and qty > 0:
-                    total_day_base += float(r["市值"]) - float(r["当日盈亏"])
-                elif realized:
-                    prev = _as_money(r.get("昨收"))
-                    open_px = _as_money(r.get("开盘"))
-                    base_px = prev if prev is not None and prev > 0 else open_px
-                    try:
-                        sold = int(r.get("卖出数量") or 0)
-                    except (TypeError, ValueError):
-                        sold = 0
-                    if base_px is not None and base_px > 0 and sold > 0:
-                        total_day_base += float(base_px) * sold
         if realized:
             settled_n += 1
             if r.get("浮盈") is not None:
@@ -1095,11 +1076,6 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         # 账户「成本」= 当前剩余持仓成本额，不含今日已平仓成本。
         if r.get("成本额") is not None and qty > 0:
             total_cost += float(r["成本额"])
-    total_day_pct = (
-        round(total_day_pnl / total_day_base * 100.0, 2)
-        if has_day and total_day_base > 0
-        else None
-    )
     holdings_meta = load_holdings()
     if _ensure_paper_equity_base(holdings_meta):
         save_holdings(holdings_meta)
@@ -1157,7 +1133,7 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         )[:10],
         "paperEquityBase": equity_base,
         "dayPnl": day_pnl_out,
-        "dayPnlPct": total_day_pct,
+        "dayPnlPct": account_today_return_pct(day_pnl_out, account_open),
         "equityDayPnl": equity_day,
         "accountTotal": account_total,
         "accountOpen": account_open,

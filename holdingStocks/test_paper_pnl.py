@@ -279,6 +279,105 @@ class TestPaperPnl(unittest.TestCase):
         self.assertEqual(acc["totalPnlPct"], round(-6346.0 / 300000.0 * 100.0, 2))
         self.assertEqual(acc["dayPnl"], 3109.0)
         self.assertEqual(acc["equityDayPnl"], 3109.0)
+        self.assertEqual(acc["dayPnlPct"], round(3109.0 / 290545.0 * 100.0, 2))
+
+    def test_account_today_return_uses_open_equity_not_row_bases(self) -> None:
+        self.book["account_total_open"] = 290545.0
+        acc = idx._build_watch_account_summary(
+            [
+                {
+                    "代码": "000021",
+                    "持仓": 1900,
+                    "市值": 70205.0,
+                    "成本额": 70262.0,
+                    "当日盈亏": -57.0,
+                    "当日基数": 70262.0,
+                    "交易日": "2026-09-18",
+                },
+                {
+                    "代码": "000034",
+                    "持仓": 3900,
+                    "市值": 91572.0,
+                    "成本额": 90051.0,
+                    "当日盈亏": 2067.0,
+                    "当日基数": 89505.0,
+                    "交易日": "2026-09-18",
+                },
+                {
+                    "代码": "000055",
+                    "持仓": 19300,
+                    "市值": 72375.0,
+                    "成本额": 73533.0,
+                    "当日盈亏": -1158.0,
+                    "当日基数": 73533.0,
+                    "交易日": "2026-09-18",
+                },
+                {
+                    "代码": "600234",
+                    "持仓": 3400,
+                    "市值": 73440.0,
+                    "成本额": 72896.0,
+                    "当日盈亏": 544.0,
+                    "当日基数": 72896.0,
+                    "交易日": "2026-09-18",
+                },
+                {
+                    "代码": "002636",
+                    "持仓": 0,
+                    "已实现": True,
+                    "卖出数量": 800,
+                    "成本": 83.54,
+                    "当日盈亏": 752.0,
+                    "当日基数": 63520.0,
+                    "交易日": "2026-09-18",
+                },
+                {
+                    "代码": "600869",
+                    "持仓": 0,
+                    "已实现": True,
+                    "卖出数量": 3300,
+                    "成本": 22.07,
+                    "当日盈亏": 1419.0,
+                    "当日基数": 70290.0,
+                    "交易日": "2026-09-18",
+                },
+                {
+                    "代码": "603115",
+                    "持仓": 0,
+                    "已实现": True,
+                    "卖出数量": 800,
+                    "成本": 91.8,
+                    "当日盈亏": -328.0,
+                    "当日基数": 76328.0,
+                    "交易日": "2026-09-18",
+                },
+            ]
+        )
+        self.assertEqual(acc["dayPnl"], 3239.0)
+        self.assertEqual(acc["accountOpen"], 290545.0)
+        self.assertEqual(acc["dayPnlPct"], round(3239.0 / 290545.0 * 100.0, 2))
+        self.assertEqual(acc["dayPnlPct"], 1.11)
+        self.assertNotEqual(acc["dayPnlPct"], round(3239.0 / 516334.0 * 100.0, 2))
+        self.assertNotEqual(acc["dayPnlPct"], 0.63)
+        self.assertEqual(acc["totalPnlPct"], round(acc["totalPnl"] / 300000.0 * 100.0, 2))
+
+    def test_account_today_return_zero_or_invalid_open_is_none(self) -> None:
+        from watch_snapshot import account_today_return_pct, apply_day_linked_account_equity
+
+        self.assertIsNone(account_today_return_pct(3239.0, 0))
+        self.assertIsNone(account_today_return_pct(3239.0, None))
+        self.assertIsNone(account_today_return_pct(3239.0, "x"))
+        self.assertIsNone(account_today_return_pct(3239.0, float("nan")))
+        self.assertIsNone(account_today_return_pct(3239.0, float("inf")))
+        self.assertEqual(account_today_return_pct(3239.0, 290545.0), 1.11)
+        linked = apply_day_linked_account_equity(
+            {"dayPnl": 3239.0, "accountOpen": 0, "marketValue": 1.0}
+        )
+        self.assertIsNone(linked.get("dayPnlPct"))
+        linked = apply_day_linked_account_equity(
+            {"dayPnl": 3239.0, "accountOpen": None, "marketValue": 1.0}
+        )
+        self.assertIsNone(linked.get("dayPnlPct"))
 
     def test_today_pnl_day_baseline_is_account_open(self) -> None:
         self.book["account_total_open"] = 290000.0
