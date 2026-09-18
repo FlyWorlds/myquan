@@ -2,13 +2,31 @@
 
 from __future__ import annotations
 
+import importlib
 import inspect
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import wechat_notify as wn
+
+def _alias_holdingstocks(*names: str) -> None:
+    """Load holdingStocks.<name> and expose it as top-level <name>.
+
+    Production modules still use sibling imports (e.g. `from watch_buy_signal import`).
+    This keeps repo-root `python -m unittest holdingStocks.*` package-safe without
+    mutating sys.path or the production modules.
+    """
+    for name in names:
+        mod = importlib.import_module(f"holdingStocks.{name}")
+        sys.modules.setdefault(name, mod)
+
+
+_alias_holdingstocks("watch_buy_signal")
+from holdingStocks import wechat_notify as wn
+
+sys.modules.setdefault("wechat_notify", wn)
 
 
 def _row(**kw):
@@ -322,7 +340,16 @@ class TestWechatNotifyN1(unittest.TestCase):
 
 class TestApplyFillPassesExitKind(unittest.TestCase):
     def setUp(self) -> None:
-        import index as idx
+        _alias_holdingstocks(
+            "quote_feed",
+            "factor2_watch",
+            "factor4_watch",
+            "watch_config",
+            "watch_snapshot",
+            "watch_buy_signal",
+            "wechat_notify",
+        )
+        from holdingStocks import index as idx
 
         self.idx = idx
         self.data = {

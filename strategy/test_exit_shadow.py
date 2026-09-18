@@ -327,12 +327,12 @@ class TestShadowFailureIsolation(unittest.TestCase):
             shadow.build_exit_context_from_paper_kwargs = orig_build
         self.assertEqual(built, [])
 
-    def test_use_flag_remains_false_in_module_source(self) -> None:
+    def test_unified_primary_flags_in_module_source(self) -> None:
         import importlib
 
         fresh = importlib.reload(shadow)
-        self.assertFalse(fresh.USE_UNIFIED_EXIT_ENGINE)
-        # Do not rewrite SHADOW_UNIFIED_EXIT_ENGINE; runtime session may have it True.
+        self.assertTrue(fresh.USE_UNIFIED_EXIT_ENGINE)
+        self.assertTrue(fresh.SHADOW_UNIFIED_EXIT_ENGINE)
 
 
 class TestPrimaryReversalSafety(unittest.TestCase):
