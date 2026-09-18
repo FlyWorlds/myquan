@@ -248,26 +248,7 @@ def compare_paper_vs_exit(
         legacy_rule=legacy_rule,
         unified_rule=unified_rule,
         config_version=SHADOW_CONFIG_VERSION,
-        context_snapshot={
-            "symbol": ctx.symbol,
-            "timestamp": ctx.timestamp.isoformat() if ctx.timestamp else None,
-            "session": ctx.session,
-            "last": ctx.current_price,
-            "open_px": ctx.open_px,
-            "working_stop": ctx.working_stop,
-            "path_hit": ctx.path_hit,
-            "path_fill_px": ctx.path_fill_px,
-            "path_stop_kind": ctx.path_stop_kind,
-            "path_action_kind": ctx.path_action_kind,
-            "qty": ctx.qty,
-            "sellable": ctx.sellable,
-            "t1_today": ctx.t1_today,
-            "hold_locked": ctx.hold_locked,
-            "stop_locked": ctx.stop_locked,
-            "signal_ok": ctx.signal_ok,
-            "entry_price": ctx.entry_price,
-            "peak_high": ctx.peak_high,
-        },
+        context_snapshot=_context_snapshot(ctx),
         decision_trace=list(dec.trace or ()),
         position_state={
             "qty": ctx.qty,
@@ -283,6 +264,146 @@ def compare_paper_vs_exit(
         },
         mismatch_class=mm,
     )
+
+
+_REPLAY_KW_KEYS = (
+    "symbol",
+    "qty",
+    "sellable",
+    "t1_today",
+    "hold_locked",
+    "stop_locked",
+    "last",
+    "open_px",
+    "prev_close",
+    "cost",
+    "peak_high",
+    "working_stop",
+    "path_hit",
+    "path_fill_px",
+    "path_action_kind",
+    "path_stop_kind",
+    "signal_ok",
+    "overnight_high_ok",
+    "buy_time",
+    "session",
+)
+
+
+def _context_snapshot(ctx: DecisionContext) -> dict[str, Any]:
+    return {
+        "symbol": ctx.symbol,
+        "timestamp": ctx.timestamp.isoformat() if ctx.timestamp else None,
+        "session": ctx.session,
+        "last": ctx.current_price,
+        "open_px": ctx.open_px,
+        "prev_close": ctx.prev_close,
+        "working_stop": ctx.working_stop,
+        "overnight_open_protect_px": ctx.overnight_open_protect_px,
+        "overnight_high_ok": ctx.overnight_high_ok,
+        "path_hit": ctx.path_hit,
+        "path_fill_px": ctx.path_fill_px,
+        "path_stop_kind": ctx.path_stop_kind,
+        "path_action_kind": ctx.path_action_kind,
+        "qty": ctx.qty,
+        "sellable": ctx.sellable,
+        "t1_today": ctx.t1_today,
+        "hold_locked": ctx.hold_locked,
+        "stop_locked": ctx.stop_locked,
+        "signal_ok": ctx.signal_ok,
+        "entry_price": ctx.entry_price,
+        "peak_high": ctx.peak_high,
+        "buy_time": ctx.buy_time,
+    }
+
+
+def _scalar_paper_kwargs(paper_kwargs: dict[str, Any] | None, rec: ShadowCompareRecord) -> dict[str, Any]:
+    src = dict(paper_kwargs or {})
+    snap = rec.context_snapshot or {}
+    out: dict[str, Any] = {}
+    fallback = {
+        "symbol": rec.symbol or snap.get("symbol"),
+        "qty": snap.get("qty"),
+        "sellable": snap.get("sellable"),
+        "t1_today": snap.get("t1_today"),
+        "hold_locked": snap.get("hold_locked"),
+        "stop_locked": snap.get("stop_locked"),
+        "last": snap.get("last"),
+        "open_px": snap.get("open_px"),
+        "prev_close": snap.get("prev_close"),
+        "cost": snap.get("entry_price"),
+        "peak_high": snap.get("peak_high"),
+        "working_stop": rec.working_stop if rec.working_stop is not None else snap.get("working_stop"),
+        "path_hit": snap.get("path_hit"),
+        "path_fill_px": snap.get("path_fill_px"),
+        "path_action_kind": snap.get("path_action_kind"),
+        "path_stop_kind": snap.get("path_stop_kind"),
+        "signal_ok": snap.get("signal_ok"),
+        "overnight_high_ok": snap.get("overnight_high_ok"),
+        "buy_time": snap.get("buy_time"),
+        "session": snap.get("session"),
+    }
+    for key in _REPLAY_KW_KEYS:
+        if key in src and src[key] is not None:
+            out[key] = src[key]
+        elif fallback.get(key) is not None:
+            out[key] = fallback[key]
+    out.pop("bars", None)
+    return out
+
+
+def paper_kwargs_from_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Rebuild paper_exit_decision kwargs from a mismatch/shadow record. No bars."""
+    if record.get("paper_kwargs"):
+        src = dict(record["paper_kwargs"])
+        src.pop("bars", None)
+        return {k: src[k] for k in _REPLAY_KW_KEYS if k in src}
+    snap = dict(record.get("context_snapshot") or {})
+    fake = ShadowCompareRecord(
+        timestamp=str(record.get("timestamp") or ""),
+        symbol=str(record.get("symbol") or snap.get("symbol") or ""),
+        legacy_action=str(record.get("legacy_action") or "HOLD"),
+        new_action=str(record.get("unified_action") or record.get("new_action") or "HOLD"),
+        legacy_price=record.get("legacy_price"),
+        new_price=record.get("unified_price", record.get("new_price")),
+        legacy_factor=None,
+        new_factor=None,
+        legacy_reason=None,
+        new_reason=None,
+        reason_code=record.get("unified_reason_code"),
+        quantity_ratio_new=record.get("unified_quantity"),
+        quantity_ratio_legacy=record.get("legacy_quantity"),
+        working_stop=record.get("working_stop", snap.get("working_stop")),
+        overnight_open_protect_px=record.get("open_protect"),
+        path_available=bool(snap.get("path_hit")),
+        match_action=True,
+        match_price=True,
+        match_qty=True,
+        context_snapshot=snap,
+        position_state=dict(record.get("position_snapshot") or record.get("position_state") or {}),
+    )
+    return _scalar_paper_kwargs(None, fake)
+
+
+def build_replayable_record(
+    rec: ShadowCompareRecord,
+    *,
+    paper_kwargs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Full mismatch/SELL payload: enough to replay, no minute bars."""
+    payload = _shadow_payload(rec, full=True)
+    payload["paper_kwargs"] = _scalar_paper_kwargs(paper_kwargs, rec)
+    payload["unified_action"] = rec.new_action
+    payload["unified_price"] = rec.new_price
+    payload["legacy_quantity"] = rec.quantity_ratio_legacy
+    payload["unified_quantity"] = rec.quantity_ratio_new
+    payload["legacy_reason_code"] = rec.legacy_rule
+    payload["unified_reason_code"] = rec.unified_rule
+    payload["open_protect"] = rec.overnight_open_protect_px
+    payload["position_snapshot"] = rec.position_state
+    payload["path"] = (rec.position_state or {}).get("path")
+    payload["config_version"] = rec.config_version
+    return payload
 
 
 def _is_rule_candidate_ctx(legacy: dict[str, Any], rec: ShadowCompareRecord, ctx: DecisionContext) -> bool:
@@ -401,7 +522,9 @@ def maybe_shadow_and_select(
                 )
                 _record_shadow_metrics(rec, mismatch=mismatch, partial=partial)
                 if mismatch or sell or partial or candidate:
-                    emit_shadow_record(_shadow_payload(rec, full=True))
+                    emit_shadow_record(
+                        build_replayable_record(rec, paper_kwargs=paper_kwargs)
+                    )
                 else:
                     _HOLD_SAMPLE_SEQ += 1
                     if _HOLD_SAMPLE_SEQ % max(1, int(SHADOW_HOLD_SAMPLE_EVERY)) == 0:

@@ -64,6 +64,9 @@ akshare DataFrame
 cd backtest && python strategy1.py --rules
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py   # 定盘池近7日1m·四槽·开盘阈值买；未到3%次日峰值回落2.5%
 python backtest/exit_decision_replay/run.py --days 10 --source ak --refresh  # Exit Legacy/Unified 只读真实分钟 parity
+python backtest/exit_decision_replay/find_cases.py --rule WORKING_STOP --days 10 --source ak  # 找历史退出候选
+python backtest/exit_decision_replay/run.py --rule PATH --symbol 002636 --days 10 --source ak  # 定向规则 replay
+python backtest/exit_decision_replay/replay_mismatch.py path.json  # Shadow mismatch → Legacy vs Unified 复现
 # 交割注释：backtest/strategy1_pool_1m/TRADE_LEDGER.md
 python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
 python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）

@@ -75,6 +75,8 @@ legacy() → 改仓/改止损/写账 → 再 build unified context
 | `classify_mismatch` | PURE | |
 | `_legacy_action` / `_legacy_qty_ratio` | PURE | |
 | `_is_rule_candidate_ctx` | PURE | |
+| `_context_snapshot` / `_scalar_paper_kwargs` / `paper_kwargs_from_record` | PURE | 从 snapshot 重建标量 kwargs，不含行情 bars。 |
+| `build_replayable_record` | PURE | mismatch/SELL 完整记录；不写文件。 |
 | `_shadow_payload` | MUTATING | 会改 record 的 `log_level`/`sampled` 字段（仅该对象，非仓位）。 |
 | `_record_shadow_metrics` | MUTATING | 只写进程内 `_SHADOW_METRICS`。candidate / winner 分列，不把 `last<=working_stop` 记成赢家 SELL。 |
 | `_note_shadow_error` | MUTATING | 只写进程内 `_SHADOW_ERRORS` + `shadow_errors` 计数。 |
@@ -129,7 +131,7 @@ Shadow 调用链中**未发现**：
 | database write | 无 |
 | HTTP request | 无 |
 | WebSocket emit | 无 |
-| file mutation | 无 |
+| file mutation | 无（paper Shadow 只写内存缓冲。`replay_mismatch.py --out` 是离线工具，不在盯盘路径） |
 | AKQUANT action | 无 |
 | cache mutation（行情缓存） | 无 |
 
