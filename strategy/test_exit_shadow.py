@@ -17,6 +17,7 @@ from strategy.exit_rules.shadow import (
     clear_shadow_buffer,
     get_shadow_buffer,
     get_shadow_errors,
+    get_shadow_metrics,
     maybe_shadow_and_select,
 )
 
@@ -63,6 +64,10 @@ class TestShadowCompare(unittest.TestCase):
         self.assertEqual(rec.get("config_version"), shadow.SHADOW_CONFIG_VERSION)
         self.assertTrue(rec.get("context_snapshot"))
         self.assertEqual(rec.get("log_level"), "full")
+        metrics = get_shadow_metrics()
+        self.assertGreaterEqual(metrics.get("legacy_sell", 0), 1)
+        self.assertGreaterEqual(metrics.get("winner_by_reason.WORKING_STOP", 0), 1)
+        self.assertGreaterEqual(metrics.get("candidate_by_reason.WORKING_STOP", 0), 1)
 
     def test_consistent_hold_is_sampled_minimal(self) -> None:
         from index import paper_exit_decision
@@ -93,6 +98,43 @@ class TestShadowCompare(unittest.TestCase):
             self.assertEqual(buf[0]["decision_trace"], [])
         finally:
             shadow.SHADOW_HOLD_SAMPLE_EVERY = old
+
+    def test_working_stop_candidate_is_not_counted_as_winner_sell(self) -> None:
+        from index import paper_exit_decision
+
+        clear_shadow_buffer()
+        out = paper_exit_decision(
+            qty=400,
+            sellable=400,
+            t1_today=False,
+            last=96.0,
+            open_px=97.0,
+            prev_close=100.0,
+            cost=100.0,
+            peak_high=100.0,
+            working_stop=97.5,
+            path_hit=False,
+            overnight_high_ok=True,
+            symbol="600552",
+        )
+        self.assertTrue(out["hit"])
+        self.assertEqual(out["kind"], "open_protect")
+        rec = get_shadow_buffer()[-1]
+        outcomes = {
+            str(s.get("rule")): s
+            for s in rec.get("decision_trace") or ()
+            if s.get("candidate") is True
+        }
+        self.assertTrue(outcomes["WORKING_STOP"]["candidate"])
+        self.assertFalse(outcomes["WORKING_STOP"]["winner"])
+        self.assertEqual(outcomes["WORKING_STOP"]["superseded_by"], "OPEN_PROTECT")
+        self.assertTrue(outcomes["OPEN_PROTECT"]["winner"])
+        metrics = get_shadow_metrics()
+        self.assertGreaterEqual(metrics.get("candidate_by_reason.WORKING_STOP", 0), 1)
+        self.assertGreaterEqual(metrics.get("candidate_by_reason.OPEN_PROTECT", 0), 1)
+        self.assertGreaterEqual(metrics.get("winner_by_reason.OPEN_PROTECT", 0), 1)
+        self.assertEqual(metrics.get("winner_by_reason.WORKING_STOP", 0), 0)
+        self.assertEqual(rec.get("unified_rule"), "OPEN_PROTECT")
 
     def test_unified_flag_can_select_engine(self) -> None:
         from index import _paper_exit_decision_legacy

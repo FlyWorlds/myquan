@@ -76,19 +76,22 @@ legacy() → 改仓/改止损/写账 → 再 build unified context
 | `_legacy_action` / `_legacy_qty_ratio` | PURE | |
 | `_is_rule_candidate_ctx` | PURE | |
 | `_shadow_payload` | MUTATING | 会改 record 的 `log_level`/`sampled` 字段（仅该对象，非仓位）。 |
+| `_record_shadow_metrics` | MUTATING | 只写进程内 `_SHADOW_METRICS`。candidate / winner 分列，不把 `last<=working_stop` 记成赢家 SELL。 |
+| `_note_shadow_error` | MUTATING | 只写进程内 `_SHADOW_ERRORS` + `shadow_errors` 计数。 |
 | `run_unified_exit` | PURE | 调 engine + 适配 dict。 |
-| `maybe_shadow_and_select` | READ_ONLY + 条件 MUTATING | flags 全关：直接返回 legacy。Shadow 开：可写 `_SHADOW_BUFFER` / metrics。`use_unified` 默认 False，生产仍返回 legacy。任意异常 → 返回 legacy。 |
+| `maybe_shadow_and_select` | READ_ONLY + 条件 MUTATING | flags 全关：直接返回 legacy。Shadow 开：可写 `_SHADOW_BUFFER` / metrics / errors。`use_unified` 默认 False，生产仍返回 legacy。任意异常 → 返回 legacy。 |
 | `emit_shadow_record` | MUTATING | 追加进程内 `_SHADOW_BUFFER`（上限 5000）。**不写文件、不写 ledger、不 HTTP。** Hook 异常被吞掉。 |
 | `set_shadow_hook` | MUTATING | 测试/观测注入。生产默认 `None`。 |
-| `clear_shadow_buffer` / `get_shadow_buffer` | MUTATING / READ_ONLY | 仅 Shadow 缓冲。 |
+| `clear_shadow_buffer` / `get_shadow_buffer` / `get_shadow_errors` / `get_shadow_metrics` | MUTATING / READ_ONLY | 仅 Shadow 缓冲。 |
 | 模块常量 `USE_*` / `SHADOW_*` | READ_ONLY 默认 | 本轮保持 False。 |
 
 Shadow 局部可变状态：
 
 ```text
 _SHADOW_BUFFER      进程内存，非 paper ledger
+_SHADOW_ERRORS      进程内存
 _HOLD_SAMPLE_SEQ    抽样计数
-_SHADOW_METRICS     计数器（若启用）
+_SHADOW_METRICS     计数器（Shadow ON 才写）
 _SHADOW_HOOK        默认 None
 _ENGINE             无状态编排器单例
 ```
@@ -100,6 +103,7 @@ _ENGINE             无状态编排器单例
 | 函数 | 标记 | 说明 |
 |------|------|------|
 | `ExitDecisionEngine.evaluate` | PURE | 只读 `DecisionContext`，返回 `ExitDecision` + trace。 |
+| `_annotate_candidates` | PURE | 只往本次 trace 追加 candidate/winner/superseded_by。 |
 | `exit_decision_to_paper_dict` | PURE | |
 | `evaluate_overnight_open_protect` | PURE | 委托 `overnight_open_protect_px`（价位公式）。 |
 | `resolve_peak_for_open_protect` | PURE | |
@@ -136,6 +140,8 @@ Shadow 调用链中**未发现**：
 | 位置 | 写入对象 | 是否影响 paper |
 |------|----------|----------------|
 | `_SHADOW_BUFFER.append` | 进程内比较日志 | 否 |
+| `_SHADOW_ERRORS.append` | 进程内错误日志 | 否 |
+| `_SHADOW_METRICS` | 进程内计数 | 否 |
 | `_HOLD_SAMPLE_SEQ` | 抽样计数 | 否 |
 | `_shadow_payload` 改 record 字段 | 比较对象 | 否 |
 | `set_shadow_hook` | 可选回调 | **若人工注入危险 hook，hook 本身可能有副作用**；生产未设置。`emit` 已吞掉 hook 异常。 |

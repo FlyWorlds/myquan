@@ -150,6 +150,61 @@ class TestExitDecisionEngineParity(unittest.TestCase):
         self.assertAlmostEqual(dec.quantity_ratio, 0.5, places=6)
         self.assertEqual(dec.reason_code, ReasonCode.PATH)
 
+    def test_working_stop_candidate_superseded_by_open_protect(self) -> None:
+        kw = dict(
+            qty=400,
+            sellable=400,
+            t1_today=False,
+            last=96.0,
+            open_px=97.0,
+            prev_close=100.0,
+            cost=100.0,
+            peak_high=100.0,
+            working_stop=97.5,
+            path_hit=False,
+            overnight_high_ok=True,
+        )
+        dec = self.eng.evaluate(_ctx_from_paper_kw(**kw))
+        self.assertEqual(dec.rule_id, ReasonCode.OPEN_PROTECT.value)
+        outcomes = {
+            str(s.get("rule")): s
+            for s in dec.trace
+            if s.get("candidate") is True
+        }
+        self.assertTrue(outcomes["WORKING_STOP"]["candidate"])
+        self.assertFalse(outcomes["WORKING_STOP"]["winner"])
+        self.assertEqual(outcomes["WORKING_STOP"]["superseded_by"], "OPEN_PROTECT")
+        self.assertTrue(outcomes["OPEN_PROTECT"]["winner"])
+        self.assertIsNone(outcomes["OPEN_PROTECT"]["superseded_by"])
+
+    def test_working_stop_candidate_superseded_by_path(self) -> None:
+        kw = dict(
+            qty=400,
+            sellable=400,
+            t1_today=False,
+            last=103.0,
+            open_px=105.0,
+            prev_close=104.0,
+            cost=100.0,
+            peak_high=108.0,
+            working_stop=104.0,
+            path_hit=True,
+            path_fill_px=103.5,
+            path_action_kind="full",
+            path_stop_kind="half_gain",
+        )
+        dec = self.eng.evaluate(_ctx_from_paper_kw(**kw))
+        self.assertEqual(dec.rule_id, ReasonCode.PATH.value)
+        outcomes = {
+            str(s.get("rule")): s
+            for s in dec.trace
+            if s.get("candidate") is True
+        }
+        self.assertTrue(outcomes["WORKING_STOP"]["candidate"])
+        self.assertFalse(outcomes["WORKING_STOP"]["winner"])
+        self.assertEqual(outcomes["WORKING_STOP"]["superseded_by"], "PATH")
+        self.assertTrue(outcomes["PATH"]["winner"])
+
     def test_t1_show_only(self) -> None:
         self._assert_match(
             qty=400,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from collections import Counter
 from typing import Any, Callable
 
 from strategy.core.exit_decision import ExitDecision, paper_reason_to_code
@@ -18,6 +19,7 @@ SHADOW_HOLD_SAMPLE_EVERY = 50
 
 _SHADOW_BUFFER: list[dict[str, Any]] = []
 _SHADOW_ERRORS: list[dict[str, Any]] = []
+_SHADOW_METRICS: Counter[str] = Counter()
 _SHADOW_HOOK: Callable[[dict[str, Any]], None] | None = None
 _ENGINE = ExitDecisionEngine()
 _HOLD_SAMPLE_SEQ = 0
@@ -65,6 +67,7 @@ def clear_shadow_buffer() -> None:
     global _HOLD_SAMPLE_SEQ
     _SHADOW_BUFFER.clear()
     _SHADOW_ERRORS.clear()
+    _SHADOW_METRICS.clear()
     _HOLD_SAMPLE_SEQ = 0
 
 
@@ -76,7 +79,21 @@ def get_shadow_errors() -> list[dict[str, Any]]:
     return list(_SHADOW_ERRORS)
 
 
-def _note_shadow_error(where: str, exc: BaseException, ctx: DecisionContext | None = None) -> None:
+def get_shadow_metrics() -> dict[str, int]:
+    return dict(_SHADOW_METRICS)
+
+
+def _bump(key: str, n: int = 1) -> None:
+    _SHADOW_METRICS[key] += n
+
+
+def _note_shadow_error(
+    where: str,
+    exc: BaseException,
+    ctx: DecisionContext | None = None,
+    *,
+    count_eval: bool = True,
+) -> None:
     """Record a shadow failure without touching paper state."""
     _SHADOW_ERRORS.append(
         {
@@ -88,6 +105,9 @@ def _note_shadow_error(where: str, exc: BaseException, ctx: DecisionContext | No
     )
     if len(_SHADOW_ERRORS) > 500:
         del _SHADOW_ERRORS[: len(_SHADOW_ERRORS) - 500]
+    _bump("shadow_errors")
+    if count_eval:
+        _bump("shadow_evaluations")
 
 
 def build_exit_context_from_paper_kwargs(**kw: Any) -> DecisionContext:
@@ -294,6 +314,38 @@ def _shadow_payload(rec: ShadowCompareRecord, *, full: bool, sampled: bool = Fal
     return payload
 
 
+def _record_shadow_metrics(rec: ShadowCompareRecord, *, mismatch: bool, partial: bool) -> None:
+    _bump("shadow_evaluations")
+    if mismatch:
+        _bump("shadow_mismatches")
+    else:
+        _bump("shadow_exact_matches")
+    if rec.legacy_action == "SELL":
+        _bump("legacy_sell")
+    if rec.new_action == "SELL":
+        _bump("unified_sell")
+    if (
+        rec.legacy_action == "SELL"
+        and rec.match_action
+        and rec.match_price
+        and rec.match_qty
+        and rec.match_reason
+    ):
+        _bump("sell_exact_match")
+    if partial:
+        _bump("partial_sell")
+    for step in rec.decision_trace or ():
+        if not isinstance(step, dict):
+            continue
+        rule = str(step.get("rule") or "")
+        if not rule:
+            continue
+        if step.get("candidate") is True:
+            _bump(f"candidate_by_reason.{rule}")
+        if step.get("winner") is True:
+            _bump(f"winner_by_reason.{rule}")
+
+
 def emit_shadow_record(payload: dict[str, Any]) -> None:
     _SHADOW_BUFFER.append(payload)
     if len(_SHADOW_BUFFER) > 5000:
@@ -347,6 +399,7 @@ def maybe_shadow_and_select(
                     (rec.quantity_ratio_legacy is not None and rec.quantity_ratio_legacy < 1.0 - 1e-12)
                     or (rec.quantity_ratio_new is not None and rec.quantity_ratio_new < 1.0 - 1e-12)
                 )
+                _record_shadow_metrics(rec, mismatch=mismatch, partial=partial)
                 if mismatch or sell or partial or candidate:
                     emit_shadow_record(_shadow_payload(rec, full=True))
                 else:
@@ -354,7 +407,7 @@ def maybe_shadow_and_select(
                     if _HOLD_SAMPLE_SEQ % max(1, int(SHADOW_HOLD_SAMPLE_EVERY)) == 0:
                         emit_shadow_record(_shadow_payload(rec, full=False, sampled=True))
             except Exception as exc:  # noqa: BLE001
-                _note_shadow_error("compare_or_log", exc, ctx)
+                _note_shadow_error("compare_or_log", exc, ctx, count_eval=True)
         if use:
             return adapted
         return legacy

@@ -28,6 +28,33 @@ def _trace_step(rule: str, result: str, **extra: Any) -> dict[str, Any]:
     return row
 
 
+def _annotate_candidates(
+    trace: list[dict[str, Any]],
+    *,
+    cand_open: bool,
+    cand_last: bool,
+    cand_path: bool,
+    winner: str,
+) -> None:
+    """Record pre-priority candidates vs the actual winner. Does not change order."""
+    for rule_id, candidate in (
+        ("OPEN_PROTECT", cand_open),
+        ("PATH", cand_path),
+        ("WORKING_STOP", cand_last),
+    ):
+        if not candidate:
+            continue
+        win = rule_id == winner
+        trace.append(
+            {
+                "rule": rule_id,
+                "candidate": True,
+                "winner": win,
+                "superseded_by": None if win else winner,
+            }
+        )
+
+
 class ExitDecisionEngine:
     """统一卖出编排（与 paper_exit_decision 对齐）。"""
 
@@ -63,6 +90,9 @@ class ExitDecisionEngine:
         last_rule = evaluate_working_stop(ctx)
         last_hit = bool(last_rule.triggered)
         path_ok = bool(path_hit and path_px > 0)
+        cand_open = bool(open_hit)
+        cand_last = bool(last_hit)
+        cand_path = bool(path_ok)
         trace.append(
             _trace_step(
                 "working_stop",
@@ -106,11 +136,25 @@ class ExitDecisionEngine:
         hit_show = bool(open_hit or last_hit or path_ok)
         if not hit_show:
             trace.append(_trace_step("hit_show", "false"))
+            _annotate_candidates(
+                trace,
+                cand_open=cand_open,
+                cand_last=cand_last,
+                cand_path=cand_path,
+                winner=ReasonCode.NONE.value,
+            )
             return ExitDecision.hold(reason="", trace=trace)
 
         # --- show-only 拦截 ---
         if t1:
             trace.append(_trace_step("t1", "block_fill"))
+            _annotate_candidates(
+                trace,
+                cand_open=cand_open,
+                cand_last=cand_last,
+                cand_path=cand_path,
+                winner=ReasonCode.T1_BLOCK.value,
+            )
             return ExitDecision.hold(
                 reason="t1",
                 reason_code=ReasonCode.T1_BLOCK,
@@ -120,6 +164,13 @@ class ExitDecisionEngine:
             )
         if ctx.hold_locked:
             trace.append(_trace_step("hold_lock", "block_fill"))
+            _annotate_candidates(
+                trace,
+                cand_open=cand_open,
+                cand_last=cand_last,
+                cand_path=cand_path,
+                winner=ReasonCode.HOLD_LOCK.value,
+            )
             return ExitDecision.hold(
                 reason="hold_lock",
                 reason_code=ReasonCode.HOLD_LOCK,
@@ -129,6 +180,13 @@ class ExitDecisionEngine:
             )
         if ctx.stop_locked:
             trace.append(_trace_step("limit_down", "block_fill"))
+            _annotate_candidates(
+                trace,
+                cand_open=cand_open,
+                cand_last=cand_last,
+                cand_path=cand_path,
+                winner=ReasonCode.LIMIT_DOWN.value,
+            )
             return ExitDecision.hold(
                 reason="limit_down",
                 reason_code=ReasonCode.LIMIT_DOWN,
@@ -139,6 +197,13 @@ class ExitDecisionEngine:
         sell_i = int(ctx.sellable if ctx.sellable is not None else 0)
         if sell_i <= 0:
             trace.append(_trace_step("not_sellable", "block_fill"))
+            _annotate_candidates(
+                trace,
+                cand_open=cand_open,
+                cand_last=cand_last,
+                cand_path=cand_path,
+                winner=ReasonCode.NOT_SELLABLE.value,
+            )
             return ExitDecision.hold(
                 reason="not_sellable",
                 reason_code=ReasonCode.NOT_SELLABLE,
@@ -148,6 +213,13 @@ class ExitDecisionEngine:
             )
         if not bool(ctx.signal_ok):
             trace.append(_trace_step("wait_auction", "block_fill"))
+            _annotate_candidates(
+                trace,
+                cand_open=cand_open,
+                cand_last=cand_last,
+                cand_path=cand_path,
+                winner=ReasonCode.WAIT_AUCTION.value,
+            )
             return ExitDecision.hold(
                 reason="wait_auction",
                 reason_code=ReasonCode.WAIT_AUCTION,
@@ -159,6 +231,13 @@ class ExitDecisionEngine:
         # --- 成交优先级：open → path → last ---
         if open_hit:
             trace.append(_trace_step("fill", "open_protect", price=open_f))
+            _annotate_candidates(
+                trace,
+                cand_open=cand_open,
+                cand_last=cand_last,
+                cand_path=cand_path,
+                winner=ReasonCode.OPEN_PROTECT.value,
+            )
             return ExitDecision.sell(
                 price=open_f,
                 reason="open_protect",
@@ -188,6 +267,13 @@ class ExitDecisionEngine:
                     stop_kind=ctx.path_stop_kind,
                 )
             )
+            _annotate_candidates(
+                trace,
+                cand_open=cand_open,
+                cand_last=cand_last,
+                cand_path=cand_path,
+                winner=ReasonCode.PATH.value,
+            )
             return ExitDecision.sell(
                 price=path_px,
                 reason="path",
@@ -207,6 +293,13 @@ class ExitDecisionEngine:
             if hard > 0:
                 fill = hard
         trace.append(_trace_step("fill", "working_stop", price=fill))
+        _annotate_candidates(
+            trace,
+            cand_open=cand_open,
+            cand_last=cand_last,
+            cand_path=cand_path,
+            winner=ReasonCode.WORKING_STOP.value,
+        )
         return ExitDecision.sell(
             price=fill,
             reason="last",
