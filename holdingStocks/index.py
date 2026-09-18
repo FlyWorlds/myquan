@@ -1087,13 +1087,12 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 settled_pnl += float(r["浮盈"])
             if r.get("当日盈亏") is not None:
                 settled_day += float(r["当日盈亏"])
-            if r.get("成本") is not None and r.get("卖出数量"):
-                total_cost += float(r["成本"]) * int(r["卖出数量"])
         if r.get("市值") is not None and qty > 0:
             mv = float(r["市值"])
             total_mv += mv
             if r.get("成本额") is None:
                 total_mv_no_cost += mv
+        # 账户「成本」= 当前剩余持仓成本额，不含今日已平仓成本。
         if r.get("成本额") is not None and qty > 0:
             total_cost += float(r["成本额"])
     total_day_pct = (
@@ -2809,6 +2808,19 @@ def _as_money(v: Any) -> float | None:
     return x if x > 0 else None
 
 
+def _as_cash(v: Any) -> float | None:
+    """纸面现金：允许 0 与负值（超配）。缺省/非有限数字才是 None。"""
+    if v is None or v == "":
+        return None
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(x):
+        return None
+    return x
+
+
 def _prev_close_from_snapshot(code: str) -> float | None:
     """CLI 卖出无行情时，用最近盯盘快照的昨收，避免昨仓今日盈亏误用成本。"""
     if not WATCH_META_FILE.is_file():
@@ -3409,7 +3421,7 @@ def _enrich_side_price_fields(row: dict[str, Any]) -> None:
 
 def _account_cash(data: dict[str, Any] | None = None) -> float | None:
     data = data if data is not None else load_holdings()
-    return _as_money(data.get("account_cash"))
+    return _as_cash(data.get("account_cash"))
 
 
 def _holdings_market_value(rows: list[dict[str, Any]]) -> float:

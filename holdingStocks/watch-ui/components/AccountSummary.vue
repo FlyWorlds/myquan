@@ -36,7 +36,7 @@ function fmt(v?: number | null, d = 2) {
       · 可用 {{ fmt(account.availableCash) }}
       · 仓位 {{ account.positionPct == null ? '-' : account.positionPct.toFixed(1) + '%' }}
       · 市值 {{ fmt(account.marketValue) }}
-      · 成本 {{ fmt(account.cost) }}
+      · 当前持仓成本 {{ fmt(account.cost) }}
       <template v-if="account.todayOpened"> · 当日开仓 {{ fmt(account.todayOpened) }}</template>
       <template v-if="account.settledCount"> · 今日平仓{{ account.settledCount }}笔</template>
       <template v-if="account.equityDayPnl != null"> · 权益日变 {{ fmt(account.equityDayPnl) }}</template>
