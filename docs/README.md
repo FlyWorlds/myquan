@@ -16,6 +16,11 @@
 | [`FACTOR21.md`](FACTOR21.md) | 因子21 涨停次日低开（策略十二，OOS 未过关） |
 | [`strategy/README.md`](../strategy/README.md) | 因子/策略注册表、CLI |
 | [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md) | **2026-09-13 策略十六/因子26 项目审查**（现行默认；含工作止损/费用/信号） |
+| [`EXIT_RULE_ORDER.md`](EXIT_RULE_ORDER.md) | Paper 卖出规则顺序（ExitDecisionEngine 真源） |
+| [`EXIT_COVERAGE_MATRIX.md`](EXIT_COVERAGE_MATRIX.md) | Phase 3C+ 退出路径覆盖矩阵 |
+| [`EXIT_COVERAGE_QUALIFICATION.md`](EXIT_COVERAGE_QUALIFICATION.md) | Phase 3C+ 覆盖资格；未切 Unified |
+| [`SHADOW_SIDE_EFFECT_AUDIT.md`](SHADOW_SIDE_EFFECT_AUDIT.md) | Unified Shadow 只读副作用审计 |
+| [`DECISION_PARITY_PHASE3_REPLAY.md`](DECISION_PARITY_PHASE3_REPLAY.md) | Phase 3A～3C 真实 1m parity 基线 |
 | [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 2026-08 凯盛 OpenBreak（因子1）底稿 |
 
 改代码时同步更新：`.cursor/rules/docs-sync.mdc`

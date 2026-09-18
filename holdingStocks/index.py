@@ -4969,6 +4969,20 @@ def paper_exit_decision(
         session=session,
         symbol=symbol,
     )
+    # Snapshot Unified Context *before* Legacy, from the same kwargs.
+    # Flags 全关时不建 context，避免盯盘热路径多余分配。
+    ctx = None
+    shadow_mod = None
+    try:
+        from strategy.exit_rules import shadow as shadow_mod
+
+        if bool(shadow_mod.USE_UNIFIED_EXIT_ENGINE) or bool(
+            shadow_mod.SHADOW_UNIFIED_EXIT_ENGINE
+        ):
+            ctx = shadow_mod.build_exit_context_from_paper_kwargs(**kw)
+    except Exception:  # noqa: BLE001
+        shadow_mod = None
+        ctx = None
     legacy = _paper_exit_decision_legacy(
         qty=qty,
         sellable=sellable,
@@ -4990,10 +5004,10 @@ def paper_exit_decision(
         buy_time=buy_time,
         session=session,
     )
+    if shadow_mod is None:
+        return legacy
     try:
-        from strategy.exit_rules.shadow import maybe_shadow_and_select
-
-        return maybe_shadow_and_select(legacy, paper_kwargs=kw)
+        return shadow_mod.maybe_shadow_and_select(legacy, paper_kwargs=kw, ctx=ctx)
     except Exception:  # noqa: BLE001
         return legacy
 

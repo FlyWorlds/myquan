@@ -6,17 +6,21 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from strategy.core.exit_decision import ExitDecision
+from strategy.core.exit_decision import ExitDecision, paper_reason_to_code
 from strategy.core.factor_result import DecisionContext
 from strategy.exit_rules.engine import ExitDecisionEngine, exit_decision_to_paper_dict
 
-# 生产默认：不切换；Shadow 默认关（测试可开）
+# 生产默认：不切换；Shadow 默认关（测试可开）。Cursor 不得自行打开。
 USE_UNIFIED_EXIT_ENGINE = False
 SHADOW_UNIFIED_EXIT_ENGINE = False
+SHADOW_CONFIG_VERSION = "phase3c+"
+SHADOW_HOLD_SAMPLE_EVERY = 50
 
 _SHADOW_BUFFER: list[dict[str, Any]] = []
+_SHADOW_ERRORS: list[dict[str, Any]] = []
 _SHADOW_HOOK: Callable[[dict[str, Any]], None] | None = None
 _ENGINE = ExitDecisionEngine()
+_HOLD_SAMPLE_SEQ = 0
 
 
 @dataclass
@@ -40,6 +44,13 @@ class ShadowCompareRecord:
     match_action: bool
     match_price: bool
     match_qty: bool
+    match_reason: bool = True
+    legacy_rule: str | None = None
+    unified_rule: str | None = None
+    config_version: str = SHADOW_CONFIG_VERSION
+    log_level: str = "full"
+    sampled: bool = False
+    context_snapshot: dict[str, Any] = field(default_factory=dict)
     decision_trace: list[dict[str, Any]] = field(default_factory=list)
     position_state: dict[str, Any] = field(default_factory=dict)
     mismatch_class: str = ""
@@ -51,11 +62,32 @@ def set_shadow_hook(hook: Callable[[dict[str, Any]], None] | None) -> None:
 
 
 def clear_shadow_buffer() -> None:
+    global _HOLD_SAMPLE_SEQ
     _SHADOW_BUFFER.clear()
+    _SHADOW_ERRORS.clear()
+    _HOLD_SAMPLE_SEQ = 0
 
 
 def get_shadow_buffer() -> list[dict[str, Any]]:
     return list(_SHADOW_BUFFER)
+
+
+def get_shadow_errors() -> list[dict[str, Any]]:
+    return list(_SHADOW_ERRORS)
+
+
+def _note_shadow_error(where: str, exc: BaseException, ctx: DecisionContext | None = None) -> None:
+    """Record a shadow failure without touching paper state."""
+    _SHADOW_ERRORS.append(
+        {
+            "where": where,
+            "error": f"{type(exc).__name__}: {exc}",
+            "symbol": str(getattr(ctx, "symbol", "") or ""),
+            "config_version": SHADOW_CONFIG_VERSION,
+        }
+    )
+    if len(_SHADOW_ERRORS) > 500:
+        del _SHADOW_ERRORS[: len(_SHADOW_ERRORS) - 500]
 
 
 def build_exit_context_from_paper_kwargs(**kw: Any) -> DecisionContext:
@@ -151,16 +183,26 @@ def compare_paper_vs_exit(
     match_qty = True
     if lq is not None and nq is not None:
         match_qty = abs(lq - nq) < 1e-9
+    legacy_rule = paper_reason_to_code(legacy.get("reason"), legacy.get("kind")).value
+    unified_rule = dec.rule_id
+    match_reason = legacy_rule == unified_rule
 
     mm = ""
-    if not (match_action and match_price and match_qty):
-        mm = classify_mismatch(
-            legacy_action=la,
-            new_action=na,
-            legacy_kind=str(legacy.get("kind") or ""),
-            new_reason_code=str(dec.reason_code.value if dec.reason_code else ""),
-            path_available=bool(ctx.path_hit),
-        )
+    if not (match_action and match_price and match_qty and match_reason):
+        if not match_action:
+            mm = classify_mismatch(
+                legacy_action=la,
+                new_action=na,
+                legacy_kind=str(legacy.get("kind") or ""),
+                new_reason_code=str(dec.reason_code.value if dec.reason_code else ""),
+                path_available=bool(ctx.path_hit),
+            )
+        elif not match_price:
+            mm = "E"
+        elif not match_qty:
+            mm = "A"
+        elif not match_reason:
+            mm = "D"
 
     return ShadowCompareRecord(
         timestamp=datetime.now(timezone.utc).isoformat(),
@@ -182,14 +224,85 @@ def compare_paper_vs_exit(
         match_action=match_action,
         match_price=match_price,
         match_qty=match_qty,
+        match_reason=match_reason,
+        legacy_rule=legacy_rule,
+        unified_rule=unified_rule,
+        config_version=SHADOW_CONFIG_VERSION,
+        context_snapshot={
+            "symbol": ctx.symbol,
+            "timestamp": ctx.timestamp.isoformat() if ctx.timestamp else None,
+            "session": ctx.session,
+            "last": ctx.current_price,
+            "open_px": ctx.open_px,
+            "working_stop": ctx.working_stop,
+            "path_hit": ctx.path_hit,
+            "path_fill_px": ctx.path_fill_px,
+            "path_stop_kind": ctx.path_stop_kind,
+            "path_action_kind": ctx.path_action_kind,
+            "qty": ctx.qty,
+            "sellable": ctx.sellable,
+            "t1_today": ctx.t1_today,
+            "hold_locked": ctx.hold_locked,
+            "stop_locked": ctx.stop_locked,
+            "signal_ok": ctx.signal_ok,
+            "entry_price": ctx.entry_price,
+            "peak_high": ctx.peak_high,
+        },
         decision_trace=list(dec.trace or ()),
         position_state={
             "qty": ctx.qty,
             "sellable": ctx.sellable,
             "t1_today": ctx.t1_today,
+            "path": {
+                "hit": ctx.path_hit,
+                "fill_px": ctx.path_fill_px,
+                "stop_kind": ctx.path_stop_kind,
+                "action_kind": ctx.path_action_kind,
+            },
+            "working_stop": ctx.working_stop,
         },
         mismatch_class=mm,
     )
+
+
+def _is_rule_candidate_ctx(legacy: dict[str, Any], rec: ShadowCompareRecord, ctx: DecisionContext) -> bool:
+    if rec.legacy_action in ("SELL", "HOLD_SHOW") or rec.new_action in ("SELL", "HOLD_SHOW"):
+        return True
+    if ctx.path_hit:
+        return True
+    stop = float(ctx.working_stop or 0)
+    last = float(ctx.current_price or 0)
+    if stop > 0 and last > 0 and last <= stop + 1e-12:
+        return True
+    if legacy.get("hit") or legacy.get("hit_show"):
+        return True
+    return False
+
+
+def _shadow_payload(rec: ShadowCompareRecord, *, full: bool, sampled: bool = False) -> dict[str, Any]:
+    rec.log_level = "full" if full else "minimal"
+    rec.sampled = bool(sampled)
+    payload = asdict(rec)
+    if full:
+        return payload
+    payload["decision_trace"] = []
+    payload["context_snapshot"] = {
+        "symbol": rec.symbol,
+        "working_stop": rec.working_stop,
+        "path_available": rec.path_available,
+    }
+    return payload
+
+
+def emit_shadow_record(payload: dict[str, Any]) -> None:
+    _SHADOW_BUFFER.append(payload)
+    if len(_SHADOW_BUFFER) > 5000:
+        del _SHADOW_BUFFER[: len(_SHADOW_BUFFER) - 5000]
+    if _SHADOW_HOOK is not None:
+        try:
+            _SHADOW_HOOK(payload)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def run_unified_exit(ctx: DecisionContext) -> tuple[ExitDecision, dict[str, Any]]:
@@ -203,25 +316,48 @@ def maybe_shadow_and_select(
     paper_kwargs: dict[str, Any],
     use_unified: bool | None = None,
     shadow: bool | None = None,
+    ctx: DecisionContext | None = None,
 ) -> dict[str, Any]:
-    """Shadow 只记录；默认仍返回 legacy。use_unified=True 才切换。"""
-    use = USE_UNIFIED_EXIT_ENGINE if use_unified is None else bool(use_unified)
-    sh = SHADOW_UNIFIED_EXIT_ENGINE if shadow is None else bool(shadow)
-    if not use and not sh:
-        return legacy
-    ctx = build_exit_context_from_paper_kwargs(**paper_kwargs)
-    dec, adapted = run_unified_exit(ctx)
-    if sh:
-        rec = compare_paper_vs_exit(legacy, dec, ctx)
-        payload = asdict(rec)
-        _SHADOW_BUFFER.append(payload)
-        if len(_SHADOW_BUFFER) > 5000:
-            del _SHADOW_BUFFER[: len(_SHADOW_BUFFER) - 5000]
-        if _SHADOW_HOOK is not None:
+    """Shadow 只记录；默认仍返回 legacy。use_unified=True 才切换。
+
+    任何 Unified / Compare / 日志异常都返回入参 legacy，不改决策。
+    """
+    try:
+        use = USE_UNIFIED_EXIT_ENGINE if use_unified is None else bool(use_unified)
+        sh = SHADOW_UNIFIED_EXIT_ENGINE if shadow is None else bool(shadow)
+        if not use and not sh:
+            return legacy
+        if ctx is None:
+            ctx = build_exit_context_from_paper_kwargs(**paper_kwargs)
+        try:
+            dec, adapted = run_unified_exit(ctx)
+        except Exception as exc:  # noqa: BLE001
+            _note_shadow_error("unified_engine", exc, ctx)
+            return legacy
+        if sh:
             try:
-                _SHADOW_HOOK(payload)
-            except Exception:  # noqa: BLE001
-                pass
-    if use:
-        return adapted
-    return legacy
+                global _HOLD_SAMPLE_SEQ
+                rec = compare_paper_vs_exit(legacy, dec, ctx)
+                mismatch = bool(rec.mismatch_class) or not (
+                    rec.match_action and rec.match_price and rec.match_qty and rec.match_reason
+                )
+                candidate = _is_rule_candidate_ctx(legacy, rec, ctx)
+                sell = rec.legacy_action == "SELL" or rec.new_action == "SELL"
+                partial = bool(
+                    (rec.quantity_ratio_legacy is not None and rec.quantity_ratio_legacy < 1.0 - 1e-12)
+                    or (rec.quantity_ratio_new is not None and rec.quantity_ratio_new < 1.0 - 1e-12)
+                )
+                if mismatch or sell or partial or candidate:
+                    emit_shadow_record(_shadow_payload(rec, full=True))
+                else:
+                    _HOLD_SAMPLE_SEQ += 1
+                    if _HOLD_SAMPLE_SEQ % max(1, int(SHADOW_HOLD_SAMPLE_EVERY)) == 0:
+                        emit_shadow_record(_shadow_payload(rec, full=False, sampled=True))
+            except Exception as exc:  # noqa: BLE001
+                _note_shadow_error("compare_or_log", exc, ctx)
+        if use:
+            return adapted
+        return legacy
+    except Exception as exc:  # noqa: BLE001
+        _note_shadow_error("maybe_shadow_and_select", exc)
+        return legacy
