@@ -14,9 +14,8 @@ from backtest.exit_decision_replay.replay_mismatch import (
 )
 from holdingStocks.index import _paper_exit_decision_legacy
 from strategy.exit_rules.engine import ExitDecisionEngine
+from strategy.exit_rules import shadow
 from strategy.exit_rules.shadow import (
-    SHADOW_UNIFIED_EXIT_ENGINE,
-    USE_UNIFIED_EXIT_ENGINE,
     build_exit_context_from_paper_kwargs,
     build_replayable_record,
     compare_paper_vs_exit,
@@ -42,9 +41,9 @@ def _sell_kwargs() -> dict:
 
 
 class TestReplayMismatch(unittest.TestCase):
-    def test_flags_stay_false(self) -> None:
-        self.assertFalse(USE_UNIFIED_EXIT_ENGINE)
-        self.assertFalse(SHADOW_UNIFIED_EXIT_ENGINE)
+    def test_unified_primary_flags_in_module_source(self) -> None:
+        self.assertTrue(shadow.USE_UNIFIED_EXIT_ENGINE)
+        self.assertTrue(shadow.SHADOW_UNIFIED_EXIT_ENGINE)
 
     def test_sell_record_round_trips(self) -> None:
         kw = _sell_kwargs()
@@ -67,8 +66,8 @@ class TestReplayMismatch(unittest.TestCase):
         self.assertEqual(result["unified_action"], "SELL")
         self.assertEqual(result["legacy_reason_code"], "WORKING_STOP")
         self.assertEqual(result["unified_reason_code"], "WORKING_STOP")
-        self.assertFalse(result["USE_UNIFIED_EXIT_ENGINE"])
-        self.assertFalse(result["SHADOW_UNIFIED_EXIT_ENGINE"])
+        self.assertTrue(result["USE_UNIFIED_EXIT_ENGINE"])
+        self.assertTrue(result["SHADOW_UNIFIED_EXIT_ENGINE"])
 
     def test_injected_mismatch_is_reproducible_from_kwargs(self) -> None:
         kw = _sell_kwargs()
@@ -108,8 +107,8 @@ class TestReplayMismatch(unittest.TestCase):
         self.assertEqual(summary["n"], 1)
         self.assertEqual(summary["exact_match"], 1)
         self.assertEqual(summary["live_mismatch"], 0)
-        self.assertFalse(USE_UNIFIED_EXIT_ENGINE)
-        self.assertFalse(SHADOW_UNIFIED_EXIT_ENGINE)
+        self.assertTrue(shadow.USE_UNIFIED_EXIT_ENGINE)
+        self.assertTrue(shadow.SHADOW_UNIFIED_EXIT_ENGINE)
 
 
 if __name__ == "__main__":

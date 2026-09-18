@@ -36,9 +36,9 @@ class TestExitDecisionReplay(unittest.TestCase):
         self.assertEqual(str(intervals[0].buy_ts), "2026-09-01 09:31:00")
         self.assertEqual(str(intervals[0].sell_ts), "2026-09-03 10:00:00")
 
-    def test_replay_does_not_enable_unified_engine(self) -> None:
-        self.assertFalse(shadow.USE_UNIFIED_EXIT_ENGINE)
-        self.assertFalse(shadow.SHADOW_UNIFIED_EXIT_ENGINE)
+    def test_unified_primary_flags_in_module_source(self) -> None:
+        self.assertTrue(shadow.USE_UNIFIED_EXIT_ENGINE)
+        self.assertTrue(shadow.SHADOW_UNIFIED_EXIT_ENGINE)
 
     def test_rule_aliases(self) -> None:
         self.assertEqual(normalize_rule_id("FACTOR_26_PATH"), "PATH")

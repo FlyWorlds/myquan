@@ -192,9 +192,11 @@ class TestShadowStatusHttp(unittest.TestCase):
         self.assertIn("metrics", body)
 
     def test_flags_untouched(self) -> None:
+        use = shadow.USE_UNIFIED_EXIT_ENGINE
+        sh = shadow.SHADOW_UNIFIED_EXIT_ENGINE
         self._get("/api/shadow/status")
-        self.assertFalse(shadow.USE_UNIFIED_EXIT_ENGINE)
-        self.assertTrue(shadow.SHADOW_UNIFIED_EXIT_ENGINE)
+        self.assertEqual(shadow.USE_UNIFIED_EXIT_ENGINE, use)
+        self.assertEqual(shadow.SHADOW_UNIFIED_EXIT_ENGINE, sh)
 
 
 if __name__ == "__main__":
