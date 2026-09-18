@@ -288,7 +288,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 - 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
 - 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。**先绑 `:8765` 再后台冷启动**（避免首屏超过 `start_watch.py` 120s 等待、页面「推送断开」）。一键启动：`python start_watch.py`。**行情分层**：热池（持仓+默认策略，≤48）SSE+新浪约1s+信号扫描；叠加观察池独立新浪分块约3s、不进 `collect_rows`、不挡启动；**现价/涨跌幅另有 ≥0.4s 快刷**（不重跑扫描）——否则整轮 collect 会把盘面价卡住。**Win/Mac 持仓**走 `origin/holdings-ledger`（`holdings-push` / 启动默认 `holdings-pull`）；`holdings_watch.json` 是本机缓存，账本更新后丢弃。**交割单**页 `/trades`（卡片「价格/交割」、API `/api/trades`，落库 `trade_ledger.json`）。盘前新浪/东财无成交价时用昨收垫。快照**先留上次可用再更新**，行情未就绪不覆盖成空表、不回写总资产/不自动入槽；每轮自愈隔夜可卖与仅现金日初。外网断了本机 WS 仍可能开着：顶栏按 `quoteStale`/`feedOk` 红字「行情中断」，时钟心跳 2s 不冻住。**板块轮动今日列**走同一条 WS，但**启动时后置**：先出盯盘/策略并实时更新，再后台拉通达信概念（不必等板块才开页）。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
 - 股票名/代码外链：百度财经 `finance.baidu.com/stock/ab-{code}`。
-- 微信预警：OpenClaw（P0 ✅）；自动结算不下真实委托。
+- 微信预警：OpenClaw；**【策略预警】** 与 **【模拟买入】/【模拟卖出】** 分模板（N1：已成交不扫描重复推；`--no-wechat` 同时关掉预警与成交推送）。自动结算不下真实委托。
 
 详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
 

@@ -195,7 +195,7 @@ python index.py review
 python index.py review --no-wechat
 
 # 长驻数据后端（默认开微信推送；页面另开 start_watch / npm run dev）
-# 9:30 起对「默认策略池」推送：将买入/已触买/将止损/已触止损/半仓止盈/止盈
+# 9:30 起对「默认策略池」推送【策略预警】；真实成交另发【模拟买入】/【模拟卖出】
 python index.py watch --interval 5 --port 8765
 # Web 盯盘：http://127.0.0.1:3000/
 
@@ -210,11 +210,12 @@ python start_watch.py
 
 | 项 | 说明 |
 |----|------|
-| 范围 | **默认策略池 ∪ 四槽实仓/今日已实现 ∪ 本轮可分类预警行** |
-| 内容 | P0 触及：已触买 / 已入槽 / 已触止损 / 半仓止盈 / 止盈；P1 预警：将买入 / 将止损；另因子2 账户级；**买卖成交即时推**（`notify_trade_fill`） |
+| 范围 | **仅默认策略池（strategy16）** 的扫描预警；strategy1 overlay 不作为默认策略预警。实仓 SELL 成交微信不要求仍在默认池 |
+| 内容 | **【策略预警】**：将买入 / 已触买未成交 / 槽满 / 将止损 / T+1暂不可卖 / 跌停不可卖；**【模拟买入】** / **【模拟卖出】** 仅 paper mutation+ledger 成功后（`notify_trade_fill`）；已成交不再扫描重复推 |
 | 窗口 | 预警扫描：**9:30–15:00** 连续竞价；**成交推送不限窗口**（纸面买卖一成交就推） |
 | 冷却 | `wechat_notify.json` 的 `cooldown_sec`（测试日可设 120）；成交键另有 30s 去重 |
-| 阻塞 | `prepare failed` → 微信给机器人发「1」刷新会话。`start_watch` 带 `--wechat-optional` 时自检失败**仍保留推送**，勿当已关闭 |
+| `--no-wechat` | 预警与 BUY/SELL/PARTIAL 成交微信全部关闭；**不改变**仓位/ledger |
+| 阻塞 | `prepare failed` → 微信给机器人发「1」刷新会话。`start_watch` 带 `--wechat-optional` 时自检失败**仍保留推送**，勿当已关闭。OpenClaw 发送仍同步（N2 再做非阻塞） |
 
 手工推送：
 

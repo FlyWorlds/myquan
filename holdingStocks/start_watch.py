@@ -229,7 +229,7 @@ def main() -> int:
     parser.add_argument(
         "--no-wechat",
         action="store_true",
-        help="关闭微信（传给 index.py watch）",
+        help="关闭微信（预警与买卖成交都不推；不影响 paper execution）",
     )
     parser.add_argument(
         "--no-ledger-pull",

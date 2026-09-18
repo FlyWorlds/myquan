@@ -3696,7 +3696,9 @@ def apply_paper_slot_buy(
             price=float(price),
             qty=int(qty),
             reason=note or "买入入槽",
+            before_qty=0,
             after_qty=int(qty),
+            strategy_id=str(STRATEGY_ID),
         )
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 买入微信推送跳过: {e}")
@@ -4183,6 +4185,7 @@ def apply_exit_fill(
     trade_note: str,
     action_kind: str = "",
     first_hit_ts: str | None = None,
+    exit_kind: str = "",
 ) -> dict[str, Any]:
     """卖出视为已成交：按成交价锁定盈亏；可只卖可用股，剩余仓继续持有。
 
@@ -4345,8 +4348,13 @@ def apply_exit_fill(
             reason=trade_note or reason,
             pnl=rec.get("pnl"),
             pnl_pct=rec.get("pnl_pct"),
+            before_qty=int(old_qty),
             after_qty=int(pos["qty"]),
             action_kind=str(action_kind or ""),
+            exit_kind=str(exit_kind or ""),
+            quantity_ratio=(
+                float(sell_qty) / float(old_qty) if old_qty > 0 else None
+            ),
         )
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 卖出微信推送跳过: {e}")
@@ -4370,6 +4378,7 @@ def apply_stop_fill(
     action_kind: str = "",
     stop_kind: str = "",
     first_hit_ts: str | None = None,
+    exit_kind: str = "",
 ) -> dict[str, Any]:
     """止损/止盈视为已成交：10% 半仓只卖一半，其余全清。"""
     sell_qty = int(qty)
@@ -4392,6 +4401,7 @@ def apply_stop_fill(
         trade_note=f"{reason}(自动)",
         action_kind="half" if half else "full",
         first_hit_ts=first_hit_ts,
+        exit_kind=str(exit_kind or ""),
     )
 
 
@@ -4467,6 +4477,7 @@ def force_eod_reserve_slot(
             px_digits=2,
             reason=REASON_EOD_RESERVE,
             trade_note=f"{REASON_EOD_RESERVE}(自动·隔夜预留)",
+            exit_kind="eod_reserve",
         )
         sold.append(code)
         # 刷新行持仓展示，避免同轮再判
@@ -5585,6 +5596,7 @@ def settle_due_paper_stops(
             action_kind=str(dec.get("action_kind") or "full"),
             stop_kind=str(dec.get("stop_kind") or ""),
             first_hit_ts=first_ts or _bar_ts_str(row.get("_path_ts")),
+            exit_kind=str(dec.get("kind") or ""),
         )
         if str(dec.get("kind") or "") == "open_protect" or dec.get("open_bell"):
             row["_open_bell"] = True
@@ -6810,6 +6822,7 @@ def collect_rows(
                     )
                     or _bar_ts_str(path_touch_ts)
                     or _bar_ts_str(q.get("last_ts")),
+                    exit_kind=_exit_kind,
                 )
                 stopped_this_scan = True
                 holdings = load_holdings()
@@ -9132,28 +9145,12 @@ def _refresh_once(
     )
     if wechat and is_signal_window():
         try:
-            from wechat_notify import notify_watch_rows, is_alert_row
-            from watch_config import (
-                is_default_strategy_pool_code,
-                portfolio_pool_codes,
+            from wechat_notify import (
+                notify_watch_rows,
+                filter_default_strategy_alert_rows,
             )
 
-            holdings = load_holdings()
-            port_codes = set(portfolio_pool_codes(holdings))
-            # 默认策略池 ∪ 四槽/已实现 ∪ 本轮可分类预警行（避免只推池内漏掉实仓）
-            notify_rows = []
-            for r in rows:
-                code = str(r.get("代码") or "")
-                if not code:
-                    continue
-                if (
-                    is_default_strategy_pool_code(code)
-                    or code in port_codes
-                    or int(r.get("持仓") or 0) > 0
-                    or bool(r.get("已实现"))
-                    or is_alert_row(r)
-                ):
-                    notify_rows.append(r)
+            notify_rows = filter_default_strategy_alert_rows(rows)
             pushed = notify_watch_rows(notify_rows)
             if pushed:
                 print(f"[{_now()}] 微信本轮推送 {len(pushed)} 条")
@@ -9647,6 +9644,12 @@ def cmd_watch(args: argparse.Namespace) -> None:
     wechat = not bool(getattr(args, "no_wechat", False))
     skip_wechat_check = bool(getattr(args, "skip_wechat_check", False))
     wechat_optional = bool(getattr(args, "wechat_optional", False))
+    try:
+        from wechat_notify import set_watch_wechat_enabled
+
+        set_watch_wechat_enabled(wechat)
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 微信运行时开关设置失败（继续）: {e}")
 
     if wechat and not skip_wechat_check:
         print("=" * 48)
@@ -10130,7 +10133,7 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument(
         "--no-wechat",
         action="store_true",
-        help="关闭微信（不启 OpenClaw、不自检、不推送）",
+        help="关闭微信（预警与买卖成交都不推；不影响 paper execution）",
     )
     w.add_argument(
         "--skip-wechat-check",

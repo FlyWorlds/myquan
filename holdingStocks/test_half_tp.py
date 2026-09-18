@@ -40,6 +40,9 @@ class TestWatchHalfTp(unittest.TestCase):
         idx.save_holdings = self._save_holdings
         idx.append_trade = lambda *_a, **_k: None
         idx.remember_factor_trigger = lambda *_a, **_k: None
+        self._wx = __import__("wechat_notify")
+        self._wx_flag = self._wx._WATCH_WECHAT_ENABLED
+        self._wx.set_watch_wechat_enabled(False)
 
     def _save_holdings(self, data: dict) -> None:
         self.data = data
@@ -49,6 +52,7 @@ class TestWatchHalfTp(unittest.TestCase):
         self.idx.save_holdings = self._save
         self.idx.append_trade = self._append
         self.idx.remember_factor_trigger = self._remember
+        self._wx.set_watch_wechat_enabled(self._wx_flag)
 
     def test_ten_pct_stop_fills_half_not_full(self) -> None:
         rec = self.idx.apply_stop_fill(

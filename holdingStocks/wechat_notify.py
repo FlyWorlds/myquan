@@ -1,4 +1,9 @@
-"""盯盘预警 / 策略触发 → 微信推送（OpenClaw message send，不走大模型）。"""
+"""盯盘预警 / 策略触发 → 微信推送（OpenClaw message send，不走大模型）。
+
+N1 语义：【策略预警】只覆盖未成交信号；【模拟买入】/【模拟卖出】只在
+paper mutation + ledger 成功后由 notify_trade_fill 发送。扫描层不得重复
+推送已成交事件。Shadow / DecisionEngine 不调用本模块。
+"""
 
 from __future__ import annotations
 
@@ -17,16 +22,90 @@ from watch_buy_signal import ALERT_PRICE_NO_GATE, is_buy_hit, is_weak_price_buy_
 
 _SEND_LOCK = threading.Lock()
 _LAST_SEND_TS = 0.0
+# None=跟随 wechat_notify.json enabled；False=watch --no-wechat（成交+预警都不发）
+_WATCH_WECHAT_ENABLED: bool | None = None
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_FILE = ROOT / "wechat_notify.json"
 STATE_FILE = ROOT / "wechat_alert_state.json"
 
-# 预警优先级：P0=因子已触发；P1=触发预警带
+# 预警优先级：P0=因子已触发；P1=触发预警带（内部去重键；对外文案统一【策略预警】）
 PRIORITY_P0 = "P0"  # 因子已触发
 PRIORITY_P1 = "P1"  # 触发预警带
 KIND_P0 = "因子已触发"
 KIND_P1 = "触发预警带"
+KIND_ALERT = "策略预警"
+
+
+def set_watch_wechat_enabled(enabled: bool | None) -> None:
+    """watch 进程运行时开关。False 时预警与成交微信都不发，不影响 execution。"""
+    global _WATCH_WECHAT_ENABLED
+    _WATCH_WECHAT_ENABLED = enabled
+
+
+def watch_wechat_enabled(*, config: dict[str, Any] | None = None) -> bool:
+    """是否允许发出微信。--no-wechat 优先于 json enabled。"""
+    if _WATCH_WECHAT_ENABLED is False:
+        return False
+    cfg = config or load_config()
+    return bool(cfg.get("enabled", True))
+
+
+def _strategy_label() -> str:
+    try:
+        from watch_config import STRATEGY_ID
+
+        return str(STRATEGY_ID or "strategy16")
+    except Exception:  # noqa: BLE001
+        return "strategy16"
+
+
+def map_fill_reason_code(
+    *,
+    exit_kind: str = "",
+    reason: str = "",
+    action_kind: str = "",
+) -> str:
+    """只映射执行路径已有字段，不重跑 DecisionEngine。"""
+    ek = str(exit_kind or "").strip().lower()
+    if ek in ("open_protect",):
+        return "OPEN_PROTECT"
+    if ek in ("path",):
+        return "PATH"
+    if ek in ("last", "working_stop"):
+        return "WORKING_STOP"
+    if ek in ("eod_reserve",):
+        return "EOD_RESERVE"
+    reason_s = str(reason or "")
+    if "尾盘空槽" in reason_s or reason_s == "尾盘空槽":
+        return "EOD_RESERVE"
+    if str(action_kind or "").lower() == "half" or "半仓" in reason_s:
+        return "HALF"
+    if ek:
+        return ek.upper()
+    return ""
+
+
+def in_default_strategy_alert_scope(code: str) -> bool:
+    """扫描预警只覆盖默认策略池（strategy16），不含 strategy1 overlay。"""
+    try:
+        from watch_config import is_default_strategy_pool_code
+
+        return bool(is_default_strategy_pool_code(str(code or "")))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def filter_default_strategy_alert_rows(
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """微信扫描名单：只留默认策略池代码。不改变 collect_rows universe。"""
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        code = str(row.get("代码") or "")
+        if code and in_default_strategy_alert_scope(code):
+            out.append(row)
+    return out
 
 _DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
@@ -131,20 +210,72 @@ def _factor_px_for_push(row: dict[str, Any], *, holding: bool) -> Any:
     return None
 
 
-def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
-    """股票池推送分类（默认策略纸面信号 → 手机）。
+def _qty(row: dict[str, Any]) -> int:
+    try:
+        return int(row.get("持仓") or 0)
+    except (TypeError, ValueError):
+        return 0
 
-    - 空仓：已触买 / 将买入（含入槽·槽满·未入槽）
-    - 有仓：已触止损 / 将止损 / 半仓止盈 / 止盈卖出 / 持仓中再触买
-    - 过门未过禁买空仓：不推买入；当日卖出后再触买仍推
-    返回 None 表示不推；否则含 level/kind/type/factor_px。
-    """
+
+def is_t1_block_alert(row: dict[str, Any]) -> bool:
+    """卖出条件已展示触发，但 T+1 没有真实 SELL。"""
+    alert = str(row.get("预警") or "")
+    if "T+1" not in alert:
+        return False
+    hit_stop = str(row.get("已触止损") or "") == "是"
+    return bool(
+        hit_stop
+        or "止损已记" in alert
+        or "已触止损" in alert
+        or "暂不可卖" in alert
+    )
+
+
+def is_filled_slot_buy_row(row: dict[str, Any]) -> bool:
+    """已实际入槽的 BUY：扫描不得再发已触买。"""
+    alert = str(row.get("预警") or "")
+    if _qty(row) <= 0:
+        return False
+    if bool(row.get("槽位占用")):
+        return True
+    return "已入槽" in alert
+
+
+def is_realized_exit_row(row: dict[str, Any]) -> bool:
+    """已有真实 SELL/PARTIAL fill 的行：扫描不得再发同一成交语义。"""
+    if not row.get("已实现"):
+        return False
+    alert = str(row.get("预警") or "")
+    hit_stop = str(row.get("已触止损") or "") == "是"
+    hit = str(row.get("因子触发") or "")
+    rebuy = (
+        is_buy_hit(row)
+        or str(row.get("持仓状态") or "") == "待买入"
+        or "再触买" in alert
+        or "可再买" in alert
+        or "将买入" in alert
+    )
+    if rebuy and not (
+        hit_stop or "半仓" in alert or "止盈" in alert or "止损" in alert
+    ):
+        return False
+    return bool(
+        hit_stop
+        or "半仓" in alert
+        or "止盈" in alert
+        or "止损" in alert
+        or str(hit).startswith("策略止损")
+        or str(hit).startswith("半仓")
+    )
+
+
+def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
+    """扫描层只分类【策略预警】（未成交信号）。已成交 BUY/SELL 返回 None。"""
     if row.get("error"):
         return None
     pos = str(row.get("持仓状态") or "")
     alert = str(row.get("预警") or "")
     hit = str(row.get("因子触发") or "")
-    # 仅「当日禁买」挡买入；已止损但再触买（待买入）仍可推
     no_buy = bool(row.get("当日禁买")) or pos == "当日禁买"
     holding = _has_holding(row)
 
@@ -160,70 +291,101 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
         or "止盈" in hit
     )
 
-    def _pack(level: str, kind: str, typ: str, factor_px: Any) -> dict[str, Any]:
+    def _pack(level: str, typ: str, status: str, factor_px: Any) -> dict[str, Any]:
         return {
             "level": level,
-            "kind": kind,
+            "kind": KIND_ALERT,
             "type": typ,
+            "status": status,
             "factor_px": factor_px,
         }
 
-    # 有仓刚结算：P0 止损/止盈一次
-    if row.get("已实现") and (
-        hit_stop
-        or half_or_tp
-        or "止损" in alert
-        or "止盈" in alert
-        or hit.startswith("策略止损")
-    ) and not (
-        hit_buy or pos == "待买入" or "再触买" in alert or "可再买" in alert
-    ):
-        typ = "半仓止盈" if ("半仓" in alert or "半仓" in hit) else (
-            "止盈" if ("止盈" in alert or "止盈" in hit) else "已触止损"
-        )
+    if is_t1_block_alert(row):
         return _pack(
             PRIORITY_P0,
-            KIND_P0,
-            typ,
-            row.get("成交价")
-            if row.get("成交价") is not None
-            else _factor_px_for_push(row, holding=True),
+            "T1_BLOCK",
+            "卖出条件已触发，但 T+1 暂不可卖",
+            _factor_px_for_push(row, holding=True),
         )
 
+    if "不可卖" in alert and (
+        hit_stop or "跌停" in alert or "封单" in alert
+    ):
+        return _pack(
+            PRIORITY_P0,
+            "跌停不可卖",
+            "卖出条件已触发，但跌停封单暂不可卖",
+            _factor_px_for_push(row, holding=True),
+        )
+
+    # 已实际成交：扫描静默（成交微信由 notify_trade_fill 负责）
+    if is_filled_slot_buy_row(row):
+        hit_buy = False
+    if is_realized_exit_row(row):
+        if not (
+            hit_buy
+            or pos == "待买入"
+            or "再触买" in alert
+            or "可再买" in alert
+            or "将买入" in alert
+        ):
+            # 半仓成交后若只剩「将止损」预警，允许继续扫
+            if near_stop or "将止损" in alert or "将半仓" in alert:
+                pass
+            else:
+                return None
+
     if holding:
-        if half_or_tp:
-            typ = "半仓止盈" if "半仓" in alert or "半仓" in hit or "将半仓" in alert else "止盈"
+        if half_or_tp and row.get("已实现") and "将半仓" not in alert:
+            # 半仓 fill 已发【模拟卖出】；剩余仓的将止损仍可预警
+            if near_stop or "将止损" in alert:
+                return _pack(
+                    PRIORITY_P1,
+                    "将止损",
+                    "将止损",
+                    _factor_px_for_push(row, holding=True),
+                )
+            return None
+        if half_or_tp and "将半仓" in alert:
+            return _pack(
+                PRIORITY_P1,
+                "将半仓",
+                "将半仓",
+                row.get("卖出价")
+                or row.get("止损")
+                or _factor_px_for_push(row, holding=True),
+            )
+        if half_or_tp and not row.get("已实现"):
             return _pack(
                 PRIORITY_P0,
-                KIND_P0,
-                typ,
+                "半仓止盈",
+                "半仓止盈已触发但尚未成交",
                 row.get("卖出价")
                 or row.get("止损")
                 or _factor_px_for_push(row, holding=True),
             )
         if (
             hit_buy
-            or "已触买" in alert
+            or ("已触买" in alert and not is_filled_slot_buy_row(row))
             or (pos == "待买入" and hit.startswith("已触发"))
         ):
             return _pack(
                 PRIORITY_P0,
-                KIND_P0,
                 "已触买",
+                "已触买但尚未实际成交",
                 row.get("买入侧价")
                 or row.get("买点")
                 or _factor_px_for_push(row, holding=False),
             )
         if (
-            hit_stop
-            or hit.startswith("策略止损")
-            or "已触止损" in alert
-            or (pos == "待卖出" and hit.startswith("已触发"))
+            (hit_stop or hit.startswith("策略止损") or "已触止损" in alert
+             or (pos == "待卖出" and hit.startswith("已触发")))
+            and not row.get("已实现")
         ):
             return _pack(
                 PRIORITY_P0,
-                KIND_P0,
                 "已触止损",
+                "卖出条件已触发但尚未成交",
                 _factor_px_for_push(row, holding=True),
             )
         if (
@@ -235,13 +397,12 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
         ):
             return _pack(
                 PRIORITY_P1,
-                KIND_P1,
+                "将止损",
                 "将止损",
                 _factor_px_for_push(row, holding=True),
             )
         return None
 
-    # 无持仓：过门禁买 / 未过门 → 不推买入；当日卖出后再触买仍推
     if no_buy:
         return None
     if is_weak_price_buy_alert(row) or ALERT_PRICE_NO_GATE in alert:
@@ -253,17 +414,21 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
         or "再触买" in alert
         or "收盘动量可再买" in alert
     ):
-        typ = "已触买"
         if "已入槽" in alert:
-            typ = "已触买·已入槽"
-        elif "槽满" in alert:
-            typ = "已触买·槽满"
-        elif "未入槽" in alert:
-            typ = "已触买·未入槽"
+            return None
+        if "槽满" in alert:
+            return _pack(
+                PRIORITY_P0,
+                "已触买·槽满",
+                "槽满",
+                _factor_px_for_push(row, holding=False),
+            )
+        status = "已触买但尚未实际成交"
+        typ = "已触买·未入槽" if "未入槽" in alert else "已触买"
         return _pack(
             PRIORITY_P0,
-            KIND_P0,
             typ,
+            status,
             _factor_px_for_push(row, holding=False),
         )
     if (
@@ -275,7 +440,7 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
     ):
         return _pack(
             PRIORITY_P1,
-            KIND_P1,
+            "将买入",
             "将买入",
             _factor_px_for_push(row, holding=False),
         )
@@ -283,7 +448,7 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def is_alert_row(row: dict[str, Any]) -> bool:
-    """股票池：有仓只推止损；空仓只推买入。因子2走账户级通道。"""
+    """扫描层可推送的【策略预警】行。因子2走账户级通道。"""
     return classify_stock_alert(row) is not None
 
 
@@ -291,7 +456,7 @@ def _alert_key(row: dict[str, Any]) -> str:
     code = str(row.get("代码") or "")
     info = classify_stock_alert(row) or {}
     return (
-        f"{code}|{info.get('level')}|{info.get('kind')}|{info.get('type')}|"
+        f"{code}|alert|{info.get('type')}|{info.get('status')}|"
         f"{row.get('已触买')}|{row.get('已触止损')}|"
         f"{int(bool(row.get('近买点')))}|{int(bool(row.get('近止损')))}"
     )
@@ -302,7 +467,6 @@ def format_alert_message(row: dict[str, Any]) -> str:
     code = row.get("代码") or "-"
     name = row.get("名称") or "-"
     digits = int(row.get("价位小数") or 2)
-    qty = int(row.get("持仓") or 0)
 
     def _n(v: Any) -> str:
         if v is None or v == "":
@@ -312,22 +476,20 @@ def format_alert_message(row: dict[str, Any]) -> str:
         except (TypeError, ValueError):
             return str(v)
 
-    if info is None:
-        return f"【盯盘】{name}({code})\n时间: {_now()}"
-
-    level = str(info["level"])
-    kind = str(info["kind"])
-    typ = str(info["type"])
-    lines = [
-        f"【{level}】{name}({code})",
-        f"预警类型: {level}·{kind}·{typ}",
-        f"因子价格: {_n(info.get('factor_px'))}",
-        f"现价: {_n(row.get('现价'))}",
-    ]
-    if qty > 0:
-        lines.insert(2, f"持仓: {qty}股")
-    lines.append(f"时间: {_now()}")
-    return "\n".join(lines)
+    status = str((info or {}).get("status") or (info or {}).get("type") or "预警")
+    extra = ""
+    if info and str(info.get("type") or "") == "T1_BLOCK":
+        extra = "\n原因：T1_BLOCK"
+    return "\n".join(
+        [
+            "【策略预警】",
+            f"股票：{code} {name}",
+            f"状态：{status}{extra}",
+            f"当前价：{_n(row.get('现价'))}",
+            f"策略：{_strategy_label()}",
+            f"时间：{_now()}",
+        ]
+    )
 
 
 def _env_with_node(cfg: dict[str, Any]) -> dict[str, str]:
@@ -580,6 +742,61 @@ def send_text(
     return False, last
 
 
+def format_buy_fill_message(
+    *,
+    code: str,
+    name: str,
+    price: float,
+    qty: int,
+    strategy_id: str = "",
+) -> str:
+    return "\n".join(
+        [
+            "【模拟买入】",
+            f"股票：{code} {name}",
+            f"成交价：{float(price):.2f}",
+            f"买入数量：{int(qty)}",
+            f"策略：{strategy_id or _strategy_label()}",
+            f"时间：{_now()}",
+        ]
+    )
+
+
+def format_sell_fill_message(
+    *,
+    code: str,
+    name: str,
+    price: float,
+    qty: int,
+    action_kind: str = "",
+    reason_code: str = "",
+    before_qty: int | None = None,
+    after_qty: int | None = None,
+    quantity_ratio: float | None = None,
+) -> str:
+    half = str(action_kind or "").lower() == "half" or (
+        quantity_ratio is not None and float(quantity_ratio) < 1.0 - 1e-12
+    )
+    fill_kind = "半仓" if half else "全仓"
+    lines = [
+        "【模拟卖出】",
+        f"股票：{code} {name}",
+        f"成交价：{float(price):.2f}",
+        f"卖出数量：{int(qty)}",
+        f"成交类型：{fill_kind}",
+    ]
+    if reason_code:
+        lines.append(f"原因：{reason_code}")
+    if before_qty is not None and after_qty is not None:
+        lines.append(f"仓位：{int(before_qty)} → {int(after_qty)}")
+    elif after_qty is not None:
+        lines.append(f"成交后持仓：{int(after_qty)}")
+    if quantity_ratio is not None:
+        lines.append(f"quantity_ratio：{float(quantity_ratio):.4f}")
+    lines.append(f"时间：{_now()}")
+    return "\n".join(lines)
+
+
 def notify_trade_fill(
     *,
     side: str,
@@ -591,15 +808,17 @@ def notify_trade_fill(
     pnl: float | None = None,
     pnl_pct: float | None = None,
     after_qty: int | None = None,
+    before_qty: int | None = None,
     action_kind: str = "",
+    exit_kind: str = "",
+    reason_code: str = "",
+    quantity_ratio: float | None = None,
+    strategy_id: str = "",
     config: dict[str, Any] | None = None,
 ) -> bool:
-    """买卖成交即时推送（不依赖连续竞价扫描窗口）。
-
-    纸面入槽/止盈止损成交后调用；受 enabled 与短冷却约束。
-    """
+    """买卖成交即时推送。只应在 paper mutation + ledger 成功后调用。"""
     cfg = config or load_config()
-    if not bool(cfg.get("enabled", True)):
+    if not watch_wechat_enabled(config=cfg):
         return False
     side_l = str(side or "").strip().lower()
     if side_l in ("买", "买入"):
@@ -608,28 +827,43 @@ def notify_trade_fill(
         side_l = "sell"
     code_s = str(code or "").strip()
     name_s = str(name or code_s)
-    typ = "买入入槽" if side_l == "buy" else (
-        "半仓止盈" if str(action_kind).lower() == "half" or "半仓" in str(reason)
-        else "卖出平仓"
+    mapped = str(reason_code or "").strip() or map_fill_reason_code(
+        exit_kind=exit_kind,
+        reason=reason,
+        action_kind=action_kind,
     )
-    lines = [
-        f"【P0】{name_s}({code_s})",
-        f"预警类型: P0·因子已触发·{typ}",
-        f"方向: {'买入' if side_l == 'buy' else '卖出'}",
-        f"成交价: {float(price):.2f}",
-        f"数量: {int(qty)}股",
-    ]
-    if after_qty is not None:
-        lines.append(f"成交后持仓: {int(after_qty)}股")
-    if side_l == "sell" and pnl is not None:
-        pct = f"（{float(pnl_pct):+.2f}%）" if pnl_pct is not None else ""
-        lines.append(f"单笔盈亏: {float(pnl):+.2f}{pct}")
-    if reason:
-        lines.append(f"理由: {reason}")
-    lines.append(f"时间: {_now()}")
-    msg = "\n".join(lines)
-    # 成交键含时刻，避免与扫描预警共用冷却误伤；同秒重复成交仍挡一下
-    key = f"fill|{code_s}|{side_l}|{typ}|{int(price*100)}|{int(qty)}|{_now()[:16]}"
+    ratio = quantity_ratio
+    if ratio is None and before_qty:
+        try:
+            ratio = float(qty) / float(before_qty) if float(before_qty) > 0 else None
+        except (TypeError, ValueError):
+            ratio = None
+    if side_l == "buy":
+        msg = format_buy_fill_message(
+            code=code_s,
+            name=name_s,
+            price=float(price),
+            qty=int(qty),
+            strategy_id=strategy_id,
+        )
+        typ = "模拟买入"
+    else:
+        msg = format_sell_fill_message(
+            code=code_s,
+            name=name_s,
+            price=float(price),
+            qty=int(qty),
+            action_kind=action_kind,
+            reason_code=mapped,
+            before_qty=before_qty,
+            after_qty=after_qty,
+            quantity_ratio=ratio,
+        )
+        typ = "模拟卖出"
+    key = (
+        f"fill|{code_s}|{side_l}|{typ}|{mapped}|"
+        f"{int(price * 100)}|{int(qty)}|{_now()[:16]}"
+    )
     state = _load_state()
     sent: dict[str, Any] = state.setdefault("sent", {})
     now_ts = time.time()
@@ -656,7 +890,7 @@ def notify_watch_rows(
 ) -> list[str]:
     """扫描盯盘行，对新增/变更预警做防抖推送。返回已推送摘要。"""
     cfg = config or load_config()
-    if not force and not bool(cfg.get("enabled", True)):
+    if not force and not watch_wechat_enabled(config=cfg):
         return []
 
     cooldown = max(60, int(cfg.get("cooldown_sec") or 1800))
