@@ -12,10 +12,12 @@
 - [ ] **T1 已记依赖收盘进程仍活着**：买入日 `t1_trail` 只在收盘确认后落库；进程若提前退出，次日可能只剩硬保护。
 - [ ] **无券商报单/持仓对账**：本地触发价必成，不能当实盘成交。
 
-### Exit Decision 统一门槛（Phase 3A～3C，2026-09-17）
+### Exit Decision 统一门槛（Phase 3A～3C+，2026-09-18）
 - [x] **只读真实分钟 replay 入口**：`backtest/exit_decision_replay/run.py`；Legacy 与 Unified 同 Context 双跑，不成交、不写 ledger。
 - [x] **第一批严格 parity**：真实 1m OHLC 上 8,077 次 evaluation，Legacy/Unified 各 SELL 25，25/25 action/price/quantity 一致，Mismatch 0；见 [`docs/DECISION_PARITY_PHASE3_REPLAY.md`](docs/DECISION_PARITY_PHASE3_REPLAY.md)。
-- [ ] **Unified 正式接管 paper**：当前证据仍不足；累计至少 30,000 evaluation、200 SELL，并补齐真实 working-stop/半仓/锁仓覆盖后再评审。`USE_UNIFIED_EXIT_ENGINE` 继续保持 False。
+- [x] **Phase 3C+ 路径覆盖**：[`docs/EXIT_COVERAGE_MATRIX.md`](docs/EXIT_COVERAGE_MATRIX.md) · [`docs/EXIT_COVERAGE_QUALIFICATION.md`](docs/EXIT_COVERAGE_QUALIFICATION.md)。`find_cases.py` + corpus；collision/boundary characterization PASS；Partial SELL 2/2 @0.5；Working Stop 赢家历史 0（信号 1944）。
+- [x] **Production Shadow Readiness（3D）**：副作用审计、失败隔离、candidate/winner/`superseded_by`、mismatch replay。见 [`docs/SHADOW_SIDE_EFFECT_AUDIT.md`](docs/SHADOW_SIDE_EFFECT_AUDIT.md) · [`docs/SHADOW_VALIDATION_REPORT.md`](docs/SHADOW_VALIDATION_REPORT.md)。**未打开** `SHADOW_UNIFIED_EXIT_ENGINE`。
+- [ ] **Unified 正式接管 paper**：Coverage Gate 未过（WORKING_STOP 赢家本窗不可得；Shadow 未开）。`USE_UNIFIED_EXIT_ENGINE` / `SHADOW_UNIFIED_EXIT_ENGINE` 保持 False。不要删 `_paper_exit_decision_legacy`。
 
 ### 锁定 · 盯盘可靠性（2026-09-14，禁止再犯）
 

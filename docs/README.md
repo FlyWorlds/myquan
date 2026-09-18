@@ -20,6 +20,7 @@
 | [`EXIT_COVERAGE_MATRIX.md`](EXIT_COVERAGE_MATRIX.md) | Phase 3C+ 退出路径覆盖矩阵 |
 | [`EXIT_COVERAGE_QUALIFICATION.md`](EXIT_COVERAGE_QUALIFICATION.md) | Phase 3C+ 覆盖资格；未切 Unified |
 | [`SHADOW_SIDE_EFFECT_AUDIT.md`](SHADOW_SIDE_EFFECT_AUDIT.md) | Unified Shadow 只读副作用审计 |
+| [`SHADOW_VALIDATION_REPORT.md`](SHADOW_VALIDATION_REPORT.md) | 生产 Shadow 计数（当前未开，全 0） |
 | [`DECISION_PARITY_PHASE3_REPLAY.md`](DECISION_PARITY_PHASE3_REPLAY.md) | Phase 3A～3C 真实 1m parity 基线 |
 | [`strategy/STRATEGY_AUDIT.md`](../strategy/STRATEGY_AUDIT.md) | 2026-08 凯盛 OpenBreak（因子1）底稿 |
 

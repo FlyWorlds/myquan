@@ -395,5 +395,7 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | [`docs/FACTOR13.md`](../docs/FACTOR13.md) | 因子13 详述 |
 | [`docs/FACTOR14.md`](../docs/FACTOR14.md) | 因子14 题材共振 |
 | [`STRATEGY_AUDIT.md`](STRATEGY_AUDIT.md) | 凯盛单票审计底稿 |
+| [`docs/EXIT_COVERAGE_MATRIX.md`](../docs/EXIT_COVERAGE_MATRIX.md) | 退出路径覆盖 + Evidence Tier |
+| [`docs/SHADOW_VALIDATION_REPORT.md`](../docs/SHADOW_VALIDATION_REPORT.md) | 生产 Shadow 计数（未开） |
 | [`TODO.MD`](../TODO.MD) | 任务与锁定项 |
 | [`.cursor/rules/docs-sync.mdc`](../.cursor/rules/docs-sync.mdc) | Cursor Agent 文档同步规则 |
