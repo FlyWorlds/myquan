@@ -49,14 +49,16 @@ fixture tags：`hold` / `open_protect` / `working_stop` / `factor26` / `path` / 
 
 ---
 
-## 4. 生产开关状态
+## 4. 生产开关状态（Phase 2 当时默认）
 
-| Flag | 默认 | 含义 |
+| Flag | 当时默认 | 含义 |
 |------|------|------|
 | `USE_UNIFIED_EXIT_ENGINE` | **False** | True 时 paper 返回引擎结果 |
 | `SHADOW_UNIFIED_EXIT_ENGINE` | **False** | True 时双跑只记 Shadow，不成交 |
 
 Legacy 仍可回滚；未删除 `_paper_exit_decision_legacy`。
+
+**Superseded by Primary Reversal：** 当前 `USE_UNIFIED_EXIT_ENGINE=True`，`SHADOW_UNIFIED_EXIT_ENGINE=True`。
 
 ---
 

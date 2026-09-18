@@ -16,8 +16,8 @@
 - [x] **只读真实分钟 replay 入口**：`backtest/exit_decision_replay/run.py`；Legacy 与 Unified 同 Context 双跑，不成交、不写 ledger。
 - [x] **第一批严格 parity**：真实 1m OHLC 上 8,077 次 evaluation，Legacy/Unified 各 SELL 25，25/25 action/price/quantity 一致，Mismatch 0；见 [`docs/DECISION_PARITY_PHASE3_REPLAY.md`](docs/DECISION_PARITY_PHASE3_REPLAY.md)。
 - [x] **Phase 3C+ 路径覆盖**：[`docs/EXIT_COVERAGE_MATRIX.md`](docs/EXIT_COVERAGE_MATRIX.md) · [`docs/EXIT_COVERAGE_QUALIFICATION.md`](docs/EXIT_COVERAGE_QUALIFICATION.md)。`find_cases.py` + corpus；collision/boundary characterization PASS；Partial SELL 2/2 @0.5；Working Stop 赢家历史 0（信号 1944）。
-- [x] **Production Shadow Readiness（3D）**：副作用审计、失败隔离、candidate/winner/`superseded_by`、mismatch replay。见 [`docs/SHADOW_SIDE_EFFECT_AUDIT.md`](docs/SHADOW_SIDE_EFFECT_AUDIT.md) · [`docs/SHADOW_VALIDATION_REPORT.md`](docs/SHADOW_VALIDATION_REPORT.md)。**未打开** `SHADOW_UNIFIED_EXIT_ENGINE`。
-- [ ] **Unified 正式接管 paper**：Coverage Gate 未过（WORKING_STOP 赢家本窗不可得；Shadow 未开）。`USE_UNIFIED_EXIT_ENGINE` / `SHADOW_UNIFIED_EXIT_ENGINE` 保持 False。不要删 `_paper_exit_decision_legacy`。
+- [x] **Production Shadow Readiness（3D）**：副作用审计、失败隔离、candidate/winner/`superseded_by`、mismatch replay。见 [`docs/SHADOW_SIDE_EFFECT_AUDIT.md`](docs/SHADOW_SIDE_EFFECT_AUDIT.md) · [`docs/SHADOW_VALIDATION_REPORT.md`](docs/SHADOW_VALIDATION_REPORT.md)。**Historical at 3D close：** 当时未打开 `SHADOW_UNIFIED_EXIT_ENGINE`。已被 Primary Reversal 取代。
+- [x] **Unified 正式接管 paper（Primary Reversal）**：`USE_UNIFIED_EXIT_ENGINE=True`，`SHADOW_UNIFIED_EXIT_ENGINE=True`。Unified = Primary，Legacy = Shadow / fallback。不要删 `_paper_exit_decision_legacy`。Notification N1 已部署（`37b0c5c7`）；自然微信 runtime validation PENDING；N2 未开始。
 
 ### 锁定 · 盯盘可靠性（2026-09-14，禁止再犯）
 

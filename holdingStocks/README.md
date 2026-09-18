@@ -101,7 +101,9 @@ WATCHLIST = list(S7_WATCHLIST)
 
 **浮盈/结算（名称旁）**：**今日盈亏 / 今日浮亏** = 四槽持仓 `session_day_pnl`（**今买相对买入价，昨仓相对昨收**；9:15 / 跨日沿用快照时按昨收重置）+ **今日平仓**记账 `day_pnl`（只认 `已实现`）。卡片不回退展示「相对成本」的浮盈当今日浮亏。**总资产** = 日初锁定（优先昨收结算 `account_total`）+ **今日盈亏**（与分票加总同动）。**总收益** = 总资产 − 纸面本金（`paper_equity_base`，默认 30 万，自 **`PAPER_PNL_START`=2026-09-09**），即「昨收累计 + 今日盈亏」。每日收盘后写一次 `holdings.daily_settlements[交易日]`（终稿；盘中可更新草稿；次日 9:15 补记未终稿日），含今日盈亏 vs 权益日变差额核对。**今日平仓**卡片锁定平仓价；策略回放持有不进账户合计。
 
-**微信推送（N1）**：预警与成交分模板。扫描只发 **【策略预警】**（将买入 / 已触买未成交 / 槽满 / 将止损 / T+1 暂不可卖 / 跌停不可卖）；**真实 paper 成交**在 `apply_paper_slot_buy` / `apply_exit_fill` 写入仓位与 ledger 之后发 **【模拟买入】** / **【模拟卖出】**（含 reason_code：WORKING_STOP / OPEN_PROTECT / PATH / HALF / EOD_RESERVE）。已成交事件不再被扫描重复推。预警扫描仅默认策略池（strategy16）；实仓 SELL 即使已离开默认池仍推成交通知。Shadow 不发微信。`start_watch --no-wechat` / `watch --no-wechat`：**预警与买卖成交都不推**，不影响 paper execution。OpenClaw 发送仍同步（非阻塞留给 N2）。`start_watch` 默认 `--wechat-optional`：自检失败仍保留推送开关。
+**Paper 卖出**：`paper_exit_decision` 当前 **Unified Primary**（`USE_UNIFIED_EXIT_ENGINE=True`），Legacy 只做 Shadow / fallback（`SHADOW_UNIFIED_EXIT_ENGINE=True`）。Shadow 比较不成交、不发微信。
+
+**微信推送（N1）**：预警与成交分模板。扫描只发 **【策略预警】**（将买入 / 已触买未成交 / 槽满 / 将止损 / T+1 暂不可卖 / 跌停不可卖）；**真实 paper 成交**在 `apply_paper_slot_buy` / `apply_exit_fill` 写入仓位与 ledger 之后发 **【模拟买入】** / **【模拟卖出】**（含 reason_code：WORKING_STOP / OPEN_PROTECT / PATH / HALF / EOD_RESERVE）。已成交事件不再被扫描重复推。预警扫描仅默认策略池（strategy16）；实仓 SELL 即使已离开默认池仍推成交通知。Shadow 不发微信。`start_watch --no-wechat` / `watch --no-wechat`：**预警与买卖成交都不推**，不影响 paper execution。OpenClaw 发送仍同步（非阻塞留给 N2）。`start_watch` 默认 `--wechat-optional`：自检失败仍保留推送开关。自然 BUY/SELL 微信覆盖仍在积累（**PENDING**），不能当成已完成。
 
 ## 依赖
 

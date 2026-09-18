@@ -71,6 +71,7 @@
 | 账户预警 | **因子2**（回测不注资） |
 | 因子22 | 默认关闭（研究对照） |
 | 仓位 | 物理四槽，每槽约 25%；先平再买；10% 半仓止盈 |
+| Paper 卖出 | **Unified Primary** + **Legacy Shadow**（`USE_UNIFIED_EXIT_ENGINE=True`，`SHADOW_UNIFIED_EXIT_ENGINE=True`） |
 
 真源注册表：[`strategy/README.md`](../strategy/README.md) · 摘要：[`READ.md`](../READ.md)。
 

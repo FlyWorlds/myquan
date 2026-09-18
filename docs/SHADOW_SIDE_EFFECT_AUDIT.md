@@ -2,8 +2,9 @@
 
 > 日期：2026-09-18  
 > 范围：Paper runtime → Context Builder → ExitDecisionEngine → Exit Rules → Decision Trace → Shadow Compare  
-> 生产开关：**未打开**（`USE_UNIFIED_EXIT_ENGINE=False`，`SHADOW_UNIFIED_EXIT_ENGINE=False`）  
-> 本审计不改交易规则。
+> **Historical at Phase 3D：** 生产开关当时未打开（`USE_UNIFIED_EXIT_ENGINE=False`，`SHADOW_UNIFIED_EXIT_ENGINE=False`）  
+> **Superseded by Primary Reversal：** `USE_UNIFIED_EXIT_ENGINE=True`，`SHADOW_UNIFIED_EXIT_ENGINE=True`（Unified = Primary，Legacy = Shadow / fallback）  
+> 本审计不改交易规则。审计结论仍适用于「Shadow 路径不得改成交」；不要把当时 False 读成当前配置。
 
 分类：
 
@@ -81,11 +82,11 @@ legacy() → 改仓/改止损/写账 → 再 build unified context
 | `_record_shadow_metrics` | MUTATING | 只写进程内 `_SHADOW_METRICS`。candidate / winner 分列，不把 `last<=working_stop` 记成赢家 SELL。 |
 | `_note_shadow_error` | MUTATING | 只写进程内 `_SHADOW_ERRORS` + `shadow_errors` 计数。 |
 | `run_unified_exit` | PURE | 调 engine + 适配 dict。 |
-| `maybe_shadow_and_select` | READ_ONLY + 条件 MUTATING | flags 全关：直接返回 legacy。Shadow 开：可写 `_SHADOW_BUFFER` / metrics / errors。`use_unified` 默认 False，生产仍返回 legacy。任意异常 → 返回 legacy。 |
+| `maybe_shadow_and_select` | READ_ONLY + 条件 MUTATING | flags 全关：直接返回 legacy。Shadow 开：可写 `_SHADOW_BUFFER` / metrics / errors。**3D 当时** `use_unified` 默认 False，生产返回 legacy。当前 Primary Reversal 下 `use_unified=True` 返回 Unified，异常 failover 回 Legacy。 |
 | `emit_shadow_record` | MUTATING | 追加进程内 `_SHADOW_BUFFER`（上限 5000）。**不写文件、不写 ledger、不 HTTP。** Hook 异常被吞掉。 |
 | `set_shadow_hook` | MUTATING | 测试/观测注入。生产默认 `None`。 |
 | `clear_shadow_buffer` / `get_shadow_buffer` / `get_shadow_errors` / `get_shadow_metrics` | MUTATING / READ_ONLY | 仅 Shadow 缓冲。 |
-| 模块常量 `USE_*` / `SHADOW_*` | READ_ONLY 默认 | 本轮保持 False。 |
+| 模块常量 `USE_*` / `SHADOW_*` | READ_ONLY 默认 | **Historical at 3D：** 本轮保持 False。 |
 
 Shadow 局部可变状态：
 
@@ -155,10 +156,11 @@ Shadow 调用链中**未发现**：
 ## 6. 结论
 
 - Shadow OFF：与引入 Shadow 之前的 Legacy 行为一致。  
-- Shadow ON：Legacy 仍是 Primary；Unified 只读观察。  
+- **Historical at 3D Shadow ON：** Legacy 仍是 Primary；Unified 只读观察。  
+- **Current（Primary Reversal）：** Unified = Primary；Legacy = Shadow / fallback。  
 - 已将 Unified Context 固定在 Legacy 决策之前的 snapshot 上。  
-- Shadow / Engine / Compare / 日志异常不得改变返回的 legacy dict。  
+- Shadow / Engine / Compare / 日志异常不得改变当时返回的 Primary 决策（3D 为 legacy；当前为 Unified，failover 才回 Legacy）。  
 
-具备人工打开 `SHADOW_UNIFIED_EXIT_ENGINE=True` 的安全前提（只读、失败隔离）。**本轮不打开。**
+**Historical：** 当时具备人工打开 `SHADOW_UNIFIED_EXIT_ENGINE=True` 的安全前提（只读、失败隔离）。**本轮（3D）不打开。** 后续已打开 Shadow 并完成 Primary Reversal。
 
 研究用途，非投资建议。

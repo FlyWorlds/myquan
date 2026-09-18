@@ -4,13 +4,15 @@
 > 对照：`_paper_exit_decision_legacy` ↔ `ExitDecisionEngine`  
 > 行情：真实 1m OHLC（AKShare 缓存，约 2026-09-07～2026-09-17）  
 > 持仓：Factor26 1m 回放生成，**不是**历史 paper ledger  
-> 生产开关：**未改变**
+> 生产开关：**本轮未改变**（historical）
 
 ```text
 USE_UNIFIED_EXIT_ENGINE = False
 SHADOW_UNIFIED_EXIT_ENGINE = False
 strategy → holdingStocks import 边 = 0（本轮未拆 index.py）
 ```
+
+**Superseded by Primary Reversal：** `USE_UNIFIED_EXIT_ENGINE=True`，`SHADOW_UNIFIED_EXIT_ENGINE=True`。下方 8,077/8,077 与 SELL 25/25 为当时 replay 事实，未改。
 
 原则：One Decision Contract + Evidence = Safe Cutover。本轮补的是证据，不是架构。
 
@@ -134,14 +136,14 @@ Decision
 | Boundary characterization | PASS |
 | Unknown mismatch | 0 |
 
-**不进入 Phase 3D Paper Unified Cutover。**
+**Historical（Phase 3C+ 当时）：不进入 Phase 3D Paper Unified Cutover。**
 
-下一步若要积累 WORKING_STOP 赢家 / 锁仓 / 竞价拦截，只能：
+下一步若要积累 WORKING_STOP 赢家 / 锁仓 / 竞价拦截，当时只能：
 
 1. 更长历史或其它持仓来源再 `find_cases --rule WORKING_STOP`
-2. 或由人工打开 `SHADOW_UNIFIED_EXIT_ENGINE=True`（**Cursor 不得自行打开**）
+2. 或由人工打开 `SHADOW_UNIFIED_EXIT_ENGINE=True`（当时约束：**Cursor 不得自行打开**）
 
-Shadow 代码已准备：一致 HOLD 抽样最小日志；SELL / mismatch / rule candidate 全量 compare；mismatch 含 symbol、timestamp、两边 decision、context snapshot、rule、trace、working_stop、path、position、config_version。Unified 仍不成交。
+Shadow 代码已准备：一致 HOLD 抽样最小日志；SELL / mismatch / rule candidate 全量 compare；mismatch 含 symbol、timestamp、两边 decision、context snapshot、rule、trace、working_stop、path、position、config_version。当时 Unified 仍不成交。后续已打开 Shadow 并完成 Primary Reversal。
 
 ---
 
@@ -169,15 +171,15 @@ python -m unittest strategy.test_exit_characterization strategy.test_exit_fixtur
 
 ---
 
-## 6. 本轮未做（刻意 STOP）
+## 6. 本轮未做（刻意 STOP · historical Phase 3C+）
 
-- 未设 `USE_UNIFIED_EXIT_ENGINE=True`
+- 当时未设 `USE_UNIFIED_EXIT_ENGINE=True`
 - 未删除 `_paper_exit_decision_legacy`
 - 未开始 AKQUANT migration
 - 未继续拆 `holdingStocks/index.py`
-- 未打开生产 Shadow
+- 当时未打开生产 Shadow
 
-等待人工下一步。研究用途，非投资建议。
+**Superseded：** 当前生产已是 Unified Primary + Legacy Shadow。不要删 `_paper_exit_decision_legacy`。
 
 ---
 
@@ -189,4 +191,4 @@ python -m unittest strategy.test_exit_characterization strategy.test_exit_fixtur
 - **Tier B**：WORKING_STOP（historical candidate > 0，winner = 0）  
 - **Tier C**：HOLD_LOCK / LIMIT_DOWN / WAIT_AUCTION  
 
-生产 Shadow 计数见 [`SHADOW_VALIDATION_REPORT.md`](SHADOW_VALIDATION_REPORT.md)（当前全 0，开关仍 False）。
+生产 Shadow 计数见 [`SHADOW_VALIDATION_REPORT.md`](SHADOW_VALIDATION_REPORT.md)（3D 原始快照全 0；当前已 Primary Reversal）。

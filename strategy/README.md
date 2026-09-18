@@ -259,7 +259,7 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack 
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 # 本周 5 日核对（不覆盖默认 REPORT）
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 5 --source ak --tag _week202609
-# Legacy vs Unified Exit 真实分钟只读回放（不成交、不打开生产开关）
+# Legacy vs Unified Exit 真实分钟只读回放（不成交、不修改生产开关）
 python backtest/exit_decision_replay/run.py --days 10 --source ak --refresh
 python backtest/exit_decision_replay/find_cases.py --rule WORKING_STOP --days 10 --source ak
 python backtest/exit_decision_replay/run.py --rule PATH --symbol 002636 --days 10 --source ak
@@ -396,6 +396,6 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | [`docs/FACTOR14.md`](../docs/FACTOR14.md) | 因子14 题材共振 |
 | [`STRATEGY_AUDIT.md`](STRATEGY_AUDIT.md) | 凯盛单票审计底稿 |
 | [`docs/EXIT_COVERAGE_MATRIX.md`](../docs/EXIT_COVERAGE_MATRIX.md) | 退出路径覆盖 + Evidence Tier |
-| [`docs/SHADOW_VALIDATION_REPORT.md`](../docs/SHADOW_VALIDATION_REPORT.md) | 生产 Shadow 计数（未开） |
+| [`docs/SHADOW_VALIDATION_REPORT.md`](../docs/SHADOW_VALIDATION_REPORT.md) | Phase 3D Shadow 计数快照（historical）；当前 Unified Primary |
 | [`TODO.MD`](../TODO.MD) | 任务与锁定项 |
 | [`.cursor/rules/docs-sync.mdc`](../.cursor/rules/docs-sync.mdc) | Cursor Agent 文档同步规则 |

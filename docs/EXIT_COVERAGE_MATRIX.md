@@ -5,8 +5,11 @@
 > `rule_id` = `ExitDecision.reason_code.value`（未新增并行字段）  
 > 扫描器：`python backtest/exit_decision_replay/scan_rules.py --write`
 
+**Historical at Phase 3C+：** Production Shadow 未开。  
+**Superseded by Primary Reversal：** `USE_UNIFIED_EXIT_ENGINE=True`，`SHADOW_UNIFIED_EXIT_ENGINE=True`。
+
 证据等级必须分开：**Synthetic** / **Historical** / **Production Shadow**。  
-本表 Historical 来自 2026-09-07～2026-09-17 真实 1m、Factor26 回放生成持仓，**8077** 次 evaluation。Production Shadow 未开。
+本表 Historical 来自 2026-09-07～2026-09-17 真实 1m、Factor26 回放生成持仓，**8077** 次 evaluation。下表 Production Shadow 列为当时未开（0），不是当前 runtime。
 
 ### Evidence Tier
 
@@ -155,9 +158,11 @@ Boundary（比较符保持 `<= + 1e-12`，未改）：
 | Rule collision characterization | **PASS** |
 | Boundary characterization | **PASS** |
 | Unknown mismatch | **0** |
-| Production shadow | **未开**（`SHADOW_UNIFIED_EXIT_ENGINE=False`） |
+| Production shadow | **当时未开**（historical：`SHADOW_UNIFIED_EXIT_ENGINE=False`） |
 
-**结论：尚未进入 Paper Unified Cutover。**  
-`USE_UNIFIED_EXIT_ENGINE=False` · `SHADOW_UNIFIED_EXIT_ENGINE=False` · 未删 `_paper_exit_decision_legacy` · 未拆 `holdingStocks/index.py`。
+**Historical 结论（Phase 3C+ 当时）：尚未进入 Paper Unified Cutover。**  
+当时：`USE_UNIFIED_EXIT_ENGINE=False` · `SHADOW_UNIFIED_EXIT_ENGINE=False` · 未删 `_paper_exit_decision_legacy` · 未拆 `holdingStocks/index.py`。
+
+**Superseded by Primary Reversal：** `USE_UNIFIED_EXIT_ENGINE=True`，`SHADOW_UNIFIED_EXIT_ENGINE=True`（Unified = Primary，Legacy = Shadow / fallback）。未删 `_paper_exit_decision_legacy`。
 
 研究用途，非投资建议。

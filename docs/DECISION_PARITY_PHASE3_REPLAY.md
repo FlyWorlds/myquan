@@ -27,14 +27,15 @@
 
 这批结果证明：在相同、显式的 `DecisionContext` 下，Legacy 与 Unified 的编排输出一致。它还**不足以单独支持生产切换**：SELL 只有 25 次，真实 working-stop 没有触发，而且持仓来自回放生成，不是历史 paper ledger 快照。
 
-因此：
+因此当时：
 
 ```text
 USE_UNIFIED_EXIT_ENGINE = False
 SHADOW_UNIFIED_EXIT_ENGINE = False
 ```
 
-保持不变。下一道切换门槛仍应是更长分钟历史或累计在线 Shadow，重点扩大 SELL、working-stop、半仓和锁仓样本。
+**Historical（2026-09-17）：** 开关保持不变。  
+**Superseded by Primary Reversal：** `USE_UNIFIED_EXIT_ENGINE=True`，`SHADOW_UNIFIED_EXIT_ENGINE=True`（Unified = Primary，Legacy = Shadow / fallback）。上方 **8,077 / 8,077** 仍是该次回放事实，未改。
 
 ## 比较口径
 
