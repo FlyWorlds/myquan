@@ -61,6 +61,7 @@ def build_watch_request_handler(
             if path in (
                 f"/{watch_meta_file.name}",
                 "/api/snapshot",
+                "/api/shadow/status",
             ):
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
                 self.send_header("Pragma", "no-cache")
@@ -115,6 +116,17 @@ def build_watch_request_handler(
             path = self.path.split("?", 1)[0]
             if path == "/ws":
                 self._handle_ws_upgrade()
+                return
+            if path == "/api/shadow/status":
+                try:
+                    from transport.shadow_status import shadow_status_payload
+
+                    self._send_json(shadow_status_payload())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json(
+                        {"error": "shadow status unavailable", "detail": type(exc).__name__},
+                        status=500,
+                    )
                 return
             if path.startswith("/api/sectors/"):
                 status, data = handle_sectors_api(self.path)

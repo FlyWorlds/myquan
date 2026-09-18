@@ -1,0 +1,132 @@
+﻿{
+    "enabled":  true,
+    "use_unified":  false,
+    "metrics":  {
+                    "shadow_evaluations":  1239,
+                    "shadow_exact_matches":  1239,
+                    "candidate_by_reason.OPEN_PROTECT":  46,
+                    "legacy_sell":  63,
+                    "unified_sell":  63,
+                    "sell_exact_match":  63,
+                    "winner_by_reason.OPEN_PROTECT":  21,
+                    "candidate_by_reason.WORKING_STOP":  63,
+                    "winner_by_reason.WORKING_STOP":  42
+                },
+    "buffer_size":  299,
+    "error_count":  0,
+    "last_record":  {
+                        "timestamp":  "2026-09-18T03:58:31.424580+00:00",
+                        "symbol":  "",
+                        "legacy_action":  "HOLD",
+                        "new_action":  "HOLD",
+                        "legacy_price":  null,
+                        "new_price":  null,
+                        "legacy_factor":  null,
+                        "new_factor":  null,
+                        "legacy_reason":  null,
+                        "new_reason":  null,
+                        "reason_code":  "NONE",
+                        "quantity_ratio_new":  null,
+                        "quantity_ratio_legacy":  null,
+                        "working_stop":  22.25,
+                        "overnight_open_protect_px":  null,
+                        "path_available":  true,
+                        "match_action":  true,
+                        "match_price":  true,
+                        "match_qty":  true,
+                        "match_reason":  true,
+                        "legacy_rule":  "NONE",
+                        "unified_rule":  "NONE",
+                        "config_version":  "phase3c+",
+                        "log_level":  "full",
+                        "sampled":  false,
+                        "context_snapshot":  {
+                                                 "symbol":  "",
+                                                 "timestamp":  null,
+                                                 "session":  "2026-09-18",
+                                                 "last":  22.35,
+                                                 "open_px":  21.61,
+                                                 "prev_close":  21.85,
+                                                 "working_stop":  22.25,
+                                                 "overnight_open_protect_px":  null,
+                                                 "overnight_high_ok":  null,
+                                                 "path_hit":  true,
+                                                 "path_fill_px":  21.1,
+                                                 "path_stop_kind":  "half_gain",
+                                                 "path_action_kind":  "full",
+                                                 "qty":  0,
+                                                 "sellable":  0,
+                                                 "t1_today":  false,
+                                                 "hold_locked":  false,
+                                                 "stop_locked":  false,
+                                                 "signal_ok":  false,
+                                                 "entry_price":  null,
+                                                 "peak_high":  21.52,
+                                                 "buy_time":  null
+                                             },
+                        "decision_trace":  [
+                                               {
+                                                   "rule":  "qty",
+                                                   "result":  "empty"
+                                               }
+                                           ],
+                        "position_state":  {
+                                               "qty":  0,
+                                               "sellable":  0,
+                                               "t1_today":  false,
+                                               "path":  {
+                                                            "hit":  true,
+                                                            "fill_px":  21.1,
+                                                            "stop_kind":  "half_gain",
+                                                            "action_kind":  "full"
+                                                        },
+                                               "working_stop":  22.25
+                                           },
+                        "mismatch_class":  "",
+                        "paper_kwargs":  {
+                                             "symbol":  "",
+                                             "qty":  0,
+                                             "sellable":  0,
+                                             "t1_today":  false,
+                                             "hold_locked":  false,
+                                             "stop_locked":  false,
+                                             "last":  22.35,
+                                             "open_px":  21.61,
+                                             "prev_close":  21.85,
+                                             "peak_high":  21.52,
+                                             "working_stop":  22.25,
+                                             "path_hit":  true,
+                                             "path_fill_px":  21.1,
+                                             "path_action_kind":  "full",
+                                             "path_stop_kind":  "half_gain",
+                                             "signal_ok":  false,
+                                             "session":  "2026-09-18"
+                                         },
+                        "unified_action":  "HOLD",
+                        "unified_price":  null,
+                        "legacy_quantity":  null,
+                        "unified_quantity":  null,
+                        "legacy_reason_code":  "NONE",
+                        "unified_reason_code":  "NONE",
+                        "open_protect":  null,
+                        "position_snapshot":  {
+                                                  "qty":  0,
+                                                  "sellable":  0,
+                                                  "t1_today":  false,
+                                                  "path":  {
+                                                               "hit":  true,
+                                                               "fill_px":  21.1,
+                                                               "stop_kind":  "half_gain",
+                                                               "action_kind":  "full"
+                                                           },
+                                                  "working_stop":  22.25
+                                              },
+                        "path":  {
+                                     "hit":  true,
+                                     "fill_px":  21.1,
+                                     "stop_kind":  "half_gain",
+                                     "action_kind":  "full"
+                                 }
+                    },
+    "last_error":  null
+}

@@ -12,8 +12,8 @@ from strategy.core.factor_result import DecisionContext
 from strategy.exit_rules.engine import ExitDecisionEngine, exit_decision_to_paper_dict
 
 # 生产默认：不切换；Shadow 默认关（测试可开）。Cursor 不得自行打开。
-USE_UNIFIED_EXIT_ENGINE = False
-SHADOW_UNIFIED_EXIT_ENGINE = False
+USE_UNIFIED_EXIT_ENGINE = True
+SHADOW_UNIFIED_EXIT_ENGINE = True
 SHADOW_CONFIG_VERSION = "phase3c+"
 SHADOW_HOLD_SAMPLE_EVERY = 50
 
@@ -93,16 +93,24 @@ def _note_shadow_error(
     ctx: DecisionContext | None = None,
     *,
     count_eval: bool = True,
+    primary_failover: bool = False,
 ) -> None:
-    """Record a shadow failure without touching paper state."""
-    _SHADOW_ERRORS.append(
-        {
-            "where": where,
-            "error": f"{type(exc).__name__}: {exc}",
-            "symbol": str(getattr(ctx, "symbol", "") or ""),
-            "config_version": SHADOW_CONFIG_VERSION,
-        }
-    )
+    """Record a shadow failure without touching paper state.
+
+    primary_failover: USE=True and Unified engine failed, so the returned
+    decision is Legacy. Distinct from shadow_errors (observation failures).
+    """
+    row: dict[str, Any] = {
+        "where": where,
+        "error": f"{type(exc).__name__}: {exc}",
+        "symbol": str(getattr(ctx, "symbol", "") or ""),
+        "config_version": SHADOW_CONFIG_VERSION,
+    }
+    if primary_failover:
+        row["primary"] = "unified"
+        row["fallback"] = "legacy"
+        _bump("primary_failover_to_legacy")
+    _SHADOW_ERRORS.append(row)
     if len(_SHADOW_ERRORS) > 500:
         del _SHADOW_ERRORS[: len(_SHADOW_ERRORS) - 500]
     _bump("shadow_errors")
@@ -505,7 +513,7 @@ def maybe_shadow_and_select(
         try:
             dec, adapted = run_unified_exit(ctx)
         except Exception as exc:  # noqa: BLE001
-            _note_shadow_error("unified_engine", exc, ctx)
+            _note_shadow_error("unified_engine", exc, ctx, primary_failover=bool(use))
             return legacy
         if sh:
             try:

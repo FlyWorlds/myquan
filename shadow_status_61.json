@@ -1,0 +1,158 @@
+﻿{
+    "enabled":  true,
+    "use_unified":  false,
+    "metrics":  {
+                    "shadow_evaluations":  61,
+                    "shadow_exact_matches":  61,
+                    "candidate_by_reason.OPEN_PROTECT":  3,
+                    "legacy_sell":  3,
+                    "unified_sell":  3,
+                    "sell_exact_match":  3,
+                    "winner_by_reason.OPEN_PROTECT":  1,
+                    "candidate_by_reason.WORKING_STOP":  3,
+                    "winner_by_reason.WORKING_STOP":  2
+                },
+    "buffer_size":  14,
+    "error_count":  0,
+    "last_record":  {
+                        "timestamp":  "2026-09-18T03:11:42.357002+00:00",
+                        "symbol":  "",
+                        "legacy_action":  "SELL",
+                        "new_action":  "SELL",
+                        "legacy_price":  95.0,
+                        "new_price":  95.0,
+                        "legacy_factor":  null,
+                        "new_factor":  null,
+                        "legacy_reason":  "last",
+                        "new_reason":  "last",
+                        "reason_code":  "WORKING_STOP",
+                        "quantity_ratio_new":  1.0,
+                        "quantity_ratio_legacy":  1.0,
+                        "working_stop":  95.0,
+                        "overnight_open_protect_px":  null,
+                        "path_available":  false,
+                        "match_action":  true,
+                        "match_price":  true,
+                        "match_qty":  true,
+                        "match_reason":  true,
+                        "legacy_rule":  "WORKING_STOP",
+                        "unified_rule":  "WORKING_STOP",
+                        "config_version":  "phase3c+",
+                        "log_level":  "full",
+                        "sampled":  false,
+                        "context_snapshot":  {
+                                                 "symbol":  "",
+                                                 "timestamp":  null,
+                                                 "session":  "",
+                                                 "last":  95.0,
+                                                 "open_px":  95.0,
+                                                 "prev_close":  95.41,
+                                                 "working_stop":  95.0,
+                                                 "overnight_open_protect_px":  null,
+                                                 "overnight_high_ok":  true,
+                                                 "path_hit":  false,
+                                                 "path_fill_px":  null,
+                                                 "path_stop_kind":  "",
+                                                 "path_action_kind":  "",
+                                                 "qty":  800,
+                                                 "sellable":  800,
+                                                 "t1_today":  false,
+                                                 "hold_locked":  false,
+                                                 "stop_locked":  false,
+                                                 "signal_ok":  true,
+                                                 "entry_price":  91.8,
+                                                 "peak_high":  98.08,
+                                                 "buy_time":  null
+                                             },
+                        "decision_trace":  [
+                                               {
+                                                   "rule":  "open_protect",
+                                                   "result":  "not_triggered",
+                                                   "price":  null,
+                                                   "protect_px":  94.94
+                                               },
+                                               {
+                                                   "rule":  "working_stop",
+                                                   "result":  "triggered",
+                                                   "price":  95.0
+                                               },
+                                               {
+                                                   "rule":  "path",
+                                                   "result":  "idle",
+                                                   "path_fill_px":  0.0,
+                                                   "path_hit":  false
+                                               },
+                                               {
+                                                   "rule":  "fill",
+                                                   "result":  "working_stop",
+                                                   "price":  95.0
+                                               },
+                                               {
+                                                   "rule":  "WORKING_STOP",
+                                                   "candidate":  true,
+                                                   "winner":  true,
+                                                   "superseded_by":  null
+                                               }
+                                           ],
+                        "position_state":  {
+                                               "qty":  800,
+                                               "sellable":  800,
+                                               "t1_today":  false,
+                                               "path":  {
+                                                            "hit":  false,
+                                                            "fill_px":  null,
+                                                            "stop_kind":  "",
+                                                            "action_kind":  ""
+                                                        },
+                                               "working_stop":  95.0
+                                           },
+                        "mismatch_class":  "",
+                        "paper_kwargs":  {
+                                             "symbol":  "",
+                                             "qty":  800,
+                                             "sellable":  800,
+                                             "t1_today":  false,
+                                             "hold_locked":  false,
+                                             "stop_locked":  false,
+                                             "last":  95.0,
+                                             "open_px":  95.0,
+                                             "prev_close":  95.41,
+                                             "cost":  91.8,
+                                             "peak_high":  98.08,
+                                             "working_stop":  95.0,
+                                             "path_hit":  false,
+                                             "path_fill_px":  0.0,
+                                             "path_action_kind":  "",
+                                             "path_stop_kind":  "",
+                                             "signal_ok":  true,
+                                             "overnight_high_ok":  true,
+                                             "session":  ""
+                                         },
+                        "unified_action":  "SELL",
+                        "unified_price":  95.0,
+                        "legacy_quantity":  1.0,
+                        "unified_quantity":  1.0,
+                        "legacy_reason_code":  "WORKING_STOP",
+                        "unified_reason_code":  "WORKING_STOP",
+                        "open_protect":  null,
+                        "position_snapshot":  {
+                                                  "qty":  800,
+                                                  "sellable":  800,
+                                                  "t1_today":  false,
+                                                  "path":  {
+                                                               "hit":  false,
+                                                               "fill_px":  null,
+                                                               "stop_kind":  "",
+                                                               "action_kind":  ""
+                                                           },
+                                                  "working_stop":  95.0
+                                              },
+                        "path":  {
+                                     "hit":  false,
+                                     "fill_px":  null,
+                                     "stop_kind":  "",
+                                     "action_kind":  ""
+                                 }
+                    },
+    "last_error":  null
+}

@@ -165,6 +165,7 @@ API：
 | 路径 | 说明 |
 |------|------|
 | `GET /api/snapshot` | 最新 WatchSnapshot v1 |
+| `GET /api/shadow/status` | 只读 Shadow telemetry（metrics / buffer 长度 / 最近一条；无 reset） |
 | `GET /api/strategies` | 策略 Tab + 因子绑定（注册表同源） |
 | `GET /api/factors` | 因子说明 + 挂载策略（注册表同源） |
 | `WS /ws` | 推送 snapshot（与 `/api/snapshot` 同结构） |

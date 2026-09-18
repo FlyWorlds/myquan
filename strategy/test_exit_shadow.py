@@ -244,6 +244,7 @@ class TestShadowFailureIsolation(unittest.TestCase):
             shadow.run_unified_exit = orig
         self.assertEqual(out, expected)
         self.assertTrue(any(e["where"] == "unified_engine" for e in get_shadow_errors()))
+        self.assertEqual(get_shadow_metrics().get("primary_failover_to_legacy", 0), 0)
 
     def test_compare_exception_returns_legacy(self) -> None:
         from index import _paper_exit_decision_legacy, paper_exit_decision
@@ -326,15 +327,144 @@ class TestShadowFailureIsolation(unittest.TestCase):
             shadow.build_exit_context_from_paper_kwargs = orig_build
         self.assertEqual(built, [])
 
-    def test_production_flags_remain_false_in_module(self) -> None:
+    def test_use_flag_remains_false_in_module_source(self) -> None:
         import importlib
 
         fresh = importlib.reload(shadow)
         self.assertFalse(fresh.USE_UNIFIED_EXIT_ENGINE)
-        self.assertFalse(fresh.SHADOW_UNIFIED_EXIT_ENGINE)
-        # restore test isolation defaults after reload
-        fresh.USE_UNIFIED_EXIT_ENGINE = False
-        fresh.SHADOW_UNIFIED_EXIT_ENGINE = False
+        # Do not rewrite SHADOW_UNIFIED_EXIT_ENGINE; runtime session may have it True.
+
+
+class TestPrimaryReversalSafety(unittest.TestCase):
+    """USE=True + SHADOW=True: Unified primary, Legacy still compared; failover is explicit."""
+
+    def setUp(self) -> None:
+        clear_shadow_buffer()
+        self._use = shadow.USE_UNIFIED_EXIT_ENGINE
+        self._sh = shadow.SHADOW_UNIFIED_EXIT_ENGINE
+        shadow.USE_UNIFIED_EXIT_ENGINE = True
+        shadow.SHADOW_UNIFIED_EXIT_ENGINE = True
+
+    def tearDown(self) -> None:
+        shadow.USE_UNIFIED_EXIT_ENGINE = self._use
+        shadow.SHADOW_UNIFIED_EXIT_ENGINE = self._sh
+        clear_shadow_buffer()
+
+    def test_normal_returns_unified_once_and_compares(self) -> None:
+        from index import _paper_exit_decision_legacy, paper_exit_decision
+
+        kw = _sell_kwargs()
+        calls = {"unified": 0, "compare": 0, "legacy": 0}
+        orig_unified = shadow.run_unified_exit
+        orig_compare = shadow.compare_paper_vs_exit
+        orig_legacy = __import__("index")._paper_exit_decision_legacy
+
+        def tracking_unified(ctx):
+            calls["unified"] += 1
+            return orig_unified(ctx)
+
+        def tracking_compare(*a, **k):
+            calls["compare"] += 1
+            return orig_compare(*a, **k)
+
+        def tracking_legacy(**kwd):
+            calls["legacy"] += 1
+            return orig_legacy(**kwd)
+
+        index = __import__("index")
+        shadow.run_unified_exit = tracking_unified
+        shadow.compare_paper_vs_exit = tracking_compare
+        index._paper_exit_decision_legacy = tracking_legacy
+        try:
+            out = paper_exit_decision(**kw)
+            expected_u = orig_unified(shadow.build_exit_context_from_paper_kwargs(**kw))[1]
+        finally:
+            shadow.run_unified_exit = orig_unified
+            shadow.compare_paper_vs_exit = orig_compare
+            index._paper_exit_decision_legacy = orig_legacy
+        self.assertEqual(calls["unified"], 1)
+        self.assertEqual(calls["compare"], 1)
+        self.assertEqual(calls["legacy"], 1)
+        self.assertEqual(out, expected_u)
+        self.assertEqual(get_shadow_metrics().get("primary_failover_to_legacy", 0), 0)
+
+    def test_compare_exception_still_returns_unified(self) -> None:
+        from index import _paper_exit_decision_legacy, paper_exit_decision
+
+        kw = _sell_kwargs()
+        marker = {
+            "hit": True,
+            "hit_show": True,
+            "fill_px": 1.23,
+            "kind": "unified_marker",
+            "action_kind": "full",
+            "stop_kind": "",
+            "reason": "marker",
+            "open_bell": False,
+        }
+        legacy = _paper_exit_decision_legacy(**{k: v for k, v in kw.items() if k != "symbol"})
+
+        def fake_unified(_ctx):
+            return object(), dict(marker)
+
+        def boom(*_a, **_k):
+            raise RuntimeError("compare down")
+
+        orig_u = shadow.run_unified_exit
+        orig_c = shadow.compare_paper_vs_exit
+        shadow.run_unified_exit = fake_unified
+        shadow.compare_paper_vs_exit = boom
+        try:
+            out = paper_exit_decision(**kw)
+        finally:
+            shadow.run_unified_exit = orig_u
+            shadow.compare_paper_vs_exit = orig_c
+        self.assertEqual(out, marker)
+        self.assertNotEqual(out, legacy)
+        self.assertTrue(any(e["where"] == "compare_or_log" for e in get_shadow_errors()))
+        self.assertEqual(get_shadow_metrics().get("primary_failover_to_legacy", 0), 0)
+
+    def test_unified_engine_exception_failsover_legacy_with_metric(self) -> None:
+        from index import _paper_exit_decision_legacy, paper_exit_decision
+
+        kw = _sell_kwargs()
+        expected = _paper_exit_decision_legacy(**{k: v for k, v in kw.items() if k != "symbol"})
+
+        def boom(_ctx):
+            raise RuntimeError("engine down")
+
+        orig = shadow.run_unified_exit
+        shadow.run_unified_exit = boom
+        try:
+            out = paper_exit_decision(**kw)
+        finally:
+            shadow.run_unified_exit = orig
+        self.assertEqual(out, expected)
+        errs = get_shadow_errors()
+        self.assertTrue(any(e.get("where") == "unified_engine" for e in errs))
+        fo = next(e for e in errs if e.get("where") == "unified_engine")
+        self.assertEqual(fo.get("primary"), "unified")
+        self.assertEqual(fo.get("fallback"), "legacy")
+        self.assertEqual(get_shadow_metrics().get("primary_failover_to_legacy"), 1)
+        self.assertGreaterEqual(get_shadow_metrics().get("shadow_errors", 0), 1)
+
+    def test_telemetry_getter_exception_does_not_change_decision(self) -> None:
+        from index import paper_exit_decision
+
+        kw = _sell_kwargs()
+
+        def boom():
+            raise RuntimeError("metrics down")
+
+        orig = shadow.get_shadow_metrics
+        shadow.get_shadow_metrics = boom
+        try:
+            out = paper_exit_decision(**kw)
+        finally:
+            shadow.get_shadow_metrics = orig
+        self.assertTrue(out["hit"])
+        self.assertEqual(out["kind"], "last")
+        self.assertEqual(get_shadow_metrics().get("primary_failover_to_legacy", 0), 0)
 
 
 if __name__ == "__main__":
