@@ -226,9 +226,11 @@ cd myquan && python -m unittest -v test_strategy_rules.py
 # 持仓盯盘（Web 页面 + Python 数据）
 cd myquan/holdingStocks && python start_watch.py --no-wechat
 # 浏览器 http://127.0.0.1:3000/  ·  API/WS :8765
-# Win↔Mac 持仓：真源 holdings.json，远程分支 holdings-ledger（不是 holdings_watch.json 缓存）
+# Win↔Mac 持仓：当前真源仍为 holdings.json + holdings-ledger 分支（不是 holdings_watch.json 缓存）
 python index.py holdings-push
 python index.py holdings-pull
+# Remote Paper State R1（未切生产）：接口/schema/迁移 dry-run 见 holdingStocks/docs/REMOTE_PAPER_STATE.md
+# python migrate_local_paper_state_to_remote.py   # dry-run only
 
 # 或分两终端
 cd myquan/holdingStocks && python index.py watch --no-wechat

@@ -198,7 +198,9 @@ python index.py holdings-push   # 本机账本 → origin/holdings-ledger（给�
 python index.py holdings-pull   # 远程账本 → 本机；丢掉 holdings_watch.json 旧缓存
 ```
 
-**Win / Mac 同一份持仓**：真源是 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细），推到独立分支 `holdings-ledger`（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。离线用 `--no-ledger-pull`。
+**Win / Mac 同一份持仓**：当前生产真源仍是本机 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细），经独立分支 `holdings-ledger` 同步（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。离线用 `--no-ledger-pull`。
+
+**Remote Paper State（Phase R1，未切生产）**：目标改为远程 PostgreSQL 单真源 + 单 writer lease（防双机重复成交）。本阶段仅落地 `paper_state/` 接口、schema、迁移 dry-run 与单测；**watch 仍写本地 JSON**。设计与命令见 [`docs/REMOTE_PAPER_STATE.md`](docs/REMOTE_PAPER_STATE.md)。
 
 **交割单**：持仓卡片现价旁 **价格**（外网行情）/ **交割**（跳转 `/trades?code=`）；顶栏与账户卡也可进 `/trades`。明细含代码、名称、买卖价、仓位、金额、单笔盈亏、账户余额、买卖理由；API `GET /api/trades`。单笔盈亏：仍持仓 BUY = `(现价−成本)×剩余仓`（浮动，复用快照/持仓现价）；SELL = 成交时 realized（冻结）。仓位列为 `qty→after_qty`（本笔数量→成交后持仓），非 lot remaining。无独立 FIFO lot，盯市挂在该代码最近一笔仍开仓 BUY、remaining=当前持仓 qty。
 
