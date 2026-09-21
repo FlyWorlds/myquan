@@ -512,7 +512,8 @@ def test_demote_pre_signal_window():
             "因子触发": "已触发",
             "持仓状态": "待买入",
             "挂单说明": "限价买@10",
-        }
+        },
+        phase="open_set",
     )
     assert buy["hit_buy"] is False
     assert buy["alert"] == "将买入"
@@ -520,11 +521,20 @@ def test_demote_pre_signal_window():
     assert "9:25 可挂单" in str(buy.get("挂单说明") or "")
 
     sell = _demote_pre_signal_window(
-        {"alert": "已触止损", "hit_buy": False, "hit_stop": True, "因子触发": "已触发"}
+        {"alert": "已触止损", "hit_buy": False, "hit_stop": True, "因子触发": "已触发"},
+        phase="open_set",
     )
     assert sell["hit_stop"] is False
-    assert sell["alert"] == "将止损"
+    assert sell["alert"] == "竞价止损预警"
+    assert sell["持仓状态"] == "已经买入"
     assert sell["因子触发"] == "接近"
+
+    observe = _demote_pre_signal_window(
+        {"alert": "已触止损", "hit_stop": True, "持仓状态": "待卖出"},
+        phase="auction_locked",
+    )
+    assert observe["alert"] == "竞价观察"
+    assert observe["持仓状态"] == "已经买入"
 
 
 def test_should_demote_pre_signal_skips_lunch_and_close():

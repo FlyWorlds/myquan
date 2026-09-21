@@ -13,6 +13,11 @@ export type TradeLedgerEntry = {
   cost?: number | null
   pnl?: number | null
   pnl_pct?: number | null
+  /** unrealized=仍持仓 BUY 现价盯市；realized=已平仓 SELL */
+  pnl_kind?: 'unrealized' | 'realized' | string | null
+  mark_price?: number | null
+  remaining_qty?: number | null
+  pnl_basis?: string | null
   day_pnl?: number | null
   day_pnl_pct?: number | null
   account_cash_after?: number | null
@@ -35,5 +40,6 @@ export type TradeLedgerResponse = {
     count?: number
   }
   entries?: TradeLedgerEntry[]
+  lot_matching?: boolean
   error?: string
 }

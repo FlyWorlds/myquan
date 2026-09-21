@@ -227,6 +227,60 @@ def is_signal_window(now: Any | None = None) -> bool:
     return market_phase(now) == "continuous"
 
 
+def is_exit_executable(now: Any | None = None) -> bool:
+    """纸面 SELL / apply_exit_fill 仅连续竞价可执行（= is_signal_window）。"""
+    return is_signal_window(now)
+
+
+def is_auction_observe(now: Any | None = None) -> bool:
+    """09:15 ≤ t < 09:25：竞价观察（可展示行情，不可结算止损）。"""
+    return market_phase(now) in ("auction_cancel", "auction_locked")
+
+
+def is_auction_result(now: Any | None = None) -> bool:
+    """09:25 ≤ t < 09:30：开盘价已出，可预警/挂单意图，仍不可实际 SELL。"""
+    return market_phase(now) == "open_set"
+
+
+def pre_continuous_stop_ui(
+    *,
+    phase: str | None = None,
+    half: bool = False,
+) -> dict[str, Any]:
+    """连续竞价前止损 UI：可预警，禁止「待卖出」冒充可执行 SELL。
+
+    · auction_observe → 竞价观察
+    · open_set → 竞价止损预警
+    """
+    ph = str(phase or market_phase() or "")
+    if ph in ("auction_cancel", "auction_locked"):
+        return {
+            "持仓状态": "已经买入",
+            "alert": "竞价观察",
+            "因子触发": "接近",
+            "挂单说明": "集合竞价观察；9:30 连续竞价起才结算止损",
+            "pending_sell": True,
+            "near_stop": True,
+            "bg_class": "warn-sell",
+            "可执行": False,
+        }
+    # open_set 及其它 demote 窗口（盘前）
+    return {
+        "持仓状态": "已经买入",
+        "alert": "竞价半仓预警" if half else "竞价止损预警",
+        "因子触发": "接近",
+        "挂单说明": (
+            "9:25 可挂单；9:30 起才结算半仓"
+            if half
+            else "9:25 可挂单；9:30 起才结算止损"
+        ),
+        "pending_sell": True,
+        "near_stop": True,
+        "bg_class": "warn-sell",
+        "可执行": False,
+    }
+
+
 def is_close_confirmed(now: Any | None = None) -> bool:
     """尾盘集合竞价后视为收盘确认（因子22 mode=close）。"""
     return _clock_minutes(now) >= 14 * 60 + 57

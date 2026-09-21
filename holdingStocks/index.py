@@ -182,12 +182,16 @@ from watch_config import (
     code_key as _code_key,
     empty_position as _empty_position,
     find_meta as _find_meta,
+    is_auction_observe,
     is_auction_quote_window,
+    is_auction_result,
     is_auction_window,
+    is_exit_executable,
     is_signal_window,
     is_threshold_ready,
     market_phase,
     market_phase_label,
+    pre_continuous_stop_ui,
     sellable_qty as _sellable_qty,
     unlock_overnight_available,
     session_open_bell_ts,
@@ -3325,11 +3329,20 @@ def _fill_row_signal_times(
         row["信号时刻"] = str(buy_full)
 
 
-def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
-    """9:30 连续竞价前：9:25 起可挂单预览，禁止『已触发』记账/结算。"""
+def _demote_pre_signal_window(
+    sig: dict[str, Any],
+    *,
+    phase: str | None = None,
+) -> dict[str, Any]:
+    """9:30 连续竞价前：禁止『已触发』记账/结算，也禁止「待卖出」冒充可执行 SELL。
+
+    · 09:15–09:25 → 竞价观察（持仓仍「已经买入」）
+    · 09:25–09:30 → 竞价止损/买入预警（仍「已经买入」/「待买入」）
+    """
     out = dict(sig)
     out["hit_buy"] = False
     out["hit_stop"] = False
+    ph = str(phase or market_phase() or "")
     alert = str(out.get("alert") or "").strip()
     trig = str(out.get("因子触发") or "").strip()
     if alert == "已触买" or alert.startswith("已触买"):
@@ -3340,34 +3353,30 @@ def _demote_pre_signal_window(sig: dict[str, Any]) -> dict[str, Any]:
         out["持仓状态"] = "待买入"
         out["因子触发"] = "接近"
         note = str(out.get("挂单说明") or "")
-        if "可挂单" not in note:
+        if "可挂单" not in note and "竞价" not in note:
             out["挂单说明"] = (
                 (note + "；" if note else "") + "9:25 可挂单；9:30 起才计已触发"
             )
-    elif alert == "已触止损" or alert.startswith("已触止损"):
-        out["alert"] = "将止损"
+    elif (
+        alert == "已触止损"
+        or alert.startswith("已触止损")
+        or alert == "半仓止盈"
+        or alert.startswith("半仓止盈")
+        or alert.endswith("待盘中结算")
+    ):
+        half = alert.startswith("半仓") or "半仓" in alert
+        ui = pre_continuous_stop_ui(phase=ph, half=half)
+        out["alert"] = ui["alert"]
         out["pending_sell"] = True
         out["near_stop"] = True
-        out["bg_class"] = out.get("bg_class") or "warn-sell"
-        out["持仓状态"] = "待卖出"
-        out["因子触发"] = "接近"
+        out["bg_class"] = ui["bg_class"]
+        out["持仓状态"] = ui["持仓状态"]  # 已经买入，不是待卖出
+        out["因子触发"] = ui["因子触发"]
+        out["可执行"] = False
         note = str(out.get("挂单说明") or "")
-        if "可挂单" not in note:
-            out["挂单说明"] = (
-                (note + "；" if note else "") + "9:25 可挂单；9:30 起才结算止损"
-            )
-    elif alert == "半仓止盈" or alert.startswith("半仓止盈"):
-        out["alert"] = "将半仓"
-        out["pending_sell"] = True
-        out["near_stop"] = True
-        out["bg_class"] = out.get("bg_class") or "warn-sell"
-        out["持仓状态"] = "待卖出"
-        out["因子触发"] = "接近"
-        note = str(out.get("挂单说明") or "")
-        if "可挂单" not in note:
-            out["挂单说明"] = (
-                (note + "；" if note else "") + "9:25 可挂单；9:30 起才结算半仓"
-            )
+        suffix = str(ui.get("挂单说明") or "")
+        if suffix and suffix not in note:
+            out["挂单说明"] = (note + "；" if note else "") + suffix
     elif trig == "已触发" or trig.startswith("已触发"):
         out["因子触发"] = "接近"
     return out
@@ -6709,7 +6718,13 @@ def collect_rows(
                     _c_chk = float(cost_h or 0)
                 except (TypeError, ValueError):
                     _o_chk, _c_chk = 0.0, 0.0
-                if qty_early > 0 and _o_chk > 0 and _c_chk > 0:
+                # 开盘保护开盘铃：须 09:25 后开盘价确定；竞价指示价不得伪写成 09:30
+                if (
+                    preview_ok
+                    and qty_early > 0
+                    and _o_chk > 0
+                    and _c_chk > 0
+                ):
                     _prot_chk = float(
                         overnight_open_protect_px(
                             _c_chk,
@@ -6729,26 +6744,37 @@ def collect_rows(
                     )
                     if _prot_chk > 0 and _o_chk <= _prot_chk + 1e-12:
                         _open_bell_ts = session_open_bell_ts(str(q["session"]))
+                _force_bell = _open_bell_ts if signal_ok else None
                 _stamp_stop_touched(
                     sticky,
                     code,
                     session=str(q["session"]),
-                    ts=_open_bell_ts or path_touch_ts,
+                    ts=_force_bell or path_touch_ts,
                     quote=q,
                     touch_stop=float(path_touch_stop or _stop_chk or 0) or None,
-                    force_ts=_open_bell_ts,
+                    force_ts=_force_bell,
                 )
             if hit_stop_show and qty_early > 0:
+                _half_sticky = is_half_stop_kind(
+                    str(lv.get("stop_kind") or ""),
+                    path_action_kind,
+                )
+                if _should_demote_pre_signal(phase_now):
+                    _sticky_alert = pre_continuous_stop_ui(
+                        phase=phase_now, half=_half_sticky
+                    )["alert"]
+                else:
+                    _sticky_alert = hit_stop_alert(
+                        str(lv.get("stop_kind") or ""),
+                        path_action_kind,
+                    )
                 _sticky_put(
                     sticky,
                     code,
                     str(q["session"]),
                     {
                         "bg_class": "warn-sell",
-                        "alert": hit_stop_alert(
-                            str(lv.get("stop_kind") or ""),
-                            path_action_kind,
-                        ),
+                        "alert": _sticky_alert,
                         "pending_sell": True,
                         "stop_touched": True,
                         "touch_stop": float(path_touch_stop or _stop_chk or 0) or None,
@@ -6853,6 +6879,8 @@ def collect_rows(
             # 盯盘按人工/云条件单的触发价记录，不对买卖触发价额外加滑点。
             stop_fill_px = stop_base_px
             # 纸面止损唯一口径：开盘保护 / 1m 路径 / 现价破卖价（不用全日最低撞抬高止损）
+            # 09:25 前开盘价未定：禁止用竞价指示价跑 OPEN_PROTECT candidate
+            _open_for_exit = float(q.get("open") or 0) if preview_ok else 0.0
             _exit_dec = paper_exit_decision(
                 qty=qty,
                 sellable=sellable,
@@ -6860,7 +6888,7 @@ def collect_rows(
                 hold_locked=hold_locked,
                 stop_locked=stop_locked,
                 last=_last_chk,
-                open_px=float(q.get("open") or 0),
+                open_px=_open_for_exit,
                 prev_close=q.get("prev_close"),
                 cost=cost,
                 peak_high=seed_h if seed_h else (pos.get("peak_high")),
@@ -6873,7 +6901,8 @@ def collect_rows(
                 buy_time=buy_time,
                 session=str(q["session"]),
             )
-            if _exit_dec.get("open_bell"):
+            # open_bell sticky / 09:30 时刻仅连续竞价后写入，避免竞价期伪触发时间
+            if _exit_dec.get("open_bell") and signal_ok:
                 _bell = session_open_bell_ts(str(q["session"]))
                 row["_open_bell"] = True
                 _stamp_stop_touched(
@@ -7269,43 +7298,53 @@ def collect_rows(
             )
             if not signal_ok:
                 if qty > 0 and hit_stop_show:
-                    # 午休/收盘/盘前：保留触达展示，仅提示待连续竞价结算
+                    # 午休/收盘：保留盘中已触达「待卖出」；竞价/开盘前：只预警不冒充待卖出
                     _half_show = is_half_stop_kind(
                         str(lv.get("stop_kind") or ""),
                         path_action_kind,
                     )
                     sig = dict(sig)
-                    sig["hit_stop"] = True
-                    sig["pending_sell"] = True
-                    sig["near_stop"] = True
-                    sig["bg_class"] = "warn-sell"
-                    sig["持仓状态"] = "待卖出"
-                    sig["因子触发"] = "已触发" if preview_ok else "接近"
-                    if preview_ok:
-                        sig["alert"] = (
-                            "半仓止盈·待盘中结算" if _half_show else "已触止损·待盘中结算"
-                        )
-                        note = str(sig.get("挂单说明") or "")
-                        if "连续竞价" not in note:
-                            sig["挂单说明"] = (
-                                (note + "；" if note else "")
-                                + (
-                                    "已触10%半仓，待 9:30–11:30 / 13:00–15:00 记减半"
-                                    if _half_show
-                                    else "已破止损价，待 9:30–11:30 / 13:00–15:00 自动结算"
-                                )
-                            )
-                    else:
-                        sig = _demote_pre_signal_window(sig)
+                    if _should_demote_pre_signal(phase_now):
+                        # 09:15–09:30：竞价观察 / 竞价止损预警
+                        seed = {
+                            "alert": (
+                                "半仓止盈·待盘中结算"
+                                if _half_show
+                                else "已触止损·待盘中结算"
+                            ),
+                            "挂单说明": str(sig.get("挂单说明") or ""),
+                        }
+                        sig.update(_demote_pre_signal_window(seed, phase=phase_now))
                         sig["hit_stop"] = True
-                        if _half_show:
-                            sig["alert"] = "将半仓"
-                        elif "止损" in str(sig.get("alert") or ""):
-                            sig["alert"] = "将止损"
-                        sig["bg_class"] = "warn-sell"
                         sig["pending_sell"] = True
+                        sig["near_stop"] = True
+                        sig["bg_class"] = "warn-sell"
+                    else:
+                        # lunch / closed：保留可执行语义展示（待卖出）
+                        sig["hit_stop"] = True
+                        sig["pending_sell"] = True
+                        sig["near_stop"] = True
+                        sig["bg_class"] = "warn-sell"
+                        sig["持仓状态"] = "待卖出"
+                        sig["因子触发"] = "已触发" if preview_ok else "接近"
+                        if preview_ok:
+                            sig["alert"] = (
+                                "半仓止盈·待盘中结算"
+                                if _half_show
+                                else "已触止损·待盘中结算"
+                            )
+                            note = str(sig.get("挂单说明") or "")
+                            if "连续竞价" not in note:
+                                sig["挂单说明"] = (
+                                    (note + "；" if note else "")
+                                    + (
+                                        "已触10%半仓，待 9:30–11:30 / 13:00–15:00 记减半"
+                                        if _half_show
+                                        else "已破止损价，待 9:30–11:30 / 13:00–15:00 自动结算"
+                                    )
+                                )
                 elif _should_demote_pre_signal(phase_now):
-                    sig = _demote_pre_signal_window(sig)
+                    sig = _demote_pre_signal_window(sig, phase=phase_now)
                 if _should_demote_pre_signal(phase_now):
                     hit_buy = False
                 # 结算口径保持 False；展示口径 hit_stop_show / hit_buy 不变
@@ -8531,8 +8570,12 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
                 row["已触止损"] = "否"
                 row["bg_class"] = "status-hold"
             return
-        # 实仓：仅可卖且触止损 → 待卖出；否则已经买入
-        if hit_stop and sellable > 0 and "不可卖" not in alert and not t1:
+        # 实仓：仅连续竞价可执行止损 →「待卖出」；
+        # 竞价/开盘前即使已触也保持「已经买入」（预警字段另标竞价观察）。
+        # 午休/收盘保留盘中已形成的待卖出展示。
+        _ph = market_phase()
+        _exec_ok = is_exit_executable() or _ph in ("lunch", "closed")
+        if hit_stop and sellable > 0 and "不可卖" not in alert and not t1 and _exec_ok:
             row["持仓状态"] = "待卖出"
             pos = "待卖出"
         else:
@@ -8540,6 +8583,7 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
             pos = "已经买入"
         row["可执行"] = (
             pos == "待卖出"
+            and is_exit_executable()
             and (not t1)
             and sellable > 0
             and "不可卖" not in alert

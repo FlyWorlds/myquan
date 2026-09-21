@@ -143,11 +143,15 @@ function fmtMoney(v?: number | null) {
             <td class="sensitive px-3 py-2 tabular-nums">{{ fmtMoney(e.amount) }}</td>
             <td class="sensitive px-3 py-2 tabular-nums">{{ e.cost == null ? '—' : fmtNum(e.cost, 4) }}</td>
             <td class="sensitive px-3 py-2 tabular-nums">
-              <template v-if="e.side === 'sell' && e.pnl != null">
+              <template v-if="e.pnl != null">
                 <ChgText :chg="e.pnl">{{ (e.pnl >= 0 ? '+' : '') + fmtMoney(e.pnl) }}</ChgText>
                 <span v-if="e.pnl_pct != null" class="ml-1 text-xs">
                   <ChgText :chg="e.pnl_pct">{{ (e.pnl_pct >= 0 ? '+' : '') + e.pnl_pct.toFixed(2) + '%' }}</ChgText>
                 </span>
+                <div
+                  v-if="e.pnl_kind === 'unrealized' || e.side === 'sell'"
+                  class="mt-0.5 text-[10px] text-ui-text-3"
+                >{{ e.pnl_kind === 'unrealized' ? '浮动' : '已实现' }}</div>
               </template>
               <template v-else>—</template>
             </td>
