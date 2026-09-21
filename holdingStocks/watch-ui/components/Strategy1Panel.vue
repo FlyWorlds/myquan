@@ -134,20 +134,32 @@ function asNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function buyPx(r: HoldingRow): number | null {
-  const cost = asNum(r.成本)
-  if (cost != null && cost > 0) return cost
+/** 正式 BUY 信号触发价：已触发因子价（冻结）；不得用开盘价冒充。 */
+function signalTriggerPx(r: HoldingRow): number | null {
   if (r.已触发因子侧 === '买入') {
     const p = asNum(r.已触发因子价)
+    if (p != null && p > 0) return p
+  }
+  const hit =
+    String(r.已触买 || '') === '是' ||
+    String(r.预警 || '').startsWith('已触买') ||
+    (String(r.持仓状态 || '') === '待买入' && String(r.因子触发 || '').startsWith('已触发'))
+  if (hit) {
+    const p = asNum(r.买点) ?? asNum(r.买入侧价) ?? asNum(r.已触发因子价)
     if (p != null && p > 0) return p
   }
   return null
 }
 
-/** 单笔收入%：(现价或成交价)/买入成本 − 1。 */
+/**
+ * 单笔收入% = SIGNAL TRADE RETURN：触发价 → 现价（或平仓价）。
+ * 不是持仓成本收益，也不是策略累计收益。
+ */
 function tradeIncomePct(r: HoldingRow): number | null {
-  const buy = buyPx(r)
-  if (buy == null) return null
+  const backend = asNum(r['单笔收入%'] ?? r.单笔收入)
+  if (backend != null) return backend
+  const trigger = signalTriggerPx(r)
+  if (trigger == null || trigger <= 0) return null
   const qty = Number(r.持仓 || 0)
   const pos = String(r.持仓状态 || '')
   const sold =
@@ -158,23 +170,14 @@ function tradeIncomePct(r: HoldingRow): number | null {
         pos.includes('已止损') ||
         pos === '当日禁买' ||
         asNum(r.成交价) != null))
-  const mark = sold ? asNum(r.成交价) : asNum(r.现价)
-  const useMark =
-    mark != null && mark > 0
-      ? mark
-      : sold
-        ? asNum(r.现价)
-        : null
-  if (useMark == null || useMark <= 0) return null
-  if (!sold) {
-    const holding =
-      qty > 0 ||
-      pos.includes('持有') ||
-      pos === '已经买入' ||
-      pos === '待卖出'
-    if (!holding) return null
+  if (sold) {
+    const exit = asNum(r.成交价)
+    if (exit == null || exit <= 0) return null
+    return (exit / trigger - 1) * 100
   }
-  return (useMark / buy - 1) * 100
+  const mark = asNum(r.现价)
+  if (mark == null || mark <= 0) return null
+  return (mark / trigger - 1) * 100
 }
 </script>
 
@@ -195,8 +198,8 @@ function tradeIncomePct(r: HoldingRow): number | null {
       </div>
       <div class="mt-1 text-xs text-ui-text-3">
         策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）；
-        单笔收入%=(现价或成交价)/成本−1（含策略持有/实仓）；图例可点筛选，可多选。
-        点「日内涨跌 / 策略收益」表头可排序。已经买入=四槽实仓；已触买含今日已入槽；T+1 止损已记不算已触止损。
+        单笔收入%=自策略触发价至现价的理论收益率（触买后即算，无需入槽；≠持仓成本收益）；图例可点筛选，可多选。
+        点「日内涨跌 / 策略收益」表头可排序。已经买入=纸面实仓；已触买含今日已入槽；T+1 止损已记不算已触止损。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button
@@ -263,7 +266,7 @@ function tradeIncomePct(r: HoldingRow): number | null {
                   策略收益<span class="tabular-nums text-[10px]">{{ sortMark('strategyPnl') }}</span>
                 </button>
               </th>
-              <th class="px-3 py-2.5">单笔收入</th>
+              <th class="px-3 py-2.5" title="自策略触发价至现价的理论收益率（≠真实账户盈亏）">单笔收入</th>
               <th class="px-3 py-2.5">前日</th>
               <th class="px-3 py-2.5">过门</th>
               <th class="px-3 py-2.5">阈值</th>

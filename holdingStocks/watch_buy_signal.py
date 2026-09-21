@@ -280,6 +280,96 @@ def is_today_alert_row(row: dict[str, Any]) -> bool:
     return hit.startswith("已触发") or hit == "接近"
 
 
+def signal_trigger_price(row: dict[str, Any]) -> float | None:
+    """正式 BUY 信号触发价（冻结字段优先）。
+
+    真源：``已触发因子价``（``factor_memory.last_buy_factor_px`` / 触买瞬间买点）。
+    不得用开盘价冒充；未正式触发返回 None。
+    """
+    if str(row.get("已触发因子侧") or "") == "买入":
+        try:
+            px = float(row.get("已触发因子价"))
+        except (TypeError, ValueError):
+            px = 0.0
+        if px > 0 and px == px:
+            return px
+    # 当日已触买但记忆尚未写回：买点即触发阈值
+    if is_buy_hit(row):
+        for k in ("买点", "买入侧价", "已触发因子价"):
+            try:
+                px = float(row.get(k))
+            except (TypeError, ValueError):
+                continue
+            if px > 0 and px == px:
+                return px
+    return None
+
+
+def signal_single_return_pct(
+    *,
+    trigger: float | None,
+    mark: float | None,
+) -> float | None:
+    """SIGNAL TRADE RETURN：(mark / trigger - 1) * 100。非持仓/账户 P&L。"""
+    try:
+        t = float(trigger) if trigger is not None else 0.0
+        m = float(mark) if mark is not None else 0.0
+    except (TypeError, ValueError):
+        return None
+    if t <= 0 or m <= 0 or t != t or m != m:
+        return None
+    return round((m / t - 1.0) * 100.0, 2)
+
+
+def _row_is_signal_closed(row: dict[str, Any]) -> bool:
+    try:
+        qty = int(row.get("持仓") or 0)
+    except (TypeError, ValueError):
+        qty = 0
+    pos = str(row.get("持仓状态") or "")
+    return bool(
+        row.get("已实现")
+        or row.get("槽位留痕")
+        or row.get("三槽平仓")
+        or (
+            qty <= 0
+            and (
+                "平仓" in pos
+                or "已止损" in pos
+                or pos == "当日禁买"
+                or pos in ("今日平仓", "已平仓", "已触止损平仓")
+            )
+        )
+    )
+
+
+def enrich_signal_single_return(row: dict[str, Any]) -> None:
+    """只读 enrich：单笔收入% = 触发价→现价（或平仓价）理论收益率。
+
+    与真实持仓成本收益分离；无可靠触发价则置 None（显示 —）。
+    """
+    trigger = signal_trigger_price(row)
+    if trigger is None:
+        row["单笔收入%"] = None
+        return
+    if _row_is_signal_closed(row):
+        try:
+            fill = float(row.get("成交价"))
+        except (TypeError, ValueError):
+            fill = 0.0
+        if fill <= 0:
+            # 无可靠 signal→exit matching：不跟现价伪造已平仓收益
+            row["单笔收入%"] = None
+            return
+        mark: float | None = fill
+    else:
+        try:
+            mark = float(row.get("现价"))
+        except (TypeError, ValueError):
+            mark = None
+    row["单笔收入%"] = signal_single_return_pct(trigger=trigger, mark=mark)
+
+
 __all__ = [
     "ALERT_FILLED",
     "ALERT_HIT_BUY",
@@ -289,6 +379,7 @@ __all__ = [
     "ALERT_SLOT_FULL",
     "alert_text",
     "annotate_unfilled_buy_signals",
+    "enrich_signal_single_return",
     "gate_ok",
     "is_actionable_unfilled_buy",
     "is_buy_hit",
@@ -301,4 +392,6 @@ __all__ = [
     "is_today_alert_row",
     "is_weak_price_buy_alert",
     "price_touched_open_buy",
+    "signal_single_return_pct",
+    "signal_trigger_price",
 ]

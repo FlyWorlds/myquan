@@ -924,19 +924,114 @@ def watchlist_codes_label(watchlist: list[dict[str, Any]] | None = None) -> str:
     return " / ".join(w["code"] for w in items)
 
 
-# ── 四槽持仓（盯盘纸面）──────────────────────────────────────────
-MAX_PORTFOLIO_SLOTS = 4  # 盘中/隔夜均可同时持 4
+# ── Paper Portfolio Capital Allocation V2（单一真源）──────────────
+# 这是 Portfolio / Risk Allocation，不是 Factor26 信号规则。
+CAPITAL_ALLOCATION_VERSION = 2
+MAX_NEW_SYMBOLS_PER_SESSION = 2  # 每个交易日最多新增 symbol 数
+MAX_POSITION_WEIGHT = 0.20  # 单票入场目标 ≤ 账户权益 20%
+MAX_POSITION_SYMBOLS = 5  # 同时持仓 symbol 上限
+ALLOW_NEGATIVE_CASH_FOR_BUY = False  # 新 BUY 不得把现金打成负
+ALLOW_PYRAMIDING = False  # 已有 qty>0 不加仓
+LOT_SIZE = 100  # A 股一手
+
+# 兼容旧槽位字段名 → 一律映射到 V2（勿在别处再写魔法数）
+MAX_PORTFOLIO_SLOTS = MAX_POSITION_SYMBOLS
 RESERVE_EMPTY_SLOTS = 0  # 不再尾盘强制空槽
-MAX_OVERNIGHT_SLOTS = MAX_PORTFOLIO_SLOTS - RESERVE_EMPTY_SLOTS  # 隔夜最多 4
-# 兼容旧名：曾误作「盘中也最多2」；现仅表示隔夜上限
-MAX_ACTIVE_SLOTS = MAX_OVERNIGHT_SLOTS
-MAX_BUYS_PER_DAY = 4  # 当日最多买入次数（与四槽对齐，可买满 4）
+MAX_OVERNIGHT_SLOTS = MAX_PORTFOLIO_SLOTS - RESERVE_EMPTY_SLOTS
+MAX_ACTIVE_SLOTS = MAX_OVERNIGHT_SLOTS  # 兼容旧名=隔夜上限
+MAX_BUYS_PER_DAY = MAX_NEW_SYMBOLS_PER_SESSION  # = 当日新开仓 unique symbols
 RESERVE_SLOT_HOUR = 14
-RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓（现与盘中同为 4）
-SLOT_WEIGHT = 0.25  # 每槽约 2.5 成仓（4×25%）
+RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓
+SLOT_WEIGHT = MAX_POSITION_WEIGHT  # 入场目标权重
 DEFAULT_ACCOUNT_TOTAL = 300_000.0  # 纸面默认总资产；clear-all / 无登记时按此估槽金额
 # 平仓腾槽后：第一梯队（平仓前已触买）用现价成交，现价不得超过买点 +1%；其后新触发仍按买点
 SLOT_FIRST_TIER_MAX_OVERSHOOT = 0.01
+
+
+def target_position_notional(
+    equity: float,
+    *,
+    weight: float = MAX_POSITION_WEIGHT,
+) -> float:
+    """单票目标名义：account_equity_at_decision × weight（非 remaining_cash×weight）。"""
+    try:
+        eq = float(equity)
+        w = float(weight)
+    except (TypeError, ValueError):
+        return 0.0
+    if eq <= 0 or w <= 0:
+        return 0.0
+    return round(eq * w, 2)
+
+
+def lot_floor_qty(
+    notional: float,
+    price: float,
+    *,
+    lot: int = LOT_SIZE,
+) -> int:
+    """向下取整到 lot 股。"""
+    try:
+        n = float(notional)
+        px = float(price)
+        lot_i = int(lot)
+    except (TypeError, ValueError):
+        return 0
+    if n <= 0 or px <= 0 or lot_i <= 0:
+        return 0
+    return int(n // (px * lot_i)) * lot_i
+
+
+def capital_buy_qty(
+    *,
+    price: float,
+    equity: float,
+    cash: float | None,
+    weight: float = MAX_POSITION_WEIGHT,
+    allow_negative_cash: bool = ALLOW_NEGATIVE_CASH_FOR_BUY,
+    lot: int = LOT_SIZE,
+) -> tuple[int, str | None]:
+    """计算新开仓股数。
+
+    buy_qty = min(target_qty, affordable_qty)；cash_after >= 0。
+    返回 (qty, skip_reason)；qty==0 时 skip_reason 非空。
+    """
+    try:
+        px = float(price)
+        eq = float(equity)
+    except (TypeError, ValueError):
+        return 0, "INVALID_PRICE"
+    if px <= 0:
+        return 0, "INVALID_PRICE"
+    target = target_position_notional(eq, weight=weight)
+    target_qty = lot_floor_qty(target, px, lot=lot)
+    if target_qty < int(lot):
+        return 0, "INSUFFICIENT_CASH"
+
+    if cash is None:
+        return int(target_qty), None
+
+    try:
+        cash_f = float(cash)
+    except (TypeError, ValueError):
+        return int(target_qty), None
+
+    if not allow_negative_cash and cash_f < 0:
+        return 0, "NEGATIVE_CASH"
+
+    affordable = lot_floor_qty(cash_f, px, lot=lot)
+    if affordable < int(lot):
+        return 0, "INSUFFICIENT_CASH"
+
+    qty = min(int(target_qty), int(affordable))
+    if qty < int(lot):
+        return 0, "INSUFFICIENT_CASH"
+    # 浮点防护：确保扣款后现金非负
+    if not allow_negative_cash and cash_f - px * qty < -1e-9:
+        qty = lot_floor_qty(cash_f, px, lot=lot)
+        if qty < int(lot):
+            return 0, "INSUFFICIENT_CASH"
+    return int(qty), None
 
 
 def occupied_slot_codes(holdings: dict[str, Any]) -> list[str]:
@@ -968,10 +1063,10 @@ def free_buy_slot_count(
     reserve_for_close: bool | None = None,
     now: Any | None = None,
 ) -> int:
-    """可买入空槽。
+    """可买入空槽（相对 MAX_POSITION_SYMBOLS / MAX_PORTFOLIO_SLOTS）。
 
-    · 盘中：最多占满 MAX_PORTFOLIO_SLOTS（4）
-    · 尾盘窗口（默认 14:50 后）或 reserve_for_close=True：按隔夜上限 MAX_OVERNIGHT_SLOTS（现为 3）
+    · 盘中与隔夜上限现同为 MAX_POSITION_SYMBOLS（V2=5）
+    · 另受当日 MAX_NEW_SYMBOLS_PER_SESSION 约束（在入槽逻辑里单独计数）
     """
     if reserve_for_close is None:
         reserve_for_close = is_reserve_slot_window(now)
@@ -989,6 +1084,11 @@ def slot_meta(holdings: dict[str, Any], *, now: Any | None = None) -> dict[str, 
         "overnightMax": int(MAX_OVERNIGHT_SLOTS),
         "activeMax": int(MAX_OVERNIGHT_SLOTS),  # 兼容旧字段=隔夜上限
         "maxBuysPerDay": int(MAX_BUYS_PER_DAY),
+        "maxNewSymbolsPerSession": int(MAX_NEW_SYMBOLS_PER_SESSION),
+        "maxPositionWeight": float(MAX_POSITION_WEIGHT),
+        "maxPositionSymbols": int(MAX_POSITION_SYMBOLS),
+        "allowNegativeCashBuy": bool(ALLOW_NEGATIVE_CASH_FOR_BUY),
+        "capitalAllocationVersion": int(CAPITAL_ALLOCATION_VERSION),
         "reserveWindow": bool(reserve_mode),
         "weight": float(SLOT_WEIGHT),
         "occupied": occupied,

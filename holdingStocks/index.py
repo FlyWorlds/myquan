@@ -204,10 +204,17 @@ from watch_config import (
     MAX_OVERNIGHT_SLOTS,
     MAX_ACTIVE_SLOTS,
     MAX_BUYS_PER_DAY,
+    MAX_NEW_SYMBOLS_PER_SESSION,
+    MAX_POSITION_WEIGHT,
+    MAX_POSITION_SYMBOLS,
+    ALLOW_NEGATIVE_CASH_FOR_BUY,
+    ALLOW_PYRAMIDING,
+    LOT_SIZE,
     RESERVE_EMPTY_SLOTS,
     SLOT_WEIGHT,
     DEFAULT_ACCOUNT_TOTAL,
     SLOT_FIRST_TIER_MAX_OVERSHOOT,
+    capital_buy_qty,
     free_slot_count,
     free_buy_slot_count,
     is_reserve_slot_window,
@@ -217,6 +224,7 @@ from watch_config import (
     peek_slot_freed_at,
     append_slot_freed_at,
     pop_slot_freed_at,
+    target_position_notional,
 )
 from watch_snapshot import (
     SNAPSHOT_VERSION,
@@ -238,6 +246,7 @@ from watch_buy_signal import (
     ALERT_PRICE_NO_GATE,
     ALERT_SLOT_FULL,
     annotate_unfilled_buy_signals as _annotate_buy_signals_core,
+    enrich_signal_single_return,
     is_actionable_unfilled_buy,
     is_buy_hit as _row_hit_buy,
     is_buy_signal_active as _buy_signal_active,
@@ -3740,6 +3749,7 @@ def apply_paper_slot_buy(
 
     buy_time 用触发时刻（1m 触达或 5s 行情 last_ts），不是进程扫到的现在。
     成交价：新触发=买点；平仓前已触买的第一梯队=现价（不得超过买点 +1%）。
+    Capital V2：不允许加仓；不允许把现金买成负数（ALLOW_NEGATIVE_CASH_FOR_BUY=False）。
     """
     price = float(price)
     qty = int(qty)
@@ -3749,7 +3759,15 @@ def apply_paper_slot_buy(
     pos = data["positions"].setdefault(code, _empty_position(meta))
     old_qty = int(pos.get("qty") or 0)
     if old_qty > 0:
+        # NO PYRAMIDING：已有仓位不加仓
         return pos
+    cash = _account_cash(data)
+    notional = round(price * qty, 2)
+    if cash is not None and not ALLOW_NEGATIVE_CASH_FOR_BUY:
+        if cash < 0:
+            raise ValueError("NEGATIVE_CASH")
+        if cash + 1e-9 < notional:
+            raise ValueError("INSUFFICIENT_CASH")
     pos["qty"] = qty
     pos["cost"] = round(price, 4)
     pos["today_cost"] = round(price, 4)
@@ -3766,10 +3784,9 @@ def apply_paper_slot_buy(
     pos["note"] = note
     pos["name"] = meta["name"]
     pos["market"] = meta["market"]
-    cash = _account_cash(data)
     if cash is not None:
-        data["account_cash"] = round(cash - price * qty, 2)
-    # 负现金也要记交割余额
+        data["account_cash"] = round(cash - notional, 2)
+    # 负现金也要记交割余额（历史卖出路径）；新 BUY 上面已拦截
     try:
         cash_after = float(data.get("account_cash")) if data.get("account_cash") is not None else None
     except (TypeError, ValueError):
@@ -3798,7 +3815,7 @@ def apply_paper_slot_buy(
             "after_qty": qty,
             "avg_cost": pos["cost"],
             "cost": pos["cost"],
-            "amount": round(price * qty, 2),
+            "amount": notional,
             "account_cash_after": cash_after,
             "session": session,
             "reason": "买入入槽",
@@ -3848,11 +3865,11 @@ def _slot_notional_budget(
     rows: list[dict[str, Any]],
     occupied: list[str],
 ) -> float | None:
-    """单槽目标金额：总权益×30%；无总权益时默认按 DEFAULT_ACCOUNT_TOTAL×30%。"""
+    """单票目标金额：总权益 × MAX_POSITION_WEIGHT（V2=20%）。"""
     if account_total is not None and float(account_total) > 0:
-        return round(float(account_total) * float(SLOT_WEIGHT), 2)
+        return target_position_notional(float(account_total))
     if DEFAULT_ACCOUNT_TOTAL and float(DEFAULT_ACCOUNT_TOTAL) > 0:
-        return round(float(DEFAULT_ACCOUNT_TOTAL) * float(SLOT_WEIGHT), 2)
+        return target_position_notional(float(DEFAULT_ACCOUNT_TOTAL))
     mv = _holdings_market_value(rows)
     n = len(occupied)
     if n > 0 and mv > 0:
@@ -3860,8 +3877,13 @@ def _slot_notional_budget(
     return None
 
 
-def _paper_slot_qty(price: float, *, account_total: float | None = None) -> int:
-    """纸面单槽股数：30 万×30% / 价，向下取整到 100 股（与入槽成交同一口径）。"""
+def _paper_slot_qty(
+    price: float,
+    *,
+    account_total: float | None = None,
+    cash: float | None = None,
+) -> int:
+    """纸面单票目标股数：权益×权重 / 价，向下取整到一手；可选现金约束。"""
     try:
         px = float(price)
     except (TypeError, ValueError):
@@ -3874,10 +3896,15 @@ def _paper_slot_qty(price: float, *, account_total: float | None = None) -> int:
         equity = 0.0
     if equity <= 0:
         equity = float(DEFAULT_ACCOUNT_TOTAL)
-    budget = equity * float(SLOT_WEIGHT)
-    if budget <= 0:
-        return 0
-    return int(budget // (px * 100.0)) * 100
+    qty, _reason = capital_buy_qty(
+        price=px,
+        equity=equity,
+        cash=cash,
+        weight=float(SLOT_WEIGHT),
+        allow_negative_cash=bool(ALLOW_NEGATIVE_CASH_FOR_BUY),
+        lot=int(LOT_SIZE),
+    )
+    return int(qty)
 
 
 def today_slot_buy_ranks(
@@ -3923,12 +3950,18 @@ def today_slot_buy_ranks(
     return ranks
 
 
+def today_new_symbol_codes(
+    session: str,
+    *,
+    text: str | None = None,
+) -> list[str]:
+    """当日新开仓 unique symbols（从 trades.jsonl BUY 重建；restart 可恢复）。
 
-def today_slot_buy_count(session: str, *, text: str | None = None) -> int:
-    """当日纸面/槽位买入次数（trades.jsonl side=buy）。"""
+    第一版禁止加仓，故每条 BUY 即一次 NEW POSITION。SELL 不删除当日额度计数。
+    """
     day = str(session or "")[:10]
     if len(day) < 10:
-        return 0
+        return []
     raw = text
     if raw is None:
         try:
@@ -3936,7 +3969,8 @@ def today_slot_buy_count(session: str, *, text: str | None = None) -> int:
             raw = tp.read_text(encoding="utf-8") if tp.exists() else ""
         except OSError:
             raw = ""
-    n = 0
+    seen: list[str] = []
+    seen_set: set[str] = set()
     for line in str(raw or "").splitlines():
         line = line.strip()
         if not line:
@@ -3945,12 +3979,25 @@ def today_slot_buy_count(session: str, *, text: str | None = None) -> int:
             rec = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if str(rec.get("side") or "") != "buy":
+        if not isinstance(rec, dict):
+            continue
+        if str(rec.get("side") or "").lower() not in ("buy", "买入"):
             continue
         ts = str(rec.get("time") or rec.get("ts") or "")
-        if ts.startswith(day):
-            n += 1
-    return n
+        sess = str(rec.get("session") or "")[:10]
+        if not (ts.startswith(day) or sess == day):
+            continue
+        code = _code_key(str(rec.get("code") or ""))
+        if not code or code in seen_set:
+            continue
+        seen_set.add(code)
+        seen.append(code)
+    return seen
+
+
+def today_slot_buy_count(session: str, *, text: str | None = None) -> int:
+    """当日新开仓 unique symbol 数（= daily new symbols；非 BUY call 次数）。"""
+    return len(today_new_symbol_codes(session, text=text))
 
 
 def _apply_portfolio_slots(
@@ -3959,11 +4006,12 @@ def _apply_portfolio_slots(
     account_total: float | None,
     phase_now: str,
 ) -> dict[str, Any]:
-    """四槽：盘中可持 4；当日最多买 4；尾盘窗口按隔夜上限（现同为 4）。
+    """Capital V2：最多同时 MAX_POSITION_SYMBOLS；当日最多新增 MAX_NEW_SYMBOLS_PER_SESSION。
 
-    · 用户实仓 qty>0 占槽；可买空槽见 free_buy_slot_count（盘中/隔夜均为 3）
+    · 用户实仓 qty>0 占槽；可买空槽见 free_buy_slot_count
     · 入槽顺序：先平再买；平仓前已触买且现价≤买点+1% 优先、按触发先后、成交价=现价；否则平仓后新触发按时间、成交价=买点
-    · 止损平仓后释放槽位，但该票当日不可再买
+    · 单票目标 = 决策时权益 × MAX_POSITION_WEIGHT，再受 available cash 约束；不得负现金买入
+    · 止损平仓后释放总槽位，但当日新增额度不因 SELL 恢复；该票当日不可再买
     """
     data = load_holdings()
     try:
@@ -3978,13 +4026,17 @@ def _apply_portfolio_slots(
     occupied = occupied_slot_codes(data)
     free = free_buy_slot_count(data)
     occupied_set = set(occupied)
-    session = next(
-        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
-        str(pd.Timestamp.now().date()),
-    )
+    # 额度绑定 trading_session_date（与日结同源），不是自然日午夜
+    session = str(trading_session_date())
+    for r in rows:
+        day = str(r.get("交易日") or "")
+        if day and day != "-" and len(day) >= 10:
+            # 展示仍可用行情日；配额以日历交易日为准
+            break
     buy_ranks = today_slot_buy_ranks(session)
-    buys_done = today_slot_buy_count(session)
-    buys_left = max(0, int(MAX_BUYS_PER_DAY) - buys_done)
+    new_today = today_new_symbol_codes(session)
+    buys_done = len(new_today)
+    buys_left = max(0, int(MAX_NEW_SYMBOLS_PER_SESSION) - buys_done)
 
     try:
         from watch_config import strategy_watchlist_codes
@@ -4008,7 +4060,7 @@ def _apply_portfolio_slots(
             continue
         if bool(r.get("当日禁买")):
             continue
-        # 三槽只从当前默认策略池入场（strategy16=核心龙头）；旧 portfolio_pool 遗留票不买
+        # 只从当前默认策略池入场（strategy16=核心龙头）；旧 portfolio_pool 遗留票不买
         if code not in strategy_codes:
             continue
         pos = str(r.get("持仓状态") or "")
@@ -4032,6 +4084,7 @@ def _apply_portfolio_slots(
             r["槽位候选"] = True
 
     bought_codes: list[str] = []
+    skipped: list[dict[str, Any]] = []
     if phase_now == "continuous" and free > 0 and buys_left > 0:
         # 入槽：只吃「已触买」。先平再买；第一梯队现价、其后新触发买点
         hit_queue = [
@@ -4039,15 +4092,16 @@ def _apply_portfolio_slots(
             for rank, dist, code, r in candidates
             if _row_hit_buy(r)
         ]
-        budget = _slot_notional_budget(account_total, rows, occupied)
+        equity = float(account_total) if account_total and float(account_total) > 0 else float(
+            DEFAULT_ACCOUNT_TOTAL
+        )
         used: set[str] = set()
         while True:
             data = load_holdings()
             if free_buy_slot_count(data) <= 0:
                 break
-            if today_slot_buy_count(session) >= int(MAX_BUYS_PER_DAY):
-                break
-            if budget is None or budget <= 0:
+            opened = today_new_symbol_codes(session)
+            if len(opened) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
                 break
             freed_at = peek_slot_freed_at(data, session)
 
@@ -4104,8 +4158,22 @@ def _apply_portfolio_slots(
             if price <= 0:
                 used.add(code)
                 continue
-            qty = int(budget // (price * 100.0)) * 100
-            if qty < 100:
+            cash_now = _account_cash(data)
+            qty, skip_reason = capital_buy_qty(
+                price=price,
+                equity=equity,
+                cash=cash_now,
+                weight=float(MAX_POSITION_WEIGHT),
+                allow_negative_cash=bool(ALLOW_NEGATIVE_CASH_FOR_BUY),
+                lot=int(LOT_SIZE),
+            )
+            if qty < int(LOT_SIZE) or skip_reason:
+                reason = skip_reason or "INSUFFICIENT_CASH"
+                skipped.append({"code": code, "reason": reason})
+                note = str(r.get("挂单说明") or "")
+                tag = f"资金规则未开仓:{reason}"
+                r["挂单说明"] = f"{tag}；{note}" if note else tag
+                r["资金规则"] = reason
                 used.add(code)
                 continue
             meta = {
@@ -4123,8 +4191,21 @@ def _apply_portfolio_slots(
                     note=f"槽位触买(自动·{fill_kind})",
                     buy_time=_row_trigger_ts(r, side="buy"),
                 )
+            except ValueError as e:
+                reason = str(e) or "INSUFFICIENT_CASH"
+                skipped.append({"code": code, "reason": reason})
+                note = str(r.get("挂单说明") or "")
+                tag = f"资金规则未开仓:{reason}"
+                r["挂单说明"] = f"{tag}；{note}" if note else tag
+                r["资金规则"] = reason
+                used.add(code)
+                continue
             except Exception as e:  # noqa: BLE001
                 print(f"[{_now()}] 槽位自动买入失败 {code}: {e}")
+                used.add(code)
+                continue
+            # 加仓短路：apply 返回原仓且 qty 未变
+            if int(pos.get("qty") or 0) <= 0:
                 used.add(code)
                 continue
             used.add(code)
@@ -4140,18 +4221,19 @@ def _apply_portfolio_slots(
             r["因子侧"] = "持有"
             px_digits = int(r.get("价位小数") or 2)
             last = r.get("现价")
+            fill_qty = int(pos.get("qty") or qty)
             if last is not None and pos.get("cost") is not None:
                 try:
                     last_f = float(last)
                     cost_f = float(pos["cost"])
-                    pnl, pnl_pct = mark_unrealized(last_f, cost_f, qty)
+                    pnl, pnl_pct = mark_unrealized(last_f, cost_f, fill_qty)
                     r["浮盈"] = pnl
                     r["浮盈%"] = pnl_pct
-                    r["市值"] = round(last_f * qty, 2)
-                    r["成本额"] = round(cost_f * qty, 2)
+                    r["市值"] = round(last_f * fill_qty, 2)
+                    r["成本额"] = round(cost_f * fill_qty, 2)
                     day_pnl, day_pct, day_base = session_day_pnl(
                         mark=last_f,
-                        qty=qty,
+                        qty=fill_qty,
                         cost=cost_f,
                         prev_close=r.get("昨收"),
                         bought_today=True,
@@ -4163,20 +4245,42 @@ def _apply_portfolio_slots(
                 except (TypeError, ValueError):
                     pass
             note = str(r.get("挂单说明") or "")
-            fill_note = f"槽位自动买入{qty}股@{price:.{px_digits}f}（{fill_kind}）"
+            fill_note = f"槽位自动买入{fill_qty}股@{price:.{px_digits}f}（{fill_kind}）"
             r["挂单说明"] = f"{fill_note}；{note}" if note else fill_note
             remember_factor_trigger(
                 code,
                 side="buy",
                 px=price,
-                session=str(r.get("交易日") or pd.Timestamp.now().date()),
+                session=str(r.get("交易日") or session),
             )
+    elif phase_now == "continuous":
+        # 记录为何整轮无法买：总槽满 or 日新增额度满
+        if free <= 0:
+            block = "MAX_POSITION_SYMBOLS"
+        elif buys_left <= 0:
+            block = "DAILY_NEW_SYMBOL_LIMIT"
+        else:
+            block = None
+        if block:
+            for _rank, _dist, code, r in candidates:
+                if _row_hit_buy(r) and int(r.get("持仓") or 0) <= 0:
+                    note = str(r.get("挂单说明") or "")
+                    tag = f"资金规则未开仓:{block}"
+                    if tag not in note:
+                        r["挂单说明"] = f"{tag}；{note}" if note else tag
+                    r["资金规则"] = block
+                    skipped.append({"code": code, "reason": block})
 
     meta = _slot_meta_from_holdings(load_holdings())
     meta["candidates"] = sorted(selected_codes)
     meta["bought"] = bought_codes
-    meta["buysToday"] = today_slot_buy_count(session)
-    meta["buysLeft"] = max(0, int(MAX_BUYS_PER_DAY) - int(meta["buysToday"]))
+    meta["skipped"] = skipped
+    opened_now = today_new_symbol_codes(session)
+    meta["buysToday"] = len(opened_now)
+    meta["buysLeft"] = max(0, int(MAX_NEW_SYMBOLS_PER_SESSION) - len(opened_now))
+    meta["newSymbolsToday"] = opened_now
+    meta["newSymbolsLeft"] = meta["buysLeft"]
+    meta["session"] = session
     return meta
 
 
@@ -7834,6 +7938,7 @@ def collect_rows(
     for r in rows:
         _enrich_side_price_fields(r)
         _finalize_position_row(r)
+        enrich_signal_single_return(r)
         code = _code_key(str(r.get("代码") or ""))
         if code in portfolio_codes:
             _enrich_float_pnl(r)
@@ -7902,6 +8007,15 @@ def collect_rows(
         slot_info = _slot_meta_from_holdings(load_holdings())
         slot_info["candidates"] = []
         slot_info["bought"] = []
+        sess_q = str(trading_session_date())
+        opened_q = today_new_symbol_codes(sess_q)
+        slot_info["session"] = sess_q
+        slot_info["buysToday"] = len(opened_q)
+        slot_info["buysLeft"] = max(
+            0, int(MAX_NEW_SYMBOLS_PER_SESSION) - len(opened_q)
+        )
+        slot_info["newSymbolsToday"] = opened_q
+        slot_info["newSymbolsLeft"] = slot_info["buysLeft"]
         if eod_sold:
             slot_info["eodReserveSold"] = eod_sold
         if not quotes_ok:
@@ -7947,11 +8061,13 @@ def collect_rows(
     _annotate_unfilled_buy_signals(rows, slot_info)
     for r in rows:
         _finalize_position_row(r)
+        enrich_signal_single_return(r)
     for r in rows:
         if int(r.get("持仓") or 0) > 0:
             _forget_slot_closed(str(r.get("代码") or ""))
         _enrich_closed_day_pnl(r)
         _finalize_position_row(r)
+        enrich_signal_single_return(r)
     if rows:
         rows[0]["_slot_meta"] = slot_info
     return sort_watch_rows(rows)

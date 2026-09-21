@@ -90,17 +90,34 @@ class TestPaperPnl(unittest.TestCase):
         self.assertIsNone(idx._as_money(-10862.0))
 
     def test_cash_execution_invariant_buy_negative_then_sell(self) -> None:
+        """V2：现金不足一手不得买入；SELL 仍可把负现金路径冲正（历史仓）。"""
         self.book["account_cash"] = 100.0
         self.book["account_total"] = 100.0
-        idx.apply_paper_slot_buy(
-            code="600000",
-            meta={"name": "测试", "market": "上证"},
-            price=12.0,
-            qty=10,
-            note="unit-cash-inv",
-            buy_time="2026-09-18 09:35:00",
-        )
-        self.assertEqual(self.book["account_cash"], -20.0)
+        with self.assertRaises(ValueError):
+            idx.apply_paper_slot_buy(
+                code="600000",
+                meta={"name": "测试", "market": "上证"},
+                price=12.0,
+                qty=10,
+                note="unit-cash-inv",
+                buy_time="2026-09-18 09:35:00",
+            )
+        self.assertEqual(self.book["account_cash"], 100.0)
+        # 手工种入历史超配仓，验证卖出仍冲正现金
+        self.book["account_cash"] = -20.0
+        self.book["positions"]["600000"] = {
+            "name": "测试",
+            "market": "上证",
+            "qty": 10,
+            "available": 10,
+            "cost": 12.0,
+            "buy_time": "2026-09-18 09:35:00",
+            "today_cost": 12.0,
+            "tp_stage": 0,
+            "last_tp_ts": None,
+            "note": "",
+            "peak_high": 12.0,
+        }
         rec = idx.apply_exit_fill(
             code="600000",
             meta={"name": "测试", "market": "上证"},
@@ -117,6 +134,23 @@ class TestPaperPnl(unittest.TestCase):
         )
         self.assertEqual(rec.get("qty"), 10)
         self.assertEqual(self.book["account_cash"], 30.0)
+
+    def test_negative_cash_buy_still_debits(self) -> None:
+        """V2：负现金账户禁止新 BUY（不修历史现金）。"""
+        self.book["account_cash"] = -20.0
+        self.book["account_total"] = -20.0
+        with self.assertRaises(ValueError) as ctx:
+            idx.apply_paper_slot_buy(
+                code="600000",
+                meta={"name": "测试", "market": "上证"},
+                price=3.0,
+                qty=10,
+                note="unit-neg-buy",
+                buy_time="2026-09-18 09:35:00",
+            )
+        self.assertIn("NEGATIVE_CASH", str(ctx.exception))
+        self.assertEqual(self.book["account_cash"], -20.0)
+        self.assertEqual(int(self.book["positions"].get("600000", {}).get("qty") or 0), 0)
 
     def test_zero_cash_sell_credits(self) -> None:
         self.book["account_cash"] = 0.0
@@ -177,19 +211,6 @@ class TestPaperPnl(unittest.TestCase):
             px_digits=2,
             reason="unit-neg100",
             trade_note="unit-neg100",
-        )
-        self.assertEqual(self.book["account_cash"], -50.0)
-
-    def test_negative_cash_buy_still_debits(self) -> None:
-        self.book["account_cash"] = -20.0
-        self.book["account_total"] = -20.0
-        idx.apply_paper_slot_buy(
-            code="600000",
-            meta={"name": "测试", "market": "上证"},
-            price=3.0,
-            qty=10,
-            note="unit-neg-buy",
-            buy_time="2026-09-18 09:35:00",
         )
         self.assertEqual(self.book["account_cash"], -50.0)
 

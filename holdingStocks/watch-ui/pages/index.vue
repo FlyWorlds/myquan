@@ -178,9 +178,12 @@ const closedCount = computed(() => closedHoldings.value.length)
           <div v-if="slotHoldings.length" class="space-y-2">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <h2 class="text-sm font-semibold text-ui-text">
-                四槽持仓（置顶）
+                纸面持仓（置顶）
                 <span class="ml-1 font-normal text-ui-text-2">
-                  占槽 {{ slotMeta?.occupiedCount ?? 0 }}/{{ slotMeta?.max ?? 4 }}
+                  占槽 {{ slotMeta?.occupiedCount ?? 0 }}/{{ slotMeta?.max ?? 5 }}
+                  <template v-if="slotMeta?.maxNewSymbolsPerSession != null">
+                    · 今日新增 {{ slotMeta?.buysToday ?? 0 }}/{{ slotMeta?.maxNewSymbolsPerSession ?? 2 }}
+                  </template>
                 </span>
               </h2>
               <p class="text-xs text-ui-text-3">已经买入 / 待卖出 · 仅默认策略池入槽</p>

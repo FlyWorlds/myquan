@@ -30,9 +30,9 @@ def test_occupied_ignores_realized_and_zero_qty():
     assert occupied_slot_codes(holdings) == ["600552"]
     assert free_slot_count(holdings) == MAX_PORTFOLIO_SLOTS - 1
     meta = slot_meta(holdings)
-    assert meta["max"] == 4
+    assert meta["max"] == MAX_PORTFOLIO_SLOTS
     assert meta["weight"] == SLOT_WEIGHT
-    assert meta["free"] == 3
+    assert meta["free"] == MAX_PORTFOLIO_SLOTS - 1
     assert meta["occupiedCount"] == 1
 
 
@@ -173,14 +173,15 @@ def test_full_slots():
             "600301": {"qty": 200},
             "002104": {"qty": 300},
             "600330": {"qty": 100},
+            "000001": {"qty": 100},
         }
     }
     assert free_slot_count(holdings) == 0
-    assert len(occupied_slot_codes(holdings)) == 4
+    assert len(occupied_slot_codes(holdings)) == MAX_PORTFOLIO_SLOTS
 
 
 def test_stop_trace_in_slot_area_not_occupying():
-    """已平仓：槽位留痕不占槽；实仓仍可满 4。"""
+    """已平仓：槽位留痕不占槽；实仓可顶满 MAX_PORTFOLIO_SLOTS。"""
     from watch_snapshot import filter_portfolio_holdings
 
     rows = [
@@ -188,6 +189,7 @@ def test_stop_trace_in_slot_area_not_occupying():
         {"代码": "600301", "名称": "华锡", "持仓": 100, "持仓状态": "已经买入", "距买点%": 2},
         {"代码": "601020", "名称": "华钰", "持仓": 100, "持仓状态": "已经买入", "距买点%": 3},
         {"代码": "600338", "名称": "珠峰", "持仓": 100, "持仓状态": "已经买入", "距买点%": 4},
+        {"代码": "000001", "名称": "平安", "持仓": 100, "持仓状态": "已经买入", "距买点%": 5},
         {
             "代码": "600330",
             "名称": "天通",
@@ -200,13 +202,13 @@ def test_stop_trace_in_slot_area_not_occupying():
     ]
     picked = filter_portfolio_holdings(
         rows,
-        portfolio_codes={"600552", "600301", "601020", "600338", "600330"},
-        strategy_codes={"600552", "600301", "601020", "600338", "600330"},
+        portfolio_codes={"600552", "600301", "601020", "600338", "000001", "600330"},
+        strategy_codes={"600552", "600301", "601020", "600338", "000001", "600330"},
         phase="continuous",
     )
     pinned = [r for r in picked if r.get("置顶")]
     traces = [r for r in picked if r.get("槽位留痕")]
-    assert len(pinned) == 4
+    assert len(pinned) == MAX_PORTFOLIO_SLOTS
     assert all(int(r.get("持仓") or 0) > 0 for r in pinned)
     assert len(traces) == 1
     assert traces[0]["代码"] == "600330"
@@ -1087,9 +1089,9 @@ def test_filter_skips_paper_replay_closed():
 
 def test_closed_day_pnl_gap_open():
     """今日平仓：低开跌破止损，平仓价=开盘，当日浮亏相对昨收。"""
-    from index import _enrich_closed_day_pnl, _paper_slot_qty
+    from index import _enrich_closed_day_pnl
 
-    qty = _paper_slot_qty(47.67)
+    qty = 1500  # fixture lot（与成本公式解耦）
     row = {
         "代码": "601208",
         "持仓": 0,
@@ -1118,9 +1120,9 @@ def test_closed_day_pnl_gap_open():
 
 def test_closed_day_pnl_path_stop():
     """今日平仓：开盘已破买点硬保护，平仓价=开盘，不是更低的 T1 回落。"""
-    from index import _enrich_closed_day_pnl, _paper_slot_qty
+    from index import _enrich_closed_day_pnl
 
-    qty = _paper_slot_qty(36.35)
+    qty = 2000  # fixture lot
     row = {
         "代码": "000021",
         "持仓": 0,
@@ -1147,9 +1149,9 @@ def test_closed_day_pnl_path_stop():
 
 def test_closed_day_pnl_locks_stop_not_last():
     """已触止损但日线最低未到：仍按止损锁定，不跟现价。"""
-    from index import _enrich_closed_day_pnl, _paper_slot_qty
+    from index import _enrich_closed_day_pnl
 
-    qty = _paper_slot_qty(70.21)
+    qty = 1000  # fixture lot
     row = {
         "代码": "002636",
         "持仓": 0,
@@ -1290,7 +1292,7 @@ def test_enrich_keeps_realized_ledger_qty():
     _enrich_closed_day_pnl(
         row, lots={"601208": {"qty": 600, "cost": 47.67}}
     )
-    assert _paper_slot_qty(47.67) == 1500
+    assert _paper_slot_qty(47.67) == 1200  # V2: 300k×20%/47.67
     assert row["卖出数量"] == 600
     assert row["当日盈亏"] == -12.5
     assert row["三槽平仓"] is True

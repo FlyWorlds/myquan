@@ -53,7 +53,8 @@ export interface HoldingRow {
   盈亏状态?: string | null
   盈亏说明?: string | null
   已实现?: boolean
-  /** 单笔收入% 由前端用现价或成交价相对成本计算 */
+  /** 单笔收入%：信号触发价→现价理论收益（≠持仓成本/策略累计） */
+  '单笔收入%'?: number | null
   单笔收入?: number | null
   当日盈亏?: number | null
   '当日盈亏%'?: number | null

@@ -77,8 +77,8 @@ def filter_portfolio_holdings(
 ) -> list[dict[str, Any]]:
     """持仓 Tab：实仓 + 当日已平仓留痕 + 默认策略池当日买点预警。
 
-    排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS=4）→ 当日已平仓（不占槽）→ 预警/候选。
-    平仓 = 四槽实仓止损/止盈卖出清仓；当日留痕（槽位留痕=True）不占槽，下一交易日清空。
+    排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS）→ 当日已平仓（不占槽）→ 预警/候选。
+    平仓 = 纸面实仓止损/止盈卖出清仓；当日留痕（槽位留痕=True）不占槽，下一交易日清空。
     买点预警仅默认策略池（strategy16=核心龙头）；旧 portfolio_pool 空壳不进持仓 Tab。
     竞价：仍展示实仓 + 当日已平仓；其它空仓预警不进持仓 Tab。
     连续竞价与午休：当日买点预警进持仓 Tab。
@@ -542,6 +542,16 @@ def patch_row_live_quote(
                     changed = True
             except Exception:  # noqa: BLE001
                 pass
+    # 现价变了：重算策略信号「单笔收入%」（触发价冻结，不写 ledger）
+    try:
+        from watch_buy_signal import enrich_signal_single_return
+
+        before = row.get("单笔收入%")
+        enrich_signal_single_return(row)
+        if row.get("单笔收入%") != before:
+            changed = True
+    except Exception:  # noqa: BLE001
+        pass
     return changed
 
 
@@ -899,7 +909,16 @@ def build_watch_snapshot(
 
             slot_meta = _sm(load_holdings())
         except Exception:  # noqa: BLE001
-            slot_meta = {"max": 4, "weight": 0.25, "occupied": [], "occupiedCount": 0, "free": 4}
+            from watch_config import MAX_PORTFOLIO_SLOTS as _max_slots
+            from watch_config import SLOT_WEIGHT as _slot_w
+
+            slot_meta = {
+                "max": int(_max_slots),
+                "weight": float(_slot_w),
+                "occupied": [],
+                "occupiedCount": 0,
+                "free": int(_max_slots),
+            }
     return {
         "v": SNAPSHOT_VERSION,
         "type": "snapshot",
