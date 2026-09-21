@@ -59,10 +59,12 @@ class TestPaperPnl(unittest.TestCase):
         self._save = idx.save_holdings
         self._append = idx.append_trade
         self._remember = idx.remember_factor_trigger
+        self._cal = idx._calendar_signal_session
         idx.load_holdings = lambda: self.book
         idx.save_holdings = self._save_book
         idx.append_trade = lambda *_a, **_k: None
         idx.remember_factor_trigger = lambda *_a, **_k: None
+        idx._calendar_signal_session = lambda: "2026-09-18"
         self._wx = __import__("wechat_notify")
         self._wx_flag = self._wx._WATCH_WECHAT_ENABLED
         self._wx.set_watch_wechat_enabled(False)
@@ -75,6 +77,7 @@ class TestPaperPnl(unittest.TestCase):
         idx.save_holdings = self._save
         idx.append_trade = self._append
         idx.remember_factor_trigger = self._remember
+        idx._calendar_signal_session = self._cal
         self._wx._WATCH_WECHAT_ENABLED = self._wx_flag
 
     def test_negative_cash_is_readable(self) -> None:
@@ -360,6 +363,55 @@ class TestPaperPnl(unittest.TestCase):
         self.assertNotEqual(acc["dayPnlPct"], round(3239.0 / 516334.0 * 100.0, 2))
         self.assertNotEqual(acc["dayPnlPct"], 0.63)
         self.assertEqual(acc["totalPnlPct"], round(acc["totalPnl"] / 300000.0 * 100.0, 2))
+
+    def test_cross_day_preopen_uses_prev_settle_not_stale_open(self) -> None:
+        """周一盘前：日初=上周五收盘结算；上周五平仓不进今日盈亏；昨仓按昨收。"""
+        self.book = _book(
+            cash=-15000.0,
+            total=293784.0,
+            open_eq=290545.0,
+            session="2026-09-18",
+        )
+        self.book["daily_settlements"] = {
+            "2026-09-17": {"account_total": 290545.0, "total_pnl": -9455.0},
+            "2026-09-18": {
+                "account_total": 293784.0,
+                "total_pnl": -6216.0,
+                "day_pnl": 3239.0,
+            },
+        }
+        idx._calendar_signal_session = lambda: "2026-09-21"
+        # 盘前现价=昨收 → 昨仓今日盈亏应为 0；周五平仓残留不得计入
+        acc = idx._build_watch_account_summary(
+            [
+                {
+                    "代码": "000021",
+                    "持仓": 1900,
+                    "现价": 36.95,
+                    "昨收": 36.95,
+                    "成本": 36.98,
+                    "市值": 70205.0,
+                    "成本额": 70262.0,
+                    "当日盈亏": -57.0,
+                    "交易日": "2026-09-18",
+                },
+                {
+                    "代码": "600869",
+                    "持仓": 0,
+                    "已实现": True,
+                    "三槽平仓": True,
+                    "浮盈": -1122.0,
+                    "当日盈亏": 1419.0,
+                    "交易日": "2026-09-18",
+                },
+            ]
+        )
+        self.assertEqual(acc["accountOpen"], 293784.0)
+        self.assertEqual(self.book["account_total_open_session"], "2026-09-21")
+        self.assertEqual(acc["dayPnl"], 0.0)
+        self.assertEqual(acc["settledCount"], 0)
+        self.assertEqual(acc["totalPnl"], round(293784.0 - 300000.0, 2))
+        self.assertEqual(acc["totalPnl"], -6216.0)
 
     def test_account_today_return_zero_or_invalid_open_is_none(self) -> None:
         from watch_snapshot import account_today_return_pct, apply_day_linked_account_equity

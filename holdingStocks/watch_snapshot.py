@@ -300,8 +300,14 @@ def rebase_holdings_day_pnl(
     for r in holdings:
         row = dict(r)
         qty = int(row.get("持仓") or 0)
+        old_sess = str(row.get("交易日") or "")[:10]
         row["交易日"] = sess
         if qty <= 0:
+            # 隔日平仓留痕：清空当日盈亏，避免盘前仍计入账户「今日」
+            if old_sess and old_sess != sess:
+                row["当日盈亏"] = None
+                row["当日盈亏%"] = None
+                row["当日基数"] = None
             out.append(row)
             continue
         buy = str(row.get("买入时间") or "")[:10]
@@ -454,7 +460,23 @@ def patch_row_live_quote(
         row["昨收"] = round(prev, digits)
         if old_prev != row["昨收"]:
             changed = True
-        chg = round((last / prev - 1.0) * 100.0, 2)
+        try:
+            from trading_day import current_trading_session, sanitize_day_change_for_session
+        except ImportError:  # pragma: no cover
+            from holdingStocks.trading_day import (
+                current_trading_session,
+                sanitize_day_change_for_session,
+            )
+
+        q_sess = None
+        if quote:
+            q_sess = quote.get("session")
+        chg = sanitize_day_change_for_session(
+            quote_session=q_sess or row.get("交易日"),
+            calendar_session=current_trading_session(),
+            mark=last,
+            previous_close=prev,
+        )
         if row.get("当日涨幅") != chg:
             row["当日涨幅"] = chg
             changed = True

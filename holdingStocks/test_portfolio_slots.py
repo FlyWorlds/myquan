@@ -1374,6 +1374,7 @@ def test_account_summary_sums_hold_and_closed_day_pnl():
                 "当日盈亏": 3575.0,
                 "市值": 90000.0,
                 "成本额": 86000.0,
+                "交易日": "2026-09-18",
             },
             {
                 "代码": "601208",
@@ -1385,6 +1386,7 @@ def test_account_summary_sums_hold_and_closed_day_pnl():
                 "开盘": 46.97,
                 "卖出数量": 1800,
                 "成本": 47.67,
+                "交易日": "2026-09-18",
             },
             {
                 "代码": "000021",
@@ -1396,14 +1398,17 @@ def test_account_summary_sums_hold_and_closed_day_pnl():
                 "开盘": 35.21,
                 "卖出数量": 2400,
                 "成本": 36.35,
+                "交易日": "2026-09-18",
             },
             {
                 "代码": "000657",
                 "持仓": 0,
                 "持仓状态": "今日平仓",
                 "当日盈亏": -9999.0,
+                "交易日": "2026-09-18",
             },
-        ]
+        ],
+        session="2026-09-18",
     )
     assert acc["dayPnl"] == round(3575.0 + 0.0 - 2136.0, 2)
     assert acc["settledCount"] == 2
@@ -1426,6 +1431,7 @@ def test_account_summary_ignores_fake_slot_closed_without_realized():
                 "当日盈亏": 100.0,
                 "市值": 1000.0,
                 "成本额": 900.0,
+                "交易日": "2026-09-18",
             },
             {
                 "代码": "601208",
@@ -1434,8 +1440,10 @@ def test_account_summary_ignores_fake_slot_closed_without_realized():
                 "当日盈亏": -999.0,
                 "浮盈": -999.0,
                 "卖出数量": 1800,
+                "交易日": "2026-09-18",
             },
-        ]
+        ],
+        session="2026-09-18",
     )
     assert acc["dayPnl"] == 100.0
     assert acc["settledCount"] == 0

@@ -72,6 +72,28 @@ from quote_feed import (
     fetch_sina_batch,
     fill_preopen_ohlc,
 )
+try:
+    from trading_day import (  # noqa: E402
+        SETTLE_KIND_POSITION,
+        build_position_settlement_marks,
+        current_trading_session,
+        needs_session_rollover,
+        overnight_preopen_quote,
+        previous_trading_session,
+        promote_quote_session,
+        sanitize_day_change_for_session,
+    )
+except ImportError:  # pragma: no cover - package import path
+    from holdingStocks.trading_day import (  # noqa: E402
+        SETTLE_KIND_POSITION,
+        build_position_settlement_marks,
+        current_trading_session,
+        needs_session_rollover,
+        overnight_preopen_quote,
+        previous_trading_session,
+        promote_quote_session,
+        sanitize_day_change_for_session,
+    )
 from strategy.akq_math import mark_unrealized, price_chg_pct, session_day_pnl, simple_return
 from strategy.minute import pull_akshare_1m
 from strategy import get_strategy_bindings
@@ -836,17 +858,42 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
     return 404, {"error": "not found"}
 
 
-def _row_counts_in_watch_pnl(row: dict[str, Any]) -> bool:
-    """账户今日盈亏：仅实仓 + 当日真实纸面卖出（已实现/三槽平仓）。不含策略回放假平仓。"""
+def _calendar_signal_session() -> str:
+    """账户日初/结算用的日历信号日（周一～周五为当日；周末锚定上周五）。"""
+    return current_trading_session()
+
+
+def _promote_quote_session(session: Any) -> str:
+    """行情盘前常仍标上一交易日；信号/账户日与日历对齐。"""
+    return promote_quote_session(session)
+
+
+def _row_session_day(row: dict[str, Any]) -> str:
+    return str(row.get("交易日") or "")[:10]
+
+
+def _row_counts_in_watch_pnl(
+    row: dict[str, Any],
+    *,
+    session: str | None = None,
+) -> bool:
+    """账户今日盈亏：仅实仓 + 当日真实纸面卖出（已实现/三槽平仓）。不含策略回放假平仓。
+
+    ``session`` 给定时：隔日平仓留痕不计入（盘前行情交易日滞后时尤甚）。
+    """
     if row.get("error"):
         return False
     try:
         qty = int(row.get("持仓") or 0)
     except (TypeError, ValueError):
         qty = 0
+    day = str(session or "")[:10]
+    row_day = _row_session_day(row)
     if qty > 0:
         return True
     if bool(row.get("已实现")) or bool(row.get("三槽平仓")):
+        if day and row_day and row_day != day:
+            return False
         return True
     return False
 
@@ -942,6 +989,8 @@ def record_daily_settlement(
         "recorded_at": _now(),
         "final": bool(is_final),
         "draft": not is_final,
+        # POSITION_SETTLEMENT：收盘盯市；绝非 POSITION_EXIT / SELL
+        "settle_kind": SETTLE_KIND_POSITION,
         "account_total": account.get("accountTotal"),
         "account_open": account.get("accountOpen"),
         "paper_equity_base": account.get("paperEquityBase") or _paper_equity_base(data),
@@ -955,6 +1004,7 @@ def record_daily_settlement(
         "settled_count": account.get("settledCount") or 0,
         "settled_day_pnl": account.get("settledDayPnl"),
         "positions": pos_lines,
+        "closing_marks": build_position_settlement_marks(rows),
         "closed_today": closed_lines,
     }
     # 草稿无变化则不写盘
@@ -1040,13 +1090,57 @@ def settle_previous_session_if_needed(*, session: str | None = None) -> None:
     record_daily_settlement(session=prev, account=acc, rows=[], force=True)
 
 
-def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _day_pnl_for_account_row(
+    row: dict[str, Any],
+    *,
+    session: str,
+) -> float | None:
+    """账户加总用的单票当日盈亏：隔日平仓不计；昨仓交易日滞后时按昨收重算。"""
+    if not _row_counts_in_watch_pnl(row, session=session):
+        return None
+    try:
+        qty = int(row.get("持仓") or 0)
+    except (TypeError, ValueError):
+        qty = 0
+    row_day = _row_session_day(row)
+    if qty > 0 and row_day and row_day < str(session)[:10]:
+        try:
+            last_f = float(row["现价"]) if row.get("现价") is not None else None
+            cost_f = float(row["成本"]) if row.get("成本") is not None else None
+        except (TypeError, ValueError):
+            return None
+        day_pnl, _, _ = session_day_pnl(
+            mark=last_f,
+            qty=qty,
+            cost=cost_f,
+            prev_close=row.get("昨收"),
+            bought_today=False,
+            fallback=None,
+        )
+        return float(day_pnl) if day_pnl is not None else None
+    if row.get("当日盈亏") is None:
+        return None
+    try:
+        return float(row["当日盈亏"])
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_watch_account_summary(
+    rows: list[dict[str, Any]],
+    *,
+    session: str | None = None,
+) -> dict[str, Any]:
     """账户合计（JSON 快照 / CLI 共用口径）。
 
     · 今日盈亏：实仓 session_day_pnl + 当日已实现 day_pnl（只认今日平仓）
     · 总资产：日初锁定 + 今日盈亏（与分票加总同动；回退现金+市值）
     · 总收益：总资产 − 纸面本金（自 PAPER_PNL_START / 默认 9/9）
+    · 日初锚 session 默认用日历信号日，不用行情滞后的行上「交易日」
     """
+    session_for_open = (
+        str(session)[:10] if session else _calendar_signal_session()
+    )
     total_day_pnl = 0.0
     total_mv = 0.0
     total_mv_no_cost = 0.0
@@ -1058,16 +1152,17 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     for r in rows:
         qty = int(r.get("持仓") or 0)
         realized = bool(r.get("已实现"))
-        in_pnl = _row_counts_in_watch_pnl(r)
-        if r.get("当日盈亏") is not None and in_pnl:
-            total_day_pnl += float(r["当日盈亏"])
+        in_pnl = _row_counts_in_watch_pnl(r, session=session_for_open)
+        day_v = _day_pnl_for_account_row(r, session=session_for_open)
+        if day_v is not None and in_pnl:
+            total_day_pnl += day_v
             has_day = True
-        if realized:
+        if realized and in_pnl:
             settled_n += 1
             if r.get("浮盈") is not None:
                 settled_pnl += float(r["浮盈"])
-            if r.get("当日盈亏") is not None:
-                settled_day += float(r["当日盈亏"])
+            if day_v is not None:
+                settled_day += day_v
         if r.get("市值") is not None and qty > 0:
             mv = float(r["市值"])
             total_mv += mv
@@ -1082,10 +1177,6 @@ def _build_watch_account_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         holdings_meta = load_holdings()
     account_total = _account_total(rows, holdings_meta)
     available_cash = _available_cash(rows, holdings_meta)
-    session_for_open = next(
-        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
-        str(pd.Timestamp.now().date()),
-    )
     _ensure_account_open_session(
         holdings_meta,
         session=session_for_open,
@@ -1384,15 +1475,14 @@ def publish_watch_snapshot(
 
     portfolio_codes = set(portfolio_pool_codes(holdings_meta))
     account = _build_watch_account_summary(rows)
-    session_today = next(
+    # 账户/结算 session 跟日历；行上交易日盘前常滞后，不得拖慢日初锚
+    session_today = _calendar_signal_session()
+    row_sess = next(
         (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
         "",
     )
-    if not session_today:
-        try:
-            session_today = str(trading_session_date())
-        except Exception:  # noqa: BLE001
-            session_today = str(pd.Timestamp.now().date())
+    if row_sess and str(row_sess)[:10] > session_today:
+        session_today = str(row_sess)[:10]
     try:
         maybe_record_daily_settlement(
             rows, account, session=session_today or None
@@ -1725,9 +1815,16 @@ def _quote_from_sina_spot(spot: dict[str, Any]) -> dict[str, Any]:
     """新浪快照 → collect_rows 可用的 quote dict（无分钟 K）。"""
     prev = spot.get("prev_close")
     last = float(spot["last"])
-    day_chg = price_chg_pct(last, prev)
+    sess = promote_quote_session(spot.get("session"))
+    day_chg = sanitize_day_change_for_session(
+        quote_session=spot.get("session"),
+        calendar_session=sess,
+        mark=last,
+        previous_close=prev,
+        day_chg_pct=price_chg_pct(last, prev),
+    )
     return {
-        "session": str(spot.get("session") or pd.Timestamp.now().date()),
+        "session": sess,
         "open": float(spot["open"]),
         "high": float(spot["high"]),
         "low": float(spot["low"]),
@@ -1754,19 +1851,16 @@ def _quote_from_daily_prev(daily: pd.DataFrame | None) -> dict[str, Any] | None:
     if close <= 0:
         return None
     date = str(last.get("date") or "")
-    return {
-        "session": str(pd.Timestamp.now().date()),
-        "open": close,
-        "high": close,
-        "low": close,
-        "last": close,
-        "prev_close": close,
-        "day_chg_pct": 0.0,
-        "last_ts": f"{date} 15:00:00" if date else _now(),
-        "name": "",
-        "_day_bars": pd.DataFrame(),
-        "_quote_source": "daily_prev",
-    }
+    sess = str(trading_session_date())
+    q = overnight_preopen_quote(
+        calendar_session=sess,
+        previous_close=close,
+        last_ts=f"{date} 15:00:00" if date else _now(),
+    )
+    q["_day_bars"] = pd.DataFrame()
+    q["_quote_source"] = "daily_prev"
+    q["name"] = ""
+    return q
 
 
 def _reseed_sina_batch(
@@ -2077,7 +2171,7 @@ def _strategy_pnl_since_cached(
     limit_down_pct: float,
 ) -> dict[str, Any]:
     """自 STRATEGY_PNL_START 起的单票策略收益（日线+盘中末 bar）。"""
-    today = str(pd.Timestamp.now().date())
+    today = str(trading_session_date())
     live_sig = (
         f"{q.get('session')}:{q.get('open')}:{q.get('high')}:"
         f"{q.get('low')}:{q.get('last')}"
@@ -2735,10 +2829,28 @@ def purge_fake_slot_closed(data: dict[str, Any], session: str) -> int:
 
 
 def heal_watch_ledger(*, session: str | None = None) -> dict[str, Any]:
-    """每轮自愈：隔夜解锁、修复仅现金日初、清掉非法「止损已记」/假三槽平仓。不改 qty / 成本 / 买入时间。"""
+    """每轮自愈：隔夜解锁、修复仅现金日初、清掉非法「止损已记」/假三槽平仓。不改 qty / 成本 / 买入时间。
+
+    跨日（含盘前，不依赖正好 9:15 在线）：
+    · 补记上一交易日 POSITION_SETTLEMENT 终稿（若缺）
+    · 清非当日 realized/closed（今日平仓归零）
+    · 日初锚滚到昨收结算 closing_equity
+    同日重复执行幂等，不二次 rollover。
+    """
     data = load_holdings()
     sess = normalize_signal_session(session or trading_session_date())
+    if needs_session_rollover(data, session=sess):
+        settle_previous_session_if_needed(session=sess)
+        data = load_holdings()
     changed = unlock_overnight_available(data, sess)
+    n_real = len(data.get("realized_today") or {})
+    n_closed = len(data.get("closed_today") or {})
+    _purge_stale_realized(data, sess)
+    if (
+        len(data.get("realized_today") or {}) != n_real
+        or len(data.get("closed_today") or {}) != n_closed
+    ):
+        changed = True
     if purge_illegal_t1_stop_notes(data) > 0:
         changed = True
     if purge_fake_slot_closed(data, sess) > 0:
@@ -2753,8 +2865,19 @@ def heal_watch_ledger(*, session: str | None = None) -> dict[str, Any]:
     if not isinstance(q, dict) or str(q.get("session") or "")[:10] != str(sess)[:10]:
         data["slot_queue"] = {"session": str(sess)[:10], "freed_at": []}
         changed = True
+    if str(data.get("last_session") or "")[:10] != str(sess)[:10]:
+        data["last_session"] = str(sess)[:10]
+        changed = True
     if changed:
         save_holdings(data)
+        data = load_holdings()
+    open_sess = str(data.get("account_total_open_session") or "")[:10]
+    if open_sess != str(sess)[:10]:
+        _ensure_account_open_session(
+            data,
+            session=sess,
+            account_total=_as_money(data.get("account_total")),
+        )
         data = load_holdings()
     return data
 
@@ -5689,8 +5812,9 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     """用1分钟线拼当日开高低；现价优先新浪实时，避免分钟末根滞后。
 
     分钟线优先框架 akshare：东财 `stock_zh_a_hist_min_em` → 新浪备用。
+    session / 涨跌幅一律相对 ``trading_session_date``，禁止沿用上一交易日 day change。
     """
-    today = str(pd.Timestamp.now().date())
+    today = str(trading_session_date())
     spot = fetch_sina_spot(sina)
 
     day = pd.DataFrame()
@@ -5718,7 +5842,8 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
                 if not prev_day.empty:
                     prev_close = float(prev_day.iloc[-1]["close"])
 
-    spot_ok = spot is not None and str(spot.get("session") or "") == today
+    spot_sess = promote_quote_session(spot.get("session") if spot else None)
+    spot_ok = spot is not None and spot_sess == today
 
     # 当日分钟线已到：OHLC 用分钟，现价优先新浪实时
     if not day.empty:
@@ -5742,7 +5867,12 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
                 open_px = float(spot["open"])
         elif prev_close is None and spot is not None:
             prev_close = float(spot["prev_close"])
-        day_chg = price_chg_pct(last_px, prev_close)
+        day_chg = sanitize_day_change_for_session(
+            quote_session=today,
+            calendar_session=today,
+            mark=last_px,
+            previous_close=prev_close,
+        )
         return {
             "session": today,
             "open": open_px,
@@ -5759,7 +5889,12 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     if spot_ok:
         prev_close = float(spot["prev_close"])
         last_px = float(spot["last"])
-        day_chg = price_chg_pct(last_px, prev_close)
+        day_chg = sanitize_day_change_for_session(
+            quote_session=today,
+            calendar_session=today,
+            mark=last_px,
+            previous_close=prev_close,
+        )
         return {
             "session": today,
             "open": float(spot["open"]),
@@ -5772,7 +5907,8 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
             "_day_bars": pd.DataFrame(),
         }
 
-    # 非交易时段：退回最近一个交易日全日分钟线
+    # 非交易时段 / 新交易日盘前：退回最近一个交易日全日分钟线，
+    # 但涨跌幅必须清零（现价=昨收），禁止沿用上一交易日 day change。
     if df.empty:
         raise RuntimeError(f"无分钟行情: {sina}")
     df = df.copy()
@@ -5785,6 +5921,15 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     day = day[(day["open"] > 0) & (day["high"] > 0) & (day["low"] > 0) & (day["close"] > 0)]
     if day.empty:
         raise RuntimeError(f"当日无有效分钟线: {sina}")
+    last_px = float(day.iloc[-1]["close"])
+    last_ts = str(day.iloc[-1]["ts"])
+    if str(last_day) < today:
+        # 新 session 尚无有效现价：昨收盯市，涨跌幅=0
+        return overnight_preopen_quote(
+            calendar_session=today,
+            previous_close=last_px,
+            last_ts=last_ts,
+        ) | {"_day_bars": pd.DataFrame()}
     prev = df[day_keys < last_day].copy()
     if not prev.empty:
         prev["close"] = pd.to_numeric(prev["close"], errors="coerce")
@@ -5797,18 +5942,21 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     open_px = float(day.iloc[0]["open"])
     high_px = float(day["high"].max())
     low_px = float(day["low"].min())
-    last_px = float(day.iloc[-1]["close"])
-    last_ts = day.iloc[-1]["ts"]
-    day_chg = price_chg_pct(last_px, prev_close)
+    day_chg = sanitize_day_change_for_session(
+        quote_session=last_day,
+        calendar_session=today,
+        mark=last_px,
+        previous_close=prev_close,
+    )
     return {
-        "session": last_day,
+        "session": today,
         "open": open_px,
         "high": high_px,
         "low": low_px,
         "last": last_px,
         "prev_close": prev_close,
         "day_chg_pct": day_chg,
-        "last_ts": str(last_ts),
+        "last_ts": last_ts,
         "_day_bars": day,
     }
 
@@ -6096,7 +6244,7 @@ def collect_rows(
         pct_pct = pct_label  # 卡片「阈值%」展示文案
         try:
             q = dict(quote_fn(w["sina"]) or {})
-            q["session"] = normalize_signal_session(q.get("session"))
+            q["session"] = _promote_quote_session(q.get("session"))
             session_today = q["session"]
             daily = _watch_daily(w["sina"])
             if USE_FACTOR4:
@@ -9499,10 +9647,7 @@ def cmd_review(args: argparse.Namespace) -> None:
     holdings_meta = load_holdings()
     account_total = _account_total(rows, holdings_meta)
     available = _available_cash(rows, holdings_meta)
-    session_for_open = next(
-        (str(r.get("交易日")) for r in rows if r.get("交易日") and r.get("交易日") != "-"),
-        str(pd.Timestamp.now().date()),
-    )
+    session_for_open = _calendar_signal_session()
     _ensure_account_open_session(
         holdings_meta,
         session=session_for_open,
