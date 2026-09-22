@@ -53,6 +53,8 @@ class TestWechatNotifyN1(unittest.TestCase):
         self._prev_state = wn.STATE_FILE
         wn.STATE_FILE = self._state
         wn.set_watch_wechat_enabled(True)
+        wn.set_async_delivery(False)
+        wn.reset_wechat_delivery_state_for_tests()
         self._cfg = {"enabled": True, "cooldown_sec": 60, "target": "test"}
         self._sent: list[str] = []
 
@@ -65,7 +67,9 @@ class TestWechatNotifyN1(unittest.TestCase):
 
     def tearDown(self) -> None:
         self._send_patch.stop()
+        wn.set_async_delivery(True)
         wn.set_watch_wechat_enabled(None)
+        wn.reset_wechat_delivery_state_for_tests()
         wn.STATE_FILE = self._prev_state
         self._tmpdir.cleanup()
 

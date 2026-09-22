@@ -13,9 +13,11 @@ import subprocess
 import sys
 import threading
 import time
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from watch_buy_signal import ALERT_PRICE_NO_GATE, is_buy_hit, is_weak_price_buy_alert
 
@@ -24,23 +26,598 @@ _SEND_LOCK = threading.Lock()
 _LAST_SEND_TS = 0.0
 # None=跟随 wechat_notify.json enabled；False=watch --no-wechat（成交+预警都不发）
 _WATCH_WECHAT_ENABLED: bool | None = None
+# True=盘中入队由 worker 发送（不阻塞盯盘）；False=同步发送（单测/复盘 CLI）
+_ASYNC_DELIVERY: bool = True
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_FILE = ROOT / "wechat_notify.json"
 STATE_FILE = ROOT / "wechat_alert_state.json"
 
-# 预警优先级：P0=因子已触发；P1=触发预警带（内部去重键；对外文案统一【策略预警】）
-PRIORITY_P0 = "P0"  # 因子已触发
-PRIORITY_P1 = "P1"  # 触发预警带
-KIND_P0 = "因子已触发"
-KIND_P1 = "触发预警带"
-KIND_ALERT = "策略预警"
+# 发送错误分类
+ERR_OK = "OK"
+ERR_SESSION_INVALID = "SESSION_INVALID"  # CONTEXT_TOKEN_INVALID / prepare failed
+ERR_TRANSIENT = "TRANSIENT"
+ERR_OTHER = "OTHER"
+
+
+# ---------------------------------------------------------------------------
+# 通道健康状态 + pending 队列 + 异步投递 worker
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class WechatChannelState:
+    healthy: bool = True
+    session_invalid: bool = False
+    last_success_at: float | None = None
+    last_failure_at: float | None = None
+    consecutive_failures: int = 0
+    session_invalid_since: float | None = None
+    last_action_required_at: float | None = None
+    last_session_invalid_log_at: float | None = None
+    token_mtime_at_invalid: float | None = None
+
+
+@dataclass
+class PendingNotification:
+    dedupe_key: str
+    message: str
+    code: str
+    alert_type: str
+    is_fill: bool = False
+    enqueued_at: float = field(default_factory=time.time)
+    summary: str = ""
+
+
+_channel_state = WechatChannelState()
+_pending: OrderedDict[str, PendingNotification] = OrderedDict()
+_pending_lock = threading.RLock()
+_worker_thread: threading.Thread | None = None
+_worker_stop = threading.Event()
+_worker_wake = threading.Event()
+_storm_last: dict[str, float] = {}  # (code|alert_type) -> last enqueue/send attempt
+
+
+def get_wechat_channel_state() -> dict[str, Any]:
+    """只读健康快照（测试/诊断）。"""
+    with _pending_lock:
+        st = _channel_state
+        return {
+            "healthy": st.healthy,
+            "session_invalid": st.session_invalid,
+            "last_success_at": st.last_success_at,
+            "last_failure_at": st.last_failure_at,
+            "consecutive_failures": st.consecutive_failures,
+            "session_invalid_since": st.session_invalid_since,
+            "pending_notification_count": len(_pending),
+            "last_wechat_success_at": st.last_success_at,
+            "last_wechat_failure_at": st.last_failure_at,
+            "wechat_session_invalid_since": st.session_invalid_since,
+        }
+
+
+def _wechat_log(msg: str) -> None:
+    _safe_print(f"[{_now()}] [WECHAT] {msg}")
+
+
+def _mark_send_success() -> None:
+    st = _channel_state
+    st.healthy = True
+    st.session_invalid = False
+    st.last_success_at = time.time()
+    st.consecutive_failures = 0
+    st.session_invalid_since = None
+    st.token_mtime_at_invalid = None
+
+
+def _mark_session_invalid(*, detail: str = "") -> None:
+    st = _channel_state
+    now = time.time()
+    was = st.session_invalid
+    st.healthy = False
+    st.session_invalid = True
+    st.last_failure_at = now
+    st.consecutive_failures = int(st.consecutive_failures or 0) + 1
+    if st.session_invalid_since is None:
+        st.session_invalid_since = now
+    if st.token_mtime_at_invalid is None:
+        st.token_mtime_at_invalid = _context_token_mtime()
+    # 避免每秒刷屏
+    if not was or (
+        st.last_session_invalid_log_at is None
+        or (now - st.last_session_invalid_log_at) >= 60.0
+    ):
+        st.last_session_invalid_log_at = now
+        _wechat_log("prepare failed -> session invalid")
+        _wechat_log("pause outbound delivery")
+        _wechat_log("waiting for inbound session refresh")
+        if detail:
+            _wechat_log(f"detail: {detail[:160]}")
+
+
+def _mark_transient_failure() -> None:
+    st = _channel_state
+    st.last_failure_at = time.time()
+    st.consecutive_failures = int(st.consecutive_failures or 0) + 1
+
+
+def _maybe_action_required(cfg: dict[str, Any]) -> None:
+    st = _channel_state
+    if not st.session_invalid or st.session_invalid_since is None:
+        return
+    threshold = float(cfg.get("session_action_log_sec") or 300)
+    elapsed = time.time() - float(st.session_invalid_since)
+    if elapsed < threshold:
+        return
+    now = time.time()
+    if st.last_action_required_at and (now - st.last_action_required_at) < threshold:
+        return
+    st.last_action_required_at = now
+    pending_n = 0
+    with _pending_lock:
+        pending_n = len(_pending)
+    _safe_print(
+        f"[{_now()}] [WECHAT][ACTION REQUIRED]\n"
+        f"微信会话仍未恢复（已 {elapsed/60:.1f} 分钟，pending={pending_n}），"
+        f"请给机器人发送任意消息以刷新会话。\n"
+        f"或: openclaw channels login --channel openclaw-weixin"
+    )
+
+
+def classify_send_error(detail: str | None) -> str:
+    """解析 openclaw 输出：SESSION_INVALID / TRANSIENT / OTHER。"""
+    d = (detail or "").lower()
+    if not d:
+        return ERR_OTHER
+    if (
+        "prepare failed" in d
+        or "ret=-2" in d
+        or "contexttoken missing" in d
+        or ("context_token" in d and "missing" in d)
+        or "context_token_invalid" in d
+        or "session_invalid" in d
+    ):
+        return ERR_SESSION_INVALID
+    if any(
+        x in d
+        for x in (
+            "timeout",
+            "econnreset",
+            "tls",
+            "fetch failed",
+            "gateway not",
+            "not reachable",
+            "socket",
+            "temporar",
+            "econnrefused",
+            "network",
+        )
+    ):
+        return ERR_TRANSIENT
+    return ERR_OTHER
+
+
+def _is_prepare_failed(detail: str) -> bool:
+    return classify_send_error(detail) == ERR_SESSION_INVALID
+
+
+def _is_transient_send_error(detail: str) -> bool:
+    return classify_send_error(detail) == ERR_TRANSIENT
+
+
+def _context_token_path(*, config: dict[str, Any] | None = None) -> Path | None:
+    cfg = config or load_config()
+    account = str(cfg.get("account") or "").strip()
+    if not account:
+        return None
+    return (
+        Path.home()
+        / ".openclaw"
+        / "openclaw-weixin"
+        / "accounts"
+        / f"{account}.context-tokens.json"
+    )
+
+
+def _context_token_mtime(*, config: dict[str, Any] | None = None) -> float | None:
+    path = _context_token_path(config=config)
+    if path is None or not path.is_file():
+        return None
+    try:
+        return float(path.stat().st_mtime)
+    except OSError:
+        return None
+
+
+def context_token_refreshed_since(
+    baseline_mtime: float | None,
+    *,
+    config: dict[str, Any] | None = None,
+) -> bool:
+    """新 inbound 写入后文件 mtime 会前进；不读 token 内容。"""
+    cur = _context_token_mtime(config=config)
+    if cur is None:
+        return False
+    if baseline_mtime is None:
+        # 原先没有文件、现在有了 → 视为刷新
+        return True
+    return cur > float(baseline_mtime) + 0.05
+
+
+def _pending_max(cfg: dict[str, Any] | None = None) -> int:
+    cfg = cfg or load_config()
+    return max(10, min(200, int(cfg.get("pending_queue_max") or 80)))
+
+
+def enqueue_notification(
+    *,
+    message: str,
+    dedupe_key: str,
+    code: str = "",
+    alert_type: str = "",
+    is_fill: bool = False,
+    summary: str = "",
+    config: dict[str, Any] | None = None,
+    bypass_storm: bool = False,
+) -> bool:
+    """主线程只入队；同 (code, alert_type) 预警覆盖旧条；成交不因预警冷却被吞。
+
+    返回 True=入队/更新，False=被短冷却跳过。
+    bypass_storm=True：worker 失败回队 / flush 中断回队时使用，避免丢消息。
+    """
+    cfg = config or load_config()
+    code_s = str(code or "").strip()
+    typ = str(alert_type or "").strip() or ("fill" if is_fill else "alert")
+    key = str(dedupe_key or f"{code_s}|{typ}")
+    storm_key = f"{code_s}|{typ}"
+    now = time.time()
+    if not is_fill and not bypass_storm:
+        cool = max(15, int(cfg.get("alert_storm_cooldown_sec") or 45))
+        prev = float(_storm_last.get(storm_key) or 0)
+        # 已在 pending 则允许覆盖；未 pending 且冷却期内则跳过
+        with _pending_lock:
+            in_pending = key in _pending or any(
+                (not p.is_fill) and p.code == code_s and p.alert_type == typ
+                for p in _pending.values()
+            )
+        if not in_pending and prev and (now - prev) < cool:
+            return False
+    _storm_last[storm_key] = now
+
+    item = PendingNotification(
+        dedupe_key=key,
+        message=str(message),
+        code=code_s,
+        alert_type=typ,
+        is_fill=bool(is_fill),
+        summary=summary or f"{code_s} {typ}".strip(),
+    )
+    with _pending_lock:
+        if key in _pending:
+            _pending.pop(key, None)
+        # 预警：同 code+type 只留最新（即使 dedupe_key 略不同）
+        if not is_fill and code_s and typ:
+            drop = [
+                k
+                for k, p in _pending.items()
+                if (not p.is_fill) and p.code == code_s and p.alert_type == typ
+            ]
+            for k in drop:
+                _pending.pop(k, None)
+        _pending[key] = item
+        # 限长：优先丢最旧非成交
+        cap = _pending_max(cfg)
+        while len(_pending) > cap:
+            victim = None
+            for k, p in _pending.items():
+                if not p.is_fill:
+                    victim = k
+                    break
+            if victim is None:
+                victim = next(iter(_pending))
+            _pending.pop(victim, None)
+    _worker_wake.set()
+    return True
+
+
+def _pop_next_pending() -> PendingNotification | None:
+    with _pending_lock:
+        if not _pending:
+            return None
+        # 成交优先
+        for k, p in list(_pending.items()):
+            if p.is_fill:
+                _pending.pop(k)
+                return p
+        k, p = next(iter(_pending.items()))
+        _pending.pop(k)
+        return p
+
+
+def _peek_pending_count() -> int:
+    with _pending_lock:
+        return len(_pending)
+
+
+def recover_wechat_session(
+    *,
+    config: dict[str, Any] | None = None,
+    wait_sec: float | None = None,
+    probe_message: str | None = None,
+    send_fn: Callable[..., tuple[bool, str]] | None = None,
+) -> tuple[bool, str]:
+    """通用会话恢复：等 inbound 刷新 context_token 文件 mtime，再探测发送一次。
+
+    不靠无限发送测试消息判断；盘中 worker 与启动自检共用。
+    send_fn 默认走底层单次发送（跳过队列），避免递归入队。
+    """
+    cfg = config or load_config()
+    wait = float(cfg.get("wait_inbound_sec") if wait_sec is None else wait_sec)
+    if wait <= 0:
+        return False, "wait_inbound_sec=0，跳过会话恢复等待"
+    poll = max(
+        0.5,
+        float(cfg.get("recover_poll_sec") or cfg.get("wait_inbound_poll_sec") or 8),
+    )
+    # 单次等待窗口内至少能探测几次
+    if wait > 0:
+        poll = min(poll, max(0.5, wait / 3.0))
+    baseline = _channel_state.token_mtime_at_invalid
+    if baseline is None:
+        baseline = _context_token_mtime(config=cfg)
+        _channel_state.token_mtime_at_invalid = baseline
+
+    if not _channel_state.session_invalid:
+        _mark_session_invalid(detail="recover_wechat_session")
+
+    _wechat_log("waiting for inbound session refresh")
+    _safe_print(
+        f"[{_now()}] 请用微信给【盯盘机器人】发任意一条消息以刷新 context_token。\n"
+        f"  最多等待 {wait:.0f}s；超时后仍可继续盯盘，恢复后自动补发 pending。\n"
+        f"  若长时间无反应: openclaw channels login --channel openclaw-weixin"
+    )
+
+    deadline = time.time() + wait
+    last = ""
+    probe = probe_message or (
+        "【盯盘·会话探测】\n通道恢复探测（不走大模型）\n" f"时间: {_now()}"
+    )
+    sender = send_fn or _send_text_direct
+
+    while time.time() < deadline:
+        if _worker_stop.is_set():
+            return False, "worker stopped"
+        _maybe_action_required(cfg)
+        time.sleep(poll)
+        if not context_token_refreshed_since(baseline, config=cfg):
+            continue
+        _wechat_log("session refreshed")
+        ok, last = sender(probe, config=cfg, retries=1)
+        if ok:
+            _mark_send_success()
+            _wechat_log("delivery recovered")
+            return True, last
+        if classify_send_error(last) == ERR_SESSION_INVALID:
+            # 文件动了但仍 prepare failed：更新 baseline 继续等下一次 inbound
+            baseline = _context_token_mtime(config=cfg)
+            _channel_state.token_mtime_at_invalid = baseline
+            _mark_session_invalid(detail=last)
+            continue
+        # 瞬时错误：再试一次后退出本轮 recover（留待下次）
+        if classify_send_error(last) == ERR_TRANSIENT:
+            ok2, last2 = sender(probe, config=cfg, retries=2)
+            if ok2:
+                _mark_send_success()
+                _wechat_log("delivery recovered")
+                return True, last2
+            last = last2
+        break
+    return False, last or "等待入站刷新超时"
+
+
+def _flush_pending_queue(
+    *,
+    config: dict[str, Any] | None = None,
+    send_fn: Callable[..., tuple[bool, str]] | None = None,
+) -> int:
+    """成功恢复后逐步补发；再次 prepare failed 则停。返回成功条数。"""
+    cfg = config or load_config()
+    gap = float(cfg.get("flush_interval_sec") or 1.2)
+    sender = send_fn or _send_text_direct
+    n = _peek_pending_count()
+    if n <= 0:
+        return 0
+    _wechat_log(f"flushing {n} pending notifications")
+    sent_n = 0
+    while True:
+        item = _pop_next_pending()
+        if item is None:
+            break
+        ok, detail = sender(item.message, config=cfg, retries=1)
+        if ok:
+            sent_n += 1
+            _mark_send_success()
+            _wechat_log(f"send success ({item.summary})")
+            time.sleep(max(0.5, gap))
+            continue
+        kind = classify_send_error(detail)
+        if kind == ERR_SESSION_INVALID:
+            # 放回队列头部语义：重新入队
+            enqueue_notification(
+                message=item.message,
+                dedupe_key=item.dedupe_key,
+                code=item.code,
+                alert_type=item.alert_type,
+                is_fill=item.is_fill,
+                summary=item.summary,
+                config=cfg,
+                bypass_storm=True,
+            )
+            _mark_session_invalid(detail=detail)
+            _wechat_log("prepare failed during flush -> session invalid")
+            break
+        if kind == ERR_TRANSIENT:
+            ok2, detail2 = sender(item.message, config=cfg, retries=2)
+            if ok2:
+                sent_n += 1
+                _mark_send_success()
+                time.sleep(max(0.5, gap))
+                continue
+            enqueue_notification(
+                message=item.message,
+                dedupe_key=item.dedupe_key,
+                code=item.code,
+                alert_type=item.alert_type,
+                is_fill=item.is_fill,
+                summary=item.summary,
+                config=cfg,
+                bypass_storm=True,
+            )
+            _wechat_log(f"flush deferred ({item.summary}): {(detail2 or '')[:120]}")
+            break
+        _wechat_log(f"flush drop other error ({item.summary}): {(detail or '')[:120]}")
+    return sent_n
+
+
+def _send_text_direct(
+    message: str,
+    *,
+    config: dict[str, Any] | None = None,
+    retries: int | None = None,
+) -> tuple[bool, str]:
+    """底层发送（可重试瞬时错误；SESSION_INVALID 立即返回不空转）。"""
+    cfg = config or load_config()
+    n = int(cfg.get("send_retries") if retries is None else retries)
+    n = max(1, n)
+    backoff = float(cfg.get("send_retry_backoff_sec") or 2.0)
+    last = ""
+    with _SEND_LOCK:
+        for i in range(n):
+            ok, detail = _send_text_once(message, cfg=cfg)
+            if ok:
+                _mark_send_success()
+                return True, detail
+            last = detail
+            kind = classify_send_error(detail)
+            if kind == ERR_SESSION_INVALID:
+                _mark_session_invalid(detail=detail)
+                return False, detail
+            if kind != ERR_TRANSIENT or i >= n - 1:
+                _mark_transient_failure()
+                break
+            wait = backoff * (2**i)
+            _wechat_log(f"transient failure, retry {i + 1}/{n}")
+            time.sleep(wait)
+    return False, last
+
+
+def _delivery_worker_main() -> None:
+    """独立线程：发送 / 会话恢复 / flush；绝不反向影响交易。"""
+    _wechat_log("delivery worker started")
+    while not _worker_stop.is_set():
+        try:
+            cfg = load_config()
+            if not watch_wechat_enabled(config=cfg):
+                _worker_wake.wait(2.0)
+                _worker_wake.clear()
+                continue
+
+            if _channel_state.session_invalid:
+                _maybe_action_required(cfg)
+                ok, _detail = recover_wechat_session(config=cfg, wait_sec=float(cfg.get("wait_inbound_sec") or 180))
+                if ok:
+                    _flush_pending_queue(config=cfg)
+                else:
+                    # 短歇后再进 recover，避免 CPU 空转；ACTION REQUIRED 已限频
+                    _worker_wake.wait(float(cfg.get("recover_poll_sec") or 8))
+                    _worker_wake.clear()
+                continue
+
+            item = _pop_next_pending()
+            if item is None:
+                _worker_wake.wait(1.0)
+                _worker_wake.clear()
+                continue
+
+            ok, detail = _send_text_direct(item.message, config=cfg)
+            if ok:
+                _wechat_log(f"send success ({item.summary})")
+                gap = float(cfg.get("flush_interval_sec") or 1.2)
+                time.sleep(max(0.3, min(gap, 2.0)))
+                continue
+
+            kind = classify_send_error(detail)
+            # 失败：放回队列（预警按 key 去重）
+            enqueue_notification(
+                message=item.message,
+                dedupe_key=item.dedupe_key,
+                code=item.code,
+                alert_type=item.alert_type,
+                is_fill=item.is_fill,
+                summary=item.summary,
+                config=cfg,
+                bypass_storm=True,
+            )
+            if kind == ERR_SESSION_INVALID:
+                continue  # 下一轮进 recover
+            # 瞬时/其它：稍后再试
+            time.sleep(float(cfg.get("send_retry_backoff_sec") or 2.0))
+        except Exception as e:  # noqa: BLE001
+            _wechat_log(f"worker error (ignored): {e}")
+            time.sleep(2.0)
+    _wechat_log("delivery worker stopped")
+
+
+def start_wechat_delivery_worker() -> None:
+    """盯盘启动后调用；幂等。"""
+    global _worker_thread
+    if _WATCH_WECHAT_ENABLED is False:
+        return
+    if _worker_thread is not None and _worker_thread.is_alive():
+        return
+    _worker_stop.clear()
+    _worker_thread = threading.Thread(
+        target=_delivery_worker_main,
+        name="wechat-delivery",
+        daemon=True,
+    )
+    _worker_thread.start()
+
+
+def stop_wechat_delivery_worker(*, join_timeout: float = 2.0) -> None:
+    global _worker_thread
+    _worker_stop.set()
+    _worker_wake.set()
+    t = _worker_thread
+    if t is not None and t.is_alive():
+        t.join(timeout=join_timeout)
+    _worker_thread = None
+
+
+def reset_wechat_delivery_state_for_tests() -> None:
+    """单测重置。"""
+    stop_wechat_delivery_worker(join_timeout=1.0)
+    with _pending_lock:
+        _pending.clear()
+    _storm_last.clear()
+    global _channel_state
+    _channel_state = WechatChannelState()
+    _worker_stop.clear()
+    _worker_wake.clear()
 
 
 def set_watch_wechat_enabled(enabled: bool | None) -> None:
     """watch 进程运行时开关。False 时预警与成交微信都不发，不影响 execution。"""
     global _WATCH_WECHAT_ENABLED
     _WATCH_WECHAT_ENABLED = enabled
+    if enabled is False:
+        stop_wechat_delivery_worker()
+
+
+def set_async_delivery(enabled: bool) -> None:
+    """测试/复盘可关异步：notify_* 同步走 send_text。"""
+    global _ASYNC_DELIVERY
+    _ASYNC_DELIVERY = bool(enabled)
 
 
 def watch_wechat_enabled(*, config: dict[str, Any] | None = None) -> bool:
@@ -49,6 +626,14 @@ def watch_wechat_enabled(*, config: dict[str, Any] | None = None) -> bool:
         return False
     cfg = config or load_config()
     return bool(cfg.get("enabled", True))
+
+
+# 预警优先级：P0=因子已触发；P1=触发预警带（内部去重键；对外文案统一【策略预警】）
+PRIORITY_P0 = "P0"  # 因子已触发
+PRIORITY_P1 = "P1"  # 触发预警带
+KIND_P0 = "因子已触发"
+KIND_P1 = "触发预警带"
+KIND_ALERT = "策略预警"
 
 
 def _strategy_label() -> str:
@@ -124,6 +709,18 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "send_retry_backoff_sec": 2.0,
     "wait_inbound_sec": 180,
     "wait_inbound_poll_sec": 8,
+    # 盘中会话恢复 / 队列
+    "pending_queue_max": 80,
+    "alert_storm_cooldown_sec": 45,  # 同 (code, alert_type) 短冷却；成交不受此限
+    "session_action_log_sec": 300,  # session invalid 持续超过此秒只打一次 ACTION REQUIRED
+    "flush_interval_sec": 1.2,
+    "recover_poll_sec": 8.0,
+    # 启动时 openclaw channels login（交互扫码，会阻塞终端）
+    # login_on_start=true：每次启动都跑（不推荐，除非你愿意每次扫码）
+    # login_on_channel_fail=true：仅通道未就绪 / 自检 prepare failed 时跑
+    "login_on_start": False,
+    "login_on_channel_fail": True,
+    "login_timeout_sec": 300,
 }
 
 
@@ -598,33 +1195,6 @@ def _send_via_node_argv(
         raise
 
 
-def _is_prepare_failed(detail: str) -> bool:
-    d = (detail or "").lower()
-    return (
-        "prepare failed" in d
-        or "ret=-2" in d
-        or "contexttoken missing" in d
-        or "context_token" in d and "missing" in d
-    )
-
-
-def _is_transient_send_error(detail: str) -> bool:
-    d = (detail or "").lower()
-    return any(
-        x in d
-        for x in (
-            "timeout",
-            "econnreset",
-            "tls",
-            "fetch failed",
-            "gateway not",
-            "not reachable",
-            "socket",
-            "temporar",
-        )
-    )
-
-
 def _send_text_once(
     message: str,
     *,
@@ -717,29 +1287,11 @@ def send_text(
 
     Windows 下不可把含换行的正文直接塞进 subprocess 参数列表
     （list2cmdline/CreateProcess 会截断到第一行），故经 Node argv 发送。
-    对 prepare failed / 瞬时网络错误自动重试。
+
+    · TRANSIENT：指数退避重试
+    · SESSION_INVALID（prepare failed / ret=-2）：立即返回，不空转重试
     """
-    cfg = config or load_config()
-    n = int(cfg.get("send_retries") if retries is None else retries)
-    n = max(1, n)
-    backoff = float(cfg.get("send_retry_backoff_sec") or 2.0)
-    last = ""
-    with _SEND_LOCK:
-        for i in range(n):
-            ok, detail = _send_text_once(message, cfg=cfg)
-            if ok:
-                return True, detail
-            last = detail
-            retryable = _is_prepare_failed(detail) or _is_transient_send_error(detail)
-            if not retryable or i >= n - 1:
-                break
-            wait = backoff * (i + 1)
-            print(
-                f"[{_now()}] 微信发送失败，{wait:.0f}s 后重试 "
-                f"({i + 1}/{n}): {(detail or '')[:120]}"
-            )
-            time.sleep(wait)
-    return False, last
+    return _send_text_direct(message, config=config, retries=retries)
 
 
 def format_buy_fill_message(
@@ -816,7 +1368,11 @@ def notify_trade_fill(
     strategy_id: str = "",
     config: dict[str, Any] | None = None,
 ) -> bool:
-    """买卖成交即时推送。只应在 paper mutation + ledger 成功后调用。"""
+    """买卖成交即时推送。只应在 paper mutation + ledger 成功后调用。
+
+    异步模式下只入队（不阻塞交易）；同步模式（单测）直接 send_text。
+    成交不受预警短冷却吞没。
+    """
     cfg = config or load_config()
     if not watch_wechat_enabled(config=cfg):
         return False
@@ -860,6 +1416,7 @@ def notify_trade_fill(
             quantity_ratio=ratio,
         )
         typ = "模拟卖出"
+    # 成交唯一键：含时刻分钟，避免同秒重复；不同成交不互相覆盖
     key = (
         f"fill|{code_s}|{side_l}|{typ}|{mapped}|"
         f"{int(price * 100)}|{int(qty)}|{_now()[:16]}"
@@ -870,6 +1427,26 @@ def notify_trade_fill(
     prev = float(sent.get(key) or 0)
     if (now_ts - prev) < 30:
         return False
+
+    summary = f"{name_s}({code_s}) {typ}"
+    if _ASYNC_DELIVERY:
+        enqueue_notification(
+            message=msg,
+            dedupe_key=key,
+            code=code_s,
+            alert_type=typ,
+            is_fill=True,
+            summary=summary,
+            config=cfg,
+        )
+        # 乐观记防抖键，避免成交风暴；真实发送由 worker 负责
+        sent[key] = now_ts
+        state["sent"] = sent
+        state["updated_at"] = _now()
+        _save_state(state)
+        start_wechat_delivery_worker()
+        return True
+
     ok, detail = send_text(msg, config=cfg)
     if ok:
         sent[key] = now_ts
@@ -878,6 +1455,17 @@ def notify_trade_fill(
         _save_state(state)
         print(f"[{_now()}] 微信已推送成交: {name_s}({code_s}) {typ}")
         return True
+    if classify_send_error(detail) == ERR_SESSION_INVALID:
+        enqueue_notification(
+            message=msg,
+            dedupe_key=key,
+            code=code_s,
+            alert_type=typ,
+            is_fill=True,
+            summary=summary,
+            config=cfg,
+        )
+        start_wechat_delivery_worker()
     print(f"[{_now()}] 微信成交推送失败 {name_s}({code_s}): {(detail or '')[:200]}")
     return False
 
@@ -888,7 +1476,7 @@ def notify_watch_rows(
     force: bool = False,
     config: dict[str, Any] | None = None,
 ) -> list[str]:
-    """扫描盯盘行，对新增/变更预警做防抖推送。返回已推送摘要。"""
+    """扫描盯盘行，对新增/变更预警做防抖推送。返回已受理摘要（异步=已入队）。"""
     cfg = config or load_config()
     if not force and not watch_wechat_enabled(config=cfg):
         return []
@@ -900,10 +1488,54 @@ def notify_watch_rows(
     active_keys: set[str] = set()
     pushed: list[str] = []
 
+    def _dispatch(msg: str, *, key: str, code: str, name: str, alert_type: str) -> bool:
+        summary = f"{name}({code}) {alert_type}"
+        if _ASYNC_DELIVERY:
+            ok_q = enqueue_notification(
+                message=msg,
+                dedupe_key=key,
+                code=code,
+                alert_type=alert_type,
+                is_fill=False,
+                summary=summary,
+                config=cfg,
+            )
+            if ok_q:
+                # 成功入队即记防抖，避免 session invalid 时每轮狂入队
+                # （队列内同 key 仍会覆盖为最新文案）
+                sent[key] = now_ts
+                pushed.append(f"{name}({code})")
+                start_wechat_delivery_worker()
+            return ok_q
+        ok, detail = send_text(msg, config=cfg)
+        if ok:
+            sent[key] = now_ts
+            pushed.append(f"{name}({code})")
+            print(
+                f"[{_now()}] 微信已推送: {name}({code}) {alert_type}"
+            )
+            return True
+        if classify_send_error(detail) == ERR_SESSION_INVALID:
+            enqueue_notification(
+                message=msg,
+                dedupe_key=key,
+                code=code,
+                alert_type=alert_type,
+                is_fill=False,
+                summary=summary,
+                config=cfg,
+            )
+            start_wechat_delivery_worker()
+            # session invalid：也记短防抖，避免主循环同步风暴
+            sent[key] = now_ts
+            pushed.append(f"{name}({code})")
+            return False
+        print(f"[{_now()}] 微信推送失败 {name}({code}): {(detail or '')[:200]}")
+        return False
+
     for row in rows:
         if row.get("error"):
             continue
-        # 个股只走 classify；因子2账户级单独推
         info = classify_stock_alert(row)
         if info is None:
             continue
@@ -911,22 +1543,22 @@ def notify_watch_rows(
         active_keys.add(key)
         prev_ts = float(sent.get(key) or 0)
         if not force and (now_ts - prev_ts) < cooldown:
-            continue
+            # 冷却期内：若已在 pending，仍允许覆盖为最新文案；否则跳过
+            with _pending_lock:
+                in_q = key in _pending or any(
+                    (not p.is_fill)
+                    and p.code == str(row.get("代码") or "")
+                    and p.alert_type == str(info.get("type") or "")
+                    for p in _pending.values()
+                )
+            if not in_q:
+                continue
         msg = format_alert_message(row)
-        ok, detail = send_text(msg, config=cfg)
         code = str(row.get("代码") or "")
         name = str(row.get("名称") or "")
-        if ok:
-            sent[key] = now_ts
-            pushed.append(f"{name}({code})")
-            print(
-                f"[{_now()}] 微信已推送: {name}({code}) "
-                f"{info.get('level')}·{info.get('kind')}·{info.get('type')}"
-            )
-        else:
-            print(f"[{_now()}] 微信推送失败 {name}({code}): {detail[:200]}")
+        typ = str(info.get("type") or "策略预警")
+        _dispatch(msg, key=key, code=code, name=name, alert_type=typ)
 
-    # 账户级因子2：单独推一次
     f2_row = next(
         (
             r
@@ -978,15 +1610,17 @@ def notify_watch_rows(
                 msg = format_factor2_push(f2_status)
             except Exception:
                 msg = format_alert_message(f2_row)
-            ok, detail = send_text(msg, config=cfg)
-            if ok:
-                sent[f2_key] = now_ts
-                pushed.append("因子2(账户)")
-                print(f"[{_now()}] 微信已推送: 因子2(账户)")
-            else:
-                print(f"[{_now()}] 微信推送失败 因子2: {detail[:200]}")
+            _dispatch(
+                msg,
+                key=f2_key,
+                code="factor2",
+                name="因子2",
+                alert_type=f2_act,
+            )
 
     for k in list(sent.keys()):
+        if k.startswith("fill|"):
+            continue
         if k not in active_keys:
             del sent[k]
     state["sent"] = sent
@@ -1143,15 +1777,9 @@ def context_token_status(*, config: dict[str, Any] | None = None) -> tuple[bool,
     target = str(cfg.get("target") or "").strip()
     if not account or not target:
         return False, "account/target 未配置"
-    path = (
-        Path.home()
-        / ".openclaw"
-        / "openclaw-weixin"
-        / "accounts"
-        / f"{account}.context-tokens.json"
-    )
-    if not path.is_file():
-        return False, f"无会话文件（需先给机器人发一条微信）: {path.name}"
+    path = _context_token_path(config=cfg)
+    if path is None or not path.is_file():
+        return False, "无会话文件（需先给机器人发一条微信）"
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
@@ -1166,7 +1794,7 @@ def context_token_status(*, config: dict[str, Any] | None = None) -> tuple[bool,
     age_h = (time.time() - path.stat().st_mtime) / 3600.0
     if not hit:
         return False, f"会话文件无本机 target（keys={len(keys)}, age={age_h:.1f}h）"
-    return True, f"本地会话 token 存在（age={age_h:.1f}h）"
+    return True, f"本地会话 token 存在（age={age_h:.1f}h, mtime={path.stat().st_mtime:.0f})"
 
 
 def _ensure_plugin_disk_fallback_patch() -> str:
@@ -1200,36 +1828,61 @@ def wait_inbound_and_retry_send(
     *,
     config: dict[str, Any] | None = None,
 ) -> tuple[bool, str]:
-    """prepare failed 时提示用户给机器人发消息，并轮询直到可发或超时。"""
-    cfg = config or load_config()
-    wait_sec = float(cfg.get("wait_inbound_sec") or 0)
-    if wait_sec <= 0:
-        return False, "wait_inbound_sec=0，跳过会话预热等待"
-    poll = max(3.0, float(cfg.get("wait_inbound_poll_sec") or 8))
-    print(
-        f"[{_now()}] 微信会话 token 已失效（服务端 prepare failed；本地磁盘回落已生效但仍被拒）。\n"
-        f"  → 请用微信给【盯盘机器人】发任意一条消息（如：1）刷新 context_token。\n"
-        f"  → 网关 getUpdates 收到后会自动写入会话文件；最多等待 {wait_sec:.0f}s 并重试发送。\n"
-        f"  → 若长时间无反应：openclaw channels login --channel openclaw-weixin"
+    """启动自检兼容入口：委托 recover_wechat_session。"""
+    return recover_wechat_session(
+        config=config,
+        probe_message=message,
+        send_fn=_send_text_direct,
     )
-    deadline = time.time() + wait_sec
-    last = ""
-    attempt = 0
-    while time.time() < deadline:
-        time.sleep(poll)
-        attempt += 1
-        tok_ok, tok_detail = context_token_status(config=cfg)
-        print(
-            f"[{_now()}] 预热探测 #{attempt}: token={tok_detail}; 尝试发送…"
+
+
+def run_weixin_channels_login(
+    *,
+    config: dict[str, Any] | None = None,
+    timeout_sec: float | None = None,
+) -> tuple[bool, str]:
+    """交互式执行 ``openclaw channels login --channel openclaw-weixin``。
+
+    必须继承 stdin/stdout（二维码/确认），故不 capture。
+    已登录时多数版本会很快返回；未登录则终端内完成扫码。
+    """
+    cfg = config or load_config()
+    channel = str(cfg.get("channel") or "openclaw-weixin")
+    to = float(
+        cfg.get("login_timeout_sec") if timeout_sec is None else timeout_sec
+    )
+    to = max(60.0, to)
+    openclaw_bin = str(cfg.get("openclaw_bin") or "openclaw")
+    env = _env_with_node(cfg)
+    exe, prefix = _resolve_openclaw_node(openclaw_bin, env)
+    cli = [*prefix, "channels", "login", "--channel", channel] if prefix else [
+        "channels",
+        "login",
+        "--channel",
+        channel,
+    ]
+    cmd = [exe, *cli] if prefix else [openclaw_bin, *cli]
+    print(
+        f"[{_now()}] [WECHAT] 运行: openclaw channels login --channel {channel}\n"
+        f"  （交互扫码/确认；完成后回到本流程。超时 {to:.0f}s）"
+    )
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=False,  # 必须给二维码留终端
+            text=True,
+            timeout=to,
+            check=False,
+            env=env,
         )
-        ok, last = send_text(message, config=cfg, retries=1)
-        if ok:
-            print(f"[{_now()}] 会话已恢复，发送成功")
-            return True, last
-        if not _is_prepare_failed(last):
-            # 非 prepare 类错误，不必空等
-            break
-    return False, last or "等待入站刷新超时"
+    except FileNotFoundError:
+        return False, "找不到 openclaw/node，无法 channels login"
+    except subprocess.TimeoutExpired:
+        return False, f"channels login 超时（>{to:.0f}s）"
+    if int(proc.returncode) == 0:
+        print(f"[{_now()}] [WECHAT] channels login 完成")
+        return True, "ok"
+    return False, f"channels login exit={proc.returncode}"
 
 
 def prepare_wechat_for_watch(
@@ -1237,10 +1890,14 @@ def prepare_wechat_for_watch(
     config: dict[str, Any] | None = None,
     send_test: bool = True,
     restart_gateway: bool = False,
+    force_login: bool = False,
 ) -> tuple[bool, str]:
-    """盯盘启动套件：补丁 → Gateway → 通道就绪 → 微信自检。
+    """盯盘启动套件：补丁 → Gateway →（可选 login）→ 通道就绪 → 微信自检。
 
     返回 (ok, detail)。失败时 detail 含原因，供调用方决定是否中止。
+
+    force_login / 配置 login_on_start：启动即跑 ``channels login``（交互）。
+    login_on_channel_fail：仅通道未就绪或 prepare failed 时再 login。
     """
     cfg = config or load_config()
     if not bool(cfg.get("enabled", True)):
@@ -1256,6 +1913,13 @@ def prepare_wechat_for_watch(
         return False, f"OpenClaw Gateway 不可用: {detail[:400]}"
     print(f"[{_now()}] OpenClaw Gateway OK")
 
+    do_login_start = bool(force_login) or bool(cfg.get("login_on_start"))
+    if do_login_start:
+        print(f"[{_now()}] [1b/3] 启动前执行 channels login…")
+        lok, ldetail = run_weixin_channels_login(config=cfg)
+        if not lok:
+            print(f"[{_now()}] channels login 未成功: {ldetail[:200]}（继续探测通道）")
+
     settle = float(cfg.get("channel_settle_sec") or 4)
     print(f"[{_now()}] [2/3] 等待微信通道就绪（settle {settle:.0f}s）…")
     if settle > 0:
@@ -1269,6 +1933,14 @@ def prepare_wechat_for_watch(
             return False, f"微信通道未就绪且 Gateway 重启失败: {detail2[:300]}"
         time.sleep(max(settle, 3.0))
         ch_ok, ch_detail = wait_weixin_channel_ready(config=cfg, timeout_sec=40)
+        if not ch_ok and bool(cfg.get("login_on_channel_fail", True)):
+            print(f"[{_now()}] 通道仍未就绪，尝试 channels login…")
+            lok, ldetail = run_weixin_channels_login(config=cfg)
+            if lok:
+                time.sleep(max(settle, 3.0))
+                ch_ok, ch_detail = wait_weixin_channel_ready(config=cfg, timeout_sec=40)
+            else:
+                print(f"[{_now()}] channels login 失败: {ldetail[:200]}")
         if not ch_ok:
             return False, f"微信通道未就绪: {ch_detail[:400]}"
     print(f"[{_now()}] 微信通道 OK: {ch_detail[:160]}")
@@ -1283,10 +1955,11 @@ def prepare_wechat_for_watch(
     ok2, detail2 = send_test_alert(config=cfg)
     if ok2:
         print(f"[{_now()}] 微信通道自检成功")
+        start_wechat_delivery_worker()
         return True, detail2
 
     if _is_prepare_failed(detail2):
-        # 磁盘 token 过期：等人发消息；同时再 restart 一次加载补丁/清 TLS
+        # 磁盘 token 过期：login（可选）+ 等人发消息；同时 gateway restart
         if "disk-fallback" not in patch_info and "patched" not in patch_info.lower():
             print(f"[{_now()}] 补丁可能未生效，gateway restart 后再试…")
         else:
@@ -1294,11 +1967,20 @@ def prepare_wechat_for_watch(
         ensure_openclaw_gateway(config=cfg, restart=True)
         time.sleep(max(settle, 3.0))
         wait_weixin_channel_ready(config=cfg, timeout_sec=30)
+        if bool(cfg.get("login_on_channel_fail", True)):
+            print(f"[{_now()}] prepare failed：尝试 channels login 刷新通道账号…")
+            run_weixin_channels_login(config=cfg)
+            time.sleep(max(settle, 2.0))
         ok3, detail3 = send_test_alert(config=cfg)
         if ok3:
-            print(f"[{_now()}] 微信通道自检成功（重启后）")
+            print(f"[{_now()}] 微信通道自检成功（重启/login 后）")
+            start_wechat_delivery_worker()
             return True, detail3
         detail2 = detail3
+        print(
+            f"[{_now()}] 提示：channels login 解决的是通道账号；"
+            f"prepare failed 还常需你给机器人发一条消息刷新 context_token。"
+        )
         ok4, detail4 = wait_inbound_and_retry_send(
             (
                 "【盯盘预警·测试】\n"
@@ -1308,8 +1990,11 @@ def prepare_wechat_for_watch(
             config=cfg,
         )
         if ok4:
+            start_wechat_delivery_worker()
             return True, detail4
         detail2 = detail4
+        # 自检失败也启动 worker：盘中 inbound 刷新后可自动恢复并补发
+        start_wechat_delivery_worker()
 
     tip = (
         "微信自检失败。\n"

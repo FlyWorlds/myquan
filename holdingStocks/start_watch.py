@@ -232,6 +232,11 @@ def main() -> int:
         help="关闭微信（预警与买卖成交都不推；不影响 paper execution）",
     )
     parser.add_argument(
+        "--wechat-login",
+        action="store_true",
+        help="启动前强制 openclaw channels login（交互扫码）",
+    )
+    parser.add_argument(
         "--no-ledger-pull",
         action="store_true",
         help="启动时不拉取远程持仓（本机 holdings.json 为准）",
@@ -279,6 +284,8 @@ def main() -> int:
         watch_args.append("--force")
     if args.no_wechat:
         watch_args.append("--no-wechat")
+    if args.wechat_login:
+        watch_args.append("--wechat-login")
     if args.no_ledger_pull:
         watch_args.append("--no-ledger-pull")
     watch_args.extend(extra)

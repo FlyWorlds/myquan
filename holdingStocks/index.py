@@ -9953,6 +9953,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
             ok, detail = prepare_wechat_for_watch(
                 restart_gateway=bool(getattr(args, "restart_gateway", False)),
+                force_login=bool(getattr(args, "wechat_login", False)),
             )
         except Exception as e:  # noqa: BLE001
             ok, detail = False, str(e)
@@ -9972,6 +9973,13 @@ def cmd_watch(args: argparse.Namespace) -> None:
                     "watch --wechat-optional / --skip-wechat-check / --no-wechat"
                 )
                 raise SystemExit(1)
+    elif wechat:
+        try:
+            from wechat_notify import start_wechat_delivery_worker
+
+            start_wechat_delivery_worker()
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 微信投递 worker 启动失败（继续）: {e}")
 
     _acquire_watch_lock(
         host=host,
@@ -10343,6 +10351,12 @@ def cmd_watch(args: argparse.Namespace) -> None:
         print("\n已停止盯盘")
     finally:
         stop.set()
+        try:
+            from wechat_notify import stop_wechat_delivery_worker
+
+            stop_wechat_delivery_worker()
+        except Exception:  # noqa: BLE001
+            pass
         feed.stop()
         _ws_hub = None
         _watch_feed = None
@@ -10442,6 +10456,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--restart-gateway",
         action="store_true",
         help="启动套件里强制 restart OpenClaw Gateway",
+    )
+    w.add_argument(
+        "--wechat-login",
+        action="store_true",
+        help="启动前强制 openclaw channels login --channel openclaw-weixin（交互扫码）",
     )
     w.add_argument(
         "--force",
