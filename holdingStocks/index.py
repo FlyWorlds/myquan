@@ -3836,6 +3836,13 @@ def apply_paper_slot_buy(
             before_qty=0,
             after_qty=int(qty),
             strategy_id=str(STRATEGY_ID),
+            # 开盘突破入槽：成交价即策略买点；若 meta 带买点则优先
+            target_px=float(
+                meta.get("buy")
+                or meta.get("买点")
+                or meta.get("entry_px")
+                or price
+            ),
         )
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 买入微信推送跳过: {e}")
@@ -4578,6 +4585,13 @@ def apply_exit_fill(
             exit_kind=str(exit_kind or ""),
             quantity_ratio=(
                 float(sell_qty) / float(old_qty) if old_qty > 0 else None
+            ),
+            target_px=float(
+                meta.get("stop")
+                or meta.get("止损")
+                or meta.get("卖出价")
+                or meta.get("exit_px")
+                or fill_px
             ),
         )
     except Exception as e:  # noqa: BLE001

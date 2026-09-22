@@ -1077,16 +1077,32 @@ def format_alert_message(row: dict[str, Any]) -> str:
     extra = ""
     if info and str(info.get("type") or "") == "T1_BLOCK":
         extra = "\n原因：T1_BLOCK"
-    return "\n".join(
-        [
-            "【策略预警】",
-            f"股票：{code} {name}",
-            f"状态：{status}{extra}",
-            f"当前价：{_n(row.get('现价'))}",
-            f"策略：{_strategy_label()}",
-            f"时间：{_now()}",
-        ]
-    )
+
+    # 买入目标：买点 / 买入侧价；卖出目标：止损 / 卖出价；策略价=本条预警对应因子价
+    buy_tgt = row.get("买点")
+    if buy_tgt is None or buy_tgt == "":
+        buy_tgt = row.get("买入侧价")
+    sell_tgt = row.get("止损")
+    if sell_tgt is None or sell_tgt == "":
+        sell_tgt = row.get("卖出价")
+    if sell_tgt is None or sell_tgt == "":
+        sell_tgt = row.get("未触发因子价")
+    strat_px = (info or {}).get("factor_px")
+    if strat_px is None or strat_px == "":
+        strat_px = buy_tgt if not _has_holding(row) else sell_tgt
+
+    lines = [
+        "【策略预警】",
+        f"股票：{code} {name}",
+        f"状态：{status}{extra}",
+        f"当前价：{_n(row.get('现价'))}",
+        f"策略价：{_n(strat_px)}",
+        f"买入目标：{_n(buy_tgt)}",
+        f"卖出目标：{_n(sell_tgt)}",
+        f"策略：{_strategy_label()}",
+        f"时间：{_now()}",
+    ]
+    return "\n".join(lines)
 
 
 def _env_with_node(cfg: dict[str, Any]) -> dict[str, str]:
@@ -1301,17 +1317,32 @@ def format_buy_fill_message(
     price: float,
     qty: int,
     strategy_id: str = "",
+    target_px: float | None = None,
+    last_px: float | None = None,
 ) -> str:
-    return "\n".join(
+    lines = [
+        "【模拟买入】",
+        f"股票：{code} {name}",
+        f"成交价：{float(price):.2f}",
+    ]
+    if target_px is not None:
+        try:
+            lines.append(f"买入目标：{float(target_px):.2f}")
+        except (TypeError, ValueError):
+            pass
+    if last_px is not None:
+        try:
+            lines.append(f"当前价：{float(last_px):.2f}")
+        except (TypeError, ValueError):
+            pass
+    lines.extend(
         [
-            "【模拟买入】",
-            f"股票：{code} {name}",
-            f"成交价：{float(price):.2f}",
             f"买入数量：{int(qty)}",
             f"策略：{strategy_id or _strategy_label()}",
             f"时间：{_now()}",
         ]
     )
+    return "\n".join(lines)
 
 
 def format_sell_fill_message(
@@ -1325,6 +1356,8 @@ def format_sell_fill_message(
     before_qty: int | None = None,
     after_qty: int | None = None,
     quantity_ratio: float | None = None,
+    target_px: float | None = None,
+    last_px: float | None = None,
 ) -> str:
     half = str(action_kind or "").lower() == "half" or (
         quantity_ratio is not None and float(quantity_ratio) < 1.0 - 1e-12
@@ -1334,9 +1367,23 @@ def format_sell_fill_message(
         "【模拟卖出】",
         f"股票：{code} {name}",
         f"成交价：{float(price):.2f}",
-        f"卖出数量：{int(qty)}",
-        f"成交类型：{fill_kind}",
     ]
+    if target_px is not None:
+        try:
+            lines.append(f"卖出目标：{float(target_px):.2f}")
+        except (TypeError, ValueError):
+            pass
+    if last_px is not None:
+        try:
+            lines.append(f"当前价：{float(last_px):.2f}")
+        except (TypeError, ValueError):
+            pass
+    lines.extend(
+        [
+            f"卖出数量：{int(qty)}",
+            f"成交类型：{fill_kind}",
+        ]
+    )
     if reason_code:
         lines.append(f"原因：{reason_code}")
     if before_qty is not None and after_qty is not None:
@@ -1366,12 +1413,15 @@ def notify_trade_fill(
     reason_code: str = "",
     quantity_ratio: float | None = None,
     strategy_id: str = "",
+    target_px: float | None = None,
+    last_px: float | None = None,
     config: dict[str, Any] | None = None,
 ) -> bool:
     """买卖成交即时推送。只应在 paper mutation + ledger 成功后调用。
 
     异步模式下只入队（不阻塞交易）；同步模式（单测）直接 send_text。
     成交不受预警短冷却吞没。
+    target_px：策略买入/卖出目标价；last_px：推送时现价（可选）。
     """
     cfg = config or load_config()
     if not watch_wechat_enabled(config=cfg):
@@ -1394,6 +1444,18 @@ def notify_trade_fill(
             ratio = float(qty) / float(before_qty) if float(before_qty) > 0 else None
         except (TypeError, ValueError):
             ratio = None
+    tgt: float | None = None
+    if target_px is not None:
+        try:
+            tgt = float(target_px)
+        except (TypeError, ValueError):
+            tgt = None
+    last: float | None = None
+    if last_px is not None:
+        try:
+            last = float(last_px)
+        except (TypeError, ValueError):
+            last = None
     if side_l == "buy":
         msg = format_buy_fill_message(
             code=code_s,
@@ -1401,6 +1463,8 @@ def notify_trade_fill(
             price=float(price),
             qty=int(qty),
             strategy_id=strategy_id,
+            target_px=tgt,
+            last_px=last,
         )
         typ = "模拟买入"
     else:
@@ -1414,6 +1478,8 @@ def notify_trade_fill(
             before_qty=before_qty,
             after_qty=after_qty,
             quantity_ratio=ratio,
+            target_px=tgt,
+            last_px=last,
         )
         typ = "模拟卖出"
     # 成交唯一键：含时刻分钟，避免同秒重复；不同成交不互相覆盖

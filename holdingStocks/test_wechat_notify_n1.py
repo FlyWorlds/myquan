@@ -34,6 +34,8 @@ def _row(**kw):
         "代码": "600330",
         "名称": "天通股份",
         "现价": 12.34,
+        "买点": 12.50,
+        "止损": 11.80,
         "价位小数": 2,
         "持仓": 0,
         "预警": "",
@@ -80,6 +82,10 @@ class TestWechatNotifyN1(unittest.TestCase):
         msg = wn.format_alert_message(_row(预警="将买入", 近买点=True, 持仓状态="待买入"))
         self.assertIn("【策略预警】", msg)
         self.assertIn("将买入", msg)
+        self.assertIn("当前价：", msg)
+        self.assertIn("策略价：", msg)
+        self.assertIn("买入目标：", msg)
+        self.assertIn("卖出目标：", msg)
         wn.notify_watch_rows(
             [_row(预警="将买入", 近买点=True, 持仓状态="待买入")],
             config=self._cfg,
