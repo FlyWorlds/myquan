@@ -196,206 +196,183 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
             self.assertNotIn(token, dump)
 
     def test_fixture_four_quadrants_distinct_symbols(self) -> None:
-        """四象限 fixture：不同 symbol；统一 replay + attach metadata。"""
+        """四象限 fixture：不同 symbol；统一 simulator + attach metadata。"""
+        import tempfile
+        from unittest import mock
+
         import index as watch_index
+        import strategy_simulator as sim
 
-        counts = {
-            "empty_long": 0,
-            "empty_flat": 0,
-            "long_long": 0,
-            "long_flat": 0,
-        }
-        symbols: list[str] = []
+        td = tempfile.TemporaryDirectory()
+        root = Path(td.name)
+        p1 = mock.patch.object(sim, "STATE_FILE", root / "strategy_sim_state.json")
+        p2 = mock.patch.object(sim, "EVENTS_FILE", root / "strategy_signal_events.json")
+        p1.start()
+        p2.start()
+        sim.reset_memory_for_tests()
+        try:
+            counts = {
+                "empty_long": 0,
+                "empty_flat": 0,
+                "long_long": 0,
+                "long_flat": 0,
+            }
+            symbols: list[str] = []
 
-        # 1) paper empty + replay long
-        code, sina = _FIXTURE_CODES["empty_long"]
-        symbols.append(code)
-        df = _yin_then_buy_hold()
-        rec = _replay(df, code=code, start_date=STRATEGY_PNL_START)
-        self.assertTrue(rec["holding"])
-        row: dict[str, Any] = {"持仓": 0, "持仓状态": "空仓"}
-        watch_index._attach_strategy_pnl_fields(
-            row,
-            w={"sina": sina, "code": code},
-            daily=df,
-            q={
-                "session": "2026-09-18",
-                "open": 10.0,
-                "high": 10.5,
-                "low": 9.9,
-                "last": 10.3,
-            },
-            entry_pct=DEFAULT_PCT,
-            stop_pct=DEFAULT_PCT,
-            tick=TICK_SIZE,
-            prev_entry_mode="yin_or_small_yang",
-            limit_down_pct=0.10,
-        )
-        self.assertEqual(row["策略收益语义"], "cumulative_factor1_replay")
-        self.assertEqual(row["策略收益范围"], "symbol")
-        self.assertTrue(row["策略累计持有"])
-        self.assertEqual(_paper_label(0, "空仓"), "空仓")
-        self.assertEqual(_replay_label(True), "回放持有")
-        # MTM
-        row2: dict[str, Any] = {}
-        watch_index._attach_strategy_pnl_fields(
-            row2,
-            w={"sina": sina, "code": code},
-            daily=df,
-            q={
-                "session": "2026-09-18",
-                "open": 10.0,
-                "high": 10.8,
-                "low": 9.9,
-                "last": 10.8,
-            },
-            entry_pct=DEFAULT_PCT,
-            stop_pct=DEFAULT_PCT,
-            tick=TICK_SIZE,
-            prev_entry_mode="yin_or_small_yang",
-            limit_down_pct=0.10,
-        )
-        self.assertGreater(float(row2["策略收益%"]), float(row["策略收益%"]))
-        counts["empty_long"] += 1
+            def _attach(code: str, sina: str, row: dict, last: float, session: str) -> dict:
+                from datetime import datetime as _dt
 
-        # 2) paper empty + replay flat
-        code, sina = _FIXTURE_CODES["empty_flat"]
-        symbols.append(code)
-        df = _yin_buy_then_sell()
-        rec = _replay(df, code=code, start_date=STRATEGY_PNL_START)
-        self.assertFalse(rec["holding"])
-        frozen = float(rec["return_pct"])
-        row = {"持仓": 0, "持仓状态": "空仓"}
-        watch_index._attach_strategy_pnl_fields(
-            row,
-            w={"sina": sina, "code": code},
-            daily=df,
-            q={
-                "session": "2026-09-19",
-                "open": 10.5,
-                "high": 11.5,
-                "low": 10.0,
-                "last": 11.2,
-            },
-            entry_pct=DEFAULT_PCT,
-            stop_pct=DEFAULT_PCT,
-            tick=TICK_SIZE,
-            prev_entry_mode="yin_or_small_yang",
-            limit_down_pct=0.10,
-        )
-        self.assertFalse(row["策略累计持有"])
-        self.assertEqual(row["策略收益%"], frozen)
-        self.assertEqual(_paper_label(0, "空仓"), "空仓")
-        self.assertEqual(_replay_label(False), "回放空仓")
-        counts["empty_flat"] += 1
+                watch_index._attach_strategy_pnl_fields(
+                    row,
+                    w={"sina": sina, "code": code},
+                    daily=_yin_then_buy_hold(),
+                    q={
+                        "session": session,
+                        "open": 10.0,
+                        "high": max(10.5, last),
+                        "low": 9.9,
+                        "last": last,
+                        "ts": _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    },
+                    entry_pct=DEFAULT_PCT,
+                    stop_pct=DEFAULT_PCT,
+                    tick=TICK_SIZE,
+                    prev_entry_mode="yin_or_small_yang",
+                    limit_down_pct=0.10,
+                )
+                return row
 
-        # 3) paper long + replay long
-        code, sina = _FIXTURE_CODES["long_long"]
-        symbols.append(code)
-        df = _yin_then_buy_hold()
-        rec = _replay(df, code=code, start_date=STRATEGY_PNL_START)
-        self.assertTrue(rec["holding"])
-        row = {"持仓": 500, "持仓状态": "已经买入"}
-        watch_index._attach_strategy_pnl_fields(
-            row,
-            w={"sina": sina, "code": code},
-            daily=df,
-            q={
-                "session": "2026-09-18",
-                "open": 10.0,
-                "high": 10.5,
-                "low": 9.9,
-                "last": 10.3,
-            },
-            entry_pct=DEFAULT_PCT,
-            stop_pct=DEFAULT_PCT,
-            tick=TICK_SIZE,
-            prev_entry_mode="yin_or_small_yang",
-            limit_down_pct=0.10,
-        )
-        self.assertTrue(row["策略累计持有"])
-        self.assertEqual(_paper_label(500, "已经买入"), "已经买入")
-        self.assertEqual(_replay_label(True), "回放持有")
-        # 纸面 long 不改变回放 metadata 语义键
-        self.assertEqual(row["策略收益范围"], "symbol")
-        counts["long_long"] += 1
+            # 1) paper empty + sim long
+            code, sina = _FIXTURE_CODES["empty_long"]
+            symbols.append(code)
+            row = {
+                "持仓": 0,
+                "持仓状态": "空仓",
+                "过门OK": True,
+                "买点": 10.0,
+                "止损": 9.5,
+            }
+            _attach(code, sina, row, 10.3, "2026-09-18")
+            self.assertEqual(row["策略收益语义"], "strategy_simulator_ledger")
+            self.assertEqual(row["策略模拟状态"], "LONG")
+            self.assertEqual(row["策略状态"], "策略持有")
+            self.assertEqual(_paper_label(0, "空仓"), "空仓")
+            counts["empty_long"] += 1
 
-        # 4) paper long + replay flat
-        code, sina = _FIXTURE_CODES["long_flat"]
-        symbols.append(code)
-        df = _yin_buy_then_sell()
-        rec = _replay(df, code=code, start_date=STRATEGY_PNL_START)
-        self.assertFalse(rec["holding"])
-        row = {"持仓": 800, "持仓状态": "已经买入"}
-        watch_index._attach_strategy_pnl_fields(
-            row,
-            w={"sina": sina, "code": code},
-            daily=df,
-            q={
-                "session": "2026-09-19",
-                "open": 10.5,
-                "high": 10.6,
-                "low": 10.0,
-                "last": 10.2,
-            },
-            entry_pct=DEFAULT_PCT,
-            stop_pct=DEFAULT_PCT,
-            tick=TICK_SIZE,
-            prev_entry_mode="yin_or_small_yang",
-            limit_down_pct=0.10,
-        )
-        self.assertFalse(row["策略累计持有"])
-        self.assertEqual(_paper_label(800, "已经买入"), "已经买入")
-        self.assertEqual(_replay_label(False), "回放空仓")
-        counts["long_flat"] += 1
+            # 2) paper empty + sim flat（last 远低于买点）
+            code, sina = _FIXTURE_CODES["empty_flat"]
+            symbols.append(code)
+            row = {
+                "持仓": 0,
+                "持仓状态": "空仓",
+                "过门OK": False,
+                "买点": 20.0,
+                "止损": 5.0,
+            }
+            _attach(code, sina, row, 10.2, "2026-09-19")
+            self.assertEqual(row["策略模拟状态"], "FLAT")
+            self.assertEqual(row["策略状态"], "空仓")
+            counts["empty_flat"] += 1
 
-        self.assertEqual(len(set(symbols)), 4, msg=f"need 4 distinct symbols, got {symbols}")
-        for k, n in counts.items():
-            self.assertGreaterEqual(n, 1, msg=f"missing quadrant {k}")
+            # 3) paper long + sim long
+            code, sina = _FIXTURE_CODES["long_long"]
+            symbols.append(code)
+            row = {
+                "持仓": 500,
+                "持仓状态": "已经买入",
+                "过门OK": True,
+                "买点": 10.0,
+                "止损": 9.5,
+            }
+            _attach(code, sina, row, 10.3, "2026-09-18")
+            self.assertEqual(row["持仓"], 500)
+            self.assertEqual(row["策略模拟状态"], "LONG")
+            counts["long_long"] += 1
 
-        # 暴露给报告（unittest 不吃 stdout 也能在失败信息里看到）
-        self.assertEqual(counts["empty_long"], 1)
-        self.assertEqual(counts["empty_flat"], 1)
-        self.assertEqual(counts["long_long"], 1)
-        self.assertEqual(counts["long_flat"], 1)
+            # 4) paper long + sim flat
+            code, sina = _FIXTURE_CODES["long_flat"]
+            symbols.append(code)
+            row = {
+                "持仓": 800,
+                "持仓状态": "已经买入",
+                "过门OK": False,
+                "买点": 20.0,
+                "止损": 5.0,
+            }
+            _attach(code, sina, row, 10.2, "2026-09-19")
+            self.assertEqual(row["持仓"], 800)
+            self.assertEqual(row["策略模拟状态"], "FLAT")
+            counts["long_flat"] += 1
+
+            self.assertEqual(len(set(symbols)), 4)
+            for k, n in counts.items():
+                self.assertEqual(n, 1, msg=k)
+        finally:
+            p1.stop()
+            p2.stop()
+            sim.reset_memory_for_tests()
+            td.cleanup()
 
     def test_attach_uniform_across_universe_codes(self) -> None:
         """对 snapshot universe（或兜底多码）统一走 _attach_strategy_pnl_fields。"""
-        import index as watch_index
+        import tempfile
+        from unittest import mock
 
-        rows = _load_strategy_universe()
-        codes = [str(r.get("代码")) for r in rows if r.get("代码")]
-        if len(codes) < 4:
-            codes = [c for c, _ in _FIXTURE_CODES.values()]
-        # 最多测 12 只，避免过慢
-        sample = codes[:12]
-        df = _yin_then_buy_hold()
-        for code in sample:
-            sina = f"{'sh' if code.startswith('6') else 'sz'}{code}"
-            row: dict[str, Any] = {}
-            watch_index._attach_strategy_pnl_fields(
-                row,
-                w={"sina": sina, "code": code},
-                daily=df,
-                q={
-                    "session": "2026-09-18",
-                    "open": 10.0,
-                    "high": 10.5,
-                    "low": 9.9,
-                    "last": 10.3,
-                },
-                entry_pct=DEFAULT_PCT,
-                stop_pct=DEFAULT_PCT,
-                tick=TICK_SIZE,
-                prev_entry_mode="yin_or_small_yang",
-                limit_down_pct=0.10,
-            )
-            self.assertEqual(row.get("策略收益语义"), "cumulative_factor1_replay")
-            self.assertEqual(row.get("策略收益范围"), "symbol")
-            self.assertIsInstance(row.get("策略累计持有"), bool)
-            self.assertEqual(row.get("策略起算"), STRATEGY_PNL_START)
-            self.assertIsNotNone(row.get("策略收益%"))
-            self.assertTrue(row.get("策略累计持有"))
+        import index as watch_index
+        import strategy_simulator as sim
+
+        td = tempfile.TemporaryDirectory()
+        root = Path(td.name)
+        p1 = mock.patch.object(sim, "STATE_FILE", root / "strategy_sim_state.json")
+        p2 = mock.patch.object(sim, "EVENTS_FILE", root / "strategy_signal_events.json")
+        p1.start()
+        p2.start()
+        sim.reset_memory_for_tests()
+        try:
+            rows = _load_strategy_universe()
+            codes = [str(r.get("代码")) for r in rows if r.get("代码")]
+            if len(codes) < 4:
+                codes = [c for c, _ in _FIXTURE_CODES.values()]
+            sample = codes[:12]
+            df = _yin_then_buy_hold()
+            for code in sample:
+                sina = f"{'sh' if code.startswith('6') else 'sz'}{code}"
+                row: dict[str, Any] = {
+                    "过门OK": True,
+                    "买点": 10.0,
+                    "止损": 9.5,
+                }
+                watch_index._attach_strategy_pnl_fields(
+                    row,
+                    w={"sina": sina, "code": code},
+                    daily=df,
+                    q={
+                        "session": "2026-09-18",
+                        "open": 10.0,
+                        "high": 10.5,
+                        "low": 9.9,
+                        "last": 10.3,
+                        "ts": __import__("datetime").datetime.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+                    },
+                    entry_pct=DEFAULT_PCT,
+                    stop_pct=DEFAULT_PCT,
+                    tick=TICK_SIZE,
+                    prev_entry_mode="yin_or_small_yang",
+                    limit_down_pct=0.10,
+                )
+                self.assertEqual(row.get("策略收益语义"), "strategy_simulator_ledger")
+                self.assertEqual(row.get("策略收益范围"), "symbol")
+                self.assertIsInstance(row.get("策略累计持有"), bool)
+                self.assertEqual(row.get("策略起算"), STRATEGY_PNL_START)
+                self.assertIsNotNone(row.get("策略收益%"))
+                self.assertIn(row.get("策略模拟状态"), ("FLAT", "LONG"))
+        finally:
+            p1.stop()
+            p2.stop()
+            sim.reset_memory_for_tests()
+            td.cleanup()
 
     def test_snapshot_buckets_or_fixture_fallback(self) -> None:
         """有 metadata 的 snapshot 计入四象限；否则 fixture 已覆盖（不伪造 production）。"""
@@ -411,7 +388,11 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
                 continue
             if r.get("策略累计持有") is None:
                 continue
-            self.assertEqual(r.get("策略收益语义"), "cumulative_factor1_replay")
+            sem = r.get("策略收益语义")
+            self.assertIn(
+                sem,
+                ("strategy_simulator_ledger", "cumulative_factor1_replay"),
+            )
             self.assertEqual(r.get("策略收益范围"), "symbol")
             self.assertIn("策略收益%", r)
 

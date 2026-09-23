@@ -43,10 +43,20 @@ export interface HoldingRow {
   策略收益?: number | null
   '策略收益%'?: number | null
   策略起算?: string
-  /** cumulative_factor1_replay：单票因子1虚拟账本累计，≠纸面/单笔收入 */
+  /** strategy_simulator_ledger：策略模拟器虚拟账本 */
   策略收益语义?: string | null
   /** symbol = 单票虚拟账本；非账户级 strategy equity */
   策略收益范围?: string | null
+  /** FLAT / LONG */
+  策略模拟状态?: string | null
+  策略模拟持有?: boolean | null
+  /** 策略主状态：空仓 / 策略持有 */
+  策略状态?: string | null
+  策略入场价?: number | null
+  策略入场时间?: string | null
+  策略出场价?: number | null
+  策略出场时间?: string | null
+  策略虚拟股数?: number | null
   /** 因子1虚拟账本是否仍持有（可与纸面空仓并存） */
   策略累计持有?: boolean | null
   策略累计笔数?: number | null

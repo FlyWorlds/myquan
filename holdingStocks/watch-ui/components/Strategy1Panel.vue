@@ -180,7 +180,15 @@ function tradeIncomePct(r: HoldingRow): number | null {
   return (mark / trigger - 1) * 100
 }
 
-/** 纸面状态文案（与角标一致，不改交易语义）。 */
+/** 策略主状态：来自 Strategy Simulator（空仓/策略持有），不跟纸面 qty。 */
+function strategyStatusLabel(r: HoldingRow): string {
+  const sim = String(r.策略状态 || '').trim()
+  if (sim === '策略持有' || sim === '空仓') return sim
+  if (r.策略模拟持有 || r.策略累计持有) return '策略持有'
+  return '空仓'
+}
+
+/** debug：纸面仓位（不作为 Strategy Tab 主状态）。 */
 function paperStatusLabel(r: HoldingRow): string {
   const qty = Number(r.持仓 || 0)
   const pos = String(r.持仓状态 || '').trim()
@@ -193,28 +201,19 @@ function paperStatusLabel(r: HoldingRow): string {
   return '空仓'
 }
 
-/**
- * 回放状态：只用 backend `策略累计持有`，禁止用收益%反推。
- * 文案固定「回放持有 / 回放空仓」，避免与纸面「持仓」混淆。
- */
-function replayStatusLabel(r: HoldingRow): string | null {
-  if (r.策略累计持有 == null) return null
-  return r.策略累计持有 ? '回放持有' : '回放空仓'
-}
-
-/** 策略累计 tooltip：与纸面仓 / 单笔收入区分。 */
+/** 策略累计 tooltip。 */
 function strategyCumTitle(r: HoldingRow): string {
   const start = String(r.策略起算 || '回放起点')
   const base =
     `单票策略虚拟账本自 ${start} 的累计收益；与模拟账户实际持仓独立。`
-  if (r.策略累计持有) {
+  if (strategyStatusLabel(r) === '策略持有') {
     return `${base} 当前收益包含现价 MTM。`
   }
   return `${base} 累计收益已冻结到最近一次虚拟平仓。`
 }
 
 const SINGLE_SIGNAL_TITLE =
-  '当前信号单笔理论收益（触发价→现价/退出价）；≠策略累计、≠纸面成本收益'
+  '当前信号单笔理论收益（策略入场价→现价/退出价）；≠策略累计、≠纸面成本收益'
 </script>
 
 <template>
@@ -233,9 +232,8 @@ const SINGLE_SIGNAL_TITLE =
         <template v-else-if="sortKey === 'strategyPnl'"> · 已按策略累计{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
       </div>
       <div class="mt-1 text-xs text-ui-text-3">
-        状态列同时显示纸面（空仓/已经买入…）与回放（回放持有/回放空仓）；二者独立。
-        策略累计=单票因子1虚拟账本自 {{ rows[0]?.策略起算 || '2026-09-01' }} 累计（≠纸面仓）；
-        单笔收入=当前信号触发价→现价/退出价（≠策略累计）；图例可点筛选。
+        状态=策略模拟器（空仓/策略持有），与纸面仓独立；纸面仅 debug 小字。
+        策略累计=该策略+标的虚拟账本；单笔收入=入场价→现价；图例可点筛选。
         点「日内涨跌 / 策略累计」表头可排序。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -279,7 +277,7 @@ const SINGLE_SIGNAL_TITLE =
               <th class="px-3 py-2.5">标的</th>
               <th
                 class="min-w-[5.5rem] px-3 py-2.5"
-                title="纸面=模拟账户仓位；回放=因子1虚拟账本（互不覆盖）"
+                title="策略模拟器状态（空仓/策略持有）；与纸面仓独立"
               >状态</th>
               <th class="px-3 py-2.5">距买点</th>
               <th class="px-3 py-2.5">竞价/开盘</th>
@@ -346,26 +344,29 @@ const SINGLE_SIGNAL_TITLE =
                 </div>
               </td>
               <td class="px-3 py-2.5 align-top">
-                <div class="text-[10px] text-ui-text-3">纸面</div>
                 <span
                   class="inline-block max-w-[7rem] truncate"
-                  :class="visual.badgeClass"
-                  :title="`纸面：${paperStatusLabel(r)}`"
+                  :class="strategyStatusLabel(r) === '策略持有' ? 'signal-badge signal-badge-hold-paper' : visual.badgeClass"
+                  :title="`策略：${strategyStatusLabel(r)}`"
                 >
-                  {{ paperStatusLabel(r) }}
+                  {{ strategyStatusLabel(r) }}
                 </span>
                 <div
-                  v-if="replayStatusLabel(r)"
-                  class="mt-1 text-[10px]"
-                  :class="r.策略累计持有 ? 'font-semibold text-accent' : 'text-ui-text-3'"
-                  :title="r.策略累计持有 ? '因子1虚拟账本仍持有（可与纸面空仓并存）' : '因子1虚拟账本空仓（累计已冻结）'"
+                  v-if="Number(r.持仓) > 0 || paperStatusLabel(r) !== '空仓'"
+                  class="mt-1 text-[10px] text-ui-text-3"
+                  :title="'纸面仓（Paper，非策略主状态）'"
                 >
-                  {{ replayStatusLabel(r) }}
+                  纸面 {{ paperStatusLabel(r) }}
+                </div>
+                <div v-if="r.策略入场时间" class="mt-0.5 font-mono text-[11px] font-semibold tabular-nums text-accent">
+                  {{ fmtSignalClock(r.策略入场时间) }}
+                </div>
+                <div v-else-if="r.信号时间" class="mt-0.5 font-mono text-[11px] font-semibold tabular-nums text-accent">
+                  {{ fmtSignalClock(r.信号时间) }}
                 </div>
                 <div v-if="Number(r.持仓) > 0 && String(r.已触买 || '') === '是'" class="mt-1 text-[10px] font-semibold text-up">今日触买</div>
                 <div v-if="r.槽位候选" class="mt-1 text-[10px] text-accent">槽位候选</div>
                 <div v-if="r.因子触发" class="mt-1 text-[10px] text-ui-text-3">{{ r.因子触发 }}</div>
-                <div v-if="r.信号时间" class="mt-0.5 font-mono text-[11px] font-semibold tabular-nums text-accent">{{ fmtSignalClock(r.信号时间) }}</div>
               </td>
               <td class="sensitive px-3 py-2.5 tabular-nums">
                 <span v-if="r['距买点%'] != null && Number(r['距买点%']) < 9000">

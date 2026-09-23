@@ -386,11 +386,12 @@ class TestStrategyReturnLifecycle(unittest.TestCase):
             prev_entry_mode="yin_or_small_yang",
             limit_down_pct=0.10,
         )
-        self.assertEqual(row["策略收益语义"], "cumulative_factor1_replay")
+        self.assertEqual(row["策略收益语义"], "strategy_simulator_ledger")
         self.assertEqual(row["策略收益范围"], "symbol")
         self.assertEqual(row["策略起算"], STRATEGY_PNL_START)
         self.assertIn("策略累计持有", row)
         self.assertIn("策略收益%", row)
+        self.assertIn("策略模拟状态", row)
         self.assertIsInstance(row["策略累计持有"], bool)
 
     def test_paper_replay_dual_status_labels(self) -> None:

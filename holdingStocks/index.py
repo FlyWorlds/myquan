@@ -2240,42 +2240,95 @@ def _attach_strategy_pnl_fields(
     prev_entry_mode: str,
     limit_down_pct: float,
 ) -> None:
-    """写入单票「策略收益%」= 自 STRATEGY_PNL_START 起 Factor1 虚拟账本累计收益。
+    """写入策略累计 / 单笔收入：权威源 = Strategy Simulator（非 Paper、非 Factor1 串台）。
 
-    语义（勿与纸面持仓 / 单笔收入混用）：
-    - STRATEGY_CUMULATIVE_RETURN（per-symbol Factor1 equity / initial_cash − 1）
-    - 含费用、整手、T+1；盘中把 live OHLC 并入末日线再 mark
-    - 虚拟仓仍持有时随现价变动；已平仓后仅现金、现价不再改累计
-    - 与纸面 qty /「空仓」无关：空仓仍可显示累计（虚拟账本未平则继续 mark）
-    - ≠ 单笔收入%（触发价→现价）；≠ 纸面持仓成本收益；≠ 账户总收益
+    Layer A：strategy_id+symbol 虚拟账本；与纸面 qty / Capital V2 无关。
+    Live：用 q.last 撞买/卖位；FLAT 累计冻结，LONG 可 mark。
     """
+    from strategy_simulator import (
+        apply_book_to_row,
+        evaluate_live_transition,
+        get_book,
+        mark_book,
+    )
+
     row["策略起算"] = STRATEGY_PNL_START
-    row["策略收益语义"] = "cumulative_factor1_replay"
-    row["策略收益范围"] = "symbol"
-    if row.get("error") or not q.get("session"):
+    sid = str(STRATEGY_ID)
+    code = str(w.get("code") or row.get("代码") or "")
+    if row.get("error") or not q.get("session") or not code:
         row["策略收益%"] = None
         row["策略收益"] = None
         row["策略累计持有"] = False
         row["策略累计笔数"] = None
+        row["策略模拟状态"] = "FLAT"
+        row["策略状态"] = "空仓"
+        row["策略收益语义"] = "strategy_simulator_ledger"
+        row["策略收益范围"] = "symbol"
         return
-    rec = _strategy_pnl_since_cached(
-        w["sina"],
-        daily,
-        q=q,
-        code=str(w["code"]),
-        entry_pct=entry_pct,
-        stop_pct=stop_pct,
-        tick=tick,
-        prev_entry_mode=prev_entry_mode,
-        limit_down_pct=limit_down_pct,
-    )
-    row["策略收益%"] = rec.get("return_pct")
-    row["策略收益"] = rec.get("pnl")
-    row["策略累计持有"] = bool(rec.get("holding"))
+
     try:
-        row["策略累计笔数"] = int(rec.get("trades") or 0)
+        last = float(q["last"])
+    except (TypeError, ValueError, KeyError):
+        last = 0.0
+    buy_lv = row.get("买点")
+    if buy_lv is None:
+        buy_lv = row.get("买入侧价")
+    sell_lv = row.get("止损")
+    if sell_lv is None:
+        sell_lv = row.get("卖出侧价")
+    allow_entry = bool(row.get("过门OK"))
+    # 已触买粘滞：允许 simulator 在仍 FLAT 时补登（与展示一致）
+    if str(row.get("已触买") or "") == "是":
+        allow_entry = True
+    quote_ts = None
+    if q.get("ts"):
+        quote_ts = str(q.get("ts"))
+    elif q.get("time"):
+        quote_ts = str(q.get("time"))
+    else:
+        # 无源时间戳：用会话日 + 当前时钟（仅作 evaluation 标记）
+        from datetime import datetime as _dt
+
+        quote_ts = f"{str(q['session'])[:10]} {_dt.now().strftime('%H:%M:%S')}"
+
+    if last > 0:
+        evaluate_live_transition(
+            strategy_id=sid,
+            symbol=code,
+            live_last=last,
+            quote_ts=quote_ts,
+            buy_level=float(buy_lv) if buy_lv is not None else None,
+            sell_level=float(sell_lv) if sell_lv is not None else None,
+            allow_entry=allow_entry,
+            reason="collect_rows",
+            persist=True,
+        )
+    book = get_book(sid, code)
+    if last > 0:
+        mark_book(book, last, quote_ts=quote_ts)
+    apply_book_to_row(row, book)
+    try:
+        row["策略累计笔数"] = int(book.get("trades") or 0)
     except (TypeError, ValueError):
         row["策略累计笔数"] = None
+    # debug：保留 Factor1 对照字段名但不作为主状态（避免 UI 双真相）
+    row["策略回放对照%"] = None
+    try:
+        rec = _strategy_pnl_since_cached(
+            w["sina"],
+            daily,
+            q=q,
+            code=code,
+            entry_pct=entry_pct,
+            stop_pct=stop_pct,
+            tick=tick,
+            prev_entry_mode=prev_entry_mode,
+            limit_down_pct=limit_down_pct,
+        )
+        row["策略回放对照%"] = rec.get("return_pct")
+        row["策略回放对照持有"] = bool(rec.get("holding"))
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _replay_last_factor_triggers_cached(

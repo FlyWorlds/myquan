@@ -430,8 +430,12 @@ def patch_row_live_quote(
     quote: dict[str, Any] | None,
     *,
     enrich_hold_pnl: bool = False,
+    strategy_id: str | None = None,
 ) -> bool:
-    """用最新 tick 覆盖现价/涨跌幅（可选实仓当日盈亏）。已实现平仓不改盈亏。"""
+    """用最新 tick 覆盖现价/涨跌幅（可选实仓当日盈亏）。已实现平仓不改盈亏。
+
+    若 strategy_id 给定：同步 Strategy Simulator live 评估（Layer A，不碰 Paper）。
+    """
     last = _quote_last(quote)
     if last is None:
         return False
@@ -552,6 +556,55 @@ def patch_row_live_quote(
             changed = True
     except Exception:  # noqa: BLE001
         pass
+
+    # Layer A：Strategy Simulator — 每次 fresh quote 评估（不改 Paper）
+    if strategy_id:
+        try:
+            from strategy_simulator import (
+                apply_book_to_row,
+                evaluate_live_transition,
+                get_book,
+            )
+
+            code = str(row.get("代码") or "")
+            if code:
+                q_ts = None
+                if quote:
+                    q_ts = quote.get("ts") or quote.get("time") or quote.get("timestamp")
+                if not q_ts:
+                    from datetime import datetime as _dt
+
+                    sess = str(row.get("交易日") or "")[:10]
+                    q_ts = f"{sess} {_dt.now().strftime('%H:%M:%S')}" if sess else _dt.now().strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+                buy_lv = row.get("买点") if row.get("买点") is not None else row.get("买入侧价")
+                sell_lv = row.get("止损") if row.get("止损") is not None else row.get("卖出侧价")
+                allow = bool(row.get("过门OK")) or str(row.get("已触买") or "") == "是"
+                before_st = row.get("策略模拟状态")
+                before_ret = row.get("策略收益%")
+                before_single = row.get("单笔收入%")
+                evaluate_live_transition(
+                    strategy_id=str(strategy_id),
+                    symbol=code,
+                    live_last=float(last),
+                    quote_ts=str(q_ts) if q_ts else None,
+                    buy_level=float(buy_lv) if buy_lv is not None else None,
+                    sell_level=float(sell_lv) if sell_lv is not None else None,
+                    allow_entry=allow,
+                    reason="quote_patch",
+                    persist=True,
+                )
+                book = get_book(str(strategy_id), code)
+                apply_book_to_row(row, book)
+                if (
+                    row.get("策略模拟状态") != before_st
+                    or row.get("策略收益%") != before_ret
+                    or row.get("单笔收入%") != before_single
+                ):
+                    changed = True
+        except Exception:  # noqa: BLE001
+            pass
     return changed
 
 
@@ -601,7 +654,7 @@ def patch_snapshot_live_quotes(
     get_quote: Callable[[str], dict[str, Any] | None],
     sina_of: Callable[[str], str] | None = None,
 ) -> bool:
-    """盘中快刷：只改现价/涨跌幅/持仓市值盈亏，不重跑信号扫描。"""
+    """盘中快刷：现价/涨跌幅；策略 Tab 同步 Layer A Simulator（不改 Paper 成交）。"""
     if sina_of is None:
         from watch_config import sina_of as _sina_of
 
@@ -628,7 +681,9 @@ def patch_snapshot_live_quotes(
         if not rows:
             continue
         for r in rows:
-            if patch_row_live_quote(r, _q_for(r), enrich_hold_pnl=False):
+            if patch_row_live_quote(
+                r, _q_for(r), enrich_hold_pnl=False, strategy_id=key
+            ):
                 changed = True
         snap[key] = rows
 
@@ -637,14 +692,14 @@ def patch_snapshot_live_quotes(
     if isinstance(s15, list):
         for r in s15:
             if isinstance(r, dict) and patch_row_live_quote(
-                r, _q_for(r), enrich_hold_pnl=False
+                r, _q_for(r), enrich_hold_pnl=False, strategy_id="strategy15"
             ):
                 changed = True
     elif isinstance(s15, dict):
         rows = list(s15.get("rows") or s15.get("stocks") or [])
         for r in rows:
             if isinstance(r, dict) and patch_row_live_quote(
-                r, _q_for(r), enrich_hold_pnl=False
+                r, _q_for(r), enrich_hold_pnl=False, strategy_id="strategy15"
             ):
                 changed = True
 
