@@ -312,7 +312,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 ## 盯盘要点
 
-**策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略收益**（自 2026-09-09 起因子回放、含费用；见 `watch_config.STRATEGY_PNL_START`）。额外盯盘见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材 601208、金安国纪 002636）。
+**策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略累计**（自 2026-09-09 起单票因子1虚拟账本累计、含费用；状态列分纸面/回放两行；虚拟持有时 mark 现价，已平冻结；≠纸面空仓/≠单笔收入；见 `watch_config.STRATEGY_PNL_START`）。额外盯盘见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材 601208、金安国纪 002636）。
 
 **策略16 Tab**：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，`SELF_WATCHLIST_PICKS`，全策略共用）+ 同策略一买卖；开盘阈值只认 `thr_2026.json`（缺省 2.5%，不走策略一遗留 `_WATCH_PCT` / 置顶 pct）；现为默认四槽交易池。图例「已经买入」=四槽实仓，「已触买」含今日已入槽；T+1 止损已记不算「已触止损」。刷新因子池：`python strategy/run_core_leader_pool.py`；拟合阈值：`python backtest/strategy16_core_leader/fit_thr.py`。
 

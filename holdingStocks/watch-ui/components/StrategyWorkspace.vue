@@ -52,7 +52,7 @@ const tabs = computed(() => {
     { id: 'signal', label: '信号' },
   ]
   if (hasChg.value) list.push({ id: 'chg', label: '股票涨幅' })
-  if (hasPnl.value) list.push({ id: 'pnl', label: '策略收益' })
+  if (hasPnl.value) list.push({ id: 'pnl', label: '策略累计' })
   list.push({
     id: 'pool',
     label: '策略股票池',
@@ -120,7 +120,7 @@ watch(
           focus="pnl"
           :pool-category="strategyId === 'strategy16' ? '因子27' : '策略池'"
         />
-        <p v-else class="text-sm text-ui-text-2">暂无策略收益数据。</p>
+        <p v-else class="text-sm text-ui-text-2">暂无策略累计数据。</p>
       </slot>
     </div>
 

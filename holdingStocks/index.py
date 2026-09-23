@@ -2240,10 +2240,23 @@ def _attach_strategy_pnl_fields(
     prev_entry_mode: str,
     limit_down_pct: float,
 ) -> None:
+    """写入单票「策略收益%」= 自 STRATEGY_PNL_START 起 Factor1 虚拟账本累计收益。
+
+    语义（勿与纸面持仓 / 单笔收入混用）：
+    - STRATEGY_CUMULATIVE_RETURN（per-symbol Factor1 equity / initial_cash − 1）
+    - 含费用、整手、T+1；盘中把 live OHLC 并入末日线再 mark
+    - 虚拟仓仍持有时随现价变动；已平仓后仅现金、现价不再改累计
+    - 与纸面 qty /「空仓」无关：空仓仍可显示累计（虚拟账本未平则继续 mark）
+    - ≠ 单笔收入%（触发价→现价）；≠ 纸面持仓成本收益；≠ 账户总收益
+    """
     row["策略起算"] = STRATEGY_PNL_START
+    row["策略收益语义"] = "cumulative_factor1_replay"
+    row["策略收益范围"] = "symbol"
     if row.get("error") or not q.get("session"):
         row["策略收益%"] = None
         row["策略收益"] = None
+        row["策略累计持有"] = False
+        row["策略累计笔数"] = None
         return
     rec = _strategy_pnl_since_cached(
         w["sina"],
@@ -2258,6 +2271,11 @@ def _attach_strategy_pnl_fields(
     )
     row["策略收益%"] = rec.get("return_pct")
     row["策略收益"] = rec.get("pnl")
+    row["策略累计持有"] = bool(rec.get("holding"))
+    try:
+        row["策略累计笔数"] = int(rec.get("trades") or 0)
+    except (TypeError, ValueError):
+        row["策略累计笔数"] = None
 
 
 def _replay_last_factor_triggers_cached(

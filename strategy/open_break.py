@@ -482,7 +482,11 @@ def replay_strategy_return_since(
     double_yang_combined_min_pct: float | None = DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     double_yang_combined_mode: str = DEFAULT_DOUBLE_YANG_COMBINED_MODE,
 ) -> dict[str, Any]:
-    """自 start_date 起空仓重放因子1，返回累计策略收益（含费用、整手、T+1）。"""
+    """自 start_date 起空仓重放因子1，返回单票策略累计收益（含费用、整手、T+1）。
+
+    equity = cash + shares * last_close；shares>0 时随 mark 变，平仓后仅现金冻结。
+    这是 per-symbol STRATEGY_CUMULATIVE_RETURN，不是纸面持仓收益，也不是单笔信号收益。
+    """
     from strategy.costs import ENGINE_COMMISSION_RATE, SLIPPAGE_VALUE, stamp_tax_for_code
 
     out: dict[str, Any] = {

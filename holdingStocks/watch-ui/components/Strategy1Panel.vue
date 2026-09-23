@@ -179,6 +179,42 @@ function tradeIncomePct(r: HoldingRow): number | null {
   if (mark == null || mark <= 0) return null
   return (mark / trigger - 1) * 100
 }
+
+/** 纸面状态文案（与角标一致，不改交易语义）。 */
+function paperStatusLabel(r: HoldingRow): string {
+  const qty = Number(r.持仓 || 0)
+  const pos = String(r.持仓状态 || '').trim()
+  if (qty > 0) {
+    if (pos === '待卖出') return '待卖出'
+    if (pos.includes('T+1')) return pos
+    return pos && pos !== '-' ? pos : '已经买入'
+  }
+  if (pos && pos !== '-') return pos
+  return '空仓'
+}
+
+/**
+ * 回放状态：只用 backend `策略累计持有`，禁止用收益%反推。
+ * 文案固定「回放持有 / 回放空仓」，避免与纸面「持仓」混淆。
+ */
+function replayStatusLabel(r: HoldingRow): string | null {
+  if (r.策略累计持有 == null) return null
+  return r.策略累计持有 ? '回放持有' : '回放空仓'
+}
+
+/** 策略累计 tooltip：与纸面仓 / 单笔收入区分。 */
+function strategyCumTitle(r: HoldingRow): string {
+  const start = String(r.策略起算 || '回放起点')
+  const base =
+    `单票策略虚拟账本自 ${start} 的累计收益；与模拟账户实际持仓独立。`
+  if (r.策略累计持有) {
+    return `${base} 当前收益包含现价 MTM。`
+  }
+  return `${base} 累计收益已冻结到最近一次虚拟平仓。`
+}
+
+const SINGLE_SIGNAL_TITLE =
+  '当前信号单笔理论收益（触发价→现价/退出价）；≠策略累计、≠纸面成本收益'
 </script>
 
 <template>
@@ -194,12 +230,13 @@ function tradeIncomePct(r: HoldingRow): number | null {
         · 每槽约 {{ Math.round((slotMeta.weight ?? 0.3) * 100) }}%
         · 默认按距买点升序（自选优先）
         <template v-if="sortKey === 'dayChg'"> · 已按日内涨跌{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
-        <template v-else-if="sortKey === 'strategyPnl'"> · 已按策略收益{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
+        <template v-else-if="sortKey === 'strategyPnl'"> · 已按策略累计{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
       </div>
       <div class="mt-1 text-xs text-ui-text-3">
-        策略收益自 {{ rows[0]?.策略起算 || '2026-09-01' }} 起算（因子1 回放·含费用）；
-        单笔收入%=自策略触发价至现价的理论收益率（触买后即算，无需入槽；≠持仓成本收益）；图例可点筛选，可多选。
-        点「日内涨跌 / 策略收益」表头可排序。已经买入=纸面实仓；已触买含今日已入槽；T+1 止损已记不算已触止损。
+        状态列同时显示纸面（空仓/已经买入…）与回放（回放持有/回放空仓）；二者独立。
+        策略累计=单票因子1虚拟账本自 {{ rows[0]?.策略起算 || '2026-09-01' }} 累计（≠纸面仓）；
+        单笔收入=当前信号触发价→现价/退出价（≠策略累计）；图例可点筛选。
+        点「日内涨跌 / 策略累计」表头可排序。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button
@@ -240,7 +277,10 @@ function tradeIncomePct(r: HoldingRow): number | null {
             <tr>
               <th class="px-3 py-2.5">分类</th>
               <th class="px-3 py-2.5">标的</th>
-              <th class="min-w-[5.5rem] px-3 py-2.5">状态</th>
+              <th
+                class="min-w-[5.5rem] px-3 py-2.5"
+                title="纸面=模拟账户仓位；回放=因子1虚拟账本（互不覆盖）"
+              >状态</th>
               <th class="px-3 py-2.5">距买点</th>
               <th class="px-3 py-2.5">竞价/开盘</th>
               <th class="px-3 py-2.5">现价</th>
@@ -260,13 +300,13 @@ function tradeIncomePct(r: HoldingRow): number | null {
                   type="button"
                   class="inline-flex items-center gap-0.5 font-semibold hover:text-accent"
                   :class="sortKey === 'strategyPnl' ? 'text-accent' : ''"
-                  :title="sortTitle('strategyPnl', '策略收益')"
+                  :title="sortTitle('strategyPnl', '策略累计')"
                   @click="toggleSort('strategyPnl')"
                 >
-                  策略收益<span class="tabular-nums text-[10px]">{{ sortMark('strategyPnl') }}</span>
+                  策略累计<span class="tabular-nums text-[10px]">{{ sortMark('strategyPnl') }}</span>
                 </button>
               </th>
-              <th class="px-3 py-2.5" title="自策略触发价至现价的理论收益率（≠真实账户盈亏）">单笔收入</th>
+              <th class="px-3 py-2.5" :title="SINGLE_SIGNAL_TITLE">单笔收入</th>
               <th class="px-3 py-2.5">前日</th>
               <th class="px-3 py-2.5">过门</th>
               <th class="px-3 py-2.5">阈值</th>
@@ -306,13 +346,22 @@ function tradeIncomePct(r: HoldingRow): number | null {
                 </div>
               </td>
               <td class="px-3 py-2.5 align-top">
+                <div class="text-[10px] text-ui-text-3">纸面</div>
                 <span
                   class="inline-block max-w-[7rem] truncate"
                   :class="visual.badgeClass"
-                  :title="visual.badgeText"
+                  :title="`纸面：${paperStatusLabel(r)}`"
                 >
-                  {{ visual.badgeText }}
+                  {{ paperStatusLabel(r) }}
                 </span>
+                <div
+                  v-if="replayStatusLabel(r)"
+                  class="mt-1 text-[10px]"
+                  :class="r.策略累计持有 ? 'font-semibold text-accent' : 'text-ui-text-3'"
+                  :title="r.策略累计持有 ? '因子1虚拟账本仍持有（可与纸面空仓并存）' : '因子1虚拟账本空仓（累计已冻结）'"
+                >
+                  {{ replayStatusLabel(r) }}
+                </div>
                 <div v-if="Number(r.持仓) > 0 && String(r.已触买 || '') === '是'" class="mt-1 text-[10px] font-semibold text-up">今日触买</div>
                 <div v-if="r.槽位候选" class="mt-1 text-[10px] text-accent">槽位候选</div>
                 <div v-if="r.因子触发" class="mt-1 text-[10px] text-ui-text-3">{{ r.因子触发 }}</div>
@@ -329,10 +378,13 @@ function tradeIncomePct(r: HoldingRow): number | null {
               <td class="sensitive px-3 py-2.5">
                 <ChgText :chg="r.当日涨幅">{{ fmtSignedPct(r.当日涨幅) }}</ChgText>
               </td>
-              <td class="sensitive px-3 py-2.5">
+              <td
+                class="sensitive px-3 py-2.5"
+                :title="strategyCumTitle(r)"
+              >
                 <ChgText :chg="r['策略收益%']">{{ fmtSignedPct(r['策略收益%']) }}</ChgText>
               </td>
-              <td class="sensitive px-3 py-2.5 tabular-nums">
+              <td class="sensitive px-3 py-2.5 tabular-nums" :title="SINGLE_SIGNAL_TITLE">
                 <ChgText :chg="tradeIncomePct(r)">{{ fmtSignedPct(tradeIncomePct(r)) }}</ChgText>
               </td>
               <td class="px-3 py-2.5">{{ r.前日形态 || '-' }}</td>
