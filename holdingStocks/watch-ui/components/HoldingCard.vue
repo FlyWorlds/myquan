@@ -24,6 +24,14 @@ const slotTrace = computed(
         posStatus.value === '已止损')),
 )
 
+/** 持仓最高 = holdings.peak_high，与自动卖出 trailing SoT 同源；≠ 今日最高 */
+const hwmTitle = computed(() => {
+  const at = props.row.持仓最高时间
+  return at
+    ? `策略 HWM（peak_high），形成 ${at}；自动卖出同用此值`
+    : '策略 HWM（peak_high）；自动卖出同用此值'
+})
+
 const posChipStyle = computed(() => {
   const s = posStatus.value
   if (s === '已经买入' || s === '持有' || s === '持有·T+1') {
@@ -153,14 +161,36 @@ const cardClass = computed(() => {
           <span class="text-ui-text-2">触发时刻</span>
           <b class="ml-1 font-mono tabular-nums">{{ fmtSignalClock(row.信号时间) }}</b>
         </div>
+        <div v-if="row.阈值就绪" class="col-span-2 grid grid-cols-3 gap-x-3 text-sm">
+          <div>
+            <span class="text-ui-text-2">现价</span>
+            <b class="sensitive ml-1 tabular-nums">{{ fmtNum(row.现价, pdg) }}</b>
+          </div>
+          <div :title="hwmTitle">
+            <span class="text-ui-text-2">持仓最高</span>
+            <b class="sensitive ml-1 tabular-nums">{{ fmtNum(row.持仓最高 ?? row.峰值, pdg) }}</b>
+            <span
+              v-if="row.持仓最高时间"
+              class="ml-1 font-mono text-[10px] text-ui-text-3"
+            >{{ row.持仓最高时间 }}</span>
+          </div>
+          <div>
+            <span class="text-ui-text-2">卖出侧</span>
+            <b class="sensitive ml-1 text-down">{{ fmtNum(row.卖出侧价 ?? row.止损, pdg) }}</b>
+          </div>
+        </div>
         <div v-if="row.阈值就绪" class="col-span-2 grid grid-cols-2 gap-x-3 text-sm">
           <div>
             <span class="text-ui-text-2">买入侧</span>
             <b class="sensitive ml-1 text-up">{{ fmtNum(row.买入侧价 ?? row.买点, pdg) }}</b>
           </div>
-          <div>
-            <span class="text-ui-text-2">卖出侧</span>
-            <b class="sensitive ml-1 text-down">{{ fmtNum(row.卖出侧价 ?? row.止损, pdg) }}</b>
+          <div
+            v-if="row.今日最高 != null || row.最高 != null"
+            title="行情 API dayHigh；≠ trailing 用的持仓最高"
+          >
+            <span class="text-ui-text-2">今日最高</span>
+            <b class="sensitive ml-1 tabular-nums">{{ fmtNum(row.今日最高 ?? row.最高, pdg) }}</b>
+            <span class="ml-1 text-[10px] text-ui-text-3">行情</span>
           </div>
         </div>
         <div v-if="row['距买点%'] != null && Number(row['距买点%']) < 9000" class="col-span-2 text-sm">

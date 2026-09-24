@@ -219,13 +219,23 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
             }
             symbols: list[str] = []
 
-            def _attach(code: str, sina: str, row: dict, last: float, session: str) -> dict:
+            def _attach(
+                code: str,
+                sina: str,
+                row: dict,
+                last: float,
+                session: str,
+                *,
+                daily: pd.DataFrame | None = None,
+            ) -> dict:
                 from datetime import datetime as _dt
 
                 watch_index._attach_strategy_pnl_fields(
                     row,
                     w={"sina": sina, "code": code},
-                    daily=_yin_then_buy_hold(),
+                    # flat 象限用空日线：避免 historical bootstrap 误开仓；
+                    # long 象限用触买持有日线 + live 撞买。
+                    daily=_yin_then_buy_hold() if daily is None else daily,
                     q={
                         "session": session,
                         "open": 10.0,
@@ -241,6 +251,10 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
                     limit_down_pct=0.10,
                 )
                 return row
+
+            empty_daily = pd.DataFrame(
+                columns=["date", "open", "high", "low", "close", "volume"]
+            )
 
             # 1) paper empty + sim long
             code, sina = _FIXTURE_CODES["empty_long"]
@@ -259,7 +273,7 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
             self.assertEqual(_paper_label(0, "空仓"), "空仓")
             counts["empty_long"] += 1
 
-            # 2) paper empty + sim flat（last 远低于买点）
+            # 2) paper empty + sim flat（last 远低于买点；无历史 bootstrap 开仓）
             code, sina = _FIXTURE_CODES["empty_flat"]
             symbols.append(code)
             row = {
@@ -269,7 +283,7 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
                 "买点": 20.0,
                 "止损": 5.0,
             }
-            _attach(code, sina, row, 10.2, "2026-09-19")
+            _attach(code, sina, row, 10.2, "2026-09-19", daily=empty_daily)
             self.assertEqual(row["策略模拟状态"], "FLAT")
             self.assertEqual(row["策略状态"], "空仓")
             counts["empty_flat"] += 1
@@ -299,7 +313,7 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
                 "买点": 20.0,
                 "止损": 5.0,
             }
-            _attach(code, sina, row, 10.2, "2026-09-19")
+            _attach(code, sina, row, 10.2, "2026-09-19", daily=empty_daily)
             self.assertEqual(row["持仓"], 800)
             self.assertEqual(row["策略模拟状态"], "FLAT")
             counts["long_flat"] += 1

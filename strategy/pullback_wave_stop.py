@@ -277,7 +277,10 @@ def open_auction_touch_ts(
     day_open: float,
     first_bar: bool,
 ) -> Any:
-    """竞价核：开盘价成交记 09:30，不用缺 09:30 的首根 1m 标签（常见 09:31/09:32）。"""
+    """竞价核：仅首根且标签为 09:31/09:32、成交价=今开时纠成 09:30。
+
+    禁止：非早盘首根、或任意时刻 fill≈open 反推开盘（PATH 同价不得改时间）。
+    """
     try:
         fill = float(fill_px or 0)
         open_px = float(day_open or 0)
@@ -287,6 +290,8 @@ def open_auction_touch_ts(
         return ts
     if abs(fill - open_px) > 1e-6:
         return ts
+    # 仅缺 09:30 的竞价/开盘首根标签可纠
+    hms = ""
     sess = ""
     if ts is not None:
         try:
@@ -294,8 +299,13 @@ def open_auction_touch_ts(
             if getattr(t, "tzinfo", None) is not None:
                 t = t.tz_convert("Asia/Shanghai").tz_localize(None)
             sess = str(t.date())
+            hms = f"{t.hour:02d}:{t.minute:02d}:{t.second:02d}"
         except Exception:  # noqa: BLE001
-            sess = str(ts)[:10]
+            s = str(ts)
+            sess = s[:10] if len(s) >= 10 else ""
+            hms = s[11:19] if len(s) >= 19 else ""
+    if hms[:5] not in ("09:30", "09:31", "09:32", ""):
+        return ts
     clock = "09:30:00"
     return f"{sess} {clock}" if sess else clock
 
@@ -588,6 +598,40 @@ def resolve_t1_overnight_note(
     }
 
 
+def raise_position_peak_high(
+    *,
+    persisted_peak: float,
+    entry_price: float | None = None,
+    quote_last: float | None = None,
+    quote_day_high: float | None = None,
+    path_running_high: float | None = None,
+    allow_quote_day_high: bool = False,
+) -> float:
+    """持仓生命周期 highWaterMark：只升不降。
+
+    · persisted_peak / path_running_high / last：始终可抬升
+    · quote_day_high：仅 allow_quote_day_high=True（隔夜仓）时并入，
+      用于漏 tick 恢复；买入当日禁止（dayHigh 可能发生在建仓前）
+    · 不把 open / preClose 当作峰值源
+    """
+    candidates: list[float] = []
+    for x in (persisted_peak, entry_price, quote_last, path_running_high):
+        try:
+            v = float(x or 0)
+        except (TypeError, ValueError):
+            v = 0.0
+        if v > 0:
+            candidates.append(v)
+    if allow_quote_day_high:
+        try:
+            dh = float(quote_day_high or 0)
+        except (TypeError, ValueError):
+            dh = 0.0
+        if dh > 0:
+            candidates.append(dh)
+    return max(candidates) if candidates else 0.0
+
+
 def stop_note_invalidated_by_recovery(
     *,
     last_px: float,
@@ -596,16 +640,30 @@ def stop_note_invalidated_by_recovery(
     recover_mult: float = 1.005,
     limit_up_pct: float = 0.10,
     tick: float = TICK_SIZE,
+    cost_px: float | None = None,
+    reason: str | None = None,
 ) -> bool:
     """T+1 已记后若现价已远离卖价（含收盘涨停），作废已记。
 
-    盯盘注释「现价已明显高于止损则不当止损」应对落库已记同样生效。
+    · hard_from_cost：现价明显高于硬保护价 → 作废（收回）
+    · t1_trail：哨兵价=成本，不是成交卖价；小幅浮盈不得当成「已收回」作废，
+      否则隔夜永远 armed=False，卖出侧锁死在成本硬保护、峰值回落 2.5% 永不生效。
+      仅涨停（或调用方另判盈≥3%）作废。
     """
     last = float(last_px or 0)
     if last <= 0:
         return False
     noted = float(noted_px or 0)
-    if noted > 0 and last > noted * float(recover_mult) + 1e-12:
+    reason_s = str(reason or "").strip()
+    try:
+        cost = float(cost_px or 0)
+    except (TypeError, ValueError):
+        cost = 0.0
+    # t1_trail 哨兵（noted≈成本）或显式 reason：禁走「last>noted×1.005」
+    is_t1_sentinel = reason_s == "t1_trail" or (
+        noted > 0 and cost > 0 and abs(noted - cost) <= 1e-6
+    )
+    if noted > 0 and (not is_t1_sentinel) and last > noted * float(recover_mult) + 1e-12:
         return True
     pc = float(prev_close or 0)
     if pc > 0:
@@ -2561,6 +2619,7 @@ __all__ = [
     "mid_gain_first_stop",
     "mid_gain_tp_candidates",
     "resolve_t1_overnight_note",
+    "raise_position_peak_high",
     "stop_note_invalidated_by_recovery",
     "exit_stop_price",
     "lot_half_shares",

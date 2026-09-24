@@ -663,6 +663,13 @@ def test_open_auction_touch_ts_rewrites_first_bar_label():
         )
         == later
     )
+    # 即使误标 first_bar，非 09:31/09:32 也不得因 fill≈open 改写
+    assert (
+        _m.open_auction_touch_ts(
+            later, fill_px=16.93, day_open=16.93, first_bar=True
+        )
+        == later
+    )
 
 
 def test_path_hit_open_fill_uses_0930_not_first_1m_label():

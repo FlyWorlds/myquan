@@ -21,7 +21,10 @@
   · 因子2 与 strategy/dd_alert 同源
   · 有仓：动态止盈触达自动结算；**阶梯 10% 减半**（持仓记 tp_stage + last_tp_ts，半仓后从触达分钟下一根继续盯 15%/峰值回落）。不接券商，本地只记信号与纸面数量。
   · **信号≠入槽**：触买预警见 `watch_buy_signal.py`（须过门）；槽满仍发「已触买·槽满」；未过门不算触买、不预警；自动入槽才是成交
-  · 本地 JSON 记录持仓（含 peak_high）；T+1 买入日不可卖
+  · 本地 JSON 记录持仓（含 peak_high / peak_high_at）；T+1 买入日不可卖
+  · **时间完整性**（系统级，非个股补丁）：见 docs/TEMPORAL_INTEGRITY.md
+    与 temporal_integrity.py — NO LOOK-AHEAD / HWM CAUSALITY /
+    EVENT IMMUTABILITY / STALE DATA；回归 run_regression_tests.py
 
 用法：
   python index.py              # 终端查看行情 + 持仓（若 watch 在跑则同步 JSON 并打开前端）
@@ -142,6 +145,7 @@ from strategy.pullback_wave_stop import (
     path_dependent_pullback_hit,
     pnl_exceeds,
     pullback_stop_price,
+    raise_position_peak_high,
     realized_vol_daily,
     replay_factor26_1m,
     replay_last_factor_triggers as _replay_f26,
@@ -150,6 +154,7 @@ from strategy.pullback_wave_stop import (
     strategy_levels as _levels_f26,
     strategy_signal as _signal_f26,
     t1_trail_stop_px,
+    working_stop_price,
 )
 from strategy.data import AKSHARE_CALL_LOCK, fetch_daily, latest_completed_weekday
 
@@ -1346,6 +1351,230 @@ def _broadcast_watch_snapshot(snap: dict[str, Any]) -> None:
 _QUOTE_PATCH_MIN_SEC = 0.4
 
 
+def _peak_at_clock(raw: Any) -> str | None:
+    """peak_high_at → HH:MM:SS（仅展示）。"""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    if len(s) >= 19 and s[10] in (" ", "T"):
+        return s[11:19]
+    if len(s) == 8 and s[2] == ":" and s[5] == ":":
+        return s
+    return s
+
+
+def _stamp_position_peak_high(
+    pos: dict[str, Any],
+    new_peak: float,
+    *,
+    at: str | None = None,
+    decision_at: str | None = None,
+) -> bool:
+    """持仓 HWM 只升不降；抬升时原子写入 peak_high + peak_high_at。
+
+    新抬升必须带 at；禁止未卜先知（at > decision_at → FUTURE_DATA_VIOLATION）。
+    """
+    from temporal_integrity import (
+        TemporalIntegrityError,
+        migrate_legacy_peak_high_at,
+        stamp_peak_high_atomic,
+    )
+
+    migrate_legacy_peak_high_at(pos)
+    at_s = str(at or "").strip()
+    if not at_s:
+        # 兼容旧调用：用 decision_at / now，但不得静默缺时间
+        at_s = str(decision_at or _now()).strip()
+    try:
+        return stamp_peak_high_atomic(
+            pos, new_peak, at=at_s, decision_at=decision_at or at_s
+        )
+    except TemporalIntegrityError:
+        raise
+
+
+def _attach_hwm_row_fields(
+    row: dict[str, Any],
+    pos: dict[str, Any] | None,
+    *,
+    px_digits: int,
+) -> None:
+    """写入今日最高 / 持仓最高 / 持仓最高时间。禁止前端重算。
+
+    · 最高 / 今日最高 = API dayHigh（行情）
+    · 持仓最高 / 峰值 = positions.peak_high（trailing SoT）
+    """
+    day_h = row.get("最高")
+    if day_h is not None:
+        try:
+            row["今日最高"] = round(float(day_h), px_digits)
+        except (TypeError, ValueError):
+            row["今日最高"] = day_h
+    ph = 0.0
+    if isinstance(pos, dict):
+        try:
+            from temporal_integrity import migrate_legacy_peak_high_at
+
+            migrate_legacy_peak_high_at(pos)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            ph = float(pos.get("peak_high") or 0)
+        except (TypeError, ValueError):
+            ph = 0.0
+    if ph <= 0:
+        try:
+            ph = float(row.get("持仓最高") or row.get("峰值") or 0)
+        except (TypeError, ValueError):
+            ph = 0.0
+    if ph > 0:
+        px = round(ph, px_digits)
+        row["持仓最高"] = px
+        row["峰值"] = px
+        at_raw = (pos or {}).get("peak_high_at") if isinstance(pos, dict) else None
+        if not at_raw:
+            at_raw = row.get("持仓最高时间")
+        clock = _peak_at_clock(at_raw)
+        if clock:
+            row["持仓最高时间"] = clock
+    else:
+        row.setdefault("持仓最高", None)
+        row.setdefault("峰值", None)
+
+
+def _iter_snapshot_price_rows(snap: dict[str, Any]):
+    for key in ("holdings", "strategy1", "strategy16", "strategy17"):
+        for r in snap.get(key) or []:
+            if isinstance(r, dict):
+                yield r
+    s15 = snap.get("strategy15")
+    if isinstance(s15, list):
+        for r in s15:
+            if isinstance(r, dict):
+                yield r
+    elif isinstance(s15, dict):
+        for r in s15.get("rows") or s15.get("stocks") or []:
+            if isinstance(r, dict):
+                yield r
+
+
+def _sync_snapshot_hwm_from_quotes(
+    snap: dict[str, Any],
+    *,
+    get_quote: Callable[[str], dict[str, Any] | None],
+) -> bool:
+    """快刷路径：用与 collect 相同的 raise_position_peak_high 抬升 HWM，并刷新卖出侧展示价。
+
+    不触发 paper 卖出；只保证 UI 的持仓最高 / 卖出侧价与 holdings.peak_high 同源。
+    """
+    from watch_config import sina_of
+
+    data = load_holdings()
+    positions = data.get("positions") or {}
+    dirty = False
+    changed = False
+    for r in _iter_snapshot_price_rows(snap):
+        code = _code_key(str(r.get("代码") or ""))
+        if not code:
+            continue
+        pos = positions.get(code)
+        if not isinstance(pos, dict):
+            pos = {}
+        try:
+            px_digits = int(r.get("价位小数") or 2)
+        except (TypeError, ValueError):
+            px_digits = 2
+        day_h = r.get("最高")
+        if day_h is not None:
+            try:
+                r["今日最高"] = round(float(day_h), px_digits)
+            except (TypeError, ValueError):
+                r["今日最高"] = day_h
+        try:
+            qty = int(pos.get("qty") or r.get("持仓") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        if qty <= 0:
+            before = r.get("持仓最高")
+            _attach_hwm_row_fields(r, pos if pos else None, px_digits=px_digits)
+            if r.get("持仓最高") != before:
+                changed = True
+            continue
+        try:
+            q = get_quote(sina_of(code)) or {}
+        except Exception:  # noqa: BLE001
+            q = {}
+        try:
+            last_h = float(q.get("last") or r.get("现价") or 0)
+        except (TypeError, ValueError):
+            last_h = 0.0
+        try:
+            snap_h = float(q.get("high") or r.get("最高") or 0)
+        except (TypeError, ValueError):
+            snap_h = 0.0
+        try:
+            cost_h = float(pos.get("cost") or r.get("成本") or 0)
+        except (TypeError, ValueError):
+            cost_h = 0.0
+        try:
+            old_peak = float(pos.get("peak_high") or 0)
+        except (TypeError, ValueError):
+            old_peak = 0.0
+        sess = str(q.get("session") or r.get("交易日") or "")[:10]
+        t1_today = is_t1_buy_day(pos.get("buy_time"), sess) if sess else False
+        quote_at = _bar_ts_str(q.get("last_ts")) or _now()
+        decision_at = quote_at
+        last_q_at = pos.get("last_quote_at")
+        try:
+            from temporal_integrity import (
+                TemporalIntegrityError,
+                assert_quote_usable,
+                migrate_legacy_peak_high_at,
+            )
+
+            migrate_legacy_peak_high_at(pos)
+            assert_quote_usable(
+                quote_at=quote_at,
+                decision_at=decision_at,
+                last_accepted_quote_at=last_q_at,
+            )
+        except TemporalIntegrityError as te:
+            print(f"[{_now()}] {te.code} quote skipped {code}: {te}")
+            before_hwm = r.get("持仓最高")
+            _attach_hwm_row_fields(r, pos, px_digits=px_digits)
+            if r.get("持仓最高") != before_hwm:
+                changed = True
+            continue
+        new_peak = raise_position_peak_high(
+            persisted_peak=old_peak,
+            entry_price=cost_h if cost_h > 0 else None,
+            quote_last=last_h,
+            quote_day_high=snap_h,
+            path_running_high=old_peak,
+            allow_quote_day_high=not bool(t1_today),
+        )
+        try:
+            if _stamp_position_peak_high(
+                pos, new_peak, at=quote_at, decision_at=decision_at
+            ):
+                dirty = True
+                changed = True
+                positions[code] = pos
+        except TemporalIntegrityError as te:
+            print(f"[{_now()}] {te.code} HWM raise blocked {code}: {te}")
+        pos["last_quote_at"] = quote_at
+        before_hwm = r.get("持仓最高")
+        _attach_hwm_row_fields(r, pos, px_digits=px_digits)
+        if r.get("持仓最高") != before_hwm:
+            changed = True
+    if dirty:
+        data["positions"] = positions
+        save_holdings(data)
+    return changed
+
+
 def publish_live_quote_patch() -> bool:
     """盘中行情快刷：现价/涨跌幅/持仓盈亏，不重跑 collect_rows。
 
@@ -1365,6 +1594,8 @@ def publish_live_quote_patch() -> bool:
         changed = patch_snapshot_live_quotes(
             snap, get_quote=feed.get_quote, sina_of=sina_of
         )
+        if _sync_snapshot_hwm_from_quotes(snap, get_quote=feed.get_quote):
+            changed = True
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 行情快刷失败: {e}")
         return False
@@ -2247,9 +2478,11 @@ def _attach_strategy_pnl_fields(
     """
     from strategy_simulator import (
         apply_book_to_row,
+        ensure_bootstrapped,
         evaluate_live_transition,
         get_book,
         mark_book,
+        sync_flat_cumulative,
     )
 
     row["策略起算"] = STRATEGY_PNL_START
@@ -2265,6 +2498,22 @@ def _attach_strategy_pnl_fields(
         row["策略收益语义"] = "strategy_simulator_ledger"
         row["策略收益范围"] = "symbol"
         return
+
+    # 历史日线 bootstrap → 同一账本；仅从未交易初始态执行一次
+    try:
+        ensure_bootstrapped(
+            sid,
+            code,
+            daily,
+            start_date=str(STRATEGY_PNL_START),
+            entry_pct=float(entry_pct),
+            stop_pct=float(stop_pct),
+            tick=float(tick),
+            prev_entry_mode=str(prev_entry_mode),
+            persist=True,
+        )
+    except Exception:  # noqa: BLE001
+        pass
 
     try:
         last = float(q["last"])
@@ -2306,6 +2555,8 @@ def _attach_strategy_pnl_fields(
     book = get_book(sid, code)
     if last > 0:
         mark_book(book, last, quote_ts=quote_ts)
+    else:
+        sync_flat_cumulative(book)
     apply_book_to_row(row, book)
     try:
         row["策略累计笔数"] = int(book.get("trades") or 0)
@@ -2937,6 +3188,8 @@ def heal_watch_ledger(*, session: str | None = None) -> dict[str, Any]:
         changed = True
     if purge_illegal_t1_stop_notes(data) > 0:
         changed = True
+    if heal_missing_overnight_t1_trail_notes(data, session=sess) > 0:
+        changed = True
     if purge_fake_slot_closed(data, sess) > 0:
         changed = True
     existing = _account_total_open(data)
@@ -3386,6 +3639,11 @@ def _fill_row_signal_times(
         open_px=row.get("开盘"),
         existing=stop_full,
         open_bell=bool(row.get("_open_bell")),
+        exit_kind=str(
+            row.get("exit_kind")
+            or (realized or {}).get("exit_kind")
+            or ""
+        ),
     )
     if bell_ts:
         stop_full = bell_ts
@@ -3843,6 +4101,7 @@ def apply_paper_slot_buy(
     pos["cost"] = round(price, 4)
     pos["today_cost"] = round(price, 4)
     pos["peak_high"] = round(price, 4)
+    pos["peak_high_at"] = None  # filled below with buy_time
     pos["available"] = 0
     raw_ts = str(buy_time or "").strip()
     if raw_ts.startswith("9999"):
@@ -3850,6 +4109,7 @@ def apply_paper_slot_buy(
     hit_ts = _bar_ts_str(raw_ts) if raw_ts else None
     hit_ts = hit_ts or _now()
     pos["buy_time"] = hit_ts
+    pos["peak_high_at"] = hit_ts
     pos["tp_stage"] = 0
     pos["last_tp_ts"] = None
     pos["note"] = note
@@ -4427,26 +4687,15 @@ def _row_trigger_ts(row: dict[str, Any], *, side: str = "buy") -> str:
     return "9999-99-99 99:99:99"
 
 
-def _keep_first_signal_ts(prev: dict[str, Any], st: dict[str, Any]) -> None:
-    for key in ("buy_hit_ts", "stop_hit_ts"):
-        old = prev.get(key)
-        if not old:
-            continue
-        new = st.get(key)
-        # 开盘保护纠成 09:30 时，允许覆盖首根 1m 的 09:31/09:32
-        if (
-            key == "stop_hit_ts"
-            and new
-            and _is_open_bell_ts(new)
-            and not _is_open_bell_ts(old)
-        ):
-            continue
-        st[key] = old
-
-
 def _is_open_bell_ts(ts: Any) -> bool:
     hms = _signal_hms(ts) or ""
     return hms[:5] == "09:30"
+
+
+def _is_early_open_1m_label(ts: Any) -> bool:
+    """缺 09:30 时的首根 1m 常见标签 09:31/09:32；不可把 09:58 PATH 当此类标签。"""
+    hms = _signal_hms(ts) or ""
+    return hms[:5] in ("09:31", "09:32")
 
 
 def _open_protect_hit_ts(
@@ -4456,19 +4705,36 @@ def _open_protect_hit_ts(
     open_px: Any = None,
     existing: Any = None,
     open_bell: bool = False,
+    exit_kind: str | None = None,
 ) -> str | None:
-    """竞价核成交时刻：开盘价成交固定 09:30；09:31/09:32 的 1m 标签纠回开盘铃。"""
+    """开盘保护成交时刻：仅 open_bell / exit_kind=open_protect 才固定 09:30。
+
+    EVENT IMMUTABILITY / NO LOOK-AHEAD（docs/TEMPORAL_INTEGRITY.md）：
+    **禁止**用 fill≈open 反推开盘时刻（PATH 触达价碰巧等于今开时不得改写成 09:30）。
+    fill_px / open_px 参数保留以兼容旧调用，不再参与推断。
+    """
+    del fill_px, open_px  # 明确不参与时间推断
     bell = session_open_bell_ts(session)
-    if open_bell:
+    if open_bell or str(exit_kind or "") == "open_protect":
         return bell
-    fill = _as_money(fill_px)
-    o = _as_money(open_px)
-    if fill is None or o is None or abs(float(fill) - float(o)) > 5e-3:
-        return _bar_ts_str(existing) if existing else None
-    hms = _signal_hms(existing) or ""
-    if not hms or hms[:5] in ("09:30", "09:31", "09:32"):
-        return bell
-    return _bar_ts_str(existing) if existing else bell
+    return _bar_ts_str(existing) if existing else None
+
+
+def _keep_first_signal_ts(prev: dict[str, Any], st: dict[str, Any]) -> None:
+    for key in ("buy_hit_ts", "stop_hit_ts"):
+        old = prev.get(key)
+        if not old:
+            continue
+        new = st.get(key)
+        # 仅允许：真正开盘铃 09:30 覆盖缺 bar 的 09:31/09:32 标签
+        if (
+            key == "stop_hit_ts"
+            and new
+            and _is_open_bell_ts(new)
+            and _is_early_open_1m_label(old)
+        ):
+            continue
+        st[key] = old
 
 
 def apply_exit_fill(
@@ -4549,8 +4815,24 @@ def apply_exit_fill(
         "reason": reason,
         "time": _bar_ts_str(first_hit_ts) or _now(),
         "first_hit_ts": _bar_ts_str(first_hit_ts),
+        "triggered_at": _bar_ts_str(first_hit_ts) or _now(),
+        "filled_at": _bar_ts_str(first_hit_ts) or _now(),
+        "decision_at": _bar_ts_str(first_hit_ts) or _now(),
+        "exit_kind": str(exit_kind or ""),
         "action_kind": str(action_kind or ""),
     }
+    # 时间链：禁止事后用价格反推；immutable 一旦写入不再因日K/新行情改写
+    from temporal_integrity import assert_event_time_chain
+
+    try:
+        assert_event_time_chain(
+            decision_at=rec["decision_at"],
+            triggered_at=rec["triggered_at"],
+            filled_at=rec["filled_at"],
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] TEMPORAL reject exit fill {code}: {e}")
+        return existing or {}
     realized[code] = rec
 
     new_qty = old_qty - sell_qty
@@ -4979,8 +5261,12 @@ def t1_buy_day_should_void_stop_note(
     prev_close: float | None,
     noted_px: float | None,
     limit_up_pct: float = 0.10,
+    reason: str | None = None,
 ) -> bool:
-    """买入日：现价盈≥3%、涨停、或已远离已记价 → 不得落库/展示「止损已记」。"""
+    """买入日：现价盈≥3%、涨停、或已远离硬保护已记价 → 不得落库/展示「止损已记」。
+
+    t1_trail 哨兵=成本：小幅浮盈不 void（否则无法隔夜武装峰值回落）。
+    """
     try:
         last = float(last_px or 0)
     except (TypeError, ValueError):
@@ -4997,6 +5283,8 @@ def t1_buy_day_should_void_stop_note(
             noted_px=noted_px,
             prev_close=prev_close,
             limit_up_pct=float(limit_up_pct or 0.10),
+            cost_px=cost if cost > 0 else None,
+            reason=reason,
         )
     )
 
@@ -5037,6 +5325,7 @@ def t1_stop_note_allowed(
         prev_close=prev_close,
         noted_px=stop_px,
         limit_up_pct=limit_up_pct,
+        reason=str(reason or ""),
     ):
         return False
     return True
@@ -5061,6 +5350,82 @@ def purge_illegal_t1_stop_notes(data: dict[str, Any]) -> int:
         pos["stop_noted"] = False
         pos["stop_noted_px"] = None
         pos["stop_noted_session"] = None
+        n += 1
+    return n
+
+
+def heal_missing_overnight_t1_trail_notes(
+    data: dict[str, Any],
+    *,
+    session: str,
+) -> int:
+    """隔夜仓缺 stop_noted：补 t1_trail 哨兵（=成本），启用峰值回落 2.5%。
+
+    仅当：有仓、非买入当日、昨收相对成本未达 3%、尚未合法已记。
+    修复「小幅浮盈误 void 哨兵 → 次日卖出侧锁死硬保护」的历史账本。
+    """
+    from strategy.open_break import floor_to_tick
+    from strategy.pullback_wave_stop import (
+        DEFAULT_GIVEBACK_ARM_PCT,
+        TICK_SIZE,
+        pnl_exceeds,
+    )
+
+    sess = str(session or "")[:10]
+    if not sess:
+        return 0
+    positions = data.get("positions") or {}
+    if not isinstance(positions, dict):
+        return 0
+    n = 0
+    for code, pos in positions.items():
+        if not isinstance(pos, dict):
+            continue
+        try:
+            qty = int(pos.get("qty") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        if qty <= 0:
+            continue
+        if bool(pos.get("t0")):
+            continue
+        buy_time = pos.get("buy_time")
+        if not buy_time:
+            continue
+        if is_t1_buy_day(buy_time, sess):
+            continue
+        if bool(pos.get("stop_noted")) and t1_stop_note_px_is_legal(
+            stop_px=float(pos.get("stop_noted_px") or 0),
+            cost_px=pos.get("cost"),
+        ):
+            continue
+        try:
+            cost = float(pos.get("cost") or 0)
+        except (TypeError, ValueError):
+            cost = 0.0
+        if cost <= 0:
+            continue
+        # 昨收已 ≥3%：本应按中段，不补 t1 哨兵
+        try:
+            prev_c = float(pos.get("prev_close_at_note") or 0)
+        except (TypeError, ValueError):
+            prev_c = 0.0
+        # 无昨收快照时用 overnight 不依赖；用 peak 粗判是否早已过 3%
+        try:
+            peak = float(pos.get("peak_high") or 0)
+        except (TypeError, ValueError):
+            peak = 0.0
+        if prev_c > 0 and pnl_exceeds(prev_c, cost, DEFAULT_GIVEBACK_ARM_PCT):
+            continue
+        # peak 相对成本已 >3%：交给中段，不强制 t1
+        if peak > 0 and pnl_exceeds(peak, cost, DEFAULT_GIVEBACK_ARM_PCT):
+            continue
+        arm_px = floor_to_tick(cost, TICK_SIZE)
+        if arm_px <= 0:
+            arm_px = round(cost, 2)
+        pos["stop_noted"] = True
+        pos["stop_noted_px"] = float(arm_px)
+        pos["stop_noted_session"] = sess
         n += 1
     return n
 
@@ -5738,7 +6103,7 @@ def _heal_open_protect_hit_times(
     *,
     session: str,
 ) -> int:
-    """开盘保护成交时刻纠成 09:30（竞价核），覆盖缺 09:30 的首根 1m 标签。"""
+    """仅对 exit_kind=open_protect / open_bell 纠成 09:30；禁止 fill≈open 事后改写 PATH。"""
     if not session:
         return 0
     bell = session_open_bell_ts(session)
@@ -5760,20 +6125,32 @@ def _heal_open_protect_hit_times(
             continue
         ck = _code_key(code)
         row = by_code.get(ck) or {}
-        open_px = _as_money(row.get("开盘"))
-        fill = _as_money(rec.get("price"))
+        exit_kind = str(rec.get("exit_kind") or row.get("exit_kind") or "")
+        open_bell = bool(row.get("_open_bell")) or exit_kind == "open_protect"
+        if not open_bell:
+            # 历史已写入的 PATH/其它原因：immutable，不得因 fill≈open 改时间
+            continue
         new_ts = _open_protect_hit_ts(
             session=session,
-            fill_px=fill,
-            open_px=open_px,
+            fill_px=rec.get("price"),
+            open_px=_as_money(row.get("开盘")),
             existing=rec.get("first_hit_ts") or rec.get("time"),
-            open_bell=bool(row.get("_open_bell")),
+            open_bell=True,
+            exit_kind="open_protect",
         )
         if not new_ts or new_ts != bell:
             continue
         if str(rec.get("time") or "") != bell or str(rec.get("first_hit_ts") or "") != bell:
+            # 仅缺 09:30 标签的开盘保护可纠；已有明确非早盘标签则不改（immutable）
+            existing_hms = _signal_hms(rec.get("first_hit_ts") or rec.get("time")) or ""
+            if existing_hms[:5] not in ("", "09:30", "09:31", "09:32"):
+                continue
             rec["time"] = bell
             rec["first_hit_ts"] = bell
+            rec["triggered_at"] = bell
+            rec["filled_at"] = bell
+            rec["decision_at"] = bell
+            rec["exit_kind"] = "open_protect"
             changed = True
             n += 1
         st = sticky.get(ck) if isinstance(sticky.get(ck), dict) else None
@@ -6693,19 +7070,112 @@ def collect_rows(
                                 lv["stop_kind"] = sk
                         except (TypeError, ValueError):
                             pass
-                    # 刷新持仓峰值：只用 1m 顺序 running_high，禁止并入快照 high
+                    # 刷新持仓峰值（lifecycle HWM，只升不降）
+                    # · 1m running_high：主路径
+                    # · 隔夜仓才并入 API dayHigh：补漏 tick；买入当日禁止
+                    #   （dayHigh 可能发生在建仓前）
+                    # · 不把 dayHigh 写进 overnight_peak / seed_h（开盘保护冻结）
                     if qty_early > 0:
                         try:
                             rh = float(path_res.get("running_high") or 0)
-                            new_peak = max(float(seed_h or 0), rh)
+                            try:
+                                snap_h = float(q.get("high") or 0)
+                            except (TypeError, ValueError):
+                                snap_h = 0.0
+                            try:
+                                last_h = float(q.get("last") or 0)
+                            except (TypeError, ValueError):
+                                last_h = 0.0
                             old_peak = float(pos_early.get("peak_high") or 0)
+                            new_peak = raise_position_peak_high(
+                                persisted_peak=old_peak,
+                                entry_price=cost_h,
+                                quote_last=last_h,
+                                quote_day_high=snap_h,
+                                path_running_high=max(float(seed_h or 0), rh),
+                                allow_quote_day_high=not bool(t1_today_early),
+                            )
                             if new_peak > old_peak + 1e-9:
-                                pos_early["peak_high"] = round(new_peak, 4)
-                                _holdings_data = load_holdings()
-                                _p = (_holdings_data.get("positions") or {}).get(code)
-                                if isinstance(_p, dict):
-                                    _p["peak_high"] = round(new_peak, 4)
-                                    save_holdings(_holdings_data)
+                                at_ts = (
+                                    _bar_ts_str(q.get("last_ts"))
+                                    or _bar_ts_str(path_res.get("touch_ts"))
+                                    or _now()
+                                )
+                                decision_at = at_ts
+                                try:
+                                    from temporal_integrity import (
+                                        TemporalIntegrityError,
+                                        assert_quote_usable,
+                                        assert_hwm_causal,
+                                    )
+
+                                    assert_quote_usable(
+                                        quote_at=at_ts, decision_at=decision_at
+                                    )
+                                    assert_hwm_causal(
+                                        peak_high_at=at_ts, decision_at=decision_at
+                                    )
+                                    if not _stamp_position_peak_high(
+                                        pos_early,
+                                        new_peak,
+                                        at=at_ts,
+                                        decision_at=decision_at,
+                                    ):
+                                        pass
+                                    else:
+                                        _holdings_data = load_holdings()
+                                        _p = (
+                                            _holdings_data.get("positions") or {}
+                                        ).get(code)
+                                        if isinstance(_p, dict):
+                                            _stamp_position_peak_high(
+                                                _p,
+                                                new_peak,
+                                                at=at_ts,
+                                                decision_at=decision_at,
+                                            )
+                                            save_holdings(_holdings_data)
+                                except TemporalIntegrityError as te:
+                                    print(
+                                        f"[{_now()}] {te.code} peak raise blocked "
+                                        f"{code}: {te}"
+                                    )
+                                    # 阻断后不得用未落库的 new_peak 算卖价（禁绕过 guard）
+                                    new_peak = float(pos_early.get("peak_high") or old_peak)
+                            # dayHigh/last 抬升后，工作卖价与 UI/成交同源重算
+                            # 只用已落库（或未抬升）的 peak，禁止未来数据抬 HWM 后仍用 ephemeral new_peak
+                            peak_for_stop = float(pos_early.get("peak_high") or 0)
+                            if peak_for_stop <= 0:
+                                peak_for_stop = float(new_peak or 0)
+                            if (
+                                peak_for_stop > 0
+                                and cost_h
+                                and cost_h > 0
+                                and (
+                                    peak_for_stop > max(float(seed_h or 0), rh) + 1e-9
+                                    or bool(overnight_armed_lv)
+                                )
+                            ):
+                                sk2, stop2 = working_stop_price(
+                                    cost_px=float(cost_h),
+                                    peak_high=float(peak_for_stop),
+                                    session_peak=max(
+                                        float(peak_for_stop),
+                                        float(q.get("open") or 0),
+                                    ),
+                                    day_open=float(q.get("open") or 0),
+                                    overnight_armed=bool(overnight_armed_lv),
+                                    hard_pct=float(stop_pct),
+                                    tick=tick,
+                                    vol20_daily=_vol20_daily_for(
+                                        str(w["sina"]), str(q["session"])
+                                    ),
+                                )
+                                if stop2 > 0:
+                                    lv["stop"] = float(stop2)
+                                    lv_base["stop"] = float(stop2)
+                                    if sk2:
+                                        lv["stop_kind"] = sk2
                         except (TypeError, ValueError, KeyError):
                             pass
                     if USE_FACTOR4:
@@ -6810,6 +7280,14 @@ def collect_rows(
                     noted_px=noted_n if noted_n > 0 else None,
                     prev_close=prev_c_n if prev_c_n > 0 else None,
                     limit_up_pct=float(limit_down_pct or 0.10),
+                    cost_px=float(cost_h or 0) if cost_h else None,
+                    reason=note_reason or (
+                        "t1_trail"
+                        if noted_n > 0
+                        and cost_h
+                        and abs(noted_n - float(cost_h)) <= 1e-6
+                        else None
+                    ),
                 )
                 if sealed_limit_up:
                     clear_stop_noted(code)
@@ -7140,6 +7618,15 @@ def collect_rows(
                     prev_close=_void_prev if _void_prev > 0 else None,
                     noted_px=_void_noted if _void_noted > 0 else None,
                     limit_up_pct=float(limit_down_pct or 0.10),
+                    reason=(
+                        "t1_trail"
+                        if cost
+                        and _void_noted > 0
+                        and abs(_void_noted - float(cost)) <= 1e-6
+                        else "hard_from_cost"
+                        if _void_noted > 0
+                        else None
+                    ),
                 ):
                     hit_stop_show = False
                     hit_stop_settle = False
@@ -7173,6 +7660,7 @@ def collect_rows(
                         open_px=q.get("open"),
                         existing=_bar_ts_str(path_touch_ts) or _bar_ts_str(q.get("last_ts")),
                         open_bell=bool(_exit_dec.get("open_bell")),
+                        exit_kind=_exit_kind,
                     )
                     or _bar_ts_str(path_touch_ts)
                     or _bar_ts_str(q.get("last_ts")),
@@ -7807,6 +8295,7 @@ def collect_rows(
                     "交易日": q["session"],
                     "开盘": round(q["open"], px_digits),
                     "最高": round(q["high"], px_digits),
+                    "今日最高": round(q["high"], px_digits),
                     "最低": round(q["low"], px_digits),
                     "现价": round(q["last"], px_digits),
                     "昨收": None
@@ -7878,6 +8367,7 @@ def collect_rows(
                     "竞价参考": auction_ref,
                     "error": None,
             }
+            _attach_hwm_row_fields(row, pos if isinstance(pos, dict) else None, px_digits=px_digits)
             _apply_trigger_date_fields(
                 row,
                 sig=sig,
@@ -8021,6 +8511,15 @@ def collect_rows(
         _save_alert_sticky(session_today, sticky)
 
     for r in rows:
+        code_hwm = _code_key(str(r.get("代码") or ""))
+        pos_hwm = positions.get(code_hwm) if code_hwm else None
+        try:
+            pdg_hwm = int(r.get("价位小数") or 2)
+        except (TypeError, ValueError):
+            pdg_hwm = 2
+        _attach_hwm_row_fields(
+            r, pos_hwm if isinstance(pos_hwm, dict) else None, px_digits=pdg_hwm
+        )
         _enrich_side_price_fields(r)
         _finalize_position_row(r)
         enrich_signal_single_return(r)

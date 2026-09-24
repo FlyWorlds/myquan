@@ -282,6 +282,14 @@ const SINGLE_SIGNAL_TITLE =
               <th class="px-3 py-2.5">距买点</th>
               <th class="px-3 py-2.5">竞价/开盘</th>
               <th class="px-3 py-2.5">现价</th>
+              <th
+                class="px-3 py-2.5"
+                title="行情 API dayHigh；≠ trailing HWM"
+              >今日最高</th>
+              <th
+                class="px-3 py-2.5"
+                title="positions.peak_high；与自动卖出 trailing 同源"
+              >持仓最高</th>
               <th class="px-3 py-2.5">
                 <button
                   type="button"
@@ -316,7 +324,7 @@ const SINGLE_SIGNAL_TITLE =
           </thead>
           <tbody>
             <tr v-if="!filteredRows.length">
-              <td colspan="16" class="px-3 py-8 text-center text-sm text-ui-text-3">
+              <td colspan="18" class="px-3 py-8 text-center text-sm text-ui-text-3">
                 无匹配标的
                 <button
                   v-if="selectedFilters.length"
@@ -376,6 +384,20 @@ const SINGLE_SIGNAL_TITLE =
               </td>
               <td class="sensitive px-3 py-2.5">{{ r.阈值就绪 ? fmtNum(r.开盘, r['价位小数'] ?? 2) : (r.竞价参考 != null ? fmtNum(r.竞价参考, r['价位小数'] ?? 2) : '待9:25') }}</td>
               <td class="sensitive px-3 py-2.5 font-semibold">{{ fmtNum(r.现价, r['价位小数'] ?? 2) }}</td>
+              <td
+                class="sensitive px-3 py-2.5 tabular-nums"
+                title="行情 dayHigh"
+              >{{ fmtNum(r.今日最高 ?? r.最高, r['价位小数'] ?? 2) }}</td>
+              <td
+                class="sensitive px-3 py-2.5 tabular-nums"
+                :title="r.持仓最高时间 ? `peak_high @ ${r.持仓最高时间}` : 'positions.peak_high'"
+              >
+                <div>{{ fmtNum(r.持仓最高 ?? r.峰值, r['价位小数'] ?? 2) }}</div>
+                <div
+                  v-if="r.持仓最高时间"
+                  class="mt-0.5 font-mono text-[10px] text-ui-text-3"
+                >{{ r.持仓最高时间 }}</div>
+              </td>
               <td class="sensitive px-3 py-2.5">
                 <ChgText :chg="r.当日涨幅">{{ fmtSignedPct(r.当日涨幅) }}</ChgText>
               </td>

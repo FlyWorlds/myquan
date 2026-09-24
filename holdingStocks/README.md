@@ -97,7 +97,17 @@ WATCHLIST = list(S7_WATCHLIST)
 
 登记示例：`python index.py set-cost 002015 --cost 16.122 --qty 600`；或在 `holdings.json` 加 `"portfolio_pool": ["002015"]`。
 
-**策略16 Tab**：默认池信号表，按 **距买点% 升序**（最近在前）；可点表头按 **日内涨跌** / **策略累计** 排序。**状态主语义 = Strategy Simulator**（空仓/策略持有，来自 `strategy_sim_state.json`，与纸面 qty 独立）；纸面仓仅 debug 小字。Live quote（约 2~5s patch）撞买/卖位触发 FLAT↔LONG；不等待 1m close。策略累计/单笔收入来自同一 simulator 虚拟账本（`策略收益语义=strategy_simulator_ledger`），**不再用 Factor1 串台**。Paper 入槽仍走 Capital V2（日增≤2 / 20% / 最多5）；Paper limit **不回滚** simulator BUY。Durable：`strategy_sim_state.json` + `strategy_signal_events.json`（跨机同步需包含）。状态图例可点筛选。买入信号口径真源：`watch_buy_signal.py`；simulator：`strategy_simulator.py`。
+**策略16 Tab**：默认池信号表，按 **距买点% 升序**（最近在前）；可点表头按 **日内涨跌** / **策略累计** 排序。**状态主语义 = Strategy Simulator**（空仓/策略持有，来自 `strategy_sim_state.json`，与纸面 qty 独立）；纸面仓仅 debug 小字。Live quote（约 2~5s patch）撞买/卖位触发 FLAT↔LONG；不等待 1m close。策略累计/单笔收入来自同一 simulator 虚拟账本（`策略收益语义=strategy_simulator_ledger`），**不再用 Factor1 串台**。**FLAT ≠ 累计 0**：从未交易才是 0%；平仓后累计 = `virtual_cash/initial_cash−1` 冻结。首次空账本用日线 OHLC touch **bootstrap 一次**（自 `STRATEGY_PNL_START` 至末日线 cutoff），其后由 live events 接力；`bootstrapped` 防双计。Paper 入槽仍走 Capital V2（日增≤2 / 20% / 最多5）；Paper limit **不回滚** simulator BUY。Durable：`strategy_sim_state.json`（含 virtual_cash/shares）+ `strategy_signal_events.json`（跨机同步需包含）。状态图例可点筛选。买入信号口径真源：`watch_buy_signal.py`；simulator：`strategy_simulator.py`。
+
+**Trailing 校验列（持仓卡 / 策略16）**：`现价 | 今日最高 | 持仓最高 | 卖出侧`。**今日最高** = 行情 API `dayHigh`（行字段 `最高`/`今日最高`）；**持仓最高** = `holdings.positions.*.peak_high`（可选 `peak_high_at`→`持仓最高时间`），与自动卖出 / `working_stop_price` / `paper_exit_decision` **同一 SoT**；前端禁止 `Math.max` 自算。全量 `collect_rows` 与行情快刷 `_sync_snapshot_hwm_from_quotes` 均经 `raise_position_peak_high` 抬升（只升不降）。
+
+**时间完整性 invariant**（`temporal_integrity.py`）：`quote_at <= decision_at`；`peak_high_at <= decision_at`（违例 = `FUTURE_DATA_VIOLATION`，禁止抬 HWM / 自动成交）；新 HWM 必须原子写 `peak_high`+`peak_high_at`；旧仓缺 `peak_high_at` 降级迁移（`LEGACY_UNKNOWN` / buy_time）；**禁止** `fill≈open` 反推 09:30（PATH 保持真实 `triggered_at`）；乱序旧行情 `STALE_QUOTE_REJECTED`；成交写入 `exit_kind`/`triggered_at`/`filled_at` 后 heal 不得改 PATH。专题：[`docs/TEMPORAL_INTEGRITY.md`](../docs/TEMPORAL_INTEGRITY.md)。
+
+**默认回归**（改 HWM / 成交时刻 / trailing 后必跑）：
+
+```bash
+cd holdingStocks && python run_regression_tests.py
+```
 
 **浮盈/结算（名称旁）**：**今日盈亏 / 今日浮亏** = 四槽持仓 `session_day_pnl`（**今买相对买入价，昨仓相对昨收**；9:15 / 跨日沿用快照时按昨收重置）+ **今日平仓**记账 `day_pnl`（只认 `已实现`，**隔日平仓留痕不计**）。卡片不回退展示「相对成本」的浮盈当今日浮亏。**总资产** = 日初锁定（优先昨收结算 `account_total`；**日初锚跟日历信号日 `trading_session_date`**，不用行情盘前滞后的行上「交易日」；跨日 heal 幂等，不依赖正好 9:15 在线）+ **今日盈亏**（与分票加总同动）。账户摘要「今日盈亏率」= 今日盈亏 / 日初锁定 `account_total_open`（单票「当日盈亏%」仍用该票当日基数）。**总收益** = 总资产 − 纸面本金（`paper_equity_base`，默认 30 万，自 **`PAPER_PNL_START`=2026-09-09**），即「昨收累计 + 今日盈亏」。**15:00 日结** = `POSITION_SETTLEMENT`（收盘盯市，**不改 qty/cost、不写 SELL**）；下一交易日 `account_total_open` = 昨收 `closing_equity`。账户摘要「当前持仓成本」= 剩余仓 `成本额`，**不含**今日已平仓成本。每日收盘后写一次 `holdings.daily_settlements[交易日]`（终稿；盘中可更新草稿；次日 heal/9:15 补记未终稿日），含今日盈亏 vs 权益日变差额核对。**今日平仓**卡片锁定平仓价；策略回放持有不进账户合计。
 

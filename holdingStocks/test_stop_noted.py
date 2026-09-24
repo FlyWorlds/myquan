@@ -388,12 +388,14 @@ class TestPaperExitDecision(unittest.TestCase):
     def test_open_protect_hit_ts_rewrites_first_1m_label(self) -> None:
         from index import _keep_first_signal_ts, _open_protect_hit_ts
 
+        # 仅 open_bell 才纠 09:30；fill≈open 不再推断
         self.assertEqual(
             _open_protect_hit_ts(
                 session="2026-09-14",
                 fill_px=16.93,
                 open_px=16.93,
                 existing="2026-09-14 09:32:00",
+                open_bell=True,
             ),
             "2026-09-14 09:30:00",
         )
@@ -403,8 +405,21 @@ class TestPaperExitDecision(unittest.TestCase):
                 fill_px=16.93,
                 open_px=16.93,
                 existing="2026-09-14 10:05:00",
+                open_bell=False,
             ),
             "2026-09-14 10:05:00",
+        )
+        # PATH 同价不得改写
+        self.assertEqual(
+            _open_protect_hit_ts(
+                session="2026-09-14",
+                fill_px=16.93,
+                open_px=16.93,
+                existing="2026-09-14 09:58:00",
+                open_bell=False,
+                exit_kind="path",
+            ),
+            "2026-09-14 09:58:00",
         )
         kept = {"stop_hit_ts": "2026-09-14 09:30:00"}
         _keep_first_signal_ts(
@@ -412,6 +427,13 @@ class TestPaperExitDecision(unittest.TestCase):
             kept,
         )
         self.assertEqual(kept["stop_hit_ts"], "2026-09-14 09:30:00")
+        # 09:58 不得被 09:30 覆盖
+        kept2 = {"stop_hit_ts": "2026-09-14 09:30:00"}
+        _keep_first_signal_ts(
+            {"stop_hit_ts": "2026-09-14 09:58:00"},
+            kept2,
+        )
+        self.assertEqual(kept2["stop_hit_ts"], "2026-09-14 09:58:00")
 
 
 class TestClosedExitFreeze(unittest.TestCase):

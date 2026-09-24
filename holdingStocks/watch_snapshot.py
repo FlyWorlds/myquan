@@ -494,7 +494,9 @@ def patch_row_live_quote(
             row["较开盘点"] = pts
             changed = True
     if high is not None:
-        row["最高"] = round(max(high, last), digits)
+        day_high = round(max(high, last), digits)
+        row["最高"] = day_high
+        row["今日最高"] = day_high
     if low is not None and low > 0:
         row["最低"] = round(min(low, last), digits)
 

@@ -312,7 +312,9 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 ## 盯盘要点
 
-**策略1 Tab**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略累计**（自 2026-09-09 起单票因子1虚拟账本累计、含费用；状态列分纸面/回放两行；虚拟持有时 mark 现价，已平冻结；≠纸面空仓/≠单笔收入；见 `watch_config.STRATEGY_PNL_START`）。额外盯盘见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材 601208、金安国纪 002636）。
+**策略1 / 策略16 Tab（默认池）**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略累计**（权威源 = `strategy_simulator`：每 `strategy_id+symbol` 虚拟账本；自 `STRATEGY_PNL_START` 日线 OHLC touch bootstrap 一次后由 live quote 接力；**FLAT ≠ 0%**，平仓冻结 `cash/initial−1`，从未交易才是 0%；语义 `strategy_simulator_ledger`，≠纸面空仓/≠单笔收入；Factor1 回放仅对照字段）。状态主列 = Simulator 空仓/策略持有。额外盯盘见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材 601208、金安国纪 002636）。**Trailing 校验列**：`现价 | 今日最高(行情 dayHigh) | 持仓最高(peak_high+时间) | 卖出侧`——持仓最高与自动卖出同源，前端禁止重算。**时间完整性**：[`docs/TEMPORAL_INTEGRITY.md`](docs/TEMPORAL_INTEGRITY.md)（NO LOOK-AHEAD / HWM CAUSALITY / EVENT IMMUTABILITY / STALE DATA）；回归 `holdingStocks/run_regression_tests.py`。
+
+**AKQuant 能力审计（只读，2026-09-24）**：[`docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md`](docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md) — 运行时 `0.3.22` vs 声明 `0.3.21`；纸面与回测双轨；Trailing **保持 CUSTOM**（AQ `place_trailing_stop` 不等价且 live 不支持）。
 
 **策略16 Tab**：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，`SELF_WATCHLIST_PICKS`，全策略共用）+ 同策略一买卖；开盘阈值只认 `thr_2026.json`（缺省 2.5%，不走策略一遗留 `_WATCH_PCT` / 置顶 pct）；现为默认四槽交易池。图例「已经买入」=四槽实仓，「已触买」含今日已入槽；T+1 止损已记不算「已触止损」。刷新因子池：`python strategy/run_core_leader_pool.py`；拟合阈值：`python backtest/strategy16_core_leader/fit_thr.py`。
 

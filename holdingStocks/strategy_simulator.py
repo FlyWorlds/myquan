@@ -69,10 +69,249 @@ def empty_book(
         "trades": 0,
         "last_mark": None,
         "last_quote_ts": None,
+        # NEVER_TRADED => 0；有成交后 FLAT 时为 cash/initial-1（≠自动清零）
         "cumulative_return_pct": 0.0,
         "single_return_pct": None,
         "closed_trade_return_pct": None,
+        "bootstrapped": False,
+        "bootstrap_cutoff": None,
+        "bootstrap_source": None,
     }
+
+
+def needs_historical_bootstrap(book: dict[str, Any]) -> bool:
+    """尚未 bootstrap 且账本仍是「从未交易」的初始态。"""
+    if bool(book.get("bootstrapped")):
+        return False
+    try:
+        trades = int(book.get("trades") or 0)
+    except (TypeError, ValueError):
+        trades = 0
+    if trades > 0:
+        return False
+    if str(book.get("state") or "FLAT") == "LONG":
+        return False
+    try:
+        shares = float(book.get("virtual_shares") or 0.0)
+    except (TypeError, ValueError):
+        shares = 0.0
+    if shares > 0:
+        return False
+    init = float(book.get("initial_cash") or INITIAL_CASH)
+    try:
+        cash = float(book.get("virtual_cash") or init)
+    except (TypeError, ValueError):
+        cash = init
+    # 已有非初始现金（例如手工/旧恢复）则不再 bootstrap
+    if abs(cash - init) > 1e-6:
+        return False
+    return True
+
+
+def sync_flat_cumulative(book: dict[str, Any]) -> None:
+    """FLAT：cumulative = cash/initial - 1（冻结派生；绝非强制 0）。"""
+    if str(book.get("state") or "FLAT") == "LONG":
+        return
+    init = float(book.get("initial_cash") or INITIAL_CASH)
+    if init <= 0:
+        return
+    cash = float(book.get("virtual_cash") or 0.0)
+    book["cumulative_return_pct"] = round((cash / init - 1.0) * 100.0, 2)
+    book["single_return_pct"] = None
+
+
+def bootstrap_book_from_daily_ohlc(
+    book: dict[str, Any],
+    daily: Any,
+    *,
+    start_date: str,
+    entry_pct: float,
+    stop_pct: float,
+    tick: float = 0.01,
+    prev_entry_mode: str = "yin_or_small_yang",
+    persist: bool = True,
+) -> dict[str, Any]:
+    """历史日线 bootstrap → 写入同一 simulator 账本（非 Factor1 串台 SoT）。
+
+    粒度：completed daily OHLC；触买=high>=buy_level（成交记 buy_level）；
+    触卖=low<=sell_level（成交记 sell_level）；T+1；与 live touch 语义一致。
+    cutoff = 末日线日期；之后由 live events 接力，不重复计数。
+    """
+    import pandas as pd
+    from strategy.open_break import (
+        entry_filters_ok,
+        entry_trigger_price,
+        stop_trigger_price,
+    )
+
+    out = {
+        "applied": False,
+        "cutoff": None,
+        "trades": 0,
+        "state": "FLAT",
+        "cumulative_return_pct": 0.0,
+    }
+    if daily is None or getattr(daily, "empty", True):
+        book["bootstrapped"] = True
+        book["bootstrap_source"] = "daily_ohlc_empty"
+        sync_flat_cumulative(book)
+        if persist:
+            save_state()
+        return out
+
+    df = daily.copy()
+    df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None).dt.normalize()
+    df = df.dropna(subset=["open", "high", "low", "close"]).sort_values("date")
+    start = pd.Timestamp(str(start_date)[:10]).normalize()
+    idxs = [
+        i
+        for i in range(len(df))
+        if pd.Timestamp(df.iloc[i]["date"]).normalize() >= start
+    ]
+    if not idxs:
+        book["bootstrapped"] = True
+        book["bootstrap_source"] = "daily_ohlc_no_bars"
+        sync_flat_cumulative(book)
+        if persist:
+            save_state()
+        return out
+
+    init = float(book.get("initial_cash") or INITIAL_CASH)
+    cash = init
+    shares = 0.0
+    state = "FLAT"
+    entry_price = None
+    entry_time = None
+    exit_price = None
+    exit_time = None
+    buy_day = None
+    trades = 0
+    closed_ret = None
+    cutoff = None
+
+    for i in idxs:
+        row = df.iloc[i]
+        prev = df.iloc[i - 1] if i >= 1 else None
+        prev2 = df.iloc[i - 2] if i >= 2 else None
+        if prev is None:
+            continue
+        day = pd.Timestamp(row["date"]).normalize()
+        cutoff = str(day.date())
+        o = float(row["open"])
+        h = float(row["high"])
+        l = float(row["low"])
+        c = float(row["close"])
+        if o <= 0 or c <= 0:
+            continue
+        buy_lv = float(entry_trigger_price(o, entry_pct=entry_pct, tick=tick))
+        sell_lv = float(stop_trigger_price(o, stop_pct=stop_pct, tick=tick))
+        allow = entry_filters_ok(
+            float(prev["open"]),
+            float(prev["close"]),
+            float(prev2["open"]) if prev2 is not None else None,
+            float(prev2["close"]) if prev2 is not None else None,
+            entry_pct=entry_pct,
+            prev_entry_mode=prev_entry_mode,
+            tick=tick,
+        )
+
+        if state == "LONG" and shares > 0:
+            if buy_day is not None and day == buy_day:
+                # T+1：当日不可卖；收盘 mark
+                continue
+            if l <= sell_lv + 1e-12:
+                px = sell_lv
+                cash = cash + shares * px
+                shares = 0.0
+                state = "FLAT"
+                exit_price = round(px, 4)
+                exit_time = f"{cutoff} 15:00:00"
+                trades += 1
+                if entry_price and entry_price > 0:
+                    closed_ret = round((px / float(entry_price) - 1.0) * 100.0, 2)
+                entry_price = None
+                entry_time = None
+                buy_day = None
+            continue
+
+        if state == "FLAT" and allow and (h + 1e-12 >= buy_lv):
+            sh, cash_left, _ = _buy_shares(cash, buy_lv)
+            if sh >= LOT:
+                cash = cash_left
+                shares = sh
+                state = "LONG"
+                entry_price = round(buy_lv, 4)
+                entry_time = f"{cutoff} 09:30:00"
+                exit_price = None
+                exit_time = None
+                buy_day = day
+                closed_ret = None
+
+    # 末日若仍 LONG：用收盘 mark 写累计（不改 cash/shares）
+    last_close = float(df.iloc[idxs[-1]]["close"])
+    book["state"] = state
+    book["virtual_cash"] = float(cash)
+    book["virtual_shares"] = float(shares)
+    book["entry_price"] = entry_price
+    book["entry_time"] = entry_time
+    book["exit_price"] = exit_price
+    book["exit_time"] = exit_time
+    book["trades"] = int(trades)
+    book["closed_trade_return_pct"] = closed_ret
+    book["bootstrapped"] = True
+    book["bootstrap_cutoff"] = cutoff
+    book["bootstrap_source"] = "daily_ohlc_touch"
+    if state == "LONG" and shares > 0:
+        mark_book(book, last_close, quote_ts=f"{cutoff} 15:00:00" if cutoff else None)
+    else:
+        sync_flat_cumulative(book)
+    if persist:
+        save_state()
+    out.update(
+        {
+            "applied": True,
+            "cutoff": cutoff,
+            "trades": trades,
+            "state": state,
+            "cumulative_return_pct": book.get("cumulative_return_pct"),
+            "virtual_cash": book.get("virtual_cash"),
+            "virtual_shares": book.get("virtual_shares"),
+        }
+    )
+    return out
+
+
+def ensure_bootstrapped(
+    strategy_id: str,
+    symbol: str,
+    daily: Any,
+    *,
+    start_date: str,
+    entry_pct: float,
+    stop_pct: float,
+    tick: float = 0.01,
+    prev_entry_mode: str = "yin_or_small_yang",
+    persist: bool = True,
+) -> dict[str, Any]:
+    """若账本仍是初始空仓，则用日线 bootstrap 一次。"""
+    book = get_book(strategy_id, symbol)
+    if not needs_historical_bootstrap(book):
+        # 已有账本：FLAT 时对齐 cumulative←cash（防 0 漂移）
+        if str(book.get("state")) != "LONG":
+            sync_flat_cumulative(book)
+        return {"applied": False, "book": book, "skipped": "already_seeded"}
+    info = bootstrap_book_from_daily_ohlc(
+        book,
+        daily,
+        start_date=start_date,
+        entry_pct=entry_pct,
+        stop_pct=stop_pct,
+        tick=tick,
+        prev_entry_mode=prev_entry_mode,
+        persist=persist,
+    )
+    info["book"] = book
+    return info
 
 
 def load_state(*, force: bool = False) -> dict[str, Any]:
@@ -143,7 +382,7 @@ def equity_of(book: dict[str, Any], mark: float | None = None) -> float:
 
 
 def mark_book(book: dict[str, Any], mark: float, *, quote_ts: str | None = None) -> None:
-    """LONG：随 mark 更新累计；FLAT：equity=cash，cumulative 冻结。"""
+    """LONG：随 mark 更新累计；FLAT：equity=cash，cumulative 冻结（≠清零）。"""
     try:
         m = float(mark)
     except (TypeError, ValueError):
@@ -166,10 +405,10 @@ def mark_book(book: dict[str, Any], mark: float, *, quote_ts: str | None = None)
         if e > 0:
             book["single_return_pct"] = round((m / e - 1.0) * 100.0, 2)
     else:
-        # FLAT：不因 mark 改 cumulative
-        book["single_return_pct"] = None
+        # FLAT：不因 mark 改 equity；cumulative 仅由 cash 派生并冻结
         if quote_ts:
             book["last_quote_ts"] = str(quote_ts)
+        sync_flat_cumulative(book)
 
 
 def _buy_shares(cash: float, px: float) -> tuple[float, float, float]:

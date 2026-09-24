@@ -35,7 +35,8 @@
 | 黑猫涨停次日高开被「开盘保护」错卖；半仓记成开盘价 | 开盘保护峰值**不得含今日开盘/盘中新高**（峰值≥今开则回退昨收/成本）。`action_kind=full` 时忽略残留 `ladder_half_10`。1m 路径**跳过 09:30 前竞价 K**。半仓成交价=阶梯策略价。**002068 已按 1m 纠成**：半仓 11.14@09:31 + 峰值回落 10.92@09:32（`correct_realized_false_open_to_path_ladder`） |
 | 天通买入日涨停仍标「止损已记」（反复） | **唯一落库口** `persist_stop_noted`：只接受 `hard_from_cost` / `t1_trail`，已记价不得高于成本。展示层禁止写账本。买入日只认现价仍在硬保护；中段卖价 / 今开撞抬高止损 / 盈≥3% / 涨停一律不记。**昨收/昨高**只经 `overnight_peak_px`（须 `overnight_session_high_ok`）；今日新买不用昨高。每轮 `purge_illegal_t1_stop_notes` 自清 |
 | 远东平仓价 24.10「好像不对」；中天记成 34.13 | 远东 24.10=今开，规则对。已平仓**卖出侧冻结为成交价**（不要跟盘后止损 24.6）。中天应按开盘 33.84，错账 `correct_realized_open_protect_fill` 纠回 |
-| 特发开盘保护卖出记成 09:32 | **竞价核=9:30 开盘价成交**。`open_protect` / 成交价=今开 时触发时刻固定 `09:30:00`，覆盖缺 09:30 的首根 1m（09:31/09:32）。每轮 `_heal_open_protect_hit_times` 纠粘滞/已实现 |
+| 特发开盘保护卖出记成 09:32；PATH 触达价碰巧=今开被改成 09:30 | **仅** `open_bell` / `exit_kind=open_protect` 记竞价核 `09:30:00`（可覆盖缺 bar 的 09:31/09:32）。**禁止** `fill≈open` 反推开盘时刻；PATH 保持真实 `triggered_at`。见 [`docs/TEMPORAL_INTEGRITY.md`](docs/TEMPORAL_INTEGRITY.md) |
+
 | 盯盘纸面槽位 | **四槽**：`MAX_PORTFOLIO_SLOTS=4`、日最多买 4、每槽约 25%（`SLOT_WEIGHT=0.25`） |
 | 策略十六有信号，持仓「预警/其它」没有 | `is_holdings_tab_signal_row`：已触买/将买入/**策略持有**/回放止损 与策略十六图例同一口径；空仓无信号不进；前端拆「预警」与「策略持有」 |
 | 触发了但看不到几点几分；入槽/平仓没有先后 | sticky 第一次记下 `buy_hit_ts` / `stop_hit_ts`；已入槽用 `buy_time`；成交/流水用触发时刻不是进程 `_now()`。**先平再买**（本轮平仓立刻补槽）。腾槽：平仓前已触买且现价≤买点+1% 按现价；否则其后新触发按买点 |
@@ -50,7 +51,8 @@
 | 隔夜 `available=0` 当券商不可卖 | `heal_watch_ledger` 解开买入日残留锁 |
 | 「已触止损」只展示、或只处理某一只 | `paper_exit_decision` + `settle_due_paper_stops` 扫全部实仓 |
 | 用全日最低 / 盘中抬高止损当成交价；已平仓卖出侧继续跟现价止损 | 开盘保护优先；卖出侧=锁定成交价；错账纠回开盘 |
-| 开盘保护成交时刻用首根 1m（09:31/09:32） | 竞价核=09:30 开盘价；`open_protect` 固定 `09:30:00` |
+| 开盘保护成交时刻用首根 1m（09:31/09:32）；或用 fill≈open 把 PATH 改成 09:30 | 竞价核仅 `open_protect`→09:30；PATH/`triggered_at`/`exit_kind` **immutable** |
+
 | 买入日用今开/中段卖价写「止损已记」，展示层再 persist 写回 | 唯一落库口只要硬保护/T1 哨兵；已记价≤成本；展示只读账本；非法已记每轮自清 |
 | 过门触买不进预警；策略 Tab 有、持仓 Tab 无 | `is_today_alert_row` / `is_holdings_tab_signal_row` |
 | 指数只按 akshare 表名精确匹配 | 新浪批量 + 失败沿用 |
@@ -59,3 +61,17 @@
 | 改完不重启当已修好 | 必须重启 `start_watch` |
 
 - [x] **2026-09-14 上述防护已进代码**。再改盯盘若绕过这些，视为回归。
+
+### 锁定 · 时间完整性（2026-09-24）
+
+系统级 invariant（非个股补丁）：[`docs/TEMPORAL_INTEGRITY.md`](docs/TEMPORAL_INTEGRITY.md) · [`holdingStocks/temporal_integrity.py`](holdingStocks/temporal_integrity.py)。
+
+| 规则 | 要求 |
+|------|------|
+| NO LOOK-AHEAD | `decision_at=T` 只用 `timestamp<=T` 的数据 |
+| HWM CAUSALITY | `peak_high`+`peak_high_at` 原子更新，且 `peak_high_at<=decision_at` |
+| EVENT IMMUTABILITY | `triggered_at`/`filled_at`/`exit_kind` 不得事后改写 |
+| STALE DATA | 旧行情不得覆盖较新策略状态 |
+
+- [x] 验收 **TEMPORAL INTEGRITY: PASS**；回归必跑 `cd holdingStocks && python run_regression_tests.py`（含 `test_temporal_integrity`）。
+- [ ] **技术债 · Forming 1m 上游行情质量**（独立）：未完成分钟 K 若供应商提前写入最终 high，可能同分钟 look-ahead。**禁止**为修此债再改已验收的 trailing/HWM 因果逻辑；另开任务治理行情源/ bar 完成态。

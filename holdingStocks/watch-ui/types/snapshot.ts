@@ -38,6 +38,13 @@ export interface HoldingRow {
   开盘?: number | null
   昨收?: number | null
   现价?: number | null
+  /** 行情 API dayHigh（≠ trailing HWM） */
+  最高?: number | null
+  今日最高?: number | null
+  /** positions.peak_high：自动卖出 trailing SoT */
+  持仓最高?: number | null
+  峰值?: number | null
+  持仓最高时间?: string | null
   当日涨幅?: number | null
   较开盘涨幅?: number | null
   策略收益?: number | null
