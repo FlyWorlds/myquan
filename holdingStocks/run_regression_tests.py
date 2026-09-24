@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""盯盘 / 因子26 / 时间完整性默认回归套件。
+"""盯盘 / 因子26 / 时间完整性 / BT-1m Contract / Cross-resolution 默认回归。
 
-改 trailing、HWM、成交时刻、paper exit 相关代码后必须跑通本脚本。
+改 trailing、HWM、成交时刻、paper exit、eval_multi_tp_bar 优先级后必须跑通。
 不包含会动真实 holdings 的集成测试。
 """
 
@@ -18,10 +18,15 @@ _ROOT = _HERE.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-# 默认 CI / 本地回归：时间完整性为必跑项
+# Gate 1: Realtime temporal + HWM
+# Gate 2–3: Factor26 priority / cross-resolution（strategy/）
 REGRESSION_MODULES = (
     "test_temporal_integrity",
     "test_high_watermark_sell_side",
+    "strategy.test_factor26_exit_priority",
+    "strategy.test_factor26_characterization",
+    "strategy.test_cross_resolution_harness",
+    "strategy.test_full_exit_orchestration",
 )
 
 

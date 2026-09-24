@@ -316,6 +316,12 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 **AKQuant 能力审计（只读，2026-09-24）**：[`docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md`](docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md) — 运行时 `0.3.22` vs 声明 `0.3.21`；纸面与回测双轨；Trailing **保持 CUSTOM**（AQ `place_trailing_stop` 不等价且 live 不支持）。
 
+**Paper↔Backtest 语义对等审计（只读，2026-09-24）**：[`docs/PAPER_BACKTEST_SEMANTIC_PARITY_AUDIT.md`](docs/PAPER_BACKTEST_SEMANTIC_PARITY_AUDIT.md) — **STRATEGY SEMANTIC PARITY: FAIL**；**COMPARABILITY: PARTIAL**（BT-1m）/ **FAIL**（BT-Daily）；版本漂移建议 PIN_0.3.22（未执行）。
+
+**Realtime×1m 架构重定义（2026-09-24）**：[`docs/REALTIME_1M_ARCHITECTURE.md`](docs/REALTIME_1M_ARCHITECTURE.md)。
+
+**Trading Engine Contract（已锁定）**：[`docs/TRADING_ENGINE_CONTRACT.md`](docs/TRADING_ENGINE_CONTRACT.md)。**Full Exit Orchestration（Gate4 PASS）**：[`docs/PRODUCTION_EXIT_ORCHESTRATION_CONTRACT.md`](docs/PRODUCTION_EXIT_ORCHESTRATION_CONTRACT.md) / [`docs/PHASE_FULL_EXIT_ORCHESTRATION_REPORT.md`](docs/PHASE_FULL_EXIT_ORCHESTRATION_REPORT.md)。`akquant==0.3.22`。回归：`python holdingStocks/run_regression_tests.py`（**71**）。
+
 **策略16 Tab**：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，`SELF_WATCHLIST_PICKS`，全策略共用）+ 同策略一买卖；开盘阈值只认 `thr_2026.json`（缺省 2.5%，不走策略一遗留 `_WATCH_PCT` / 置顶 pct）；现为默认四槽交易池。图例「已经买入」=四槽实仓，「已触买」含今日已入槽；T+1 止损已记不算「已触止损」。刷新因子池：`python strategy/run_core_leader_pool.py`；拟合阈值：`python backtest/strategy16_core_leader/fit_thr.py`。
 
 **策略17 Tab（紫阳真君）**：国泰海通/国泰君安武汉紫阳东路近 3 个月龙虎榜成交池（因子28）∪ 公共自选；买卖规则同因子26，**不入默认四槽**。刷新：`python strategy/run_ziyang_pool.py`。

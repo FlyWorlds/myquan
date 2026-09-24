@@ -75,3 +75,24 @@
 
 - [x] 验收 **TEMPORAL INTEGRITY: PASS**；回归必跑 `cd holdingStocks && python run_regression_tests.py`（含 `test_temporal_integrity`）。
 - [ ] **技术债 · Forming 1m 上游行情质量**（独立）：未完成分钟 K 若供应商提前写入最终 high，可能同分钟 look-ahead。**禁止**为修此债再改已验收的 trailing/HWM 因果逻辑；另开任务治理行情源/ bar 完成态。
+
+### 审计登记 · Paper↔Backtest 语义（2026-09-24，只读）
+
+见 [`docs/PAPER_BACKTEST_SEMANTIC_PARITY_AUDIT.md`](docs/PAPER_BACKTEST_SEMANTIC_PARITY_AUDIT.md)。
+
+- [ ] **P0**：勿用 BT-Daily（`half_gain`）验证 Factor26 生产语义；文档钉死「简化研究」。
+- [x] **P1**：akquant **PIN_0.3.22**（`requirements.txt`；回归 56 OK）。
+- [x] **P1**：BT-1m Contract + Cross Harness（见 TRADING_ENGINE_CONTRACT）；编排 gap（open_protect/path 全链）仍待扩。
+- [ ] **P1/P2**：Capital V2 / Fee 与回测不可比，直至显式对齐或降级为信号对照（PHASE CAPITAL/FEE）。
+
+### 架构重定义 · Realtime First（2026-09-24）
+
+见 [`docs/REALTIME_1M_ARCHITECTURE.md`](docs/REALTIME_1M_ARCHITECTURE.md)、[`docs/TRADING_ENGINE_CONTRACT.md`](docs/TRADING_ENGINE_CONTRACT.md)、[`docs/PHASE_LOCK_CONTRACT_REPORT.md`](docs/PHASE_LOCK_CONTRACT_REPORT.md)。
+
+- [x] 目标钉死：Paper=实时成交驱动；正式回测=1m；**禁止**为 parity 降级盯盘粒度。
+- [x] 登记并锁定 `CURRENT_INTRABAR_POLICY = PRIORITY_ENVELOPE` + `FACTOR26_EXIT_PRIORITY_1M` 单测。
+- [x] Cross-resolution harness + 六类分类（Gate3）；歧义审计 metadata（不改成交）。
+- [x] `akquant` **PIN 0.3.22**；回归 71 OK。
+- [x] **Gate4 FULL_EXIT_ORCHESTRATION**：open_protect→path→last 竞争矩阵 + RealtimeFullExitRunner（生产函数）；见 PRODUCTION_EXIT_ORCHESTRATION_CONTRACT。
+- [ ] 历史 quote 事件流充足后补 Production Replay（当前 INSUFFICIENT_REPLAY_DATA）。
+- [ ] PHASE CAPITAL / FEE / PNL；SHARED PURE CORE EXTRACTION（编排 PASS 后允许启动）。

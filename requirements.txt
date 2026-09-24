@@ -1,5 +1,5 @@
 # myquan 运行依赖（全局 pip；同级 ../akquant 源码仅供研读，不参与 import）
-akquant==0.3.21
+akquant==0.3.22
 akshare>=1.14.0
 baostock>=0.8.9
 czsc==1.0.0rc8

@@ -61,6 +61,29 @@ HARD_GAP_OPEN_DUMP = "open_dump"  # 低开已破硬保护 → 再等开盘下杀
 HARD_GAP_MODES = (HARD_GAP_IMMEDIATE, HARD_GAP_OPEN_DUMP)
 DEFAULT_HARD_GAP_DUMP_PCT = 0.01  # open_dump：从开盘再下杀 1%
 
+# 1m Adapter 正式盘中政策（Contract；禁止改成 O→H→L→C 假路径）
+CURRENT_INTRABAR_POLICY = "PRIORITY_ENVELOPE"
+
+# 与 eval_multi_tp_bar 控制流一致（越前越优先；hard_from_cost_gap 在代码里 reason 仍为 hard_from_cost）
+FACTOR26_EXIT_PRIORITY_1M: tuple[str, ...] = (
+    "hard_open_dump",
+    "hard_from_cost_gap",
+    "t1_peak_trail",
+    "ladder_full_15",
+    "half_gain",
+    "vol_giveback",
+    "hard_from_cost",
+    "ladder_half_10",
+    "peak_pullback_clear",
+)
+
+# Realtime 观测层（paper_exit_decision；可卖闸门之后）
+FACTOR26_OBSERVATION_PRIORITY_REALTIME: tuple[str, ...] = (
+    "open_protect",
+    "path",
+    "last",
+)
+
 STRATEGY_RULES = """
 ================================================================================
   因子26 · 多层止盈（买=开盘阈值）
@@ -86,12 +109,178 @@ STRATEGY_RULES = """
   · 昨收/昨高只经 overnight_peak_px：函数看买入日（昨天已持有或昨天买入才并入）；漏传买入日不用昨收/昨高
   · 不得低于买点硬保护；低开已破硬保护按开盘卖（竞价核=09:30，不用首根 1m 标签）
   · 半仓不足 200 股则改为全清
+  · 1m 政策 CURRENT_INTRABAR_POLICY=PRIORITY_ENVELOPE（非 O-H-L-C 假路径）
+  · Realtime 观测层：open_protect → path → last（不等 1m close）
 
 【默认】entry 2.5%；中段门槛 3%；阶梯 10%/15%；大赚回落 2%；回落一半 50%；波动回落 50%×20日日频σ；
        T1 峰值回落 2.5%；硬保护 2.5%。
-【说明】选股/过滤用日线；成交触达用 1 分钟 path-dependent（定盘池短窗约 7 日）。
+【说明】选股/过滤用日线；正式验证回测=BT-1m；生产=REALTIME；日线=研究。
 ================================================================================
 """
+
+
+
+def detect_intrabar_ambiguity(
+    *,
+    bar_open: float,
+    bar_high: float,
+    bar_low: float,
+    cost_px: float,
+    peak_before: float,
+    shares: int = 0,
+    tp_stage: int = 0,
+    overnight_armed: bool = False,
+    day_open: float | None = None,
+    giveback_ratio: float = DEFAULT_GIVEBACK_RATIO,
+    hard_pct: float = DEFAULT_PULLBACK_PCT,
+    ladder_half_pct: float = DEFAULT_LADDER_HALF_PCT,
+    ladder_full_pct: float = DEFAULT_LADDER_FULL_PCT,
+    peak_pullback_x: float = DEFAULT_PEAK_PULLBACK_X,
+    giveback_arm_pct: float = DEFAULT_GIVEBACK_ARM_PCT,
+    t1_trail_pct: float = DEFAULT_T1_PEAK_TRAIL_PCT,
+    vol20_daily: float | None = None,
+    vol_giveback_ratio: float = DEFAULT_VOL_GIVEBACK_RATIO,
+    session_peak_before: float = 0.0,
+    hard_gap_mode: str = HARD_GAP_IMMEDIATE,
+    hard_gap_dump_pct: float = DEFAULT_HARD_GAP_DUMP_PCT,
+    tick: float = TICK_SIZE,
+) -> dict[str, Any]:
+    """审计：同 bar 是否同时具备上行包络与下行触达（OHLC 无法证明先后）。
+
+    不改变交易结果；仅标记 INTRABAR_AMBIGUITY。
+    """
+    cost = float(cost_px)
+    h = float(bar_high)
+    lo = float(bar_low)
+    bar_o = float(bar_open or 0)
+    day_o = float(day_open) if day_open is not None and float(day_open) > 0 else bar_o
+    peak = max(float(peak_before or 0), cost) if cost > 0 else float(peak_before or 0)
+    sess = float(session_peak_before or 0)
+    if sess <= 0 and day_o > 0:
+        sess = day_o
+    empty = {
+        "intrabar_ambiguous": False,
+        "new_high": False,
+        "upside_hits": [],
+        "downside_hits": [],
+        "resolved_by": CURRENT_INTRABAR_POLICY,
+    }
+    if cost <= 0 or h <= 0 or lo <= 0:
+        return empty
+
+    new_high = h > peak + 1e-12
+    live_hi = max(h, day_o, bar_o)
+    live_ok = pnl_exceeds(live_hi, cost, giveback_arm_pct)
+    peak_incl = max(peak, h)
+    peak_gain = (peak_incl / cost - 1.0) if cost > 0 and peak_incl > 0 else 0.0
+    hard_px = cost_hard_stop_px(cost, hard_pct=hard_pct, tick=tick)
+    gap_mode = str(hard_gap_mode or HARD_GAP_IMMEDIATE).strip().lower()
+    if gap_mode not in HARD_GAP_MODES:
+        gap_mode = HARD_GAP_IMMEDIATE
+    open_broke_hard = hard_px > 0 and day_o > 0 and day_o <= hard_px + 1e-12
+
+    upside: list[str] = []
+    downside: list[str] = []
+
+    ladder15 = ladder_target_price(cost, gain_pct=ladder_full_pct, tick=tick)
+    ladder10 = ladder_target_price(cost, gain_pct=ladder_half_pct, tick=tick)
+    if ladder15 > 0 and h + 1e-12 >= ladder15:
+        upside.append("ladder_full_15")
+    if ladder10 > 0 and h + 1e-12 >= ladder10:
+        upside.append("ladder_half_10")
+
+    if open_broke_hard:
+        if gap_mode == HARD_GAP_OPEN_DUMP:
+            dump = overnight_open_dump_fill(
+                day_open=day_o,
+                bar_low=lo,
+                dump_pct=float(hard_gap_dump_pct),
+                tick=tick,
+            )
+            if dump.get("hit"):
+                downside.append("hard_open_dump")
+        else:
+            downside.append("hard_from_cost_gap")
+
+    if overnight_armed and (not live_ok):
+        sess_ref = max(sess, day_o, peak, bar_o)
+        trail_px = t1_trail_stop_px(
+            sess_ref,
+            cost_px=cost,
+            t1_trail_pct=t1_trail_pct,
+            hard_pct=hard_pct,
+            tick=tick,
+        )
+        if trail_px > 0 and lo <= trail_px + 1e-12:
+            downside.append("t1_peak_trail")
+
+    mid_gain = (
+        live_ok
+        and peak_gain > float(giveback_arm_pct) + 1e-12
+        and peak_gain < float(ladder_half_pct) - 1e-12
+    )
+    if mid_gain:
+        mid_hit = mid_gain_first_hit(
+            lo,
+            peak,
+            cost,
+            vol20_daily,
+            giveback_ratio=giveback_ratio,
+            vol_giveback_ratio=vol_giveback_ratio,
+            tick=tick,
+        )
+        if mid_hit is not None:
+            downside.append(str(mid_hit[0]))
+
+    if hard_px > 0 and lo <= hard_px + 1e-12 and not open_broke_hard:
+        downside.append("hard_from_cost")
+
+    peak_line = peak_pullback_half_price(peak, pullback_x=peak_pullback_x, tick=tick)
+    hit_peak_trail = (
+        live_ok
+        and peak_gain + 1e-12 >= float(ladder_half_pct)
+        and peak_incl > cost + 1e-12
+        and peak_line > 0
+        and lo <= peak_line + 1e-12
+    )
+    if hit_peak_trail:
+        downside.append("peak_pullback_clear")
+
+    ambiguous = bool((new_high and downside) or (upside and downside))
+    if "ladder_half_10" in upside and "peak_pullback_clear" in downside:
+        ambiguous = True
+
+    return {
+        "intrabar_ambiguous": bool(ambiguous),
+        "new_high": bool(new_high),
+        "upside_hits": upside,
+        "downside_hits": downside,
+        "resolved_by": CURRENT_INTRABAR_POLICY,
+        "tp_stage": int(tp_stage),
+        "shares": int(shares),
+    }
+
+
+def attach_1m_audit_metadata(
+    result: dict[str, Any],
+    *,
+    ambiguity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """向 eval_multi_tp_bar 结果附加审计字段（不改 action）。"""
+    out = dict(result)
+    amb = ambiguity or {}
+    out["resolution"] = "1m"
+    out["intrabar_ambiguous"] = bool(amb.get("intrabar_ambiguous"))
+    out["resolution_policy"] = CURRENT_INTRABAR_POLICY
+    if out["intrabar_ambiguous"]:
+        out["resolved_by"] = CURRENT_INTRABAR_POLICY
+    out["intrabar_flags"] = {
+        "new_high": bool(amb.get("new_high")),
+        "upside_hits": list(amb.get("upside_hits") or []),
+        "downside_hits": list(amb.get("downside_hits") or []),
+    }
+    return out
+
 
 
 def pullback_stop_price(
@@ -814,6 +1003,7 @@ def eval_multi_tp_bar(
       noted_px: 建议记入的止损/止盈价（T+1）
       peak_after: 本 bar 结束后持仓峰值
       session_peak_after: 本 bar 结束后的当日峰值
+      resolution / intrabar_ambiguous / resolution_policy：审计字段（不改成交）
     """
     cost = float(cost_px)
     h = float(bar_high)
@@ -834,8 +1024,36 @@ def eval_multi_tp_bar(
         "peak_after": max(peak, h) if h > 0 else peak,
         "session_peak_after": sess_after,
     }
+
+    def _finish(result: dict[str, Any]) -> dict[str, Any]:
+        amb = detect_intrabar_ambiguity(
+            bar_open=bar_o,
+            bar_high=h,
+            bar_low=lo,
+            cost_px=cost,
+            peak_before=float(peak_before or 0),
+            shares=sh,
+            tp_stage=stage,
+            overnight_armed=bool(overnight_armed),
+            day_open=day_o,
+            giveback_ratio=giveback_ratio,
+            hard_pct=hard_pct,
+            ladder_half_pct=ladder_half_pct,
+            ladder_full_pct=ladder_full_pct,
+            peak_pullback_x=peak_pullback_x,
+            giveback_arm_pct=giveback_arm_pct,
+            t1_trail_pct=t1_trail_pct,
+            vol20_daily=vol20_daily,
+            vol_giveback_ratio=vol_giveback_ratio,
+            session_peak_before=sess,
+            hard_gap_mode=hard_gap_mode,
+            hard_gap_dump_pct=hard_gap_dump_pct,
+            tick=tick,
+        )
+        return attach_1m_audit_metadata(result, ambiguity=amb)
+
     if cost <= 0 or sh <= 0 or h <= 0 or lo <= 0:
-        return empty
+        return _finish(empty)
 
     def _full(reason: str, px: float, *, downside: bool = True) -> dict[str, Any]:
         fill = float(px)
@@ -902,15 +1120,15 @@ def eval_multi_tp_bar(
             tick=tick,
         )
         if dump.get("hit") and float(dump.get("fill_px") or 0) > 0:
-            return _full(
+            return _finish(_full(
                 "hard_open_dump",
                 float(dump["fill_px"]),
                 downside=True,
-            )
+            ))
     elif open_broke_hard:
         if can_sell:
-            return _full("hard_from_cost", hard_px, downside=True)
-        return _mark(hard_px)
+            return _finish(_full("hard_from_cost", hard_px, downside=True))
+        return _finish(_mark(hard_px))
 
     # 1) 未到 3%：次日按隔夜高点/当日高点回落 2.5%（不得低于买点硬保护）
     if overnight_armed and (not live_ok):
@@ -924,8 +1142,8 @@ def eval_multi_tp_bar(
         )
         if trail_px > 0 and lo <= trail_px + 1e-12:
             if can_sell:
-                return _full("t1_peak_trail", trail_px, downside=True)
-            return _mark(trail_px)
+                return _finish(_full("t1_peak_trail", trail_px, downside=True))
+            return _finish(_mark(trail_px))
 
     ladder15 = ladder_target_price(cost, gain_pct=ladder_full_pct, tick=tick)
     ladder10 = ladder_target_price(cost, gain_pct=ladder_half_pct, tick=tick)
@@ -933,8 +1151,8 @@ def eval_multi_tp_bar(
     # 2) 阶梯 15% 全清（上破）
     if ladder15 > 0 and h + 1e-12 >= ladder15:
         if can_sell:
-            return _full("ladder_full_15", ladder15, downside=False)
-        return {**empty, "peak_after": max(peak, h)}
+            return _finish(_full("ladder_full_15", ladder15, downside=False))
+        return _finish({**empty, "peak_after": max(peak, h)})
 
     # 3) 中赚 3%～10%：回落一半 vs 波动回落，价高者先触
     mid_gain = (
@@ -958,12 +1176,12 @@ def eval_multi_tp_bar(
     if mid_hit is not None:
         reason, px = mid_hit
         if can_sell:
-            return _full(reason, px, downside=True)
-        return {**empty, "peak_after": max(peak, h)}
+            return _finish(_full(reason, px, downside=True))
+        return _finish({**empty, "peak_after": max(peak, h)})
     if hard_px > 0 and lo <= hard_px + 1e-12:
         if can_sell:
-            return _full("hard_from_cost", hard_px, downside=True)
-        return _mark(hard_px)
+            return _finish(_full("hard_from_cost", hard_px, downside=True))
+        return _finish(_mark(hard_px))
 
     # 4) 大赚：10% 半仓优先；≥10% 后峰值回落 X 清仓
     peak_line = peak_pullback_half_price(peak, pullback_x=peak_pullback_x, tick=tick)
@@ -977,16 +1195,16 @@ def eval_multi_tp_bar(
     )
     if hit_ladder10:
         if not can_sell:
-            return {**empty, "peak_after": max(peak, h)}
+            return _finish({**empty, "peak_after": max(peak, h)})
         if stage < 1:
-            return _half("ladder_half_10", ladder10, downside=False)
+            return _finish(_half("ladder_half_10", ladder10, downside=False))
         # 已半仓：10% 不再清剩余，留给 15% / 峰值回落 2%
     if hit_peak_trail:
         if not can_sell:
-            return {**empty, "peak_after": max(peak, h)}
-        return _full("peak_pullback_clear", peak_line, downside=True)
+            return _finish({**empty, "peak_after": max(peak, h)})
+        return _finish(_full("peak_pullback_clear", peak_line, downside=True))
 
-    return empty
+    return _finish(empty)
 
 
 # open_dump_stop_price 定义在文件后部；overnight 调用前需已定义。
@@ -2559,6 +2777,13 @@ def evaluate_pullback_wave_stop(ctx: Any, **overrides: Any) -> Any:
         tick=float(_g("tick", TICK_SIZE)),
     )
     action = raw.get("action")
+    audit = {
+        "resolution": raw.get("resolution"),
+        "intrabar_ambiguous": raw.get("intrabar_ambiguous"),
+        "resolution_policy": raw.get("resolution_policy"),
+        "resolved_by": raw.get("resolved_by"),
+        "intrabar_flags": raw.get("intrabar_flags"),
+    }
     if not action:
         return FactorResult.idle(
             "factor26",
@@ -2568,6 +2793,7 @@ def evaluate_pullback_wave_stop(ctx: Any, **overrides: Any) -> Any:
             noted_px=raw.get("noted_px"),
             peak_after=raw.get("peak_after"),
             session_peak_after=raw.get("session_peak_after"),
+            **audit,
         )
     return FactorResult.fire(
         "factor26",
@@ -2580,6 +2806,7 @@ def evaluate_pullback_wave_stop(ctx: Any, **overrides: Any) -> Any:
         noted_px=raw.get("noted_px"),
         peak_after=raw.get("peak_after"),
         session_peak_after=raw.get("session_peak_after"),
+        **audit,
     )
 
 
@@ -2601,6 +2828,11 @@ __all__ = [
     "HARD_GAP_OPEN_DUMP",
     "HARD_GAP_MODES",
     "DEFAULT_HARD_GAP_DUMP_PCT",
+    "CURRENT_INTRABAR_POLICY",
+    "FACTOR26_EXIT_PRIORITY_1M",
+    "FACTOR26_OBSERVATION_PRIORITY_REALTIME",
+    "detect_intrabar_ambiguity",
+    "attach_1m_audit_metadata",
     "STRATEGY_RULES",
     "pullback_stop_price",
     "cost_hard_stop_px",

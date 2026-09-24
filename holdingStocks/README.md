@@ -13,6 +13,8 @@
 
 可插拔架构见 `../strategy/README.md`。
 
+**架构（Realtime First，2026-09-24）**：生产卖出以 **实时 quote/trade** 驱动 HWM / trailing / Factor26（不等 1m close）；正式验证回测用 **1m OHLC**（`PRIORITY_ENVELOPE`，不伪造 tick 序）。共享策略语义、不共享市场分辨率。合同 [`docs/TRADING_ENGINE_CONTRACT.md`](../docs/TRADING_ENGINE_CONTRACT.md)；回归 `python holdingStocks/run_regression_tests.py`。
+
 ## 策略锁定 · 策略十六（因子27 + 因子26 + 因子2 + 因子22）
 
 - **买（因子26）**：开盘阈值 `high ≥ ceil(open×(1+entry))`；前日阴线或小阳；禁双阳跨日≥5%；T+1。**触达按 1 分钟顺序**
