@@ -24,6 +24,8 @@ REGRESSION_MODULES = (
     "test_temporal_integrity",
     "test_high_watermark_sell_side",
     "test_watch_boot_perf",
+    "test_stale_sticky_crossday",
+    "test_holdings_store",
     "test_strategy_simulator_lifecycle",
     "test_strategy_cumulative_regression",
     "strategy.test_factor26_exit_priority",

@@ -171,8 +171,11 @@ const closedCount = computed(() => closedHoldings.value.length)
 
     <template v-if="!loading">
       <section v-show="activeTab === 'holdings'" class="space-y-4">
-        <IndexBar v-if="snapshot" :indices="snapshot.indices" />
-        <AccountSummary v-if="snapshot" :account="snapshot.account" />
+        <AccountSummary v-if="snapshot" :account="snapshot.account" :holdings="snapshot.holdings">
+          <template v-if="snapshot.indices?.length" #aside>
+            <IndexBar compact :indices="snapshot.indices" />
+          </template>
+        </AccountSummary>
         <p v-if="snapshot && !snapshot.holdings?.length" class="text-sm text-ui-text-2">暂无持仓/当日预警；实仓登记或定盘池出现买入预警后显示于此。</p>
         <template v-else>
           <div v-if="slotHoldings.length" class="space-y-2">
@@ -189,7 +192,7 @@ const closedCount = computed(() => closedHoldings.value.length)
               <p class="text-xs text-ui-text-3">已经买入 / 待卖出 · 仅默认策略池入槽</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in slotHoldings" :key="'slot-' + String(row.代码)" :row="row" />
+              <HoldingCard v-for="row in slotHoldings" :key="'slot-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" />
             </div>
           </div>
           <div v-if="closedHoldings.length" class="space-y-2">
@@ -203,7 +206,7 @@ const closedCount = computed(() => closedHoldings.value.length)
               <p class="text-xs text-ui-text-3">仅当日四槽纸面卖出；下一交易日清空</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.代码)" :row="row" />
+              <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" />
             </div>
           </div>
           <div v-if="otherHoldings.length" class="space-y-2">
@@ -215,7 +218,7 @@ const closedCount = computed(() => closedHoldings.value.length)
               <p class="text-xs text-ui-text-3">与策略十六图例同步 · 按触发时间升序（早→晚）</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in otherHoldings" :key="'other-' + String(row.代码)" :row="row" />
+              <HoldingCard v-for="row in otherHoldings" :key="'other-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" />
             </div>
           </div>
           <div v-if="paperHoldings.length" class="space-y-2">
@@ -227,7 +230,7 @@ const closedCount = computed(() => closedHoldings.value.length)
               <p class="text-xs text-ui-text-3">日线回放仍持有、未入四槽 · 与策略十六「策略持有」同步</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in paperHoldings" :key="'paper-' + String(row.代码)" :row="row" />
+              <HoldingCard v-for="row in paperHoldings" :key="'paper-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" />
             </div>
           </div>
         </template>

@@ -17,6 +17,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from holdings_store import atomic_write_text, file_lock, write_json_locked
+
 ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
 TRADES_FILE = ROOT / "trades.jsonl"
@@ -155,7 +157,7 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
                 )
             return "local-newer"
 
-        HOLDINGS_FILE.write_text(remote_copy.read_text(encoding="utf-8"), encoding="utf-8")
+        write_json_locked(HOLDINGS_FILE, remote_copy.read_text(encoding="utf-8"))
         trades_ok = _show_file(
             repo,
             f"{remote_ref}:{LEDGER_REL_PATHS[1]}",
@@ -223,17 +225,17 @@ def push_holdings(*, force: bool = False) -> str:
                 pass
 
     data: dict[str, Any]
-    try:
-        data = json.loads(HOLDINGS_FILE.read_text(encoding="utf-8"))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError) as e:
-        raise SystemExit(f"holdings.json 无法读取: {e}") from e
-    if not isinstance(data, dict):
-        raise SystemExit("holdings.json 格式不对")
-    data["updated_host"] = current_host()
-    HOLDINGS_FILE.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    with file_lock(HOLDINGS_FILE):
+        try:
+            data = json.loads(HOLDINGS_FILE.read_text(encoding="utf-8"))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as e:
+            raise SystemExit(f"holdings.json 无法读取: {e}") from e
+        if not isinstance(data, dict):
+            raise SystemExit("holdings.json 格式不对")
+        data["updated_host"] = current_host()
+        atomic_write_text(
+            HOLDINGS_FILE, json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+        )
 
     index_path = ROOT / ".ledger_git_index"
     env = {"GIT_INDEX_FILE": str(index_path)}

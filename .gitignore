@@ -22,6 +22,8 @@ backtest/*_out.txt
 #   python index.py holdings-push / holdings-pull
 # holdings_watch.json 是本机展示缓存，不是账本，禁止当跨机真源
 holdingStocks/holdings.json
+holdingStocks/holdings.json.lock
+holdingStocks/holdings.json.*.tmp
 holdingStocks/holdings_report.html
 holdingStocks/holdings_watch.json
 holdingStocks/holdings_watch.pid

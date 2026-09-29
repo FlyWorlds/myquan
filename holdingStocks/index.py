@@ -69,6 +69,7 @@ _MYQUAN_ROOT = Path(__file__).resolve().parents[1]
 if str(_MYQUAN_ROOT) not in sys.path:
     sys.path.insert(0, str(_MYQUAN_ROOT))
 
+from holdings_store import HoldingsStore, reset_container
 from quote_feed import (
     LocalWsHub,
     QuoteFeedManager,
@@ -381,6 +382,13 @@ _WATCH_OVERLAY_READY = threading.Event()
 _last_watch_snapshot: dict[str, Any] | None = None
 _last_snapshot_digest: str | None = None
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
+# 账本唯一持有者：进程内同一对象、串行写、写前版本检查、原子落盘（见 holdings_store.py）
+_HOLDINGS_STORE = HoldingsStore(
+    _HOLDINGS_CACHE,
+    path=lambda: HOLDINGS_FILE,
+    normalize=lambda d: _normalize_holdings(d),
+    log=lambda m: print(f"[{_now()}] {m}"),
+)
 
 
 _WATCH_BOOT_PRIMARY_ONLY = False
@@ -1485,8 +1493,21 @@ def _sync_snapshot_hwm_from_quotes(
     """
     from watch_config import sina_of
 
+    # 快刷线程与扫描线程并发改同一账本对象：改+写整段串行
+    with _HOLDINGS_STORE.transaction():
+        return _sync_snapshot_hwm_locked(snap, get_quote=get_quote, sina_of=sina_of)
+
+
+def _sync_snapshot_hwm_locked(
+    snap: dict[str, Any],
+    *,
+    get_quote: Callable[[str], dict[str, Any] | None],
+    sina_of: Callable[[str], str],
+) -> bool:
     data = load_holdings()
-    positions = data.get("positions") or {}
+    positions = data.get("positions")
+    if not isinstance(positions, dict):
+        positions = data["positions"] = {}
     dirty = False
     changed = False
     for r in _iter_snapshot_price_rows(snap):
@@ -1584,7 +1605,6 @@ def _sync_snapshot_hwm_from_quotes(
         if r.get("持仓最高") != before_hwm:
             changed = True
     if dirty:
-        data["positions"] = positions
         save_holdings(data)
     return changed
 
@@ -3035,13 +3055,29 @@ def _holdings_file_mtime() -> float:
         return 0.0
 
 
-def load_holdings() -> dict[str, Any]:
-    mtime = _holdings_file_mtime()
-    cached = _HOLDINGS_CACHE.get("data")
-    if cached is not None and float(_HOLDINGS_CACHE.get("mtime") or 0.0) >= mtime:
-        return cached
+def _normalize_holdings(data: dict[str, Any]) -> None:
     # effective_watchlist 必须显式传入 holdings：不传会回调 load_holdings，
     # 缓存未写入前无限递归直到 RecursionError（被 primary_watchlist 吞掉），单次 60s+。
+    positions = data.setdefault("positions", {})
+    for w in effective_watchlist(data):
+        positions.setdefault(w["code"], _empty_position(w))
+    data.setdefault("realized_today", {})
+    data.setdefault("closed_today", {})
+    data.setdefault("daily_settlements", {})
+    data.setdefault("account_total", None)
+    data.setdefault("account_cash", None)
+    data.setdefault("account_total_open", None)
+    data.setdefault("account_total_open_session", None)
+    data.setdefault("paper_equity_base", None)
+    data.setdefault("paper_pnl_start", None)
+    data.setdefault("alert_sticky", {})
+
+
+def load_holdings() -> dict[str, Any]:
+    """进程内唯一账本对象（身份稳定）；外部改盘后原地合并，不换绑。"""
+    data = _HOLDINGS_STORE.load()
+    if data is not None:
+        return data
     if not HOLDINGS_FILE.exists():
         data = {
             "updated_at": None,
@@ -3056,25 +3092,10 @@ def load_holdings() -> dict[str, Any]:
             for w in effective_watchlist(data)
         }
         save_holdings(data)
-        return data
-    with HOLDINGS_FILE.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-    positions = data.setdefault("positions", {})
-    for w in effective_watchlist(data):
-        positions.setdefault(w["code"], _empty_position(w))
-    data.setdefault("realized_today", {})
-    data.setdefault("closed_today", {})
-    data.setdefault("daily_settlements", {})
-    data.setdefault("account_total", None)
-    data.setdefault("account_cash", None)
-    data.setdefault("account_total_open", None)
-    data.setdefault("account_total_open_session", None)
-    data.setdefault("paper_equity_base", None)
-    data.setdefault("paper_pnl_start", None)
-    data.setdefault("alert_sticky", {})
-    _HOLDINGS_CACHE["data"] = data
-    _HOLDINGS_CACHE["mtime"] = _holdings_file_mtime()
-    return data
+    loaded = _HOLDINGS_STORE.load()
+    if loaded is not None:
+        return loaded
+    return data if data is not None else {}
 
 
 def _account_total_open(data: dict[str, Any] | None = None) -> float | None:
@@ -3218,7 +3239,7 @@ def heal_watch_ledger(*, session: str | None = None) -> dict[str, Any]:
         changed = True
     q = data.get("slot_queue")
     if not isinstance(q, dict) or str(q.get("session") or "")[:10] != str(sess)[:10]:
-        data["slot_queue"] = {"session": str(sess)[:10], "freed_at": []}
+        reset_container(data, "slot_queue", {"session": str(sess)[:10], "freed_at": []})
         changed = True
     if str(data.get("last_session") or "")[:10] != str(sess)[:10]:
         data["last_session"] = str(sess)[:10]
@@ -3306,7 +3327,7 @@ def _save_alert_sticky(session: str, sticky: dict[str, Any]) -> None:
         for k, v in sticky.items()
         if isinstance(v, dict) and str(v.get("session") or "") == session
     }
-    data["alert_sticky"] = kept
+    reset_container(data, "alert_sticky", kept)
     save_holdings(data)
 
 
@@ -3324,7 +3345,7 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
     sess = normalize_signal_session(session)
     settle_previous_session_if_needed(session=sess)
     _purge_stale_realized(data, sess)
-    data["alert_sticky"] = {}
+    reset_container(data, "alert_sticky", {})
     data["watch_status_reset_session"] = sess
     # 非实仓仓位：清掉策略展示用粘滞字段（不改 qty>0）
     for code, pos in list((data.get("positions") or {}).items()):
@@ -3520,6 +3541,20 @@ def _merge_path_buy_hit(
     return bool(hit_open or hit), px, ts
 
 
+def _sticky_same_session(sticky: dict[str, Any], code: str, session: str) -> dict[str, Any]:
+    """仅返回同一 session 的粘滞；跨日旧记录一律视为空。
+
+    9:15 清空前加载的扫描若继承昨日 buy_touched/buy_hit_ts 并改写 session，
+    会伪造「今日已触买」→ 入槽现价买入且 buy_time 记成昨日、绕过 T+1。
+    """
+    prev = sticky.get(code)
+    if not isinstance(prev, dict):
+        return {}
+    if str(prev.get("session") or "") != str(session):
+        return {}
+    return prev
+
+
 def _sticky_put(
     sticky: dict[str, Any],
     code: str,
@@ -3527,9 +3562,7 @@ def _sticky_put(
     payload: dict[str, Any],
 ) -> None:
     """写粘滞时保留当日 buy_touched / stop_touched，避免卖出防抖把已触买抹掉。"""
-    prev = sticky.get(code) if isinstance(sticky.get(code), dict) else {}
-    if not isinstance(prev, dict):
-        prev = {}
+    prev = _sticky_same_session(sticky, code, session)
     st = dict(prev)
     st.update(payload)
     st["session"] = str(session)
@@ -3591,9 +3624,9 @@ def _stamp_buy_touched(
     quote: dict[str, Any] | None = None,
 ) -> None:
     """当日已触买粘滞；第一次记下时分秒。"""
-    prev = sticky.get(code) if isinstance(sticky.get(code), dict) else {}
+    prev = _sticky_same_session(sticky, code, session)
     payload: dict[str, Any] = {"buy_touched": True}
-    if not (isinstance(prev, dict) and prev.get("buy_hit_ts")):
+    if not prev.get("buy_hit_ts"):
         payload["buy_hit_ts"] = _signal_ts_text(ts, quote=quote)
     _sticky_put(sticky, code, session, payload)
 
@@ -3609,12 +3642,12 @@ def _stamp_stop_touched(
     force_ts: str | None = None,
 ) -> None:
     """当日已触止损粘滞；第一次记下时分秒。开盘保护可强制写成 09:30。"""
-    prev = sticky.get(code) if isinstance(sticky.get(code), dict) else {}
+    prev = _sticky_same_session(sticky, code, session)
     payload: dict[str, Any] = {"stop_touched": True}
     if touch_stop:
         payload["touch_stop"] = float(touch_stop)
     forced = str(force_ts or "").strip()
-    old_ts = prev.get("stop_hit_ts") if isinstance(prev, dict) else None
+    old_ts = prev.get("stop_hit_ts")
     if forced:
         payload["stop_hit_ts"] = forced
     elif not old_ts:
@@ -3967,14 +4000,16 @@ def _sync_account_total(rows: list[dict[str, Any]]) -> float | None:
 
 
 def save_holdings(data: dict[str, Any]) -> None:
-    data["updated_at"] = _now()
     from holdings_sync import current_host
 
-    data["updated_host"] = current_host()
-    with HOLDINGS_FILE.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    _HOLDINGS_CACHE["data"] = data
-    _HOLDINGS_CACHE["mtime"] = _holdings_file_mtime()
+    host = current_host()
+
+    def _stamp(d: dict[str, Any]) -> None:
+        d["updated_at"] = _now()
+        d["updated_host"] = host
+
+    _stamp(data)
+    _HOLDINGS_STORE.save(data, stamp=_stamp)
 
 
 def _purge_stale_realized(data: dict[str, Any], session: str) -> None:
@@ -3985,14 +4020,20 @@ def _purge_stale_realized(data: dict[str, Any], session: str) -> None:
         del realized[k]
     traces = data.get("closed_today")
     if isinstance(traces, dict):
-        data["closed_today"] = {
-            k: v
-            for k, v in traces.items()
-            if isinstance(v, dict) and str(v.get("session") or "") == session
-        }
+        reset_container(
+            data,
+            "closed_today",
+            {
+                k: v
+                for k, v in traces.items()
+                if isinstance(v, dict) and str(v.get("session") or "") == session
+            },
+        )
     q = data.get("slot_queue")
     if not isinstance(q, dict) or str(q.get("session") or "")[:10] != str(session)[:10]:
-        data["slot_queue"] = {"session": str(session)[:10], "freed_at": []}
+        reset_container(
+            data, "slot_queue", {"session": str(session)[:10], "freed_at": []}
+        )
 
 
 def _slot_closed_map(
@@ -4091,17 +4132,25 @@ def apply_paper_slot_buy(
     qty: int,
     note: str = "槽位触买(自动)",
     buy_time: str | None = None,
+    session: str | None = None,
 ) -> dict[str, Any]:
     """纸面自动入仓：写 qty/成本/buy_time；扣减 account_cash（若有）。
 
     buy_time 用触发时刻（1m 触达或 5s 行情 last_ts），不是进程扫到的现在。
     成交价：新触发=买点；平仓前已触买的第一梯队=现价（不得超过买点 +1%）。
     Capital V2：不允许加仓；不允许把现金买成负数（ALLOW_NEGATIVE_CASH_FOR_BUY=False）。
+    传 session 时 buy_time 必须落在该交易日，否则拒买（跨日 buy_time 会绕过 T+1）。
     """
     price = float(price)
     qty = int(qty)
     if qty <= 0 or price <= 0:
         raise ValueError("价格/数量必须 > 0")
+    if session:
+        bt = str(buy_time or "").strip()
+        if bt and not bt.startswith("9999"):
+            bt_day = (_bar_ts_str(bt) or bt)[:10]
+            if bt_day != str(session)[:10]:
+                raise ValueError("STALE_BUY_TRIGGER")
     data = load_holdings()
     pos = data["positions"].setdefault(code, _empty_position(meta))
     old_qty = int(pos.get("qty") or 0)
@@ -4488,10 +4537,14 @@ def _apply_portfolio_slots(
                     continue
                 if int((data.get("positions") or {}).get(code, {}).get("qty") or 0) > 0:
                     continue
+                trig = _row_trigger_ts(r, side="buy")
+                if not trig.startswith("9999") and trig[:10] != str(session)[:10]:
+                    skipped.append({"code": code, "reason": "STALE_BUY_TRIGGER", "trigger_ts": trig})
+                    used.add(code)
+                    continue
                 dec = _fill_of(r)
                 if dec is None:
                     continue
-                trig = _row_trigger_ts(r, side="buy")
                 tier = "0" if dec.get("kind") == "last" else "1"
                 ranked.append((tier, trig, code, r, dec))
             ranked.sort(key=lambda x: (x[0], x[1], x[2]))
@@ -4546,6 +4599,7 @@ def _apply_portfolio_slots(
                     qty=qty,
                     note=f"槽位触买(自动·{fill_kind})",
                     buy_time=_row_trigger_ts(r, side="buy"),
+                    session=str(session)[:10],
                 )
             except ValueError as e:
                 reason = str(e) or "INSUFFICIENT_CASH"
@@ -9934,10 +9988,8 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
     for w in effective_watchlist(data):
         positions[w["code"]] = _empty_position(w)
 
-    data["realized_today"] = {}
-    data["closed_today"] = {}
-    data["alert_sticky"] = {}
-    data["factor_memory"] = {}
+    for key in ("realized_today", "closed_today", "alert_sticky", "factor_memory"):
+        reset_container(data, key, {})
     data["account_total"] = float(DEFAULT_ACCOUNT_TOTAL)
     data["account_cash"] = float(DEFAULT_ACCOUNT_TOTAL)
     data["account_total_open"] = float(DEFAULT_ACCOUNT_TOTAL)
@@ -10665,6 +10717,14 @@ def cmd_watch(args: argparse.Namespace) -> None:
             reseed_live()
             return _refresh_open_prices(interval, get_quote=get_quote)
 
+    def safe_auction_reset(*, only_if_due: bool = False) -> None:
+        # 与扫描互斥：扫描中途被清空的账本状态会被扫描尾部整份写回（09-29 粘滞复活）
+        with refresh_lock:
+            if only_if_due:
+                ensure_watch_status_reset_today()
+            else:
+                reset_watch_status_at_auction()
+
     def clock_heartbeat_loop() -> None:
         while not stop.is_set():
             if stop.wait(2.0):
@@ -10737,7 +10797,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 break
             try:
                 if action == "reseed":
-                    reset_watch_status_at_auction()
+                    safe_auction_reset()
                     try:
                         _daily_cache_warm(force=True)
                     except Exception as e:  # noqa: BLE001
@@ -10838,7 +10898,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         feed_started = False
 
         try:
-            ensure_watch_status_reset_today()
+            safe_auction_reset(only_if_due=True)
             t0 = time.perf_counter()
             # 启动强制清缓存放最前：原先放在首屏之后，热池日线会被拉两遍
             _ensure_signal_day_caches(force=True)

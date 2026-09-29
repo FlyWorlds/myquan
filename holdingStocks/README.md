@@ -113,6 +113,8 @@ cd holdingStocks && python run_regression_tests.py
 
 **浮盈/结算（名称旁）**：**今日盈亏 / 今日浮亏** = 四槽持仓 `session_day_pnl`（**今买相对买入价，昨仓相对昨收**；9:15 / 跨日沿用快照时按昨收重置）+ **今日平仓**记账 `day_pnl`（只认 `已实现`，**隔日平仓留痕不计**）。卡片不回退展示「相对成本」的浮盈当今日浮亏。**总资产** = 日初锁定（优先昨收结算 `account_total`；**日初锚跟日历信号日 `trading_session_date`**，不用行情盘前滞后的行上「交易日」；跨日 heal 幂等，不依赖正好 9:15 在线）+ **今日盈亏**（与分票加总同动）。账户摘要「今日盈亏率」= 今日盈亏 / 日初锁定 `account_total_open`（单票「当日盈亏%」仍用该票当日基数）。**总收益** = 总资产 − 纸面本金（`paper_equity_base`，默认 30 万，自 **`PAPER_PNL_START`=2026-09-09**），即「昨收累计 + 今日盈亏」。**15:00 日结** = `POSITION_SETTLEMENT`（收盘盯市，**不改 qty/cost、不写 SELL**）；下一交易日 `account_total_open` = 昨收 `closing_equity`。账户摘要「当前持仓成本」= 剩余仓 `成本额`，**不含**今日已平仓成本。每日收盘后写一次 `holdings.daily_settlements[交易日]`（终稿；盘中可更新草稿；次日 heal/9:15 补记未终稿日），含今日盈亏 vs 权益日变差额核对。**今日平仓**卡片锁定平仓价；策略回放持有不进账户合计。
 
+**首页布局**：账户摘要卡首行左侧为总收益 / 今日盈亏 +「?」图标（悬停/聚焦弹出总资产、可用、市值、持仓成本、因子2 摘要与口径说明）+ 交割单链接，右侧靠右为上证、深证紧凑指数卡（点击跳百度指数页；窄屏自动换行）。**仓位占比**：账户摘要显示 **总仓位占比** = Σ持仓市值 / 总资产（后端 `account.positionPct`，>100% 标红）、现金占比 = 可用 / 总资产、持股只数，以及按占比降序的**个股仓位**标签；每张持仓卡片名称上方状态标签行有「仓位 x%」标签（带小进度条）= 该票市值（缺失时 现价×持仓）/ 总资产，仅 `持仓>0` 显示，与总占比同口径（前端 `watch-ui/utils/position.ts`，不改后端）。隐私模式下隐藏。
+
 **Paper 卖出**：`paper_exit_decision` 当前 **Unified Primary**（`USE_UNIFIED_EXIT_ENGINE=True`），Legacy 只做 Shadow / fallback（`SHADOW_UNIFIED_EXIT_ENGINE=True`）。Shadow 比较不成交、不发微信。
 
 **微信推送（N1）**：预警与成交分模板。扫描只发 **【策略预警】**（将买入 / 已触买未成交 / 槽满 / 将止损 / T+1 暂不可卖 / 跌停不可卖）；**真实 paper 成交**在 `apply_paper_slot_buy` / `apply_exit_fill` 写入仓位与 ledger 之后发 **【模拟买入】** / **【模拟卖出】**（含 reason_code：WORKING_STOP / OPEN_PROTECT / PATH / HALF / EOD_RESERVE）。已成交事件不再被扫描重复推。预警扫描仅默认策略池（strategy16）；实仓 SELL 即使已离开默认池仍推成交通知。Shadow 不发微信。`start_watch --no-wechat` / `watch --no-wechat`：**预警与买卖成交都不推**，不影响 paper execution。
@@ -174,6 +176,14 @@ cd holdingStocks/watch-ui && npm install && npm run dev
 - **OpenClaw / 微信自检并行**：`--wechat-optional`（`start_watch.py` 默认）下 Gateway→通道→测试发送放到后台线程 `wechat-prepare`，拿到盯盘锁后与行情、API 同时进行；启动通知在自检结束后于后台发送。严格模式（不带 `--wechat-optional`）仍同步，失败即中止。
 - **行情分层首屏**：首屏只扫描**热池**（默认策略 + 公共自选 + 持仓）——新浪批量 → 东财 SSE → 热池日线并行预热 → 首屏快照；**策略一池**在首屏后后台补齐（日线预热 → 新浪 seed），完成后并入信号扫描并推「全量快照」。紫阳叠加池、板块仍各自后台加载。启动强制清日线缓存只在最前做一次（原先首屏后再清，热池日线拉两遍）。
 - **账本加载递归修复**：`load_holdings` 为宇宙补空仓位时必须把 `holdings` 显式传给 `effective_watchlist`；此前不传会回调 `load_holdings`，一路递归到 `RecursionError`（被 `primary_watchlist` 吞掉），单次名单构建 60–90s，是「启动很慢」的主因。`load_strategy16_thr_map` 按 mtime 缓存。回归：`test_watch_boot_perf`。
+- **跨日粘滞不得继承**：`alert_sticky` 写入只继承同一 `session` 的旧记录（`_sticky_same_session`）。此前 9:15 清空前加载的扫描会把昨日 `buy_touched`/`buy_hit_ts` 连同新 session 写回，伪造「今日已触买」→ 腾槽现价买入且 `buy_time` 记成昨日、绕过 T+1（2026-09-29 金安国纪）。入槽另有两道闸：触发时刻非当日 → `STALE_BUY_TRIGGER` 不买；`apply_paper_slot_buy(session=)` 拒收跨日 `buy_time`。回归：`test_stale_sticky_crossday`。
+- **账本存储层（旧数据不得覆盖新数据）**：`holdings.json` 统一由 `holdings_store.HoldingsStore` 读写（`index.load_holdings` / `save_holdings` 已接入）。
+  - 进程内 `load_holdings()` 永远返回**同一个对象**；其它进程（CLI `buy`/`sell`、`holdings-pull`）改盘后原地三方合并吸收，不再换绑新 dict。
+  - `save_holdings` 在进程锁 + 跨进程文件锁（`holdings.json.lock`）内执行；写前比对磁盘版本（mtime_ns + 大小），被外部改过就先合并：只改一边的字段各自保留，同字段冲突以磁盘为准并打日志「账本被外部改写，已合并」。
+  - 落盘用临时文件 + `os.replace` 原子替换，读者不会读到半截 JSON。
+  - `alert_sticky` / `closed_today` / `slot_queue` 等容器只用 `reset_container` 原地清空，不换绑；9:15 状态重置（含启动补跑）改为持 `refresh_lock`，与扫描互斥；行情快刷抬 HWM 与写盘在存储锁内完成。
+  - `holdings-pull` / `holdings-push` / `repair_void_stale_buy.py` 写账本同样走文件锁 + 原子替换。
+  - 回归：`test_holdings_store`。
 - `holdings-pull` 的 `git fetch` 加 20s 超时，网络挂起时降级用本机账本。
 
 **顶栏红字不只看本机 WebSocket**。`:8765` 在本机，断外网时 WS 仍可能显示已连接、hub 里还有断开前的现价。快照带 `feedOk` / `quoteStale` / `quoteAt`（最近一次东财 SSE 或新浪批量成功）；超过约 40s 没收外网行情，顶栏红字「行情中断，数据停在 HH:MM:SS」。刷新线程卡住时仍有 **2s 时钟心跳**，页面时钟继续走，不要把「本机 WS 还开着」当成行情正常。前端 `updatedAt` 超过 20s 也红字「服务停滞」。午休无成交只要新浪兜底还通，不红。

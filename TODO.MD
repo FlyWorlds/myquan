@@ -42,6 +42,8 @@
 | 触发了但看不到几点几分；入槽/平仓没有先后 | sticky 第一次记下 `buy_hit_ts` / `stop_hit_ts`；已入槽用 `buy_time`；成交/流水用触发时刻不是进程 `_now()`。**先平再买**（本轮平仓立刻补槽）。腾槽：平仓前已触买且现价≤买点+1% 按现价；否则其后新触发按买点 |
 | 扫仓补平 `path_hit=False`，以为没有 1m | 5s 刷新就是实盘时钟。本轮行上带 `_path_hit` / `_path_fill_px` / `_path_ts`，扫仓能看见 1m；现价破卖价按**触发点**成交 |
 | 改完 Python 页面仍是旧逻辑 | `start_watch` **不热更新**；改账本/结算后必须停掉再开当前进程 |
+| 金安国纪 002636 昨日无仓、今日未触买点，09:30 却被「现价」买入并 09:30:15 止损，买单时间记成昨日 09:46（2026-09-29） | 9:15 清空前加载的扫描写卖出防抖时，`_sticky_put` 继承了**昨日** `buy_touched`/`buy_hit_ts` 并把 session 改成今日 → 伪造「今日已触买」+ 触发早于腾槽 → 第一梯队现价买入；buy_time=昨日绕过 T+1。现：粘滞只继承**同 session**（`_sticky_same_session`）；入槽跳过非当日触发（`STALE_BUY_TRIGGER`）；`apply_paper_slot_buy(session=)` 拒收跨日 buy_time。回归 `test_stale_sticky_crossday` |
+| 多线程/多进程各自整份写 `holdings.json`，后写的旧数据盖掉先写的新数据（002636 根因） | `holdings_store.HoldingsStore`：进程内账本对象身份稳定；写盘串行（进程锁 + `holdings.json.lock` 文件锁）+ 写前版本检查（mtime_ns+size，被外部改过先三方合并，冲突以磁盘为准）+ 原子替换；容器只 `reset_container` 原地清空；9:15 重置持 `refresh_lock`。回归 `test_holdings_store` |
 | 12 点断网，时钟停在 12 点多，没有红色「服务中断」 | 红字以前只认本机 WebSocket。断外网时 `:8765` 仍开、hub 缓存现价还能出表。现按 SSE/新浪是否还在收数打 `quoteStale`/`feedOk`/`quoteAt`；刷新卡住仍 2s 推时钟；前端 `updatedAt`>20s 或 HTTP 失败也红字「行情中断/网络异常/服务停滞」 |
 
 | 禁止 | 正确做法 |

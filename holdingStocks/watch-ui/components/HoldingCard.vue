@@ -3,8 +3,11 @@ import type { HoldingRow } from '~/types/snapshot'
 import { fmtNum, fmtSignedPct, fmtSignalClock } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
+import { fmtPositionPct, positionPctOf } from '~/utils/position'
 
-const props = defineProps<{ row: HoldingRow }>()
+const props = defineProps<{ row: HoldingRow; accountTotal?: number | null }>()
+
+const positionPct = computed(() => positionPctOf(props.row, props.accountTotal))
 
 const pdg = props.row['价位小数'] ?? 2
 const visual = computed(() => resolveSignalVisual(props.row))
@@ -115,6 +118,17 @@ const cardClass = computed(() => {
               class="rounded-full border px-2 py-0.5 text-xs font-medium"
               :style="posChipStyle"
             >{{ posStatus }}</span>
+            <span
+              v-if="positionPct != null"
+              class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium text-accent"
+              style="border: 1px solid color-mix(in srgb, var(--watch-accent) 45%, transparent); background: color-mix(in srgb, var(--watch-accent) 10%, transparent)"
+              title="仓位占比 = 市值 / 总资产"
+            >
+              仓位 <b class="sensitive tabular-nums">{{ fmtPositionPct(positionPct) }}</b>
+              <span class="h-1 w-10 overflow-hidden rounded-full bg-ui-hairline">
+                <span class="sensitive block h-full rounded-full bg-accent" :style="{ width: `${Math.min(100, positionPct)}%` }" />
+              </span>
+            </span>
           </div>
           <h2 class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-bold">
             <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ row.名称 }}</a>
