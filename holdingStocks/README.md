@@ -99,7 +99,7 @@ WATCHLIST = list(S7_WATCHLIST)
 
 登记示例：`python index.py set-cost 002015 --cost 16.122 --qty 600`；或在 `holdings.json` 加 `"portfolio_pool": ["002015"]`。
 
-**策略16 Tab**：默认池信号表，按 **距买点% 升序**（最近在前）；可点表头按 **日内涨跌** / **策略累计** 排序。**状态主语义 = Strategy Simulator**（空仓/策略持有，来自 `strategy_sim_state.json`，与纸面 qty 独立）；纸面仓仅 debug 小字。Live quote（约 2~5s patch）撞买/卖位触发 FLAT↔LONG；不等待 1m close。策略累计/单笔收入来自同一 simulator 虚拟账本（`策略收益语义=strategy_simulator_ledger`），**不再用 Factor1 串台**。**FLAT ≠ 累计 0**：从未交易才是 0%；平仓后累计 = `virtual_cash/initial_cash−1` 冻结。首次空账本用日线 OHLC touch **bootstrap 一次**（自 `STRATEGY_PNL_START` 至末日线 cutoff），其后由 live events 接力；`bootstrapped` 防双计。Paper 入槽仍走 Capital V2（日增≤2 / 20% / 最多5）；Paper limit **不回滚** simulator BUY。Durable：`strategy_sim_state.json`（含 virtual_cash/shares）+ `strategy_signal_events.json`（跨机同步需包含）。状态图例可点筛选。买入信号口径真源：`watch_buy_signal.py`；simulator：`strategy_simulator.py`。
+**策略16 Tab**：默认池信号表，按 **距买点% 升序**（最近在前）；可点表头按 **日内涨跌** / **策略累计** 排序。**状态主语义 = Strategy Simulator**（空仓/策略持有，来自 `strategy_sim_state.json`，与纸面 qty 独立）；纸面仓仅 debug 小字。Live quote（约 2~5s patch）撞买/卖位触发 FLAT↔LONG；不等待 1m close。**T+1 与回测 `open_break` / 日线 bootstrap 同口径**：买入当日不卖（`t0` 标的除外，`skipped=t1_locked`），卖出当日不再买回（`skipped=exited_today`）。2026-09-28 前 live 无此两条，买卖位交叉的票逐 tick 翻转（如 601208 单日近万笔），污染 25 个账本；修复脚本 `python repair_strategy_sim_t1.py`（默认 dry-run，停盯盘后 `--apply`；按原 bootstrap_cutoff 重跑历史段 + 新规则重放 live 事件，被拒事件归档 `strategy_signal_events.voided.json`）。策略累计/单笔收入来自同一 simulator 虚拟账本（`策略收益语义=strategy_simulator_ledger`），**不再用 Factor1 串台**。**FLAT ≠ 累计 0**：从未交易才是 0%；平仓后累计 = `virtual_cash/initial_cash−1` 冻结。首次空账本用日线 OHLC touch **bootstrap 一次**（自 `STRATEGY_PNL_START` 至末日线 cutoff），其后由 live events 接力；`bootstrapped` 防双计。Paper 入槽仍走 Capital V2（日增≤2 / 20% / 最多5）；Paper limit **不回滚** simulator BUY。Durable：`strategy_sim_state.json`（含 virtual_cash/shares）+ `strategy_signal_events.json`（跨机同步需包含）。状态图例可点筛选。买入信号口径真源：`watch_buy_signal.py`；simulator：`strategy_simulator.py`。
 
 **Trailing 校验列（持仓卡 / 策略16）**：`现价 | 今日最高 | 持仓最高 | 卖出侧`。**今日最高** = 行情 API `dayHigh`（行字段 `最高`/`今日最高`）；**持仓最高** = `holdings.positions.*.peak_high`（可选 `peak_high_at`→`持仓最高时间`），与自动卖出 / `working_stop_price` / `paper_exit_decision` **同一 SoT**；前端禁止 `Math.max` 自算。全量 `collect_rows` 与行情快刷 `_sync_snapshot_hwm_from_quotes` 均经 `raise_position_peak_high` 抬升（只升不降）。
 
@@ -169,6 +169,12 @@ cd holdingStocks/watch-ui && npm install && npm run dev
 ```
 
 **启动顺序**：`watch` **先绑定并开始接受** `:8765`（HTTP `/api` + WebSocket `/ws`），再后台做冷启动（新浪批量、**强制按信号交易日重拉日线**、东财 SSE、首屏快照）。日线末根须覆盖「最近已收盘工作日」（15:15 前不含当日）；缺则增量/全量补拉，避免过门/前日沿用旧 parquet。周六日信号日锚定上周五；周一「前日」自然为上周五。`start_watch.py` 等 API 端口就绪后再自己开 Nuxt（并传 `--no-ui-dev`，避免两套前端抢 `:3000`）。此前若等首屏算完才绑端口，池子变大后会超过 120s，页面红字「推送断开，等待重连…」。冷启动期间若有上次 `holdings_watch.json` **且不比 `holdings.json` 旧** 会先展示旧快照，否则丢掉过期缓存并推 `boot` 占位。首屏/轮询**先记录再更新**：行情全失败或持仓/策略十六被滤空时沿用上一份可用快照（`quoteStale`），不覆盖成空表；账本 `occupied` 变了才出新快照。
+
+**并行 / 分层冷启动**（2026-09-28）：
+- **OpenClaw / 微信自检并行**：`--wechat-optional`（`start_watch.py` 默认）下 Gateway→通道→测试发送放到后台线程 `wechat-prepare`，拿到盯盘锁后与行情、API 同时进行；启动通知在自检结束后于后台发送。严格模式（不带 `--wechat-optional`）仍同步，失败即中止。
+- **行情分层首屏**：首屏只扫描**热池**（默认策略 + 公共自选 + 持仓）——新浪批量 → 东财 SSE → 热池日线并行预热 → 首屏快照；**策略一池**在首屏后后台补齐（日线预热 → 新浪 seed），完成后并入信号扫描并推「全量快照」。紫阳叠加池、板块仍各自后台加载。启动强制清日线缓存只在最前做一次（原先首屏后再清，热池日线拉两遍）。
+- **账本加载递归修复**：`load_holdings` 为宇宙补空仓位时必须把 `holdings` 显式传给 `effective_watchlist`；此前不传会回调 `load_holdings`，一路递归到 `RecursionError`（被 `primary_watchlist` 吞掉），单次名单构建 60–90s，是「启动很慢」的主因。`load_strategy16_thr_map` 按 mtime 缓存。回归：`test_watch_boot_perf`。
+- `holdings-pull` 的 `git fetch` 加 20s 超时，网络挂起时降级用本机账本。
 
 **顶栏红字不只看本机 WebSocket**。`:8765` 在本机，断外网时 WS 仍可能显示已连接、hub 里还有断开前的现价。快照带 `feedOk` / `quoteStale` / `quoteAt`（最近一次东财 SSE 或新浪批量成功）；超过约 40s 没收外网行情，顶栏红字「行情中断，数据停在 HH:MM:SS」。刷新线程卡住时仍有 **2s 时钟心跳**，页面时钟继续走，不要把「本机 WS 还开着」当成行情正常。前端 `updatedAt` 超过 20s 也红字「服务停滞」。午休无成交只要新浪兜底还通，不红。
 

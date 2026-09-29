@@ -462,6 +462,10 @@ def _event_id(
     return str(uuid.uuid5(uuid.NAMESPACE_URL, raw))
 
 
+def _session_of(ts: Any) -> str:
+    return str(ts or "").replace("T", " ")[:10]
+
+
 def quote_age_seconds(
     quote_ts: str | None,
     *,
@@ -506,13 +510,16 @@ def evaluate_live_transition(
     force_book: dict[str, Any] | None = None,
     now: datetime | None = None,
     stale_after: float | None = None,
+    t0: bool = False,
 ) -> dict[str, Any]:
     """用 live last 撞 buy/sell level；仅状态转换产生事件。
 
-    BUY：FLAT + allow_entry + last >= buy_level
-    SELL：LONG + last <= sell_level
+    BUY：FLAT + allow_entry + last >= buy_level，且当日未卖出过
+    SELL：LONG + last <= sell_level，且非买入当日（t0 标的除外）
 
     条件语义保持 touch（>= / <=），不是 cross。
+    T+1 / 卖出日不再买回与回测 ``open_break`` 及日线 bootstrap 一致；
+    缺这两条时买卖位交叉的票会逐 tick 买卖翻转。
     返回 {transition, book, event, telemetry}。
     """
     eval_t = evaluation_time or _now_str()
@@ -561,13 +568,20 @@ def evaluate_live_transition(
         state = str(book.get("state") or "FLAT")
         event: dict[str, Any] | None = None
         transition: str | None = None
+        session = _session_of(quote_ts or eval_t)
 
         if state == "FLAT":
             try:
                 buy_lv = float(buy_level) if buy_level is not None else None
             except (TypeError, ValueError):
                 buy_lv = None
-            if allow_entry and buy_lv is not None and buy_lv > 0 and last + 1e-12 >= buy_lv:
+            touched = (
+                allow_entry and buy_lv is not None and buy_lv > 0 and last + 1e-12 >= buy_lv
+            )
+            if touched and _session_of(book.get("exit_time")) == session:
+                out["skipped"] = "exited_today"
+                touched = False
+            if touched:
                 shares, cash_left, _ = _buy_shares(float(book["virtual_cash"]), last)
                 if shares >= LOT:
                     book["state"] = "LONG"
@@ -600,7 +614,11 @@ def evaluate_live_transition(
                 sell_lv = float(sell_level) if sell_level is not None else None
             except (TypeError, ValueError):
                 sell_lv = None
-            if sell_lv is not None and sell_lv > 0 and last <= sell_lv + 1e-12:
+            touched = sell_lv is not None and sell_lv > 0 and last <= sell_lv + 1e-12
+            if touched and not t0 and _session_of(book.get("entry_time")) == session:
+                out["skipped"] = "t1_locked"
+                touched = False
+            if touched:
                 shares = float(book.get("virtual_shares") or 0.0)
                 entry = float(book.get("entry_price") or 0.0)
                 proceeds = shares * last

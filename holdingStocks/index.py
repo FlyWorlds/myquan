@@ -383,14 +383,28 @@ _last_snapshot_digest: str | None = None
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
 
 
-def _scan_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+_WATCH_BOOT_PRIMARY_ONLY = False
+
+
+def _set_watch_boot_primary_only(on: bool) -> None:
+    """盯盘冷启动分层：True 时信号扫描只走热池，策略一池后台补齐后再并入。"""
+    global _WATCH_BOOT_PRIMARY_ONLY
+    _WATCH_BOOT_PRIMARY_ONLY = bool(on)
+
+
+def _scan_watchlist(
+    holdings: dict[str, Any] | None = None, *, full: bool = False
+) -> list[dict[str, Any]]:
     """信号扫描：热池（默认交易）∪ 策略一盯盘池。
 
     紫阳等大观察池不进此名单（独立轻量行情）。
+    冷启动阶段（``_WATCH_BOOT_PRIMARY_ONLY``）只返回热池，``full=True`` 强制全量。
     """
     from watch_config import strategy1_watchlist
 
     base = primary_watchlist(holdings)
+    if _WATCH_BOOT_PRIMARY_ONLY and not full:
+        return list(base)
     seen = {_code_key(w["code"]) for w in base}
     out = list(base)
     for w in strategy1_watchlist(holdings):
@@ -2551,6 +2565,7 @@ def _attach_strategy_pnl_fields(
             allow_entry=allow_entry,
             reason="collect_rows",
             persist=True,
+            t0=bool(w.get("t0")),
         )
     book = get_book(sid, code)
     if last > 0:
@@ -3025,24 +3040,27 @@ def load_holdings() -> dict[str, Any]:
     cached = _HOLDINGS_CACHE.get("data")
     if cached is not None and float(_HOLDINGS_CACHE.get("mtime") or 0.0) >= mtime:
         return cached
+    # effective_watchlist 必须显式传入 holdings：不传会回调 load_holdings，
+    # 缓存未写入前无限递归直到 RecursionError（被 primary_watchlist 吞掉），单次 60s+。
     if not HOLDINGS_FILE.exists():
         data = {
             "updated_at": None,
             "account_total": None,
             "account_cash": None,
-            "positions": {
-                w["code"]: _empty_position(w)
-                for w in effective_watchlist()
-            },
+            "positions": {},
             "realized_today": {},
             "closed_today": {},
+        }
+        data["positions"] = {
+            w["code"]: _empty_position(w)
+            for w in effective_watchlist(data)
         }
         save_holdings(data)
         return data
     with HOLDINGS_FILE.open("r", encoding="utf-8") as f:
         data = json.load(f)
     positions = data.setdefault("positions", {})
-    for w in effective_watchlist():
+    for w in effective_watchlist(data):
         positions.setdefault(w["code"], _empty_position(w))
     data.setdefault("realized_today", {})
     data.setdefault("closed_today", {})
@@ -10528,10 +10546,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 微信运行时开关设置失败（继续）: {e}")
 
-    if wechat and not skip_wechat_check:
-        print("=" * 48)
-        print("盯盘启动套件：OpenClaw → 微信自检 → 盯盘")
-        print("=" * 48)
+    def _run_wechat_prepare() -> bool:
         try:
             from wechat_notify import prepare_wechat_for_watch
 
@@ -10541,17 +10556,30 @@ def cmd_watch(args: argparse.Namespace) -> None:
             )
         except Exception as e:  # noqa: BLE001
             ok, detail = False, str(e)
-        if not ok:
-            print(f"[{_now()}] 微信套件失败:\n{detail[:600]}")
-            if wechat_optional:
-                # 通道「running」≠能发：prepare failed 时常因会话 token 过期。
-                # 仍保持 wechat=True，盘中买卖/预警可在 token 恢复后发出；
-                # 不要静默关掉推送（否则通道修好了也不发）。
-                print(
-                    f"[{_now()}] --wechat-optional：继续盯盘并保留微信推送。"
-                    "请用微信给机器人发一条消息刷新会话；之后买卖/预警会自动推。"
-                )
-            else:
+        if ok:
+            print(f"[{_now()}] 微信套件就绪")
+            return True
+        print(f"[{_now()}] 微信套件失败:\n{detail[:600]}")
+        if wechat_optional:
+            # 通道「running」≠能发：prepare failed 时常因会话 token 过期。
+            # 仍保持 wechat=True，盘中买卖/预警可在 token 恢复后发出；
+            # 不要静默关掉推送（否则通道修好了也不发）。
+            print(
+                f"[{_now()}] --wechat-optional：继续盯盘并保留微信推送。"
+                "请用微信给机器人发一条消息刷新会话；之后买卖/预警会自动推。"
+            )
+        return False
+
+    # --wechat-optional（start_watch 默认）：OpenClaw/微信自检与行情、API 并行，
+    # 不再挡在端口监听之前；严格模式仍同步，失败即中止。
+    wechat_prepare_async = bool(wechat and not skip_wechat_check and wechat_optional)
+    wechat_prepare_thread: threading.Thread | None = None
+    if wechat and not skip_wechat_check:
+        if not wechat_prepare_async:
+            print("=" * 48)
+            print("盯盘启动套件：OpenClaw → 微信自检 → 盯盘")
+            print("=" * 48)
+            if not _run_wechat_prepare():
                 print(
                     "中止盯盘。修好通道后重试；或临时："
                     "watch --wechat-optional / --skip-wechat-check / --no-wechat"
@@ -10571,6 +10599,13 @@ def cmd_watch(args: argparse.Namespace) -> None:
         ui_dev_port=ui_dev_port if use_ui_dev else None,
         force=bool(getattr(args, "force", False)),
     )
+    if wechat_prepare_async:
+        # 拿到锁之后再动 Gateway，避免抢占已在跑的实例
+        print(f"[{_now()}] 盯盘启动套件：OpenClaw → 微信自检 后台并行（行情/API 不等待）")
+        wechat_prepare_thread = threading.Thread(
+            target=_run_wechat_prepare, name="wechat-prepare", daemon=True
+        )
+        wechat_prepare_thread.start()
     stop = threading.Event()
     refresh_lock = threading.Lock()
     ws_hub = LocalWsHub()
@@ -10788,6 +10823,9 @@ def cmd_watch(args: argparse.Namespace) -> None:
             print(f"[{_now()}] 股票名称缓存已预热（{n_names} 条）")
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 名称缓存预热失败（继续）: {e}")
+        # 分层冷启动：首屏只扫热池（默认策略+自选+持仓），策略一池首屏后后台补齐。
+        # 必须在 worker 启动前置位，否则 loop 首轮就会全量串行拉日线。
+        _set_watch_boot_primary_only(True)
         # 先起刷新线程 + 行情源：日线预热常因缺 panda_data/网络挂住，
         # 若堵在 feed.start() 之前，worker 一直 wait_update，快照永不更新。
         if not worker.is_alive():
@@ -10796,21 +10834,26 @@ def cmd_watch(args: argparse.Namespace) -> None:
             quote_patch_worker.start()
         if not milestone_worker.is_alive():
             milestone_worker.start()
-        print("冷启动：先上首屏快照，日线预热放后台（避免页面卡在「连接中」）")
+        print("冷启动：先上热池（默认策略）首屏，策略一池/日线全量放后台异步补齐")
         feed_started = False
 
         try:
             ensure_watch_status_reset_today()
             t0 = time.perf_counter()
+            # 启动强制清缓存放最前：原先放在首屏之后，热池日线会被拉两遍
+            _ensure_signal_day_caches(force=True)
             primary = primary_watchlist()
-            scan = _scan_watchlist()
-            n_fast = reseed_live(scan)
+            n_fast = reseed_live(primary)
             feed.start()
             feed_started = True
+            try:
+                _daily_cache_warm(primary, force=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 热池日线预热失败（继续按票补拉）: {e}")
             report, _ = safe_refresh()
             elapsed = time.perf_counter() - t0
             _log_watch_snapshot_push(
-                f"首屏快照已推送: {report}（扫描 {n_fast}/{len(scan)} 只 · 热池 {len(primary)} · {elapsed:.1f}s）",
+                f"首屏快照已推送: {report}（热池 {n_fast}/{len(primary)} 只 · {elapsed:.1f}s · 策略一池后台补齐）",
                 force=True,
             )
             # 叠加池：后台独立轮询，不挡首屏、不进 collect_rows
@@ -10826,23 +10869,34 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 print(f"[{_now()}] 叠加池轮询未启动（继续）: {e}")
                 _WATCH_OVERLAY_READY.set()
             try:
+                t1 = time.perf_counter()
+                primary_codes = {_code_key(w["code"]) for w in primary}
+                rest = [
+                    w
+                    for w in _scan_watchlist(full=True)
+                    if _code_key(w["code"]) not in primary_codes
+                ]
                 print(
-                    f"[{_now()}] 后台强制刷新日线"
+                    f"[{_now()}] 后台补齐策略一池 {len(rest)} 只"
                     f"（session={trading_session_date()} · "
                     f"已收盘日线截至 {latest_completed_weekday()}）…"
                 )
-                _ensure_signal_day_caches(force=True)
-                _daily_cache_warm(scan, force=True)
-                print(f"[{_now()}] 扫描池日线预热完成（{len(scan)} 只）")
-                report2, _ = safe_refresh()
-                _log_watch_snapshot_push(
-                    f"预热后快照已推送: {report2}",
-                    force=True,
-                )
+                if rest:
+                    # 先并行预热：reseed 缺新浪快照时逐只 _watch_daily 垫昨收
+                    _daily_cache_warm(rest, force=True)
+                    reseed_live(rest)
             except Exception as e:  # noqa: BLE001
-                print(f"[{_now()}] 日线预热失败（继续按票补拉）: {e}")
+                print(f"[{_now()}] 策略一池补齐失败（并入后按票补拉）: {e}")
+            finally:
+                _set_watch_boot_primary_only(False)
+            report2, _ = safe_refresh()
+            _log_watch_snapshot_push(
+                f"全量快照已推送: {report2}（补齐 {time.perf_counter() - t1:.1f}s）",
+                force=True,
+            )
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 首次更新失败（API 已就绪，继续后台刷新）: {e}")
+            _set_watch_boot_primary_only(False)
             _WATCH_OVERLAY_READY.set()
             if not feed_started:
                 try:
@@ -10916,16 +10970,24 @@ def cmd_watch(args: argparse.Namespace) -> None:
     )
     print("展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）")
     if wechat:
-        try:
-            from wechat_notify import send_startup_message
 
-            ok, detail = send_startup_message(url=url)
-            if ok:
-                print(f"[{_now()}] 微信启动通知已推送")
-            else:
-                print(f"[{_now()}] 微信启动通知失败: {detail[:200]}")
-        except Exception as e:  # noqa: BLE001
-            print(f"[{_now()}] 微信启动通知异常: {e}")
+        def _send_wechat_startup() -> None:
+            if wechat_prepare_thread is not None:
+                wechat_prepare_thread.join()
+            try:
+                from wechat_notify import send_startup_message
+
+                ok, detail = send_startup_message(url=url)
+                if ok:
+                    print(f"[{_now()}] 微信启动通知已推送")
+                else:
+                    print(f"[{_now()}] 微信启动通知失败: {detail[:200]}")
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_now()}] 微信启动通知异常: {e}")
+
+        threading.Thread(
+            target=_send_wechat_startup, name="wechat-startup-msg", daemon=True
+        ).start()
     if not args.no_open:
         webbrowser.open(url)
     try:

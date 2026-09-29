@@ -23,6 +23,9 @@ if str(_ROOT) not in sys.path:
 REGRESSION_MODULES = (
     "test_temporal_integrity",
     "test_high_watermark_sell_side",
+    "test_watch_boot_perf",
+    "test_strategy_simulator_lifecycle",
+    "test_strategy_cumulative_regression",
     "strategy.test_factor26_exit_priority",
     "strategy.test_factor26_characterization",
     "strategy.test_cross_resolution_harness",

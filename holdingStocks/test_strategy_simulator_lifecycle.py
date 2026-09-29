@@ -110,7 +110,7 @@ class TestSimulatorLifecycle(_TmpSim):
             strategy_id="strategy16",
             symbol="600330",
             live_last=9.40,
-            quote_ts="2026-09-23 09:45:00",
+            quote_ts="2026-09-24 09:45:00",
             buy_level=10.0,
             sell_level=9.5,
             allow_entry=False,
@@ -137,7 +137,7 @@ class TestSimulatorLifecycle(_TmpSim):
             strategy_id="strategy16",
             symbol="002636",
             live_last=9.4,
-            quote_ts="2026-09-23 10:00:00",
+            quote_ts="2026-09-24 10:00:00",
             buy_level=9.9,
             sell_level=9.5,
             allow_entry=False,
@@ -146,7 +146,7 @@ class TestSimulatorLifecycle(_TmpSim):
             strategy_id="strategy16",
             symbol="002636",
             live_last=10.2,
-            quote_ts="2026-09-23 09:40:00",
+            quote_ts="2026-09-25 09:40:00",
             buy_level=10.0,
             sell_level=9.6,
             allow_entry=True,
@@ -228,7 +228,7 @@ class TestSimulatorLifecycle(_TmpSim):
             strategy_id="strategy16",
             symbol="000070",
             live_last=15.5,
-            quote_ts="2026-09-23 10:00:00",
+            quote_ts="2026-09-24 10:00:00",
             buy_level=17.0,
             sell_level=16.0,
             allow_entry=False,
@@ -277,13 +277,13 @@ class TestLiveRealtime(_TmpSim):
             strategy_id="strategy16",
             symbol="600540",
             live_last=9.75,
-            quote_ts="2026-09-23 09:31:18",
+            quote_ts="2026-09-24 09:31:18",
             buy_level=10.20,
             sell_level=9.80,
             allow_entry=False,
         )
         self.assertEqual(r["transition"], "SELL")
-        self.assertEqual(r["book"]["exit_time"], "2026-09-23 09:31:18")
+        self.assertEqual(r["book"]["exit_time"], "2026-09-24 09:31:18")
 
     def test_no_duplicate_buy(self) -> None:
         for px, sec in ((10.01, "01"), (10.02, "02"), (10.03, "03"), (10.04, "04")):
@@ -318,7 +318,7 @@ class TestLiveRealtime(_TmpSim):
                 strategy_id="strategy16",
                 symbol="603042",
                 live_last=px,
-                quote_ts=f"2026-09-23 09:40:{sec}",
+                quote_ts=f"2026-09-24 09:40:{sec}",
                 buy_level=10.0,
                 sell_level=9.5,
                 allow_entry=False,
@@ -356,7 +356,7 @@ class TestLiveRealtime(_TmpSim):
             strategy_id="strategy16",
             symbol="603663",
             live_last=9.60,
-            quote_ts="2026-09-23 09:35:00",
+            quote_ts="2026-09-24 09:35:00",
             buy_level=10.0,
             sell_level=9.80,
             allow_entry=False,
@@ -394,6 +394,117 @@ class TestLiveRealtime(_TmpSim):
         self.assertEqual(r["event"]["quote_timestamp"], "2026-09-23 09:31:05")
 
 
+class TestT1AndNoSameDayReentry(_TmpSim):
+    """与 open_break / 日线 bootstrap 同口径：买入当日不卖；卖出当日不再买回。"""
+
+    def _buy(self, code: str, ts: str = "2026-09-23 09:33:22") -> None:
+        r = _eval(
+            strategy_id="strategy16",
+            symbol=code,
+            live_last=14.04,
+            quote_ts=ts,
+            buy_level=14.04,
+            sell_level=13.5,
+            allow_entry=True,
+        )
+        self.assertEqual(r["transition"], "BUY")
+
+    def test_same_day_sell_blocked_keeps_long(self) -> None:
+        self._buy("600100")
+        r = _eval(
+            strategy_id="strategy16",
+            symbol="600100",
+            live_last=13.72,
+            quote_ts="2026-09-23 09:38:42",
+            buy_level=14.04,
+            sell_level=13.93,
+            allow_entry=True,
+        )
+        self.assertIsNone(r["transition"])
+        self.assertEqual(r["skipped"], "t1_locked")
+        self.assertEqual(r["book"]["state"], "LONG")
+        self.assertEqual(int(r["book"]["trades"]), 0)
+        self.assertLess(float(r["book"]["cumulative_return_pct"]), 0.0)
+
+    def test_next_day_sell_allowed(self) -> None:
+        self._buy("600101")
+        r = _eval(
+            strategy_id="strategy16",
+            symbol="600101",
+            live_last=13.72,
+            quote_ts="2026-09-24 09:31:00",
+            buy_level=14.04,
+            sell_level=13.93,
+            allow_entry=False,
+        )
+        self.assertEqual(r["transition"], "SELL")
+
+    def test_t0_symbol_can_sell_same_day(self) -> None:
+        self._buy("510300")
+        r = _eval(
+            strategy_id="strategy16",
+            symbol="510300",
+            live_last=13.72,
+            quote_ts="2026-09-23 09:38:42",
+            buy_level=14.04,
+            sell_level=13.93,
+            allow_entry=False,
+            t0=True,
+        )
+        self.assertEqual(r["transition"], "SELL")
+
+    def test_no_rebuy_on_exit_day(self) -> None:
+        self._buy("600102")
+        _eval(
+            strategy_id="strategy16",
+            symbol="600102",
+            live_last=13.4,
+            quote_ts="2026-09-24 09:40:00",
+            buy_level=14.0,
+            sell_level=13.5,
+            allow_entry=False,
+        )
+        r = _eval(
+            strategy_id="strategy16",
+            symbol="600102",
+            live_last=14.2,
+            quote_ts="2026-09-24 10:30:00",
+            buy_level=14.0,
+            sell_level=13.5,
+            allow_entry=True,
+        )
+        self.assertIsNone(r["transition"])
+        self.assertEqual(r["skipped"], "exited_today")
+        r2 = _eval(
+            strategy_id="strategy16",
+            symbol="600102",
+            live_last=14.2,
+            quote_ts="2026-09-25 09:31:00",
+            buy_level=14.0,
+            sell_level=13.5,
+            allow_entry=True,
+        )
+        self.assertEqual(r2["transition"], "BUY")
+
+    def test_crossed_levels_do_not_flip_flop(self) -> None:
+        """买点≤现价≤卖点（交叉）时逐 tick 评估：当日只允许一次 BUY。"""
+        n_events = 0
+        for sec in range(30):
+            r = _eval(
+                strategy_id="strategy16",
+                symbol="600103",
+                live_last=55.03,
+                quote_ts=f"2026-09-23 14:25:{sec:02d}",
+                buy_level=55.0,
+                sell_level=55.04,
+                allow_entry=True,
+            )
+            if r["transition"]:
+                n_events += 1
+        self.assertEqual(n_events, 1)
+        self.assertEqual(sim.get_book("strategy16", "600103")["state"], "LONG")
+
+
 class TestRestartPreserve(_TmpSim):
     def test_live_buy_restart_preserve(self) -> None:
         _eval(
@@ -429,7 +540,7 @@ class TestRestartPreserve(_TmpSim):
             strategy_id="strategy16",
             symbol="603328",
             live_last=12.5,
-            quote_ts="2026-09-23 10:00:00",
+            quote_ts="2026-09-24 10:00:00",
             buy_level=14.0,
             sell_level=13.0,
             allow_entry=False,

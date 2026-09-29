@@ -88,9 +88,24 @@ def load_core_leader_payload() -> dict[str, Any]:
     return dict(raw) if isinstance(raw, dict) else {}
 
 
+_THR_MAP_CACHE: dict[str, Any] = {"mtime": None, "data": {}}
+
+
 def load_strategy16_thr_map() -> dict[str, float]:
-    if not STRATEGY16_THR_PATH.is_file():
+    """按 mtime 缓存：meta_for_code 每只票都会调，盯盘宇宙数百只。"""
+    try:
+        mtime = STRATEGY16_THR_PATH.stat().st_mtime
+    except OSError:
         return {}
+    if _THR_MAP_CACHE["mtime"] == mtime:
+        return dict(_THR_MAP_CACHE["data"])
+    out = _read_strategy16_thr_map()
+    _THR_MAP_CACHE["mtime"] = mtime
+    _THR_MAP_CACHE["data"] = out
+    return dict(out)
+
+
+def _read_strategy16_thr_map() -> dict[str, float]:
     try:
         raw = json.loads(STRATEGY16_THR_PATH.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001

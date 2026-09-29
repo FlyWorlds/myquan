@@ -66,6 +66,7 @@ def _run(
     cwd: Path,
     env: dict[str, str] | None = None,
     check: bool = True,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     merged = os.environ.copy()
     if env:
@@ -79,6 +80,7 @@ def _run(
         errors="replace",
         capture_output=True,
         check=check,
+        timeout=timeout,
     )
 
 
@@ -116,10 +118,12 @@ def _show_file(repo: Path, spec: str, dest: Path) -> bool:
 def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
     """从 origin/holdings-ledger 覆盖本机账本。远程较旧则跳过（--force 除外）。"""
     repo = repo_root()
+    # 盯盘启动同步路径：网络挂起时不能无限堵 API（超时由调用方降级为本机账本）
     fetch = _run(
         ["git", "fetch", "origin", LEDGER_BRANCH],
         cwd=repo,
         check=False,
+        timeout=20,
     )
     remote_ref = f"origin/{LEDGER_BRANCH}"
     if fetch.returncode != 0 or not _ref_exists(repo, remote_ref):

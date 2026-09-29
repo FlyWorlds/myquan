@@ -596,6 +596,7 @@ def patch_row_live_quote(
                     allow_entry=allow,
                     reason="quote_patch",
                     persist=True,
+                    t0=bool(row.get("t0")),
                 )
                 book = get_book(str(strategy_id), code)
                 apply_book_to_row(row, book)
