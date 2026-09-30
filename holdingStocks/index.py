@@ -10566,6 +10566,12 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
             STATE_FILE.unlink()
     except Exception as e:  # noqa: BLE001
         print(f"清微信预警状态失败（继续）: {e}")
+    try:
+        import strategy_simulator
+
+        strategy_simulator.reset_all_state()
+    except Exception as e:  # noqa: BLE001
+        print(f"清策略模拟账本失败（继续）: {e}")
 
     print(
         f"已清仓并重置全部状态 · session={sess} · "

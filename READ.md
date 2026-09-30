@@ -184,6 +184,8 @@ cd "/Users/wangxiangyu/Documents/akquan回测/myquan/holdingStocks"
 /opt/homebrew/opt/python@3.14/bin/python3.14 index.py holdings-pull
 ```
 
+`holdings-ledger` 分支是多设备运行态真源，包含纸面持仓、成交流水、交割明细，以及策略16/16B 的 simulator 状态与事件。`main` 只放代码；启动 `start_watch.py` 默认先拉远程账本，清空持仓后要执行一次 `holdings-push --force`，另一台设备再启动会得到同一份空仓状态。
+
 ## 验证命令
 
 推荐使用：
@@ -284,7 +286,7 @@ result = aq.run_backtest(
 ## 开发约定
 
 - 改策略/因子时，同步更新 `strategy/README.md`、`docs/` 和本文。
-- 不要把 `holdingStocks/strategy_sim_state.json`、运行快照和账本缓存当普通代码改。
+- 不要把 `holdingStocks/strategy_sim_state.json`、`holdingStocks/strategy_signal_events.json`、运行快照和账本缓存当普通代码改；它们由 `origin/holdings-ledger` 同步。
 - 默认在实际工作区修改：`/Users/wangxiangyu/Documents/akquan回测/myquan`。
 - 提交前至少跑 `holdingStocks/run_all_tests.py --skip-pytest-if-missing`。
 - 涉及前端时，再跑 `holdingStocks/watch-ui` 的构建或本地 dev 验证。

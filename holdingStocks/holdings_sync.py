@@ -1,6 +1,7 @@
 """Win / Mac 持仓账本远程同步。
 
 真源是 ``holdings.json`` + ``trades.jsonl`` + ``trade_ledger.json``（交割明细），
+以及 Strategy Simulator 两个 durable 文件，
 走独立 git 分支 ``holdings-ledger``，
 不进 ``main``（文件仍在 .gitignore，避免随代码误提交）。
 
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -23,13 +25,18 @@ ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
 TRADES_FILE = ROOT / "trades.jsonl"
 TRADE_LEDGER_FILE = ROOT / "trade_ledger.json"
+STRATEGY_SIM_STATE_FILE = ROOT / "strategy_sim_state.json"
+STRATEGY_SIGNAL_EVENTS_FILE = ROOT / "strategy_signal_events.json"
 WATCH_META_FILE = ROOT / "holdings_watch.json"
 LEDGER_BRANCH = "holdings-ledger"
-LEDGER_REL_PATHS = (
-    "holdingStocks/holdings.json",
-    "holdingStocks/trades.jsonl",
-    "holdingStocks/trade_ledger.json",
+LEDGER_FILES: tuple[tuple[str, Path, str], ...] = (
+    ("holdingStocks/holdings.json", HOLDINGS_FILE, "json"),
+    ("holdingStocks/trades.jsonl", TRADES_FILE, "text"),
+    ("holdingStocks/trade_ledger.json", TRADE_LEDGER_FILE, "text"),
+    ("holdingStocks/strategy_sim_state.json", STRATEGY_SIM_STATE_FILE, "text"),
+    ("holdingStocks/strategy_signal_events.json", STRATEGY_SIGNAL_EVENTS_FILE, "text"),
 )
+LEDGER_REL_PATHS = tuple(rel for rel, _, _ in LEDGER_FILES)
 
 
 def snapshot_cache_stale(
@@ -118,7 +125,7 @@ def _show_file(repo: Path, spec: str, dest: Path) -> bool:
 
 
 def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
-    """从 origin/holdings-ledger 覆盖本机账本。远程较旧则跳过（--force 除外）。"""
+    """从 origin/holdings-ledger 覆盖本机纸面账本和策略模拟账本。"""
     repo = repo_root()
     # 盯盘启动同步路径：网络挂起时不能无限堵 API（超时由调用方降级为本机账本）
     fetch = _run(
@@ -134,7 +141,6 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
             print(msg)
         return "missing-remote"
 
-    remote_holdings = repo / LEDGER_REL_PATHS[0]
     tmp = Path(tempfile.mkdtemp(prefix="holdings-ledger-"))
     remote_copy = tmp / "holdings.json"
     try:
@@ -157,19 +163,17 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
                 )
             return "local-newer"
 
-        write_json_locked(HOLDINGS_FILE, remote_copy.read_text(encoding="utf-8"))
-        trades_ok = _show_file(
-            repo,
-            f"{remote_ref}:{LEDGER_REL_PATHS[1]}",
-            TRADES_FILE,
-        )
-        ledger_ok = False
-        if len(LEDGER_REL_PATHS) > 2:
-            ledger_ok = _show_file(
-                repo,
-                f"{remote_ref}:{LEDGER_REL_PATHS[2]}",
-                TRADE_LEDGER_FILE,
-            )
+        missing_files: list[str] = []
+        for rel, local_path, kind in LEDGER_FILES:
+            staged = tmp / Path(rel).name
+            if not _show_file(repo, f"{remote_ref}:{rel}", staged):
+                missing_files.append(Path(rel).name)
+                continue
+            text = staged.read_text(encoding="utf-8")
+            if kind == "json":
+                write_json_locked(local_path, text)
+            else:
+                atomic_write_text(local_path, text)
         invalidate_watch_cache()
         if not quiet:
             host = ""
@@ -179,26 +183,23 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
             except (OSError, TypeError, ValueError, json.JSONDecodeError):
                 pass
             extra = ""
-            if not trades_ok:
-                extra += " · trades.jsonl 远程没有（保留本地）"
-            if len(LEDGER_REL_PATHS) > 2 and not ledger_ok:
-                extra += " · trade_ledger.json 远程没有（保留本地）"
+            if missing_files:
+                extra = " · 远程缺少 " + ",".join(missing_files) + "（保留本地）"
             print(
-                f"已拉取远程持仓 · updated_at={remote_ts or '-'} "
+                f"已拉取远程持仓/策略状态 · updated_at={remote_ts or '-'} "
                 f"host={host or '-'} · 已丢本机 holdings_watch.json"
                 + extra
             )
         return "pulled"
     finally:
         try:
-            remote_copy.unlink(missing_ok=True)
-            tmp.rmdir()
+            shutil.rmtree(tmp, ignore_errors=True)
         except OSError:
             pass
 
 
 def push_holdings(*, force: bool = False) -> str:
-    """把本机 holdings.json + trades.jsonl + trade_ledger.json 推到 origin/holdings-ledger。"""
+    """把本机持仓账本和策略模拟账本推到 origin/holdings-ledger。"""
     if not HOLDINGS_FILE.is_file():
         raise SystemExit("没有 holdings.json，无法推送")
     repo = repo_root()
@@ -272,7 +273,7 @@ def push_holdings(*, force: bool = False) -> str:
             err = (push.stderr or push.stdout or "").strip()
             raise SystemExit(f"git push origin {LEDGER_BRANCH} 失败:\n{err}")
         print(
-            f"已推送远程持仓 → origin/{LEDGER_BRANCH} · "
+            f"已推送远程持仓/策略状态 → origin/{LEDGER_BRANCH} · "
             f"{_updated_at(HOLDINGS_FILE)} · host={current_host()} · {sha[:10]}"
         )
         return "pushed"

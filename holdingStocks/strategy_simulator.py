@@ -494,6 +494,28 @@ def save_state(data: dict[str, Any] | None = None) -> None:
         tmp.replace(STATE_FILE)
 
 
+def reset_all_state() -> None:
+    """Reset durable simulator state and event stream for a fresh paper session."""
+    global _STATE
+    with _LOCK:
+        _STATE = empty_state()
+        _STATE["updated_at"] = _now_str()
+        tmp = STATE_FILE.with_suffix(".json.tmp")
+        tmp.write_text(
+            json.dumps(_STATE, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        tmp.replace(STATE_FILE)
+
+        raw = {"updated_at": _now_str(), "events": []}
+        ev_tmp = EVENTS_FILE.with_suffix(".json.tmp")
+        ev_tmp.write_text(
+            json.dumps(raw, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        ev_tmp.replace(EVENTS_FILE)
+
+
 def get_book(strategy_id: str, symbol: str) -> dict[str, Any]:
     st = load_state()
     key = _pos_key(strategy_id, symbol)
