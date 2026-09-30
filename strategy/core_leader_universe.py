@@ -75,14 +75,16 @@ def add_months(d: date, months: int) -> date:
     return date(y, m, day)
 
 
-def rolling_3m_window(today: date | None = None) -> dict[str, str]:
-    """滚动近 3 个月：窗口 [as_of-3m, as_of]，名单有效至 as_of+3m。"""
+def rolling_3m_window(today: date | None = None, *, horizon_months: int = DEFAULT_HORIZON_MONTHS) -> dict[str, str]:
+    """滚动近 N 个月：窗口 [as_of-Nm, as_of]，名单有效至 as_of+Nm。"""
     end = today or date.today()
-    start = add_months(end, -DEFAULT_HORIZON_MONTHS)
-    until = add_months(end, DEFAULT_HORIZON_MONTHS)
+    months = max(1, int(horizon_months or DEFAULT_HORIZON_MONTHS))
+    start = add_months(end, -months)
+    until = add_months(end, months)
     label = f"{start.isoformat()}~{end.isoformat()}"
     return {
-        "horizon": "rolling_3m",
+        "horizon": f"rolling_{months}m",
+        "horizon_months": str(months),
         "window_start": start.isoformat(),
         "window_end": end.isoformat(),
         "valid_until": until.isoformat(),
@@ -112,11 +114,20 @@ def passes_stock_filter(
     name: str = "",
     price: float | None = None,
     *,
-    price_max: float = DEFAULT_PRICE_MAX,
+    price_max: float | None = DEFAULT_PRICE_MAX,
+    exclude_st: bool = True,
+    exclude_chinext: bool = True,
+    exclude_star: bool = True,
+    exclude_bse: bool = True,
 ) -> bool:
-    if not is_core_leader_board(code):
+    c = "".join(ch for ch in str(code) if ch.isdigit()).zfill(6)[-6:]
+    if exclude_chinext and c.startswith(("300", "301")):
         return False
-    if is_st_name(name):
+    if exclude_star and c.startswith(("688", "689")):
+        return False
+    if exclude_bse and c.startswith(("8", "4", "92", "43", "83", "87")):
+        return False
+    if exclude_st and is_st_name(name):
         return False
     if price is None:
         return False
@@ -124,7 +135,11 @@ def passes_stock_filter(
         px = float(price)
     except (TypeError, ValueError):
         return False
-    return 0 < px < float(price_max)
+    if px <= 0:
+        return False
+    if price_max is None or float(price_max) <= 0:
+        return True
+    return px < float(price_max)
 
 
 def _num(v: Any) -> float | None:
@@ -194,7 +209,11 @@ def pick_leaders_from_members(
     *,
     concept: str,
     per_concept: int = DEFAULT_PER_CONCEPT,
-    price_max: float = DEFAULT_PRICE_MAX,
+    price_max: float | None = DEFAULT_PRICE_MAX,
+    exclude_st: bool = True,
+    exclude_chinext: bool = True,
+    exclude_star: bool = True,
+    exclude_bse: bool = True,
 ) -> list[dict[str, Any]]:
     """概念内过滤后按涨跌幅、成交额取前 K。"""
     if members is None:
@@ -209,7 +228,16 @@ def pick_leaders_from_members(
         code = code.zfill(6)[-6:] if code else ""
         name = str(raw.get("名称") or raw.get("name") or "").strip()
         price = _num(raw.get("现价") or raw.get("price"))
-        if not code or not passes_stock_filter(code, name, price, price_max=price_max):
+        if not code or not passes_stock_filter(
+            code,
+            name,
+            price,
+            price_max=price_max,
+            exclude_st=exclude_st,
+            exclude_chinext=exclude_chinext,
+            exclude_star=exclude_star,
+            exclude_bse=exclude_bse,
+        ):
             continue
         scored.append(
             {
@@ -510,7 +538,12 @@ def build_quarter_pool(
     max_concepts: int = DEFAULT_MAX_CONCEPTS,
     per_concept: int = DEFAULT_PER_CONCEPT,
     target_pool: int = DEFAULT_TARGET_POOL,
-    price_max: float = DEFAULT_PRICE_MAX,
+    price_max: float | None = DEFAULT_PRICE_MAX,
+    horizon_months: int = DEFAULT_HORIZON_MONTHS,
+    exclude_st: bool = True,
+    exclude_chinext: bool = True,
+    exclude_star: bool = True,
+    exclude_bse: bool = True,
     spot: pd.DataFrame | None = None,
     members_by_concept: dict[str, Any] | None = None,
     fetch: bool = True,
@@ -521,7 +554,7 @@ def build_quarter_pool(
     """
     end_d = today or date.today()
     as_of = end_d.isoformat()
-    win = rolling_3m_window(end_d)
+    win = rolling_3m_window(end_d, horizon_months=horizon_months)
     errors: list[str] = []
     source = "tdx_concept_activity"
     if spot is None and fetch:
@@ -570,6 +603,10 @@ def build_quarter_pool(
             concept=name,
             per_concept=per_concept,
             price_max=price_max,
+            exclude_st=exclude_st,
+            exclude_chinext=exclude_chinext,
+            exclude_star=exclude_star,
+            exclude_bse=exclude_bse,
         )
         new_leaders: list[dict[str, Any]] = []
         for item in leaders:
@@ -597,12 +634,23 @@ def build_quarter_pool(
         item["rank"] = i
 
     used_concepts = [c for c in concepts if int(c.get("picked") or 0) > 0]
+    price_note = "不限价格" if price_max is None or float(price_max) <= 0 else f"现价<{float(price_max):.0f}"
+    board_parts: list[str] = []
+    if exclude_st:
+        board_parts.append("非ST")
+    if exclude_chinext:
+        board_parts.append("非创业")
+    if exclude_star:
+        board_parts.append("非科创")
+    if exclude_bse:
+        board_parts.append("非北交")
+    filter_note = "、".join(board_parts + [price_note])
     note = (
-        f"近3个月 {win['label']} 冻结至 {win['valid_until']}："
+        f"近{int(win.get('horizon_months') or horizon_months)}个月 {win['label']} 冻结至 {win['valid_until']}："
         f"活跃概念偏高（成交额≥中位数，最多扫 Top{max_concepts}），"
         f"每概念≤{per_concept}，池约 {int(target_pool)} 只；"
         f"实际 {len(picks)} 只 / {len(used_concepts)} 个概念入池；"
-        f"主板非ST非科创创业、现价<{price_max:.0f}。"
+        f"{filter_note}。"
         "买卖同策略一（因子26/2/22）。研究用途，非投资建议。"
     )
     if picks and all(it.get("chg_pct") is None for it in picks):
@@ -612,6 +660,7 @@ def build_quarter_pool(
 
     return {
         "horizon": win["horizon"],
+        "horizon_months": int(win.get("horizon_months") or horizon_months),
         "window_start": win["window_start"],
         "window_end": win["window_end"],
         "valid_until": win["valid_until"],
@@ -623,7 +672,11 @@ def build_quarter_pool(
         "max_concepts": int(max_concepts),
         "per_concept": int(per_concept),
         "target_pool": int(target_pool),
-        "price_max": float(price_max),
+        "price_max": None if price_max is None else float(price_max),
+        "exclude_st": bool(exclude_st),
+        "exclude_chinext": bool(exclude_chinext),
+        "exclude_star": bool(exclude_star),
+        "exclude_bse": bool(exclude_bse),
         "concepts": concepts,
         "used_concepts": used_concepts,
         "picks": picks,

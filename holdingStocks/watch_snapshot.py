@@ -900,6 +900,7 @@ def build_watch_snapshot(
     strategy3: dict[str, Any] | None = None,
     strategy8: dict[str, Any] | None = None,
     strategy15: dict[str, Any] | None = None,
+    strategy16b: list[dict[str, Any]] | None = None,
     strategy17: list[dict[str, Any]] | None = None,
     sectors: dict[str, Any] | None = None,
     refresh_sec: int = 5,
@@ -969,6 +970,10 @@ def build_watch_snapshot(
             if code_key(str(r.get("代码") or "")) in s16_codes
         ]
     )
+    if strategy16b is not None:
+        strategy16b_rows = list(strategy16b)
+    else:
+        strategy16b_rows = [dict(r) for r in strategy16_rows]
     try:
         from watch_config import ziyang_codes
 
@@ -1033,6 +1038,7 @@ def build_watch_snapshot(
         "strategy8": strategy8 or {},
         "strategy15": strategy15 or {},
         "strategy16": strategy16_rows,
+        "strategy16b": strategy16b_rows,
         "strategy17": strategy17_rows,
         "sectors": sectors or {},
         "strategies": strategies or [],

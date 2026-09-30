@@ -19,6 +19,7 @@ _EXPECTED_IDS = frozenset(
         "strategy12",
         "strategy15",
         "strategy16",
+        "strategy16b",
         "strategy17",
     }
 )
@@ -40,6 +41,14 @@ class TestStrategyAutoDiscovery(unittest.TestCase):
 
         spec = get_strategy_spec("strategy16")
         self.assertTrue(spec.meta.get("default") is True)
+
+    def test_strategy16b_registered_next_to_strategy16(self) -> None:
+        from strategy.core.strategy_registry import get_strategy_spec
+
+        spec = get_strategy_spec("strategy16b")
+        self.assertEqual(spec.name, "策略十六B·条件选股")
+        self.assertTrue(spec.meta.get("watch_tab") is True)
+        self.assertTrue(spec.meta.get("custom_select_ui") is True)
 
 
 if __name__ == "__main__":

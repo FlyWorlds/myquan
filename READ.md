@@ -1,256 +1,274 @@
-<!-- # myquan — AKQuant 框架接入说明 -->
-## 盯盘要点
+# myquan - 基于 AKQuant 的 A 股量化盯盘与回测项目
 
-**启动（推荐，Mac / Windows）**
+本项目基于 [AKQuant](https://github.com/akfamily/akquant) 构建，面向 A 股策略研究、回测、模拟盘盯盘和纸面交易状态管理。
 
-```bash
-cd holdingStocks && python start_watch.py --no-wechat
+当前主线是 **策略十六：因子27 核心龙头池 + 因子26 多层止盈 + 因子2 回撤预警**。盯盘端支持分阶段异步加载：先出持仓，再出默认策略，最后补齐其它策略和观察池。
 
-停止：删除holdingStocks/holdings_watch.pid
-# 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
-# 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
-# 策略8 Tab：当日涨停实时定题材（随涨停变化重算）
-# 持仓 Tab：Capital V2（同时≤5、日新开≤2、单票入场≤20%、现金约束）；先平再买；腾槽第一梯队现价≤买点+1%按现价，新触发按买点；10%半仓止盈→减半留仓；其余止损/止盈清仓→「今日平仓」栏（不占槽）；总收益=日初+今日盈亏（自 2026-09-09）；每日结算核对
-# 策略1 Tab：按距买点升序；空槽标候选
-# 板块轮动：http://127.0.0.1:3000/sectors （通达信优先；今日列/成分现价走 WS 自动刷，不必点重载）
-```
+## 快速启动
 
-本目录基于 [AKQuant](https://github.com/akfamily/akquant) 做 A 股策略回测与盯盘。
-
-**运行时依赖**：全局 / pip 安装的 `akquant`（见 `requirements.txt`，当前钉死 `0.3.21`）。  
-**旁挂源码**：同级目录 `../akquant/` 仅供阅读、对照实现，**不会**自动进入 `PYTHONPATH`。
-
-文档维护：改策略/因子/回测时同步更新本文、`TODO.MD`、`docs/`（规则见 `.cursor/rules/docs-sync.mdc`）。  
-架构与技术栈：[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
-
----
-
-## 框架概览
-
-**AKQuant** 是 Rust 内核 + Python 策略层的混合量化框架。
-
-**数据流：**
-
-```
-akshare DataFrame
-    → normalize / load_bar_from_df
-    → Bar → Strategy.on_bar → Execution → Statistics
-    → BacktestResult
-```
-
-**本项目策略分层（开闭原则）：**
-
-```
-因子层 (factors)           → 价位 / 信号 / 通用过滤
-策略层 (bindings)          → 本策略挂哪些因子、参数、专属过滤器
-决策层 (decision)          → MarketContext → Decision(buy|sell|hold)
-执行层 (runner / backtest / 盯盘) → 下单、回测、预警推送
-```
-
-**当前生效**
-
-| 场景 | 配置 |
-|------|------|
-| **盯盘 / 默认回测** | **策略十六 = 因子27 核心龙头池 + 因子26 多层止盈 + 因子2 预警**（因子2 回测不注资；**因子22 默认关闭**，仅研究对照） |
-| **因子26** | 选股日线 / 成交 1m；池回测近 7 日；T+1；**买=开盘阈值**；卖=硬保护2.5%（低开已破按开盘）+ 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + 阶梯10%半仓/15%全清 + 大赚后回落2%清 + 买入日未到3%则次日按隔夜高点回落2.5%（不得低于硬保护；昨收/昨高只经 `overnight_peak_px`，仅昨日策略持有/买入才并入）；**盯盘 10% 记减半**（`tp_stage`，不接券商只出信号）；买入日盈利≥3%不记、其余都记（盯盘唯一落库口，涨停/中段卖价不得记）；**Capital V2**（同时≤5、日新开≤2 symbol、单票入场≤权益20%、现金约束禁负现金；当日卖出禁再买；**先平再买**；腾槽第一梯队现价≤买点+1%按现价，其后新触发按买点） |
-| **因子1（复用）** | 开盘±锚定止损；策略三/四/八等仍用；已非策略一主因子 |
-| **策略一选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top20**（宽宇宙主板，剔ST/百元股，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
-| **策略十六选股（默认）** | **因子27 核心龙头** as_of **2026-09-30**（滚动至 2026-12-30，约30只）∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用） → `python strategy/run_core_leader_pool.py` + `SELF_WATCHLIST_PICKS`；名单见 [`docs/FACTOR27.md`](docs/FACTOR27.md) |
-| **因子13B（🔒锁定，对照）** | 熊市盾牌 thr\* Top3 · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
-| **Paper 卖出** | **Unified Primary** + **Legacy Shadow**：`USE_UNIFIED_EXIT_ENGINE=True`，`SHADOW_UNIFIED_EXIT_ENGINE=True`。Notification N1 已部署；自然微信事件 PENDING；N2 未开始 |
-
-因子13 详情：[`docs/FACTOR13.md`](docs/FACTOR13.md) · 因子16：[`docs/FACTOR16.md`](docs/FACTOR16.md) · 因子17：[`docs/FACTOR17.md`](docs/FACTOR17.md) · 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md) · 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md) · 因子26：[`docs/FACTOR26.md`](docs/FACTOR26.md) · 因子27：[`docs/FACTOR27.md`](docs/FACTOR27.md)
+推荐在项目根目录使用依赖齐全的 Homebrew Python：
 
 ```bash
-cd backtest && python strategy1.py --rules
-PYTHONPATH=. python backtest/strategy1_pool_1m/run.py   # 定盘池近7日1m·四槽·开盘阈值买；未到3%次日峰值回落2.5%
-python backtest/exit_decision_replay/run.py --days 10 --source ak --refresh  # Exit Legacy/Unified 只读真实分钟 parity
-python backtest/exit_decision_replay/find_cases.py --rule WORKING_STOP --days 10 --source ak  # 找历史退出候选
-python backtest/exit_decision_replay/run.py --rule PATH --symbol 002636 --days 10 --source ak  # 定向规则 replay
-python backtest/exit_decision_replay/replay_mismatch.py path.json  # Shadow mismatch → Legacy vs Unified 复现
-# 交割注释：backtest/strategy1_pool_1m/TRADE_LEDGER.md
-python backtest/s1_f13_refit_2025.py          # 策略1 宽宇宙换池（13A+16）
-python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定对照）
+cd "/Users/wangxiangyu/Documents/akquan回测/myquan"
+/opt/homebrew/opt/python@3.14/bin/python3.14 holdingStocks/index.py watch
 ```
 
-**任务进度**：[`TODO.MD`](TODO.MD)（P0 行情/预警 ✅；P0 持仓入库待做；因子13 已锁定；2026-09-13 审查见 PROJECT_AUDIT）  
-**现行默认算法审核**（2026-09-13）：[`docs/PROJECT_AUDIT.md`](docs/PROJECT_AUDIT.md)
-
----
-
-## 策略与因子注册表（摘要）
-
-**完整真源**：[`strategy/README.md`](strategy/README.md) · 策略专题：[`docs/STRATEGY.md`](docs/STRATEGY.md) · 文档索引：[`docs/README.md`](docs/README.md)
-
-> 新增/改因子或策略时，须同步更新 **strategy/README.md → docs/ → 本文**；任务/锁定见 [`TODO.MD`](TODO.MD)（见 [`.cursor/rules/docs-sync.mdc`](.cursor/rules/docs-sync.mdc)）。
-
-### 因子一览
-
-| ID | 名称 | 分类 | 作用 | 模块 / 要点 |
-|----|------|------|------|-------------|
-| **factor1** | 因子1-开盘突破 | 开盘执行 | 开盘突破买卖 | `open_break.py`：买突破、卖开盘锚定止损、T+1；策略三/四等复用 |
-| **factor2** | 因子2-回撤预警 | 回撤补仓 | 回撤加减仓**预警** | `dd_alert.py`：默认加仓≥20% / 减仓≤10%；**回测不注资** |
-| **factor3** | 因子3-动量 | 动量 | 截面选股 / 单票择时 | `momentum.py`：组合截面反转；单票 dist_hl 等 |
-| **factor4** | 因子4-牛市持股 | 止盈持股 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1 止损 |
-| **factor5** | 因子5-Serenity前瞻主题 | 情绪题材 | 前瞻主题研究池 | `serenity_factor5.py`：公开帖→主题→A 股概念代理 |
-| **factor6** | 因子6-组合动量ETF轮动 | 动量 | 宽基 ETF 轮动 | `etf_combo_momentum.py`：短长窗 ROC 合成，TopK |
-| **factor7** | 因子7-行业ETF双动量 | 动量 | 月频行业主线 | `industry_residual_momentum.py`：普通+残差动量各 50% |
-| **factor8** | 因子8-缠论结构 | 缠论 | 结构买卖点 | `chan/`：一/二/三类买卖点；供策略二 |
-| **factor9** | 因子9-日线多空动能 | 动量 | 选股/开仓门控 | `ls_energy.py`：日线多空能量 overlay |
-| **factor10** | 因子10-价格选股 | 动量 | 周频开仓名单 | `s1_price_select.py`：近高/趋势/动量；供策略四 |
-| **factor11** | 因子11-两段近高选股 | 动量 | 截面选股 | `near_high_hold.py`：动量 Top20→近高 Top5；供策略五 |
-| **factor12** | 因子12-反转池近高 | 反转 | 截面选股（研究） | `factor12_combo.py`：20 日反转 Top20→近高 Top5；供策略六 |
-| **factor13a** | 因子13A-质量带契合选股 | 选股质量 | 动态合格池 | `factor13_fit.py`：夏普/回撤甜区 walk-forward |
-| **factor13b** | 因子13B-熊市盾牌 thr\* Top3 | 选股质量 | 熊年防守 Top3 | `factor13_bear_shield.py` · [`LOCKED.json`](backtest/factor13_bear_shield/LOCKED.json) |
-| **factor13** | 因子13-契合选股（别名→13A） | 选股质量 | 兼容 | 等同 factor13a |
-| **factor14** | 因子14-题材共振 | 情绪题材 | 题材联动选股 | **当日**同题材涨停同伴数≥3；盯盘随涨停实时重算；见 [`docs/FACTOR14.md`](docs/FACTOR14.md) |
-| **factor15** | 因子15-题材晋级低开 | 情绪题材 | 题材联动过滤（可选） | gap 低开带；策略八默认关闭 |
-| **factor16** | 因子16-概念龙头评分 | 选股质量 | 池内排序 | 13A 过门 + 因子1 OOS 盈亏比/胜率；见 [`docs/FACTOR16.md`](docs/FACTOR16.md) |
-| **factor17** | 因子17-缠论笔盈亏比 | 缠论 | 笔归因评估 | `bi_pl_ratio.py`；原策略七，Web 在因子池 |
-| **factor18** | 因子18-低开跌停情绪 | 情绪题材 | 大盘情绪择时 | 低开开盘跌停家数；策略十二恐慌日空仓 |
-| **factor19** | 因子19-低开反包 | 反转 | 旧假设 | 压力日低开；未过关 |
-| **factor20** | 因子20-跌停次日开板 | 反转 | 已否决 | 昨收跌停今开未封 |
-| **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停且曾开板、今低开；上证昨收≤−2% 空仓；调参窗强、盲测回撤未过关 |
-| **factor22** | 因子22-收盘动量 | 动量 | 研究再买 | 止损后收盘≥low×(1+pct) 同日再买；**策略十六默认关**；三槽当日卖出禁再买；见 [`docs/FACTOR22.md`](docs/FACTOR22.md) |
-| **factor23** | 因子23-最高连板止盈 | 止盈持股 | 策略十五 | 最高板定 7%/10%/15% 减半止盈 |
-| **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五 | 低中梯度开 F22/F25；高潮关接回 |
-| **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡 | 30m 确认止损+动态半仓+卖飞回补；见 [`docs/FACTOR25.md`](docs/FACTOR25.md) |
-| **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买=开盘阈值 1m；卖=硬保护2.5%（低开已破按开盘）+ 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + 阶梯10%半仓/15%全清 + 大赚后回落2%清 + 买入日未到3%则次日隔夜高点回落2.5%（昨收/昨高只经 `overnight_peak_px`，仅昨日策略持有/买入才并入）；**盯盘与 1m 回测 10% 均减半**；买入日盈利≥3%不记、其余都记；已平仓留痕价同 1m 触达；池近 7 日；见 [`docs/FACTOR26.md`](docs/FACTOR26.md) |
-| **factor27** | 因子27-核心龙头 | 情绪题材 | 策略十六宇宙 | 通达信活跃概念≥中位数（最多扫 Top40）；每概念≤2；池约30只；主板非ST<100元；滚动近3个月冻结；HQ/东财失败则轮动缓存+新浪；当前 as_of **2026-09-30**；交易宇宙另并**公共自选池**；见 [`docs/FACTOR27.md`](docs/FACTOR27.md) |
-| **factor28** | 因子28-紫阳真君 | 情绪题材 | 策略十七宇宙 | 国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交并集；见 [`docs/FACTOR28.md`](docs/FACTOR28.md) |
-| **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究 | Amihud 软门 + 成交额地板 + 均线过滤 |
-
-### 策略一览
-
-| ID | 名称 | 绑定因子 | 状态 | 说明 |
-|----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor26 + factor2 + factor13a + factor16 + factor22 | ✅ | 开盘阈值买、多层止盈 + 回撤预警 + 收盘动量再买；定盘池 13A→16 Top20；别名 `open_break3` / `s1` |
-| **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30 分小转大 + 日线二/三买卖；别名 `chan` |
-| **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮+±阈值；回测见 `backtest/strategy3_first_board/` |
-| **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 突破 + 牛市放宽 + 20% 昨高全清 + 周频 Top5 |
-| **strategy5** | 策略五·近高 Top5 | factor11 | ✅ 研究 | 周频等权持有；别名 `near_high` |
-| **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | IS 优于策略五，2024–2025 未确认，不替换策略五 |
-| **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材（盯盘实时重算）→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
-| **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2%；调参 2020–2024 +645%/夏普 1.23，盲测 +3.6%/回撤 55% |
-| **strategy15** | 策略十五·连板减磨损 | factor1+22+23+24+25 | ✅ 盯盘 | 震荡 F25(30m) 减磨损；高潮关接回；回测 `backtest/strategy15_m30_chop/` |
-| **strategy16** | 策略十六·核心龙头 | factor27+26+2（factor22 默认关） | ✅ **默认** | 因子27近3个月池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖内核共用因子26（绑定独立）；默认四槽交易池；**先平再买**，腾槽第一梯队现价≤买点+1%按现价、其后新触发按买点；因子22 仅研究对照 |
-| **strategy17** | 策略十七·紫阳真君 | factor28+26+2（factor22 默认关） | ✅ 盯盘 | 武汉紫阳东路近3个月龙虎榜成交池；买卖同因子26；**非默认交易池** |
-
-`run_strategy7` 已归入 **因子17-缠论笔盈亏比**（Web 策略栏不展示）。
-`run_strategy9_emotion` 已归入 **因子18-低开跌停情绪**（Web 策略栏不展示）。
-
-旧执行层研究代码在 `strategy/strategies/_unreg_s*`（因子 3/6/7 仍保留）。
-
----
-
-## 安装
+开发前端时使用：
 
 ```bash
-cd myquan
+cd "/Users/wangxiangyu/Documents/akquan回测/myquan"
+/opt/homebrew/opt/python@3.14/bin/python3.14 holdingStocks/index.py watch --ui-dev
+```
+
+也可以继续用一键脚本：
+
+```bash
+cd "/Users/wangxiangyu/Documents/akquan回测/myquan/holdingStocks"
+/opt/homebrew/opt/python@3.14/bin/python3.14 start_watch.py --no-wechat
+/opt/homebrew/opt/python@3.14/bin/python3.14 start_watch.py --force
+/opt/homebrew/opt/python@3.14/bin/python3.14 start_watch.py --stop
+```
+
+默认页面：
+
+- 前端：`http://127.0.0.1:3000/`
+- API / WebSocket：`http://127.0.0.1:8765/`
+- 板块轮动：`http://127.0.0.1:3000/sectors`
+- 交割单：`http://127.0.0.1:3000/trades`
+
+启动日志应依次出现：
+
+```text
+持仓首屏已推送
+默认策略快照已推送
+全量快照已推送
+```
+
+日线预热线程数可调：
+
+```bash
+WATCH_DAILY_WARM_WORKERS=16 /opt/homebrew/opt/python@3.14/bin/python3.14 holdingStocks/index.py watch --ui-dev
+```
+
+## 启动加载顺序
+
+盯盘冷启动分三段，目的是先让页面可用，再补齐重数据：
+
+1. **持仓首屏**：只加载实仓、今日已实现和用户登记持仓池。
+2. **默认策略**：加载策略16核心龙头热池和公共自选池。
+3. **全量补齐**：后台补策略一池、策略16B动态池、策略17叠加观察池、策略3/8/15面板、板块轮动和画像缓存。
+
+这些任务不再阻塞首屏：
+
+- 股票名称缓存预热
+- 个股画像/板块反查
+- 策略3/8/15快照面板
+- 策略17叠加观察池
+- 板块轮动
+
+行情 seed 与日线缓存预热并行执行；新浪批量失败时仍会按票兜底拉日线。
+
+## 当前默认交易逻辑
+
+| 模块 | 当前口径 |
+| --- | --- |
+| 默认策略 | **策略16 核心龙头** |
+| 选股池 | 因子27 近3个月核心龙头池 + 公共自选池 |
+| 买入 | 因子26 开盘阈值买入，1m path-dependent |
+| 卖出 | 因子26 多层止盈/止损，1m path-dependent |
+| 预警 | 因子2 回撤加减仓预警 |
+| 因子22 | 默认关闭，仅研究对照 |
+| 仓位 | Capital V2，模拟盘纸面交易，不接券商 |
+
+因子26退出规则摘要：
+
+- 硬保护 2.5%，低开已破按开盘。
+- 中赚 3-10%：回落一半与 `0.5 x 20日日频sigma` 谁先到走谁。
+- 10% 半仓止盈，15% 全清。
+- 大赚后回落 2% 清仓。
+- 买入日未到 3%，次日按隔夜高点回落 2.5%，不得低于硬保护。
+- T+1：买入当日不卖，卖出当日不买回。
+
+## 策略16 与策略16B
+
+### 策略16
+
+策略16是当前默认交易池：
+
+- 因子27核心龙头池，默认近3个月。
+- 主板、非 ST、价格上限等条件由策略固定参数过滤。
+- 交易内核使用因子26。
+- 公共自选池全策略共用。
+
+刷新核心龙头池：
+
+```bash
+cd "/Users/wangxiangyu/Documents/akquan回测/myquan"
+/opt/homebrew/opt/python@3.14/bin/python3.14 strategy/run_core_leader_pool.py
+```
+
+### 策略16B
+
+策略16B复刻策略16的买卖内核，但选股条件可以在页面里动态配置，从全A重新过滤：
+
+- 回看月份：1/2/3/6 等。
+- 概念数量、每概念数量、目标池大小。
+- 价格上限。
+- 非 ST、排除创业板、排除科创板、排除北交所。
+
+页面位置在策略16右侧。点击“生成”后，后端会调用：
+
+```text
+GET /api/strategy16b/select
+```
+
+生成结果会进入策略16B Tab 和动态盯盘池，不覆盖策略16正式池。
+
+## 盯盘页面说明
+
+| Tab | 说明 |
+| --- | --- |
+| 持仓 | 实仓/今日平仓/纸面交易状态，Capital V2账户摘要 |
+| 策略1 | 研究池，按距买点排序 |
+| 策略3 | T-1连板梯度情绪 + 首板晋级跟踪 |
+| 策略8 | 当日涨停实时定题材 |
+| 策略15 | 连板减磨损与震荡处理 |
+| 策略16 | 默认核心龙头交易池 |
+| 策略16B | 条件可配置的核心龙头动态池 |
+| 策略17 | 紫阳真君叠加观察池，非默认交易池 |
+
+重要口径：
+
+- `holdings_watch.json` 是本机快照缓存，不是账本真源。
+- 纸面账本、交易和状态文件不要手工乱改。
+- Win/Mac 持仓同步走 `origin/holdings-ledger`。
+- 外网行情断开时，本机 WebSocket 仍可能正常，页面以 `quoteStale` / `feedOk` 显示行情健康。
+
+## 常用命令
+
+### 回测
+
+```bash
+cd "/Users/wangxiangyu/Documents/akquan回测/myquan"
+
+# 策略一规则
+/opt/homebrew/opt/python@3.14/bin/python3.14 backtest/strategy1.py --rules
+
+# 策略16核心龙头池近7日1m回测
+PYTHONPATH=. /opt/homebrew/opt/python@3.14/bin/python3.14 backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
+
+# 因子22同日再买对照
+PYTHONPATH=. /opt/homebrew/opt/python@3.14/bin/python3.14 backtest/strategy16_core_leader/compare_f22.py --days 7
+
+# 低开破硬保护对照
+PYTHONPATH=. /opt/homebrew/opt/python@3.14/bin/python3.14 backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7
+```
+
+### 因子池
+
+```bash
+cd "/Users/wangxiangyu/Documents/akquan回测/myquan"
+
+# 策略16核心龙头池
+/opt/homebrew/opt/python@3.14/bin/python3.14 strategy/run_core_leader_pool.py
+
+# 策略17紫阳真君池
+/opt/homebrew/opt/python@3.14/bin/python3.14 strategy/run_ziyang_pool.py
+```
+
+### 持仓同步
+
+```bash
+cd "/Users/wangxiangyu/Documents/akquan回测/myquan/holdingStocks"
+/opt/homebrew/opt/python@3.14/bin/python3.14 index.py holdings-push
+/opt/homebrew/opt/python@3.14/bin/python3.14 index.py holdings-pull
+```
+
+## 验证命令
+
+推荐使用：
+
+```bash
+cd "/Users/wangxiangyu/Documents/akquan回测/myquan"
+
+/opt/homebrew/opt/python@3.14/bin/python3.14 -m py_compile holdingStocks/index.py
+/opt/homebrew/opt/python@3.14/bin/python3.14 -m unittest holdingStocks.test_watch_boot_perf holdingStocks.test_strategy16b_dynamic
+/opt/homebrew/opt/python@3.14/bin/python3.14 holdingStocks/run_all_tests.py --skip-pytest-if-missing
+```
+
+当前系统默认 `python3` 可能缺 `pandas` / `akshare`，不要用它判断项目是否坏了。
+
+安装依赖：
+
+```bash
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
-官方文档：<https://akquant.akfamily.xyz/>
+## 项目结构
 
----
-
-## 本项目结构
-
-```
+```text
 myquan/
-├── READ.md                  # 本文档（项目总览）
-├── TODO.MD                  # 任务优先级与锁定项
-├── docs/
-│   ├── STRATEGY.md          # 策略说明专题
-│   ├── PROJECT_AUDIT.md     # 策略十六/因子26 算法审核（现行默认）
-│   ├── FACTOR13.md          # 因子13（质量带 + 熊盾锁定）
-│   ├── FACTOR14.md          # 因子14 题材共振（策略八）
-│   ├── FACTOR16.md          # 因子16 概念龙头评分
-│   ├── FACTOR17.md          # 因子17 缠论笔盈亏比
-│   ├── FACTOR18.md          # 因子18 低开跌停情绪
-│   ├── FACTOR19.md          # 因子19 低开反包（旧）
-│   ├── FACTOR20.md          # 因子20 跌停次日（否决）
-│   └── FACTOR21.md          # 因子21 涨停次日低开
-├── .cursor/rules/
-│   └── docs-sync.mdc        # 文档同步规则
-├── strategy/                # 可插拔策略框架
-│   ├── README.md            # 因子/策略注册表
-│   ├── factor13_bear_shield.py
-│   ├── run_factor13_bear_shield_wf.py
-│   └── ...
-├── backtest/
-│   ├── factor13_bear_shield/   # LOCKED.json、recommended.json
-│   └── factor13_bear_shield_wf/
-├── holdingStocks/           # 盯盘 + 微信预警
-└── data_cache/              # 前复权日线 parquet
+├── READ.md                         # 根目录说明
+├── TODO.MD                         # 任务与锁定项
+├── docs/                           # 策略、因子、架构和审计文档
+├── strategy/                       # 因子、策略注册表、策略绑定和选股池生成
+├── backtest/                       # 回测、对照实验和报告产物
+├── holdingStocks/                  # 盯盘、模拟盘账本、HTTP/WS、微信通知
+├── holdingStocks/watch-ui/         # Nuxt 前端
+├── sectors/                        # 板块/概念数据
+└── data_cache/                     # 本地行情缓存
 ```
 
-运行示例：
+关键文档：
 
-```bash
-# 策略一回测
-cd myquan/backtest && python run.py kaicheng
-cd myquan/backtest && python strategy1.py --rules
-# 定盘池 1m 四槽（对齐实盘 T+1：未到3%次日峰值回落2.5%，过3%走中段一半/波动赛跑，过10%走分段；长窗用 panda）
-cd myquan && PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 7 --source auto
-PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --days 20 --source panda --refresh
-PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack   # 研究：加回攻击波
-# 策略十六：核心龙头池近 7 日 1m（产物 backtest/strategy16_core_leader/）
-PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
-# 本周 5 日核对（不覆盖默认 REPORT；短窗不能当策略期望）
-PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 5 --source ak --tag _week202609
-# 策略十六：因子22 同日再买对照（生产禁再买 vs 研究开 F22）→ COMPARE_F22.md
-PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7
-# 卖出后开盘阈值同日再买对照 → COMPARE_OPEN_REBUY.md；全池等权加 --all-pool → COMPARE_OPEN_REBUY_ALL.md
-PYTHONPATH=. python backtest/strategy16_core_leader/compare_open_rebuy.py --days 7
-PYTHONPATH=. python backtest/strategy16_core_leader/compare_open_rebuy.py --days 7 --all-pool
-# 低开破硬保护：立刻卖 vs 开盘再下杀1%（全池等权）→ COMPARE_HARD_GAP.md
-PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7
+- [架构说明](docs/ARCHITECTURE.md)
+- [策略专题](docs/STRATEGY.md)
+- [策略注册表](strategy/README.md)
+- [因子26](docs/FACTOR26.md)
+- [因子27](docs/FACTOR27.md)
+- [因子28](docs/FACTOR28.md)
+- [盯盘说明](holdingStocks/README.md)
+- [时间完整性](docs/TEMPORAL_INTEGRITY.md)
+- [交易引擎契约](docs/TRADING_ENGINE_CONTRACT.md)
+- [退出编排契约](docs/PRODUCTION_EXIT_ORCHESTRATION_CONTRACT.md)
 
-# 因子13 熊市盾牌 WF（thr* Top3，锁定配置）
-cd myquan && python strategy/run_factor13_bear_shield_wf.py
+## AKQuant 接入方式
 
-# 策略十二：涨停次日低开（研究，盲测回撤未过关）
-python backtest/strategy12_emotion_gate/tune.py
-python backtest/strategy12_emotion_gate/run.py
+AKQuant 是 Rust 内核 + Python 策略层的混合量化框架。本项目主要使用 Python 侧能力，同时保留自定义实时盯盘和纸面交易状态。
 
-# 策略十六：核心龙头池（通达信概念活跃度，滚动近3个月）
-python strategy/run_core_leader_pool.py
-# 策略十七：紫阳真君池（武汉紫阳东路近3个月龙虎榜成交）
-python strategy/run_ziyang_pool.py
-PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
+典型数据流：
 
-# 离线规则测试
-cd myquan && python -m unittest -v test_strategy_rules.py
-
-# 持仓盯盘（Web 页面 + Python 数据）
-cd myquan/holdingStocks && python start_watch.py --no-wechat
-# 浏览器 http://127.0.0.1:3000/  ·  API/WS :8765
-# Win↔Mac 持仓：当前真源仍为 holdings.json + holdings-ledger 分支（不是 holdings_watch.json 缓存）
-python index.py holdings-push
-python index.py holdings-pull
-# Remote Paper State R1（未切生产）：接口/schema/迁移 dry-run 见 holdingStocks/docs/REMOTE_PAPER_STATE.md
-# python migrate_local_paper_state_to_remote.py   # dry-run only
-
-# 或分两终端
-cd myquan/holdingStocks && python index.py watch --no-wechat
-cd myquan/holdingStocks/watch-ui && npm run dev
+```text
+akshare DataFrame
+  -> normalize / load_bar_from_df
+  -> Bar
+  -> Strategy.on_bar
+  -> Execution / Statistics
+  -> BacktestResult
 ```
 
-盯盘细节：[`holdingStocks/README.md`](holdingStocks/README.md)
+本项目策略分层：
 
----
+```text
+因子层 factors
+  -> 策略绑定 bindings
+  -> 决策层 decision
+  -> 执行层 runner / backtest / watch
+```
 
-## 最小接入示例
+最小 AKQuant 示例：
 
 ```python
 import akquant as aq
 from akquant import Strategy, CurrentClose
 
+
 class MyStrategy(Strategy):
     def on_bar(self, bar):
         if self.get_position(bar.symbol) == 0 and bar.close > bar.open:
             self.buy(symbol=bar.symbol, quantity=100)
+
 
 result = aq.run_backtest(
     data=df,
@@ -263,76 +281,10 @@ result = aq.run_backtest(
 )
 ```
 
-本项目回测：
+## 开发约定
 
-```python
-from strategy import KAICHENG, run_strategy1
-run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
-```
-
----
-
-## 回测要点（akquant 0.3.x）
-
-- `CurrentClose` 控制成交时点；策略一参数经 `BacktestConfig` / `apply_strategy_config` 注入。
-- 日线缓存：`data_cache/<symbol>_daily_qfq.parquet`；除权后可 `force_daily_refresh=True`。
-
-| 资产 | 接口 | 说明 |
-|------|------|------|
-| A 股 | `stock_zh_a_daily` | `strategy.data` 默认 |
-| ETF | `fund_etf_hist_em` | `sh51*` / `sz15*` 等 |
-
----
-
-
-
-- 规则与 **因子1** 同源（`strategy/open_break.py`）；盯盘首页 Tab 为 **策略1 / 3 / 8 / 15 / 16**；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。策略十二在 `/strategies` 因子组合栏。
-- 早盘节点：9:15 竞价+**全日状态重置**（sticky/缓存/微信防抖，只留实仓；**昨仓今日盈亏按昨收重算**；启动过点补跑；**并强制重拉日线供过门/前日**）→ 9:20 不可撤 → 9:25 算阈值/过门/**可挂单**（**竞价观察/竞价止损预警，禁止「待卖出」与纸面 SELL**）→ 9:30 触发信号/止损结算（`watch_config.market_phase` / `is_exit_executable`）。因子26 止盈触达按 **1 分钟 path-dependent**（禁止全日 low×抬高后卖价假触）。周六日信号日锚定上周五；周一前日=上周五。指数走新浪批量（代码对不上不整卡失败）；**总资产/总收益 = 日初锁定（优先昨收结算 `daily_settlements`）+ 今日盈亏**（与分票加总同动；**日初锚跟 `trading_session_date`，跨日 heal 幂等不依赖正好 9:15**），不用被改坏的「仅现金」日初；**15:00 `POSITION_SETTLEMENT` 收盘盯市（不改 qty/cost）**。
-- 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
-- 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。**先绑 `:8765` 再后台冷启动**（避免首屏超过 `start_watch.py` 120s 等待、页面「推送断开」）。一键启动：`python start_watch.py`。**并行冷启动**：OpenClaw/微信自检在 `--wechat-optional`（默认）下后台并行、不挡 API；首屏只扫热池（默认策略+自选+持仓），策略一池首屏后异步补齐；修复账本↔名单递归（原单次 60–90s，启动慢主因）。**仓位占比**：账户摘要显示总仓位占比（Σ市值/总资产）+ 现金占比 + 个股仓位标签，持仓卡片显示单票占比（同口径）。**行情分层**：热池（持仓+默认策略，≤48）SSE+新浪约1s+信号扫描；叠加观察池独立新浪分块约3s、不进 `collect_rows`、不挡启动；**现价/涨跌幅另有 ≥0.4s 快刷**（不重跑扫描）——否则整轮 collect 会把盘面价卡住。**Win/Mac 持仓**走 `origin/holdings-ledger`（`holdings-push` / 启动默认 `holdings-pull`）；`holdings_watch.json` 是本机缓存，账本更新后丢弃。**账本并发写**：`holdings.json` 统一走 `holdings_store`（进程内单一对象 + 文件锁串行写 + 写前版本检查/三方合并 + 原子替换），旧数据不再覆盖新数据。**交割单**页 `/trades`（卡片「价格/交割」、API `/api/trades`，落库 `trade_ledger.json`；仍持仓 BUY 单笔盈亏按现价浮动盯市、SELL realized 冻结）。盘前新浪/东财无成交价时用昨收垫。快照**先留上次可用再更新**，行情未就绪不覆盖成空表、不回写总资产/不自动入槽；每轮自愈隔夜可卖与仅现金日初。外网断了本机 WS 仍可能开着：顶栏按 `quoteStale`/`feedOk` 红字「行情中断」，时钟心跳 2s 不冻住。**板块轮动今日列**走同一条 WS，但**启动时后置**：先出盯盘/策略并实时更新，再后台拉通达信概念（不必等板块才开页）。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
-- 股票名/代码外链：百度财经 `finance.baidu.com/stock/ab-{code}`。名称移入即预取基本面，约 0.1 秒弹出（题材/概念/行业、市值估值、关联股票及关系、产业上下游；API `GET /api/stock/profile`）。
-- 微信预警：OpenClaw；**【策略预警】** 与 **【模拟买入】/【模拟卖出】** 分模板（N1 已部署：已成交不扫描重复推；`--no-wechat` 同时关掉预警与成交推送）。自然 BUY/SELL 微信覆盖 **PENDING**；N2 未开始。自动结算不下真实委托。Paper 卖出当前 **Unified Primary + Legacy Shadow**。
-
-详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
-
----
-
-## 参考
-
-- 官方文档：<https://akquant.akfamily.xyz/>
-- 策略注册表：[`strategy/README.md`](strategy/README.md)
-- 策略专题：[`docs/STRATEGY.md`](docs/STRATEGY.md)
-- 因子13：[`docs/FACTOR13.md`](docs/FACTOR13.md)
-- 因子18：[`docs/FACTOR18.md`](docs/FACTOR18.md)
-- 因子21：[`docs/FACTOR21.md`](docs/FACTOR21.md)
-- 因子19：[`docs/FACTOR19.md`](docs/FACTOR19.md)
-- 凯盛审计底稿：[`strategy/STRATEGY_AUDIT.md`](strategy/STRATEGY_AUDIT.md)
-- 任务清单：[`TODO.MD`](TODO.MD)
-
-
-## 盯盘要点
-
-**策略1 / 策略16 Tab（默认池）**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略累计**（权威源 = `strategy_simulator`：每 `strategy_id+symbol` 虚拟账本；自 `STRATEGY_PNL_START`=**2026-10-08** 起算，此前不成交、累计 0；该日起日线 OHLC touch bootstrap 一次后由 live quote 接力；**FLAT ≠ 0%**，平仓冻结 `cash/initial−1`，从未交易才是 0%；live 与回测同口径 **T+1**（买入当日不卖、卖出当日不买回；旧版缺失导致逐 tick 翻转，修复见 `holdingStocks/repair_strategy_sim_t1.py`）；语义 `strategy_simulator_ledger`，≠纸面空仓/≠单笔收入；Factor1 回放仅对照字段）。状态主列 = Simulator 空仓/策略持有。额外盯盘见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材 601208、金安国纪 002636）。股票名称移入即预取基本面、约 0.1 秒弹出（行业/概念、市值、关联股及关系、产业上下游）。**Trailing 校验列**：`现价 | 今日最高(行情 dayHigh) | 持仓最高(peak_high+时间) | 卖出侧`——持仓最高与自动卖出同源，前端禁止重算。**时间完整性**：[`docs/TEMPORAL_INTEGRITY.md`](docs/TEMPORAL_INTEGRITY.md)（NO LOOK-AHEAD / HWM CAUSALITY / EVENT IMMUTABILITY / STALE DATA）；回归 `holdingStocks/run_regression_tests.py`。
-
-**AKQuant 能力审计（只读，2026-09-24）**：[`docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md`](docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md) — 运行时 `0.3.22` vs 声明 `0.3.21`；纸面与回测双轨；Trailing **保持 CUSTOM**（AQ `place_trailing_stop` 不等价且 live 不支持）。
-
-**Paper↔Backtest 语义对等审计（只读，2026-09-24）**：[`docs/PAPER_BACKTEST_SEMANTIC_PARITY_AUDIT.md`](docs/PAPER_BACKTEST_SEMANTIC_PARITY_AUDIT.md) — **STRATEGY SEMANTIC PARITY: FAIL**；**COMPARABILITY: PARTIAL**（BT-1m）/ **FAIL**（BT-Daily）；版本漂移建议 PIN_0.3.22（未执行）。
-
-**Realtime×1m 架构重定义（2026-09-24）**：[`docs/REALTIME_1M_ARCHITECTURE.md`](docs/REALTIME_1M_ARCHITECTURE.md)。
-
-**Trading Engine Contract（已锁定）**：[`docs/TRADING_ENGINE_CONTRACT.md`](docs/TRADING_ENGINE_CONTRACT.md)。**Full Exit Orchestration（Gate4 PASS）**：[`docs/PRODUCTION_EXIT_ORCHESTRATION_CONTRACT.md`](docs/PRODUCTION_EXIT_ORCHESTRATION_CONTRACT.md) / [`docs/PHASE_FULL_EXIT_ORCHESTRATION_REPORT.md`](docs/PHASE_FULL_EXIT_ORCHESTRATION_REPORT.md)。`akquant==0.3.22`。回归：`python holdingStocks/run_regression_tests.py`（**157**）。
-
-**策略16 Tab**：因子27 选股池（**as_of 2026-09-30**，有效至 2026-12-30）∪ **公共自选池**（天通/凯盛/东材/金安，`SELF_WATCHLIST_PICKS`，全策略共用）+ 同策略一买卖；开盘阈值只认 `thr_2026.json`（缺省 2.5%，不走策略一遗留 `_WATCH_PCT` / 置顶 pct）；现为默认四槽交易池。换池后空槽只买新名单，**实仓不因掉池强平**。图例「已经买入」=四槽实仓，「已触买」含今日已入槽；T+1 止损已记不算「已触止损」。刷新因子池：`python strategy/run_core_leader_pool.py`（改池须重启 `start_watch`）；拟合阈值：`python backtest/strategy16_core_leader/fit_thr.py`。
-
-**策略17 Tab（紫阳真君）**：国泰海通/国泰君安武汉紫阳东路近 3 个月龙虎榜成交池（因子28）∪ 公共自选；买卖规则同因子26，**不入默认四槽**。刷新：`python strategy/run_ziyang_pool.py`。
-
-**持仓 Capital V2**：同时最多 **5** 只实仓；每个交易日最多新开 **2** 个 symbol（从 `trades.jsonl` BUY 重建，restart 不重置额度）；单票入场目标 ≤ 决策时权益 **20%**，再受 available cash 约束（不得负现金买入、禁止加仓）；SELL 释放总槽但不恢复当日新增额度。**仅当前默认策略池（strategy16 核心龙头）入槽**。连续竞价（9:30–11:30 / 13:00–15:00）才自动成交；买入触达按 1 分钟（买=开盘阈值）。**卖出：全持仓走 `paper_exit_decision`**（5 秒触发即按卖点成交，滑点在成本里；1m 排先后并补迟到；昨收已过 3% 且今开低于回落一半 → 按开盘平，**竞价核时刻固定 09:30**；开盘保护峰值用 **9:15 冻结的 `overnight_peak`**，禁止盘中新高回写后再抬保护；**竞价 9:15–9:30 行情不得抬 HWM**；**09:30–09:32 API high 高于今开/现价/1m 视为竞价残留**（`usable_session_high`）；今开已破工作卖价且当日最高从未印到 → 按开盘，禁止记从未成交的卖点；高开且峰值≥今开回退成本/昨收；1m **跳过 09:30 前竞价 K**；开盘保护强制全清；**昨收/昨高只经 `overnight_peak_px`**，仅昨日策略持有或策略买入才并入，今日新买只用成本硬保护）。**买入日「止损已记」只走唯一落库口**（硬保护或收盘未到 3% 的哨兵；已记价不得高于成本）；盈≥3%/涨停/中段卖价不得记。空槽入槽：**先平再买**（本轮平仓立刻补槽）。平仓前已触买且现价≤买点+1% 优先，成交价=**现价**；否则其后新触发按时间，成交价=**买点**。开盘空槽/从未腾槽的新触发仍按买点。**触买信号 ≠ 入槽**：过门触买但槽满/日额度满/现金不足仍发「已触买·槽满/未入槽」或「资金规则未开仓」进预警栏；**策略持有 / 回放止损**同样进持仓 Tab（与策略十六图例同步，不进今日平仓栏）；**未过门不算触买**；**午休/收盘仍展示已触买**（持仓预警栏当天一旦列入不摘；竞价只留实仓+已平仓），不降成空仓、不自动成交。**信号**「已触止损」与**持仓态**「今日平仓」分开：纸面止损/止盈卖出后清 qty，持仓页「今日平仓」栏**只认 `realized_today` 纸面卖出**（不含策略回放、不含旧买档冒充；`heal` 清无卖出的 `closed_today`）。**今日盈亏**=实仓当日盈亏+今日平仓；账户「今日盈亏率」=今日盈亏/日初权益；**总收益**=总资产−纸面本金（自 **2026-09-09**）；账户摘要「当前持仓成本」=剩余仓成本额（不含今日已平仓成本）；收盘后写 `daily_settlements` 日结算核对。卡片名称旁为**今日盈亏**并展示锁定**平仓价**（开盘保护优先否则 1m 第一次触达；已平仓卖出侧冻结为该成交价，禁止用收盘后抬高的止损去改展示或改账；今买相对买入价，昨仓相对昨收；已实现用记账股数；昨仓留痕按权益×权重估槽），**下一交易日清空**。顶部合计盈亏=持仓浮盈+已平仓（相对成本）；今日盈亏=今买相对买入价、昨仓相对昨收（`strategy/akq_math.py` 走 akquant `vec_returns`）；百分比用成本额/当日基数，不用被改坏的日初现金。因子22 14:57 后收盘确认。止损若记了 `account_cash` 会加回现金。隔夜仓买入日 `available=0` 残留会自动解开，避免「已触止损·暂不可卖」假锁。
-
-盯盘可靠性锁定（空表 / 假锁仓 / 该平未平 / 信号不同步 / 平仓价展示 / 断网无红字 / 买入日涨停误记止损禁止再犯）：[`TODO.MD`](TODO.MD)「锁定 · 盯盘可靠性」。
-
-**启动（推荐）**
-
-```bash
-cd holdingStocks && python start_watch.py --no-wechat
-# 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
-```
+- 改策略/因子时，同步更新 `strategy/README.md`、`docs/` 和本文。
+- 不要把 `holdingStocks/strategy_sim_state.json`、运行快照和账本缓存当普通代码改。
+- 默认在实际工作区修改：`/Users/wangxiangyu/Documents/akquan回测/myquan`。
+- 提交前至少跑 `holdingStocks/run_all_tests.py --skip-pytest-if-missing`。
+- 涉及前端时，再跑 `holdingStocks/watch-ui` 的构建或本地 dev 验证。

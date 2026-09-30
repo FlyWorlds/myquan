@@ -154,6 +154,11 @@ const activeItems = computed(() => {
                   <span v-if="it.oos_win_rate_pct != null"> · 胜率 {{ Number(it.oos_win_rate_pct).toFixed(1) }}%</span>
                 </template>
                 <template v-else-if="it.thr != null">阈值 ±{{ (Number(it.thr) * 100).toFixed(1) }}%</template>
+                <template v-else-if="it.concept != null">
+                  {{ it.concept }}
+                  <span v-if="it.price != null"> · 现价 {{ Number(it.price).toFixed(2) }}</span>
+                  <span v-if="it.chg_pct != null"> · 涨跌 {{ Number(it.chg_pct).toFixed(2) }}%</span>
+                </template>
                 <template v-else-if="it.theme != null">{{ it.theme }} · lu {{ it.theme_lu }}</template>
                 <template v-else-if="it.score != null">score {{ Number(it.score).toFixed(2) }}</template>
                 <template v-else-if="it.gap_pct != null">gap {{ it.gap_pct }}% · 量比 {{ it.vol_ratio }}</template>
