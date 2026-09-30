@@ -1,42 +1,6 @@
 {
-  "updated_at": "2026-09-29 10:14:53",
+  "updated_at": "2026-09-30 14:29:48",
   "events": [
-    {
-      "event_id": "bd741802-3469-5d97-9d94-be15880f240c",
-      "strategy_id": "strategy16",
-      "symbol": "600552",
-      "side": "BUY",
-      "trigger_price": 18.57,
-      "trigger_time": "2026-09-23 11:37:28",
-      "quote_timestamp": "2026-09-23 11:37:28",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-23",
-      "buy_level": 18.34
-    },
-    {
-      "event_id": "494fa9e0-352f-52fa-9999-c563daaccf98",
-      "strategy_id": "strategy16",
-      "symbol": "601208",
-      "side": "BUY",
-      "trigger_price": 54.93,
-      "trigger_time": "2026-09-23 11:37:37",
-      "quote_timestamp": "2026-09-23 11:37:37",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-23",
-      "buy_level": 54.1
-    },
-    {
-      "event_id": "c11b168e-c289-548d-84e3-950670ca8d0a",
-      "strategy_id": "strategy16",
-      "symbol": "002779",
-      "side": "BUY",
-      "trigger_price": 85.99,
-      "trigger_time": "2026-09-23 11:41:42",
-      "quote_timestamp": "2026-09-23 11:41:42",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-23",
-      "buy_level": 84.88
-    },
     {
       "event_id": "321c46f9-b190-580c-a22e-3154551ca411",
       "strategy_id": "strategy1",
@@ -110,54 +74,6 @@
       "buy_level": 21.82
     },
     {
-      "event_id": "4ece3067-1b89-5b82-83ec-1d9aebed38e1",
-      "strategy_id": "strategy16",
-      "symbol": "601020",
-      "side": "BUY",
-      "trigger_price": 21.82,
-      "trigger_time": "2026-09-23 13:42:48",
-      "quote_timestamp": "2026-09-23 13:42:48",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-23",
-      "buy_level": 21.82
-    },
-    {
-      "event_id": "429b1db8-c885-58ea-b05e-fb2b6bae95cf",
-      "strategy_id": "strategy16",
-      "symbol": "000002",
-      "side": "SELL",
-      "trigger_price": 3.82,
-      "trigger_time": "2026-09-24 09:24:25",
-      "quote_timestamp": "2026-09-24 09:24:25",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 3.82
-    },
-    {
-      "event_id": "755239f3-ccd3-5d50-9098-3fb4d93ab4b4",
-      "strategy_id": "strategy16",
-      "symbol": "603328",
-      "side": "SELL",
-      "trigger_price": 15.2,
-      "trigger_time": "2026-09-24 09:27:24",
-      "quote_timestamp": "2026-09-24 09:27:24",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 15.48
-    },
-    {
-      "event_id": "44b131c0-443c-5b4a-a7f2-1f039b92cb34",
-      "strategy_id": "strategy16",
-      "symbol": "603042",
-      "side": "BUY",
-      "trigger_price": 17.07,
-      "trigger_time": "2026-09-24 09:30:04",
-      "quote_timestamp": "2026-09-24 09:30:04",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "buy_level": 17.04
-    },
-    {
       "event_id": "87bb08c8-1f90-5559-8464-ea44abbcfa42",
       "strategy_id": "strategy15",
       "symbol": "603042",
@@ -180,18 +96,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-24",
       "buy_level": 23.67
-    },
-    {
-      "event_id": "7e505fb2-6d87-5db6-98f9-777e06418ebc",
-      "strategy_id": "strategy16",
-      "symbol": "600121",
-      "side": "BUY",
-      "trigger_price": 4.87,
-      "trigger_time": "2026-09-24 09:30:22",
-      "quote_timestamp": "2026-09-24 09:30:22",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "buy_level": 4.87
     },
     {
       "event_id": "58c1c88c-d91e-5c1f-87a8-76d0698554c0",
@@ -218,18 +122,6 @@
       "buy_level": 33.9
     },
     {
-      "event_id": "988b0ea8-664d-5028-ad2c-d4ebac724580",
-      "strategy_id": "strategy16",
-      "symbol": "002068",
-      "side": "SELL",
-      "trigger_price": 9.6,
-      "trigger_time": "2026-09-24 09:30:33",
-      "quote_timestamp": "2026-09-24 09:30:33",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 9.6
-    },
-    {
       "event_id": "8de2dfae-27de-55b9-b277-582da379e6a3",
       "strategy_id": "strategy1",
       "symbol": "603920",
@@ -252,42 +144,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-24",
       "buy_level": 13.06
-    },
-    {
-      "event_id": "694c5b7c-d71f-5185-b29e-228108d59eea",
-      "strategy_id": "strategy16",
-      "symbol": "600967",
-      "side": "BUY",
-      "trigger_price": 13.1,
-      "trigger_time": "2026-09-24 09:32:55",
-      "quote_timestamp": "2026-09-24 09:32:55",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "buy_level": 13.06
-    },
-    {
-      "event_id": "fb2ec899-370e-5cde-8a4a-0cae29b552d7",
-      "strategy_id": "strategy16",
-      "symbol": "600353",
-      "side": "SELL",
-      "trigger_price": 33.8,
-      "trigger_time": "2026-09-24 09:36:47",
-      "quote_timestamp": "2026-09-24 09:36:47",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 33.84
-    },
-    {
-      "event_id": "3a45ca8b-8158-59c3-b722-c079d1ad007b",
-      "strategy_id": "strategy16",
-      "symbol": "600403",
-      "side": "BUY",
-      "trigger_price": 7.4,
-      "trigger_time": "2026-09-24 09:38:59",
-      "quote_timestamp": "2026-09-24 09:38:59",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "buy_level": 7.4
     },
     {
       "event_id": "7defde31-aeba-5d6c-88cc-968206e22d62",
@@ -314,18 +170,6 @@
       "buy_level": 10.05
     },
     {
-      "event_id": "e6b4e209-dd8b-5151-851f-8e2527720aa1",
-      "strategy_id": "strategy16",
-      "symbol": "000151",
-      "side": "BUY",
-      "trigger_price": 10.25,
-      "trigger_time": "2026-09-24 09:51:42",
-      "quote_timestamp": "2026-09-24 09:51:42",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "buy_level": 10.19
-    },
-    {
       "event_id": "3a9e641a-5f77-5ffc-a114-eeb847185ca1",
       "strategy_id": "strategy15",
       "symbol": "000151",
@@ -336,42 +180,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-24",
       "buy_level": 10.19
-    },
-    {
-      "event_id": "06372f17-9d0f-5227-952f-ff0ecef13205",
-      "strategy_id": "strategy16",
-      "symbol": "600234",
-      "side": "SELL",
-      "trigger_price": 22.25,
-      "trigger_time": "2026-09-24 10:01:49",
-      "quote_timestamp": "2026-09-24 10:01:49",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 22.25
-    },
-    {
-      "event_id": "4f10a7f6-1919-54d5-8716-06ed8c0e3cfb",
-      "strategy_id": "strategy16",
-      "symbol": "603920",
-      "side": "SELL",
-      "trigger_price": 46.88,
-      "trigger_time": "2026-09-24 10:03:38",
-      "quote_timestamp": "2026-09-24 10:03:38",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 47.25
-    },
-    {
-      "event_id": "9c87a7ec-9a10-5c00-b716-10d6e56c2aef",
-      "strategy_id": "strategy16",
-      "symbol": "601208",
-      "side": "SELL",
-      "trigger_price": 54.94,
-      "trigger_time": "2026-09-24 10:09:47",
-      "quote_timestamp": "2026-09-24 10:09:47",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 54.98
     },
     {
       "event_id": "650b604b-f6e8-5f9c-af1c-38ac5d116861",
@@ -386,18 +194,6 @@
       "sell_level": 54.98
     },
     {
-      "event_id": "73da3a9b-e4b3-5adb-b0a7-279496e41ca1",
-      "strategy_id": "strategy16",
-      "symbol": "603115",
-      "side": "BUY",
-      "trigger_price": 77.54,
-      "trigger_time": "2026-09-24 10:22:42",
-      "quote_timestamp": "2026-09-24 10:22:42",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "buy_level": 77.48
-    },
-    {
       "event_id": "90247dbc-ae37-59e9-8f0a-5c7e57db13e4",
       "strategy_id": "strategy15",
       "symbol": "603115",
@@ -408,42 +204,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-24",
       "buy_level": 77.48
-    },
-    {
-      "event_id": "1d87c565-16e8-592c-ba93-55142dd2c6c1",
-      "strategy_id": "strategy16",
-      "symbol": "002636",
-      "side": "SELL",
-      "trigger_price": 83.11,
-      "trigger_time": "2026-09-24 10:25:07",
-      "quote_timestamp": "2026-09-24 10:25:07",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 83.13
-    },
-    {
-      "event_id": "4b3c8ba8-772e-562f-a3f0-42b5bf176f9e",
-      "strategy_id": "strategy16",
-      "symbol": "601068",
-      "side": "SELL",
-      "trigger_price": 4.3,
-      "trigger_time": "2026-09-24 10:41:40",
-      "quote_timestamp": "2026-09-24 10:41:40",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 4.3
-    },
-    {
-      "event_id": "cffaa2bb-2fe2-5de9-a10f-33fb0c55a915",
-      "strategy_id": "strategy16",
-      "symbol": "603663",
-      "side": "BUY",
-      "trigger_price": 48.03,
-      "trigger_time": "2026-09-24 10:45:23",
-      "quote_timestamp": "2026-09-24 10:45:23",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-24",
-      "buy_level": 48.03
     },
     {
       "event_id": "f0d5c3e9-37dd-59ef-b881-f92a285067be",
@@ -482,54 +242,6 @@
       "sell_level": 82.9
     },
     {
-      "event_id": "09dca073-d21a-5174-b5e1-d8c1bd66fb0e",
-      "strategy_id": "strategy16",
-      "symbol": "002779",
-      "side": "SELL",
-      "trigger_price": 82.83,
-      "trigger_time": "2026-09-24 10:54:16",
-      "quote_timestamp": "2026-09-24 10:54:16",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 82.9
-    },
-    {
-      "event_id": "3d6c3aef-401b-5a0a-b120-9d458cac0feb",
-      "strategy_id": "strategy16",
-      "symbol": "601519",
-      "side": "SELL",
-      "trigger_price": 8.58,
-      "trigger_time": "2026-09-24 11:27:28",
-      "quote_timestamp": "2026-09-24 11:27:28",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 8.58
-    },
-    {
-      "event_id": "27530aeb-96cf-54df-bbc2-d727b1e67c3e",
-      "strategy_id": "strategy16",
-      "symbol": "002273",
-      "side": "SELL",
-      "trigger_price": 25.34,
-      "trigger_time": "2026-09-24 14:07:48",
-      "quote_timestamp": "2026-09-24 14:07:48",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 25.38
-    },
-    {
-      "event_id": "512fa056-3ca9-50a0-b4f1-2bf3bd9c9616",
-      "strategy_id": "strategy16",
-      "symbol": "600552",
-      "side": "SELL",
-      "trigger_price": 18.31,
-      "trigger_time": "2026-09-24 14:08:06",
-      "quote_timestamp": "2026-09-24 14:08:06",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 18.33
-    },
-    {
       "event_id": "e8c03531-b349-5823-a51c-26d2539d83bb",
       "strategy_id": "strategy1",
       "symbol": "002093",
@@ -554,90 +266,6 @@
       "sell_level": 21.16
     },
     {
-      "event_id": "851f5180-cb6e-5b5e-b2a4-2a26f3bccf1f",
-      "strategy_id": "strategy16",
-      "symbol": "002093",
-      "side": "BUY",
-      "trigger_price": 7.77,
-      "trigger_time": "2026-09-24 14:32:19",
-      "quote_timestamp": "2026-09-24 14:32:19",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "buy_level": 7.74
-    },
-    {
-      "event_id": "474d5ec2-9056-5cfd-9e47-1d99d1b6e8a0",
-      "strategy_id": "strategy16",
-      "symbol": "601020",
-      "side": "SELL",
-      "trigger_price": 21.16,
-      "trigger_time": "2026-09-24 14:32:21",
-      "quote_timestamp": "2026-09-24 14:32:21",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 21.16
-    },
-    {
-      "event_id": "15c2068d-6344-5703-9b0d-ad905bf9509b",
-      "strategy_id": "strategy16",
-      "symbol": "002922",
-      "side": "SELL",
-      "trigger_price": 22.74,
-      "trigger_time": "2026-09-24 14:36:21",
-      "quote_timestamp": "2026-09-24 14:36:21",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-24",
-      "sell_level": 22.74
-    },
-    {
-      "event_id": "e1316e76-4eb5-599f-8771-d7164a205870",
-      "strategy_id": "strategy16",
-      "symbol": "603328",
-      "side": "BUY",
-      "trigger_price": 14.04,
-      "trigger_time": "2026-09-28 09:33:22",
-      "quote_timestamp": "2026-09-28 09:33:22",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-28",
-      "buy_level": 14.04
-    },
-    {
-      "event_id": "2ab70e6e-3b06-5b6f-9881-892e3cd6d1a7",
-      "strategy_id": "strategy16",
-      "symbol": "603042",
-      "side": "SELL",
-      "trigger_price": 17.17,
-      "trigger_time": "2026-09-28 09:33:42",
-      "quote_timestamp": "2026-09-28 09:33:42",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 17.82
-    },
-    {
-      "event_id": "30808d22-6797-5956-81c6-753bf9643efe",
-      "strategy_id": "strategy16",
-      "symbol": "603115",
-      "side": "SELL",
-      "trigger_price": 74.88,
-      "trigger_time": "2026-09-28 09:34:16",
-      "quote_timestamp": "2026-09-28 09:34:16",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 75.84
-    },
-    {
-      "event_id": "d547231a-4f73-52e3-bb82-197c0cbde84a",
-      "strategy_id": "strategy16",
-      "symbol": "002929",
-      "side": "SELL",
-      "trigger_price": 49.73,
-      "trigger_time": "2026-09-28 09:37:11",
-      "quote_timestamp": "2026-09-28 09:37:11",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 50.06
-    },
-    {
       "event_id": "6c4ede3a-4603-5a32-aa8f-448400f0a4ea",
       "strategy_id": "strategy1",
       "symbol": "600552",
@@ -648,30 +276,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-28",
       "sell_level": 19.04
-    },
-    {
-      "event_id": "15c51680-19d8-575b-8e4d-12811823c1bf",
-      "strategy_id": "strategy16",
-      "symbol": "000032",
-      "side": "SELL",
-      "trigger_price": 13.77,
-      "trigger_time": "2026-09-28 09:38:43",
-      "quote_timestamp": "2026-09-28 09:38:43",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 13.77
-    },
-    {
-      "event_id": "aa637f79-4dad-5be2-9513-5e1fc83e0818",
-      "strategy_id": "strategy16",
-      "symbol": "603663",
-      "side": "SELL",
-      "trigger_price": 45.35,
-      "trigger_time": "2026-09-28 09:38:43",
-      "quote_timestamp": "2026-09-28 09:38:43",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 46.39
     },
     {
       "event_id": "927d2db5-886e-531f-b8c6-a81b85f6aed1",
@@ -698,18 +302,6 @@
       "sell_level": 75.84
     },
     {
-      "event_id": "21ffa808-09b0-54af-a086-309a5c4ba17b",
-      "strategy_id": "strategy16",
-      "symbol": "000062",
-      "side": "SELL",
-      "trigger_price": 22.17,
-      "trigger_time": "2026-09-28 09:40:24",
-      "quote_timestamp": "2026-09-28 09:40:24",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 22.17
-    },
-    {
       "event_id": "31f15a57-74f9-50f4-bd62-5e69ac2322e5",
       "strategy_id": "strategy1",
       "symbol": "002636",
@@ -717,18 +309,6 @@
       "trigger_price": 80.31,
       "trigger_time": "2026-09-28 09:45:06",
       "quote_timestamp": "2026-09-28 09:45:06",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-28",
-      "buy_level": 80.26
-    },
-    {
-      "event_id": "68258e62-e4b0-57e3-a9a0-da62a9f45749",
-      "strategy_id": "strategy16",
-      "symbol": "002636",
-      "side": "BUY",
-      "trigger_price": 80.31,
-      "trigger_time": "2026-09-28 09:45:08",
-      "quote_timestamp": "2026-09-28 09:45:08",
       "reason": "quote_patch",
       "trading_session_date": "2026-09-28",
       "buy_level": 80.26
@@ -744,18 +324,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-28",
       "buy_level": 80.26
-    },
-    {
-      "event_id": "df9c44cb-8e87-5f52-8a85-369eb4e06d3d",
-      "strategy_id": "strategy16",
-      "symbol": "000034",
-      "side": "SELL",
-      "trigger_price": 23.52,
-      "trigger_time": "2026-09-28 09:49:07",
-      "quote_timestamp": "2026-09-28 09:49:07",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 23.53
     },
     {
       "event_id": "a086ac8e-8cb9-58ab-8181-29b5b362d419",
@@ -782,78 +350,6 @@
       "sell_level": 7.79
     },
     {
-      "event_id": "5b85d868-3ce9-586c-89cf-70b4ffb6e8fb",
-      "strategy_id": "strategy16",
-      "symbol": "002093",
-      "side": "SELL",
-      "trigger_price": 7.77,
-      "trigger_time": "2026-09-28 09:59:08",
-      "quote_timestamp": "2026-09-28 09:59:08",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 7.79
-    },
-    {
-      "event_id": "c07582be-0642-5701-b474-63e2b18464dc",
-      "strategy_id": "strategy16",
-      "symbol": "000063",
-      "side": "SELL",
-      "trigger_price": 30.9,
-      "trigger_time": "2026-09-28 10:28:12",
-      "quote_timestamp": "2026-09-28 10:28:12",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 30.9
-    },
-    {
-      "event_id": "1736f6bd-12db-50ef-9518-65729cc74ceb",
-      "strategy_id": "strategy16",
-      "symbol": "000972",
-      "side": "SELL",
-      "trigger_price": 3.9,
-      "trigger_time": "2026-09-28 10:32:10",
-      "quote_timestamp": "2026-09-28 10:32:10",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 3.9
-    },
-    {
-      "event_id": "e788fb0d-b82c-5934-bea0-b2621c0f4e82",
-      "strategy_id": "strategy16",
-      "symbol": "000049",
-      "side": "SELL",
-      "trigger_price": 21.6,
-      "trigger_time": "2026-09-28 11:17:55",
-      "quote_timestamp": "2026-09-28 11:17:55",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-28",
-      "sell_level": 21.6
-    },
-    {
-      "event_id": "945ffe5e-ddb0-54eb-84ad-d13de1c33af7",
-      "strategy_id": "strategy16",
-      "symbol": "600540",
-      "side": "BUY",
-      "trigger_price": 5.64,
-      "trigger_time": "2026-09-29 08:32:48",
-      "quote_timestamp": "2026-09-29 08:32:48",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 5.57
-    },
-    {
-      "event_id": "4a9494bb-2924-59f6-a14a-b0164069291d",
-      "strategy_id": "strategy16",
-      "symbol": "000807",
-      "side": "SELL",
-      "trigger_price": 25.37,
-      "trigger_time": "2026-09-29 08:34:44",
-      "quote_timestamp": "2026-09-29 08:34:44",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-29",
-      "sell_level": 25.37
-    },
-    {
       "event_id": "5d128469-dc82-5fd6-8458-dc751ca0553c",
       "strategy_id": "strategy15",
       "symbol": "600540",
@@ -878,18 +374,6 @@
       "sell_level": 18.26
     },
     {
-      "event_id": "2c210353-236b-58fa-aafd-8046eee49c40",
-      "strategy_id": "strategy16",
-      "symbol": "603328",
-      "side": "SELL",
-      "trigger_price": 13.13,
-      "trigger_time": "2026-09-29 09:09:23",
-      "quote_timestamp": "2026-09-29 09:09:23",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "sell_level": 13.9
-    },
-    {
       "event_id": "37f32576-11d8-543e-b562-c4a90b6b4f3b",
       "strategy_id": "strategy1",
       "symbol": "002636",
@@ -900,30 +384,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-29",
       "sell_level": 77.31
-    },
-    {
-      "event_id": "932de9ad-63cf-583e-be38-5be1dca25307",
-      "strategy_id": "strategy16",
-      "symbol": "002636",
-      "side": "SELL",
-      "trigger_price": 77.1,
-      "trigger_time": "2026-09-29 09:15:06",
-      "quote_timestamp": "2026-09-29 09:15:06",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "sell_level": 77.31
-    },
-    {
-      "event_id": "36b50e44-22ea-5c75-9f27-7e6e3f24171f",
-      "strategy_id": "strategy16",
-      "symbol": "002068",
-      "side": "BUY",
-      "trigger_price": 9.7,
-      "trigger_time": "2026-09-29 09:15:06",
-      "quote_timestamp": "2026-09-29 09:15:06",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 9.35
     },
     {
       "event_id": "fb792f78-59a4-518c-8cbd-10f4f8d3e8a1",
@@ -986,18 +446,6 @@
       "buy_level": 13.46
     },
     {
-      "event_id": "ee8a806a-81c1-592c-98e9-c258f0c6a1d3",
-      "strategy_id": "strategy16",
-      "symbol": "000062",
-      "side": "BUY",
-      "trigger_price": 22.28,
-      "trigger_time": "2026-09-29 09:16:25",
-      "quote_timestamp": "2026-09-29 09:16:25",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 22.28
-    },
-    {
       "event_id": "53bb2c74-be1c-5575-9d42-b69fc35e289d",
       "strategy_id": "strategy15",
       "symbol": "000062",
@@ -1034,54 +482,6 @@
       "sell_level": 42.29
     },
     {
-      "event_id": "e170ee6c-9696-5649-8d26-a2111042ffbd",
-      "strategy_id": "strategy16",
-      "symbol": "002779",
-      "side": "BUY",
-      "trigger_price": 80.28,
-      "trigger_time": "2026-09-29 09:21:09",
-      "quote_timestamp": "2026-09-29 09:21:09",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 78.76
-    },
-    {
-      "event_id": "c31d0ee4-b420-56f8-bd2f-ba00250e61a4",
-      "strategy_id": "strategy16",
-      "symbol": "603663",
-      "side": "BUY",
-      "trigger_price": 43.36,
-      "trigger_time": "2026-09-29 09:25:24",
-      "quote_timestamp": "2026-09-29 09:25:24",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 43.06
-    },
-    {
-      "event_id": "77b384b1-2aeb-5e5e-a645-abdc5410ad58",
-      "strategy_id": "strategy16",
-      "symbol": "000009",
-      "side": "BUY",
-      "trigger_price": 6.72,
-      "trigger_time": "2026-09-29 09:25:29",
-      "quote_timestamp": "2026-09-29 09:25:29",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 6.72
-    },
-    {
-      "event_id": "b2a4a816-2faa-54e2-81c0-40dbf5e4b2bd",
-      "strategy_id": "strategy16",
-      "symbol": "000657",
-      "side": "BUY",
-      "trigger_price": 53.57,
-      "trigger_time": "2026-09-29 09:25:33",
-      "quote_timestamp": "2026-09-29 09:25:33",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 53.49
-    },
-    {
       "event_id": "3c6703e7-a1a6-5f90-8354-f2c42deef0d8",
       "strategy_id": "strategy15",
       "symbol": "000009",
@@ -1106,18 +506,6 @@
       "buy_level": 53.49
     },
     {
-      "event_id": "b7ee264d-109c-5831-a7bf-f489276e0e20",
-      "strategy_id": "strategy16",
-      "symbol": "000002",
-      "side": "BUY",
-      "trigger_price": 3.81,
-      "trigger_time": "2026-09-29 09:30:07",
-      "quote_timestamp": "2026-09-29 09:30:07",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 3.79
-    },
-    {
       "event_id": "296013b1-8697-5cda-91e7-dfa17a569f79",
       "strategy_id": "strategy15",
       "symbol": "000002",
@@ -1128,18 +516,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-29",
       "buy_level": 3.79
-    },
-    {
-      "event_id": "0833a25d-ef4e-58dc-bd4b-fe0b594ce0ad",
-      "strategy_id": "strategy16",
-      "symbol": "600522",
-      "side": "BUY",
-      "trigger_price": 31.28,
-      "trigger_time": "2026-09-29 09:30:16",
-      "quote_timestamp": "2026-09-29 09:30:16",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 31.27
     },
     {
       "event_id": "459b53ac-9488-5944-8c7e-a950fd1e8722",
@@ -1154,18 +530,6 @@
       "buy_level": 31.27
     },
     {
-      "event_id": "f7617790-f5b1-55fc-abf7-4544d5ca4b58",
-      "strategy_id": "strategy16",
-      "symbol": "600121",
-      "side": "SELL",
-      "trigger_price": 5.07,
-      "trigger_time": "2026-09-29 09:30:22",
-      "quote_timestamp": "2026-09-29 09:30:22",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "sell_level": 5.08
-    },
-    {
       "event_id": "cfee304c-9554-56ca-8b44-416631dd3d7c",
       "strategy_id": "strategy15",
       "symbol": "600121",
@@ -1178,18 +542,6 @@
       "sell_level": 5.08
     },
     {
-      "event_id": "a79d1c53-1ea9-5aca-9c3e-c648a737795e",
-      "strategy_id": "strategy16",
-      "symbol": "603115",
-      "side": "BUY",
-      "trigger_price": 71.46,
-      "trigger_time": "2026-09-29 09:31:21",
-      "quote_timestamp": "2026-09-29 09:31:21",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 71.09
-    },
-    {
       "event_id": "f51441ad-ba29-5a85-a9da-88b9809bc215",
       "strategy_id": "strategy15",
       "symbol": "603115",
@@ -1200,18 +552,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-29",
       "buy_level": 71.09
-    },
-    {
-      "event_id": "18d38d7c-749a-5bbc-a83a-52d018240ac1",
-      "strategy_id": "strategy16",
-      "symbol": "600869",
-      "side": "BUY",
-      "trigger_price": 18.11,
-      "trigger_time": "2026-09-29 09:31:33",
-      "quote_timestamp": "2026-09-29 09:31:33",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 18.11
     },
     {
       "event_id": "2cb70e36-bfd7-51df-93c0-d593d544c50c",
@@ -1238,30 +578,6 @@
       "buy_level": 15.82
     },
     {
-      "event_id": "c9764851-f792-5ff4-b500-16d71badb6fc",
-      "strategy_id": "strategy16",
-      "symbol": "000070",
-      "side": "BUY",
-      "trigger_price": 15.83,
-      "trigger_time": "2026-09-29 09:31:50",
-      "quote_timestamp": "2026-09-29 09:31:50",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 15.82
-    },
-    {
-      "event_id": "22487ba3-24cf-503b-9a69-4533a26eee7c",
-      "strategy_id": "strategy16",
-      "symbol": "603042",
-      "side": "BUY",
-      "trigger_price": 15.96,
-      "trigger_time": "2026-09-29 09:32:20",
-      "quote_timestamp": "2026-09-29 09:32:20",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 15.92
-    },
-    {
       "event_id": "5ac8de1a-75ff-5288-8658-365672fa54ef",
       "strategy_id": "strategy15",
       "symbol": "600330",
@@ -1286,18 +602,6 @@
       "buy_level": 28.21
     },
     {
-      "event_id": "1674cb4b-3bc1-565a-aa39-0a8d6f8d58c2",
-      "strategy_id": "strategy16",
-      "symbol": "600330",
-      "side": "BUY",
-      "trigger_price": 28.21,
-      "trigger_time": "2026-09-29 09:34:24",
-      "quote_timestamp": "2026-09-29 09:34:24",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 28.21
-    },
-    {
       "event_id": "f4b9893a-d003-513f-a84c-17f7622821a8",
       "strategy_id": "strategy1",
       "symbol": "603920",
@@ -1310,18 +614,6 @@
       "sell_level": 43.77
     },
     {
-      "event_id": "0a85b49e-fe23-5551-b4e9-345ab75b7435",
-      "strategy_id": "strategy16",
-      "symbol": "000034",
-      "side": "BUY",
-      "trigger_price": 23.17,
-      "trigger_time": "2026-09-29 09:39:37",
-      "quote_timestamp": "2026-09-29 09:39:37",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 23.16
-    },
-    {
       "event_id": "b761d6b0-1d4f-5d79-a7ee-3289fa12e324",
       "strategy_id": "strategy15",
       "symbol": "000034",
@@ -1332,30 +624,6 @@
       "reason": "quote_patch",
       "trading_session_date": "2026-09-29",
       "buy_level": 23.16
-    },
-    {
-      "event_id": "af9f6df7-0d01-53c8-93d4-21fc79b35f56",
-      "strategy_id": "strategy16",
-      "symbol": "603920",
-      "side": "BUY",
-      "trigger_price": 44.39,
-      "trigger_time": "2026-09-29 09:40:05",
-      "quote_timestamp": "2026-09-29 09:40:05",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 44.35
-    },
-    {
-      "event_id": "db99106b-4140-5278-b606-0cb3edef84b9",
-      "strategy_id": "strategy16",
-      "symbol": "000008",
-      "side": "BUY",
-      "trigger_price": 2.4,
-      "trigger_time": "2026-09-29 09:42:22",
-      "quote_timestamp": "2026-09-29 09:42:22",
-      "reason": "quote_patch",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 2.4
     },
     {
       "event_id": "ea1b5e6c-7281-51f9-a01e-fb069cfe8958",
@@ -1406,18 +674,6 @@
       "sell_level": 9.25
     },
     {
-      "event_id": "0931a418-ad1b-584e-a763-a323e47b264b",
-      "strategy_id": "strategy16",
-      "symbol": "601519",
-      "side": "BUY",
-      "trigger_price": 8.49,
-      "trigger_time": "2026-09-29 10:00:44",
-      "quote_timestamp": "2026-09-29 10:00:44",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 8.43
-    },
-    {
       "event_id": "706494ac-7390-5141-ad5f-6875f8b6b2d1",
       "strategy_id": "strategy1",
       "symbol": "601519",
@@ -1442,16 +698,268 @@
       "buy_level": 4.34
     },
     {
-      "event_id": "0bf68733-e3da-5fbe-bc8f-5885fc7a1c58",
-      "strategy_id": "strategy16",
-      "symbol": "601068",
+      "event_id": "45a1ea1c-edca-58fa-965a-7bd89d7779ac",
+      "strategy_id": "strategy15",
+      "symbol": "600869",
+      "side": "SELL",
+      "trigger_price": 17.86,
+      "trigger_time": "2026-09-30 09:48:12",
+      "quote_timestamp": "2026-09-30 09:48:12",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "sell_level": 17.86
+    },
+    {
+      "event_id": "5ad538e5-de0f-5b75-80ec-41844d422f98",
+      "strategy_id": "strategy15",
+      "symbol": "600552",
       "side": "BUY",
-      "trigger_price": 4.35,
-      "trigger_time": "2026-09-29 10:14:53",
-      "quote_timestamp": "2026-09-29 10:14:53",
-      "reason": "collect_rows",
-      "trading_session_date": "2026-09-29",
-      "buy_level": 4.34
+      "trigger_price": 17.74,
+      "trigger_time": "2026-09-30 09:48:17",
+      "quote_timestamp": "2026-09-30 09:48:17",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 17.74
+    },
+    {
+      "event_id": "af5de68a-ff8d-53a6-8b02-45ea067bf47b",
+      "strategy_id": "strategy1",
+      "symbol": "600552",
+      "side": "BUY",
+      "trigger_price": 17.74,
+      "trigger_time": "2026-09-30 09:48:17",
+      "quote_timestamp": "2026-09-30 09:48:17",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 17.74
+    },
+    {
+      "event_id": "2e54cd84-c978-530e-8f3b-b999bc4a556b",
+      "strategy_id": "strategy1",
+      "symbol": "600330",
+      "side": "SELL",
+      "trigger_price": 27.3,
+      "trigger_time": "2026-09-30 09:56:17",
+      "quote_timestamp": "2026-09-30 09:56:17",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "sell_level": 27.3
+    },
+    {
+      "event_id": "23efc837-fba3-5724-b4d7-ce44e029e977",
+      "strategy_id": "strategy15",
+      "symbol": "600330",
+      "side": "SELL",
+      "trigger_price": 27.3,
+      "trigger_time": "2026-09-30 09:56:18",
+      "quote_timestamp": "2026-09-30 09:56:18",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "sell_level": 27.3
+    },
+    {
+      "event_id": "efbb44e1-7d79-58b8-8893-54efdc3e0b85",
+      "strategy_id": "strategy15",
+      "symbol": "000070",
+      "side": "SELL",
+      "trigger_price": 16.03,
+      "trigger_time": "2026-09-30 09:57:10",
+      "quote_timestamp": "2026-09-30 09:57:10",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "sell_level": 16.03
+    },
+    {
+      "event_id": "97ef8f88-7e7d-5a38-8ff8-fb9126345da6",
+      "strategy_id": "strategy15",
+      "symbol": "000055",
+      "side": "SELL",
+      "trigger_price": 3.78,
+      "trigger_time": "2026-09-30 10:09:37",
+      "quote_timestamp": "2026-09-30 10:09:37",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "sell_level": 3.78
+    },
+    {
+      "event_id": "9237d36b-6e7e-5636-a01a-52b66ba2908e",
+      "strategy_id": "strategy15",
+      "symbol": "601872",
+      "side": "BUY",
+      "trigger_price": 20.3,
+      "trigger_time": "2026-09-30 10:15:09",
+      "quote_timestamp": "2026-09-30 10:15:09",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 20.3
+    },
+    {
+      "event_id": "66f5c653-4d6d-5fe7-9cb2-5038f8d61cdb",
+      "strategy_id": "strategy15",
+      "symbol": "000657",
+      "side": "SELL",
+      "trigger_price": 53.11,
+      "trigger_time": "2026-09-30 10:34:00",
+      "quote_timestamp": "2026-09-30 10:34:00",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "sell_level": 53.11
+    },
+    {
+      "event_id": "0eb4e558-e9b3-507f-b1b8-b83f10fc5ebd",
+      "strategy_id": "strategy15",
+      "symbol": "002273",
+      "side": "BUY",
+      "trigger_price": 24.72,
+      "trigger_time": "2026-09-30 11:05:57",
+      "quote_timestamp": "2026-09-30 11:05:57",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 24.42
+    },
+    {
+      "event_id": "b0c0d244-c6d3-5832-8b43-4fc525a8146b",
+      "strategy_id": "strategy15",
+      "symbol": "000682",
+      "side": "BUY",
+      "trigger_price": 10.63,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 10.56
+    },
+    {
+      "event_id": "7778800d-4a9f-5de5-81f1-433617e75fd5",
+      "strategy_id": "strategy15",
+      "symbol": "000756",
+      "side": "BUY",
+      "trigger_price": 14.61,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 14.35
+    },
+    {
+      "event_id": "22545079-35f7-5b9a-a1a3-5ccb4bf53cfc",
+      "strategy_id": "strategy15",
+      "symbol": "000803",
+      "side": "BUY",
+      "trigger_price": 7.22,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 7.11
+    },
+    {
+      "event_id": "eba0bb9e-3dfc-5366-9e0c-5f1f5687d22e",
+      "strategy_id": "strategy15",
+      "symbol": "001266",
+      "side": "BUY",
+      "trigger_price": 38.54,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 37.26
+    },
+    {
+      "event_id": "dc69a015-148e-5784-85d1-f87107072542",
+      "strategy_id": "strategy15",
+      "symbol": "001282",
+      "side": "BUY",
+      "trigger_price": 17.19,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 16.83
+    },
+    {
+      "event_id": "98a478d3-2746-5f00-bab1-8dee84234d69",
+      "strategy_id": "strategy15",
+      "symbol": "002454",
+      "side": "BUY",
+      "trigger_price": 5.61,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 5.23
+    },
+    {
+      "event_id": "c45b8c7b-2742-5d5a-aa71-7f85f13f2dfc",
+      "strategy_id": "strategy15",
+      "symbol": "002580",
+      "side": "BUY",
+      "trigger_price": 19.41,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 18.86
+    },
+    {
+      "event_id": "85fe1bf7-9f1a-5e93-9623-2b205d2aecc0",
+      "strategy_id": "strategy15",
+      "symbol": "002703",
+      "side": "BUY",
+      "trigger_price": 15.7,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 15.63
+    },
+    {
+      "event_id": "d11ef960-c018-5a40-9e53-917c11f4e291",
+      "strategy_id": "strategy15",
+      "symbol": "600072",
+      "side": "BUY",
+      "trigger_price": 9.7,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 9.08
+    },
+    {
+      "event_id": "dcdce874-5d1d-535c-bd07-0cc92b2db591",
+      "strategy_id": "strategy15",
+      "symbol": "600760",
+      "side": "BUY",
+      "trigger_price": 43.79,
+      "trigger_time": "2026-09-30 11:08:39",
+      "quote_timestamp": "2026-09-30 11:08:39",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 43.72
+    },
+    {
+      "event_id": "041f8289-23ea-54b1-8844-1159e6acbe4d",
+      "strategy_id": "strategy15",
+      "symbol": "002430",
+      "side": "BUY",
+      "trigger_price": 24.88,
+      "trigger_time": "2026-09-30 11:18:54",
+      "quote_timestamp": "2026-09-30 11:18:54",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 24.69
+    },
+    {
+      "event_id": "671d0457-d776-5577-ae22-323a5c82d8f1",
+      "strategy_id": "strategy15",
+      "symbol": "601609",
+      "side": "BUY",
+      "trigger_price": 11.84,
+      "trigger_time": "2026-09-30 14:24:47",
+      "quote_timestamp": "2026-09-30 14:24:47",
+      "reason": "quote_patch",
+      "trading_session_date": "2026-09-30",
+      "buy_level": 11.84
     }
   ]
 }

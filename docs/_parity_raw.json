@@ -1,0 +1,93 @@
+{
+  "tallies": {
+    "total": 6,
+    "action_match": 4,
+    "action_mismatch": 2,
+    "sell_match": 1,
+    "sell_mismatch": 2,
+    "hold_match": 3,
+    "hold_mismatch": 0,
+    "structural_expected": 2,
+    "price_compared": 1,
+    "price_match": 1,
+    "price_mismatch": 0,
+    "factor_id_engine_sell": 1
+  },
+  "rows": [
+    {
+      "case": "hold_mid_range",
+      "paper_action": "HOLD",
+      "engine_action": "HOLD",
+      "action_match": true,
+      "structural_expected": false,
+      "expect_note": "",
+      "paper_kind": "",
+      "paper_reason": "",
+      "engine_reason": "持有",
+      "engine_factor_id": null
+    },
+    {
+      "case": "path_hit_sell",
+      "paper_action": "SELL",
+      "engine_action": "SELL",
+      "action_match": true,
+      "structural_expected": false,
+      "expect_note": "",
+      "paper_kind": "path",
+      "paper_reason": "path",
+      "engine_reason": "浮盈回落一半 104.00（高108.00）",
+      "engine_factor_id": "factor26",
+      "paper_fill": 104.0,
+      "engine_price": 104.0,
+      "price_match": true
+    },
+    {
+      "case": "t1_path_show_only",
+      "paper_action": "HOLD_SHOW",
+      "engine_action": "HOLD",
+      "action_match": true,
+      "structural_expected": false,
+      "expect_note": "paper may HOLD_SHOW; engine HOLD(t1)",
+      "paper_kind": "",
+      "paper_reason": "t1",
+      "engine_reason": "T+1 禁卖",
+      "engine_factor_id": null
+    },
+    {
+      "case": "open_protect_gap_down",
+      "paper_action": "SELL",
+      "engine_action": "HOLD",
+      "action_match": false,
+      "structural_expected": true,
+      "expect_note": "paper open_protect SELL; engine HOLD without path_hit_stop",
+      "paper_kind": "open_protect",
+      "paper_reason": "open_protect",
+      "engine_reason": "持有",
+      "engine_factor_id": null
+    },
+    {
+      "case": "heimiao_gap_up_no_open_protect",
+      "paper_action": "HOLD",
+      "engine_action": "HOLD",
+      "action_match": true,
+      "structural_expected": false,
+      "expect_note": "",
+      "paper_kind": "",
+      "paper_reason": "",
+      "engine_reason": "持有",
+      "engine_factor_id": null
+    },
+    {
+      "case": "last_vs_working_stop_no_path",
+      "paper_action": "SELL",
+      "engine_action": "HOLD",
+      "action_match": false,
+      "structural_expected": true,
+      "expect_note": "paper may SELL on last<=working_stop; engine HOLD without path",
+      "paper_kind": "last",
+      "paper_reason": "last",
+      "engine_reason": "持有",
+      "engine_factor_id": null
+    }
+  ]
+}

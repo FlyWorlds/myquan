@@ -459,6 +459,74 @@ def overnight_open_protect_px(
     return max(x for x in (hard, trail) if x and x > 0)
 
 
+def session_high_never_printed_stop(
+    *,
+    open_px: float,
+    last_px: float,
+    working_stop: float,
+    day_high: float = 0.0,
+) -> bool:
+    """今开已破工作卖价，且当日最高从未印到该卖价（低开/竞价脏峰穿越）。
+
+    必须传入连续竞价 ``day_high>0``；缺省不判定，避免把盘中回落到开盘
+    误升成开盘保护。
+    """
+    try:
+        stop = float(working_stop or 0)
+        open_f = float(open_px or 0)
+        last_f = float(last_px or 0)
+        hi = float(day_high or 0)
+    except (TypeError, ValueError):
+        return False
+    if stop <= 0 or open_f <= 0 or last_f <= 0 or hi <= 0:
+        return False
+    if open_f > stop + 1e-12 or last_f > stop + 1e-12:
+        return False
+    printed = max(open_f, last_f, hi)
+    return printed <= stop + 1e-12
+
+
+def usable_session_high(
+    *,
+    quote_high: float = 0.0,
+    open_px: float = 0.0,
+    last_px: float = 0.0,
+    path_running_high: float = 0.0,
+    trust_api_high: bool = False,
+) -> float:
+    """当日已印出最高。API ``high`` 仅在 ``trust_api_high`` 时并入。
+
+    集合竞价 / 开盘后前几秒：行情源 ``high`` 可能仍是竞价虚高
+    （中国宝安 7.03@09:15，连续竞价从未成交）。此时只用今开 / 现价 / 1m 最高。
+    过开盘脏窗后才把 API dayHigh 当漏 tick 恢复源。
+    """
+    printed = 0.0
+    for x in (open_px, last_px, path_running_high):
+        try:
+            v = float(x or 0)
+        except (TypeError, ValueError):
+            v = 0.0
+        if v > printed:
+            printed = v
+    if not trust_api_high:
+        return printed
+    try:
+        hi = float(quote_high or 0)
+    except (TypeError, ValueError):
+        hi = 0.0
+    if hi <= printed + 1e-12:
+        return printed
+    # API high 高于已印出：仅当还没有 1m 最高时作漏 tick 恢复。
+    # 1m 已在则虚高（竞价残留）不得压过 running_high / 今开 / 现价。
+    try:
+        rh = float(path_running_high or 0)
+    except (TypeError, ValueError):
+        rh = 0.0
+    if rh > 0:
+        return printed
+    return hi
+
+
 def open_auction_touch_ts(
     ts: Any,
     *,
@@ -2838,6 +2906,8 @@ __all__ = [
     "cost_hard_stop_px",
     "t1_trail_stop_px",
     "overnight_open_protect_px",
+    "session_high_never_printed_stop",
+    "usable_session_high",
     "overnight_peak_px",
     "open_auction_touch_ts",
     "overnight_session_high_ok",

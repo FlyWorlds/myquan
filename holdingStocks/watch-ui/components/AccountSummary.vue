@@ -83,7 +83,9 @@ const cashPct = computed(() => {
             class="rounded-full border border-ui-hairline px-1.5 leading-5"
             :title="`${s.name}(${s.code}) 市值/总资产`"
           >
-            <span class="sensitive">{{ s.name }}</span>
+            <StockNameHover :code="s.code" :name="s.name">
+              <span class="sensitive">{{ s.name }}</span>
+            </StockNameHover>
             <b class="sensitive ml-1 tabular-nums">{{ fmtPositionPct(s.pct) }}</b>
           </span>
         </div>

@@ -6,6 +6,7 @@ import json
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import parse_qs, urlparse
 
 from transport.websocket import ws_accept_key, ws_pack_text
 
@@ -67,12 +68,12 @@ def build_watch_request_handler(
                 self.send_header("Pragma", "no-cache")
             super().end_headers()
 
-        def _send_json(self, data: Any, *, status: int = 200) -> None:
+        def _send_json(self, data: Any, *, status: int = 200, cache_control: str = "no-store") -> None:
             body = json.dumps(data, ensure_ascii=False).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache_control)
             self.end_headers()
             self.wfile.write(body)
 
@@ -125,6 +126,26 @@ def build_watch_request_handler(
                 except Exception as exc:  # noqa: BLE001
                     self._send_json(
                         {"error": "shadow status unavailable", "detail": type(exc).__name__},
+                        status=500,
+                    )
+                return
+            if path == "/api/stock/profile":
+                qs = parse_qs(urlparse(self.path).query)
+                raw = (qs.get("code") or [""])[0]
+                try:
+                    from stock_profile import get_stock_profile, normalize_stock_code
+
+                    code = normalize_stock_code(raw)
+                    if not code:
+                        self._send_json({"error": "invalid code"}, status=400)
+                        return
+                    self._send_json(
+                        get_stock_profile(code),
+                        cache_control="private, max-age=60",
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json(
+                        {"error": "profile unavailable", "detail": type(exc).__name__},
                         status=500,
                     )
                 return

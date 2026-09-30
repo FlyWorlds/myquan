@@ -137,13 +137,14 @@ const activeItems = computed(() => {
             >
               <td class="px-2 py-1 text-ui-text-3">{{ it.rank ?? '—' }}</td>
               <td class="px-2 py-1 sensitive">
-                <a
-                  v-if="it.code"
-                  :href="baiduStockUrl(it.code, it.name)"
-                  target="_blank"
-                  rel="noopener"
-                  class="text-accent hover:underline"
-                >{{ stockLabel(it.code, it.name) }}</a>
+                <StockNameHover v-if="it.code" :code="it.code" :name="it.name">
+                  <a
+                    :href="baiduStockUrl(it.code, it.name)"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-accent hover:underline"
+                  >{{ stockLabel(it.code, it.name) }}</a>
+                </StockNameHover>
                 <span v-else>{{ stockLabel(it.symbol, it.name) }}</span>
               </td>
               <td class="px-2 py-1 text-xs text-ui-text-3">

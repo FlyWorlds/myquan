@@ -285,7 +285,7 @@ class TestStrategyReturnLifecycle(unittest.TestCase):
 
     def test_strategy_today_vs_cumulative_preserve(self) -> None:
         """STRATEGY_CUMULATIVE_PRESERVE：起算日不变；无「今日清零」逻辑。"""
-        self.assertEqual(STRATEGY_PNL_START, "2026-09-09")
+        self.assertEqual(STRATEGY_PNL_START, "2026-10-08")
         df = _daily(
             [
                 _bar("2026-09-08", 3.20, 3.25, 3.15, 3.18),
@@ -293,8 +293,8 @@ class TestStrategyReturnLifecycle(unittest.TestCase):
                 _bar("2026-09-10", 3.18, 3.20, 3.14, 3.16),
             ]
         )
-        r = _replay(df, start_date=STRATEGY_PNL_START, entry_pct=0.025, stop_pct=0.025)
-        self.assertEqual(r["start_date"], STRATEGY_PNL_START)
+        r = _replay(df, start_date="2026-09-09", entry_pct=0.025, stop_pct=0.025)
+        self.assertEqual(r["start_date"], "2026-09-09")
         # 起算后无成交 → 0，不是 NaN / 被清掉
         self.assertIsNotNone(r["return_pct"])
 
@@ -321,7 +321,7 @@ class TestStrategyReturnLifecycle(unittest.TestCase):
             _merge_live_daily_bar(
                 df, session="2026-09-23", open_px=3.81, high_px=4.03, low_px=3.81, close_px=3.99
             ),
-            start_date=STRATEGY_PNL_START,
+            start_date="2026-09-09",
             entry_pct=ep,
             stop_pct=ep,
         )
@@ -333,7 +333,7 @@ class TestStrategyReturnLifecycle(unittest.TestCase):
             _merge_live_daily_bar(
                 df, session="2026-09-23", open_px=3.81, high_px=4.03, low_px=3.81, close_px=4.03
             ),
-            start_date=STRATEGY_PNL_START,
+            start_date="2026-09-09",
             entry_pct=ep,
             stop_pct=ep,
         )
@@ -341,7 +341,7 @@ class TestStrategyReturnLifecycle(unittest.TestCase):
             _merge_live_daily_bar(
                 df, session="2026-09-23", open_px=3.81, high_px=4.10, low_px=3.81, close_px=4.10
             ),
-            start_date=STRATEGY_PNL_START,
+            start_date="2026-09-09",
             entry_pct=ep,
             stop_pct=ep,
         )

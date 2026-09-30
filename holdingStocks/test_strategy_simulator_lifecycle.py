@@ -40,11 +40,14 @@ class _TmpSim(unittest.TestCase):
         self._p_events = mock.patch.object(sim, "EVENTS_FILE", self._events)
         self._p_state.start()
         self._p_events.start()
+        self._p_pnl = mock.patch("watch_config.STRATEGY_PNL_START", "2026-01-01")
+        self._p_pnl.start()
         sim.reset_memory_for_tests()
 
     def tearDown(self) -> None:
         self._p_state.stop()
         self._p_events.stop()
+        self._p_pnl.stop()
         sim.reset_memory_for_tests()
         self._td.cleanup()
 
@@ -75,6 +78,23 @@ class TestSimulatorLifecycle(_TmpSim):
         self.assertEqual(r["book"]["entry_price"], 10.08)
         self.assertEqual(r["book"]["entry_time"], "2026-09-23 09:31:05")
         self.assertGreater(float(r["book"]["virtual_shares"]), 0)
+
+    def test_before_pnl_start_skips_buy(self) -> None:
+        with mock.patch("watch_config.STRATEGY_PNL_START", "2026-10-08"):
+            r = _eval(
+                strategy_id="strategy16",
+                symbol="002273",
+                live_last=24.72,
+                quote_ts="2026-09-30 10:00:00",
+                buy_level=20.0,
+                sell_level=19.0,
+                allow_entry=True,
+                reason="test",
+            )
+        self.assertEqual(r["skipped"], "before_pnl_start")
+        self.assertIsNone(r["transition"])
+        self.assertEqual(r["book"]["state"], "FLAT")
+        self.assertEqual(float(r["book"]["trades"]), 0)
 
     def test_long_live_mark(self) -> None:
         _eval(
@@ -592,6 +612,46 @@ class TestSessionGatesPaperUntouched(_TmpSim):
         )
         self.assertEqual(r["transition"], "BUY")
 
+    def test_auction_observe_simulator_sell_blocked(self) -> None:
+        """9:30 前不得模拟卖出；等到开盘铃按开盘价。"""
+        _eval(
+            strategy_id="strategy16",
+            symbol="000009",
+            live_last=6.72,
+            quote_ts="2026-09-29 09:31:00",
+            buy_level=6.72,
+            sell_level=6.50,
+            allow_entry=True,
+        )
+        blocked = _eval(
+            strategy_id="strategy16",
+            symbol="000009",
+            live_last=6.88,
+            quote_ts="2026-09-30 09:25:38",
+            buy_level=7.06,
+            sell_level=6.98,
+            allow_entry=False,
+            day_open=6.88,
+        )
+        self.assertIsNone(blocked["transition"])
+        self.assertEqual(blocked["skipped"], "wait_auction")
+        self.assertEqual(sim.get_book("strategy16", "000009")["state"], "LONG")
+        filled = _eval(
+            strategy_id="strategy16",
+            symbol="000009",
+            live_last=6.88,
+            quote_ts="2026-09-30 09:30:01",
+            buy_level=7.06,
+            sell_level=6.98,
+            allow_entry=False,
+            day_open=6.88,
+        )
+        self.assertEqual(filled["transition"], "SELL")
+        book = sim.get_book("strategy16", "000009")
+        self.assertEqual(book["state"], "FLAT")
+        self.assertAlmostEqual(float(book["exit_price"]), 6.88, places=2)
+        self.assertEqual(book["exit_time"], "2026-09-30 09:30:00")
+
     def test_no_symbol_hardcode_in_simulator(self) -> None:
         text = Path(sim.__file__).read_text(encoding="utf-8")
         for token in ("000002", "万科", "603328"):
@@ -617,6 +677,20 @@ class TestApplyRow(_TmpSim):
         self.assertTrue(row["策略累计持有"])
         self.assertEqual(row["持仓"], 0)
         self.assertEqual(row["持仓状态"], "空仓")
+
+    def test_apply_book_does_not_clobber_paper_signal_time(self) -> None:
+        _eval(
+            strategy_id="strategy16",
+            symbol="600330",
+            live_last=10.5,
+            quote_ts="2026-09-23 09:31:05",
+            buy_level=10.0,
+            sell_level=9.5,
+            allow_entry=True,
+        )
+        row: dict = {"持仓": 0, "持仓状态": "今日平仓", "信号时间": "09:30:00"}
+        sim.apply_book_to_row(row, sim.get_book("strategy16", "600330"))
+        self.assertEqual(row["信号时间"], "09:30:00")
 
 
 if __name__ == "__main__":

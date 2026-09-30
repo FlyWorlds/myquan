@@ -87,7 +87,9 @@ function categoryOf(r: HoldingRow): string {
               >{{ categoryOf(r) }}</span>
             </td>
             <td class="px-3 py-2.5 align-top">
-              <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
+              <StockNameHover :code="r.代码" :name="r.名称">
+                <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
+              </StockNameHover>
             </td>
             <td class="px-3 py-2.5 align-top">
               <span :class="resolveSignalVisual(r).badgeClass">{{ resolveSignalVisual(r).badgeText }}</span>

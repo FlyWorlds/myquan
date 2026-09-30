@@ -100,6 +100,33 @@ class TestRaisePositionPeakHigh(unittest.TestCase):
         )
         self.assertAlmostEqual(h, 18.88)
 
+    def test_opening_leftover_high_not_ingested(self) -> None:
+        """开盘脏窗：API high=7.03 未印出 → 不得抬 HWM。"""
+        from strategy.pullback_wave_stop import usable_session_high
+
+        hi = usable_session_high(
+            quote_high=7.03, open_px=6.88, last_px=6.88, trust_api_high=False
+        )
+        self.assertAlmostEqual(hi, 6.88)
+        h = raise_position_peak_high(
+            persisted_peak=6.91,
+            quote_last=6.88,
+            quote_day_high=hi,
+            allow_quote_day_high=True,
+        )
+        self.assertAlmostEqual(h, 6.91)
+
+    def test_trusted_day_high_still_recovers_missed_tick(self) -> None:
+        from strategy.pullback_wave_stop import usable_session_high
+
+        hi = usable_session_high(
+            quote_high=18.88,
+            open_px=18.40,
+            last_px=18.60,
+            trust_api_high=True,
+        )
+        self.assertAlmostEqual(hi, 18.88)
+
     def test_5b_same_day_buy_must_not_use_pre_entry_day_high(self) -> None:
         """买入当日：即使 API dayHigh=20，也不得在 allow=False 时并入。"""
         h = raise_position_peak_high(
@@ -274,6 +301,70 @@ class TestHwmUiFieldsSoT(unittest.TestCase):
         self.assertAlmostEqual(float(row["今日最高"]), 18.5)
         self.assertAlmostEqual(float(row["持仓最高"]), 19.0)
         self.assertNotEqual(row["今日最高"], row["持仓最高"])
+
+
+class TestAuctionStampedHwmClamp(unittest.TestCase):
+    def test_clamp_today_auction_peak(self) -> None:
+        from index import _clamp_auction_stamped_hwm
+
+        pos = {
+            "peak_high": 7.03,
+            "peak_high_at": "2026-09-30 09:15:36",
+        }
+        self.assertTrue(
+            _clamp_auction_stamped_hwm(
+                pos,
+                session="2026-09-30",
+                cost=6.72,
+                prev_close=6.86,
+                open_px=6.88,
+                last_px=6.88,
+            )
+        )
+        self.assertAlmostEqual(float(pos["peak_high"]), 6.88)
+        self.assertEqual(pos["peak_high_at"], "2026-09-30 09:30:00")
+
+    def test_freeze_skips_today_auction_peak(self) -> None:
+        """今日 09:15 脏峰不得冻进 overnight_peak。"""
+        import index as idx
+
+        pos = {
+            "qty": 1000,
+            "cost": 6.72,
+            "buy_time": "2026-09-29 09:30:00",
+            "peak_high": 7.03,
+            "peak_high_at": "2026-09-30 09:15:36",
+            "overnight_peak": 7.03,
+            "overnight_peak_session": "2026-09-30",
+        }
+        seed = idx.freeze_overnight_peak_for_session(
+            pos,
+            session="2026-09-30",
+            cost=6.72,
+            prev_close=6.86,
+            open_px=6.88,
+            qty=1000,
+        )
+        self.assertLess(seed, 7.03 - 1e-9)
+        self.assertLessEqual(float(pos["overnight_peak"]), 6.88 + 1e-9)
+
+    def test_yesterday_peak_not_clamped(self) -> None:
+        from index import _clamp_auction_stamped_hwm
+
+        pos = {
+            "peak_high": 6.91,
+            "peak_high_at": "2026-09-29 14:50:00",
+        }
+        self.assertFalse(
+            _clamp_auction_stamped_hwm(
+                pos,
+                session="2026-09-30",
+                cost=6.72,
+                open_px=6.88,
+                last_px=6.88,
+            )
+        )
+        self.assertAlmostEqual(float(pos["peak_high"]), 6.91)
 
 
 if __name__ == "__main__":

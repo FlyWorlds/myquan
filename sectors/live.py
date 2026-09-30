@@ -304,7 +304,7 @@ def stock_quotes_by_codes(codes: list[str]) -> dict[str, dict[str, Any]]:
     if tdx_hq_available():
         try:
             out = _quotes_from_tdx(codes)
-            if out:
+            if out and any((v or {}).get("price") for v in out.values()):
                 return out
         except Exception:
             pass
@@ -316,7 +316,7 @@ def stock_quotes_by_codes(codes: list[str]) -> dict[str, dict[str, Any]]:
             "code": c,
             "price": v.get("price"),
             "chgPct": v.get("chgPct"),
-            "amount": None,
+            "amount": v.get("amount"),
         }
         for c, v in raw.items()
     }

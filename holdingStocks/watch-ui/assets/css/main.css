@@ -290,6 +290,24 @@
     transform: translate(4px, -8px) scale(0.98);
   }
 
+  .stock-profile-panel {
+    z-index: 110;
+  }
+
+  .stock-profile-panel.registry-detail-enter-active,
+  .stock-profile-panel.registry-detail-leave-active {
+    transition: opacity 0.1s ease-out, transform 0.1s ease-out;
+  }
+
+  .stock-profile-chip {
+    @apply rounded-full border border-ui-hairline px-2 py-0.5 text-[11px] text-ui-text-2;
+  }
+
+  .stock-profile-chip-link:hover {
+    border-color: color-mix(in srgb, var(--watch-accent) 45%, var(--ui-hairline));
+    color: var(--watch-accent);
+  }
+
   .v-loading-mask {
     @apply absolute inset-0 z-20 flex items-center justify-center bg-black/50;
   }

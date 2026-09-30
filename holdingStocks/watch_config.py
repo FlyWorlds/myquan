@@ -78,10 +78,10 @@ def session_open_bell_ts(session: str | None) -> str:
     clock = f"{OPEN_BELL_HOUR:02d}:{OPEN_BELL_MINUTE:02d}:00"
     return f"{sess} {clock}" if sess else clock
 
-# 策略/账户总收益起算日（含费用、T+1；自该交易日空仓/纸面本金起算）
-STRATEGY_PNL_START = "2026-09-09"
-# 账户「总收益」基准日：相对 DEFAULT_ACCOUNT_TOTAL 纸面本金
-PAPER_PNL_START = STRATEGY_PNL_START
+# 策略十六「策略累计」起算日：该交易日起才 bootstrap / live 成交计收益（国庆后首个交易日）
+STRATEGY_PNL_START = "2026-10-08"
+# 账户「总收益」基准日：相对 DEFAULT_ACCOUNT_TOTAL 纸面本金（与策略累计分开）
+PAPER_PNL_START = "2026-09-09"
 
 # 开盘价强制刷新（与 9:25 对齐）
 OPEN_PRICE_REFRESH_HOUR = AUCTION_OPEN_HOUR
@@ -225,6 +225,55 @@ def is_threshold_ready(now: Any | None = None) -> bool:
 def is_signal_window(now: Any | None = None) -> bool:
     """仅连续竞价时段允许因子触发/止损结算/微信预警（不含午休、收盘后）。"""
     return market_phase(now) == "continuous"
+
+
+def _quote_clock_hms(ts: Any) -> str:
+    """从行情时间戳取出 HH:MM:SS；缺戳返回空串（不回落到墙钟）。"""
+    s = str(ts or "").strip().replace("T", " ", 1)
+    if len(s) >= 19 and s[10] == " ":
+        return s[11:19]
+    if len(s) >= 8 and s[2] == ":":
+        return s[:8]
+    return ""
+
+
+def timestamp_in_signal_window(ts: Any) -> bool:
+    """按行情时间戳判定连续竞价；缺戳不可用。"""
+    hms = _quote_clock_hms(ts)
+    if not hms:
+        return False
+    return ("09:30:00" <= hms <= "11:30:00") or ("13:00:00" <= hms < "15:00:00")
+
+
+def is_opening_high_untrusted(ts: Any) -> bool:
+    """09:30:00–09:32:59：API dayHigh 可能仍是竞价虚高。"""
+    hms = _quote_clock_hms(ts)
+    if not hms:
+        return False
+    return "09:30:00" <= hms <= "09:32:59"
+
+
+def is_auction_quote_ts(ts: Any) -> bool:
+    """09:15:00 ≤ t < 09:30:00 的行情戳（不含开盘铃）。"""
+    hms = _quote_clock_hms(ts)
+    if not hms:
+        return False
+    return "09:15:00" <= hms < "09:30:00"
+
+
+def trust_quote_day_high(ts: Any) -> bool:
+    """连续竞价且过开盘脏高窗口后，才把 API dayHigh 当已印出最高。
+
+    缺行情戳时回落到墙钟：盘中可补漏 tick；竞价/开盘脏窗仍不信 API high。
+    """
+    hms = _quote_clock_hms(ts)
+    if not hms:
+        from datetime import datetime as _dt
+
+        now = _dt.now()
+        clock = f"{now.hour:02d}:{now.minute:02d}:{now.second:02d}"
+        return is_signal_window(now) and not is_opening_high_untrusted(clock)
+    return timestamp_in_signal_window(ts) and not is_opening_high_untrusted(ts)
 
 
 def is_exit_executable(now: Any | None = None) -> bool:
@@ -640,6 +689,7 @@ def is_default_strategy_pool_code(code: str) -> bool:
 def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
     """对齐默认策略池：剔除旧策略遗留空壳；保留实仓 / 当日已实现 / 用户有成本登记。
 
+    换因子27 名单时：**qty>0 的持仓即使已不在新池也保留**，不得因换票砍仓。
     返回新的 portfolio_pool 列表（已写回 holdings）。
     """
     sw = strategy_watchlist_codes()

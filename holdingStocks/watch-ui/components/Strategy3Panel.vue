@@ -151,7 +151,9 @@ const luPhaseClass = computed(() => {
             :class="!r.可操作 ? 'opacity-60' : ''"
           >
             <td class="px-2 py-2 sensitive">
-              <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
+              <StockNameHover :code="r.代码" :name="r.名称">
+                <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
+              </StockNameHover>
             </td>
             <td class="px-2 py-2">{{ r.连板 ?? '—' }}</td>
             <td class="px-2 py-2" :class="r.昨日首板 ? 'font-semibold text-up' : ''">{{ r.昨日首板 ? '是' : '否' }}</td>

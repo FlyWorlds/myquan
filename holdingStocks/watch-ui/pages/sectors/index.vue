@@ -262,7 +262,11 @@ onBeforeUnmount(() => {
                 class="border-t border-ui-hairline"
               >
                 <td class="py-1.5 pr-2 font-mono text-xs">{{ m.代码 }}</td>
-                <td class="py-1.5 pr-2">{{ m.名称 || m.代码 }}</td>
+                <td class="py-1.5 pr-2">
+                  <StockNameHover :code="m.代码" :name="m.名称">
+                    {{ m.名称 || m.代码 }}
+                  </StockNameHover>
+                </td>
                 <td class="py-1.5 pr-2 text-right font-mono">
                   {{ m.现价 != null ? Number(m.现价).toFixed(2) : '-' }}
                 </td>

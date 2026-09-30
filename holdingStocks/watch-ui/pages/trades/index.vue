@@ -120,10 +120,12 @@ function fmtMoney(v?: number | null) {
             </td>
             <td class="px-3 py-2">
               <div class="font-medium">
-                <NuxtLink
-                  :to="`/trades?code=${e.code}`"
-                  class="hover:text-accent hover:underline"
-                >{{ e.name || e.code }}</NuxtLink>
+                <StockNameHover :code="e.code" :name="e.name">
+                  <NuxtLink
+                    :to="`/trades?code=${e.code}`"
+                    class="hover:text-accent hover:underline"
+                  >{{ e.name || e.code }}</NuxtLink>
+                </StockNameHover>
               </div>
               <div class="flex flex-wrap items-center gap-2 text-xs text-ui-text-2">
                 <span class="sensitive">{{ e.code }}</span>

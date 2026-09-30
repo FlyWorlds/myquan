@@ -128,6 +128,7 @@ def build_exit_context_from_paper_kwargs(**kw: Any) -> DecisionContext:
         stop_locked=bool(kw.get("stop_locked")),
         current_price=float(kw.get("last") or 0),
         open_px=float(kw.get("open_px") or 0),
+        day_high=float(kw.get("day_high") or 0),
         prev_close=kw.get("prev_close"),
         entry_price=kw.get("cost"),
         peak_high=kw.get("peak_high"),

@@ -8,6 +8,8 @@
 - [x] **Decision 日线同 bar 前视**：无 `meta.path_hit_stop` 时不再用全日 low 成交。
 - [x] **工作止损 dummy 假触发阶梯**：未触达时走 `working_stop_price`（过 10% 展示峰值回落 2%），不再用 OHLC=peak 撞 10%/15% 目标价。
 - [x] **对账回测不计费**：`pool_1m` 现金/权益按 `strategy.costs` 扣佣金+杂费+印花+滑点。
+- [x] **2026-09-30 因子27 重选**：`picks_quarter.json` as_of 2026-09-30（30只/18概念，有效至 2026-12-30）；HQ/东财失败走轮动缓存+新浪；0票不覆盖旧池。改池须重启 `start_watch`。名单见 [`docs/FACTOR27.md`](docs/FACTOR27.md)。
+- [x] **2026-09-30 策略16 累计重置**：`STRATEGY_PNL_START=2026-10-08`（国庆后首个交易日才计策略累计）；纸面总收益仍 `PAPER_PNL_START=2026-09-09`。起算日前 simulator `skipped=before_pnl_start`。
 - [ ] **近 7 日 1m + 阈值择优窗口太短**：`--fit-thr` 用 2026 至今日线夏普择优，再在近 7 日 1m 上看组合。只能当执行核对，不能当样本外期望；加长窗独立验证前勿把该数字当策略期望。
 - [ ] **T1 已记依赖收盘进程仍活着**：买入日 `t1_trail` 只在收盘确认后落库；进程若提前退出，次日可能只剩硬保护。
 - [ ] **无券商报单/持仓对账**：本地触发价必成，不能当实盘成交。
@@ -35,6 +37,7 @@
 | 黑猫涨停次日高开被「开盘保护」错卖；半仓记成开盘价 | 开盘保护峰值**不得含今日开盘/盘中新高**（峰值≥今开则回退昨收/成本）。`action_kind=full` 时忽略残留 `ladder_half_10`。1m 路径**跳过 09:30 前竞价 K**。半仓成交价=阶梯策略价。**002068 已按 1m 纠成**：半仓 11.14@09:31 + 峰值回落 10.92@09:32（`correct_realized_false_open_to_path_ladder`） |
 | 天通买入日涨停仍标「止损已记」（反复） | **唯一落库口** `persist_stop_noted`：只接受 `hard_from_cost` / `t1_trail`，已记价不得高于成本。展示层禁止写账本。买入日只认现价仍在硬保护；中段卖价 / 今开撞抬高止损 / 盈≥3% / 涨停一律不记。**昨收/昨高**只经 `overnight_peak_px`（须 `overnight_session_high_ok`）；今日新买不用昨高。每轮 `purge_illegal_t1_stop_notes` 自清 |
 | 远东平仓价 24.10「好像不对」；中天记成 34.13 | 远东 24.10=今开，规则对。已平仓**卖出侧冻结为成交价**（不要跟盘后止损 24.6）。中天应按开盘 33.84，错账 `correct_realized_open_protect_fill` 纠回 |
+| 中国宝安平仓价 6.98（今开 6.88、最高 6.92 从未成交） | 竞价虚拟高 7.03@09:15 抬 HWM → 假中赚 6.98。**竞价不回写峰值**；**09:30–09:32 API high 高于今开/现价/1m 仍当虚高**（`usable_session_high`）；今开已破卖价且当日最高未印到 → **按开盘**；今日竞价戳 `peak_high` 压回已印出价。`correct_realized_open_protect_fill` 纠回 |
 | 特发开盘保护卖出记成 09:32；PATH 触达价碰巧=今开被改成 09:30 | **仅** `open_bell` / `exit_kind=open_protect` 记竞价核 `09:30:00`（可覆盖缺 bar 的 09:31/09:32）。**禁止** `fill≈open` 反推开盘时刻；PATH 保持真实 `triggered_at`。见 [`docs/TEMPORAL_INTEGRITY.md`](docs/TEMPORAL_INTEGRITY.md) |
 
 | 盯盘纸面槽位 | **四槽**：`MAX_PORTFOLIO_SLOTS=4`、日最多买 4、每槽约 25%（`SLOT_WEIGHT=0.25`） |
@@ -53,6 +56,7 @@
 | 隔夜 `available=0` 当券商不可卖 | `heal_watch_ledger` 解开买入日残留锁 |
 | 「已触止损」只展示、或只处理某一只 | `paper_exit_decision` + `settle_due_paper_stops` 扫全部实仓 |
 | 用全日最低 / 盘中抬高止损当成交价；已平仓卖出侧继续跟现价止损 | 开盘保护优先；卖出侧=锁定成交价；错账纠回开盘 |
+| 竞价虚拟高/昨高残留写进 `peak_high`；从未成交的卖点当平仓价 | 9:15–9:30 **不抬 HWM**；09:30–09:32 API high 高于今开/现价/1m → 丢弃；今开已破卖价且当日最高未印到 → 按开盘；竞价戳脏峰压回 |
 | 开盘保护成交时刻用首根 1m（09:31/09:32）；或用 fill≈open 把 PATH 改成 09:30 | 竞价核仅 `open_protect`→09:30；PATH/`triggered_at`/`exit_kind` **immutable** |
 
 | 买入日用今开/中段卖价写「止损已记」，展示层再 persist 写回 | 唯一落库口只要硬保护/T1 哨兵；已记价≤成本；展示只读账本；非法已记每轮自清 |
@@ -94,7 +98,7 @@
 - [x] 目标钉死：Paper=实时成交驱动；正式回测=1m；**禁止**为 parity 降级盯盘粒度。
 - [x] 登记并锁定 `CURRENT_INTRABAR_POLICY = PRIORITY_ENVELOPE` + `FACTOR26_EXIT_PRIORITY_1M` 单测。
 - [x] Cross-resolution harness + 六类分类（Gate3）；歧义审计 metadata（不改成交）。
-- [x] `akquant` **PIN 0.3.22**；回归 71 OK。
+- [x] `akquant` **PIN 0.3.22**；回归 157 OK。
 - [x] **Gate4 FULL_EXIT_ORCHESTRATION**：open_protect→path→last 竞争矩阵 + RealtimeFullExitRunner（生产函数）；见 PRODUCTION_EXIT_ORCHESTRATION_CONTRACT。
 - [ ] 历史 quote 事件流充足后补 Production Replay（当前 INSUFFICIENT_REPLAY_DATA）。
 - [ ] PHASE CAPITAL / FEE / PNL；SHARED PURE CORE EXTRACTION（编排 PASS 后允许启动）。

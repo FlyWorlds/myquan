@@ -141,6 +141,14 @@ class TestNoPriceInferredOpenBell(unittest.TestCase):
         _keep_first_signal_ts({"stop_hit_ts": "2026-09-24 09:32:00"}, st)
         self.assertEqual(st["stop_hit_ts"], "2026-09-24 09:30:00")
 
+    def test_keep_first_allows_0925_auction_to_0930(self) -> None:
+        """竞价观察戳 09:25 可被开盘铃 09:30 覆盖。"""
+        from index import _keep_first_signal_ts
+
+        st = {"stop_hit_ts": "2026-09-24 09:30:00"}
+        _keep_first_signal_ts({"stop_hit_ts": "2026-09-24 09:25:00"}, st)
+        self.assertEqual(st["stop_hit_ts"], "2026-09-24 09:30:00")
+
     def test_heal_skips_path_even_if_fill_eq_open(self) -> None:
         from index import _open_protect_hit_ts
 

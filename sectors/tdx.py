@@ -14,6 +14,7 @@ import os
 import re
 import struct
 import sys
+import threading
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -633,6 +634,11 @@ def _download_report_file(filename: str, *, cache: Path, meta_path: Path, max_ag
             json.dumps({"updated_at": datetime.now().isoformat(timespec="seconds")}),
             encoding="utf-8",
         )
+    def _usable_cache() -> Path | None:
+        if cache.is_file() and cache.stat().st_size > 1000:
+            return cache
+        return None
+
     if cache.is_file():
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -645,23 +651,35 @@ def _download_report_file(filename: str, *, cache: Path, meta_path: Path, max_ag
             if cache.stat().st_size > 1000:
                 return cache
 
-    api = _connect_api()
+    if not tdx_hq_available():
+        hit = _usable_cache()
+        if hit is not None:
+            return hit
+        raise ConnectionError(_TDX_LAST_ERR or "无法连接通达信行情服务器")
+
     try:
-        info = api.get_block_info_meta(filename)
-        size = int((info or {}).get("size") or 0)
-        if size <= 0:
-            raise RuntimeError(f"{filename} 大小为 0")
-        raw = api.get_report_file_by_size(filename, size)
-    finally:
-        api.disconnect()
-    if not raw:
-        raise RuntimeError(f"下载 {filename} 失败")
-    cache.write_bytes(raw)
-    meta_path.write_text(
-        json.dumps({"updated_at": datetime.now().isoformat(timespec="seconds"), "size": len(raw)}),
-        encoding="utf-8",
-    )
-    return cache
+        api = _connect_api()
+        try:
+            info = api.get_block_info_meta(filename)
+            size = int((info or {}).get("size") or 0)
+            if size <= 0:
+                raise RuntimeError(f"{filename} 大小为 0")
+            raw = api.get_report_file_by_size(filename, size)
+        finally:
+            api.disconnect()
+        if not raw:
+            raise RuntimeError(f"下载 {filename} 失败")
+        cache.write_bytes(raw)
+        meta_path.write_text(
+            json.dumps({"updated_at": datetime.now().isoformat(timespec="seconds"), "size": len(raw)}),
+            encoding="utf-8",
+        )
+        return cache
+    except Exception:
+        hit = _usable_cache()
+        if hit is not None:
+            return hit
+        raise
 
 
 def ensure_block_gn_dat(*, force: bool = False, max_age_days: int = 7) -> Path:
@@ -836,38 +854,69 @@ def _members_index_stale(max_age_days: int = 7) -> bool:
         return True
 
 
+_MEMBERS_INDEX_LOCK = threading.Lock()
+
+
+def _read_members_index_file() -> dict[str, dict[str, list[str]]] | None:
+    if not TDX_MEMBERS_INDEX.is_file():
+        return None
+    try:
+        data = json.loads(TDX_MEMBERS_INDEX.read_text(encoding="utf-8"))
+        # Windows 无 tdxhy 时「行业」可为空；有概念成分即可复用缓存
+        if data.get("概念"):
+            return {
+                "行业": data.get("行业") or {},
+                "概念": data["概念"],
+            }
+    except Exception:
+        return None
+    return None
+
+
 def load_members_index(*, force: bool = False) -> dict[str, dict[str, list[str]]]:
     """板块名称 → 成分股代码（6位）。kind: 行业 / 概念。"""
-    if not force and not _members_index_stale() and TDX_MEMBERS_INDEX.is_file():
-        try:
-            data = json.loads(TDX_MEMBERS_INDEX.read_text(encoding="utf-8"))
-            # Windows 无 tdxhy 时「行业」可为空；有概念成分即可复用缓存
-            if data.get("概念"):
-                return {
-                    "行业": data.get("行业") or {},
-                    "概念": data["概念"],
-                }
-        except Exception:
-            pass
+    with _MEMBERS_INDEX_LOCK:
+        cached = _read_members_index_file()
+        # 有概念成分就复用；过期刷新另走 force=True，避免盘中因 HQ 超时把选股打成 0 票
+        if cached and not force:
+            return cached
 
-    print("  构建通达信成分股索引（行业 tdxhy + 概念 block_gn）…")
-    industry = _build_industry_members_index()
-    concept = _build_concept_members_index()
-    payload = {"行业": industry, "概念": concept}
-    TDX_MEMBERS_INDEX.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    TDX_MEMBERS_META.write_text(
-        json.dumps(
-            {
-                "updated_at": datetime.now().isoformat(timespec="seconds"),
-                "industry_boards": len(industry),
-                "concept_boards": len(concept),
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
-    )
-    print(f"    行业 {len(industry)} · 概念 {len(concept)}")
-    return payload
+        try:
+            print("  构建通达信成分股索引（行业 tdxhy + 概念 block_gn）…")
+            try:
+                industry = _build_industry_members_index()
+            except Exception:
+                industry = (cached or {}).get("行业") or {}
+            try:
+                concept = _build_concept_members_index()
+            except Exception:
+                concept = {}
+            if not concept and cached:
+                concept = cached.get("概念") or {}
+            payload = {"行业": industry, "概念": concept}
+            if concept:
+                TDX_MEMBERS_INDEX.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+                TDX_MEMBERS_META.write_text(
+                    json.dumps(
+                        {
+                            "updated_at": datetime.now().isoformat(timespec="seconds"),
+                            "industry_boards": len(industry),
+                            "concept_boards": len(concept),
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+            print(f"    行业 {len(industry)} · 概念 {len(concept)}")
+            if payload.get("概念"):
+                return payload
+        except Exception:
+            if cached:
+                return cached
+            raise
+        if cached:
+            return cached
+        return payload
 
 
 def _stock_market(code: str) -> int:

@@ -151,14 +151,16 @@ const luPhaseClass = computed(() => {
         <tbody>
           <tr v-for="row in rows" :key="String(row.代码)" class="border-t border-ui-hairline">
             <td class="px-2 py-2 whitespace-nowrap">
-              <a
-                :href="baiduStockUrl(row.代码, row.名称)"
-                target="_blank"
-                rel="noopener"
-                class="text-accent hover:underline"
-              >
-                {{ rowLabel(row.代码, row.名称) }}
-              </a>
+              <StockNameHover :code="row.代码" :name="row.名称">
+                <a
+                  :href="baiduStockUrl(row.代码, row.名称)"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-accent hover:underline"
+                >
+                  {{ rowLabel(row.代码, row.名称) }}
+                </a>
+              </StockNameHover>
             </td>
             <td class="px-2 py-2 max-w-[8rem] truncate" :title="String(row.题材)">{{ row.题材 }}</td>
             <td class="px-2 py-2">{{ row.类型 }}</td>

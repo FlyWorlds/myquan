@@ -6,7 +6,7 @@
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
   · **仓位**：物理 4 槽（盘中/隔夜均可持 4）；当日最多买 4；每槽约 25%；**先平再买**；平仓前已触买且现价≤买点+1% 优先（成交价=现价），否则其后新触发按时间（成交价=买点）
-  · 9:15 清空非实仓盯盘状态；**9:15–9:25 竞价不算买卖/动态止盈**；9:25 起算阈值并可挂单；9:30 起触发结算
+  · 9:15 清空非实仓盯盘状态；**9:15–9:30 竞价不算买卖/动态止盈、不回写峰值**；9:25 起算阈值并可挂单；9:30 起触发结算
   · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票不可再待买入
   · 默认交易宇宙：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用，见 watch_config.SELF_WATCHLIST_PICKS）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
@@ -142,6 +142,8 @@ from strategy.pullback_wave_stop import (
     overnight_open_protect_px,
     overnight_peak_px,
     overnight_session_high_ok,
+    session_high_never_printed_stop,
+    usable_session_high,
     path_dependent_buy_hit,
     path_dependent_pullback_hit,
     pnl_exceeds,
@@ -194,6 +196,9 @@ from watch_config import (
     is_auction_window,
     is_exit_executable,
     is_signal_window,
+    is_auction_quote_ts,
+    timestamp_in_signal_window,
+    trust_quote_day_high,
     is_threshold_ready,
     market_phase,
     market_phase_label,
@@ -1387,6 +1392,90 @@ def _peak_at_clock(raw: Any) -> str | None:
     return s
 
 
+def _sanitize_quote_session_high(
+    q: dict[str, Any],
+    *,
+    path_running_high: float = 0.0,
+) -> dict[str, Any]:
+    """就地清洗 quote.high：竞价/开盘脏窗丢掉 API 虚高，改用已印出最高。"""
+    if not isinstance(q, dict):
+        return q
+    try:
+        raw = float(q.get("high") or 0)
+    except (TypeError, ValueError):
+        raw = 0.0
+    try:
+        open_px = float(q.get("open") or 0)
+    except (TypeError, ValueError):
+        open_px = 0.0
+    try:
+        last_px = float(q.get("last") or 0)
+    except (TypeError, ValueError):
+        last_px = 0.0
+    ts = q.get("last_ts") or q.get("ts") or q.get("time")
+    q["high"] = usable_session_high(
+        quote_high=raw,
+        open_px=open_px,
+        last_px=last_px,
+        path_running_high=path_running_high,
+        trust_api_high=trust_quote_day_high(ts),
+    )
+    return q
+
+
+def _peak_high_usable_for_overnight(
+    pos: dict[str, Any] | None,
+    session: str,
+) -> float | None:
+    """隔夜峰值不得用「今日竞价戳」的 peak_high（竞价虚高）。"""
+    if not isinstance(pos, dict):
+        return None
+    at = str(pos.get("peak_high_at") or "")
+    sess = str(session or "")[:10]
+    if sess and at[:10] == sess and is_auction_quote_ts(at):
+        return None
+    try:
+        peak = float(pos.get("peak_high") or 0)
+    except (TypeError, ValueError):
+        peak = 0.0
+    return peak if peak > 0 else None
+
+
+def _clamp_auction_stamped_hwm(
+    pos: dict[str, Any],
+    *,
+    session: str,
+    cost: float = 0.0,
+    prev_close: float = 0.0,
+    open_px: float = 0.0,
+    last_px: float = 0.0,
+) -> bool:
+    """今日竞价窗口抬上去的 peak_high 压回已印出价（只此例外允许 HWM 下降）。"""
+    if not isinstance(pos, dict):
+        return False
+    sess = str(session or "")[:10]
+    at = str(pos.get("peak_high_at") or "")
+    if not sess or at[:10] != sess or not is_auction_quote_ts(at):
+        return False
+    try:
+        peak = float(pos.get("peak_high") or 0)
+    except (TypeError, ValueError):
+        peak = 0.0
+    cap = 0.0
+    for x in (cost, prev_close, open_px, last_px):
+        try:
+            v = float(x or 0)
+        except (TypeError, ValueError):
+            v = 0.0
+        if v > cap:
+            cap = v
+    if cap <= 0 or peak <= cap + 1e-9:
+        return False
+    pos["peak_high"] = round(float(cap), 4)
+    pos["peak_high_at"] = f"{sess} 09:30:00"
+    return True
+
+
 def _stamp_position_peak_high(
     pos: dict[str, Any],
     new_peak: float,
@@ -1582,23 +1671,52 @@ def _sync_snapshot_hwm_locked(
             if r.get("持仓最高") != before_hwm:
                 changed = True
             continue
-        new_peak = raise_position_peak_high(
-            persisted_peak=old_peak,
-            entry_price=cost_h if cost_h > 0 else None,
-            quote_last=last_h,
-            quote_day_high=snap_h,
-            path_running_high=old_peak,
-            allow_quote_day_high=not bool(t1_today),
-        )
         try:
-            if _stamp_position_peak_high(
-                pos, new_peak, at=quote_at, decision_at=decision_at
-            ):
-                dirty = True
-                changed = True
-                positions[code] = pos
-        except TemporalIntegrityError as te:
-            print(f"[{_now()}] {te.code} HWM raise blocked {code}: {te}")
+            open_h = float(q.get("open") or r.get("开盘") or 0)
+        except (TypeError, ValueError):
+            open_h = 0.0
+        try:
+            prev_h = float(q.get("prev_close") or r.get("昨收") or 0)
+        except (TypeError, ValueError):
+            prev_h = 0.0
+        if _clamp_auction_stamped_hwm(
+            pos,
+            session=sess,
+            cost=cost_h,
+            prev_close=prev_h,
+            open_px=open_h,
+            last_px=last_h,
+        ):
+            dirty = True
+            changed = True
+            positions[code] = pos
+            old_peak = float(pos.get("peak_high") or 0)
+        # 竞价虚拟价不得抬 HWM；开盘后前几秒 API high 仍可能是竞价残留
+        quote_in_cont = timestamp_in_signal_window(quote_at)
+        if is_signal_window() and quote_in_cont:
+            snap_h = usable_session_high(
+                quote_high=snap_h,
+                open_px=open_h,
+                last_px=last_h,
+                trust_api_high=trust_quote_day_high(quote_at),
+            )
+            new_peak = raise_position_peak_high(
+                persisted_peak=old_peak,
+                entry_price=cost_h if cost_h > 0 else None,
+                quote_last=last_h,
+                quote_day_high=snap_h,
+                path_running_high=old_peak,
+                allow_quote_day_high=not bool(t1_today),
+            )
+            try:
+                if _stamp_position_peak_high(
+                    pos, new_peak, at=quote_at, decision_at=decision_at
+                ):
+                    dirty = True
+                    changed = True
+                    positions[code] = pos
+            except TemporalIntegrityError as te:
+                print(f"[{_now()}] {te.code} HWM raise blocked {code}: {te}")
         pos["last_quote_at"] = quote_at
         before_hwm = r.get("持仓最高")
         _attach_hwm_row_fields(r, pos, px_digits=px_digits)
@@ -2575,18 +2693,19 @@ def _attach_strategy_pnl_fields(
         quote_ts = f"{str(q['session'])[:10]} {_dt.now().strftime('%H:%M:%S')}"
 
     if last > 0:
-        evaluate_live_transition(
-            strategy_id=sid,
-            symbol=code,
-            live_last=last,
-            quote_ts=quote_ts,
-            buy_level=float(buy_lv) if buy_lv is not None else None,
-            sell_level=float(sell_lv) if sell_lv is not None else None,
-            allow_entry=allow_entry,
-            reason="collect_rows",
-            persist=True,
-            t0=bool(w.get("t0")),
-        )
+                evaluate_live_transition(
+                    strategy_id=sid,
+                    symbol=code,
+                    live_last=last,
+                    quote_ts=quote_ts,
+                    buy_level=float(buy_lv) if buy_lv is not None else None,
+                    sell_level=float(sell_lv) if sell_lv is not None else None,
+                    allow_entry=allow_entry,
+                    reason="collect_rows",
+                    persist=True,
+                    t0=bool(w.get("t0")),
+                    day_open=q.get("open"),
+                )
     book = get_book(sid, code)
     if last > 0:
         mark_book(book, last, quote_ts=quote_ts)
@@ -4770,6 +4889,14 @@ def _is_early_open_1m_label(ts: Any) -> bool:
     return hms[:5] in ("09:31", "09:32")
 
 
+def _is_auction_or_early_open_ts(ts: Any) -> bool:
+    """09:15–09:32：竞价观察戳 / 缺 09:30 的首根。开盘铃可覆盖成 09:30。"""
+    hms = _signal_hms(ts) or ""
+    if len(hms) < 5:
+        return False
+    return "09:15:00" <= hms <= "09:32:59"
+
+
 def _open_protect_hit_ts(
     *,
     session: str,
@@ -4798,12 +4925,14 @@ def _keep_first_signal_ts(prev: dict[str, Any], st: dict[str, Any]) -> None:
         if not old:
             continue
         new = st.get(key)
-        # 仅允许：真正开盘铃 09:30 覆盖缺 bar 的 09:31/09:32 标签
+        # 仅允许：真正开盘铃 09:30 覆盖竞价观察戳 / 缺 bar 的 09:31/09:32
         if (
             key == "stop_hit_ts"
             and new
             and _is_open_bell_ts(new)
-            and _is_early_open_1m_label(old)
+            and (
+                _is_early_open_1m_label(old) or _is_auction_or_early_open_ts(old)
+            )
         ):
             continue
         st[key] = old
@@ -5511,6 +5640,7 @@ def _paper_exit_decision_legacy(
     stop_locked: bool = False,
     last: float = 0.0,
     open_px: float = 0.0,
+    day_high: float = 0.0,
     prev_close: float | None = None,
     cost: float | None = None,
     peak_high: float | None = None,
@@ -5617,6 +5747,20 @@ def _paper_exit_decision_legacy(
             and last_px > 0
             and last_px <= hard * 1.003 + 1e-12
         )
+    # 今开已破工作卖价，且当日最高从未印到该价 → 按开盘成交，禁止记从未成交的卖点
+    if (not t1_today) and (not open_hit) and last_hit:
+        try:
+            day_hi = float(day_high or 0)
+        except (TypeError, ValueError):
+            day_hi = 0.0
+        if session_high_never_printed_stop(
+            open_px=open_f,
+            last_px=last_px,
+            working_stop=stop_f,
+            day_high=day_hi,
+        ):
+            open_hit = True
+            open_bell = True
     hit_show = bool(open_hit or last_hit or path_ok)
     if not hit_show:
         return empty
@@ -5685,6 +5829,7 @@ def paper_exit_decision(
     stop_locked: bool = False,
     last: float = 0.0,
     open_px: float = 0.0,
+    day_high: float = 0.0,
     prev_close: float | None = None,
     cost: float | None = None,
     peak_high: float | None = None,
@@ -5712,6 +5857,7 @@ def paper_exit_decision(
         stop_locked=stop_locked,
         last=last,
         open_px=open_px,
+        day_high=day_high,
         prev_close=prev_close,
         cost=cost,
         peak_high=peak_high,
@@ -5748,6 +5894,7 @@ def paper_exit_decision(
         stop_locked=stop_locked,
         last=last,
         open_px=open_px,
+        day_high=day_high,
         prev_close=prev_close,
         cost=cost,
         peak_high=peak_high,
@@ -5778,10 +5925,12 @@ def correct_realized_open_protect_fill(
     cost: float | None,
     peak_high: float | None,
     px_digits: int,
+    day_high: float = 0.0,
 ) -> dict[str, Any] | None:
     """已记账卖出若本应按开盘保护成交、却写成了抬高后的止损，纠回开盘价。
 
     不改 qty。现金按价差轧差。远东今开=24.10 已是开盘保护，不会动。
+    含：工作卖价从未被当日最高印到（竞价脏峰抬止损）→ 按开盘纠价。
     """
     data = load_holdings()
     _purge_stale_realized(data, session)
@@ -5807,6 +5956,7 @@ def correct_realized_open_protect_fill(
         t1_today=False,
         last=old_px,
         open_px=open_f,
+        day_high=day_high,
         prev_close=prev_close,
         cost=cost_f,
         peak_high=peak_high,
@@ -5840,6 +5990,14 @@ def correct_realized_open_protect_fill(
     rec["day_pnl"] = None if day_pnl is None else round(float(day_pnl), 2)
     rec["day_pnl_pct"] = None if day_pnl_pct is None else round(float(day_pnl_pct), 2)
     rec["note_fix"] = "开盘保护纠价"
+    rec["exit_kind"] = "open_protect"
+    rec["action_kind"] = "full"
+    bell = session_open_bell_ts(str(session)[:10])
+    rec["time"] = bell
+    rec["first_hit_ts"] = bell
+    rec["triggered_at"] = bell
+    rec["filled_at"] = bell
+    rec["decision_at"] = bell
     pos = (data.get("positions") or {}).get(code)
     if isinstance(pos, dict):
         pos["note"] = f"止损成交@{new_px} ({session})"
@@ -5859,6 +6017,7 @@ def correct_realized_open_protect_fill(
     sticky = data.get("alert_sticky")
     if isinstance(sticky, dict) and isinstance(sticky.get(code), dict):
         sticky[code]["touch_stop"] = new_px
+        sticky[code]["stop_hit_ts"] = bell
     save_holdings(data)
     meta_name = str((pos or {}).get("name") or rec.get("name") or code)
     append_trade(
@@ -6127,6 +6286,10 @@ def _reconcile_realized_open_protects(
             cost_f = float(cost) if cost is not None else 0.0
         except (TypeError, ValueError):
             cost_f = 0.0
+        try:
+            day_hi = float(row.get("最高") or row.get("今日最高") or 0)
+        except (TypeError, ValueError):
+            day_hi = 0.0
         peak_for_fix = freeze_overnight_peak_for_session(
             pos if isinstance(pos, dict) else {},
             session=session,
@@ -6144,6 +6307,7 @@ def _reconcile_realized_open_protects(
             cost=float(cost) if cost is not None else None,
             peak_high=peak_for_fix if peak_for_fix > 0 else (pos or {}).get("peak_high"),
             px_digits=int(row.get("价位小数") or 2),
+            day_high=day_hi,
         )
         if not isinstance(fixed, dict):
             continue
@@ -6213,9 +6377,9 @@ def _heal_open_protect_hit_times(
         if not new_ts or new_ts != bell:
             continue
         if str(rec.get("time") or "") != bell or str(rec.get("first_hit_ts") or "") != bell:
-            # 仅缺 09:30 标签的开盘保护可纠；已有明确非早盘标签则不改（immutable）
+            # 竞价观察戳 / 缺 09:30 的 09:31/09:32 可纠；09:32 之后的 PATH 不改
             existing_hms = _signal_hms(rec.get("first_hit_ts") or rec.get("time")) or ""
-            if existing_hms[:5] not in ("", "09:30", "09:31", "09:32"):
+            if existing_hms[:8] > "09:32:59":
                 continue
             rec["time"] = bell
             rec["first_hit_ts"] = bell
@@ -6304,6 +6468,10 @@ def settle_due_paper_stops(
             code=code,
             persist=True,
         )
+        try:
+            day_hi = float(row.get("最高") or row.get("今日最高") or 0)
+        except (TypeError, ValueError):
+            day_hi = 0.0
         dec = paper_exit_decision(
             qty=qty,
             sellable=sellable,
@@ -6311,6 +6479,7 @@ def settle_due_paper_stops(
             hold_locked=bool(pos.get("hold_lock")),
             last=last,
             open_px=open_px,
+            day_high=day_hi,
             prev_close=row.get("昨收"),
             cost=pos.get("cost") if pos.get("cost") is not None else row.get("成本"),
             peak_high=peak_for_exit if peak_for_exit > 0 else pos.get("peak_high"),
@@ -6754,6 +6923,10 @@ def freeze_overnight_peak_for_session(
         return 0.0
 
     frozen_ok = str(pos.get("overnight_peak_session") or "") == sess
+    at_peak = str(pos.get("peak_high_at") or "")
+    # 今日竞价戳抬上去的脏峰：作废已冻 overnight，按昨收/成本重算
+    if frozen_ok and at_peak[:10] == sess and is_auction_quote_ts(at_peak):
+        frozen_ok = False
     seed = 0.0
     if frozen_ok:
         try:
@@ -6761,10 +6934,7 @@ def freeze_overnight_peak_for_session(
         except (TypeError, ValueError):
             seed = 0.0
     if seed <= 0:
-        try:
-            peak_h = float(pos.get("peak_high") or 0) or None
-        except (TypeError, ValueError):
-            peak_h = None
+        peak_h = _peak_high_usable_for_overnight(pos, sess)
         seed = float(
             overnight_peak_px(
                 cost_f,
@@ -6892,6 +7062,7 @@ def collect_rows(
         try:
             q = dict(quote_fn(w["sina"]) or {})
             q["session"] = _promote_quote_session(q.get("session"))
+            _sanitize_quote_session_high(q)
             session_today = q["session"]
             daily = _watch_daily(w["sina"])
             if USE_FACTOR4:
@@ -7150,6 +7321,7 @@ def collect_rows(
                     if qty_early > 0:
                         try:
                             rh = float(path_res.get("running_high") or 0)
+                            _sanitize_quote_session_high(q, path_running_high=rh)
                             try:
                                 snap_h = float(q.get("high") or 0)
                             except (TypeError, ValueError):
@@ -7159,13 +7331,44 @@ def collect_rows(
                             except (TypeError, ValueError):
                                 last_h = 0.0
                             old_peak = float(pos_early.get("peak_high") or 0)
+                            quote_at_h = _bar_ts_str(q.get("last_ts")) or ""
+                            live_hwm = bool(
+                                is_signal_window()
+                                and timestamp_in_signal_window(quote_at_h)
+                            )
+                            try:
+                                open_h = float(q.get("open") or 0)
+                            except (TypeError, ValueError):
+                                open_h = 0.0
+                            try:
+                                prev_h = float(q.get("prev_close") or 0)
+                            except (TypeError, ValueError):
+                                prev_h = 0.0
+                            if _clamp_auction_stamped_hwm(
+                                pos_early,
+                                session=str(q.get("session") or ""),
+                                cost=cost_h,
+                                prev_close=prev_h,
+                                open_px=open_h,
+                                last_px=last_h,
+                            ):
+                                old_peak = float(pos_early.get("peak_high") or 0)
+                            snap_h = usable_session_high(
+                                quote_high=snap_h,
+                                open_px=open_h,
+                                last_px=last_h,
+                                path_running_high=rh,
+                                trust_api_high=trust_quote_day_high(quote_at_h),
+                            )
                             new_peak = raise_position_peak_high(
                                 persisted_peak=old_peak,
                                 entry_price=cost_h,
-                                quote_last=last_h,
-                                quote_day_high=snap_h,
+                                quote_last=last_h if live_hwm else None,
+                                quote_day_high=snap_h if live_hwm else None,
                                 path_running_high=max(float(seed_h or 0), rh),
-                                allow_quote_day_high=not bool(t1_today_early),
+                                allow_quote_day_high=bool(
+                                    live_hwm and (not t1_today_early)
+                                ),
                             )
                             if new_peak > old_peak + 1e-9:
                                 at_ts = (
@@ -7620,6 +7823,16 @@ def collect_rows(
             # 纸面止损唯一口径：开盘保护 / 1m 路径 / 现价破卖价（不用全日最低撞抬高止损）
             # 09:25 前开盘价未定：禁止用竞价指示价跑 OPEN_PROTECT candidate
             _open_for_exit = float(q.get("open") or 0) if preview_ok else 0.0
+            try:
+                _day_hi = float(q.get("high") or 0) if preview_ok else 0.0
+            except (TypeError, ValueError):
+                _day_hi = 0.0
+            _day_hi = usable_session_high(
+                quote_high=_day_hi,
+                open_px=_open_for_exit,
+                last_px=float(_last_chk or 0),
+                trust_api_high=trust_quote_day_high(q.get("last_ts")),
+            )
             _exit_dec = paper_exit_decision(
                 qty=qty,
                 sellable=sellable,
@@ -7628,6 +7841,7 @@ def collect_rows(
                 stop_locked=stop_locked,
                 last=_last_chk,
                 open_px=_open_for_exit,
+                day_high=_day_hi,
                 prev_close=q.get("prev_close"),
                 cost=cost,
                 peak_high=seed_h if seed_h else (pos.get("peak_high")),
@@ -10883,6 +11097,13 @@ def cmd_watch(args: argparse.Namespace) -> None:
             print(f"[{_now()}] 股票名称缓存已预热（{n_names} 条）")
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 名称缓存预热失败（继续）: {e}")
+        try:
+            from stock_profile import warm_profile_index
+
+            n_rev = warm_profile_index()
+            print(f"[{_now()}] 个股画像板块反查已预热（{n_rev} 只）")
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 个股画像预热失败（继续）: {e}")
         # 分层冷启动：首屏只扫热池（默认策略+自选+持仓），策略一池首屏后后台补齐。
         # 必须在 worker 启动前置位，否则 loop 首轮就会全量串行拉日线。
         _set_watch_boot_primary_only(True)

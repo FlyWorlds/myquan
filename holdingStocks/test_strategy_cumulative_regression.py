@@ -41,11 +41,14 @@ class _Tmp(unittest.TestCase):
         self._p2 = mock.patch.object(sim, "EVENTS_FILE", root / "strategy_signal_events.json")
         self._p1.start()
         self._p2.start()
+        self._p_pnl = mock.patch("watch_config.STRATEGY_PNL_START", "2026-01-01")
+        self._p_pnl.start()
         sim.reset_memory_for_tests()
 
     def tearDown(self) -> None:
         self._p1.stop()
         self._p2.stop()
+        self._p_pnl.stop()
         sim.reset_memory_for_tests()
         self._td.cleanup()
 

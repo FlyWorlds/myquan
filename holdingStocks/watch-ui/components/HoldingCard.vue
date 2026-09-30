@@ -131,7 +131,9 @@ const cardClass = computed(() => {
             </span>
           </div>
           <h2 class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-bold">
-            <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ row.名称 }}</a>
+            <StockNameHover :code="row.代码" :name="row.名称">
+              <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ row.名称 }}</a>
+            </StockNameHover>
             <b class="sensitive tabular-nums">{{ fmtNum(row.现价, pdg) }}</b>
             <a
               :href="baiduStockUrl(row.代码, row.名称)"

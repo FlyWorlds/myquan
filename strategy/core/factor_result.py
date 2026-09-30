@@ -89,6 +89,7 @@ class DecisionContext:
     prev_close: float | None = None
     peak_high: float | None = None
     open_px: float | None = None
+    day_high: float = 0.0
     path_hit: bool = False
     path_fill_px: float | None = None
     path_action_kind: str = ""

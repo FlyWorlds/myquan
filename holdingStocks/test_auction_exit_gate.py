@@ -60,6 +60,24 @@ class TestMarketPhaseAuctionGates(unittest.TestCase):
         self.assertTrue(is_threshold_ready(_at(9, 25)))
 
 
+class TestQuoteDayHighTrust(unittest.TestCase):
+    def test_timestamp_windows(self) -> None:
+        from watch_config import (
+            is_auction_quote_ts,
+            is_opening_high_untrusted,
+            timestamp_in_signal_window,
+            trust_quote_day_high,
+        )
+
+        self.assertFalse(timestamp_in_signal_window("2026-09-30 09:15:36"))
+        self.assertTrue(is_auction_quote_ts("2026-09-30 09:15:36"))
+        self.assertTrue(timestamp_in_signal_window("2026-09-30 09:30:01"))
+        self.assertTrue(is_opening_high_untrusted("2026-09-30 09:30:01"))
+        self.assertFalse(trust_quote_day_high("2026-09-30 09:30:01"))
+        self.assertTrue(trust_quote_day_high("2026-09-30 09:33:00"))
+        self.assertFalse(trust_quote_day_high("2026-09-30 09:25:00"))
+
+
 class TestPreContinuousUi(unittest.TestCase):
     def test_demote_never_pending_sell_status(self) -> None:
         for ph in ("auction_cancel", "auction_locked", "open_set"):

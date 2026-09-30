@@ -494,9 +494,28 @@ def patch_row_live_quote(
             row["较开盘点"] = pts
             changed = True
     if high is not None:
-        day_high = round(max(high, last), digits)
-        row["最高"] = day_high
-        row["今日最高"] = day_high
+        ts = None
+        if quote:
+            ts = quote.get("last_ts") or quote.get("ts") or quote.get("time")
+        try:
+            from watch_config import trust_quote_day_high
+            from strategy.pullback_wave_stop import usable_session_high
+        except ImportError:  # pragma: no cover
+            from holdingStocks.watch_config import trust_quote_day_high
+            from strategy.pullback_wave_stop import usable_session_high
+
+        printed = usable_session_high(
+            quote_high=high,
+            open_px=float(open_px or 0),
+            last_px=last,
+            trust_api_high=trust_quote_day_high(ts),
+        )
+        if printed <= 0:
+            printed = last
+        day_high = round(printed, digits)
+        if day_high > 0:
+            row["最高"] = day_high
+            row["今日最高"] = day_high
     if low is not None and low > 0:
         row["最低"] = round(min(low, last), digits)
 
@@ -597,6 +616,8 @@ def patch_row_live_quote(
                     reason="quote_patch",
                     persist=True,
                     t0=bool(row.get("t0")),
+                    day_open=row.get("开盘")
+                    or (quote.get("open") if isinstance(quote, dict) else None),
                 )
                 book = get_book(str(strategy_id), code)
                 apply_book_to_row(row, book)

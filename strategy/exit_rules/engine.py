@@ -12,7 +12,7 @@ from strategy.core.exit_decision import ExitAction, ExitDecision, ReasonCode
 from strategy.core.factor_result import DecisionContext
 from strategy.exit_rules.overnight_open_protect import evaluate_overnight_open_protect
 from strategy.exit_rules.working_stop import evaluate_working_stop
-from strategy.pullback_wave_stop import cost_hard_stop_px, is_half_stop_kind
+from strategy.pullback_wave_stop import cost_hard_stop_px, is_half_stop_kind, session_high_never_printed_stop
 
 
 def _f(x: Any, default: float = 0.0) -> float:
@@ -132,6 +132,21 @@ class ExitDecisionEngine:
                     path_ok=path_ok,
                 )
             )
+
+        # 今开已破工作卖价且当日最高从未印到该价 → 升为开盘保护
+        if (not t1) and (not open_hit) and last_hit:
+            dh = _f(getattr(ctx, "day_high", 0))
+            if session_high_never_printed_stop(
+                open_px=open_f,
+                last_px=last_px,
+                working_stop=stop_f,
+                day_high=dh,
+            ):
+                open_hit = True
+                cand_open = True
+                trace.append(
+                    _trace_step("gap_through_stop", "open_protect", price=open_f)
+                )
 
         hit_show = bool(open_hit or last_hit or path_ok)
         if not hit_show:

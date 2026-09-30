@@ -345,6 +345,104 @@ class TestPaperExitDecision(unittest.TestCase):
         self.assertEqual(dec["kind"], "last")
         self.assertAlmostEqual(dec["fill_px"], 9.75, places=2)
 
+    def test_baoan_unprinted_working_stop_fills_at_open(self) -> None:
+        """中国宝安：竞价脏峰把中赚止损抬到 6.98，今开 6.88、最高 6.92 从未印到 → 按开盘。"""
+        from strategy.pullback_wave_stop import session_high_never_printed_stop
+
+        self.assertTrue(
+            session_high_never_printed_stop(
+                open_px=6.88, last_px=6.88, working_stop=6.98, day_high=6.92
+            )
+        )
+        dec = paper_exit_decision(
+            qty=8500,
+            sellable=8500,
+            t1_today=False,
+            last=6.88,
+            open_px=6.88,
+            day_high=6.92,
+            prev_close=6.86,
+            cost=6.72,
+            peak_high=7.03,
+            working_stop=6.98,
+            path_hit=False,
+            signal_ok=True,
+            overnight_high_ok=True,
+            buy_time="2026-09-29 09:30:00",
+            session="2026-09-30",
+        )
+        self.assertTrue(dec["hit"])
+        self.assertEqual(dec["kind"], "open_protect")
+        self.assertAlmostEqual(dec["fill_px"], 6.88, places=2)
+
+    def test_baoan_opening_leftover_high_sanitized_fills_at_open(self) -> None:
+        """9:30 API high 仍为竞价 7.03：清洗后按开盘，不得记 6.98。"""
+        from strategy.pullback_wave_stop import usable_session_high
+
+        day_hi = usable_session_high(
+            quote_high=7.03, open_px=6.88, last_px=6.88, trust_api_high=False
+        )
+        self.assertAlmostEqual(day_hi, 6.88)
+        dec = paper_exit_decision(
+            qty=8500,
+            sellable=8500,
+            t1_today=False,
+            last=6.88,
+            open_px=6.88,
+            day_high=day_hi,
+            prev_close=6.86,
+            cost=6.72,
+            peak_high=7.03,
+            working_stop=6.98,
+            path_hit=False,
+            signal_ok=True,
+            overnight_high_ok=True,
+            buy_time="2026-09-29 09:30:00",
+            session="2026-09-30",
+        )
+        self.assertEqual(dec["kind"], "open_protect")
+        self.assertAlmostEqual(dec["fill_px"], 6.88, places=2)
+
+    def test_unsanitized_auction_high_would_last_fill(self) -> None:
+        """对照：未清洗的 API high=7.03 会被当成已印到卖价，错记 last@6.98。"""
+        dec = paper_exit_decision(
+            qty=8500,
+            sellable=8500,
+            t1_today=False,
+            last=6.88,
+            open_px=6.88,
+            day_high=7.03,
+            prev_close=6.86,
+            cost=6.72,
+            peak_high=7.03,
+            working_stop=6.98,
+            path_hit=False,
+            signal_ok=True,
+            overnight_high_ok=True,
+            buy_time="2026-09-29 09:30:00",
+            session="2026-09-30",
+        )
+        self.assertEqual(dec["kind"], "last")
+        self.assertAlmostEqual(dec["fill_px"], 6.98, places=2)
+
+    def test_intraday_last_fill_keeps_stop_when_high_printed(self) -> None:
+        """盘中最高已印到卖价：即使现价跌回开盘附近，仍按卖点成交，不升开盘保护。"""
+        dec = paper_exit_decision(
+            qty=1000,
+            sellable=1000,
+            t1_today=False,
+            last=10.10,
+            open_px=10.00,
+            day_high=10.50,
+            prev_close=9.90,
+            cost=9.80,
+            working_stop=10.20,
+            path_hit=False,
+            signal_ok=True,
+        )
+        self.assertEqual(dec["kind"], "last")
+        self.assertAlmostEqual(dec["fill_px"], 10.20, places=2)
+
     def test_yuandong_open_protect_fills_at_open(self) -> None:
         """远东：昨收 25.35 已过 3%，今开 24.10 低于回落一半 → 平仓价=开盘，不是盘后止损 24.6。"""
         dec = paper_exit_decision(

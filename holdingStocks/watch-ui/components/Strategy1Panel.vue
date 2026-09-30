@@ -348,7 +348,9 @@ const SINGLE_SIGNAL_TITLE =
               </td>
               <td class="px-3 py-2.5 align-top">
                 <div class="leading-snug">
-                  <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
+                  <StockNameHover :code="r.代码" :name="r.名称">
+                    <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
+                  </StockNameHover>
                 </div>
               </td>
               <td class="px-3 py-2.5 align-top">

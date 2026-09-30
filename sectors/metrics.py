@@ -150,10 +150,19 @@ def fetch_member_quotes_sina(codes: list[str]) -> dict[str, dict[str, Any]]:
         if not spot:
             continue
         c = str(code).zfill(6)
+        last = spot.get("last")
+        prev = spot.get("prev_close")
+        chg = spot.get("day_chg_pct")
+        if chg is None and last and prev:
+            try:
+                chg = (float(last) / float(prev) - 1.0) * 100.0
+            except (TypeError, ValueError, ZeroDivisionError):
+                chg = None
         out[c] = {
             "code": c,
-            "price": spot.get("last"),
-            "chgPct": spot.get("day_chg_pct"),
+            "price": last,
+            "chgPct": chg,
+            "amount": spot.get("amount"),
         }
     return out
 

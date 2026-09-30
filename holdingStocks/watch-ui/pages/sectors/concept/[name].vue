@@ -207,7 +207,11 @@ watch(conceptName, async () => {
             <tbody>
               <tr v-for="l in seg.leaders" :key="l.code" class="border-t border-ui-hairline">
                 <td class="py-2">{{ l.rank }}</td>
-                <td class="py-2">{{ l.name }} <span class="text-ui-text-3">{{ l.code }}</span></td>
+                <td class="py-2">
+                  <StockNameHover :code="l.code" :name="l.name">
+                    {{ l.name }} <span class="text-ui-text-3">{{ l.code }}</span>
+                  </StockNameHover>
+                </td>
                 <td class="py-2 text-right font-semibold text-watch-up">+{{ l.return_pct.toFixed(2) }}%</td>
                 <td class="py-2 text-right">{{ l.livePrice != null ? l.livePrice.toFixed(2) : '-' }}</td>
                 <td
@@ -230,7 +234,9 @@ watch(conceptName, async () => {
             :key="m.code"
             class="rounded-md border border-ui-hairline px-2 py-1"
           >
-            {{ m.name }} {{ m.code }}
+            <StockNameHover :code="m.code" :name="m.name">
+              {{ m.name }} {{ m.code }}
+            </StockNameHover>
             <template v-if="sectors?.quotes?.[m.code]">
               · {{ sectors.quotes[m.code].price?.toFixed(2) }}
               <span :class="(sectors.quotes[m.code].chgPct ?? 0) >= 0 ? 'text-watch-up' : 'text-watch-down'">
@@ -285,8 +291,10 @@ watch(conceptName, async () => {
               >
                 <td class="py-2 pr-2">{{ l.rank }}</td>
                 <td class="py-2 pr-2">
-                  {{ l.name }}
-                  <span class="text-ui-text-3">{{ l.code }}</span>
+                  <StockNameHover :code="l.code" :name="l.name">
+                    {{ l.name }}
+                    <span class="text-ui-text-3">{{ l.code }}</span>
+                  </StockNameHover>
                 </td>
                 <td class="py-2 pr-2 text-right font-mono">
                   {{ l.score_quality != null ? l.score_quality.toFixed(3) : '-' }}

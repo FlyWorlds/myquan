@@ -266,7 +266,7 @@ def _spot_has_activity(df: pd.DataFrame) -> bool:
 
 
 def _spot_from_rotation_cache() -> pd.DataFrame:
-    """盘前/行情空时：用板块轮动缓存最近一日成交额排名（偏高概念）。"""
+    """盘前/行情空时：用板块轮动缓存成分成交额聚合（偏高概念）。"""
     path = ROOT / "sectors" / "cache" / "tdx_rotation_api.json"
     if not path.is_file():
         return pd.DataFrame()
@@ -275,9 +275,40 @@ def _spot_from_rotation_cache() -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
     kind = ((raw.get("kinds") or {}).get("概念") or {})
-    top = ((kind.get("by_metric") or {}).get("成交额") or {}).get("top") or []
-    latest = top[0] if top else []
+    members = kind.get("members") or {}
     rows: list[dict[str, Any]] = []
+    if isinstance(members, dict) and members:
+        for name, lst in members.items():
+            name = str(name or "").strip()
+            if not name:
+                continue
+            amt = 0.0
+            for it in lst or []:
+                if not isinstance(it, dict):
+                    continue
+                v = _num(it.get("成交额") or it.get("amount"))
+                if v and v > 0:
+                    amt += float(v)
+            if amt <= 0:
+                continue
+            rows.append(
+                {
+                    "板块": name,
+                    "label": "",
+                    "涨跌幅": None,
+                    "资金": amt,
+                    "总成交额": amt,
+                    "成交额": amt,
+                }
+            )
+        if rows:
+            return pd.DataFrame(rows)
+    top = ((kind.get("by_metric") or {}).get("成交额") or {}).get("top") or []
+    latest: list[Any] = []
+    for day in top:
+        if day:
+            latest = day
+            break
     for it in latest:
         name = str(it.get("name") or "").strip()
         if not name:
@@ -365,8 +396,10 @@ def _enrich_member_quotes(df: pd.DataFrame) -> pd.DataFrame:
         q = quotes.get(code) or {}
         if q.get("chgPct") is not None:
             out.at[i, "涨跌幅"] = q.get("chgPct")
-        if q.get("price") is not None and _num(raw.get("现价")) is None:
+        if q.get("price") is not None:
             out.at[i, "现价"] = q.get("price")
+        if q.get("amount") is not None:
+            out.at[i, "成交额"] = q.get("amount")
     live_chg = out["涨跌幅"].map(_num)
     if live_chg.notna().any() and (live_chg.abs() > 1e-9).any():
         return out
@@ -403,11 +436,71 @@ def _enrich_member_quotes(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _members_from_rotation_cache(name: str) -> pd.DataFrame:
+    """轮动缓存里已有成分现价/涨跌/成交额（通达信 HQ 挂掉时的成分回退）。"""
+    path = ROOT / "sectors" / "cache" / "tdx_rotation_api.json"
+    if not path.is_file():
+        return pd.DataFrame()
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return pd.DataFrame()
+    members = ((raw.get("kinds") or {}).get("概念") or {}).get("members") or {}
+    if not isinstance(members, dict):
+        return pd.DataFrame()
+    name = str(name or "").strip()
+    rows = members.get(name)
+    if not rows:
+        stripped = name.replace("概念", "").strip()
+        for key, lst in members.items():
+            k2 = str(key).replace("概念", "").strip()
+            if key == name or (stripped and (stripped == k2 or stripped in str(key) or k2 in name)):
+                rows = lst
+                break
+    if not isinstance(rows, list) or not rows:
+        return pd.DataFrame()
+    out: list[dict[str, Any]] = []
+    for it in rows:
+        if not isinstance(it, dict):
+            continue
+        code = "".join(ch for ch in str(it.get("代码") or it.get("code") or "") if ch.isdigit())
+        code = code.zfill(6)[-6:] if code else ""
+        if not code:
+            continue
+        out.append(
+            {
+                "代码": code,
+                "名称": str(it.get("名称") or it.get("name") or "").strip(),
+                "现价": it.get("现价") or it.get("price"),
+                "涨跌幅": it.get("涨跌幅") or it.get("chgPct"),
+                "成交额": it.get("成交额") or it.get("amount"),
+            }
+        )
+    return pd.DataFrame(out)
+
+
+def _members_have_price(df: pd.DataFrame) -> bool:
+    if df is None or df.empty:
+        return False
+    for col in ("现价", "price"):
+        if col in df.columns and df[col].map(_num).notna().any():
+            return True
+    return False
+
+
 def fetch_concept_members(name: str) -> pd.DataFrame:
     from sectors.live import fetch_concept_member_rows
 
-    payload = fetch_concept_member_rows(name, limit=80)
-    df = pd.DataFrame(payload.get("members") or [])
+    df = pd.DataFrame()
+    try:
+        payload = fetch_concept_member_rows(name, limit=80)
+        df = pd.DataFrame(payload.get("members") or [])
+    except Exception:
+        df = pd.DataFrame()
+    if not _members_have_price(df):
+        cached = _members_from_rotation_cache(name)
+        if not cached.empty:
+            df = cached
     return _enrich_member_quotes(df)
 
 
@@ -449,6 +542,12 @@ def build_quarter_pool(
     seen: set[str] = set()
     if members_by_concept is None and fetch and concepts:
         members_by_concept = {}
+        try:
+            from sectors.tdx import load_members_index
+
+            load_members_index()
+        except Exception:
+            pass
 
         def _one(name: str) -> tuple[str, pd.DataFrame]:
             try:
@@ -456,7 +555,7 @@ def build_quarter_pool(
             except Exception:  # noqa: BLE001
                 return name, pd.DataFrame()
 
-        with ThreadPoolExecutor(max_workers=min(8, len(concepts))) as pool:
+        with ThreadPoolExecutor(max_workers=min(4, len(concepts))) as pool:
             futs = [pool.submit(_one, c["name"]) for c in concepts]
             for fut in as_completed(futs):
                 name, df = fut.result()
@@ -539,6 +638,16 @@ def build_quarter_pool(
 def save_picks(payload: dict[str, Any], path: Path | None = None) -> Path:
     out = path or DEFAULT_PICKS_PATH
     out.parent.mkdir(parents=True, exist_ok=True)
+    if not payload.get("n_picks") and out.is_file():
+        try:
+            old = json.loads(out.read_text(encoding="utf-8"))
+        except Exception:
+            old = {}
+        if int(old.get("n_picks") or 0) > 0:
+            errs = list(payload.get("errors") or [])
+            errs.append("本次 0 票，未覆盖上次核心龙头池")
+            payload["errors"] = errs
+            return out
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return out
 

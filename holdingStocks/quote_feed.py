@@ -481,6 +481,8 @@ def fetch_sina_batch(sinas: list[str]) -> dict[str, dict[str, Any]]:
                 "low": low_px,
                 "last": last_px,
                 "prev_close": prev_close,
+                "amount": _f(9),
+                "day_chg_pct": price_chg_pct(last_px, prev_close),
                 "last_ts": stamp,
                 "name": stock_name,
             }

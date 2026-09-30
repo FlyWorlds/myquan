@@ -495,6 +495,105 @@ def is_quote_stale(
     return age > float(stale_after)
 
 
+def _session_clock(ts: str | None) -> str:
+    """从 quote_ts 取 HH:MM:SS；缺则空串。"""
+    s = str(ts or "").strip()
+    if len(s) >= 19 and s[10] == " ":
+        return s[11:19]
+    if len(s) >= 8 and s[2] == ":":
+        return s[:8]
+    return ""
+
+
+def _in_live_exec_window(quote_ts: str | None) -> bool:
+    """连续竞价才允许 simulator 成交（与纸面 is_signal_window 对齐）。"""
+    hms = _session_clock(quote_ts)
+    if not hms:
+        return False
+    return ("09:30:00" <= hms <= "11:30:00") or ("13:00:00" <= hms < "15:00:00")
+
+
+def pnl_start_date() -> str:
+    from watch_config import STRATEGY_PNL_START
+
+    return str(STRATEGY_PNL_START)[:10]
+
+
+def session_before_pnl_start(session: str | None) -> bool:
+    """起算日前不计策略累计成交（展示保持空账本 0%）。"""
+    s = str(session or "")[:10]
+    start = pnl_start_date()
+    return bool(s) and bool(start) and s < start
+
+
+def reset_strategy_books(strategy_id: str) -> int:
+    """清空某策略全部虚拟账本（累计归零）。盯盘须停掉再写盘，否则内存会盖回。"""
+    load_state(force=True)
+    sid = str(strategy_id)
+    prefix = f"{sid}:"
+    n = 0
+    with _LOCK:
+        st = _STATE if _STATE is not None else empty_state()
+        pos = st.setdefault("positions", {})
+        for key in list(pos.keys()):
+            if str(key).startswith(prefix):
+                code = str(key).split(":", 1)[-1]
+                pos[key] = empty_book(strategy_id=sid, symbol=code)
+                n += 1
+        st["updated_at"] = _now_str()
+        save_state()
+    return n
+
+
+def archive_strategy_events(
+    strategy_id: str,
+    *,
+    dest: Path | None = None,
+    reason: str = "",
+) -> int:
+    """把某策略历史事件移出 live 事件流，避免 repair 重放旧成交。"""
+    sid = str(strategy_id)
+    dest = dest or (ROOT / f"strategy_signal_events.{sid}_archived.json")
+    if not EVENTS_FILE.is_file():
+        return 0
+    try:
+        raw = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return 0
+    evs = list(raw.get("events") or []) if isinstance(raw, dict) else []
+    kept: list[dict[str, Any]] = []
+    moved: list[dict[str, Any]] = []
+    for e in evs:
+        if not isinstance(e, dict):
+            continue
+        if str(e.get("strategy_id") or "") == sid:
+            row = dict(e)
+            if reason:
+                row["archive_reason"] = reason
+            moved.append(row)
+        else:
+            kept.append(e)
+    if not moved:
+        return 0
+    dest.write_text(
+        json.dumps(
+            {"updated_at": _now_str(), "reason": reason, "events": moved},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    EVENTS_FILE.write_text(
+        json.dumps(
+            {"updated_at": _now_str(), "events": kept},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return len(moved)
+
+
 def evaluate_live_transition(
     *,
     strategy_id: str,
@@ -511,11 +610,14 @@ def evaluate_live_transition(
     now: datetime | None = None,
     stale_after: float | None = None,
     t0: bool = False,
+    day_open: float | None = None,
 ) -> dict[str, Any]:
     """用 live last 撞 buy/sell level；仅状态转换产生事件。
 
     BUY：FLAT + allow_entry + last >= buy_level，且当日未卖出过
     SELL：LONG + last <= sell_level，且非买入当日（t0 标的除外）
+    **SELL 仅连续竞价**（09:30–11:30 / 13:00–15:00）。竞价已破卖价等到 9:30，
+    若今开已破卖价则按开盘价、时刻 09:30:00。
 
     条件语义保持 touch（>= / <=），不是 cross。
     T+1 / 卖出日不再买回与回测 ``open_break`` 及日线 bootstrap 一致；
@@ -528,6 +630,30 @@ def evaluate_live_transition(
         if stale_after is not None
         else LIVE_QUOTE_STALE_AFTER_SECONDS
     )
+    sess0 = _session_of(quote_ts or eval_t)
+    if session_before_pnl_start(sess0):
+        book = force_book if force_book is not None else get_book(strategy_id, symbol)
+        try:
+            last0 = float(live_last)
+        except (TypeError, ValueError):
+            last0 = 0.0
+        if last0 > 0:
+            mark_book(book, last0, quote_ts=quote_ts)
+        if persist and force_book is None:
+            save_state()
+        return {
+            "transition": None,
+            "book": deepcopy(book),
+            "event": None,
+            "telemetry": {
+                "quote_time": quote_ts,
+                "evaluation_time": eval_t,
+                "signal_time": None,
+                "quote_to_eval_ms": None,
+                "eval_to_signal_ms": None,
+            },
+            "skipped": "before_pnl_start",
+        }
     out: dict[str, Any] = {
         "transition": None,
         "book": None,
@@ -618,18 +744,38 @@ def evaluate_live_transition(
             if touched and not t0 and _session_of(book.get("entry_time")) == session:
                 out["skipped"] = "t1_locked"
                 touched = False
+            if touched and not _in_live_exec_window(quote_ts or eval_t):
+                out["skipped"] = "wait_auction"
+                touched = False
             if touched:
                 shares = float(book.get("virtual_shares") or 0.0)
                 entry = float(book.get("entry_price") or 0.0)
-                proceeds = shares * last
+                fill_px = last
+                exit_ts = str(quote_ts or eval_t)
+                try:
+                    open_f = float(day_open or 0)
+                except (TypeError, ValueError):
+                    open_f = 0.0
+                hms = _session_clock(quote_ts or eval_t)
+                if (
+                    sell_lv is not None
+                    and open_f > 0
+                    and open_f <= float(sell_lv) + 1e-12
+                    and "09:30:00" <= hms <= "09:32:59"
+                ):
+                    fill_px = open_f
+                    exit_ts = f"{session} 09:30:00"
+                proceeds = shares * fill_px
                 book["virtual_cash"] = float(book.get("virtual_cash") or 0.0) + proceeds
                 book["virtual_shares"] = 0.0
                 book["state"] = "FLAT"
-                book["exit_price"] = round(last, 4)
-                book["exit_time"] = str(quote_ts or eval_t)
+                book["exit_price"] = round(fill_px, 4)
+                book["exit_time"] = exit_ts
                 book["trades"] = int(book.get("trades") or 0) + 1
                 if entry > 0:
-                    book["closed_trade_return_pct"] = round((last / entry - 1.0) * 100.0, 2)
+                    book["closed_trade_return_pct"] = round(
+                        (fill_px / entry - 1.0) * 100.0, 2
+                    )
                 book["single_return_pct"] = None
                 init = float(book.get("initial_cash") or INITIAL_CASH)
                 book["cumulative_return_pct"] = round(
@@ -639,12 +785,12 @@ def evaluate_live_transition(
                 transition = "SELL"
                 event = {
                     "event_id": _event_id(
-                        strategy_id, symbol, "SELL", book["exit_time"], last
+                        strategy_id, symbol, "SELL", book["exit_time"], fill_px
                     ),
                     "strategy_id": strategy_id,
                     "symbol": _code_key(symbol),
                     "side": "SELL",
-                    "trigger_price": round(last, 4),
+                    "trigger_price": round(fill_px, 4),
                     "trigger_time": book["exit_time"],
                     "quote_timestamp": quote_ts,
                     "reason": reason,
@@ -691,8 +837,12 @@ def apply_book_to_row(row: dict[str, Any], book: dict[str, Any]) -> None:
     row["策略收益范围"] = "symbol"
     row["策略累计持有"] = state == "LONG"
     row["单笔收入%"] = book.get("single_return_pct")
-    if book.get("entry_time"):
-        row["信号时间"] = book.get("entry_time") if state == "LONG" else book.get("exit_time")
+    # 不覆盖 Paper 已写入的成交/预警时刻（今日平仓卡片「触发」以纸面为准）
+    if not row.get("信号时间"):
+        if book.get("entry_time"):
+            row["信号时间"] = (
+                book.get("entry_time") if state == "LONG" else book.get("exit_time")
+            )
 
 
 def reset_memory_for_tests() -> None:

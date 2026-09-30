@@ -28,6 +28,7 @@ C. 可成交时的优先级（谁先触发谁成交）
 | 03 | 信号 | `last_hit` = last ≤ working_stop | — |
 | 04 | 信号 | `path_ok` = path_hit ∧ path_fill_px>0 | — |
 | 05 | T+1 收窄 | 若 `t1_today`：清零 `open_hit`；`last_hit`/`path_ok` 仅允许硬保护触达 | — |
+| 05b | 信号 | 非 T+1：今开已破 working_stop 且已印出 `day_high` 从未到该价 → `open_hit`。`day_high` 须为 `usable_session_high`（开盘脏窗丢掉 API 竞价虚高） | `open_bell` |
 | 06 | 展示 | `hit_show` = open_hit ∨ last_hit ∨ path_ok；否则 empty | `hit_show` |
 | 07 | 拦截 | `t1_today` → 只展示，不成交 | `reason=t1` |
 | 08 | 拦截 | `hold_locked` → 只展示 | `hold_lock` |

@@ -1035,6 +1035,15 @@ def test_simulate_ladder_half_only_keeps_remainder():
     assert int(sim2.get("shares_out") or 0) == 500
 
 
+def test_usable_session_high_drops_auction_leftover():
+    """开盘脏窗丢掉 API 虚高；过窗后仍可用 dayHigh 补漏 tick。"""
+    fn = _m.usable_session_high
+    assert abs(fn(quote_high=7.03, open_px=6.88, last_px=6.88, trust_api_high=False) - 6.88) < 1e-9
+    assert abs(fn(quote_high=18.88, open_px=18.40, last_px=18.60, trust_api_high=True) - 18.88) < 1e-9
+    assert abs(fn(quote_high=7.03, open_px=6.88, last_px=6.88, path_running_high=6.92, trust_api_high=False) - 6.92) < 1e-9
+    assert abs(fn(quote_high=7.03, open_px=6.88, last_px=6.87, path_running_high=6.92, trust_api_high=True) - 6.92) < 1e-9
+
+
 if __name__ == "__main__":
     test_half_gain_formula()
     test_multi_tp_ladder_and_peak_once()
@@ -1067,6 +1076,7 @@ if __name__ == "__main__":
     test_simulate_ladder_half_reduces_shares_then_peak_trail_clears_rest()
     test_simulate_ladder_half_only_keeps_remainder()
     test_working_stop_not_ladder_when_peak_already_extended()
+    test_usable_session_high_drops_auction_leftover()
     test_path_dependent_ladder_half_uses_real_shares_and_stage()
     test_strategy_signal_half_alert_not_full_stop()
     test_strategy_signal_hang_text_is_multi_tp()

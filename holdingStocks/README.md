@@ -22,7 +22,7 @@
 - **选股/过滤**：日线（阴小阳、双阳）；**因子2 回撤**日线权益预警（不注资）
 - **因子2**：账户回撤加减仓**预警**（**不自动改现金**）
 - **因子22**：研究路径保留；**三槽执行下，当日止损/已记卖出的标的当日禁再买**（不再用因子22 同日回补该票）
-- **纸面持仓（Capital V2）**：同时最多 **5** 只；每个交易日最多新开 **2** 个 symbol；单票入场目标 ≤ 权益 **20%**；BUY 受可用现金约束（不得买成负现金）；禁止加仓。**仅默认策略池入槽**；**先平再买**。平仓腾总槽但不恢复当日新增额度。成交价规则不变：平仓前已触买且现价≤买点+1%→现价，否则新触发→买点。
+- **纸面持仓（Capital V2）**：同时最多 **5** 只；每个交易日最多新开 **2** 个 symbol；单票入场目标 ≤ 权益 **20%**；BUY 受可用现金约束（不得买成负现金）；禁止加仓。**仅当前默认策略池入槽**（换池后空槽只买新因子27∪自选）；**已有实仓不因掉出因子27 强平**，卖出仍走因子26 / T+1。**先平再买**。平仓腾总槽但不恢复当日新增额度。成交价规则不变：平仓前已触买且现价≤买点+1%→现价，否则新触发→买点。
 - 交易池：**因子27 选股池** ∪ **公共自选池**（天通/凯盛/东材/金安 · `SELF_WATCHLIST_PICKS`；策略一/十五/十六与盯盘并集均并入）
 - 参数与 `strategy16` / `pullback_wave_stop` 同源；`USE_FACTOR4=False`（不叠牛市止损）
 
@@ -34,7 +34,7 @@
 - **因子池**：刷新 `picks_quarter.json`（`python strategy/run_core_leader_pool.py`）
 - **公共自选池**：改 `SELF_WATCHLIST_PICKS`（旧名 `STRATEGY16_EXTRA_PICKS` 仍兼容；**全策略共用**，非仅策略十六）。「选股/池名单」在策略 Tab **底部折叠面板**（默认收起，展开后按分类 Tab 查看）；上方实时信号表整表展示。
 
-**当前**：因子27 滚动近3个月名单（每概念≤2、约30只）+ 自选四票；剔ST/百元股/科创/创业。改池后需重启 `start_watch.py`。
+**当前**：因子27 as_of **2026-09-30**（30只 / 18概念，有效至 2026-12-30，见 [`docs/FACTOR27.md`](../docs/FACTOR27.md)）+ 自选四票；剔ST/百元股/科创/创业。换池后空槽只买新名单，**实仓不因掉池强平**。改池后需重启 `start_watch.py`。
 
 回测产物：`backtest/strategy16_core_leader/`。**策略十六开盘阈值**只认 `thr_2026.json`（缺省 `DEFAULT_PCT=2.5%`），不走策略一遗留 `_WATCH_PCT` / 置顶名单里的 pct。
 
@@ -65,9 +65,9 @@ WATCHLIST = list(S7_WATCHLIST)
 | 时刻 | 行为 |
 |------|------|
 | **9:15 前** | 可启动 watch；盘前不触发信号；无成交价用昨收/日线垫现价；**先留上次可用快照再更新，行情未就绪不覆盖成空表** |
-| **9:15** | 开始拉竞价行情；**进程内定时任务** `holdings-auction-milestones` 触发：**全日状态重置**（sticky / 非当日 realized / 微信防抖）+ **昨仓今日盈亏按昨收重算**；只留 qty>0 实仓；启动时若已过 9:15 且本日未重置会补跑；报单可撤；**竞价价可展示，禁止止损结算 / 禁止「待卖出」**（预警用「竞价观察」） |
+| **9:15** | 开始拉竞价行情；**进程内定时任务** `holdings-auction-milestones` 触发：**全日状态重置**（sticky / 非当日 realized / 微信防抖）+ **昨仓今日盈亏按昨收重算**；只留 qty>0 实仓；启动时若已过 9:15 且本日未重置会补跑；报单可撤；**竞价价可展示，禁止止损结算 / 禁止「待卖出」/ 禁止抬 HWM**（预警用「竞价观察」） |
 | **9:20** | 竞价不可撤单；同上，仍不可 `apply_exit_fill` |
-| **9:25** | 开盘价确定 → 算过门（阴/小阳）/买点/止损，**可挂单**（建议买/卖价）；可亮「竞价止损预警 / 将买入」，**不计已触发、不结算、不「待卖出」** |
+| **9:25** | 开盘价确定 → 算过门（阴/小阳）/买点/止损，**可挂单**（建议买/卖价）；可亮「竞价止损预警 / 将买入」，**不计已触发、不结算、不「待卖出」**；预警时刻不得写成成交时刻 |
 | **9:30** | 连续竞价 → **已触发**买卖 / 止损**结算** / 微信（**11:30–13:00 午休、15:00 后不自动成交**）；此时才允许持仓态「待卖出」与【模拟卖出】 |
 | **已触止损展示** | 路径触达或现价≤卖价即标「是」并绿底预警；**午休/收盘后仍保留展示**；自动卖出仅连续竞价 |
 | **已触买展示** | 过门且盘中触及买点 → 标「已触买」（槽满/未入槽仍预警）；卡片/策略表展示**触发时刻（时分秒）**；**进预警栏后当天不摘**；不降成空仓；自动买入仅连续竞价 |
@@ -75,15 +75,15 @@ WATCHLIST = list(S7_WATCHLIST)
 优先级（9:30 起）：
 
 1. **买入当日（T+1）**：不可卖。盘中盈利未到 3% **只预告**「将记到次日」，**不**把状态打成已触止损、**不**武装当日卖价。收盘确认后才落库武装次日峰值回落。硬保护被路径打到且现价仍在硬保护附近才记「止损已记」，**下一交易日隔夜仓可卖**（`available=0` 当买入日残留，自动解开，不永久锁仓）。**昨收/昨高**只经 `overnight_peak_px`（须 `overnight_session_high_ok`）；今日新买不用昨收/昨高。**唯一落库口** `persist_stop_noted`：只接受 `hard_from_cost` / `t1_trail`，已记价不得高于成本。盈利≥3%、涨停、中段卖价、今开撞当日抬高卖价：**不记、已记作废、禁止写回**。每轮 `heal_watch_ledger` 清掉非法已记。
-2. **持有中（全持仓同一套 `paper_exit_decision`）**：非 T+1、可卖则平。盯盘 **5 秒刷新即成交**（现价破卖价按**卖点**记，滑点在策略成本里不加第二次）。1 分钟路径用来排先后、进程迟到时补第一笔触达。昨收已过 3% 且今开低于回落一半 → 按开盘平。**竞价核 = 9:30 开盘价成交**（触发时刻固定 `09:30:00`，不用缺 09:30 的首根 1m 标签 09:31/09:32）。开盘保护用 **9:15 冻结的隔夜峰值**（`overnight_peak`），禁止盘中新高回写后再抬保护（涨停次日高开误杀）；高开且峰值≥今开回退成本/昨收，低开仍用昨高；1m **跳过 09:30 前竞价 K**；开盘保护强制全清（忽略残留 `ladder_half_10`）。禁止用全日最低去撞盘中抬高后的止损。扫仓 `settle_due_paper_stops` 能看见本轮 1m 触达，不再 `path_hit=False`。已平仓卖出侧=锁定成交价。T+1 只记不卖。**10% 只减半**
+2. **持有中（全持仓同一套 `paper_exit_decision`）**：非 T+1、可卖则平。盯盘 **5 秒刷新即成交**（现价破卖价按**卖点**记，滑点在策略成本里不加第二次；**今开已破卖价且当日最高从未印到该价 → 按开盘**）。1 分钟路径用来排先后、进程迟到时补第一笔触达。昨收已过 3% 且今开低于回落一半 → 按开盘平。**竞价核 = 9:30 开盘价成交**（触发时刻固定 `09:30:00`，不用缺 09:30 的首根 1m 标签 09:31/09:32）。开盘保护用 **9:15 冻结的隔夜峰值**（`overnight_peak`），禁止盘中新高回写后再抬保护（涨停次日高开误杀）；**竞价行情不得抬 HWM**；**开盘后前 3 分钟 API `high` 若高于今开/现价/1m 最高视为竞价残留**（`usable_session_high`，不进 HWM / 今日最高 / 穿越判定）；高开且峰值≥今开回退成本/昨收，低开仍用昨高；1m **跳过 09:30 前竞价 K**；开盘保护强制全清（忽略残留 `ladder_half_10`）。禁止用全日最低去撞盘中抬高后的止损。扫仓 `settle_due_paper_stops` 能看见本轮 1m 触达，不再 `path_hit=False`。已平仓卖出侧=锁定成交价。T+1 只记不卖。**10% 只减半**
 3. **当日卖出后再买**：**禁止**（止损/已记卖出的标的当日不可再买）
 4. **仓位（Capital V2）**：同时最多 5；日新开最多 2 symbol；单票入场 ≤ 权益 20%；现金约束、禁止负现金买入、禁止加仓；**先平再买**；腾槽价规则同前
 5. **空仓**：过滤通过且触买点 → **买入信号预警必须进持仓预警栏**（待买入 / 已触买）；**入槽是成交**，槽满/日额度满/现金不足仍可发「已触买·槽满/未入槽」或挂单说明「资金规则未开仓」。策略回放止损不当当日禁买。**未过门不算触买、不预警**
 6. **数据**：买入触达 **5 秒现价/最高 ≥ 买点即成交**。新触发（含开盘空槽）成交价=**买点**；平仓腾槽后第一梯队（平仓前已触买）成交价=**现价**，且现价不得超过买点 1%。有 1m 则用触达分钟的时分秒排入槽先后。卖出同口径。`信号时间` 来自 sticky / `buy_time` / 1m `touch_ts` / 行情 `last_ts`，已入槽后本轮不再算触买也要显示。禁止用收盘后抬高的止损去撞今开。
 
-（**9:15–9:25 竞价**：只拉行情参考，**不算**买点/动态止盈/触达、**不**回写峰值。  
+（**9:15–9:30 竞价**：只拉行情参考，**不算**买点/动态止盈/触达、**不**回写峰值（竞价虚拟高/昨高残留不得抬 HWM）。  
 **9:25–9:30**：开盘价已定，**可挂单**（阈值/将买入/将止损），**不**结算、**不**推微信。  
-**9:30 起**：已触发买卖 / 止损结算 / 微信。因子26 实仓触达用当日 1m 缓存。）
+**9:30 起**：已触发买卖 / 止损结算 / 微信。因子26 实仓触达用当日 1m 缓存。今开已破工作卖价且当日最高从未印到该价 → **按开盘成交**，时刻固定 **09:30:00**（竞价观察戳 09:15–09:25 不得当平成交时刻）。策略模拟 SELL 同样等连续竞价，低开已破按开盘。）
 
 （策略三开启 `USE_FACTOR4` 时：牛市可放宽/暂停止损，见 `factor4_watch.py`。）
 
@@ -99,9 +99,9 @@ WATCHLIST = list(S7_WATCHLIST)
 
 登记示例：`python index.py set-cost 002015 --cost 16.122 --qty 600`；或在 `holdings.json` 加 `"portfolio_pool": ["002015"]`。
 
-**策略16 Tab**：默认池信号表，按 **距买点% 升序**（最近在前）；可点表头按 **日内涨跌** / **策略累计** 排序。**状态主语义 = Strategy Simulator**（空仓/策略持有，来自 `strategy_sim_state.json`，与纸面 qty 独立）；纸面仓仅 debug 小字。Live quote（约 2~5s patch）撞买/卖位触发 FLAT↔LONG；不等待 1m close。**T+1 与回测 `open_break` / 日线 bootstrap 同口径**：买入当日不卖（`t0` 标的除外，`skipped=t1_locked`），卖出当日不再买回（`skipped=exited_today`）。2026-09-28 前 live 无此两条，买卖位交叉的票逐 tick 翻转（如 601208 单日近万笔），污染 25 个账本；修复脚本 `python repair_strategy_sim_t1.py`（默认 dry-run，停盯盘后 `--apply`；按原 bootstrap_cutoff 重跑历史段 + 新规则重放 live 事件，被拒事件归档 `strategy_signal_events.voided.json`）。策略累计/单笔收入来自同一 simulator 虚拟账本（`策略收益语义=strategy_simulator_ledger`），**不再用 Factor1 串台**。**FLAT ≠ 累计 0**：从未交易才是 0%；平仓后累计 = `virtual_cash/initial_cash−1` 冻结。首次空账本用日线 OHLC touch **bootstrap 一次**（自 `STRATEGY_PNL_START` 至末日线 cutoff），其后由 live events 接力；`bootstrapped` 防双计。Paper 入槽仍走 Capital V2（日增≤2 / 20% / 最多5）；Paper limit **不回滚** simulator BUY。Durable：`strategy_sim_state.json`（含 virtual_cash/shares）+ `strategy_signal_events.json`（跨机同步需包含）。状态图例可点筛选。买入信号口径真源：`watch_buy_signal.py`；simulator：`strategy_simulator.py`。
+**策略16 Tab**：默认池信号表，按 **距买点% 升序**（最近在前）；可点表头按 **日内涨跌** / **策略累计** 排序。**状态主语义 = Strategy Simulator**（空仓/策略持有，来自 `strategy_sim_state.json`，与纸面 qty 独立）；纸面仓仅 debug 小字。Live quote（约 2~5s patch）撞买/卖位触发 FLAT↔LONG；不等待 1m close。**T+1 与回测 `open_break` / 日线 bootstrap 同口径**：买入当日不卖（`t0` 标的除外，`skipped=t1_locked`），卖出当日不再买回（`skipped=exited_today`）。2026-09-28 前 live 无此两条，买卖位交叉的票逐 tick 翻转（如 601208 单日近万笔），污染 25 个账本；修复脚本 `python repair_strategy_sim_t1.py`（默认 dry-run，停盯盘后 `--apply`；按原 bootstrap_cutoff 重跑历史段 + 新规则重放 live 事件，被拒事件归档 `strategy_signal_events.voided.json`）。策略累计/单笔收入来自同一 simulator 虚拟账本（`策略收益语义=strategy_simulator_ledger`），**不再用 Factor1 串台**。**FLAT ≠ 累计 0**：从未交易才是 0%；平仓后累计 = `virtual_cash/initial_cash−1` 冻结。首次空账本用日线 OHLC touch **bootstrap 一次**（自 `STRATEGY_PNL_START`=**2026-10-08** 至末日线 cutoff；此前 live 成交 `skipped=before_pnl_start`，累计保持 0），其后由 live events 接力；`bootstrapped` 防双计。纸面账户总收益仍自 `PAPER_PNL_START`=2026-09-09。Paper 入槽仍走 Capital V2（日增≤2 / 20% / 最多5）；Paper limit **不回滚** simulator BUY。Durable：`strategy_sim_state.json`（含 virtual_cash/shares）+ `strategy_signal_events.json`（跨机同步需包含）。状态图例可点筛选。买入信号口径真源：`watch_buy_signal.py`；simulator：`strategy_simulator.py`。
 
-**Trailing 校验列（持仓卡 / 策略16）**：`现价 | 今日最高 | 持仓最高 | 卖出侧`。**今日最高** = 行情 API `dayHigh`（行字段 `最高`/`今日最高`）；**持仓最高** = `holdings.positions.*.peak_high`（可选 `peak_high_at`→`持仓最高时间`），与自动卖出 / `working_stop_price` / `paper_exit_decision` **同一 SoT**；前端禁止 `Math.max` 自算。全量 `collect_rows` 与行情快刷 `_sync_snapshot_hwm_from_quotes` 均经 `raise_position_peak_high` 抬升（只升不降）。
+**Trailing 校验列（持仓卡 / 策略16）**：`现价 | 今日最高 | 持仓最高 | 卖出侧`。**今日最高** = 已印出最高（`usable_session_high`：连续竞价且过开盘脏窗才信 API `dayHigh`，否则 max(今开, 现价, 1m)）；**持仓最高** = `holdings.positions.*.peak_high`（可选 `peak_high_at`→`持仓最高时间`），与自动卖出 / `working_stop_price` / `paper_exit_decision` **同一 SoT**；前端禁止 `Math.max` 自算。全量 `collect_rows` 与行情快刷 `_sync_snapshot_hwm_from_quotes` 均经 `raise_position_peak_high` 抬升（只升不降）；**连续竞价前不抬**；**行情时间戳须已在连续竞价**（墙钟 9:30 但 tick 仍是 9:25 也不抬）。
 
 **时间完整性 invariant**（`temporal_integrity.py`）：`quote_at <= decision_at`；`peak_high_at <= decision_at`（违例 = `FUTURE_DATA_VIOLATION`，禁止抬 HWM / 自动成交）；新 HWM 必须原子写 `peak_high`+`peak_high_at`；旧仓缺 `peak_high_at` 降级迁移（`LEGACY_UNKNOWN` / buy_time）；**禁止** `fill≈open` 反推 09:30（PATH 保持真实 `triggered_at`）；乱序旧行情 `STALE_QUOTE_REJECTED`；成交写入 `exit_kind`/`triggered_at`/`filled_at` 后 heal 不得改 PATH。专题：[`docs/TEMPORAL_INTEGRITY.md`](../docs/TEMPORAL_INTEGRITY.md)。
 
@@ -148,7 +148,7 @@ pip install -r ../requirements.txt
 
 浏览器 **http://127.0.0.1:3000/sectors** 为板块轮动热力表。**优先通达信概念**（本地配置同步 + pytdx）；行情失败时仅复用**同一交易日且今日列已有排名**的通达信磁盘缓存（≤2 天）。**隔日缓存作废**；通达信只拉到 1 日时拼回磁盘历史，禁止整表覆盖。**启动分步**：先推盯盘/策略快照并实时刷新，板块通达信全市场行情放到首屏之后的后台线程（约 5s）；主循环不再同步 `build_sectors_live_payload`。历史列来自 `/api/sectors/rotation`（约 1 小时缓存，「重载历史」才重拉）；**今日列与成分股现价走盯盘 WebSocket**。点格子只为展开成分名单；再点一次进概念详情（先 lite 出 K 线，再补波段龙头；因子16 评分后置）。
 
-栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（HTTP `/api` + WebSocket `/ws`），不生成 HTML、不托管页面。
+栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（HTTP `/api` + WebSocket `/ws`），不生成 HTML、不托管页面。股票名称移入即预取基本面，约 0.1 秒弹出（行业/概念/题材、市值 PE/PB、同板块关联及关系、产业上下游/主营；`GET /api/stock/profile`）。
 
 ```bash
 # 推荐：一键（Mac / Windows）
@@ -202,6 +202,7 @@ API：
 | `GET /api/shadow/status` | 只读 Shadow telemetry（metrics / buffer 长度 / 最近一条；无 reset） |
 | `GET /api/strategies` | 策略 Tab + 因子绑定（注册表同源） |
 | `GET /api/factors` | 因子说明 + 挂载策略（注册表同源） |
+| `GET /api/stock/profile?code=` | 个股 hover 画像：行业/概念/题材、市值估值、同板块关联及关系、产业上下游（通达信板块 + 东财 F10） |
 | `WS /ws` | 推送 snapshot（与 `/api/snapshot` 同结构） |
 
 前端路由（Nuxt SPA）：

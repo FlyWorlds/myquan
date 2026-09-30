@@ -1,5 +1,5 @@
 /** 鼠标悬停 delayMs 后显示，移出短暂延迟后隐藏（便于移入浮层）。 */
-export function useHoverDelay(delayMs = 1000) {
+export function useHoverDelay(delayMs: number | (() => number) = 1000, leaveMs = 220) {
   const show = ref(false)
   let enterTimer: ReturnType<typeof setTimeout> | null = null
   let leaveTimer: ReturnType<typeof setTimeout> | null = null
@@ -21,10 +21,11 @@ export function useHoverDelay(delayMs = 1000) {
       leaveTimer = null
     }
     if (show.value) return
+    const wait = typeof delayMs === 'function' ? delayMs() : delayMs
     enterTimer = setTimeout(() => {
       show.value = true
       enterTimer = null
-    }, delayMs)
+    }, Math.max(0, wait))
   }
 
   function onLeave() {
@@ -35,7 +36,7 @@ export function useHoverDelay(delayMs = 1000) {
     leaveTimer = setTimeout(() => {
       show.value = false
       leaveTimer = null
-    }, 220)
+    }, leaveMs)
   }
 
   function onPanelEnter() {
