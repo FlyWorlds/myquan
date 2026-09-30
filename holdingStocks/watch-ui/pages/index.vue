@@ -66,6 +66,13 @@ const strategy15Tab = computed(() => strategyTabs.value.find((t) => t.id === 'st
 const strategy16Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16'))
 const strategy16bTab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16b'))
 const strategy17Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy17'))
+const strategy16RowsCount = computed(() => snapshot.value?.strategy16?.length || 0)
+const strategy16PickCount = computed(() => strategy16Tab.value?.picks?.items?.length || 0)
+const strategy16PartialLoading = computed(() => {
+  const rows = strategy16RowsCount.value
+  const picks = strategy16PickCount.value
+  return picks > 0 && rows > 0 && rows < picks
+})
 
 type Strategy16BPriceMax = '50' | '100' | '200' | 'none'
 
@@ -389,6 +396,15 @@ const closedCount = computed(() => closedHoldings.value.length)
       </section>
       <section v-show="activeTab === 'strategy16'">
         <StrategyInfoPanel v-if="strategy16Tab" :tab="strategy16Tab" class="mb-4" />
+        <div
+          v-if="strategy16PickCount"
+          class="mb-3 rounded border border-ui-hairline bg-ui-surface px-3 py-2 text-xs text-ui-text-2"
+        >
+          实时表 {{ strategy16RowsCount }} / 候选池 {{ strategy16PickCount }} 只
+          <span v-if="strategy16PartialLoading" class="ml-2 text-accent">
+            分阶段加载中，默认策略行情还在补齐
+          </span>
+        </div>
         <Strategy1Panel
           v-if="snapshot"
           :rows="snapshot.strategy16 || []"
