@@ -878,6 +878,15 @@ def apply_feed_health(
         snap["quoteAt"] = snap.get("clock")
     if health.get("quoteAgeSec") is not None:
         snap["quoteAgeSec"] = health.get("quoteAgeSec")
+    try:
+        try:
+            from health_status import classify_snapshot_health
+        except ModuleNotFoundError:
+            from holdingStocks.health_status import classify_snapshot_health
+
+        snap.update(classify_snapshot_health(snap))
+    except Exception:  # noqa: BLE001
+        pass
     return snap
 
 

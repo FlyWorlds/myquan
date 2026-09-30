@@ -1,0 +1,8 @@
+# Development and regression-test dependencies.
+#
+# Runtime dependencies stay in requirements.txt. Install this file when you want
+# to run the repository-wide pytest suite in a fresh environment:
+#
+#   python3 -m pip install -r requirements.txt -r requirements-dev.txt
+
+pytest>=8.0

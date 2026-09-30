@@ -2631,6 +2631,7 @@ def _attach_strategy_pnl_fields(
     from strategy_simulator import (
         apply_book_to_row,
         ensure_bootstrapped,
+        ensure_bootstrapped_from_factor26_replay,
         evaluate_live_transition,
         get_book,
         mark_book,
@@ -2649,9 +2650,33 @@ def _attach_strategy_pnl_fields(
         row["策略状态"] = "空仓"
         row["策略收益语义"] = "strategy_simulator_ledger"
         row["策略收益范围"] = "symbol"
+        row["策略历史口径"] = "daily_open_break_fixed_stop"
+        row["策略实时口径"] = "quote_touch_row_levels"
+        row["策略退出口径"] = "row_sell_level_live"
         return
 
-    # 历史日线 bootstrap → 同一账本；仅从未交易初始态执行一次
+    replay_info: dict[str, Any] | None = None
+    if str(FACTOR_ID).lower() in ("factor26", "f26", "26"):
+        try:
+            replay_info = _replay_last_factor_triggers_cached(
+                w["sina"],
+                daily,
+                entry_pct=entry_pct,
+                stop_pct=stop_pct,
+                tick=tick,
+                prev_entry_mode=prev_entry_mode,
+                limit_down_pct=limit_down_pct,
+            )
+            ensure_bootstrapped_from_factor26_replay(
+                sid,
+                code,
+                replay_info,
+                persist=True,
+            )
+        except Exception:  # noqa: BLE001
+            replay_info = None
+
+    # 历史 bootstrap → 同一账本；优先 factor26 1m replay，缺分钟时退回日线简化模型。
     try:
         ensure_bootstrapped(
             sid,
@@ -2719,7 +2744,7 @@ def _attach_strategy_pnl_fields(
     # debug：保留 Factor1 对照字段名但不作为主状态（避免 UI 双真相）
     row["策略回放对照%"] = None
     try:
-        rec = _strategy_pnl_since_cached(
+        rec = replay_info or _strategy_pnl_since_cached(
             w["sina"],
             daily,
             q=q,
@@ -2732,6 +2757,9 @@ def _attach_strategy_pnl_fields(
         )
         row["策略回放对照%"] = rec.get("return_pct")
         row["策略回放对照持有"] = bool(rec.get("holding"))
+        row["策略回放触发侧"] = rec.get("last_trigger_side")
+        row["策略回放触发价"] = rec.get("last_trigger_px")
+        row["策略回放来源"] = rec.get("source")
     except Exception:  # noqa: BLE001
         pass
 

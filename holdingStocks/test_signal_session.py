@@ -1,4 +1,4 @@
-"""信号交易日 / 前日锚定（周末→周五；周一前日=周五）。"""
+"""信号交易日 / 前日锚定（休市日→上一交易日）。"""
 
 from __future__ import annotations
 
@@ -35,6 +35,15 @@ def test_weekend_and_monday_anchor() -> None:
     assert normalize_signal_session("2026-09-14") == "2026-09-14"
 
 
+def test_exchange_holiday_anchor() -> None:
+    # 2026 National Day: SSE closes Oct 1-7 and resumes Oct 8.
+    assert trading_session_date(dt.datetime(2026, 10, 1, 10, 0)) == dt.date(2026, 9, 30)
+    assert trading_session_date(dt.datetime(2026, 10, 7, 10, 0)) == dt.date(2026, 9, 30)
+    assert trading_session_date(dt.datetime(2026, 10, 8, 10, 0)) == dt.date(2026, 10, 8)
+    assert prev_trading_day(dt.date(2026, 10, 8)) == dt.date(2026, 9, 30)
+    assert normalize_signal_session("2026-10-03") == "2026-09-30"
+
+
 def test_prev_bars_monday_uses_friday() -> None:
     daily = pd.DataFrame(
         {
@@ -56,5 +65,6 @@ def test_prev_bars_monday_uses_friday() -> None:
 
 if __name__ == "__main__":
     test_weekend_and_monday_anchor()
+    test_exchange_holiday_anchor()
     test_prev_bars_monday_uses_friday()
     print("ok")

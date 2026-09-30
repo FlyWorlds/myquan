@@ -110,61 +110,46 @@ def _clock_minutes(now: Any | None = None) -> int:
 
 
 def last_weekday(d: Any) -> Any:
-    """回落到最近周五及以前的工作日（跳过周六日）。"""
-    from datetime import date as _date
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
+    """Compatibility alias: last actual A-share trading day on or before ``d``."""
+    try:
+        from trading_calendar import last_trading_day_on_or_before
+    except ModuleNotFoundError:
+        from holdingStocks.trading_calendar import last_trading_day_on_or_before
 
-    if isinstance(d, _dt):
-        day = d.date()
-    elif isinstance(d, _date):
-        day = d
-    else:
-        day = _dt.strptime(str(d)[:10], "%Y-%m-%d").date()
-    while day.weekday() >= 5:
-        day -= _td(days=1)
-    return day
+    return last_trading_day_on_or_before(d)
 
 
 def trading_session_date(now: Any | None = None) -> Any:
-    """信号交易日：周六/周日锚定上周五；周一～周五用当日。
+    """信号交易日：锚定最近一个 A 股交易日。
 
-    周一盘中「前日」仍取上周五 K（由 session=周一 + 日线 date 严格早于 session 自然得到）。
+    周末和交易所休市日锚到上一交易日；交易日盘中使用当日。
     """
-    from datetime import datetime as _dt
+    try:
+        from trading_calendar import trading_session_date as _trading_session_date
+    except ModuleNotFoundError:
+        from holdingStocks.trading_calendar import trading_session_date as _trading_session_date
 
-    ts = now if isinstance(now, _dt) else _dt.now()
-    return last_weekday(ts.date())
+    return _trading_session_date(now)
 
 
 def prev_trading_day(session: Any) -> Any:
-    """session 的前一交易日（周一→周五；跳过周末）。不含法定长假日历。"""
-    from datetime import date as _date
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
+    """session 的前一 A 股交易日。"""
+    try:
+        from trading_calendar import previous_trading_day
+    except ModuleNotFoundError:
+        from holdingStocks.trading_calendar import previous_trading_day
 
-    if isinstance(session, _dt):
-        day = session.date()
-    elif isinstance(session, _date):
-        day = session
-    else:
-        day = _dt.strptime(str(session)[:10], "%Y-%m-%d").date()
-    day -= _td(days=1)
-    return last_weekday(day)
+    return previous_trading_day(session)
 
 
 def normalize_signal_session(session: Any | None = None, *, now: Any | None = None) -> str:
-    """规范化信号 session：空/周末 → 上周五；工作日保持原日。"""
-    from datetime import datetime as _dt
-
-    raw = str(session or "").strip()
-    if not raw:
-        return str(trading_session_date(now))
+    """规范化信号 session：空/休市日 → 最近一个 A 股交易日。"""
     try:
-        day = _dt.strptime(raw[:10], "%Y-%m-%d").date()
-    except ValueError:
-        return str(trading_session_date(now))
-    return str(last_weekday(day))
+        from trading_calendar import normalize_signal_session as _normalize_signal_session
+    except ModuleNotFoundError:
+        from holdingStocks.trading_calendar import normalize_signal_session as _normalize_signal_session
+
+    return _normalize_signal_session(session, now=now)
 
 
 def market_phase(now: Any | None = None) -> str:

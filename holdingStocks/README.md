@@ -129,11 +129,22 @@ cd holdingStocks && python run_regression_tests.py
 pip install -r ../requirements.txt
 ```
 
+开发/全量测试依赖：
+
+```bash
+pip install -r ../requirements.txt -r ../requirements-dev.txt
+python run_regression_tests.py          # 默认模拟盘回归
+python run_all_tests.py                 # 默认回归 + 全量 pytest（需 pytest）
+python -m pytest -q ../                 # 全量测试（需 pytest）
+```
+
 ## 模块
 
 | 文件 | 职责 |
 |------|------|
 | `watch_config.py` | 策略 ID、定盘池 `_FIT_WATCH`、阈值、竞价窗口；S7 备用 |
+| `trading_calendar.py` | A 股交易日历；周末/交易所休市日锚定上一交易日，支持本地 override |
+| `health_status.py` | 健康事件分级：阻断交易 / 仅影响通知 / 仅影响展示 |
 | `factor2_watch.py` | 账户回撤预警 |
 | `factor4_watch.py` | 牛市 regime（策略三 + 因子4 时） |
 | `trade_ledger.py` | 交割单 JSON 账本（`trade_ledger.json`）；买入入槽/卖出平仓落库；API 读模型对仍持仓 BUY 按现价盯市「单笔盈亏」（不写回 ledger） |
