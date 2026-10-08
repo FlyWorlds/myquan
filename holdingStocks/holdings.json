@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-30 17:10:22",
+  "updated_at": "2026-10-08 09:12:05",
   "positions": {
     "001309": {
       "name": "德明利",
@@ -2969,9 +2969,9 @@
   "realized_today": {},
   "account_total": 300000.0,
   "account_cash": 300000.0,
-  "account_total_open": 300000.0,
-  "account_total_open_session": "2026-09-30",
-  "last_session": null,
+  "account_total_open": 301541.0,
+  "account_total_open_session": "2026-10-08",
+  "last_session": "2026-10-08",
   "alert_sticky": {},
   "strategy": {
     "001309": {
@@ -3189,11 +3189,11 @@
     "peak": 326457.0,
     "in_add_zone": false,
     "last_action": "hold",
-    "last_label": "回撤8.8% 观望（加仓≥20% / 减仓≤10%）",
-    "last_session": "2026-09-30",
+    "last_label": "回撤8.1% 观望（加仓≥20% / 减仓≤10%）",
+    "last_session": "2026-10-08",
     "suggest_amount": 0.0,
-    "dd_pct": 8.75,
-    "equity": 297881.0,
+    "dd_pct": 8.1,
+    "equity": 300000.0,
     "thresholds": {
       "hist_max_dd": 0.26,
       "avg_yearly_max_dd": 0.19,
@@ -3242,7 +3242,7 @@
   ],
   "watch_status_reset_session": "2026-09-30",
   "closed_today": {},
-  "updated_host": "wangxiangyudeMacBook-Pro.local",
+  "updated_host": "WIN-IDCFVK9G3SU",
   "daily_settlements": {
     "2026-09-14": {
       "session": "2026-09-14",
@@ -3621,12 +3621,34 @@
         }
       ],
       "closed_today": []
+    },
+    "2026-10-08": {
+      "session": "2026-10-08",
+      "recorded_at": "2026-10-08 08:48:43",
+      "final": false,
+      "draft": true,
+      "settle_kind": "POSITION_SETTLEMENT",
+      "account_total": 300000.0,
+      "account_open": 301541.0,
+      "paper_equity_base": 300000.0,
+      "paper_pnl_start": "2026-09-09",
+      "day_pnl": null,
+      "day_pnl_pct": null,
+      "equity_day_pnl": -1541.0,
+      "day_pnl_vs_equity": null,
+      "total_pnl": 0.0,
+      "total_pnl_pct": 0.0,
+      "settled_count": 0,
+      "settled_day_pnl": null,
+      "positions": [],
+      "closing_marks": [],
+      "closed_today": []
     }
   },
   "paper_equity_base": 300000.0,
   "paper_pnl_start": "2026-09-09",
   "slot_queue": {
-    "session": "2026-09-30",
+    "session": "2026-10-08",
     "freed_at": []
   }
 }
