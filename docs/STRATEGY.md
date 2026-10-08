@@ -42,7 +42,7 @@
 
 ### 因子22 · 收盘动量（策略十六默认关）
 
-- 因子26 当日止损后：三槽执行下**当日禁再买该票**；策略十六 bindings 默认 `enabled=False`。
+- 因子26 当日止损后：三槽执行下**当日通常禁再买该票**；策略十六 bindings 默认 `enabled=False`。策略十六仅对「前一日止损已记 + 次日竞价低开开盘保护卖出」放开过门回买。
 - **仓位**：物理 3 槽（盘中/隔夜均可持 3）；当日最多买 3。
 - 对照见 `holdingStocks/watch_config.py`：`MAX_PORTFOLIO_SLOTS` / `MAX_OVERNIGHT_SLOTS` / `MAX_BUYS_PER_DAY` / `RESERVE_EMPTY_SLOTS`（`MAX_ACTIVE_SLOTS` 兼容旧名=隔夜上限）。
 - 绑定：`strategy1/bindings`；决策见 `Strategy1Decision`；说明：[`FACTOR22.md`](FACTOR22.md)。
@@ -176,9 +176,9 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 
 - **选股（因子27）**：通达信概念成交额 ≥ 截面中位数（最多扫 Top40）；每概念至多 2 只龙头；去重后约 **30** 只；剔创业/科创/北交/ST、现价 < 100；**滚动近 3 个月冻结**（非自然季度）。通达信/东财现价失败则轮动缓存活跃度 + 新浪成分现价；**0 票不覆盖**旧池。当前冻结 as_of **2026-09-30**（有效至 2026-12-30）。
 - **自选池**：`SELF_WATCHLIST_PICKS`（天通 / 凯盛 / 东材 / 金安）为**公共池**，与因子27分开维护；策略一/十五/十六与盯盘 `effective_watchlist` 均并入（非仅策略十六）。
-- **买卖**：同策略一（因子26 多层止盈 + 因子2 预警 + 因子22 再买）。三槽 **先平再买**；腾槽第一梯队（平仓前已触买）现价 ≤ 买点 +1% 按现价成交，其后新触发按买点。
+- **买卖**：同策略一（因子26 多层止盈 + 因子2 预警 + 因子22 再买）。三槽 **先平再买**；腾槽第一梯队（平仓前已触买）现价 ≤ 买点 +1% 按现价成交，其后新触发按买点。**隔夜已记止损 + 次日竞价低开走开盘保护全清**后，当天过门触买允许回补（盘中路径止损 / 10% 半仓 / 因子22 仍不可同日回买该票；回买占当日新开额度）。
 - **策略累计（simulator）**：自 `STRATEGY_PNL_START`=**2026-10-08** 从 0 起算；买卖均仅连续竞价（09:30 前 `wait_auction`）；清零后打 `pnl_start_reset` 防日线回灌。账本随 `holdings-ledger` 跨机同步。纸面总收益仍自 `PAPER_PNL_START`=2026-09-09。
-- **因子22 与三槽**：生产三槽「当日卖出禁再买」下 factor22 **不改变成交**；对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`（近7日：禁再买约 +4.6%，开同日再买约 +7.65%，差约 3.05pp，研究用途）。
+- **因子22 与三槽**：生产三槽「当日卖出通常禁再买」下 factor22 **不改变成交**；对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`（近7日：禁再买约 +4.6%，开同日再买约 +7.65%，差约 3.05pp，研究用途）。
 - **刷新池**：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json`。
 - **近 7 日 1m 回测**（开盘阈值=2026至今 {2/2.5/3}% 日线夏普择优；卖同策略一；独立三槽）：`PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr` → `backtest/strategy16_core_leader/REPORT.md`。
 - **F22 对照**：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7`。

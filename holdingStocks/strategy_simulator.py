@@ -25,6 +25,9 @@ EVENTS_FILE = ROOT / "strategy_signal_events.json"
 INITIAL_CASH = 100_000.0
 LOT = 100
 TARGET_PCT = 0.95
+# 策略十六：隔夜仓竞价低开（今开已破卖价、按 09:30 开盘价全清）后，允许当日过门回买。
+# 模拟器无「止损已记」账本，用隔夜 entry_time + 开盘保护成交近似纸面规则。
+GAP_REBUY_STRATEGY_IDS = frozenset({"strategy16"})
 # 正常刷新 2~5s；偶发延迟留余量。过期 quote 不产生新 transition。
 LIVE_QUOTE_STALE_AFTER_SECONDS = 15.0
 
@@ -76,6 +79,7 @@ def empty_book(
         "bootstrapped": False,
         "bootstrap_cutoff": None,
         "bootstrap_source": None,
+        "gap_rebuy_ok": False,
     }
 
 
@@ -466,6 +470,23 @@ def _session_of(ts: Any) -> str:
     return str(ts or "").replace("T", " ")[:10]
 
 
+def _stamp_gap_rebuy_ok(
+    *,
+    strategy_id: str,
+    entry_time: Any,
+    session: str,
+    used_open_protect: bool,
+) -> bool:
+    """隔夜仓 + 竞价低开按开盘价全清 → 策略十六允许当日回买。"""
+    if str(strategy_id) not in GAP_REBUY_STRATEGY_IDS:
+        return False
+    if not used_open_protect:
+        return False
+    entry_day = str(entry_time or "")[:10]
+    sess = str(session)[:10]
+    return bool(entry_day and sess and entry_day < sess)
+
+
 def quote_age_seconds(
     quote_ts: str | None,
     *,
@@ -621,6 +642,7 @@ def evaluate_live_transition(
     """用 live last 撞 buy/sell level；仅状态转换产生事件。
 
     BUY：FLAT + allow_entry + last >= buy_level，且当日未卖出过
+    （策略十六例外：隔夜仓竞价低开按开盘价全清后，过门允许当日回买）
     SELL：LONG + last <= sell_level，且非买入当日（t0 标的除外）
     **买卖均仅连续竞价**（09:30–11:30 / 13:00–15:00）。竞价观察不入账；
     竞价已破卖价等到 9:30，若今开已破卖价则按开盘价、时刻 09:30:00。
@@ -711,8 +733,9 @@ def evaluate_live_transition(
                 allow_entry and buy_lv is not None and buy_lv > 0 and last + 1e-12 >= buy_lv
             )
             if touched and _session_of(book.get("exit_time")) == session:
-                out["skipped"] = "exited_today"
-                touched = False
+                if not book.get("gap_rebuy_ok"):
+                    out["skipped"] = "exited_today"
+                    touched = False
             if touched and not _in_live_exec_window(quote_ts or eval_t):
                 out["skipped"] = "wait_auction"
                 touched = False
@@ -724,6 +747,7 @@ def evaluate_live_transition(
                     book["entry_time"] = str(quote_ts or eval_t)
                     book["exit_price"] = None
                     book["exit_time"] = None
+                    book["gap_rebuy_ok"] = False
                     book["virtual_shares"] = shares
                     book["virtual_cash"] = cash_left
                     book["closed_trade_return_pct"] = None
@@ -761,6 +785,7 @@ def evaluate_live_transition(
                 entry = float(book.get("entry_price") or 0.0)
                 fill_px = last
                 exit_ts = str(quote_ts or eval_t)
+                used_open_protect = False
                 try:
                     open_f = float(day_open or 0)
                 except (TypeError, ValueError):
@@ -774,12 +799,19 @@ def evaluate_live_transition(
                 ):
                     fill_px = open_f
                     exit_ts = f"{session} 09:30:00"
+                    used_open_protect = True
                 proceeds = shares * fill_px
                 book["virtual_cash"] = float(book.get("virtual_cash") or 0.0) + proceeds
                 book["virtual_shares"] = 0.0
                 book["state"] = "FLAT"
                 book["exit_price"] = round(fill_px, 4)
                 book["exit_time"] = exit_ts
+                book["gap_rebuy_ok"] = _stamp_gap_rebuy_ok(
+                    strategy_id=strategy_id,
+                    entry_time=book.get("entry_time"),
+                    session=session,
+                    used_open_protect=used_open_protect,
+                )
                 book["trades"] = int(book.get("trades") or 0) + 1
                 if entry > 0:
                     book["closed_trade_return_pct"] = round(

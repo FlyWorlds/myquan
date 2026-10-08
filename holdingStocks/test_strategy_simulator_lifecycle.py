@@ -506,6 +506,96 @@ class TestT1AndNoSameDayReentry(_TmpSim):
         )
         self.assertEqual(r2["transition"], "BUY")
 
+    def test_strategy16_gap_rebuy_after_open_protect(self) -> None:
+        """隔夜仓 + 次日竞价低开按开盘价卖出后，盘中过门允许回买。"""
+        self._buy("600104")
+        sold = _eval(
+            strategy_id="strategy16",
+            symbol="600104",
+            live_last=13.40,
+            quote_ts="2026-09-24 09:30:01",
+            buy_level=14.04,
+            sell_level=13.93,
+            allow_entry=False,
+            day_open=13.40,
+        )
+        self.assertEqual(sold["transition"], "SELL")
+        self.assertTrue(sold["book"].get("gap_rebuy_ok"))
+        self.assertEqual(sold["book"]["exit_time"], "2026-09-24 09:30:00")
+        rebuy = _eval(
+            strategy_id="strategy16",
+            symbol="600104",
+            live_last=14.20,
+            quote_ts="2026-09-24 10:30:00",
+            buy_level=14.04,
+            sell_level=13.93,
+            allow_entry=True,
+        )
+        self.assertEqual(rebuy["transition"], "BUY")
+        self.assertFalse(rebuy["book"].get("gap_rebuy_ok"))
+        self.assertEqual(rebuy["book"]["state"], "LONG")
+
+    def test_strategy16_midday_sell_still_bans_rebuy(self) -> None:
+        self._buy("600105")
+        sold = _eval(
+            strategy_id="strategy16",
+            symbol="600105",
+            live_last=13.40,
+            quote_ts="2026-09-24 10:12:00",
+            buy_level=14.04,
+            sell_level=13.93,
+            allow_entry=False,
+            day_open=14.10,
+        )
+        self.assertEqual(sold["transition"], "SELL")
+        self.assertFalse(sold["book"].get("gap_rebuy_ok"))
+        blocked = _eval(
+            strategy_id="strategy16",
+            symbol="600105",
+            live_last=14.20,
+            quote_ts="2026-09-24 10:40:00",
+            buy_level=14.04,
+            sell_level=13.93,
+            allow_entry=True,
+        )
+        self.assertIsNone(blocked["transition"])
+        self.assertEqual(blocked["skipped"], "exited_today")
+
+    def test_strategy1_open_protect_still_bans_rebuy(self) -> None:
+        r = _eval(
+            strategy_id="strategy1",
+            symbol="600106",
+            live_last=14.04,
+            quote_ts="2026-09-23 09:33:22",
+            buy_level=14.04,
+            sell_level=13.5,
+            allow_entry=True,
+        )
+        self.assertEqual(r["transition"], "BUY")
+        sold = _eval(
+            strategy_id="strategy1",
+            symbol="600106",
+            live_last=13.40,
+            quote_ts="2026-09-24 09:30:01",
+            buy_level=14.04,
+            sell_level=13.93,
+            allow_entry=False,
+            day_open=13.40,
+        )
+        self.assertEqual(sold["transition"], "SELL")
+        self.assertFalse(sold["book"].get("gap_rebuy_ok"))
+        blocked = _eval(
+            strategy_id="strategy1",
+            symbol="600106",
+            live_last=14.20,
+            quote_ts="2026-09-24 10:30:00",
+            buy_level=14.04,
+            sell_level=13.93,
+            allow_entry=True,
+        )
+        self.assertIsNone(blocked["transition"])
+        self.assertEqual(blocked["skipped"], "exited_today")
+
     def test_crossed_levels_do_not_flip_flop(self) -> None:
         """买点≤现价≤卖点（交叉）时逐 tick 评估：当日只允许一次 BUY。"""
         n_events = 0

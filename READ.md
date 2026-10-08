@@ -52,7 +52,7 @@ akshare DataFrame
 | 场景 | 配置 |
 |------|------|
 | **盯盘 / 默认回测** | **策略十六 = 因子27 核心龙头池 + 因子26 多层止盈 + 因子2 预警**（因子2 回测不注资；**因子22 默认关闭**，仅研究对照） |
-| **因子26** | 选股日线 / 成交 1m；池回测近 7 日；T+1；**买=开盘阈值**；卖=硬保护2.5%（低开已破按开盘）+ 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + 阶梯10%半仓/15%全清 + 大赚后回落2%清 + 买入日未到3%则次日按隔夜高点回落2.5%（不得低于硬保护；昨收/昨高只经 `overnight_peak_px`，仅昨日策略持有/买入才并入）；**盯盘 10% 记减半**（`tp_stage`，不接券商只出信号）；买入日盈利≥3%不记、其余都记（盯盘唯一落库口，涨停/中段卖价不得记）；**Capital V2**（同时≤5、日新开≤2 symbol、单票入场≤权益20%、现金约束禁负现金；当日卖出禁再买；**先平再买**；腾槽第一梯队现价≤买点+1%按现价，其后新触发按买点） |
+| **因子26** | 选股日线 / 成交 1m；池回测近 7 日；T+1；**买=开盘阈值**；卖=硬保护2.5%（低开已破按开盘）+ 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + 阶梯10%半仓/15%全清 + 大赚后回落2%清 + 买入日未到3%则次日按隔夜高点回落2.5%（不得低于硬保护；昨收/昨高只经 `overnight_peak_px`，仅昨日策略持有/买入才并入）；**盯盘 10% 记减半**（`tp_stage`，不接券商只出信号）；买入日盈利≥3%不记、其余都记（盯盘唯一落库口，涨停/中段卖价不得记）；**Capital V2**（同时≤5、日新开≤2 symbol、单票入场≤权益20%、现金约束禁负现金；当日卖出通常禁再买；**策略十六**：前一日止损已记+次日竞价低开开盘保护卖出后过门可回买，仍占日新开额度；**先平再买**；腾槽第一梯队现价≤买点+1%按现价，其后新触发按买点） |
 | **因子1（复用）** | 开盘±锚定止损；策略三/四/八等仍用；已非策略一主因子 |
 | **策略一选股（研究）** | **因子13A 质量带 → 因子16 龙头排序 Top20**（宽宇宙主板，剔ST/百元股，无置顶）→ 见 `watch_config` / `backtest/s1_f13_refit_2025/` |
 | **策略十六选股（默认）** | **因子27 核心龙头** as_of **2026-09-30**（滚动至 2026-12-30，约30只）∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用） → `python strategy/run_core_leader_pool.py` + `SELF_WATCHLIST_PICKS`；名单见 [`docs/FACTOR27.md`](docs/FACTOR27.md) |
@@ -111,7 +111,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **factor19** | 因子19-低开反包 | 反转 | 旧假设 | 压力日低开；未过关 |
 | **factor20** | 因子20-跌停次日开板 | 反转 | 已否决 | 昨收跌停今开未封 |
 | **factor21** | 因子21-涨停次日低开 | 反转 | 策略十二选股 | 昨收涨停且曾开板、今低开；上证昨收≤−2% 空仓；调参窗强、盲测回撤未过关 |
-| **factor22** | 因子22-收盘动量 | 动量 | 研究再买 | 止损后收盘≥low×(1+pct) 同日再买；**策略十六默认关**；三槽当日卖出禁再买；见 [`docs/FACTOR22.md`](docs/FACTOR22.md) |
+| **factor22** | 因子22-收盘动量 | 动量 | 研究再买 | 止损后收盘≥low×(1+pct) 同日再买；**策略十六默认关**；三槽当日卖出通常禁再买（策略十六仅隔夜已记+竞价低开例外）；见 [`docs/FACTOR22.md`](docs/FACTOR22.md) |
 | **factor23** | 因子23-最高连板止盈 | 止盈持股 | 策略十五 | 最高板定 7%/10%/15% 减半止盈 |
 | **factor24** | 因子24-连板梯度情绪 | 情绪题材 | 策略十五 | 低中梯度开 F22/F25；高潮关接回 |
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡 | 30m 确认止损+动态半仓+卖飞回补；见 [`docs/FACTOR25.md`](docs/FACTOR25.md) |
@@ -133,7 +133,7 @@ python strategy/run_factor13_bear_shield_wf.py   # 因子13B WF 回测（锁定�
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | 当日涨停定题材（盯盘实时重算）→联动±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；见 REPORT |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2%；调参 2020–2024 +645%/夏普 1.23，盲测 +3.6%/回撤 55% |
 | **strategy15** | 策略十五·连板减磨损 | factor1+22+23+24+25 | ✅ 盯盘 | 震荡 F25(30m) 减磨损；高潮关接回；回测 `backtest/strategy15_m30_chop/` |
-| **strategy16** | 策略十六·核心龙头 | factor27+26+2（factor22 默认关） | ✅ **默认** | 因子27近3个月池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖内核共用因子26（绑定独立）；默认四槽交易池；**先平再买**，腾槽第一梯队现价≤买点+1%按现价、其后新触发按买点；因子22 仅研究对照 |
+| **strategy16** | 策略十六·核心龙头 | factor27+26+2（factor22 默认关） | ✅ **默认** | 因子27近3个月池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖内核共用因子26（绑定独立）；默认四槽交易池；**先平再买**，腾槽第一梯队现价≤买点+1%按现价、其后新触发按买点；**隔夜已记+次日竞价低开卖出后盘中过门可回买**；因子22 仅研究对照 |
 | **strategy17** | 策略十七·紫阳真君 | factor28+26+2（factor22 默认关） | ✅ 盯盘 | 武汉紫阳东路近3个月龙虎榜成交池；买卖同因子26；**非默认交易池** |
 
 `run_strategy7` 已归入 **因子17-缠论笔盈亏比**（Web 策略栏不展示）。
@@ -312,7 +312,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 ## 盯盘要点
 
-**策略1 / 策略16 Tab（默认池）**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略累计**（权威源 = `strategy_simulator`：每 `strategy_id+symbol` 虚拟账本；自 `STRATEGY_PNL_START`=**2026-10-08** 起算，此前不成交、累计 0；该日起日线 OHLC touch bootstrap 一次后由 live quote 接力；**FLAT ≠ 0%**，平仓冻结 `cash/initial−1`，从未交易才是 0%；live 与回测同口径 **T+1**（买入当日不卖、卖出当日不买回；旧版缺失导致逐 tick 翻转，修复见 `holdingStocks/repair_strategy_sim_t1.py`）；**买卖均仅连续竞价**（09:30 前 `wait_auction`）；语义 `strategy_simulator_ledger`，≠纸面空仓/≠单笔收入；Factor1 回放仅对照字段）。状态主列 = Simulator 空仓/策略持有。额外盯盘见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材 601208、金安国纪 002636）。股票名称移入即预取基本面、约 0.1 秒弹出（行业/概念、市值、关联股名称及关系、产业上下游）。**Trailing 校验列**：`现价 | 今日最高(行情 dayHigh) | 持仓最高(peak_high+时间) | 卖出侧`——持仓最高与自动卖出同源，前端禁止重算。**时间完整性**：[`docs/TEMPORAL_INTEGRITY.md`](docs/TEMPORAL_INTEGRITY.md)（NO LOOK-AHEAD / HWM CAUSALITY / EVENT IMMUTABILITY / STALE DATA）；回归 `holdingStocks/run_regression_tests.py`。
+**策略1 / 策略16 Tab（默认池）**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略累计**（权威源 = `strategy_simulator`：每 `strategy_id+symbol` 虚拟账本；自 `STRATEGY_PNL_START`=**2026-10-08** 起算，此前不成交、累计 0；该日起日线 OHLC touch bootstrap 一次后由 live quote 接力；**FLAT ≠ 0%**，平仓冻结 `cash/initial−1`，从未交易才是 0%；live 与回测同口径 **T+1**（买入当日不卖、卖出当日通常不买回；策略十六隔夜仓竞价低开按开盘价全清后可当日过门回买；旧版缺失导致逐 tick 翻转，修复见 `holdingStocks/repair_strategy_sim_t1.py`）；**买卖均仅连续竞价**（09:30 前 `wait_auction`）；语义 `strategy_simulator_ledger`，≠纸面空仓/≠单笔收入；Factor1 回放仅对照字段）。状态主列 = Simulator 空仓/策略持有。额外盯盘见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材 601208、金安国纪 002636）。股票名称移入即预取基本面、约 0.1 秒弹出（行业/概念、市值、关联股名称及关系、产业上下游）。**Trailing 校验列**：`现价 | 今日最高(行情 dayHigh) | 持仓最高(peak_high+时间) | 卖出侧`——持仓最高与自动卖出同源，前端禁止重算。**时间完整性**：[`docs/TEMPORAL_INTEGRITY.md`](docs/TEMPORAL_INTEGRITY.md)（NO LOOK-AHEAD / HWM CAUSALITY / EVENT IMMUTABILITY / STALE DATA）；回归 `holdingStocks/run_regression_tests.py`。
 
 **AKQuant 能力审计（只读，2026-09-24）**：[`docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md`](docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md) — 运行时 `0.3.22` vs 声明 `0.3.21`；纸面与回测双轨；Trailing **保持 CUSTOM**（AQ `place_trailing_stop` 不等价且 live 不支持）。
 

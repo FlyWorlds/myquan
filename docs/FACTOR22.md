@@ -1,6 +1,6 @@
 # 因子22 · 收盘动量
 
-> 研究用途，非投资建议。叠在主止损（**因子26**）上的同日再买规则。**策略十六默认关闭**；策略一 bindings 仍挂（研究）。三槽执行下当日已卖出禁再买。
+> 研究用途，非投资建议。叠在主止损（**因子26**）上的同日再买规则。**策略十六默认关闭**；策略一 bindings 仍挂（研究）。三槽执行下当日已卖出通常禁再买（策略十六仅隔夜已记+竞价低开开盘保护卖出后过门可回买，不经由因子22）。
 
 ## 规则
 
@@ -18,7 +18,7 @@
 
 - `strategy/strategies/strategy1/bindings.py` → `factor22`（研究，enabled）
 - `strategy/strategies/strategy16/bindings.py` → `factor22`（**enabled=False**，生产不改成交）
-- 盯盘 / 默认 `pool_1m`：当日卖出禁再买。对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`。
+- 盯盘 / 默认 `pool_1m`：当日卖出通常禁再买。策略十六隔夜已记+竞价低开回买走开盘阈值，不走因子22。对照见 `backtest/strategy16_core_leader/COMPARE_F22.md`。
 
 ## 验证（仅天通 2026）
 

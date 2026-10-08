@@ -27,6 +27,7 @@ REGRESSION_MODULES = (
     "test_stale_sticky_crossday",
     "test_holdings_store",
     "test_strategy_simulator_lifecycle",
+    "test_gap_rebuy",
     "test_strategy_cumulative_regression",
     "strategy.test_factor26_exit_priority",
     "strategy.test_factor26_characterization",

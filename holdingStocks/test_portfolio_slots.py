@@ -803,6 +803,35 @@ def test_apply_trigger_sold_today_bans_rebuy():
     assert row.get("当日禁买") is True
 
 
+def test_apply_trigger_gap_rebuy_clears_ban():
+    """隔夜已记+竞价低开：过门通过时不当日禁买。"""
+    from index import _apply_trigger_date_fields
+
+    row = {
+        "持仓状态": "待买入",
+        "预警": "竞价止损·允许回买",
+        "已触买": "否",
+        "买点": 10.5,
+        "止损": 9.8,
+        "成交价": 9.5,
+        "隔夜竞价回买": True,
+    }
+    sig = {"hit_buy": False, "hit_stop": True, "因子触发": "已触发", "持仓状态": "待买入"}
+    _apply_trigger_date_fields(
+        row,
+        sig=sig,
+        session="2026-10-08",
+        last_px=10.2,
+        px_digits=2,
+        buy_time=None,
+        qty=0,
+        replay={"holding": False},
+        code="600330",
+        allow_entry=True,
+    )
+    assert row.get("当日禁买") is False
+
+
 def test_apply_trigger_holding_today_buy_marks_triggered():
     """今日入槽实仓：因子触发写「已触发 M/D」，即使 T+1 止损已记。"""
     from index import _apply_trigger_date_fields

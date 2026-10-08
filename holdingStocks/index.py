@@ -5,9 +5,10 @@
   · 卖（因子26）：硬保护2.5%；中赚3–10%回落一半与0.5×20日日频σ谁先到走谁；阶梯10%/15%；未到3%次日峰值回落2.5%；1 分钟 path-dependent
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
+    （例外：前一日止损已记 + 次日竞价低开开盘保护卖出后，过门触买允许当日回补）
   · **仓位**：物理 4 槽（盘中/隔夜均可持 4）；当日最多买 4；每槽约 25%；**先平再买**；平仓前已触买且现价≤买点+1% 优先（成交价=现价），否则其后新触发按时间（成交价=买点）
   · 9:15 清空非实仓盯盘状态；**9:15–9:30 竞价不算买卖/动态止盈、不回写峰值**；9:25 起算阈值并可挂单；9:30 起触发结算
-  · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票不可再待买入
+  · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票通常不可再待买入（隔夜已记+竞价低开除外）
   · 默认交易宇宙：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用，见 watch_config.SELF_WATCHLIST_PICKS）
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
   · 运行时分叉：本文件 collect_rows() **不**调用 get_decision_engine()；
@@ -2966,7 +2967,8 @@ def _apply_trigger_date_fields(
     paper_stopped = bool(replay.get("holding")) and qty <= 0 and hit_stop
     # 仅三槽真实卖出禁买；回放止损不当当日禁买，否则天通等自选票触买进不了预警栏
     stop_exit_today = bool(sold_today)
-    row["当日禁买"] = bool(sold_today)
+    gap_rebuy = bool(row.get("隔夜竞价回买"))
+    row["当日禁买"] = bool(sold_today) and not gap_rebuy
     if paper_stopped and not sold_today and not hit_buy:
         row["持仓状态"] = STATUS_STOP_CLOSED
         if str(row.get("预警") or "") in ("", "-", "空仓", "待买入", "策略持有"):
@@ -4535,7 +4537,8 @@ def _apply_portfolio_slots(
     · 用户实仓 qty>0 占槽；可买空槽见 free_buy_slot_count
     · 入槽顺序：先平再买；平仓前已触买且现价≤买点+1% 优先、按触发先后、成交价=现价；否则平仓后新触发按时间、成交价=买点
     · 单票目标 = 决策时权益 × MAX_POSITION_WEIGHT，再受 available cash 约束；不得负现金买入
-    · 止损平仓后释放总槽位，但当日新增额度不因 SELL 恢复；该票当日不可再买
+    · 止损平仓后释放总槽位，但当日新增额度不因 SELL 恢复；该票当日通常不可再买
+      （隔夜止损已记 + 竞价开盘保护卖出后允许回补，仍占当日新增额度）
     """
     data = load_holdings()
     try:
@@ -4582,13 +4585,15 @@ def _apply_portfolio_slots(
         code = _code_key(str(r.get("代码") or ""))
         if int(r.get("持仓") or 0) > 0 or code in occupied_set:
             continue
-        if bool(r.get("当日禁买")):
+        if bool(r.get("当日禁买")) and not r.get("隔夜竞价回买"):
             continue
         # 只从当前默认策略池入场（strategy16=核心龙头）；旧 portfolio_pool 遗留票不买
         if code not in strategy_codes:
             continue
         pos = str(r.get("持仓状态") or "")
-        if pos in ("当日禁买",) or _is_stop_closed_status(pos):
+        if pos in ("当日禁买",):
+            continue
+        if _is_stop_closed_status(pos) and not r.get("隔夜竞价回买"):
             continue
         if r.get("过门OK") is False:
             continue
@@ -4652,7 +4657,7 @@ def _apply_portfolio_slots(
             for _rank, _dist, code, r in hit_queue:
                 if code in used:
                     continue
-                if bool(r.get("当日禁买")):
+                if bool(r.get("当日禁买")) and not r.get("隔夜竞价回买"):
                     continue
                 if int((data.get("positions") or {}).get(code, {}).get("qty") or 0) > 0:
                     continue
@@ -4939,6 +4944,32 @@ def _keep_first_signal_ts(prev: dict[str, Any], st: dict[str, Any]) -> None:
         st[key] = old
 
 
+def overnight_gap_rebuy_allowed(
+    rec: dict[str, Any] | None,
+    *,
+    session: str,
+) -> bool:
+    """前一日止损已记、次日竞价低开（open_protect）全清后，允许当日过门回买。"""
+    if not isinstance(rec, dict):
+        return False
+    if str(rec.get("session") or "")[:10] != str(session)[:10]:
+        return False
+    if rec.get("full_exit") is False:
+        return False
+    flag = rec.get("allow_intraday_rebuy")
+    if flag is True:
+        return True
+    if flag is False:
+        return False
+    if str(rec.get("exit_kind") or "") != "open_protect":
+        return False
+    if not rec.get("prior_stop_noted"):
+        return False
+    buy_day = str(rec.get("buy_time") or "")[:10]
+    sess = str(session)[:10]
+    return bool(buy_day and buy_day < sess)
+
+
 def apply_exit_fill(
     *,
     code: str,
@@ -4984,6 +5015,9 @@ def apply_exit_fill(
             return existing
 
     pos = data["positions"].setdefault(code, _empty_position(meta))
+    prior_noted = bool(pos.get("stop_noted"))
+    prior_noted_sess = str(pos.get("stop_noted_session") or "")[:10]
+    buy_day = str(buy_time or pos.get("buy_time") or "")[:10]
     old_qty = int(pos.get("qty") or 0)
     sell_qty = max(0, min(int(qty), old_qty))
     if sell_qty <= 0:
@@ -5022,6 +5056,9 @@ def apply_exit_fill(
         "decision_at": _bar_ts_str(first_hit_ts) or _now(),
         "exit_kind": str(exit_kind or ""),
         "action_kind": str(action_kind or ""),
+        "buy_time": str(buy_time or "") or None,
+        "prior_stop_noted": prior_noted,
+        "prior_stop_noted_session": prior_noted_sess or None,
     }
     # 时间链：禁止事后用价格反推；immutable 一旦写入不再因日K/新行情改写
     from temporal_integrity import assert_event_time_chain
@@ -5040,6 +5077,13 @@ def apply_exit_fill(
     new_qty = old_qty - sell_qty
     rec["after_qty"] = int(new_qty)
     rec["full_exit"] = bool(new_qty <= 0)
+    overnight = bool(buy_day and buy_day < str(session)[:10])
+    rec["allow_intraday_rebuy"] = bool(
+        overnight
+        and prior_noted
+        and str(exit_kind or "") == "open_protect"
+        and new_qty <= 0
+    )
     pos["qty"] = new_qty
     pos["name"] = meta["name"]
     pos["market"] = meta["market"]
@@ -7725,11 +7769,15 @@ def collect_rows(
                     },
                 )
             # 当日止损/已结算卖出 → 三槽规则下当日禁再买（含因子22）
+            # 例外：隔夜止损已记 + 竞价低开 open_protect 全清后允许过门回买
             _realized_pre = realized_map.get(code)
             _sold_today_pre = bool(
                 _realized_pre
                 and str(_realized_pre.get("session") or "") == q["session"]
                 and _realized_pre.get("reason") in EXIT_REASONS
+            )
+            _gap_rebuy_pre = overnight_gap_rebuy_allowed(
+                _realized_pre, session=str(q["session"])
             )
             _replay_holding = bool(replay.get("holding")) and int(
                 (positions.get(code) or {}).get("qty") or 0
@@ -8029,9 +8077,11 @@ def collect_rows(
                     tick=tick,
                 )
                 # 三槽：当日已止损/已记卖出 → 禁止同日再买（含因子22）
-                f26_rebuy = bool(allow_entry and hit_buy and (not _sold_today_pre))
+                # 隔夜已记 + 竞价低开卖出：放开禁买，过门触买即可回补
+                _ban_rebuy = bool(_sold_today_pre) and not bool(_gap_rebuy_pre)
+                f26_rebuy = bool(allow_entry and hit_buy and (not _ban_rebuy))
                 rebuy_ok = bool(
-                    allow_entry and (not _sold_today_pre) and (f26_rebuy or f22)
+                    allow_entry and (not _ban_rebuy) and (f26_rebuy or f22)
                 )
                 f22_px = (
                     round(float(f22["fill_px"]), px_digits)
@@ -8039,8 +8089,10 @@ def collect_rows(
                     else None
                 )
                 buy_show = float(lv.get("open_buy") or lv["buy_trigger"])
-                if _sold_today_pre:
+                if _ban_rebuy:
                     note += "；当日已卖出·禁再买"
+                elif _gap_rebuy_pre:
+                    note += "；竞价止损·允许回买"
                 elif f22 and not f26_rebuy:
                     buy_show = f22_px if f22_px is not None else buy_show
                     note += f"；收盘动量可再买@{buy_show:.{px_digits}f}"
@@ -8075,11 +8127,17 @@ def collect_rows(
                     alert0 = (
                         "止损后·收盘动量可再买"
                         if (f22 and not f26_rebuy)
-                        else "卖出后再触买"
+                        else ("竞价止损后再触买" if _gap_rebuy_pre else "卖出后再触买")
                     )
                     bg0 = "status-buy"
                     hang0 = float(buy_show) if buy_show is not None else None
                     note0 = note
+                elif _gap_rebuy_pre and allow_entry and preview_ok:
+                    pos_st0 = "待买入"
+                    alert0 = "竞价止损·允许回买"
+                    bg0 = sig0.get("bg_class") or "status-flat"
+                    hang0 = float(buy_show) if buy_show is not None else None
+                    note0 = note + "；可再买·待触买点"
                 else:
                     pos_st0 = STATUS_STOP_CLOSED
                     # 信号=已触止损；持仓态=已平仓
@@ -8092,7 +8150,7 @@ def collect_rows(
                     hang0 = None
                     note0 = (
                         note + "；当日禁再买"
-                        if _sold_today_pre
+                        if _ban_rebuy
                         else (note + "；可再买·待触买点" if allow_entry else note)
                     )
                 row0 = {
@@ -8168,6 +8226,7 @@ def collect_rows(
                         "市值": 0.0,
                         "成本额": None,
                         "已实现": True,
+                        "隔夜竞价回买": bool(_gap_rebuy_pre),
                         "价位小数": px_digits,
                         "更新": q["last_ts"][11:19]
                         if len(q["last_ts"]) >= 19
@@ -8186,19 +8245,26 @@ def collect_rows(
                     code=code,
                     allow_entry=bool(allow_entry),
                 )
-                # 再买信号：仅当日本票未因止损/已记卖出时放行
-                if rebuy_hit and not _sold_today_pre:
+                # 再买信号：当日卖出通常禁买；隔夜已记+竞价低开除外
+                if rebuy_hit and not _ban_rebuy:
                     row0["持仓状态"] = "待买入"
                     row0["当日禁买"] = False
+                    row0["隔夜竞价回买"] = bool(_gap_rebuy_pre)
                     row0["预警"] = alert0
                     row0["建议挂单"] = hang0
                     row0["近买点"] = True
                     row0["已触买"] = "是"
                     row0["bg_class"] = "status-buy"
-                elif _sold_today_pre:
+                elif _ban_rebuy:
                     row0["当日禁买"] = True
                     if str(row0.get("持仓状态") or "") in ("", "空仓", "待买入"):
                         row0["持仓状态"] = STATUS_STOP_CLOSED
+                elif _gap_rebuy_pre and allow_entry:
+                    row0["当日禁买"] = False
+                    row0["隔夜竞价回买"] = True
+                    if _is_stop_closed_status(row0.get("持仓状态")):
+                        row0["持仓状态"] = "待买入"
+                    row0["挂单说明"] = note + "；可再买·待触买点"
                 elif allow_entry:
                     row0["当日禁买"] = False
                     if _is_stop_closed_status(row0.get("持仓状态")):

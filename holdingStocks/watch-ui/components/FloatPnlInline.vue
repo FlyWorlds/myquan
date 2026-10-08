@@ -134,7 +134,7 @@ const title = computed(() => {
   <span
     v-if="visible"
     class="text-sm font-semibold"
-    :class="block ? 'mt-0.5 block' : 'ml-1.5 inline-flex flex-wrap items-baseline gap-x-1'"
+    :class="block ? 'mt-0.5 block whitespace-nowrap' : 'ml-1.5 inline-flex shrink-0 flex-nowrap items-baseline gap-x-1 whitespace-nowrap'"
     :title="title"
   >
     <span class="text-[10px] font-normal text-ui-text-3">{{ label }}</span>
