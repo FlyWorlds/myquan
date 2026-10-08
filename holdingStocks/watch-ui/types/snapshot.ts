@@ -68,6 +68,7 @@ export interface HoldingRow {
   策略累计持有?: boolean | null
   策略累计笔数?: number | null
   持仓?: number
+  可用?: number | null
   市值?: number | null
   买入时间?: string | null
   交易日?: string | null

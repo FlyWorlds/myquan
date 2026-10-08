@@ -1,6 +1,7 @@
 """Win / Mac 持仓账本远程同步。
 
-真源是 ``holdings.json`` + ``trades.jsonl`` + ``trade_ledger.json``（交割明细），
+真源是 ``holdings.json`` + ``trades.jsonl`` + ``trade_ledger.json``（交割明细）
++ ``strategy_sim_state.json`` / ``strategy_signal_events.json``（策略累计），
 走独立 git 分支 ``holdings-ledger``，
 不进 ``main``（文件仍在 .gitignore，避免随代码误提交）。
 
@@ -23,12 +24,23 @@ ROOT = Path(__file__).resolve().parent
 HOLDINGS_FILE = ROOT / "holdings.json"
 TRADES_FILE = ROOT / "trades.jsonl"
 TRADE_LEDGER_FILE = ROOT / "trade_ledger.json"
+SIM_STATE_FILE = ROOT / "strategy_sim_state.json"
+SIM_EVENTS_FILE = ROOT / "strategy_signal_events.json"
 WATCH_META_FILE = ROOT / "holdings_watch.json"
 LEDGER_BRANCH = "holdings-ledger"
 LEDGER_REL_PATHS = (
     "holdingStocks/holdings.json",
     "holdingStocks/trades.jsonl",
     "holdingStocks/trade_ledger.json",
+    "holdingStocks/strategy_sim_state.json",
+    "holdingStocks/strategy_signal_events.json",
+)
+LEDGER_LOCAL_FILES = (
+    HOLDINGS_FILE,
+    TRADES_FILE,
+    TRADE_LEDGER_FILE,
+    SIM_STATE_FILE,
+    SIM_EVENTS_FILE,
 )
 
 
@@ -158,18 +170,10 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
             return "local-newer"
 
         write_json_locked(HOLDINGS_FILE, remote_copy.read_text(encoding="utf-8"))
-        trades_ok = _show_file(
-            repo,
-            f"{remote_ref}:{LEDGER_REL_PATHS[1]}",
-            TRADES_FILE,
-        )
-        ledger_ok = False
-        if len(LEDGER_REL_PATHS) > 2:
-            ledger_ok = _show_file(
-                repo,
-                f"{remote_ref}:{LEDGER_REL_PATHS[2]}",
-                TRADE_LEDGER_FILE,
-            )
+        missing: list[str] = []
+        for rel, dest in zip(LEDGER_REL_PATHS[1:], LEDGER_LOCAL_FILES[1:]):
+            if not _show_file(repo, f"{remote_ref}:{rel}", dest):
+                missing.append(Path(rel).name)
         invalidate_watch_cache()
         if not quiet:
             host = ""
@@ -178,11 +182,7 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
                 host = str((data or {}).get("updated_host") or "")
             except (OSError, TypeError, ValueError, json.JSONDecodeError):
                 pass
-            extra = ""
-            if not trades_ok:
-                extra += " · trades.jsonl 远程没有（保留本地）"
-            if len(LEDGER_REL_PATHS) > 2 and not ledger_ok:
-                extra += " · trade_ledger.json 远程没有（保留本地）"
+            extra = "".join(f" · {name} 远程没有（保留本地）" for name in missing)
             print(
                 f"已拉取远程持仓 · updated_at={remote_ts or '-'} "
                 f"host={host or '-'} · 已丢本机 holdings_watch.json"
@@ -198,7 +198,7 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
 
 
 def push_holdings(*, force: bool = False) -> str:
-    """把本机 holdings.json + trades.jsonl + trade_ledger.json 推到 origin/holdings-ledger。"""
+    """把本机纸面账本 + 策略模拟账本推到 origin/holdings-ledger。"""
     if not HOLDINGS_FILE.is_file():
         raise SystemExit("没有 holdings.json，无法推送")
     repo = repo_root()
@@ -241,14 +241,15 @@ def push_holdings(*, force: bool = False) -> str:
     env = {"GIT_INDEX_FILE": str(index_path)}
     try:
         parent = ""
-        if _ref_exists(repo, f"refs/heads/{LEDGER_BRANCH}"):
+        # 以远程 tip 为父，避免本机落后的 holdings-ledger 导致非快进
+        if fetch.returncode == 0 and _ref_exists(repo, remote_ref):
+            _run(["git", "read-tree", remote_ref], cwd=repo, env=env)
+            parent = _run(["git", "rev-parse", remote_ref], cwd=repo).stdout.strip()
+        elif _ref_exists(repo, f"refs/heads/{LEDGER_BRANCH}"):
             _run(["git", "read-tree", LEDGER_BRANCH], cwd=repo, env=env)
             parent = _run(
                 ["git", "rev-parse", LEDGER_BRANCH], cwd=repo
             ).stdout.strip()
-        elif _ref_exists(repo, remote_ref):
-            _run(["git", "read-tree", remote_ref], cwd=repo, env=env)
-            parent = _run(["git", "rev-parse", remote_ref], cwd=repo).stdout.strip()
         else:
             _run(["git", "read-tree", "--empty"], cwd=repo, env=env)
 

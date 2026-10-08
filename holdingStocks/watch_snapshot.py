@@ -310,8 +310,20 @@ def rebase_holdings_day_pnl(
                 row["当日基数"] = None
             out.append(row)
             continue
-        buy = str(row.get("买入时间") or "")[:10]
-        bought_today = bool(buy and buy == sess)
+        try:
+            from watch_config import infer_bought_today
+        except ImportError:  # pragma: no cover
+            from holdingStocks.watch_config import infer_bought_today
+
+        bought_today = infer_bought_today(
+            buy_time=row.get("买入时间") or row.get("buy_time"),
+            session=sess,
+            qty=qty,
+            available=row.get("可用"),
+            cost=row.get("成本"),
+            day_base=row.get("当日基数"),
+            prev_close=row.get("昨收"),
+        )
         last = _as_pos_float(row.get("现价"))
         if last is None:
             out.append(row)
@@ -541,8 +553,20 @@ def patch_row_live_quote(
         if enrich_hold_pnl:
             cost = _as_pos_float(row.get("成本"))
             sess = str(row.get("交易日") or "")[:10]
-            buy_t = str(row.get("买入时间") or "")[:10]
-            bought_today = bool(buy_t and sess and buy_t == sess)
+            try:
+                from watch_config import infer_bought_today
+            except ImportError:  # pragma: no cover
+                from holdingStocks.watch_config import infer_bought_today
+
+            bought_today = infer_bought_today(
+                buy_time=row.get("买入时间") or row.get("buy_time"),
+                session=sess,
+                qty=qty,
+                available=row.get("可用"),
+                cost=cost,
+                day_base=row.get("当日基数"),
+                prev_close=prev,
+            )
             try:
                 from strategy.akq_math import mark_unrealized, session_day_pnl
 

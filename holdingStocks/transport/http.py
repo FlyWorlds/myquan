@@ -23,6 +23,7 @@ def build_watch_request_handler(
     get_factors_api: Callable[[], Any],
     handle_sectors_api: Callable[[str], tuple[int, Any]],
     watch_ui_dist_ready: Callable[[], bool],
+    on_paper_reset: Callable[[], Any] | None = None,
 ) -> type[SimpleHTTPRequestHandler]:
     """返回绑定依赖后的 RequestHandler 类（供 ThreadingHTTPServer 使用）。"""
 
@@ -48,7 +49,7 @@ def build_watch_request_handler(
             path = self.path.split("?", 1)[0]
             if path.startswith("/api/") or path == f"/{watch_meta_file.name}":
                 self.send_response(204)
-                self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
                 self.send_header("Access-Control-Allow-Headers", "Content-Type")
                 self._send_cors_if_dev()
                 self.end_headers()
@@ -186,6 +187,22 @@ def build_watch_request_handler(
                 return
             if watch_ui_dist_ready() and path != f"/{watch_meta_file.name}":
                 self._serve_path(watch_ui_dist / "index.html")
+                return
+            self.send_error(404, "Not Found")
+
+        def do_POST(self) -> None:  # noqa: N802
+            path = self.path.split("?", 1)[0]
+            if path == "/api/holdings/reset":
+                if on_paper_reset is None:
+                    self._send_json({"error": "reset unavailable"}, status=503)
+                    return
+                try:
+                    self._send_json(on_paper_reset() or {"ok": True})
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json(
+                        {"error": "reset failed", "detail": type(exc).__name__},
+                        status=500,
+                    )
                 return
             self.send_error(404, "Not Found")
 

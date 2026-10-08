@@ -917,6 +917,61 @@ def unlock_overnight_available(data: dict[str, Any], session: str) -> bool:
     return changed
 
 
+def infer_bought_today(
+    *,
+    buy_time: str | None,
+    session: str | None,
+    qty: int = 0,
+    available: int | None = None,
+    cost: float | None = None,
+    day_base: float | None = None,
+    prev_close: float | None = None,
+) -> bool:
+    """今买判定。买入日落在本交易日即今买；昨买明确隔夜。
+
+    刚入槽常漏打 ``买入时间``，快刷会把今日盈亏误算成相对昨收（等于当日涨幅）。
+    此时：T+1 锁仓（可用=0）或当日基数已贴成本，按今买。
+    """
+    sess = str(session or "")[:10]
+    buy = str(buy_time or "")[:10]
+    if buy and sess and buy == sess:
+        return True
+    if buy and sess and buy != sess:
+        return False
+    try:
+        q = int(qty or 0)
+    except (TypeError, ValueError):
+        q = 0
+    if q <= 0:
+        return False
+    try:
+        c = float(cost) if cost is not None else None
+    except (TypeError, ValueError):
+        c = None
+    if c is None or c <= 0:
+        return False
+    if available is not None:
+        try:
+            if int(available) == 0:
+                return True
+        except (TypeError, ValueError):
+            pass
+    if day_base is not None:
+        try:
+            db = float(day_base)
+            if abs(db - c * q) <= 0.05:
+                return True
+            try:
+                prev = float(prev_close) if prev_close is not None else None
+            except (TypeError, ValueError):
+                prev = None
+            if prev is not None and prev > 0 and abs(db - prev * q) <= 0.05:
+                return False
+        except (TypeError, ValueError):
+            pass
+    return False
+
+
 def calc_day_pnl(
     *,
     last: float,
@@ -935,9 +990,16 @@ def calc_day_pnl(
     昨仓只用昨收（无昨收则空，不回退开盘/成本，避免跨日「今日浮亏」挂成本）。
     今买相对买入价；无成本时才回退开盘。
     """
-    del available, t0  # 口径按买日整仓，不再拆可卖/锁定
-    bought_today = bool(session) and is_t1_buy_day(buy_time, str(session))
+    del t0  # 口径按买日整仓，不再拆可卖/锁定
     cost_use = today_cost if today_cost is not None else cost
+    bought_today = infer_bought_today(
+        buy_time=buy_time,
+        session=session,
+        qty=qty,
+        available=available,
+        cost=cost_use,
+        prev_close=prev_close,
+    )
     if bought_today:
         fb = float(open_px) if open_px is not None else None
     else:

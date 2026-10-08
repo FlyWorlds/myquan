@@ -10,7 +10,7 @@ cd holdingStocks && python start_watch.py --no-wechat
 # 浏览器 http://127.0.0.1:3000/  ·  Python 只提供数据 API/WS :8765
 # 策略3 Tab：T-1 连板梯度情绪 + 首板晋级跟踪
 # 策略8 Tab：当日涨停实时定题材（随涨停变化重算）
-# 持仓 Tab：Capital V2（同时≤5、日新开≤2、单票入场≤20%、现金约束）；先平再买；腾槽第一梯队现价≤买点+1%按现价，新触发按买点；10%半仓止盈→减半留仓；其余止损/止盈清仓→「今日平仓」栏（不占槽）；总收益=日初+今日盈亏（自 2026-09-09）；每日结算核对
+# 持仓 Tab：Capital V2（同时≤5、日新开≤2、单票入场≤20%、现金约束）；先平再买；腾槽第一梯队现价≤买点+1%按现价，新触发按买点；10%半仓止盈→减半留仓；其余止损/止盈清仓→「今日平仓」栏（不占槽）；总收益=日初+今日盈亏（自 2026-09-09）；每日结算核对；交割单可看总盈亏/按月；账户可清空重置
 # 策略1 Tab：按距买点升序；空槽标候选
 # 板块轮动：http://127.0.0.1:3000/sectors （通达信优先；今日列/成分现价走 WS 自动刷，不必点重载）
 ```
@@ -226,7 +226,7 @@ cd myquan && python -m unittest -v test_strategy_rules.py
 # 持仓盯盘（Web 页面 + Python 数据）
 cd myquan/holdingStocks && python start_watch.py --no-wechat
 # 浏览器 http://127.0.0.1:3000/  ·  API/WS :8765
-# Win↔Mac 持仓：当前真源仍为 holdings.json + holdings-ledger 分支（不是 holdings_watch.json 缓存）
+# Win↔Mac 持仓：当前真源仍为 holdings.json + 策略模拟账本 + holdings-ledger 分支（不是 holdings_watch.json 缓存）
 python index.py holdings-push
 python index.py holdings-pull
 # Remote Paper State R1（未切生产）：接口/schema/迁移 dry-run 见 holdingStocks/docs/REMOTE_PAPER_STATE.md
@@ -287,9 +287,9 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 
 - 规则与 **因子1** 同源（`strategy/open_break.py`）；盯盘首页 Tab 为 **策略1 / 3 / 8 / 15 / 16**；独立页 **`/strategies`**、**`/factors`** 全量说明（注册表 API 同源）。策略十二在 `/strategies` 因子组合栏。
-- 早盘节点：9:15 竞价+**全日状态重置**（sticky/缓存/微信防抖，只留实仓；**昨仓今日盈亏按昨收重算**；启动过点补跑；**并强制重拉日线供过门/前日**）→ 9:20 不可撤 → 9:25 算阈值/过门/**可挂单**（**竞价观察/竞价止损预警，禁止「待卖出」与纸面 SELL**）→ 9:30 触发信号/止损结算（`watch_config.market_phase` / `is_exit_executable`）。因子26 止盈触达按 **1 分钟 path-dependent**（禁止全日 low×抬高后卖价假触）。周六日信号日锚定上周五；周一前日=上周五。指数走新浪批量（代码对不上不整卡失败）；**总资产/总收益 = 日初锁定（优先昨收结算 `daily_settlements`）+ 今日盈亏**（与分票加总同动；**日初锚跟 `trading_session_date`，跨日 heal 幂等不依赖正好 9:15**），不用被改坏的「仅现金」日初；**15:00 `POSITION_SETTLEMENT` 收盘盯市（不改 qty/cost）**。
+- 早盘节点：9:15 竞价+**全日状态重置**（sticky/缓存/微信防抖，只留实仓；**昨仓今日盈亏按昨收重算**；**今买相对买入价**（漏打买入时间不按当日涨幅）；启动过点补跑；**并强制重拉日线供过门/前日**）→ 9:20 不可撤 → 9:25 算阈值/过门/**可挂单**（**竞价观察/竞价止损预警，禁止「待卖出」与纸面 SELL**）→ 9:30 触发信号/止损结算（`watch_config.market_phase` / `is_exit_executable`）。因子26 止盈触达按 **1 分钟 path-dependent**（禁止全日 low×抬高后卖价假触）。周六日信号日锚定上周五；周一前日=上周五。指数走新浪批量（代码对不上不整卡失败）；**总资产/总收益 = 日初锁定（优先昨收结算 `daily_settlements`）+ 今日盈亏**（与分票加总同动；**日初锚跟 `trading_session_date`，跨日 heal 幂等不依赖正好 9:15**），不用被改坏的「仅现金」日初；**15:00 `POSITION_SETTLEMENT` 收盘盯市（不改 qty/cost）**。
 - 合格池：中证500∪1000 静态池 + **因子13 动态池（研究/锁定）**。
-- 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。**先绑 `:8765` 再后台冷启动**（避免首屏超过 `start_watch.py` 120s 等待、页面「推送断开」）。一键启动：`python start_watch.py`。**并行冷启动**：OpenClaw/微信自检在 `--wechat-optional`（默认）下后台并行、不挡 API；首屏只扫热池（默认策略+自选+持仓），策略一池首屏后异步补齐；修复账本↔名单递归（原单次 60–90s，启动慢主因）。**仓位占比**：账户摘要显示总仓位占比（Σ市值/总资产）+ 现金占比 + 个股仓位标签，持仓卡片显示单票占比（同口径）。**行情分层**：热池（持仓+默认策略，≤48）SSE+新浪约1s+信号扫描；叠加观察池独立新浪分块约3s、不进 `collect_rows`、不挡启动；**现价/涨跌幅另有 ≥0.4s 快刷**（不重跑扫描）——否则整轮 collect 会把盘面价卡住。**Win/Mac 持仓**走 `origin/holdings-ledger`（`holdings-push` / 启动默认 `holdings-pull`）；`holdings_watch.json` 是本机缓存，账本更新后丢弃。**账本并发写**：`holdings.json` 统一走 `holdings_store`（进程内单一对象 + 文件锁串行写 + 写前版本检查/三方合并 + 原子替换），旧数据不再覆盖新数据。**交割单**页 `/trades`（卡片「价格/交割」、API `/api/trades`，落库 `trade_ledger.json`；仍持仓 BUY 单笔盈亏按现价浮动盯市、SELL realized 冻结）。盘前新浪/东财无成交价时用昨收垫。快照**先留上次可用再更新**，行情未就绪不覆盖成空表、不回写总资产/不自动入槽；每轮自愈隔夜可卖与仅现金日初。外网断了本机 WS 仍可能开着：顶栏按 `quoteStale`/`feedOk` 红字「行情中断」，时钟心跳 2s 不冻住。**板块轮动今日列**走同一条 WS，但**启动时后置**：先出盯盘/策略并实时更新，再后台拉通达信概念（不必等板块才开页）。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
+- 行情：`python index.py watch` 只推送 **JSON 快照**（`/api/snapshot` + WebSocket `/ws`）；盯盘页面只用 **watch-ui**（`:3000`）。**先绑 `:8765` 再后台冷启动**（避免首屏超过 `start_watch.py` 120s 等待、页面「推送断开」）。一键启动：`python start_watch.py`。**并行冷启动**：OpenClaw/微信自检在 `--wechat-optional`（默认）下后台并行、不挡 API；首屏只扫热池（默认策略+自选+持仓），策略一池首屏后异步补齐；修复账本↔名单递归（原单次 60–90s，启动慢主因）。**仓位占比**：账户摘要显示总仓位占比（Σ市值/总资产）+ 现金占比 + 个股仓位标签，持仓卡片显示单票占比（同口径）。**行情分层**：热池（持仓+默认策略，≤48）SSE+新浪约1s+信号扫描；叠加观察池独立新浪分块约3s、不进 `collect_rows`、不挡启动；**现价/涨跌幅另有 ≥0.4s 快刷**（不重跑扫描）——否则整轮 collect 会把盘面价卡住。**Win/Mac 持仓**走 `origin/holdings-ledger`（`holdings-push` / 启动默认 `holdings-pull`）；`holdings_watch.json` 是本机缓存，账本更新后丢弃。**账本并发写**：`holdings.json` 统一走 `holdings_store`（进程内单一对象 + 文件锁串行写 + 写前版本检查/三方合并 + 原子替换），旧数据不再覆盖新数据。**交割单**页 `/trades`（卡片「价格/交割」、API `/api/trades?month=`，落库 `trade_ledger.json`；汇总总盈亏=已实现+浮动；仍持仓 BUY 单笔盈亏按现价浮动盯市、SELL realized 冻结；账户卡可**清空重置**纸面持仓，同 `clear-all`）。盘前新浪/东财无成交价时用昨收垫。快照**先留上次可用再更新**，行情未就绪不覆盖成空表、不回写总资产/不自动入槽；每轮自愈隔夜可卖与仅现金日初。外网断了本机 WS 仍可能开着：顶栏按 `quoteStale`/`feedOk` 红字「行情中断」，时钟心跳 2s 不冻住。**板块轮动今日列**走同一条 WS，但**启动时后置**：先出盯盘/策略并实时更新，再后台拉通达信概念（不必等板块才开页）。详见 [`holdingStocks/README.md`](holdingStocks/README.md)。
 - 股票名/代码外链：百度财经 `finance.baidu.com/stock/ab-{code}`。名称移入即预取基本面，约 0.1 秒弹出（题材/概念/行业、市值估值、关联股票及关系、产业上下游；API `GET /api/stock/profile`）。
 - 微信预警：OpenClaw；**【策略预警】** 与 **【模拟买入】/【模拟卖出】** 分模板（N1 已部署：已成交不扫描重复推；`--no-wechat` 同时关掉预警与成交推送）。自然 BUY/SELL 微信覆盖 **PENDING**；N2 未开始。自动结算不下真实委托。Paper 卖出当前 **Unified Primary + Legacy Shadow**。
 
@@ -312,7 +312,7 @@ run_strategy1(KAICHENG, show_report=True)   # 因子1+因子2 预警
 
 ## 盯盘要点
 
-**策略1 / 策略16 Tab（默认池）**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略累计**（权威源 = `strategy_simulator`：每 `strategy_id+symbol` 虚拟账本；自 `STRATEGY_PNL_START`=**2026-10-08** 起算，此前不成交、累计 0；该日起日线 OHLC touch bootstrap 一次后由 live quote 接力；**FLAT ≠ 0%**，平仓冻结 `cash/initial−1`，从未交易才是 0%；live 与回测同口径 **T+1**（买入当日不卖、卖出当日不买回；旧版缺失导致逐 tick 翻转，修复见 `holdingStocks/repair_strategy_sim_t1.py`）；语义 `strategy_simulator_ledger`，≠纸面空仓/≠单笔收入；Factor1 回放仅对照字段）。状态主列 = Simulator 空仓/策略持有。额外盯盘见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材 601208、金安国纪 002636）。股票名称移入即预取基本面、约 0.1 秒弹出（行业/概念、市值、关联股及关系、产业上下游）。**Trailing 校验列**：`现价 | 今日最高(行情 dayHigh) | 持仓最高(peak_high+时间) | 卖出侧`——持仓最高与自动卖出同源，前端禁止重算。**时间完整性**：[`docs/TEMPORAL_INTEGRITY.md`](docs/TEMPORAL_INTEGRITY.md)（NO LOOK-AHEAD / HWM CAUSALITY / EVENT IMMUTABILITY / STALE DATA）；回归 `holdingStocks/run_regression_tests.py`。
+**策略1 / 策略16 Tab（默认池）**：除信号外展示**日内涨跌**、**距买点%**（列表升序）、**策略累计**（权威源 = `strategy_simulator`：每 `strategy_id+symbol` 虚拟账本；自 `STRATEGY_PNL_START`=**2026-10-08** 起算，此前不成交、累计 0；该日起日线 OHLC touch bootstrap 一次后由 live quote 接力；**FLAT ≠ 0%**，平仓冻结 `cash/initial−1`，从未交易才是 0%；live 与回测同口径 **T+1**（买入当日不卖、卖出当日不买回；旧版缺失导致逐 tick 翻转，修复见 `holdingStocks/repair_strategy_sim_t1.py`）；**买卖均仅连续竞价**（09:30 前 `wait_auction`）；语义 `strategy_simulator_ledger`，≠纸面空仓/≠单笔收入；Factor1 回放仅对照字段）。状态主列 = Simulator 空仓/策略持有。额外盯盘见 `watch_config.PORTFOLIO_PINNED_WATCHLIST`（含东材 601208、金安国纪 002636）。股票名称移入即预取基本面、约 0.1 秒弹出（行业/概念、市值、关联股名称及关系、产业上下游）。**Trailing 校验列**：`现价 | 今日最高(行情 dayHigh) | 持仓最高(peak_high+时间) | 卖出侧`——持仓最高与自动卖出同源，前端禁止重算。**时间完整性**：[`docs/TEMPORAL_INTEGRITY.md`](docs/TEMPORAL_INTEGRITY.md)（NO LOOK-AHEAD / HWM CAUSALITY / EVENT IMMUTABILITY / STALE DATA）；回归 `holdingStocks/run_regression_tests.py`。
 
 **AKQuant 能力审计（只读，2026-09-24）**：[`docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md`](docs/AKQUANT_NATIVE_CAPABILITY_AUDIT.md) — 运行时 `0.3.22` vs 声明 `0.3.21`；纸面与回测双轨；Trailing **保持 CUSTOM**（AQ `place_trailing_stop` 不等价且 live 不支持）。
 

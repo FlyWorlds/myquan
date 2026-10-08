@@ -315,10 +315,22 @@ def enrich_open_buy_marks(
     return out
 
 
+def entry_month(entry: dict[str, Any] | None) -> str:
+    """成交所属自然月 ``YYYY-MM``（优先 session，其次 time）。"""
+    if not isinstance(entry, dict):
+        return ""
+    for key in ("session", "time"):
+        raw = str(entry.get(key) or "").strip()
+        if len(raw) >= 7 and raw[4] == "-":
+            return raw[:7]
+    return ""
+
+
 def list_ledger_entries(
     *,
     code: str | None = None,
     session: str | None = None,
+    month: str | None = None,
     side: str | None = None,
     limit: int = 500,
     offset: int = 0,
@@ -336,6 +348,14 @@ def list_ledger_entries(
     if side:
         sl = str(side).strip().lower()
         rows = [e for e in rows if str(e.get("side") or "").lower() == sl]
+    months = sorted({entry_month(e) for e in rows if entry_month(e)}, reverse=True)
+    month_key = ""
+    if month:
+        month_key = str(month).strip()[:7]
+        if len(month_key) >= 7:
+            rows = [e for e in rows if entry_month(e) == month_key]
+        else:
+            month_key = ""
     rows = enrich_open_buy_marks(rows, holdings=holdings, marks=marks)
     rows = list(reversed(rows))  # 新→旧
     total = len(rows)
@@ -344,17 +364,29 @@ def list_ledger_entries(
     page = rows[off : off + lim]
     buy_amt = sum(float(e.get("amount") or 0) for e in rows if e.get("side") == "buy")
     sell_amt = sum(float(e.get("amount") or 0) for e in rows if e.get("side") == "sell")
-    sell_pnl = sum(float(e.get("pnl") or 0) for e in rows if e.get("side") == "sell")
+    realized = sum(float(e.get("pnl") or 0) for e in rows if e.get("side") == "sell")
+    unrealized = sum(
+        float(e.get("pnl") or 0)
+        for e in rows
+        if e.get("side") == "buy" and e.get("pnl_kind") == "unrealized"
+    )
+    total_pnl = realized + unrealized
     return {
         "updated_at": data.get("updated_at"),
         "total": total,
         "offset": off,
         "limit": lim,
+        "month": month_key or None,
+        "months": months,
         "summary": {
             "buy_amount": round(buy_amt, 2),
             "sell_amount": round(sell_amt, 2),
-            "sell_pnl": round(sell_pnl, 2),
+            "sell_pnl": round(realized, 2),
+            "realized_pnl": round(realized, 2),
+            "unrealized_pnl": round(unrealized, 2),
+            "total_pnl": round(total_pnl, 2),
             "count": total,
+            "month": month_key or None,
         },
         "entries": page,
         "lot_matching": TRADE_LOT_MATCHING_AVAILABLE,
@@ -400,6 +432,7 @@ def api_trades_payload(query: str) -> tuple[int, dict[str, Any]]:
     qs = parse_qs(urlparse(query).query)
     code = (qs.get("code") or [None])[0]
     session = (qs.get("session") or [None])[0]
+    month = (qs.get("month") or [None])[0]
     side = (qs.get("side") or [None])[0]
     try:
         limit = int((qs.get("limit") or ["200"])[0])
@@ -413,6 +446,7 @@ def api_trades_payload(query: str) -> tuple[int, dict[str, Any]]:
     return 200, list_ledger_entries(
         code=code,
         session=session,
+        month=month,
         side=side,
         limit=limit,
         offset=offset,

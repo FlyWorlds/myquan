@@ -1354,6 +1354,87 @@ def test_calc_day_pnl_today_buy_vs_cost():
     assert pct == round((17.0 / 16.29 - 1.0) * 100.0, 2)
 
 
+def test_calc_day_pnl_today_buy_without_buy_time_uses_cost():
+    """刚入槽漏打买入时间：T+1 锁仓仍按买入价，不按当日涨幅。"""
+    from watch_config import calc_day_pnl, infer_bought_today
+
+    assert infer_bought_today(
+        buy_time=None,
+        session="2026-10-08",
+        qty=1100,
+        available=0,
+        cost=52.34,
+        prev_close=48.0,
+    )
+    pnl, pct, base = calc_day_pnl(
+        last=53.04,
+        qty=1100,
+        available=0,
+        cost=52.34,
+        prev_close=48.0,
+        open_px=52.0,
+        today_cost=52.34,
+        buy_time=None,
+        session="2026-10-08",
+    )
+    assert pnl == round((53.04 - 52.34) * 1100, 2)
+    assert pct == round((53.04 / 52.34 - 1.0) * 100.0, 2)
+    assert base == round(52.34 * 1100, 2)
+
+
+def test_patch_live_quote_today_buy_not_day_change():
+    """快刷不得把今买当日盈亏改成相对昨收（等于当日涨幅）。"""
+    from watch_snapshot import patch_row_live_quote, rebase_holdings_day_pnl
+
+    row = {
+        "代码": "601208",
+        "持仓": 1100,
+        "可用": 0,
+        "成本": 52.34,
+        "现价": 52.34,
+        "昨收": 48.0,
+        "开盘": 52.0,
+        "交易日": "2026-10-08",
+        "当日盈亏": 0.0,
+        "当日盈亏%": 0.0,
+        "当日基数": round(52.34 * 1100, 2),
+    }
+    changed = patch_row_live_quote(
+        row,
+        {"last": 53.04, "prev_close": 48.0, "open": 52.0, "session": "2026-10-08"},
+        enrich_hold_pnl=True,
+    )
+    assert changed
+    assert row["当日盈亏"] == round((53.04 - 52.34) * 1100, 2)
+    assert row["当日盈亏%"] == round((53.04 / 52.34 - 1.0) * 100.0, 2)
+    assert abs(float(row["当日盈亏%"]) - round((53.04 / 48.0 - 1.0) * 100.0, 2)) > 1
+
+    missing_buy = {
+        "代码": "601208",
+        "持仓": 1100,
+        "可用": 0,
+        "成本": 52.34,
+        "现价": 53.04,
+        "昨收": 48.0,
+        "交易日": "2026-09-30",
+    }
+    rebased = rebase_holdings_day_pnl([missing_buy], session="2026-10-08")[0]
+    assert rebased["当日盈亏"] == round((53.04 - 52.34) * 1100, 2)
+
+
+def test_infer_bought_today_respects_overnight_buy_time():
+    from watch_config import infer_bought_today
+
+    assert not infer_bought_today(
+        buy_time="2026-09-30 13:42:30",
+        session="2026-10-08",
+        qty=1100,
+        available=0,
+        cost=52.34,
+        prev_close=48.0,
+    )
+
+
 def test_calc_day_pnl_overnight_vs_prev_close():
     """昨仓：今日盈亏=现价相对昨收，等于 akquant vec_returns。"""
     from watch_config import calc_day_pnl

@@ -328,27 +328,107 @@ def _fetch_core_themes(code: str) -> list[dict[str, str]]:
     return out[:12]
 
 
-def _name_map(codes: list[str]) -> dict[str, str]:
+def _is_real_name(code: str, name: Any) -> bool:
+    c = normalize_stock_code(code)
+    n = str(name or "").strip()
+    if not c or not n:
+        return False
+    if n == c or n.isdigit():
+        return False
+    return True
+
+
+def _local_name_table() -> dict[str, str]:
+    """全量本地名称表。不走逐码网络，避免 hover 只补到大板块前 80 只。"""
     out: dict[str, str] = {}
     try:
-        from stock_names import lookup_names_for_codes
+        from stock_names import name_by_code
 
-        out.update(lookup_names_for_codes(codes))
+        for raw, name in name_by_code().items():
+            c = normalize_stock_code(raw) or str(raw).zfill(6)
+            if _is_real_name(c, name):
+                out[c] = str(name).strip()
     except Exception:
         pass
-    missing = [c for c in codes if c not in out]
-    if not missing:
-        return out
     try:
         from sectors.stock_names import stock_name_map
 
-        table = stock_name_map()
-        for c in missing:
-            n = str(table.get(c) or "").strip()
-            if n:
-                out[c] = n
+        for raw, name in stock_name_map().items():
+            c = normalize_stock_code(raw) or str(raw).zfill(6)
+            if c not in out and _is_real_name(c, name):
+                out[c] = str(name).strip()
     except Exception:
         pass
+    return out
+
+
+def _secid(code: str) -> str:
+    c = normalize_stock_code(code)
+    if not c:
+        return ""
+    if c.startswith(("6", "5")) or (c.startswith("9") and not c.startswith(("92", "43"))):
+        return f"1.{c}"
+    return f"0.{c}"
+
+
+def _fetch_names_ulist(codes: list[str]) -> dict[str, str]:
+    """东财 2.push2 批量补中文名（push2.eastmoney.com 单票接口常被墙）。"""
+    out: dict[str, str] = {}
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in codes:
+        c = normalize_stock_code(raw)
+        if c and c not in seen:
+            seen.add(c)
+            cleaned.append(c)
+    for i in range(0, len(cleaned), 40):
+        chunk = cleaned[i : i + 40]
+        secids = ",".join(s for s in (_secid(c) for c in chunk) if s)
+        if not secids:
+            continue
+        try:
+            url = (
+                "https://2.push2.eastmoney.com/api/qt/ulist.np/get"
+                f"?fltt=2&invt=2&fields=f12,f14&secids={secids}"
+            )
+            r = requests.get(url, headers=_QUOTE_HEADERS, timeout=4)
+            r.raise_for_status()
+            rows = ((r.json() or {}).get("data") or {}).get("diff") or []
+        except Exception:
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            c = normalize_stock_code(str(row.get("f12") or ""))
+            n = _blank(row.get("f14"))
+            if c and _is_real_name(c, n):
+                out[c] = str(n)
+    if out:
+        try:
+            from stock_names import _remember_name
+
+            for c, n in out.items():
+                _remember_name(c, n)
+        except Exception:
+            pass
+    return out
+
+
+def _apply_names(rows: list[dict[str, Any]], names: dict[str, str]) -> None:
+    for r in rows:
+        c = str(r.get("code") or "")
+        n = names.get(c)
+        if _is_real_name(c, n):
+            r["name"] = n
+
+
+def _name_map(codes: list[str]) -> dict[str, str]:
+    table = _local_name_table()
+    out = {c: table[c] for c in (normalize_stock_code(x) for x in codes) if c and c in table}
+    missing = [normalize_stock_code(x) for x in codes if normalize_stock_code(x) not in out]
+    missing = [c for c in missing if c]
+    if missing:
+        out.update(_fetch_names_ulist(missing))
     return out
 
 
@@ -426,19 +506,14 @@ def get_stock_profile(
         if name not in concept_boards:
             concept_boards.append(name)
 
-    related_seed_codes: list[str] = []
-    for kind in ("行业", "概念"):
-        for board in (boards.get(kind) or [])[:10]:
-            related_seed_codes.extend((idx.get(kind) or {}).get(board) or [])
-    uniq = []
-    seen_c = set()
-    for raw in related_seed_codes:
-        cc = normalize_stock_code(str(raw))
-        if cc and cc not in seen_c:
-            seen_c.add(cc)
-            uniq.append(cc)
-    names = _name_map([c, *uniq[:80]])
+    names = _local_name_table()
     related = _related_from_boards(c, boards, idx, names)
+    missing = [r["code"] for r in related if not _is_real_name(r["code"], r.get("name"))]
+    if not _is_real_name(c, names.get(c)):
+        missing.append(c)
+    if missing:
+        names.update(_fetch_names_ulist(missing))
+        _apply_names(related, names)
 
     upstream = [r for r in related if r.get("role") == "上游"]
     downstream = [r for r in related if r.get("role") == "下游"]

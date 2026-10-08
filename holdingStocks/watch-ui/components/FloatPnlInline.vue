@@ -22,22 +22,51 @@ const closed = computed(() => {
 const boughtToday = computed(() => {
   const buy = String(props.row.买入时间 || '').slice(0, 10)
   const sess = String(props.row.交易日 || '').slice(0, 10)
-  return Boolean(buy && sess && buy === sess)
+  if (buy && sess && buy === sess) return true
+  if (buy && sess && buy !== sess) return false
+  const qty = Number(props.row.持仓 || 0)
+  const cost = Number(props.row.成本)
+  const last = Number(props.row.现价)
+  const avail = props.row.可用
+  // 刚入槽常漏打买入时间；T+1 锁仓按今买，避免今日浮盈先显示当日涨幅
+  if (qty > 0 && Number.isFinite(cost) && cost > 0 && avail === 0) return true
+  const backendPct = props.row['当日盈亏%']
+  const dayChg = props.row.当日涨幅
+  if (
+    qty > 0 &&
+    Number.isFinite(cost) &&
+    cost > 0 &&
+    Number.isFinite(last) &&
+    last > 0 &&
+    backendPct != null &&
+    dayChg != null &&
+    Math.abs(Number(backendPct) - Number(dayChg)) <= 0.06 &&
+    Math.abs((last / cost - 1) * 100 - Number(backendPct)) > 0.06
+  ) {
+    return true
+  }
+  return false
 })
 
-/** 后端当日盈亏；跨日缺失时昨仓按昨收本地补算，绝不回退到成本浮盈。 */
+function vsCost(last: number, cost: number, qty: number) {
+  return {
+    amount: Math.round((last - cost) * qty * 100) / 100,
+    pct: Math.round((last / cost - 1) * 10000) / 100,
+  }
+}
+
+/** 今买始终相对买入价。昨仓才信后端当日盈亏；缺失时按昨收补，不回退成本。 */
 const dayPnl = computed(() => {
+  const qty = Number(props.row.持仓 || 0)
+  const last = Number(props.row.现价)
+  const cost = Number(props.row.成本)
+  if (boughtToday.value && qty > 0 && Number.isFinite(last) && last > 0 && Number.isFinite(cost) && cost > 0) {
+    return vsCost(last, cost, qty).amount
+  }
   const v = props.row.当日盈亏
   if (v != null && !Number.isNaN(Number(v))) return Number(v)
-  const qty = Number(props.row.持仓 || 0)
   if (qty <= 0) return null
-  const last = Number(props.row.现价)
   if (!Number.isFinite(last) || last <= 0) return null
-  if (boughtToday.value) {
-    const cost = Number(props.row.成本)
-    if (!Number.isFinite(cost) || cost <= 0) return null
-    return Math.round((last - cost) * qty * 100) / 100
-  }
   const prev = Number(props.row.昨收)
   if (!Number.isFinite(prev) || prev <= 0) return null
   return Math.round((last - prev) * qty * 100) / 100
@@ -46,17 +75,16 @@ const dayPnl = computed(() => {
 const amount = computed(() => dayPnl.value)
 
 const pct = computed(() => {
+  const qty = Number(props.row.持仓 || 0)
+  const last = Number(props.row.现价)
+  const cost = Number(props.row.成本)
+  if (boughtToday.value && qty > 0 && Number.isFinite(last) && last > 0 && Number.isFinite(cost) && cost > 0) {
+    return vsCost(last, cost, qty).pct
+  }
   const v = props.row['当日盈亏%']
   if (v != null && !Number.isNaN(Number(v))) return Number(v)
-  const qty = Number(props.row.持仓 || 0)
   if (qty <= 0 || dayPnl.value == null) return null
-  const last = Number(props.row.现价)
   if (!Number.isFinite(last) || last <= 0) return null
-  if (boughtToday.value) {
-    const cost = Number(props.row.成本)
-    if (!Number.isFinite(cost) || cost <= 0) return null
-    return Math.round((last / cost - 1) * 10000) / 100
-  }
   const prev = Number(props.row.昨收)
   if (!Number.isFinite(prev) || prev <= 0) return null
   return Math.round((last / prev - 1) * 10000) / 100

@@ -535,10 +535,16 @@ def reset_strategy_books(strategy_id: str) -> int:
     with _LOCK:
         st = _STATE if _STATE is not None else empty_state()
         pos = st.setdefault("positions", {})
+        start = pnl_start_date()
         for key in list(pos.keys()):
             if str(key).startswith(prefix):
                 code = str(key).split(":", 1)[-1]
-                pos[key] = empty_book(strategy_id=sid, symbol=code)
+                book = empty_book(strategy_id=sid, symbol=code)
+                # 防止 reset 后日线 bootstrap 把 10 月前成交又灌回来
+                book["bootstrapped"] = True
+                book["bootstrap_source"] = "pnl_start_reset"
+                book["bootstrap_cutoff"] = start
+                pos[key] = book
                 n += 1
         st["updated_at"] = _now_str()
         save_state()
@@ -616,8 +622,8 @@ def evaluate_live_transition(
 
     BUY：FLAT + allow_entry + last >= buy_level，且当日未卖出过
     SELL：LONG + last <= sell_level，且非买入当日（t0 标的除外）
-    **SELL 仅连续竞价**（09:30–11:30 / 13:00–15:00）。竞价已破卖价等到 9:30，
-    若今开已破卖价则按开盘价、时刻 09:30:00。
+    **买卖均仅连续竞价**（09:30–11:30 / 13:00–15:00）。竞价观察不入账；
+    竞价已破卖价等到 9:30，若今开已破卖价则按开盘价、时刻 09:30:00。
 
     条件语义保持 touch（>= / <=），不是 cross。
     T+1 / 卖出日不再买回与回测 ``open_break`` 及日线 bootstrap 一致；
@@ -706,6 +712,9 @@ def evaluate_live_transition(
             )
             if touched and _session_of(book.get("exit_time")) == session:
                 out["skipped"] = "exited_today"
+                touched = False
+            if touched and not _in_live_exec_window(quote_ts or eval_t):
+                out["skipped"] = "wait_auction"
                 touched = False
             if touched:
                 shares, cash_left, _ = _buy_shares(float(book["virtual_cash"]), last)

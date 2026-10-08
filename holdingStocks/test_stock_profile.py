@@ -68,6 +68,35 @@ class TestRelatedAndProfile(unittest.TestCase):
         self.assertTrue(any(r.get("role") == "下游" for r in rows))
         self.assertTrue(all(r["code"] != "002273" for r in rows))
 
+    def test_related_names_use_full_local_map(self) -> None:
+        """关联股从小板块挑，名称必须用全表，不能只补大板块前 80 只。"""
+        big = [f"{i:06d}" for i in range(1, 120)]
+        idx = {
+            "行业": {},
+            "概念": {
+                "超大板块": ["600346", *big],
+                "电解铜箔": ["600346", "001223", "002191"],
+            },
+        }
+        names = {
+            "001223": "欧克科技",
+            "002191": "劲嘉股份",
+            "600346": "恒力石化",
+        }
+        with patch("stock_profile._local_name_table", return_value=names):
+            with patch("stock_profile._fetch_names_ulist", return_value={}):
+                payload = get_stock_profile(
+                    "600346",
+                    fetch_survey=lambda _c: {"name": "恒力石化"},
+                    fetch_quote=lambda _c: {"name": "恒力石化"},
+                    members_index=idx,
+                    use_cache=False,
+                )
+        by_code = {r["code"]: r["name"] for r in payload["related"]}
+        self.assertEqual(by_code.get("001223"), "欧克科技")
+        self.assertEqual(by_code.get("002191"), "劲嘉股份")
+        self.assertTrue(all(r["name"] != r["code"] for r in payload["related"] if r["code"] in names))
+
     def test_profile_uses_injected_sources(self) -> None:
         survey = {
             "name": "水晶光电",

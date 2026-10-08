@@ -99,7 +99,7 @@ WATCHLIST = list(S7_WATCHLIST)
 
 登记示例：`python index.py set-cost 002015 --cost 16.122 --qty 600`；或在 `holdings.json` 加 `"portfolio_pool": ["002015"]`。
 
-**策略16 Tab**：默认池信号表，按 **距买点% 升序**（最近在前）；可点表头按 **日内涨跌** / **策略累计** 排序。**状态主语义 = Strategy Simulator**（空仓/策略持有，来自 `strategy_sim_state.json`，与纸面 qty 独立）；纸面仓仅 debug 小字。Live quote（约 2~5s patch）撞买/卖位触发 FLAT↔LONG；不等待 1m close。**T+1 与回测 `open_break` / 日线 bootstrap 同口径**：买入当日不卖（`t0` 标的除外，`skipped=t1_locked`），卖出当日不再买回（`skipped=exited_today`）。2026-09-28 前 live 无此两条，买卖位交叉的票逐 tick 翻转（如 601208 单日近万笔），污染 25 个账本；修复脚本 `python repair_strategy_sim_t1.py`（默认 dry-run，停盯盘后 `--apply`；按原 bootstrap_cutoff 重跑历史段 + 新规则重放 live 事件，被拒事件归档 `strategy_signal_events.voided.json`）。策略累计/单笔收入来自同一 simulator 虚拟账本（`策略收益语义=strategy_simulator_ledger`），**不再用 Factor1 串台**。**FLAT ≠ 累计 0**：从未交易才是 0%；平仓后累计 = `virtual_cash/initial_cash−1` 冻结。首次空账本用日线 OHLC touch **bootstrap 一次**（自 `STRATEGY_PNL_START`=**2026-10-08** 至末日线 cutoff；此前 live 成交 `skipped=before_pnl_start`，累计保持 0），其后由 live events 接力；`bootstrapped` 防双计。纸面账户总收益仍自 `PAPER_PNL_START`=2026-09-09。Paper 入槽仍走 Capital V2（日增≤2 / 20% / 最多5）；Paper limit **不回滚** simulator BUY。Durable：`strategy_sim_state.json`（含 virtual_cash/shares）+ `strategy_signal_events.json`（跨机同步需包含）。状态图例可点筛选。买入信号口径真源：`watch_buy_signal.py`；simulator：`strategy_simulator.py`。
+**策略16 Tab**：默认池信号表，按 **距买点% 升序**（最近在前）；可点表头按 **日内涨跌** / **策略累计** 排序。**状态主语义 = Strategy Simulator**（空仓/策略持有，来自 `strategy_sim_state.json`，与纸面 qty 独立）；纸面仓仅 debug 小字。Live quote（约 2~5s patch）撞买/卖位触发 FLAT↔LONG；不等待 1m close。**T+1 与回测 `open_break` / 日线 bootstrap 同口径**：买入当日不卖（`t0` 标的除外，`skipped=t1_locked`），卖出当日不再买回（`skipped=exited_today`）。2026-09-28 前 live 无此两条，买卖位交叉的票逐 tick 翻转（如 601208 单日近万笔），污染 25 个账本；修复脚本 `python repair_strategy_sim_t1.py`（默认 dry-run，停盯盘后 `--apply`；按原 bootstrap_cutoff 重跑历史段 + 新规则重放 live 事件，被拒事件归档 `strategy_signal_events.voided.json`）。策略累计/单笔收入来自同一 simulator 虚拟账本（`策略收益语义=strategy_simulator_ledger`），**不再用 Factor1 串台**。**FLAT ≠ 累计 0**：从未交易才是 0%；平仓后累计 = `virtual_cash/initial_cash−1` 冻结。首次空账本用日线 OHLC touch **bootstrap 一次**（自 `STRATEGY_PNL_START`=**2026-10-08** 至末日线 cutoff；此前 live 成交 `skipped=before_pnl_start`，累计保持 0），其后由 live events 接力；`bootstrapped` 防双计。**2026-10-08 账本清零**：`reset_strategy_books` 打 `pnl_start_reset`，避免日线把 10 月前成交回灌；买卖均 `wait_auction`（09:30 前不成交）。纸面账户总收益仍自 `PAPER_PNL_START`=2026-09-09。Paper 入槽仍走 Capital V2（日增≤2 / 20% / 最多5）；Paper limit **不回滚** simulator BUY。Durable：`strategy_sim_state.json`（含 virtual_cash/shares）+ `strategy_signal_events.json`（`holdings-push` 一并上 `holdings-ledger`）。状态图例可点筛选。买入信号口径真源：`watch_buy_signal.py`；simulator：`strategy_simulator.py`。
 
 **Trailing 校验列（持仓卡 / 策略16）**：`现价 | 今日最高 | 持仓最高 | 卖出侧`。**今日最高** = 已印出最高（`usable_session_high`：连续竞价且过开盘脏窗才信 API `dayHigh`，否则 max(今开, 现价, 1m)）；**持仓最高** = `holdings.positions.*.peak_high`（可选 `peak_high_at`→`持仓最高时间`），与自动卖出 / `working_stop_price` / `paper_exit_decision` **同一 SoT**；前端禁止 `Math.max` 自算。全量 `collect_rows` 与行情快刷 `_sync_snapshot_hwm_from_quotes` 均经 `raise_position_peak_high` 抬升（只升不降）；**连续竞价前不抬**；**行情时间戳须已在连续竞价**（墙钟 9:30 但 tick 仍是 9:25 也不抬）。
 
@@ -111,7 +111,7 @@ WATCHLIST = list(S7_WATCHLIST)
 cd holdingStocks && python run_regression_tests.py
 ```
 
-**浮盈/结算（名称旁）**：**今日盈亏 / 今日浮亏** = 四槽持仓 `session_day_pnl`（**今买相对买入价，昨仓相对昨收**；9:15 / 跨日沿用快照时按昨收重置）+ **今日平仓**记账 `day_pnl`（只认 `已实现`，**隔日平仓留痕不计**）。卡片不回退展示「相对成本」的浮盈当今日浮亏。**总资产** = 日初锁定（优先昨收结算 `account_total`；**日初锚跟日历信号日 `trading_session_date`**，不用行情盘前滞后的行上「交易日」；跨日 heal 幂等，不依赖正好 9:15 在线）+ **今日盈亏**（与分票加总同动）。账户摘要「今日盈亏率」= 今日盈亏 / 日初锁定 `account_total_open`（单票「当日盈亏%」仍用该票当日基数）。**总收益** = 总资产 − 纸面本金（`paper_equity_base`，默认 30 万，自 **`PAPER_PNL_START`=2026-09-09**），即「昨收累计 + 今日盈亏」。**15:00 日结** = `POSITION_SETTLEMENT`（收盘盯市，**不改 qty/cost、不写 SELL**）；下一交易日 `account_total_open` = 昨收 `closing_equity`。账户摘要「当前持仓成本」= 剩余仓 `成本额`，**不含**今日已平仓成本。每日收盘后写一次 `holdings.daily_settlements[交易日]`（终稿；盘中可更新草稿；次日 heal/9:15 补记未终稿日），含今日盈亏 vs 权益日变差额核对。**今日平仓**卡片锁定平仓价；策略回放持有不进账户合计。
+**浮盈/结算（名称旁）**：**今日盈亏 / 今日浮亏** = 四槽持仓 `session_day_pnl`（**今买相对买入价，昨仓相对昨收**；刚入槽漏打买入时间时按 T+1 锁仓仍走买入价，禁止先显示当日涨幅；9:15 / 跨日沿用快照时昨仓按昨收重置）+ **今日平仓**记账 `day_pnl`（只认 `已实现`，**隔日平仓留痕不计**）。卡片不回退展示「相对成本」的浮盈当今日浮亏。**总资产** = 日初锁定（优先昨收结算 `account_total`；**日初锚跟日历信号日 `trading_session_date`**，不用行情盘前滞后的行上「交易日」；跨日 heal 幂等，不依赖正好 9:15 在线）+ **今日盈亏**（与分票加总同动）。账户摘要「今日盈亏率」= 今日盈亏 / 日初锁定 `account_total_open`（单票「当日盈亏%」仍用该票当日基数）。**总收益** = 总资产 − 纸面本金（`paper_equity_base`，默认 30 万，自 **`PAPER_PNL_START`=2026-09-09**），即「昨收累计 + 今日盈亏」。**15:00 日结** = `POSITION_SETTLEMENT`（收盘盯市，**不改 qty/cost、不写 SELL**）；下一交易日 `account_total_open` = 昨收 `closing_equity`。账户摘要「当前持仓成本」= 剩余仓 `成本额`，**不含**今日已平仓成本。每日收盘后写一次 `holdings.daily_settlements[交易日]`（终稿；盘中可更新草稿；次日 heal/9:15 补记未终稿日），含今日盈亏 vs 权益日变差额核对。**今日平仓**卡片锁定平仓价；策略回放持有不进账户合计。
 
 **首页布局**：账户摘要卡首行左侧为总收益 / 今日盈亏 +「?」图标（悬停/聚焦弹出总资产、可用、市值、持仓成本、因子2 摘要与口径说明）+ 交割单链接，右侧靠右为上证、深证紧凑指数卡（点击跳百度指数页；窄屏自动换行）。**仓位占比**：账户摘要显示 **总仓位占比** = Σ持仓市值 / 总资产（后端 `account.positionPct`，>100% 标红）、现金占比 = 可用 / 总资产、持股只数，以及按占比降序的**个股仓位**标签；每张持仓卡片名称上方状态标签行有「仓位 x%」标签（带小进度条）= 该票市值（缺失时 现价×持仓）/ 总资产，仅 `持仓>0` 显示，与总占比同口径（前端 `watch-ui/utils/position.ts`，不改后端）。隐私模式下隐藏。
 
@@ -148,7 +148,7 @@ pip install -r ../requirements.txt
 
 浏览器 **http://127.0.0.1:3000/sectors** 为板块轮动热力表。**优先通达信概念**（本地配置同步 + pytdx）；行情失败时仅复用**同一交易日且今日列已有排名**的通达信磁盘缓存（≤2 天）。**隔日缓存作废**；通达信只拉到 1 日时拼回磁盘历史，禁止整表覆盖。**启动分步**：先推盯盘/策略快照并实时刷新，板块通达信全市场行情放到首屏之后的后台线程（约 5s）；主循环不再同步 `build_sectors_live_payload`。历史列来自 `/api/sectors/rotation`（约 1 小时缓存，「重载历史」才重拉）；**今日列与成分股现价走盯盘 WebSocket**。点格子只为展开成分名单；再点一次进概念详情（先 lite 出 K 线，再补波段龙头；因子16 评分后置）。
 
-栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（HTTP `/api` + WebSocket `/ws`），不生成 HTML、不托管页面。股票名称移入即预取基本面，约 0.1 秒弹出（行业/概念/题材、市值 PE/PB、同板块关联及关系、产业上下游/主营；`GET /api/stock/profile`）。
+栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（HTTP `/api` + WebSocket `/ws`），不生成 HTML、不托管页面。股票名称移入即预取基本面，约 0.1 秒弹出（行业/概念/题材、市值 PE/PB、同板块关联及关系、产业上下游/主营；`GET /api/stock/profile`）。关联股中文名走全量本地表，缺的再批量东财补，不按大板块前 80 只截断。
 
 ```bash
 # 推荐：一键（Mac / Windows）
@@ -203,6 +203,8 @@ API：
 | `GET /api/strategies` | 策略 Tab + 因子绑定（注册表同源） |
 | `GET /api/factors` | 因子说明 + 挂载策略（注册表同源） |
 | `GET /api/stock/profile?code=` | 个股 hover 画像：行业/概念/题材、市值估值、同板块关联及关系、产业上下游（通达信板块 + 东财 F10） |
+| `GET /api/trades` | 交割单；`month=YYYY-MM` 按月；汇总含总盈亏=已实现+浮动 |
+| `POST /api/holdings/reset` | 纸面持仓清空重置（同 `index.py clear-all`；交割历史保留） |
 | `WS /ws` | 推送 snapshot（与 `/api/snapshot` 同结构） |
 
 前端路由（Nuxt SPA）：
@@ -210,6 +212,7 @@ API：
 | 路径 | 说明 |
 |------|------|
 | `/` | 持仓盯盘（首页） |
+| `/trades` | 交割单（总盈亏 / 按月 / 持仓清空重置） |
 | `/strategies` | 策略说明（全量注册表） |
 | `/factors` | 因子说明（全量注册表 + 规则摘要） |
 
@@ -231,11 +234,11 @@ python index.py holdings-push   # 本机账本 → origin/holdings-ledger（给�
 python index.py holdings-pull   # 远程账本 → 本机；丢掉 holdings_watch.json 旧缓存
 ```
 
-**Win / Mac 同一份持仓**：当前生产真源仍是本机 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细），经独立分支 `holdings-ledger` 同步（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。离线用 `--no-ledger-pull`。
+**Win / Mac 同一份持仓**：当前生产真源仍是本机 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细）以及 `strategy_sim_state.json` / `strategy_signal_events.json`（策略累计），经独立分支 `holdings-ledger` 同步（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。离线用 `--no-ledger-pull`。
 
 **Remote Paper State（Phase R1，未切生产）**：目标改为远程 PostgreSQL 单真源 + 单 writer lease（防双机重复成交）。本阶段仅落地 `paper_state/` 接口、schema、迁移 dry-run 与单测；**watch 仍写本地 JSON**。设计与命令见 [`docs/REMOTE_PAPER_STATE.md`](docs/REMOTE_PAPER_STATE.md)。
 
-**交割单**：持仓卡片现价旁 **价格**（外网行情）/ **交割**（跳转 `/trades?code=`）；顶栏与账户卡也可进 `/trades`。明细含代码、名称、买卖价、仓位、金额、单笔盈亏、账户余额、买卖理由；API `GET /api/trades`。单笔盈亏：仍持仓 BUY = `(现价−成本)×剩余仓`（浮动，复用快照/持仓现价）；SELL = 成交时 realized（冻结）。仓位列为 `qty→after_qty`（本笔数量→成交后持仓），非 lot remaining。无独立 FIFO lot，盯市挂在该代码最近一笔仍开仓 BUY、remaining=当前持仓 qty。
+**交割单**：持仓卡片现价旁 **价格**（外网行情）/ **交割**（跳转 `/trades?code=`）；顶栏与账户卡也可进 `/trades`。可按月筛选，汇总栏给出**总盈亏**（已实现卖出 + 仍持仓浮动）。明细含代码、名称、买卖价、仓位、金额、单笔盈亏、账户余额、买卖理由；API `GET /api/trades?month=YYYY-MM`。单笔盈亏：仍持仓 BUY = `(现价−成本)×剩余仓`（浮动，复用快照/持仓现价）；SELL = 成交时 realized（冻结）。仓位列为 `qty→after_qty`（本笔数量→成交后持仓），非 lot remaining。无独立 FIFO lot，盯市挂在该代码最近一笔仍开仓 BUY、remaining=当前持仓 qty。账户卡与交割单页有**持仓清空重置**（`POST /api/holdings/reset`，同 `python index.py clear-all`：空仓、资金回默认、当日成交归档；**不删**交割历史）。
 
 ## 如何扩展
 

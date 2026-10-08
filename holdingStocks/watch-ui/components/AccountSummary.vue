@@ -3,6 +3,11 @@ import type { HoldingRow, WatchAccount } from '~/types/snapshot'
 import { fmtPositionPct, positionPctOf } from '~/utils/position'
 
 const props = defineProps<{ account: WatchAccount; holdings?: HoldingRow[] }>()
+const { resetting, resetPaper } = usePaperReset()
+
+async function onReset() {
+  await resetPaper()
+}
 
 function fmt(v?: number | null, d = 2) {
   if (v == null) return '-'
@@ -69,6 +74,13 @@ const cashPct = computed(() => {
             </span>
           </span>
           <NuxtLink to="/trades" class="self-center text-xs text-accent hover:underline">交割单 →</NuxtLink>
+          <button
+            type="button"
+            class="self-center text-xs text-down hover:underline disabled:opacity-50"
+            :disabled="resetting"
+            title="清空全部纸面持仓并重置账户到默认资金"
+            @click="onReset"
+          >{{ resetting ? '重置中…' : '清空重置' }}</button>
         </div>
         <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <span class="text-ui-text-2" title="Σ市值 / 总资产">仓位</span>

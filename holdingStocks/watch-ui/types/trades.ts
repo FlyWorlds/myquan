@@ -33,11 +33,17 @@ export type TradeLedgerResponse = {
   total?: number
   offset?: number
   limit?: number
+  month?: string | null
+  months?: string[]
   summary?: {
     buy_amount?: number
     sell_amount?: number
     sell_pnl?: number
+    realized_pnl?: number
+    unrealized_pnl?: number
+    total_pnl?: number
     count?: number
+    month?: string | null
   }
   entries?: TradeLedgerEntry[]
   lot_matching?: boolean

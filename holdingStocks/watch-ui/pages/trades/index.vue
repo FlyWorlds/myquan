@@ -4,9 +4,17 @@ import { fmtNum } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 
 const route = useRoute()
+const router = useRouter()
+const { resetting, resetPaper } = usePaperReset()
+
 const codeFilter = computed(() => {
   const c = String(route.query.code || '').replace(/\D/g, '')
   return c ? c.padStart(6, '0').slice(-6) : ''
+})
+
+const monthFilter = computed(() => {
+  const m = String(route.query.month || '').trim()
+  return /^\d{4}-\d{2}$/.test(m) ? m : ''
 })
 
 const loading = ref(true)
@@ -19,6 +27,7 @@ async function load() {
   try {
     const qs = new URLSearchParams()
     if (codeFilter.value) qs.set('code', codeFilter.value)
+    if (monthFilter.value) qs.set('month', monthFilter.value)
     qs.set('limit', '500')
     const res = await fetch(`/api/trades?${qs.toString()}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -31,10 +40,23 @@ async function load() {
   }
 }
 
-watch(codeFilter, () => load(), { immediate: true })
+watch([codeFilter, monthFilter], () => load(), { immediate: true })
 
 const entries = computed(() => payload.value?.entries || [])
 const summary = computed(() => payload.value?.summary)
+const months = computed(() => payload.value?.months || [])
+
+function setMonth(month: string) {
+  const q = { ...route.query } as Record<string, string | string[] | undefined>
+  if (month) q.month = month
+  else delete q.month
+  void router.replace({ query: q })
+}
+
+async function onReset() {
+  const info = await resetPaper()
+  if (info?.ok) await load()
+}
 
 function sideLabel(e: TradeLedgerEntry) {
   if (e.side === 'buy') return '买入'
@@ -46,6 +68,11 @@ function fmtMoney(v?: number | null) {
   if (v == null) return '—'
   return v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+
+function monthLabel(m: string) {
+  const [y, mo] = m.split('-')
+  return `${y}年${Number(mo)}月`
+}
 </script>
 
 <template>
@@ -56,16 +83,53 @@ function fmtMoney(v?: number | null) {
         <p class="mt-1 text-sm text-ui-text-2">
           纸面账本 JSON（每次入槽买入 / 平仓卖出落库）
           <template v-if="codeFilter"> · 筛选 {{ codeFilter }}</template>
+          <template v-if="monthFilter"> · {{ monthLabel(monthFilter) }}</template>
         </p>
       </div>
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="flex items-center gap-1.5 text-sm text-ui-text-2">
+          月份
+          <select
+            class="rounded-lg border border-ui-hairline bg-ui-surface px-2 py-1.5 text-sm text-ui-text"
+            :value="monthFilter"
+            @change="setMonth(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">全部</option>
+            <option v-for="m in months" :key="m" :value="m">{{ monthLabel(m) }}</option>
+          </select>
+        </label>
         <NuxtLink v-if="codeFilter" to="/trades" class="btn btn-ghost">全部明细</NuxtLink>
         <button type="button" class="btn btn-ghost" :disabled="loading" @click="load">刷新</button>
+        <button
+          type="button"
+          class="btn btn-ghost text-down"
+          :disabled="resetting"
+          title="清空纸面持仓并重置账户资金"
+          @click="onReset"
+        >{{ resetting ? '重置中…' : '持仓清空重置' }}</button>
         <NuxtLink to="/" class="btn btn-ghost">返回盯盘</NuxtLink>
       </div>
     </div>
 
-    <section v-if="summary" class="card mb-4 grid gap-2 p-4 text-sm sm:grid-cols-4">
+    <section v-if="summary" class="card mb-4 grid gap-2 p-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
+      <div>
+        <div class="text-ui-text-2">总盈亏</div>
+        <div class="sensitive font-semibold">
+          <ChgText :chg="summary.total_pnl">{{ fmtMoney(summary.total_pnl) }}</ChgText>
+        </div>
+      </div>
+      <div>
+        <div class="text-ui-text-2">已实现</div>
+        <div class="sensitive font-semibold">
+          <ChgText :chg="summary.realized_pnl ?? summary.sell_pnl">{{ fmtMoney(summary.realized_pnl ?? summary.sell_pnl) }}</ChgText>
+        </div>
+      </div>
+      <div>
+        <div class="text-ui-text-2">浮动</div>
+        <div class="sensitive font-semibold">
+          <ChgText :chg="summary.unrealized_pnl">{{ fmtMoney(summary.unrealized_pnl) }}</ChgText>
+        </div>
+      </div>
       <div>
         <div class="text-ui-text-2">笔数</div>
         <div class="sensitive font-semibold">{{ summary.count ?? 0 }}</div>
@@ -77,12 +141,6 @@ function fmtMoney(v?: number | null) {
       <div>
         <div class="text-ui-text-2">卖出金额</div>
         <div class="sensitive font-semibold">{{ fmtMoney(summary.sell_amount) }}</div>
-      </div>
-      <div>
-        <div class="text-ui-text-2">卖出盈亏合计</div>
-        <div class="sensitive font-semibold">
-          <ChgText :chg="summary.sell_pnl">{{ fmtMoney(summary.sell_pnl) }}</ChgText>
-        </div>
       </div>
     </section>
 
@@ -169,7 +227,7 @@ function fmtMoney(v?: number | null) {
       </table>
     </div>
     <p class="mt-3 text-xs text-ui-text-3">
-      数据文件：holdingStocks/trade_ledger.json · 更新于 {{ payload?.updated_at || '—' }}
+      总盈亏 = 已实现卖出盈亏 + 仍持仓买入浮动；按月筛选只统计该月成交。数据文件：holdingStocks/trade_ledger.json · 更新于 {{ payload?.updated_at || '—' }}
     </p>
   </div>
 </template>

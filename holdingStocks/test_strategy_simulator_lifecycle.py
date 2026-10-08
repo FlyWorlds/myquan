@@ -600,7 +600,7 @@ class TestRestartPreserve(_TmpSim):
 
 
 class TestSessionGatesPaperUntouched(_TmpSim):
-    def test_auction_observe_simulator_buy_ok(self) -> None:
+    def test_auction_observe_simulator_buy_blocked(self) -> None:
         r = _eval(
             strategy_id="strategy16",
             symbol="601208",
@@ -610,7 +610,9 @@ class TestSessionGatesPaperUntouched(_TmpSim):
             sell_level=11.0,
             allow_entry=True,
         )
-        self.assertEqual(r["transition"], "BUY")
+        self.assertIsNone(r["transition"])
+        self.assertEqual(r["skipped"], "wait_auction")
+        self.assertEqual(sim.get_book("strategy16", "601208")["state"], "FLAT")
 
     def test_auction_observe_simulator_sell_blocked(self) -> None:
         """9:30 前不得模拟卖出；等到开盘铃按开盘价。"""
@@ -677,6 +679,26 @@ class TestApplyRow(_TmpSim):
         self.assertTrue(row["策略累计持有"])
         self.assertEqual(row["持仓"], 0)
         self.assertEqual(row["持仓状态"], "空仓")
+
+    def test_reset_strategy_books_zeroes_and_stamps_bootstrap(self) -> None:
+        _eval(
+            strategy_id="strategy16",
+            symbol="600330",
+            live_last=10.5,
+            quote_ts="2026-09-23 09:31:05",
+            buy_level=10.0,
+            sell_level=9.5,
+            allow_entry=True,
+        )
+        self.assertEqual(sim.get_book("strategy16", "600330")["state"], "LONG")
+        n = sim.reset_strategy_books("strategy16")
+        self.assertGreaterEqual(n, 1)
+        book = sim.get_book("strategy16", "600330")
+        self.assertEqual(book["state"], "FLAT")
+        self.assertEqual(float(book["trades"]), 0)
+        self.assertAlmostEqual(float(book["cumulative_return_pct"]), 0.0)
+        self.assertTrue(book["bootstrapped"])
+        self.assertEqual(book["bootstrap_source"], "pnl_start_reset")
 
     def test_apply_book_does_not_clobber_paper_signal_time(self) -> None:
         _eval(

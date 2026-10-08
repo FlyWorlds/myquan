@@ -4742,6 +4742,7 @@ def _apply_portfolio_slots(
             r["持仓"] = int(pos.get("qty") or qty)
             r["成本"] = pos.get("cost")
             r["可用"] = int(pos.get("available") or 0)
+            r["买入时间"] = pos.get("buy_time")
             r["槽位占用"] = True
             r["槽位候选"] = False
             r["已实现"] = False
@@ -10167,13 +10168,14 @@ def cmd_clear(args: argparse.Namespace) -> None:
     print(f"已清空持仓: {code} {meta['name']}")
 
 
-def cmd_clear_all(_: argparse.Namespace) -> None:
-    """清仓并重置全部盯盘状态，便于当日重新执行默认策略三槽。
+def reset_paper_account() -> dict[str, Any]:
+    """清仓并重置全部纸面盯盘状态（CLI / HTTP 共用）。
 
     · 全部 positions → 空仓；realized / alert_sticky / factor_memory 清空
     · strategy 纸面持有复位；portfolio_pool 对齐默认策略池
     · 当日 trades.jsonl 买卖行归档，避免「日最多买 / 当日禁买」挡住重跑
     · 账户总资产回到默认纸面资金；清内存缓存与微信防抖
+    · 不删 ``trade_ledger.json`` 交割历史
     """
     from watch_config import (
         DEFAULT_ACCOUNT_TOTAL,
@@ -10269,12 +10271,27 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
     except Exception as e:  # noqa: BLE001
         print(f"清微信预警状态失败（继续）: {e}")
 
+    return {
+        "ok": True,
+        "session": sess,
+        "account_total": float(DEFAULT_ACCOUNT_TOTAL),
+        "pool_size": len(data.get("portfolio_pool") or []),
+        "archived_trades": int(n_archived),
+        "max_buys_per_day": int(MAX_BUYS_PER_DAY),
+    }
+
+
+def cmd_clear_all(_: argparse.Namespace) -> None:
+    """清仓并重置全部盯盘状态，便于当日重新执行默认策略三槽。"""
+    from watch_config import DEFAULT_ACCOUNT_TOTAL
+
+    info = reset_paper_account()
     print(
-        f"已清仓并重置全部状态 · session={sess} · "
-        f"池 {len(data.get('portfolio_pool') or [])} 只 · "
-        f"归档当日成交 {n_archived} 笔 · 账户 {DEFAULT_ACCOUNT_TOTAL:.0f}"
+        f"已清仓并重置全部状态 · session={info['session']} · "
+        f"池 {info['pool_size']} 只 · "
+        f"归档当日成交 {info['archived_trades']} 笔 · 账户 {DEFAULT_ACCOUNT_TOTAL:.0f}"
     )
-    print(f"盯盘下一轮将按默认策略重新扫描入槽（日最多买 {int(MAX_BUYS_PER_DAY)}）。")
+    print(f"盯盘下一轮将按默认策略重新扫描入槽（日最多买 {info['max_buys_per_day']}）。")
 
 def cmd_history(_: argparse.Namespace) -> None:
     if not TRADES_FILE.exists():
@@ -11050,6 +11067,15 @@ def cmd_watch(args: argparse.Namespace) -> None:
     def _get_last_snap() -> Any:
         return _last_watch_snapshot
 
+    def _on_paper_reset() -> dict[str, Any]:
+        info = reset_paper_account()
+        try:
+            safe_refresh()
+        except Exception as exc:  # noqa: BLE001
+            info = dict(info)
+            info["refresh_error"] = type(exc).__name__
+        return info
+
     _Handler = build_watch_request_handler(
         root=ROOT,
         watch_meta_file=WATCH_META_FILE,
@@ -11061,6 +11087,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         get_factors_api=_get_factors_api_cache,
         handle_sectors_api=_handle_sectors_api,
         watch_ui_dist_ready=_watch_ui_dist_ready,
+        on_paper_reset=_on_paper_reset,
     )
 
     _seed_boot_watch_snapshot()

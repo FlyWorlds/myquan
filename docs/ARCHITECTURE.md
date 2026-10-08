@@ -145,6 +145,8 @@
 | `holdings.json` | 持仓、现金、当日已实现、峰值等 |
 | `trades.jsonl` | 成交流水（追加） |
 | `trade_ledger.json` | 交割明细（结构化，供 `/trades`） |
+| `strategy_sim_state.json` | 策略虚拟账本（单笔累计 / 策略收益） |
+| `strategy_signal_events.json` | 策略模拟成交事件 |
 | `holdings_watch.json` | **本机展示缓存**，非跨机真源 |
 
 跨机：独立 Git 分支 `origin/holdings-ledger`（`holdings-push` / `holdings-pull`）。代码走 `main`，账本不进 main（gitignore）。

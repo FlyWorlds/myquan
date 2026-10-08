@@ -2,7 +2,7 @@ import type { StockProfile } from '~/types/stockProfile'
 
 const cache = new Map<string, StockProfile>()
 const inflight = new Map<string, Promise<StockProfile>>()
-const SS_PREFIX = 'watch_sp_'
+const SS_PREFIX = 'watch_sp_v2_'
 
 function digitsOf(code?: string | number | null): string {
   const d = String(code || '').replace(/\D/g, '')

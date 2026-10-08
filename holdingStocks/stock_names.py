@@ -147,13 +147,14 @@ def _lookup_name_online(code: str) -> str:
 
         secid = f"1.{c}" if c[0] in "569" else f"0.{c}"
         resp = requests.get(
-            "https://push2.eastmoney.com/api/qt/stock/get",
-            params={"secid": secid, "fields": "f58"},
+            "https://2.push2.eastmoney.com/api/qt/ulist.np/get",
+            params={"fltt": "2", "invt": "2", "fields": "f12,f14", "secids": secid},
             headers={"User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/"},
             timeout=6,
         )
-        data = (resp.json() or {}).get("data") or {}
-        n = str(data.get("f58") or "").strip()
+        rows = ((resp.json() or {}).get("data") or {}).get("diff") or []
+        row = rows[0] if rows else {}
+        n = str((row or {}).get("f14") or "").strip()
         if n and not _is_bad_name(c, n):
             _remember_name(c, n)
             return n

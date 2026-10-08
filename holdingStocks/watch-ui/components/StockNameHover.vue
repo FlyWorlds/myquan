@@ -181,6 +181,12 @@ const chainGroups = computed(() => {
 function relatedKey(r: StockRelated, i: number) {
   return `${r.code}-${r.board}-${i}`
 }
+
+function relatedLabel(r: StockRelated) {
+  const name = String(r.name || '').trim()
+  const code = String(r.code || '').trim()
+  return name && name !== code ? name : code
+}
 </script>
 
 <template>
@@ -307,8 +313,8 @@ function relatedKey(r: StockRelated, i: number) {
                       target="_blank"
                       rel="noopener"
                       class="text-accent hover:underline"
-                    >{{ r.name }}</a>
-                    <span class="text-ui-text-3">{{ r.code }}</span>
+                    >{{ relatedLabel(r) }}</a>
+                    <span v-if="relatedLabel(r) !== r.code" class="text-ui-text-3">{{ r.code }}</span>
                     <span class="text-ui-text-2">{{ r.relation }}·{{ r.board }}</span>
                   </li>
                 </ul>
@@ -325,7 +331,7 @@ function relatedKey(r: StockRelated, i: number) {
                     target="_blank"
                     rel="noopener"
                     class="mr-2 text-accent hover:underline"
-                  >{{ r.name }}</a>
+                  >{{ relatedLabel(r) }}</a>
                 </div>
                 <p v-if="profile.chain?.note" class="text-xs leading-relaxed text-ui-text-3">
                   {{ profile.chain.note }}
