@@ -26,6 +26,50 @@ def _row_json(row: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _code_key(raw: Any) -> str:
+    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
+    return digits[-6:].zfill(6) if digits else ""
+
+
+def _is_bad_stock_name(code: str, name: Any) -> bool:
+    c = _code_key(code)
+    n = str(name or "").strip()
+    if not n:
+        return True
+    if c and (n == c or (n.isdigit() and n.zfill(6) == c)):
+        return True
+    low = n.lower()
+    return low.startswith(("sh", "sz")) or n.startswith("SYN")
+
+
+def _fill_stock_names(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """补齐策略/持仓快照里的中文名，避免前端列表只显示代码。"""
+    missing: list[str] = []
+    for r in rows:
+        code = _code_key(r.get("代码") or r.get("code"))
+        if code and _is_bad_stock_name(code, r.get("名称") or r.get("name")):
+            missing.append(code)
+    if not missing:
+        return rows
+    try:
+        from stock_names import lookup_names_for_codes
+
+        names = lookup_names_for_codes(sorted(set(missing)))
+    except Exception:  # noqa: BLE001
+        names = {}
+    if not names:
+        return rows
+    for r in rows:
+        code = _code_key(r.get("代码") or r.get("code"))
+        name = names.get(code)
+        if name and _is_bad_stock_name(code, r.get("名称") or r.get("name")):
+            if "名称" in r or "代码" in r:
+                r["名称"] = name
+            if "name" in r or "code" in r:
+                r["name"] = name
+    return rows
+
+
 def _strip_holdings_pnl(row: dict[str, Any]) -> dict[str, Any]:
     """策略 Tab 用：去掉持仓口径浮盈/结算金额，仅保留信号与策略收益%。"""
     out = _row_json(row)
@@ -902,6 +946,15 @@ def apply_feed_health(
         snap["quoteAt"] = snap.get("clock")
     if health.get("quoteAgeSec") is not None:
         snap["quoteAgeSec"] = health.get("quoteAgeSec")
+    try:
+        try:
+            from health_status import classify_snapshot_health
+        except ModuleNotFoundError:
+            from holdingStocks.health_status import classify_snapshot_health
+
+        snap.update(classify_snapshot_health(snap))
+    except Exception:  # noqa: BLE001
+        pass
     return snap
 
 
@@ -915,6 +968,7 @@ def build_watch_snapshot(
     strategy3: dict[str, Any] | None = None,
     strategy8: dict[str, Any] | None = None,
     strategy15: dict[str, Any] | None = None,
+    strategy16b: list[dict[str, Any]] | None = None,
     strategy17: list[dict[str, Any]] | None = None,
     sectors: dict[str, Any] | None = None,
     refresh_sec: int = 5,
@@ -954,36 +1008,40 @@ def build_watch_snapshot(
             ),
         )
 
-    holdings = [
+    holdings = _fill_stock_names([
         _row_json(r)
         for r in filter_portfolio_holdings(rows, portfolio_codes=portfolio_codes)
-    ]
+    ])
     try:
         from watch_config import strategy1_codes as _s1_codes_fn
 
         s1_codes = _s1_codes_fn()
     except Exception:  # noqa: BLE001
         s1_codes = set(strategy_codes)
-    strategy1_rows = _sort_pool_rows(
+    strategy1_rows = _fill_stock_names(_sort_pool_rows(
         [
             _retag_strategy1_row(_strip_holdings_pnl(r))
             for r in rows
             if code_key(str(r.get("代码") or "")) in s1_codes
         ]
-    )
+    ))
     try:
         from watch_config import core_leader_codes
 
         s16_codes = core_leader_codes()
     except Exception:  # noqa: BLE001
         s16_codes = set()
-    strategy16_rows = _sort_pool_rows(
+    strategy16_rows = _fill_stock_names(_sort_pool_rows(
         [
             _strip_holdings_pnl(r)
             for r in rows
             if code_key(str(r.get("代码") or "")) in s16_codes
         ]
-    )
+    ))
+    if strategy16b is not None:
+        strategy16b_rows = _fill_stock_names(list(strategy16b))
+    else:
+        strategy16b_rows = _fill_stock_names([dict(r) for r in strategy16_rows])
     try:
         from watch_config import ziyang_codes
 
@@ -991,15 +1049,15 @@ def build_watch_snapshot(
     except Exception:  # noqa: BLE001
         s17_codes = set()
     if strategy17 is not None:
-        strategy17_rows = list(strategy17)
+        strategy17_rows = _fill_stock_names(list(strategy17))
     else:
-        strategy17_rows = _sort_pool_rows(
+        strategy17_rows = _fill_stock_names(_sort_pool_rows(
             [
                 _strip_holdings_pnl(r)
                 for r in rows
                 if code_key(str(r.get("代码") or "")) in s17_codes
             ]
-        )
+        ))
     slot_meta = None
     for r in rows:
         if isinstance(r.get("_slot_meta"), dict):
@@ -1048,6 +1106,7 @@ def build_watch_snapshot(
         "strategy8": strategy8 or {},
         "strategy15": strategy15 or {},
         "strategy16": strategy16_rows,
+        "strategy16b": strategy16b_rows,
         "strategy17": strategy17_rows,
         "sectors": sectors or {},
         "strategies": strategies or [],

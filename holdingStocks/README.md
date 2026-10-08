@@ -129,11 +129,22 @@ cd holdingStocks && python run_regression_tests.py
 pip install -r ../requirements.txt
 ```
 
+开发/全量测试依赖：
+
+```bash
+pip install -r ../requirements.txt -r ../requirements-dev.txt
+python run_regression_tests.py          # 默认模拟盘回归
+python run_all_tests.py                 # 默认回归 + 全量 pytest（需 pytest）
+python -m pytest -q ../                 # 全量测试（需 pytest）
+```
+
 ## 模块
 
 | 文件 | 职责 |
 |------|------|
 | `watch_config.py` | 策略 ID、定盘池 `_FIT_WATCH`、阈值、竞价窗口；S7 备用 |
+| `trading_calendar.py` | A 股交易日历；周末/交易所休市日锚定上一交易日，支持本地 override |
+| `health_status.py` | 健康事件分级：阻断交易 / 仅影响通知 / 仅影响展示 |
 | `factor2_watch.py` | 账户回撤预警 |
 | `factor4_watch.py` | 牛市 regime（策略三 + 因子4 时） |
 | `trade_ledger.py` | 交割单 JSON 账本（`trade_ledger.json`）；买入入槽/卖出平仓落库；API 读模型对仍持仓 BUY 按现价盯市「单笔盈亏」（不写回 ledger） |
@@ -227,14 +238,14 @@ cd holdingStocks
 python start_watch.py        # 推荐：数据 API + Web 盯盘（Mac/Windows）
 python index.py              # 终端查看行情 + 持仓
 python index.py watch        # 仅数据后端（不启页面）
-python index.py clear-all    # 清仓+重置状态+归档当日成交；账户回到 DEFAULT_ACCOUNT_TOTAL（现 30 万）
+python index.py clear-all    # 清仓+重置纸面/策略模拟状态+归档当日成交；账户回到 DEFAULT_ACCOUNT_TOTAL（现 30 万）
 python index.py buy 600552 15.50 400
 python index.py sell 600552 16.20 400
 python index.py holdings-push   # 本机账本 → origin/holdings-ledger（给另一台 Mac/Win）
 python index.py holdings-pull   # 远程账本 → 本机；丢掉 holdings_watch.json 旧缓存
 ```
 
-**Win / Mac 同一份持仓**：当前生产真源仍是本机 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细）以及 `strategy_sim_state.json` / `strategy_signal_events.json`（策略累计），经独立分支 `holdings-ledger` 同步（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。离线用 `--no-ledger-pull`。
+**Win / Mac 同一份持仓**：当前生产真源仍是本机 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细）以及 `strategy_sim_state.json` / `strategy_signal_events.json`（策略16/16B 累计），经独立分支 `holdings-ledger` 同步（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。清仓后要 `holdings-push --force`，另一台设备再启动即可得到同一份空仓状态；离线用 `--no-ledger-pull`。
 
 **Remote Paper State（Phase R1，未切生产）**：目标改为远程 PostgreSQL 单真源 + 单 writer lease（防双机重复成交）。本阶段仅落地 `paper_state/` 接口、schema、迁移 dry-run 与单测；**watch 仍写本地 JSON**。设计与命令见 [`docs/REMOTE_PAPER_STATE.md`](docs/REMOTE_PAPER_STATE.md)。
 

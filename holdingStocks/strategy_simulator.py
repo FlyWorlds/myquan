@@ -79,6 +79,9 @@ def empty_book(
         "bootstrapped": False,
         "bootstrap_cutoff": None,
         "bootstrap_source": None,
+        "bootstrap_model": "daily_open_break_fixed_stop",
+        "live_model": "quote_touch_row_levels",
+        "exit_model": "row_sell_level_live",
         "gap_rebuy_ok": False,
     }
 
@@ -158,6 +161,7 @@ def bootstrap_book_from_daily_ohlc(
     if daily is None or getattr(daily, "empty", True):
         book["bootstrapped"] = True
         book["bootstrap_source"] = "daily_ohlc_empty"
+        book["bootstrap_model"] = "daily_open_break_fixed_stop"
         sync_flat_cumulative(book)
         if persist:
             save_state()
@@ -175,6 +179,7 @@ def bootstrap_book_from_daily_ohlc(
     if not idxs:
         book["bootstrapped"] = True
         book["bootstrap_source"] = "daily_ohlc_no_bars"
+        book["bootstrap_model"] = "daily_open_break_fixed_stop"
         sync_flat_cumulative(book)
         if persist:
             save_state()
@@ -265,6 +270,9 @@ def bootstrap_book_from_daily_ohlc(
     book["bootstrapped"] = True
     book["bootstrap_cutoff"] = cutoff
     book["bootstrap_source"] = "daily_ohlc_touch"
+    book["bootstrap_model"] = "daily_open_break_fixed_stop"
+    book["live_model"] = "quote_touch_row_levels"
+    book["exit_model"] = "row_sell_level_live"
     if state == "LONG" and shares > 0:
         mark_book(book, last_close, quote_ts=f"{cutoff} 15:00:00" if cutoff else None)
     else:
@@ -283,6 +291,140 @@ def bootstrap_book_from_daily_ohlc(
         }
     )
     return out
+
+
+def bootstrap_book_from_factor26_replay(
+    book: dict[str, Any],
+    replay: dict[str, Any],
+    *,
+    persist: bool = True,
+) -> dict[str, Any]:
+    """Seed simulator from production factor26 1m replay trades when available."""
+    out = {
+        "applied": False,
+        "source": replay.get("source") if isinstance(replay, dict) else None,
+        "trades": 0,
+        "state": str(book.get("state") or "FLAT"),
+    }
+    if not isinstance(replay, dict) or replay.get("source") != "1m":
+        return out
+    trades = [t for t in (replay.get("trades") or []) if isinstance(t, dict)]
+    if not trades:
+        book["bootstrapped"] = True
+        book["bootstrap_source"] = "factor26_1m_empty"
+        book["bootstrap_model"] = "factor26_1m_replay"
+        book["live_model"] = "quote_touch_row_levels"
+        book["exit_model"] = "row_sell_level_live"
+        sync_flat_cumulative(book)
+        if persist:
+            save_state()
+        out.update({"applied": True, "state": book.get("state")})
+        return out
+
+    init = float(book.get("initial_cash") or INITIAL_CASH)
+    cash = init
+    shares = 0.0
+    state = "FLAT"
+    entry_price = None
+    entry_time = None
+    exit_price = None
+    exit_time = None
+    closed_ret = None
+    sells = 0
+    last_mark = None
+    cutoff = None
+
+    for t in trades:
+        side = str(t.get("side") or "").lower()
+        try:
+            px = float(t.get("px") or 0)
+        except (TypeError, ValueError):
+            px = 0.0
+        if px <= 0:
+            continue
+        ts = str(t.get("ts") or t.get("date") or "")
+        cutoff = str(t.get("date") or ts)[:10] or cutoff
+        if side == "buy" and state == "FLAT":
+            sh, cash_left, _ = _buy_shares(cash, px)
+            if sh < LOT:
+                continue
+            cash = cash_left
+            shares = sh
+            state = "LONG"
+            entry_price = round(px, 4)
+            entry_time = ts or (f"{cutoff} 09:30:00" if cutoff else None)
+            exit_price = None
+            exit_time = None
+            closed_ret = None
+            last_mark = px
+        elif side == "sell" and state == "LONG" and shares > 0:
+            sell_shares = shares
+            try:
+                noted_shares = float(t.get("shares") or 0)
+            except (TypeError, ValueError):
+                noted_shares = 0.0
+            if noted_shares > 0:
+                sell_shares = min(shares, noted_shares)
+            cash += sell_shares * px
+            shares -= sell_shares
+            if shares <= 1e-9:
+                shares = 0.0
+                state = "FLAT"
+                exit_price = round(px, 4)
+                exit_time = ts or (f"{cutoff} 15:00:00" if cutoff else None)
+                if entry_price and entry_price > 0:
+                    closed_ret = round((px / float(entry_price) - 1.0) * 100.0, 2)
+                entry_price = None
+                entry_time = None
+                sells += 1
+            last_mark = px
+
+    book["state"] = state
+    book["virtual_cash"] = float(cash)
+    book["virtual_shares"] = float(shares)
+    book["entry_price"] = entry_price
+    book["entry_time"] = entry_time
+    book["exit_price"] = exit_price
+    book["exit_time"] = exit_time
+    book["trades"] = int(sells)
+    book["closed_trade_return_pct"] = closed_ret
+    book["bootstrapped"] = True
+    book["bootstrap_cutoff"] = cutoff
+    book["bootstrap_source"] = "factor26_1m_replay"
+    book["bootstrap_model"] = "factor26_1m_replay"
+    book["live_model"] = "quote_touch_row_levels"
+    book["exit_model"] = "row_sell_level_live"
+    if state == "LONG" and shares > 0 and last_mark:
+        mark_book(book, float(last_mark), quote_ts=f"{cutoff} 15:00:00" if cutoff else None)
+    else:
+        sync_flat_cumulative(book)
+    if persist:
+        save_state()
+    out.update(
+        {
+            "applied": True,
+            "cutoff": cutoff,
+            "trades": sells,
+            "state": state,
+            "cumulative_return_pct": book.get("cumulative_return_pct"),
+        }
+    )
+    return out
+
+
+def ensure_bootstrapped_from_factor26_replay(
+    strategy_id: str,
+    symbol: str,
+    replay: dict[str, Any],
+    *,
+    persist: bool = True,
+) -> dict[str, Any]:
+    book = get_book(strategy_id, symbol)
+    if not needs_historical_bootstrap(book):
+        return {"applied": False, "book": book, "skipped": "already_seeded"}
+    info = bootstrap_book_from_factor26_replay(book, replay, persist=persist)
+    info["book"] = book
+    return info
 
 
 def ensure_bootstrapped(
@@ -354,6 +496,28 @@ def save_state(data: dict[str, Any] | None = None) -> None:
             encoding="utf-8",
         )
         tmp.replace(STATE_FILE)
+
+
+def reset_all_state() -> None:
+    """Reset durable simulator state and event stream for a fresh paper session."""
+    global _STATE
+    with _LOCK:
+        _STATE = empty_state()
+        _STATE["updated_at"] = _now_str()
+        tmp = STATE_FILE.with_suffix(".json.tmp")
+        tmp.write_text(
+            json.dumps(_STATE, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        tmp.replace(STATE_FILE)
+
+        raw = {"updated_at": _now_str(), "events": []}
+        ev_tmp = EVENTS_FILE.with_suffix(".json.tmp")
+        ev_tmp.write_text(
+            json.dumps(raw, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        ev_tmp.replace(EVENTS_FILE)
 
 
 def get_book(strategy_id: str, symbol: str) -> dict[str, Any]:
@@ -767,6 +931,7 @@ def evaluate_live_transition(
                         "reason": reason,
                         "trading_session_date": str(book["entry_time"])[:10],
                         "buy_level": buy_lv,
+                        "execution_model": "quote_touch_row_levels",
                     }
         elif state == "LONG":
             try:
@@ -837,6 +1002,7 @@ def evaluate_live_transition(
                     "reason": reason,
                     "trading_session_date": str(book["exit_time"])[:10],
                     "sell_level": sell_lv,
+                    "execution_model": "quote_touch_row_levels",
                 }
             else:
                 mark_book(book, last, quote_ts=quote_ts)
@@ -876,6 +1042,9 @@ def apply_book_to_row(row: dict[str, Any], book: dict[str, Any]) -> None:
     row["策略收益"] = None
     row["策略收益语义"] = "strategy_simulator_ledger"
     row["策略收益范围"] = "symbol"
+    row["策略历史口径"] = book.get("bootstrap_model") or "daily_open_break_fixed_stop"
+    row["策略实时口径"] = book.get("live_model") or "quote_touch_row_levels"
+    row["策略退出口径"] = book.get("exit_model") or "row_sell_level_live"
     row["策略累计持有"] = state == "LONG"
     row["单笔收入%"] = book.get("single_return_pct")
     # 不覆盖 Paper 已写入的成交/预警时刻（今日平仓卡片「触发」以纸面为准）

@@ -196,6 +196,8 @@ class StrategyRuleTests(unittest.TestCase):
         self.assertEqual(get_strategy("援军战法").id, "strategy1")
         ids16 = {b.factor_id for b in get_strategy_bindings("strategy16")}
         self.assertEqual(ids16, {"factor26", "factor2", "factor27"})
+        ids16b = {b.factor_id for b in get_strategy_bindings("strategy16b")}
+        self.assertEqual(ids16b, ids16)
         all16 = {
             b.factor_id: b
             for b in get_strategy("strategy16").bindings(enabled_only=False)

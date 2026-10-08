@@ -24,6 +24,8 @@ REGRESSION_MODULES = (
     "test_temporal_integrity",
     "test_high_watermark_sell_side",
     "test_watch_boot_perf",
+    "test_trading_calendar",
+    "test_health_status",
     "test_stale_sticky_crossday",
     "test_holdings_store",
     "test_strategy_simulator_lifecycle",

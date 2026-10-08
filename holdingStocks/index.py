@@ -387,6 +387,12 @@ _WATCH_FRONT_READY = threading.Event()
 _WATCH_OVERLAY_READY = threading.Event()
 _last_watch_snapshot: dict[str, Any] | None = None
 _last_snapshot_digest: str | None = None
+_STRATEGY16B_LOCK = threading.RLock()
+_STRATEGY16B_DYNAMIC: dict[str, Any] = {
+    "params": {},
+    "pool": {},
+    "watchlist": [],
+}
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
 # 账本唯一持有者：进程内同一对象、串行写、写前版本检查、原子落盘（见 holdings_store.py）
 _HOLDINGS_STORE = HoldingsStore(
@@ -397,13 +403,45 @@ _HOLDINGS_STORE = HoldingsStore(
 )
 
 
-_WATCH_BOOT_PRIMARY_ONLY = False
+_WATCH_BOOT_STAGE = "full"  # full | primary | holdings
 
 
 def _set_watch_boot_primary_only(on: bool) -> None:
     """盯盘冷启动分层：True 时信号扫描只走热池，策略一池后台补齐后再并入。"""
-    global _WATCH_BOOT_PRIMARY_ONLY
-    _WATCH_BOOT_PRIMARY_ONLY = bool(on)
+    _set_watch_boot_stage("primary" if on else "full")
+
+
+def _set_watch_boot_stage(stage: str) -> None:
+    """盯盘冷启动分层：holdings 首屏 → primary 默认策略 → full 全量。"""
+    global _WATCH_BOOT_STAGE
+    if stage not in {"holdings", "primary", "full"}:
+        stage = "full"
+    _WATCH_BOOT_STAGE = stage
+
+
+def _watch_include_strategy_panels() -> bool:
+    return _WATCH_BOOT_STAGE == "full"
+
+
+def _holding_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """只返回持仓/今日已实现池，用于最快首屏。"""
+    try:
+        from watch_config import meta_for_code, portfolio_pool_codes
+    except Exception:  # noqa: BLE001
+        return []
+    holdings = holdings or {}
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for code in portfolio_pool_codes(holdings):
+        c = _code_key(str(code))
+        if not c or c in seen:
+            continue
+        seen.add(c)
+        item = meta_for_code(c, holdings)
+        item.setdefault("pool_src", "portfolio")
+        item.setdefault("池来源", "持仓")
+        out.append(item)
+    return out
 
 
 def _scan_watchlist(
@@ -417,7 +455,9 @@ def _scan_watchlist(
     from watch_config import strategy1_watchlist
 
     base = primary_watchlist(holdings)
-    if _WATCH_BOOT_PRIMARY_ONLY and not full:
+    if not full and _WATCH_BOOT_STAGE == "holdings":
+        return _holding_watchlist(holdings)
+    if not full and _WATCH_BOOT_STAGE == "primary":
         return list(base)
     seen = {_code_key(w["code"]) for w in base}
     out = list(base)
@@ -431,12 +471,19 @@ def _scan_watchlist(
         item.setdefault("pool_src", "strategy1_pool")
         item.setdefault("池来源", "策略池")
         out.append(item)
+    for w in _strategy16b_watchlist():
+        c = _code_key(str(w.get("code") or ""))
+        if not c or c in seen:
+            continue
+        seen.add(c)
+        out.append(dict(w))
     return out
 _REPLAY_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _STRATEGY_PNL_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _MIN_WATCH_REFRESH_SEC = 1.0
 _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
 _INDEX_CACHE_TTL_SEC = 15.0
+_DAILY_WARM_WORKERS = max(4, int(os.environ.get("WATCH_DAILY_WARM_WORKERS", "12")))
 # 盯盘 loop 快照推送日志：每 N 次打印一条（冷启动始终打印）；1=每次；环境变量 WATCH_SNAPSHOT_LOG_EVERY
 _WATCH_SNAPSHOT_LOG_EVERY = max(1, int(os.environ.get("WATCH_SNAPSHOT_LOG_EVERY", "12")))
 _watch_snapshot_push_n = 0
@@ -614,7 +661,7 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
 
 # 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
 WATCH_LIVE_TAB_IDS = frozenset(
-    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy17"}
+    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy16b", "strategy17"}
 )
 
 _REGISTRY_KIND_ZH = {
@@ -629,7 +676,30 @@ def _strategy_tab_number(strategy_id: str) -> str:
     sid = str(strategy_id)
     if sid.startswith("strategy") and sid[8:].isdigit():
         return sid[8:]
+    if sid == "strategy16b":
+        return "16B"
     return sid
+
+
+def _strategy_tab_sort_value(strategy_id: str, meta: Mapping[str, Any] | None) -> float:
+    try:
+        return float((meta or {}).get("tab_order"))
+    except (TypeError, ValueError):
+        pass
+    sid = str(strategy_id)
+    if sid.startswith("strategy") and sid[8:].isdigit():
+        return float(sid[8:])
+    if sid == "strategy16b":
+        return 16.1
+    return 999.0
+
+
+def _strategy_tab_primary_order(strategy_id: str, is_default: bool) -> float:
+    if is_default:
+        return 0.0
+    if str(strategy_id) == "strategy16b":
+        return 0.1
+    return 1.0
 
 
 def _strategy_tab_short_name(name: str) -> str:
@@ -735,6 +805,8 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
             tabs[-1]["reportPath"] = "docs/STRATEGY.md"
         if spec.id == "strategy16":
             tabs[-1]["reportPath"] = "docs/FACTOR27.md"
+        if spec.id == "strategy16b":
+            tabs[-1]["reportPath"] = "docs/FACTOR27.md"
         if spec.id == "strategy17":
             tabs[-1]["reportPath"] = "docs/FACTOR28.md"
         from strategy_picks_loader import load_strategy_picks
@@ -742,8 +814,8 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
     tabs.sort(
         key=lambda t: (
-            0 if t.get("is_watch_default") else 1,
-            int(_strategy_tab_number(str(t["id"]))),
+            _strategy_tab_primary_order(str(t["id"]), bool(t.get("is_watch_default"))),
+            _strategy_tab_sort_value(str(t["id"]), t.get("meta") if isinstance(t.get("meta"), dict) else None),
         )
     )
     return tabs
@@ -1311,6 +1383,7 @@ def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
         ),
         "strategy15": snapshot.get("strategy15"),
         "strategy16": snapshot.get("strategy16"),
+        "strategy16b": snapshot.get("strategy16b"),
         "strategy17": snapshot.get("strategy17"),
         "phaseKey": snapshot.get("phaseKey"),
         "strategy": snapshot.get("strategy"),
@@ -1344,6 +1417,180 @@ def _watch_tabs_with_live_s8(strategy8: dict[str, Any]) -> list[dict[str, Any]]:
                 live_picks_from_payload(strategy8), "strategy8"
             )
     return tabs
+
+
+def _query_bool(qs: Mapping[str, list[str]], key: str, default: bool) -> bool:
+    raw = (qs.get(key) or [str(default)])[0]
+    return str(raw).strip().lower() in ("1", "true", "yes", "on", "y")
+
+
+def _query_int(
+    qs: Mapping[str, list[str]],
+    key: str,
+    default: int,
+    *,
+    lo: int,
+    hi: int,
+) -> int:
+    try:
+        val = int((qs.get(key) or [default])[0])
+    except (TypeError, ValueError):
+        val = int(default)
+    return max(int(lo), min(int(hi), val))
+
+
+def _query_float_or_none(
+    qs: Mapping[str, list[str]],
+    key: str,
+    default: float | None,
+    *,
+    lo: float,
+    hi: float,
+) -> float | None:
+    raw = (qs.get(key) or [default])[0]
+    if raw is None or str(raw).strip().lower() in ("", "none", "null", "0", "不限"):
+        return None
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(float(lo), min(float(hi), val))
+
+
+def _strategy16b_select_params(path: str) -> dict[str, Any]:
+    qs = parse_qs(urlparse(path).query)
+    return {
+        "horizon_months": _query_int(qs, "horizonMonths", 3, lo=1, hi=12),
+        "max_concepts": _query_int(qs, "maxConcepts", 40, lo=5, hi=120),
+        "per_concept": _query_int(qs, "perConcept", 2, lo=1, hi=5),
+        "target_pool": _query_int(qs, "targetPool", 30, lo=5, hi=100),
+        "price_max": _query_float_or_none(qs, "priceMax", 100.0, lo=1.0, hi=1000.0),
+        "exclude_st": _query_bool(qs, "excludeSt", True),
+        "exclude_chinext": _query_bool(qs, "excludeChinext", True),
+        "exclude_star": _query_bool(qs, "excludeStar", True),
+        "exclude_bse": _query_bool(qs, "excludeBse", True),
+    }
+
+
+def _strategy16b_picks_from_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for i, it in enumerate(payload.get("picks") or [], 1):
+        if not isinstance(it, Mapping):
+            continue
+        code = _code_key(str(it.get("code") or ""))
+        if not code:
+            continue
+        items.append(
+            {
+                "rank": int(it.get("rank") or i),
+                "symbol": code,
+                "code": code,
+                "name": str(it.get("name") or ""),
+                "category": "条件选股",
+                "分类": "条件选股",
+                "pool_src": "strategy16b",
+                "concept": it.get("concepts") or it.get("concept"),
+                "price": it.get("price"),
+                "chg_pct": it.get("chg_pct"),
+                "amount": it.get("amount"),
+            }
+        )
+    return {
+        "kind": "pool",
+        "asOf": payload.get("as_of") or payload.get("label"),
+        "source": str(payload.get("source") or "strategy16b_dynamic"),
+        "note": str(payload.get("note") or ""),
+        "items": items,
+    }
+
+
+def _strategy16b_watch_items_from_payload(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    try:
+        from watch_config import load_strategy16_thr_map, meta_for_code
+    except Exception:  # noqa: BLE001
+        return []
+    thrs = load_strategy16_thr_map()
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for it in payload.get("picks") or []:
+        if not isinstance(it, Mapping):
+            continue
+        code = _code_key(str(it.get("code") or ""))
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        item = meta_for_code(code)
+        if it.get("name"):
+            item["name"] = str(it.get("name") or "")
+        item["universe"] = "strategy16b"
+        item["pool_src"] = "strategy16b"
+        item["池来源"] = "条件选股"
+        item["concept"] = it.get("concepts") or it.get("concept")
+        thr = thrs.get(code)
+        if thr is not None:
+            item["pct"] = float(thr)
+            item["entry_pct"] = float(thr)
+            item["stop_pct"] = float(DEFAULT_PCT)
+        out.append(item)
+    return out
+
+
+def _set_strategy16b_dynamic(params: Mapping[str, Any], payload: Mapping[str, Any]) -> None:
+    global _last_snapshot_digest
+    with _STRATEGY16B_LOCK:
+        _STRATEGY16B_DYNAMIC["params"] = dict(params)
+        _STRATEGY16B_DYNAMIC["pool"] = dict(payload)
+        _STRATEGY16B_DYNAMIC["watchlist"] = _strategy16b_watch_items_from_payload(payload)
+    _last_snapshot_digest = None
+
+
+def _strategy16b_watchlist() -> list[dict[str, Any]]:
+    with _STRATEGY16B_LOCK:
+        return [dict(w) for w in (_STRATEGY16B_DYNAMIC.get("watchlist") or [])]
+
+
+def _strategy16b_codes() -> set[str]:
+    return {_code_key(str(w.get("code") or "")) for w in _strategy16b_watchlist()}
+
+
+def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    codes = _strategy16b_codes()
+    if not codes:
+        return []
+    meta_by_code = {
+        _code_key(str(w.get("code") or "")): w
+        for w in _strategy16b_watchlist()
+    }
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        code = _code_key(str(r.get("代码") or ""))
+        if code not in codes:
+            continue
+        row = dict(r)
+        meta = meta_by_code.get(code) or {}
+        row["pool_src"] = "strategy16b"
+        row["池来源"] = "条件选股"
+        if meta.get("concept"):
+            row["concept"] = meta.get("concept")
+        out.append(row)
+    return out
+
+
+def _handle_strategy16b_api(path: str) -> tuple[int, Any]:
+    try:
+        from strategy.core_leader_universe import build_quarter_pool
+
+        params = _strategy16b_select_params(path)
+        payload = build_quarter_pool(fetch=True, **params)
+        _set_strategy16b_dynamic(params, payload)
+        return 200, {
+            "strategyId": "strategy16b",
+            "params": params,
+            "pool": payload,
+            "picks": _strategy16b_picks_from_payload(payload),
+        }
+    except Exception as exc:  # noqa: BLE001
+        return 500, {"error": "strategy16b select failed", "detail": str(exc)}
 
 
 def _current_feed_health() -> dict[str, Any]:
@@ -1856,6 +2103,7 @@ def publish_watch_snapshot(
     refresh_sec: int = 5,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
     fetch_sectors: bool = True,
+    include_strategy_panels: bool = True,
 ) -> tuple[Path, bool]:
     """推送 JSON 快照（WebSocket + holdings_watch.json），盯盘模式不写 HTML。
 
@@ -1886,9 +2134,6 @@ def publish_watch_snapshot(
         )
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 日结算记录失败（继续）: {e}")
-    from strategy3_watch import build_strategy3_payload
-    from strategy8_watch import build_strategy8_payload
-
     def _batch_quote(sinas: list[str]) -> dict[str, dict[str, Any]]:
         batch = fetch_sina_batch([s.lower() for s in sinas])
         out: dict[str, dict[str, Any]] = {}
@@ -1898,45 +2143,54 @@ def publish_watch_snapshot(
                 out[s.lower()] = _quote_from_sina_spot(spot)
         return out
 
-    try:
-        strategy3 = build_strategy3_payload(
-            session=session_today or None,
-            get_quote=get_quote,
-            batch_quote=_batch_quote,
-        )
-    except Exception as e:  # noqa: BLE001
-        print(f"[{_now()}] 策略三快照失败（继续盯盘）: {e}")
-        strategy3 = {"error": str(e), "rows": []}
-    try:
-        strategy8 = build_strategy8_payload(
-            session=session_today or None,
-            get_quote=get_quote,
-            batch_quote=_batch_quote,
-        )
-    except Exception as e:  # noqa: BLE001
-        print(f"[{_now()}] 策略八快照失败（继续盯盘）: {e}")
-        strategy8 = {"error": str(e), "rows": []}
+    strategy3: dict[str, Any] = {}
+    strategy8: dict[str, Any] = {}
+    strategy15: dict[str, Any] = {}
+    strategy17_rows: list[dict[str, Any]] = []
+    if include_strategy_panels:
+        from strategy3_watch import build_strategy3_payload
+        from strategy8_watch import build_strategy8_payload
+
+        try:
+            strategy3 = build_strategy3_payload(
+                session=session_today or None,
+                get_quote=get_quote,
+                batch_quote=_batch_quote,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 策略三快照失败（继续盯盘）: {e}")
+            strategy3 = {"error": str(e), "rows": []}
+        try:
+            strategy8 = build_strategy8_payload(
+                session=session_today or None,
+                get_quote=get_quote,
+                batch_quote=_batch_quote,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 策略八快照失败（继续盯盘）: {e}")
+            strategy8 = {"error": str(e), "rows": []}
     sectors = _sectors_for_snapshot(fetch_sectors=fetch_sectors)
-    try:
-        from strategy15_watch import build_strategy15_payload
+    if include_strategy_panels:
+        try:
+            from strategy15_watch import build_strategy15_payload
 
-        strategy15 = build_strategy15_payload(
-            session=session_today or None,
-            strategy1_rows=[
-                r
-                for r in rows
-                if not r.get("error")
-            ],
-        )
-    except Exception as e:  # noqa: BLE001
-        print(f"[{_now()}] 策略十五快照失败（继续盯盘）: {e}")
-        strategy15 = {"error": str(e), "rows": []}
-    try:
-        from strategy17_watch import cached_strategy17_rows
+            strategy15 = build_strategy15_payload(
+                session=session_today or None,
+                strategy1_rows=[
+                    r
+                    for r in rows
+                    if not r.get("error")
+                ],
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 策略十五快照失败（继续盯盘）: {e}")
+            strategy15 = {"error": str(e), "rows": []}
+        try:
+            from strategy17_watch import cached_strategy17_rows
 
-        strategy17_rows = cached_strategy17_rows()
-    except Exception:  # noqa: BLE001
-        strategy17_rows = []
+            strategy17_rows = cached_strategy17_rows()
+        except Exception:  # noqa: BLE001
+            strategy17_rows = []
     snapshot = build_watch_snapshot(
         rows=rows,
         indices=indices,
@@ -1953,6 +2207,7 @@ def publish_watch_snapshot(
         strategy3=strategy3,
         strategy8=strategy8,
         strategy15=strategy15,
+        strategy16b=_strategy16b_rows_from_rows(rows),
         strategy17=strategy17_rows,
         sectors=sectors,
         refresh_sec=refresh_sec,
@@ -1990,6 +2245,11 @@ def publish_watch_snapshot(
                     snapshot.get("strategy16")
                     if "strategy16" in snapshot
                     else snap.get("strategy16") or []
+                )
+                snap["strategy16b"] = (
+                    snapshot.get("strategy16b")
+                    if "strategy16b" in snapshot
+                    else snap.get("strategy16b") or []
                 )
                 if session_today and snapshot_needs_day_pnl_rebase(
                     snap, session=session_today
@@ -2263,6 +2523,8 @@ def _quote_from_daily_prev(daily: pd.DataFrame | None) -> dict[str, Any] | None:
 def _reseed_sina_batch(
     feed: QuoteFeedManager,
     watchlist: list[dict[str, Any]] | None = None,
+    *,
+    daily_fallback: bool = True,
 ) -> int:
     """冷启动快路径：新浪批量快照 seed（~2s），先让页面可用。"""
     items = watchlist if watchlist is not None else effective_watchlist()
@@ -2275,7 +2537,10 @@ def _reseed_sina_batch(
             continue
         feed.seed(w["sina"], _quote_from_sina_spot(spot))
         n += 1
-    # 盘前新浪/批量失败时用已预热日线昨收垫上，避免 collect_rows 逐只 8s 超时
+    # 盘前新浪/批量失败时用已预热日线昨收垫上，避免 collect_rows 逐只 8s 超时。
+    # 冷启动首屏会并行预热日线；此处可关闭，避免 seed 阶段串行卡住。
+    if not daily_fallback:
+        return n
     for w in items:
         if feed.get_quote(w["sina"]):
             continue
@@ -2301,9 +2566,11 @@ def fetch_today_quote_live(sina: str) -> dict[str, Any]:
 def _reseed_live_batch(
     feed: QuoteFeedManager,
     watchlist: list[dict[str, Any]] | None = None,
+    *,
+    daily_fallback: bool = True,
 ) -> int:
     """刷新当日实时快照（新浪批量）。"""
-    return _reseed_sina_batch(feed, watchlist)
+    return _reseed_sina_batch(feed, watchlist, daily_fallback=daily_fallback)
 
 
 def _daily_cache_warm(
@@ -2311,7 +2578,10 @@ def _daily_cache_warm(
 ) -> None:
     """并行预热日线缓存，避免首屏 collect_rows 串行等 IO。"""
     items = watchlist if watchlist is not None else effective_watchlist()
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    if not items:
+        return
+    workers = min(_DAILY_WARM_WORKERS, max(1, len(items)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(lambda w: _watch_daily(w["sina"], force=force), items))
 
 
@@ -2632,6 +2902,7 @@ def _attach_strategy_pnl_fields(
     from strategy_simulator import (
         apply_book_to_row,
         ensure_bootstrapped,
+        ensure_bootstrapped_from_factor26_replay,
         evaluate_live_transition,
         get_book,
         mark_book,
@@ -2650,9 +2921,33 @@ def _attach_strategy_pnl_fields(
         row["策略状态"] = "空仓"
         row["策略收益语义"] = "strategy_simulator_ledger"
         row["策略收益范围"] = "symbol"
+        row["策略历史口径"] = "daily_open_break_fixed_stop"
+        row["策略实时口径"] = "quote_touch_row_levels"
+        row["策略退出口径"] = "row_sell_level_live"
         return
 
-    # 历史日线 bootstrap → 同一账本；仅从未交易初始态执行一次
+    replay_info: dict[str, Any] | None = None
+    if str(FACTOR_ID).lower() in ("factor26", "f26", "26"):
+        try:
+            replay_info = _replay_last_factor_triggers_cached(
+                w["sina"],
+                daily,
+                entry_pct=entry_pct,
+                stop_pct=stop_pct,
+                tick=tick,
+                prev_entry_mode=prev_entry_mode,
+                limit_down_pct=limit_down_pct,
+            )
+            ensure_bootstrapped_from_factor26_replay(
+                sid,
+                code,
+                replay_info,
+                persist=True,
+            )
+        except Exception:  # noqa: BLE001
+            replay_info = None
+
+    # 历史 bootstrap → 同一账本；优先 factor26 1m replay，缺分钟时退回日线简化模型。
     try:
         ensure_bootstrapped(
             sid,
@@ -2720,7 +3015,7 @@ def _attach_strategy_pnl_fields(
     # debug：保留 Factor1 对照字段名但不作为主状态（避免 UI 双真相）
     row["策略回放对照%"] = None
     try:
-        rec = _strategy_pnl_since_cached(
+        rec = replay_info or _strategy_pnl_since_cached(
             w["sina"],
             daily,
             q=q,
@@ -2733,6 +3028,9 @@ def _attach_strategy_pnl_fields(
         )
         row["策略回放对照%"] = rec.get("return_pct")
         row["策略回放对照持有"] = bool(rec.get("holding"))
+        row["策略回放触发侧"] = rec.get("last_trigger_side")
+        row["策略回放触发价"] = rec.get("last_trigger_px")
+        row["策略回放来源"] = rec.get("source")
     except Exception:  # noqa: BLE001
         pass
 
@@ -10336,6 +10634,12 @@ def reset_paper_account() -> dict[str, Any]:
             STATE_FILE.unlink()
     except Exception as e:  # noqa: BLE001
         print(f"清微信预警状态失败（继续）: {e}")
+    try:
+        import strategy_simulator
+
+        strategy_simulator.reset_all_state()
+    except Exception as e:  # noqa: BLE001
+        print(f"清策略模拟账本失败（继续）: {e}")
 
     return {
         "ok": True,
@@ -10379,6 +10683,7 @@ def _refresh_once(
     *,
     get_quote: Callable[[str], dict[str, Any]] | None = None,
     wechat: bool = False,
+    include_strategy_panels: bool = True,
 ) -> tuple[Path, bool]:
     global _last_auction_skip_log
     rows = collect_rows(get_quote=get_quote)
@@ -10389,6 +10694,7 @@ def _refresh_once(
         refresh_sec=refresh_sec,
         get_quote=get_quote,
         fetch_sectors=False,
+        include_strategy_panels=include_strategy_panels,
     )
     if wechat and is_signal_window():
         try:
@@ -11002,12 +11308,21 @@ def cmd_watch(args: argparse.Namespace) -> None:
         feed.seed(sina, q)
         return q
 
-    def reseed_live(watchlist: list[dict[str, Any]] | None = None) -> int:
-        return _reseed_live_batch(feed, watchlist)
+    def reseed_live(
+        watchlist: list[dict[str, Any]] | None = None,
+        *,
+        daily_fallback: bool = True,
+    ) -> int:
+        return _reseed_live_batch(feed, watchlist, daily_fallback=daily_fallback)
 
-    def safe_refresh() -> tuple[Path, bool]:
+    def safe_refresh(*, include_strategy_panels: bool = True) -> tuple[Path, bool]:
         with refresh_lock:
-            return _refresh_once(interval, get_quote=get_quote, wechat=wechat)
+            return _refresh_once(
+                interval,
+                get_quote=get_quote,
+                wechat=wechat,
+                include_strategy_panels=include_strategy_panels,
+            )
 
     def safe_open_refresh() -> tuple[Path, bool]:
         with refresh_lock:
@@ -11057,7 +11372,9 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 break
             last = time.monotonic()
             try:
-                _, published = safe_refresh()
+                _, published = safe_refresh(
+                    include_strategy_panels=_watch_include_strategy_panels()
+                )
                 if published:
                     _log_watch_snapshot_push(
                         f"[{_now()}] 快照已推送 → {WATCH_META_FILE.name}",
@@ -11151,6 +11468,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         get_last_snapshot=_get_last_snap,
         get_strategies_api=_get_strategies_api_cache,
         get_factors_api=_get_factors_api_cache,
+        handle_strategy16b_api=_handle_strategy16b_api,
         handle_sectors_api=_handle_sectors_api,
         watch_ui_dist_ready=_watch_ui_dist_ready,
         on_paper_reset=_on_paper_reset,
@@ -11182,24 +11500,29 @@ def cmd_watch(args: argparse.Namespace) -> None:
     print(f"盯盘 API 已启动: http://{host}:{port}/")
     print("冷启动放到后台：新浪批量 + 预热日线 + 东财 SSE（页面可先连上）")
 
-    def _watch_cold_boot() -> None:
+    def _warm_reference_data() -> None:
         try:
             from stock_names import warm_name_cache
 
             n_names = warm_name_cache()
-            print(f"[{_now()}] 股票名称缓存已预热（{n_names} 条）")
+            print(f"[{_now()}] 股票名称缓存后台预热完成（{n_names} 条）")
         except Exception as e:  # noqa: BLE001
-            print(f"[{_now()}] 名称缓存预热失败（继续）: {e}")
+            print(f"[{_now()}] 名称缓存后台预热失败（继续）: {e}")
         try:
             from stock_profile import warm_profile_index
 
             n_rev = warm_profile_index()
-            print(f"[{_now()}] 个股画像板块反查已预热（{n_rev} 只）")
+            print(f"[{_now()}] 个股画像板块反查后台预热完成（{n_rev} 只）")
         except Exception as e:  # noqa: BLE001
-            print(f"[{_now()}] 个股画像预热失败（继续）: {e}")
-        # 分层冷启动：首屏只扫热池（默认策略+自选+持仓），策略一池首屏后后台补齐。
+            print(f"[{_now()}] 个股画像后台预热失败（继续）: {e}")
+
+    def _watch_cold_boot() -> None:
+        threading.Thread(
+            target=_warm_reference_data, name="watch-reference-warmup", daemon=True
+        ).start()
+        # 分层冷启动：首屏只扫持仓，随后默认策略，最后策略一池/其它面板后台补齐。
         # 必须在 worker 启动前置位，否则 loop 首轮就会全量串行拉日线。
-        _set_watch_boot_primary_only(True)
+        _set_watch_boot_stage("holdings")
         # 先起刷新线程 + 行情源：日线预热常因缺 panda_data/网络挂住，
         # 若堵在 feed.start() 之前，worker 一直 wait_update，快照永不更新。
         if not worker.is_alive():
@@ -11208,7 +11531,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             quote_patch_worker.start()
         if not milestone_worker.is_alive():
             milestone_worker.start()
-        print("冷启动：先上热池（默认策略）首屏，策略一池/日线全量放后台异步补齐")
+        print("冷启动：先上持仓首屏，再加载默认策略，最后异步补齐其它策略")
         feed_started = False
 
         try:
@@ -11216,18 +11539,52 @@ def cmd_watch(args: argparse.Namespace) -> None:
             t0 = time.perf_counter()
             # 启动强制清缓存放最前：原先放在首屏之后，热池日线会被拉两遍
             _ensure_signal_day_caches(force=True)
-            primary = primary_watchlist()
-            n_fast = reseed_live(primary)
+            holdings_meta = load_holdings()
+            holdings_first = _holding_watchlist(holdings_meta)
             feed.start()
             feed_started = True
-            try:
-                _daily_cache_warm(primary, force=True)
-            except Exception as e:  # noqa: BLE001
-                print(f"[{_now()}] 热池日线预热失败（继续按票补拉）: {e}")
-            report, _ = safe_refresh()
+            n_holdings = 0
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                live_f = pool.submit(reseed_live, holdings_first, daily_fallback=False)
+                daily_f = pool.submit(_daily_cache_warm, holdings_first, force=True)
+                try:
+                    n_holdings = int(live_f.result() or 0)
+                except Exception as e:  # noqa: BLE001
+                    print(f"[{_now()}] 持仓新浪快照 seed 失败（继续按票补拉）: {e}")
+                try:
+                    daily_f.result()
+                except Exception as e:  # noqa: BLE001
+                    print(f"[{_now()}] 持仓日线预热失败（继续按票补拉）: {e}")
+            report, _ = safe_refresh(include_strategy_panels=False)
             elapsed = time.perf_counter() - t0
             _log_watch_snapshot_push(
-                f"首屏快照已推送: {report}（热池 {n_fast}/{len(primary)} 只 · {elapsed:.1f}s · 策略一池后台补齐）",
+                f"持仓首屏已推送: {report}（持仓 {n_holdings}/{len(holdings_first)} 只 · {elapsed:.1f}s）",
+                force=True,
+            )
+            _set_watch_boot_stage("primary")
+            t_primary = time.perf_counter()
+            primary = primary_watchlist(load_holdings())
+            primary_rest = [
+                w
+                for w in primary
+                if _code_key(w["code"]) not in {_code_key(x["code"]) for x in holdings_first}
+            ]
+            n_primary = 0
+            if primary_rest:
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    live_f = pool.submit(reseed_live, primary_rest, daily_fallback=False)
+                    daily_f = pool.submit(_daily_cache_warm, primary_rest, force=True)
+                    try:
+                        n_primary = int(live_f.result() or 0)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[{_now()}] 默认策略新浪快照 seed 失败（继续按票补拉）: {e}")
+                    try:
+                        daily_f.result()
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[{_now()}] 默认策略日线预热失败（继续按票补拉）: {e}")
+            report1, _ = safe_refresh(include_strategy_panels=False)
+            _log_watch_snapshot_push(
+                f"默认策略快照已推送: {report1}（新增 {n_primary}/{len(primary_rest)} 只 · {time.perf_counter() - t_primary:.1f}s）",
                 force=True,
             )
             # 叠加池：后台独立轮询，不挡首屏、不进 collect_rows
@@ -11262,7 +11619,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             except Exception as e:  # noqa: BLE001
                 print(f"[{_now()}] 策略一池补齐失败（并入后按票补拉）: {e}")
             finally:
-                _set_watch_boot_primary_only(False)
+                _set_watch_boot_stage("full")
             report2, _ = safe_refresh()
             _log_watch_snapshot_push(
                 f"全量快照已推送: {report2}（补齐 {time.perf_counter() - t1:.1f}s）",
@@ -11270,7 +11627,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             )
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 首次更新失败（API 已就绪，继续后台刷新）: {e}")
-            _set_watch_boot_primary_only(False)
+            _set_watch_boot_stage("full")
             _WATCH_OVERLAY_READY.set()
             if not feed_started:
                 try:

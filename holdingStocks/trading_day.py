@@ -3,7 +3,7 @@
 口径真源（与账户 UI 对齐）：
 
 TRADING_DAY_SOURCE_OF_TRUTH = trading_session_date()
-  · 周一～周五 = 当日；周六日锚定上周五（不创建假 session）
+  · 交易日 = 当日；周末/交易所休市日锚定上一交易日（不创建假 session）
 
 SETTLEMENT_TIME_SEMANTICS = 连续竞价结束后 phase==closed（15:00 后）
   · POSITION_SETTLEMENT = 收盘盯市记账（不改 qty / cost，不写 SELL）

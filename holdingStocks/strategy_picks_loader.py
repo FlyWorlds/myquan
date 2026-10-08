@@ -69,6 +69,12 @@ _PICK_SOURCES: dict[str, dict[str, Any]] = {
             _MYQUAN / "backtest/strategy16_core_leader/picks_quarter.json",
         ],
     },
+    "strategy16b": {
+        "kind": "pool",
+        "paths": [
+            _MYQUAN / "backtest/strategy16_core_leader/picks_quarter.json",
+        ],
+    },
     "strategy17": {
         "kind": "pool",
         "paths": [
@@ -101,6 +107,7 @@ _POOL_CATEGORY: dict[str, str] = {
     "strategy12": "策略池",
     "strategy15": "策略池",
     "strategy16": "因子27",
+    "strategy16b": "条件选股",
     "strategy17": "紫阳真君",
 }
 
@@ -596,7 +603,7 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
         elif sid in ("strategy4", "strategy5"):
             col = "symbols" if sid == "strategy4" else "picks"
             raw = _load_weekly_csv(path, symbol_col=col)
-        elif sid == "strategy16":
+        elif sid in ("strategy16", "strategy16b"):
             raw = _load_s16_quarter(path)
         elif sid == "strategy17":
             raw = _load_s17_ziyang(path)

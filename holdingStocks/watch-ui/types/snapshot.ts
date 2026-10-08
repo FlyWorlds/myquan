@@ -149,6 +149,9 @@ export interface StrategyPickItem {
   code?: string
   name?: string
   score?: number
+  price?: number
+  chg_pct?: number
+  amount?: number
   thr?: number
   gap_pct?: number
   vol_ratio?: number
@@ -390,6 +393,7 @@ export interface WatchSnapshot {
   strategy8?: Strategy8Payload
   strategy15?: Strategy15Payload
   strategy16?: HoldingRow[]
+  strategy16b?: HoldingRow[]
   strategy17?: HoldingRow[]
   sectors?: SectorsLivePayload
   strategies: StrategyTab[]

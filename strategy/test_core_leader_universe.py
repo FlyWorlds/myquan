@@ -32,7 +32,14 @@ class TestCoreLeaderUniverse(unittest.TestCase):
         self.assertTrue(passes_stock_filter("600000", "浦发银行", 8.5))
         self.assertFalse(passes_stock_filter("600000", "浦发银行", 100))
         self.assertFalse(passes_stock_filter("300750", "宁德时代", 80))
+        self.assertTrue(
+            passes_stock_filter("300750", "宁德时代", 80, exclude_chinext=False)
+        )
+        self.assertTrue(
+            passes_stock_filter("688001", "科创示例", 80, exclude_star=False)
+        )
         self.assertFalse(passes_stock_filter("600000", "*ST示例", 8.5))
+        self.assertTrue(passes_stock_filter("600000", "*ST示例", 8.5, exclude_st=False))
 
     def test_select_hot_concepts_above_median_then_topn(self):
         spot = pd.DataFrame(
@@ -77,6 +84,23 @@ class TestCoreLeaderUniverse(unittest.TestCase):
         self.assertEqual([x["code"] for x in picks], ["600001", "600003"])
         self.assertEqual([x["rank_in_concept"] for x in picks], [1, 2])
 
+    def test_dynamic_filters_can_include_growth_board_and_st(self):
+        members = pd.DataFrame(
+            [
+                {"代码": "300001", "名称": "创业票", "现价": 10, "涨跌幅": 9, "成交额": 9e8},
+                {"代码": "600002", "名称": "*ST乙", "现价": 5, "涨跌幅": 8, "成交额": 8e8},
+                {"代码": "600003", "名称": "主板票", "现价": 20, "涨跌幅": 7, "成交额": 2e8},
+            ]
+        )
+        picks = pick_leaders_from_members(
+            members,
+            concept="测试概念",
+            per_concept=3,
+            exclude_chinext=False,
+            exclude_st=False,
+        )
+        self.assertEqual([x["code"] for x in picks], ["300001", "600002", "600003"])
+
     def test_build_pool_dedup_across_concepts(self):
         spot = pd.DataFrame(
             [
@@ -103,10 +127,12 @@ class TestCoreLeaderUniverse(unittest.TestCase):
             fetch=False,
             max_concepts=2,
             per_concept=2,
+            horizon_months=2,
         )
-        self.assertEqual(payload["horizon"], "rolling_3m")
-        self.assertEqual(payload["label"], "2026-06-09~2026-09-09")
-        self.assertEqual(payload["valid_until"], "2026-12-09")
+        self.assertEqual(payload["horizon"], "rolling_2m")
+        self.assertEqual(payload["horizon_months"], 2)
+        self.assertEqual(payload["label"], "2026-07-09~2026-09-09")
+        self.assertEqual(payload["valid_until"], "2026-11-09")
         self.assertEqual([x["code"] for x in payload["picks"]], ["600001", "600002"])
         self.assertIn("概念乙", str(payload["picks"][0].get("concepts") or ""))
 

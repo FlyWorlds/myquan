@@ -32,6 +32,8 @@ const legend = [
 type LegendId = (typeof legend)[number]['id']
 
 const selectedFilters = ref<LegendId[]>([])
+const hoverExplanationKey = ref('')
+const pinnedExplanationKey = ref('')
 
 /** 表头排序：默认无（后端距买点升序）；点列头 desc→asc→清 */
 type SortKey = 'dayChg' | 'strategyPnl'
@@ -132,6 +134,32 @@ function asNum(v: unknown): number | null {
   if (v == null || v === '') return null
   const n = Number(v)
   return Number.isFinite(n) ? n : null
+}
+
+function rowKey(r: HoldingRow): string {
+  return String(r.代码 || r.名称 || '')
+}
+
+function explanationText(r: HoldingRow): string {
+  return String(r.挂单说明 || r.预警 || '').trim()
+}
+
+function toggleExplanation(r: HoldingRow) {
+  const key = rowKey(r)
+  pinnedExplanationKey.value = pinnedExplanationKey.value === key ? '' : key
+}
+
+function isExplanationOpen(r: HoldingRow): boolean {
+  const key = rowKey(r)
+  return hoverExplanationKey.value === key || pinnedExplanationKey.value === key
+}
+
+function closeHoverExplanation() {
+  hoverExplanationKey.value = ''
+}
+
+function closePinnedExplanation() {
+  pinnedExplanationKey.value = ''
 }
 
 /** 正式 BUY 信号触发价：已触发因子价（冻结）；不得用开盘价冒充。 */
@@ -440,7 +468,36 @@ const SINGLE_SIGNAL_TITLE =
                   {{ fmtNum(r.因子价, r['价位小数'] ?? 2) }}
                 </div>
               </td>
-              <td class="max-w-[220px] px-3 py-2.5 text-xs leading-relaxed text-ui-text-2">{{ r.挂单说明 || r.预警 || '-' }}</td>
+              <td class="px-3 py-2.5 align-top">
+                <div
+                  v-if="explanationText(r)"
+                  class="relative inline-flex"
+                  @mouseleave="closeHoverExplanation"
+                >
+                  <button
+                    type="button"
+                    class="inline-flex h-6 w-6 items-center justify-center rounded-full border border-ui-hairline bg-ui-surface-2 text-xs font-bold text-ui-text-2 shadow-sm transition hover:border-accent hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+                    :aria-expanded="isExplanationOpen(r)"
+                    :aria-label="`查看${stockLabel(r.代码, r.名称)}说明`"
+                    :title="explanationText(r)"
+                    @mouseenter="hoverExplanationKey = rowKey(r)"
+                    @focus="hoverExplanationKey = rowKey(r)"
+                    @blur="closeHoverExplanation"
+                    @click.stop="toggleExplanation(r)"
+                    @keydown.esc.stop="closePinnedExplanation"
+                  >
+                    ?
+                  </button>
+                  <div
+                    v-show="isExplanationOpen(r)"
+                    role="tooltip"
+                    class="absolute right-0 top-8 z-30 w-[min(28rem,70vw)] rounded-md border border-ui-hairline bg-ui-surface p-3 text-left text-xs leading-relaxed text-ui-text shadow-xl"
+                  >
+                    {{ explanationText(r) }}
+                  </div>
+                </div>
+                <span v-else class="text-xs text-ui-text-3">-</span>
+              </td>
             </tr>
           </tbody>
         </table>

@@ -78,6 +78,34 @@ class TestSimulatorLifecycle(_TmpSim):
         self.assertEqual(r["book"]["entry_price"], 10.08)
         self.assertEqual(r["book"]["entry_time"], "2026-09-23 09:31:05")
         self.assertGreater(float(r["book"]["virtual_shares"]), 0)
+        self.assertEqual(r["event"]["execution_model"], "quote_touch_row_levels")
+
+    def test_apply_row_exposes_model_semantics(self) -> None:
+        book = sim.empty_book(strategy_id="strategy16", symbol="600330")
+        row: dict = {}
+        sim.apply_book_to_row(row, book)
+        self.assertEqual(row["策略收益语义"], "strategy_simulator_ledger")
+        self.assertEqual(row["策略历史口径"], "daily_open_break_fixed_stop")
+        self.assertEqual(row["策略实时口径"], "quote_touch_row_levels")
+        self.assertEqual(row["策略退出口径"], "row_sell_level_live")
+
+    def test_factor26_replay_bootstrap(self) -> None:
+        book = sim.empty_book(strategy_id="strategy16", symbol="600330")
+        info = sim.bootstrap_book_from_factor26_replay(
+            book,
+            {
+                "source": "1m",
+                "trades": [
+                    {"date": "2026-09-23", "side": "buy", "px": 10.0, "ts": "2026-09-23 09:35:00"},
+                    {"date": "2026-09-24", "side": "sell", "px": 10.5, "ts": "2026-09-24 10:05:00"},
+                ],
+            },
+            persist=False,
+        )
+        self.assertTrue(info["applied"])
+        self.assertEqual(book["bootstrap_model"], "factor26_1m_replay")
+        self.assertEqual(book["state"], "FLAT")
+        self.assertGreater(float(book["virtual_cash"]), float(book["initial_cash"]))
 
     def test_before_pnl_start_skips_buy(self) -> None:
         with mock.patch("watch_config.STRATEGY_PNL_START", "2026-10-08"):

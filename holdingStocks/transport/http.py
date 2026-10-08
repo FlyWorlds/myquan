@@ -21,6 +21,7 @@ def build_watch_request_handler(
     get_last_snapshot: Callable[[], Any],
     get_strategies_api: Callable[[], Any],
     get_factors_api: Callable[[], Any],
+    handle_strategy16b_api: Callable[[str], tuple[int, Any]] | None = None,
     handle_sectors_api: Callable[[str], tuple[int, Any]],
     watch_ui_dist_ready: Callable[[], bool],
     on_paper_reset: Callable[[], Any] | None = None,
@@ -152,6 +153,10 @@ def build_watch_request_handler(
                 return
             if path.startswith("/api/sectors/"):
                 status, data = handle_sectors_api(self.path)
+                self._send_json(data, status=status)
+                return
+            if path == "/api/strategy16b/select" and handle_strategy16b_api is not None:
+                status, data = handle_strategy16b_api(self.path)
                 self._send_json(data, status=status)
                 return
             if path == "/api/strategies":
