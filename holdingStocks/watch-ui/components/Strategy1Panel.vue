@@ -40,6 +40,10 @@ type SortKey = 'dayChg' | 'strategyPnl'
 type SortDir = 'desc' | 'asc'
 const sortKey = ref<SortKey | null>(null)
 const sortDir = ref<SortDir>('desc')
+/** 快刷会改当日涨幅；行序钉住，避免整表跟着 tick 乱跳 */
+const SORT_HOLD_MS = 3000
+const pinnedCodes = ref<string[] | null>(null)
+let holdTimer: ReturnType<typeof setTimeout> | undefined
 
 const decoratedRows = computed(() =>
   (props.rows || []).map((row) => {
@@ -64,23 +68,92 @@ function sortValue(row: HoldingRow, key: SortKey): number | null {
   return asNum(row['策略收益%'])
 }
 
-const filteredRows = computed(() => {
+function rowCode(row: HoldingRow): string {
+  return String(row.代码 || '')
+}
+
+function visibleDecorated() {
   let list = decoratedRows.value
   if (selectedFilters.value.length) {
     const on = new Set(selectedFilters.value)
     list = list.filter((x) => x.tags.some((id) => on.has(id)))
   }
+  return list
+}
+
+function compareSorted(
+  a: { row: HoldingRow },
+  b: { row: HoldingRow },
+  key: SortKey,
+  dir: number,
+): number {
+  const va = sortValue(a.row, key)
+  const vb = sortValue(b.row, key)
+  if (va == null && vb == null) return rowCode(a.row).localeCompare(rowCode(b.row))
+  if (va == null) return 1
+  if (vb == null) return -1
+  if (va !== vb) return va < vb ? -dir : dir
+  return rowCode(a.row).localeCompare(rowCode(b.row))
+}
+
+function snapshotOrder() {
+  const key = sortKey.value
+  if (!key) {
+    pinnedCodes.value = null
+    return
+  }
+  const dir = sortDir.value === 'desc' ? -1 : 1
+  pinnedCodes.value = [...visibleDecorated()]
+    .sort((a, b) => compareSorted(a, b, key, dir))
+    .map((x) => rowCode(x.row))
+}
+
+function scheduleOrderRefresh() {
+  if (!import.meta.client || holdTimer != null) return
+  holdTimer = setTimeout(() => {
+    holdTimer = undefined
+    snapshotOrder()
+  }, SORT_HOLD_MS)
+}
+
+watch([sortKey, sortDir, selectedFilters], () => {
+  if (holdTimer != null) {
+    clearTimeout(holdTimer)
+    holdTimer = undefined
+  }
+  snapshotOrder()
+})
+
+watch(
+  () => props.rows,
+  () => {
+    if (!sortKey.value) return
+    if (pinnedCodes.value == null) snapshotOrder()
+    else scheduleOrderRefresh()
+  },
+)
+
+onUnmounted(() => {
+  if (holdTimer != null) clearTimeout(holdTimer)
+})
+
+const filteredRows = computed(() => {
+  const list = visibleDecorated()
   const key = sortKey.value
   if (!key) return list
-  const dir = sortDir.value === 'desc' ? -1 : 1
+  const order = pinnedCodes.value
+  if (!order?.length) {
+    const dir = sortDir.value === 'desc' ? -1 : 1
+    return [...list].sort((a, b) => compareSorted(a, b, key, dir))
+  }
+  const rank = new Map(order.map((code, i) => [code, i]))
   return [...list].sort((a, b) => {
-    const va = sortValue(a.row, key)
-    const vb = sortValue(b.row, key)
-    if (va == null && vb == null) return 0
-    if (va == null) return 1
-    if (vb == null) return -1
-    if (va === vb) return 0
-    return va < vb ? -dir : dir
+    const ca = rowCode(a.row)
+    const cb = rowCode(b.row)
+    const ia = rank.get(ca) ?? order.length
+    const ib = rank.get(cb) ?? order.length
+    if (ia !== ib) return ia - ib
+    return ca.localeCompare(cb)
   })
 })
 
@@ -262,7 +335,7 @@ const SINGLE_SIGNAL_TITLE =
       <div class="mt-1 text-xs text-ui-text-3">
         状态=策略模拟器（空仓/策略持有），与纸面仓独立；纸面仅 debug 小字。
         策略累计=该策略+标的虚拟账本；单笔收入=入场价→现价；图例可点筛选。
-        点「日内涨跌 / 策略累计」表头可排序。
+        点「日内涨跌 / 策略累计」表头可排序（数字实时刷，行序约 3 秒重排，避免乱跳）。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button
