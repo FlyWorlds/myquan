@@ -15,9 +15,17 @@ for p in (str(ROOT), str(HS)):
         sys.path.insert(0, p)
 
 from watch_config import (  # noqa: E402
+    calendar_is_trading_day,
+    is_auction_window,
+    is_close_confirmed,
+    is_signal_window,
+    is_threshold_ready,
     last_weekday,
+    market_phase,
+    market_phase_label,
     normalize_signal_session,
     prev_trading_day,
+    timestamp_in_signal_window,
     trading_session_date,
 )
 from index import _prev_bars_from_daily  # noqa: E402
@@ -63,8 +71,42 @@ def test_prev_bars_monday_uses_friday() -> None:
     assert (o, c) == (11.0, 10.8)
 
 
+def test_closed_session_skips_signal_and_wechat_window() -> None:
+    sat = dt.datetime(2026, 10, 10, 10, 0)  # 周六
+    holiday = dt.datetime(2026, 10, 7, 10, 0)  # 国庆休市
+    fri = dt.datetime(2026, 10, 9, 10, 0)  # 周五交易日
+
+    assert calendar_is_trading_day(sat) is False
+    assert calendar_is_trading_day(holiday) is False
+    assert calendar_is_trading_day(fri) is True
+
+    assert market_phase(sat) == "closed"
+    assert market_phase(holiday) == "closed"
+    assert market_phase(fri) == "continuous"
+    assert is_signal_window(sat) is False
+    assert is_signal_window(holiday) is False
+    assert is_signal_window(fri) is True
+    assert is_auction_window(dt.datetime(2026, 10, 10, 9, 20)) is False
+    assert is_threshold_ready(dt.datetime(2026, 10, 10, 9, 26)) is False
+    assert is_close_confirmed(dt.datetime(2026, 10, 10, 15, 0)) is False
+    assert market_phase_label(now=sat) == "休市（非交易日）"
+    assert timestamp_in_signal_window("2026-10-10 10:00:00") is True
+    assert timestamp_in_signal_window("2026-10-09 08:00:00") is False
+
+
+def test_next_auction_milestone_skips_weekend_and_holiday() -> None:
+    from index import _next_auction_milestone
+
+    nxt, _label, _action = _next_auction_milestone(dt.datetime(2026, 10, 10, 10, 0))
+    assert nxt.date() == dt.date(2026, 10, 12)  # 下周一
+    nxt, _, _ = _next_auction_milestone(dt.datetime(2026, 10, 7, 10, 0))
+    assert nxt.date() == dt.date(2026, 10, 8)
+
+
 if __name__ == "__main__":
     test_weekend_and_monday_anchor()
     test_exchange_holiday_anchor()
     test_prev_bars_monday_uses_friday()
+    test_closed_session_skips_signal_and_wechat_window()
+    test_next_auction_milestone_skips_weekend_and_holiday()
     print("ok")

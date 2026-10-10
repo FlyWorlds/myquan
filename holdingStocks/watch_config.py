@@ -109,6 +109,31 @@ def _clock_minutes(now: Any | None = None) -> int:
     return int(ts.hour) * 60 + int(ts.minute)
 
 
+def calendar_is_trading_day(now: Any | None = None) -> bool:
+    """墙钟或给定时刻的自然日是否为 A 股开市日。
+
+    周末与交易所休市为 False。``now`` 缺省=本机当前时刻。
+    """
+    from datetime import date as _date
+    from datetime import datetime as _dt
+
+    try:
+        from trading_calendar import is_trading_day
+    except ModuleNotFoundError:
+        from holdingStocks.trading_calendar import is_trading_day
+
+    if now is None:
+        return bool(is_trading_day(_dt.now().date()))
+    if isinstance(now, _dt):
+        return bool(is_trading_day(now.date()))
+    if isinstance(now, _date):
+        return bool(is_trading_day(now))
+    try:
+        return bool(is_trading_day(now))
+    except (TypeError, ValueError):
+        return False
+
+
 def last_weekday(d: Any) -> Any:
     """Compatibility alias: last actual A-share trading day on or before ``d``."""
     try:
@@ -153,7 +178,12 @@ def normalize_signal_session(session: Any | None = None, *, now: Any | None = No
 
 
 def market_phase(now: Any | None = None) -> str:
-    """盘前 / 竞价 / 连续竞价 / 午休 / 收盘。连续竞价仅 9:30–11:30、13:00–15:00。"""
+    """盘前 / 竞价 / 连续竞价 / 午休 / 收盘。连续竞价仅 9:30–11:30、13:00–15:00。
+
+    非交易日整日视为 closed（不因墙上 9:30 误开信号/微信）。
+    """
+    if not calendar_is_trading_day(now):
+        return "closed"
     m = _clock_minutes(now)
     a15 = AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
     a20 = AUCTION_NO_CANCEL_HOUR * 60 + AUCTION_NO_CANCEL_MINUTE
@@ -180,6 +210,8 @@ def market_phase(now: Any | None = None) -> str:
 
 
 def market_phase_label(phase: str | None = None, *, now: Any | None = None) -> str:
+    if not calendar_is_trading_day(now):
+        return "休市（非交易日）"
     ph = phase or market_phase(now)
     labels = {
         "pre_auction": "盘前（9:15 前）",
@@ -194,21 +226,25 @@ def market_phase_label(phase: str | None = None, *, now: Any | None = None) -> s
 
 
 def is_auction_quote_window(now: Any | None = None) -> bool:
-    """9:15 起拉竞价行情（watch 高频刷新）。"""
+    """9:15 起拉竞价行情（watch 高频刷新）。休市日关闭。"""
+    if not calendar_is_trading_day(now):
+        return False
     return _clock_minutes(now) >= (
         AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
     )
 
 
 def is_threshold_ready(now: Any | None = None) -> bool:
-    """9:25 起用开盘价算过门/买点/止损（9:30 前不结算）。"""
+    """9:25 起用开盘价算过门/买点/止损（9:30 前不结算）。休市日关闭。"""
+    if not calendar_is_trading_day(now):
+        return False
     return _clock_minutes(now) >= (
         AUCTION_OPEN_HOUR * 60 + AUCTION_OPEN_MINUTE
     )
 
 
 def is_signal_window(now: Any | None = None) -> bool:
-    """仅连续竞价时段允许因子触发/止损结算/微信预警（不含午休、收盘后）。"""
+    """仅交易日连续竞价允许因子触发/止损结算/微信预警（不含午休、收盘后、休市）。"""
     return market_phase(now) == "continuous"
 
 
@@ -223,7 +259,10 @@ def _quote_clock_hms(ts: Any) -> str:
 
 
 def timestamp_in_signal_window(ts: Any) -> bool:
-    """按行情时间戳判定连续竞价；缺戳不可用。"""
+    """按行情时间戳判定连续竞价（只看时分秒）；缺戳不可用。
+
+    是否开市看墙钟 ``is_signal_window(now)``，不在这里用戳上的日期拦回放/测例。
+    """
     hms = _quote_clock_hms(ts)
     if not hms:
         return False
@@ -316,12 +355,16 @@ def pre_continuous_stop_ui(
 
 
 def is_close_confirmed(now: Any | None = None) -> bool:
-    """尾盘集合竞价后视为收盘确认（因子22 mode=close）。"""
+    """尾盘集合竞价后视为收盘确认（因子22 mode=close）。休市日不确认。"""
+    if not calendar_is_trading_day(now):
+        return False
     return _clock_minutes(now) >= 14 * 60 + 57
 
 
 def is_auction_window(now: Any | None = None) -> bool:
-    """是否处于集合竞价时段 09:15–09:30（不含 09:30）。"""
+    """是否处于集合竞价时段 09:15–09:30（不含 09:30）。休市日关闭。"""
+    if not calendar_is_trading_day(now):
+        return False
     t = _clock_minutes(now)
     start = AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
     end = SIGNAL_ACTIVE_HOUR * 60 + SIGNAL_ACTIVE_MINUTE

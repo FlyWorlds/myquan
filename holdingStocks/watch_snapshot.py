@@ -657,12 +657,12 @@ def patch_row_live_quote(
 
             code = str(row.get("代码") or "")
             if code:
+                from datetime import datetime as _dt
+
                 q_ts = None
                 if quote:
                     q_ts = quote.get("ts") or quote.get("time") or quote.get("timestamp")
                 if not q_ts:
-                    from datetime import datetime as _dt
-
                     sess = str(row.get("交易日") or "")[:10]
                     q_ts = f"{sess} {_dt.now().strftime('%H:%M:%S')}" if sess else _dt.now().strftime(
                         "%Y-%m-%d %H:%M:%S"
@@ -686,6 +686,7 @@ def patch_row_live_quote(
                     t0=bool(row.get("t0")),
                     day_open=row.get("开盘")
                     or (quote.get("open") if isinstance(quote, dict) else None),
+                    now=_dt.now(),
                 )
                 book = get_book(str(strategy_id), code)
                 apply_book_to_row(row, book)

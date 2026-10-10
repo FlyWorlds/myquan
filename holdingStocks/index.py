@@ -197,6 +197,7 @@ from watch_config import (
     is_auction_window,
     is_exit_executable,
     is_signal_window,
+    calendar_is_trading_day,
     is_auction_quote_ts,
     timestamp_in_signal_window,
     trust_quote_day_high,
@@ -3001,6 +3002,7 @@ def _attach_strategy_pnl_fields(
                     persist=True,
                     t0=bool(w.get("t0")),
                     day_open=q.get("open"),
+                    now=datetime.now(),
                 )
     book = get_book(sid, code)
     if last > 0:
@@ -3826,9 +3828,11 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
 
 
 def ensure_watch_status_reset_today(*, session: str | None = None) -> None:
-    """启动时若已过 9:15 且本日未重置，则补跑一次。"""
+    """启动时若已过 9:15 且本日未重置，则补跑一次。休市日不补跑。"""
     from watch_config import AUCTION_START_HOUR, AUCTION_START_MINUTE, _clock_minutes
 
+    if not calendar_is_trading_day():
+        return
     sess = normalize_signal_session(session)
     data = load_holdings()
     if str(data.get("watch_status_reset_session") or "") == sess:
@@ -10709,6 +10713,11 @@ def _refresh_once(
                 print(f"[{_now()}] 微信本轮推送 {len(pushed)} 条")
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 微信预警推送异常: {e}")
+    elif wechat and not calendar_is_trading_day():
+        now_m = time.monotonic()
+        if now_m - _last_auction_skip_log >= 60.0:
+            _last_auction_skip_log = now_m
+            print(f"[{_now()}] 休市（{market_phase_label()}）；跳过微信预警与自动成交")
     elif wechat and is_auction_window():
         now_m = time.monotonic()
         if now_m - _last_auction_skip_log >= 60.0:
@@ -10736,7 +10745,7 @@ def _next_auction_milestone(
 ) -> tuple[datetime, str, str]:
     """下一早盘里程碑：(时刻, 标签, 动作 reseed|open|refresh)。
 
-    跳过周六日（A 股休市）；与 ``trading_session_date`` 对齐。
+    跳过周末与交易所休市日；与 ``calendar_is_trading_day`` 对齐。
     """
     now = now or datetime.now()
     candidates: list[tuple[datetime, str, str]] = []
@@ -10744,8 +10753,7 @@ def _next_auction_milestone(
         t = now.replace(hour=h, minute=m, second=0, microsecond=0)
         if t <= now:
             t += timedelta(days=1)
-        # 落到下一交易日（跳过周末）
-        while t.weekday() >= 5:
+        while not calendar_is_trading_day(t):
             t += timedelta(days=1)
         candidates.append((t, label, action))
     return min(candidates, key=lambda x: x[0])
@@ -11685,7 +11693,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     )
     print(
         "信号窗口: 9:15 拉竞价 · 9:25 算阈值/过门 · 9:30 起触发买卖/止损/微信；"
-        "9:15–9:30 不结算止损"
+        "9:15–9:30 不结算止损；周末/休市日不推预警、不自动成交"
     )
     print(f"当前阶段: {market_phase_label()}")
     pct_note = " / ".join(

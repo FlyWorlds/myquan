@@ -691,7 +691,7 @@ def _session_clock(ts: str | None) -> str:
 
 
 def _in_live_exec_window(quote_ts: str | None) -> bool:
-    """连续竞价才允许 simulator 成交（与纸面 is_signal_window 对齐）。"""
+    """连续竞价才允许 simulator 成交（与纸面 timestamp_in_signal_window 对齐）。"""
     hms = _session_clock(quote_ts)
     if not hms:
         return False
@@ -808,8 +808,9 @@ def evaluate_live_transition(
     BUY：FLAT + allow_entry + last >= buy_level，且当日未卖出过
     （策略十六例外：隔夜仓竞价低开按开盘价全清后，过门允许当日回买）
     SELL：LONG + last <= sell_level，且非买入当日（t0 标的除外）
-    **买卖均仅连续竞价**（09:30–11:30 / 13:00–15:00）。竞价观察不入账；
+    **买卖均仅交易日连续竞价**（09:30–11:30 / 13:00–15:00）。竞价观察不入账；
     竞价已破卖价等到 9:30，若今开已破卖价则按开盘价、时刻 09:30:00。
+    传入 ``now`` 时休市日不成交（生产盯盘会传墙钟）。
 
     条件语义保持 touch（>= / <=），不是 cross。
     T+1 / 卖出日不再买回与回测 ``open_break`` 及日线 bootstrap 一致；
@@ -867,6 +868,21 @@ def evaluate_live_transition(
     if last <= 0:
         out["skipped"] = "bad_last"
         return out
+
+    if now is not None:
+        try:
+            from watch_config import is_signal_window
+        except ModuleNotFoundError:
+            from holdingStocks.watch_config import is_signal_window
+
+        if not is_signal_window(now):
+            book = force_book if force_book is not None else get_book(strategy_id, symbol)
+            mark_book(book, last, quote_ts=quote_ts)
+            out["book"] = book
+            out["skipped"] = "closed_session"
+            if persist and force_book is None:
+                save_state()
+            return out
 
     if is_quote_stale(quote_ts, now=now, stale_after=stale_lim):
         out["skipped"] = "stale_quote"

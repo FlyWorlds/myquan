@@ -772,6 +772,21 @@ class TestSessionGatesPaperUntouched(_TmpSim):
         self.assertAlmostEqual(float(book["exit_price"]), 6.88, places=2)
         self.assertEqual(book["exit_time"], "2026-09-30 09:30:00")
 
+    def test_weekend_now_blocks_even_if_weekday_quote(self) -> None:
+        r = _eval(
+            strategy_id="strategy16",
+            symbol="601208",
+            live_last=12.0,
+            quote_ts="2026-10-09 10:00:00",
+            buy_level=11.5,
+            sell_level=11.0,
+            allow_entry=True,
+            now=datetime(2026, 10, 10, 10, 0),
+        )
+        self.assertIsNone(r["transition"])
+        self.assertEqual(r["skipped"], "closed_session")
+        self.assertEqual(sim.get_book("strategy16", "601208")["state"], "FLAT")
+
     def test_no_symbol_hardcode_in_simulator(self) -> None:
         text = Path(sim.__file__).read_text(encoding="utf-8")
         for token in ("000002", "万科", "603328"):

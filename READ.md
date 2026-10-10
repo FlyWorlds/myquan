@@ -141,6 +141,7 @@ GET /api/strategy16b/select
 - 纸面账本、交易和状态文件不要手工乱改。
 - Win/Mac 持仓同步走 `origin/holdings-ledger`。
 - 外网行情断开时，本机 WebSocket 仍可能正常，页面以 `quoteStale` / `feedOk` 显示行情健康。
+- 微信扫描预警与纸面/策略模拟自动成交只在 **A 股交易日连续竞价**；周末和交易所休市日不推扫描预警、不成交（`market_phase=closed`）。
 
 ## 常用命令
 
