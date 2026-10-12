@@ -579,6 +579,110 @@ def mark_book(book: dict[str, Any], mark: float, *, quote_ts: str | None = None)
         sync_flat_cumulative(book)
 
 
+def _official_buy_from_open(day_open: float | None) -> float | None:
+    try:
+        open_lv = float(day_open or 0)
+    except (TypeError, ValueError):
+        return None
+    if open_lv <= 0:
+        return None
+    try:
+        from strategy.open_break import entry_trigger_price as _etp
+    except ModuleNotFoundError:
+        import sys
+
+        parent = str(ROOT.parent)
+        if parent not in sys.path:
+            sys.path.insert(0, parent)
+        from strategy.open_break import entry_trigger_price as _etp
+    return float(_etp(open_lv))
+
+
+def _void_today_unprinted_long(
+    book: dict[str, Any],
+    *,
+    official_buy: float,
+    session: str,
+) -> bool:
+    """今开后未印到核定买点却已 LONG：视同未买，加回现金，不记一笔 SELL。"""
+    if str(book.get("state") or "") != "LONG":
+        return False
+    if _session_of(book.get("entry_time")) != str(session)[:10]:
+        return False
+    try:
+        entry = float(book.get("entry_price") or 0)
+    except (TypeError, ValueError):
+        entry = 0.0
+    if entry <= 0 or entry + 1e-8 >= float(official_buy):
+        return False
+    try:
+        shares = float(book.get("virtual_shares") or 0)
+    except (TypeError, ValueError):
+        shares = 0.0
+    if shares > 0 and entry > 0:
+        book["virtual_cash"] = float(book.get("virtual_cash") or 0.0) + shares * entry
+    book["virtual_shares"] = 0.0
+    book["state"] = "FLAT"
+    book["entry_price"] = None
+    book["entry_time"] = None
+    book["exit_price"] = None
+    book["exit_time"] = None
+    book["single_return_pct"] = None
+    book["closed_trade_return_pct"] = None
+    book["gap_rebuy_ok"] = False
+    book["last_mark"] = None
+    sync_flat_cumulative(book)
+    return True
+
+
+def _drop_today_buy_events(strategy_id: str, symbol: str, session: str) -> int:
+    """把当日该票假 BUY 从事件流挪到 voided，避免重启回放又买回来。"""
+    if not EVENTS_FILE.is_file():
+        return 0
+    try:
+        raw = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return 0
+    evs = list((raw or {}).get("events") or [])
+    keep: list[dict[str, Any]] = []
+    dropped: list[dict[str, Any]] = []
+    code = _code_key(symbol)
+    day = str(session)[:10]
+    for e in evs:
+        if (
+            str(e.get("strategy_id") or "") == str(strategy_id)
+            and _code_key(str(e.get("symbol") or "")) == code
+            and str(e.get("side") or "").upper() == "BUY"
+            and str(e.get("trading_session_date") or e.get("trigger_time") or "")[:10] == day
+        ):
+            rec = dict(e)
+            rec["voided_at"] = _now_str()
+            rec["void_reason"] = "BUY_NOT_PRINTED"
+            dropped.append(rec)
+        else:
+            keep.append(e)
+    if not dropped:
+        return 0
+    raw["events"] = keep
+    raw["updated_at"] = _now_str()
+    tmp = EVENTS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(EVENTS_FILE)
+    void_path = ROOT / "strategy_signal_events.voided.json"
+    prev: list[dict[str, Any]] = []
+    if void_path.is_file():
+        try:
+            old = json.loads(void_path.read_text(encoding="utf-8"))
+            prev = list((old or {}).get("events") or []) if isinstance(old, dict) else list(old or [])
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            prev = []
+    void_path.write_text(
+        json.dumps({"updated_at": raw["updated_at"], "events": prev + dropped}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return len(dropped)
+
+
 def _buy_shares(cash: float, px: float) -> tuple[float, float, float]:
     """返回 (shares, cash_left, fee_approx0). 整手；无印花税买入。"""
     if px <= 0 or cash <= 0:
@@ -877,9 +981,18 @@ def evaluate_live_transition(
 
         if not is_signal_window(now):
             book = force_book if force_book is not None else get_book(strategy_id, symbol)
+            sess_closed = _session_of(quote_ts or eval_t)
+            official = _official_buy_from_open(day_open)
+            if official and _void_today_unprinted_long(
+                book, official_buy=official, session=sess_closed
+            ):
+                out["skipped"] = "unprinted_buy_void"
+                if persist and force_book is None:
+                    _drop_today_buy_events(strategy_id, symbol, sess_closed)
+            else:
+                out["skipped"] = "closed_session"
             mark_book(book, last, quote_ts=quote_ts)
             out["book"] = book
-            out["skipped"] = "closed_session"
             if persist and force_book is None:
                 save_state()
             return out
@@ -904,6 +1017,15 @@ def evaluate_live_transition(
         transition: str | None = None
         session = _session_of(quote_ts or eval_t)
 
+        official = _official_buy_from_open(day_open)
+        if official and _void_today_unprinted_long(
+            book, official_buy=official, session=session
+        ):
+            out["skipped"] = "unprinted_buy_void"
+            if persist and force_book is None:
+                _drop_today_buy_events(strategy_id, symbol, session)
+            state = "FLAT"
+
         if state == "FLAT":
             try:
                 buy_lv = float(buy_level) if buy_level is not None else None
@@ -914,15 +1036,11 @@ def evaluate_live_transition(
             except (TypeError, ValueError):
                 open_lv = 0.0
             # 有核定今开时，买点必须是今开突破阈值；开盘价本身不是突破
-            if open_lv > 0:
-                try:
-                    from strategy.open_break import entry_trigger_price as _etp
-
-                    official = float(_etp(open_lv))
-                    if buy_lv is None or buy_lv + 1e-8 < official:
-                        buy_lv = official
-                except Exception:  # noqa: BLE001
-                    buy_lv = None
+            if official is not None:
+                if buy_lv is None or buy_lv + 1e-8 < official:
+                    buy_lv = official
+            elif open_lv > 0:
+                buy_lv = _official_buy_from_open(open_lv) or buy_lv
             touched = (
                 allow_entry and buy_lv is not None and buy_lv > 0 and last + 1e-12 >= buy_lv
             )

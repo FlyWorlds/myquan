@@ -827,6 +827,31 @@ class TestSessionGatesPaperUntouched(_TmpSim):
         )
         self.assertEqual(filled["transition"], "BUY")
 
+    def test_today_long_below_official_buy_is_voided(self) -> None:
+        """策略16列表：今开附近假买入（入场 < 核定买点）须自愈打回空仓。"""
+        book = sim.empty_book(strategy_id="strategy16", symbol="000049")
+        book["state"] = "LONG"
+        book["entry_price"] = 22.94
+        book["entry_time"] = "2026-10-12 09:30:00"
+        book["virtual_shares"] = 4000.0
+        book["virtual_cash"] = 100000.0 - 22.94 * 4000.0
+        voided = _eval(
+            strategy_id="strategy16",
+            symbol="000049",
+            live_last=22.39,
+            quote_ts="2026-10-12 10:50:00",
+            buy_level=22.94,
+            sell_level=21.80,
+            allow_entry=True,
+            day_open=22.43,
+            now=datetime(2026, 10, 12, 10, 50),
+            force_book=book,
+        )
+        self.assertEqual(voided.get("skipped"), "unprinted_buy_void")
+        self.assertIsNone(voided["transition"])
+        self.assertEqual(voided["book"]["state"], "FLAT")
+        self.assertAlmostEqual(float(voided["book"]["virtual_cash"]), 100000.0, places=1)
+
     def test_weekend_now_blocks_even_if_weekday_quote(self) -> None:
         r = _eval(
             strategy_id="strategy16",
