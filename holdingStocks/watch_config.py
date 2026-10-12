@@ -25,7 +25,13 @@ from strategy.board_rules import (
     market_of,
     sina_of,
 )
-from strategy.open_break import DEFAULT_PCT, TICK_SIZE, floor_to_tick, is_t1_buy_day
+from strategy.open_break import (
+    DEFAULT_PCT,
+    TICK_SIZE,
+    entry_trigger_price,
+    floor_to_tick,
+    is_t1_buy_day,
+)
 from strategy.watch_universe import (
     CORE_LEADER_PICKS_PATH,
     POOL_SRC_FACTOR27,
@@ -1273,6 +1279,75 @@ def session_open_usable(quote: dict[str, Any] | None = None, **px: Any) -> float
     return round(open_px, 4)
 
 
+def official_buy_trigger(
+    official_open: float | None,
+    *,
+    entry_pct: float = DEFAULT_PCT,
+    tick: float = TICK_SIZE,
+) -> float | None:
+    """今日核定开盘对应的开盘突破买点；开盘未核定时为 None。"""
+    try:
+        open_px = float(official_open or 0)
+    except (TypeError, ValueError):
+        return None
+    if open_px <= 0:
+        return None
+    return round(float(entry_trigger_price(open_px, entry_pct=entry_pct, tick=tick)), 4)
+
+
+def session_high_prints_buy(
+    *,
+    session_high: float | None,
+    official_buy: float | None,
+) -> bool:
+    """当日最高必须实际印到核定买点。开盘价本身不是突破。"""
+    try:
+        high = float(session_high or 0)
+        buy = float(official_buy or 0)
+    except (TypeError, ValueError):
+        return False
+    if high <= 0 or buy <= 0:
+        return False
+    return high + 1e-12 >= buy
+
+
+def buy_fill_reject_reason(
+    *,
+    fill_px: float,
+    official_buy: float | None = None,
+    session_high: float | None = None,
+    session_low: float | None = None,
+) -> str | None:
+    """买入成交校验。None=可通过；否则返回拒因。"""
+    try:
+        px = float(fill_px or 0)
+    except (TypeError, ValueError):
+        return "INVALID_FILL"
+    if px <= 0:
+        return "INVALID_FILL"
+    try:
+        low = float(session_low or 0)
+    except (TypeError, ValueError):
+        low = 0.0
+    if low > 0 and px + 1e-12 < low:
+        return "UNPRINTABLE_FILL"
+    try:
+        buy = float(official_buy or 0)
+    except (TypeError, ValueError):
+        buy = 0.0
+    if buy <= 0:
+        return None
+    try:
+        high = float(session_high or 0)
+    except (TypeError, ValueError):
+        high = 0.0
+    if high > 0 and high + 1e-12 < buy:
+        return "BUY_NOT_PRINTED"
+    if px + 1e-12 < buy:
+        return "FILL_BELOW_BUY"
+    return None
+
+
 def session_print_low(quote: dict[str, Any] | None = None, **px: Any) -> float | None:
     """当日已印最低；缺最低时不用开盘凑（开盘可能是昨收垫的）。"""
     q = quote if isinstance(quote, dict) else {}
@@ -1294,9 +1369,9 @@ def reprintable_buy_cost(
     official_buy: float | None = None,
     session_high: float | None = None,
 ) -> float | None:
-    """今买成本低于已印最低时，返回应改写的成本；否则 None。
+    """今买成本低于已印最低时，仅当最高已印到核定买点才改到该买点。
 
-    优先今日核定买点（最高已触达），否则今开，再否则今低。
+    最高未到买点时不改成今开/今低，避免把未突破的错价洗成「合法开盘买」。
     """
     try:
         c = float(cost)
@@ -1316,15 +1391,12 @@ def reprintable_buy_cost(
         high = float(session_high or 0)
     except (TypeError, ValueError):
         high = 0.0
-    if buy > 0 and buy + 1e-12 >= low and (high <= 0 or high + 1e-12 >= buy):
+    if buy > 0 and buy + 1e-12 >= low and session_high_prints_buy(
+        session_high=high if high > 0 else None,
+        official_buy=buy,
+    ):
         return round(buy, 4)
-    try:
-        op = float(official_open or 0)
-    except (TypeError, ValueError):
-        op = 0.0
-    if op > 0 and op + 1e-12 >= low:
-        return round(op, 4)
-    return round(low, 4)
+    return None
 
 
 def slot_fill_decision(
@@ -1336,13 +1408,16 @@ def slot_fill_decision(
     overshoot: float = SLOT_FIRST_TIER_MAX_OVERSHOOT,
     tick: float = TICK_SIZE,
     session_low: float | None = None,
+    official_buy: float | None = None,
+    session_high: float | None = None,
 ) -> dict[str, Any] | None:
     """空槽成交价：平仓腾出 vs 新触发。
 
     · 无平仓时刻（开盘空槽/从未腾槽）：按买点成交
     · 触发早于平仓（第一梯队）：现价成交，且现价 ≤ 买点×(1+overshoot)；超限本轮不买
     · 平仓后才触发：按买点成交
-    · 成交价不得低于当日已印最低（昨收垫出来的买点低于今低则拒）
+    · 成交价不得低于当日已印最低，也不得低于今日核定买点
+    · 当日最高未印到核定买点则拒（开盘价附近的假突破不算）
     """
     try:
         sig = float(signal_px or 0)
@@ -1367,13 +1442,23 @@ def slot_fill_decision(
         px = floor_to_tick(last, tick)
         if px <= 0:
             return None
-        if low > 0 and px + 1e-12 < low:
+        if buy_fill_reject_reason(
+            fill_px=px,
+            official_buy=official_buy,
+            session_high=session_high,
+            session_low=low if low > 0 else None,
+        ):
             return None
         return {"fill_px": round(float(px), 4), "kind": "last"}
     px = floor_to_tick(sig, tick)
     if px <= 0:
         return None
-    if low > 0 and px + 1e-12 < low:
+    if buy_fill_reject_reason(
+        fill_px=px,
+        official_buy=official_buy,
+        session_high=session_high,
+        session_low=low if low > 0 else None,
+    ):
         return None
     return {"fill_px": round(float(px), 4), "kind": "signal"}
 

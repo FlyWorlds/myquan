@@ -201,6 +201,9 @@ from watch_config import (
     calendar_is_trading_day,
     session_open_usable,
     session_print_low,
+    official_buy_trigger,
+    session_high_prints_buy,
+    buy_fill_reject_reason,
     reprintable_buy_cost,
     is_auction_quote_ts,
     timestamp_in_signal_window,
@@ -3005,7 +3008,7 @@ def _attach_strategy_pnl_fields(
                     reason="collect_rows",
                     persist=True,
                     t0=bool(w.get("t0")),
-                    day_open=q.get("open"),
+                    day_open=session_open_usable(q) or q.get("open"),
                     now=datetime.now(),
                 )
     book = get_book(sid, code)
@@ -3946,8 +3949,14 @@ def _merge_path_buy_hit(
     open_px: float,
     entry_pct: float,
     tick: float,
+    official_buy: float | None = None,
 ) -> tuple[bool, float | None, Any]:
-    """有分钟线走路径；日线最高已触开盘买点时，1m 不全或回退也不把已触买打成未触。"""
+    """有分钟线走路径；日线最高已触开盘买点时，1m 不全或回退也不把已触买打成未触。
+
+    核定买点存在时，1m 路径不得用更低的过期/攻击价把未印出的买点判成已触。
+    """
+    if official_buy is not None and not hit_open:
+        return False, None, None
     if bars_buy is None or getattr(bars_buy, "empty", True):
         return bool(hit_open), None, None
     buy_path = path_dependent_buy_hit(
@@ -3963,6 +3972,10 @@ def _merge_path_buy_hit(
         try:
             px = float(buy_path["buy_px"])
         except (TypeError, ValueError):
+            px = None
+    if official_buy is not None and hit:
+        if px is None or px + 1e-12 < float(official_buy):
+            hit = False
             px = None
     ts = buy_path.get("touch_ts") if hit else None
     return bool(hit_open or hit), px, ts
@@ -4029,8 +4042,18 @@ def _restore_session_buy_hit(
     qty: int,
     sticky_row: dict[str, Any] | None,
     session: str,
+    official_buy: float | None = None,
+    session_high: float | None = None,
 ) -> bool:
-    """当日已触买粘滞：有分钟线、现价离开买点也不摘。次日 9:15 才清。"""
+    """当日已触买粘滞：有分钟线、现价离开买点也不摘。次日 9:15 才清。
+
+    最高未印到今日核定买点时，竞价/盘前错戳的 buy_touched 一律作废。
+    """
+    if official_buy is not None and not session_high_prints_buy(
+        session_high=session_high,
+        official_buy=official_buy,
+    ):
+        return False
     if int(qty or 0) > 0:
         return bool(hit_buy_raw)
     if not isinstance(sticky_row, dict):
@@ -4633,11 +4656,14 @@ def apply_paper_slot_buy(
     buy_time: str | None = None,
     session: str | None = None,
     session_low: float | None = None,
+    official_buy: float | None = None,
+    session_high: float | None = None,
 ) -> dict[str, Any]:
     """纸面自动入仓：写 qty/成本/buy_time；扣减 account_cash（若有）。
 
     buy_time 用触发时刻（1m 触达或 5s 行情 last_ts），不是进程扫到的现在。
-    成交价：新触发=买点（须 ≥ 当日最低，否则拒）；平仓前已触买的第一梯队=现价（不得超过买点 +1%）。
+    成交价：新触发=买点（须 ≥ 当日最低且 ≥ 核定买点，否则拒）；平仓前已触买的第一梯队=现价（不得超过买点 +1%，也不得低于核定买点）。
+    当日最高未印到核定买点则拒（开盘附近假突破不成交）。
     Capital V2：不允许加仓；不允许把现金买成负数（ALLOW_NEGATIVE_CASH_FOR_BUY=False）。
     传 session 时 buy_time 必须落在该交易日，否则拒买（跨日 buy_time 会绕过 T+1）。
     """
@@ -4645,12 +4671,14 @@ def apply_paper_slot_buy(
     qty = int(qty)
     if qty <= 0 or price <= 0:
         raise ValueError("价格/数量必须 > 0")
-    try:
-        low_px = float(session_low or 0)
-    except (TypeError, ValueError):
-        low_px = 0.0
-    if low_px > 0 and price + 1e-12 < low_px:
-        raise ValueError("UNPRINTABLE_FILL")
+    reject = buy_fill_reject_reason(
+        fill_px=price,
+        official_buy=official_buy,
+        session_high=session_high,
+        session_low=session_low,
+    )
+    if reject:
+        raise ValueError(reject)
     if session:
         bt = str(buy_time or "").strip()
         if bt and not bt.startswith("9999"):
@@ -5028,27 +5056,38 @@ def _apply_portfolio_slots(
                     session_low = float(row.get("最低") or 0)
                 except (TypeError, ValueError):
                     session_low = 0.0
-                signal = 0.0
-                for key in ("买点", "已触发因子价", "买入侧价"):
+                try:
+                    session_high = float(row.get("最高") or 0)
+                except (TypeError, ValueError):
+                    session_high = 0.0
+                official = 0.0
+                try:
+                    official = float(row.get("买点") or 0)
+                except (TypeError, ValueError):
+                    official = 0.0
+                if official <= 0:
                     try:
-                        px = float(row.get(key) or 0)
+                        official = float(row.get("买入侧价") or 0)
                     except (TypeError, ValueError):
-                        continue
-                    if px <= 0:
-                        continue
-                    if session_low > 0 and px + 1e-12 < session_low:
-                        continue
-                    signal = px
-                    break
-                if signal <= 0:
+                        official = 0.0
+                if official <= 0:
+                    return None
+                if session_low > 0 and official + 1e-12 < session_low:
+                    return None
+                if not session_high_prints_buy(
+                    session_high=session_high if session_high > 0 else None,
+                    official_buy=official,
+                ):
                     return None
                 return slot_fill_decision(
-                    signal_px=signal,
+                    signal_px=official,
                     last_px=last,
                     trigger_ts=_row_trigger_ts(row, side="buy"),
                     freed_at=freed_at,
                     overshoot=SLOT_FIRST_TIER_MAX_OVERSHOOT,
                     session_low=session_low if session_low > 0 else None,
+                    official_buy=official,
+                    session_high=session_high if session_high > 0 else None,
                 )
 
             ranked: list[tuple[str, str, str, dict[str, Any], dict[str, Any]]] = []
@@ -5118,6 +5157,14 @@ def _apply_portfolio_slots(
             except (TypeError, ValueError):
                 row_low = 0.0
             try:
+                row_high = float(r.get("最高") or 0)
+            except (TypeError, ValueError):
+                row_high = 0.0
+            try:
+                row_buy = float(r.get("买点") or 0)
+            except (TypeError, ValueError):
+                row_buy = 0.0
+            try:
                 pos = apply_paper_slot_buy(
                     code=code,
                     meta=meta,
@@ -5127,6 +5174,8 @@ def _apply_portfolio_slots(
                     buy_time=_row_trigger_ts(r, side="buy"),
                     session=str(session)[:10],
                     session_low=row_low if row_low > 0 else None,
+                    official_buy=row_buy if row_buy > 0 else None,
+                    session_high=row_high if row_high > 0 else None,
                 )
             except ValueError as e:
                 reason = str(e) or "INSUFFICIENT_CASH"
@@ -7690,8 +7739,19 @@ def collect_rows(
                 replay=replay,
                 qty=qty_early,
             )
-            open_buy = float(lv.get("open_buy") or lv["buy_trigger"])
-            hit_open = q["high"] + 1e-12 >= open_buy
+            official_buy = official_buy_trigger(
+                official_open, entry_pct=entry_pct, tick=tick
+            )
+            if official_buy:
+                open_buy = float(official_buy)
+                lv["buy_trigger"] = open_buy
+                lv["open_buy"] = open_buy
+            else:
+                open_buy = float(lv.get("open_buy") or lv["buy_trigger"])
+            hit_open = session_high_prints_buy(
+                session_high=q.get("high"),
+                official_buy=official_buy,
+            )
             hit_buy_raw = hit_open
             if threshold_ok and official_open is None:
                 hit_buy_raw = False
@@ -7710,17 +7770,21 @@ def collect_rows(
                 hit_buy_raw, path_buy_px, path_buy_ts = _merge_path_buy_hit(
                     hit_open,
                     bars_buy,
-                    open_px=float(q["open"]),
+                    open_px=float(official_open or q["open"]),
                     entry_pct=float(entry_pct),
                     tick=tick,
+                    official_buy=official_buy,
                 )
             # 当日粘滞：已触买进预警后整天保留（有 1m / 现价离开买点也不摘）
+            # 但最高未印到核定买点时，盘前/竞价错戳一律作废
             _st_buy = sticky.get(code) if isinstance(sticky.get(code), dict) else None
             hit_buy_raw = _restore_session_buy_hit(
                 hit_buy_raw,
                 qty=qty_early,
                 sticky_row=_st_buy,
                 session=str(q["session"]),
+                official_buy=official_buy,
+                session_high=q.get("high"),
             )
             hit_buy = bool(allow_entry) and hit_buy_raw
             _replay_holding_early = bool(replay.get("holding")) and qty_early <= 0

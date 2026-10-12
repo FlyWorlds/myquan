@@ -94,7 +94,61 @@ def test_reprintable_buy_cost_prefers_official_buy():
         official_open=17.82,
         official_buy=18.27,
         session_high=18.10,
-    ) == 17.82
+    ) is None
+
+
+def test_wufang_open_print_is_not_buy_hit():
+    """五方光电：今开 14.83、最高 14.87、核定买点 15.21，开盘附近不得算触买/成交。"""
+    from watch_config import (
+        buy_fill_reject_reason,
+        official_buy_trigger,
+        session_high_prints_buy,
+        slot_fill_decision,
+    )
+
+    official = official_buy_trigger(14.83, entry_pct=0.025)
+    assert official == 15.21
+    assert session_high_prints_buy(session_high=14.87, official_buy=official) is False
+    assert session_high_prints_buy(session_high=14.83, official_buy=official) is False
+    assert session_high_prints_buy(session_high=15.21, official_buy=official) is True
+    assert (
+        buy_fill_reject_reason(
+            fill_px=14.33,
+            official_buy=official,
+            session_high=14.87,
+            session_low=13.55,
+        )
+        == "BUY_NOT_PRINTED"
+    )
+    assert (
+        buy_fill_reject_reason(
+            fill_px=14.33,
+            official_buy=official,
+            session_high=15.30,
+            session_low=13.55,
+        )
+        == "FILL_BELOW_BUY"
+    )
+    first_tier = slot_fill_decision(
+        signal_px=15.21,
+        last_px=14.33,
+        trigger_ts="2026-10-12 09:25:00",
+        freed_at="2026-10-12 09:30:00",
+        session_low=13.55,
+        official_buy=15.21,
+        session_high=14.87,
+    )
+    assert first_tier is None
+    ok = slot_fill_decision(
+        signal_px=15.21,
+        last_px=15.25,
+        trigger_ts="2026-10-12 09:40:00",
+        session_low=14.83,
+        official_buy=15.21,
+        session_high=15.30,
+    )
+    assert ok is not None
+    assert abs(float(ok["fill_px"]) - 15.21) < 1e-9
 
 
 def test_slot_fill_rejects_signal_below_session_low():
@@ -699,6 +753,28 @@ def test_restore_session_buy_hit_ignores_1m_pullback():
     _sticky_drop_sell_keep_buy(sticky, "000151", "2026-09-11")
     assert sticky["000151"]["buy_touched"] is True
     assert "bg_class" not in sticky["000151"]
+    assert (
+        _restore_session_buy_hit(
+            False,
+            qty=0,
+            sticky_row=sticky["000151"],
+            session="2026-09-11",
+            official_buy=15.21,
+            session_high=14.87,
+        )
+        is False
+    )
+    assert (
+        _restore_session_buy_hit(
+            False,
+            qty=0,
+            sticky_row=sticky["000151"],
+            session="2026-09-11",
+            official_buy=15.21,
+            session_high=15.30,
+        )
+        is True
+    )
 
 
 def test_today_alert_row_keeps_buy_hit_without_alert_text():

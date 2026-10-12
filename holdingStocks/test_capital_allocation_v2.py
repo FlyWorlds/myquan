@@ -366,6 +366,22 @@ class TestCapitalAllocationV2(unittest.TestCase):
         self.assertIn("UNPRINTABLE_FILL", str(ctx.exception))
         self.assertEqual(int(self.book["positions"].get("002866", {}).get("qty") or 0), 0)
 
+    def test_apply_blocks_buy_not_printed(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            idx.apply_paper_slot_buy(
+                code="002962",
+                meta={"name": "五方光电", "market": "深证"},
+                price=14.33,
+                qty=4100,
+                buy_time="2026-10-12 09:30:00",
+                session="2026-10-12",
+                session_low=13.55,
+                official_buy=15.21,
+                session_high=14.87,
+            )
+        self.assertIn("BUY_NOT_PRINTED", str(ctx.exception))
+        self.assertEqual(int(self.book["positions"].get("002962", {}).get("qty") or 0), 0)
+
     def test_reprice_unprintable_today_buy(self) -> None:
         self.book["positions"]["002866"] = {
             "name": "传艺科技",

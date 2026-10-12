@@ -913,12 +913,14 @@ def evaluate_live_transition(
                 open_lv = float(day_open) if day_open is not None else 0.0
             except (TypeError, ValueError):
                 open_lv = 0.0
-            # 买点低于今开 = 昨收垫出来的过期阈值，改按今开重算
-            if buy_lv is not None and open_lv > 0 and buy_lv + 1e-8 < open_lv:
+            # 有核定今开时，买点必须是今开突破阈值；开盘价本身不是突破
+            if open_lv > 0:
                 try:
                     from strategy.open_break import entry_trigger_price as _etp
 
-                    buy_lv = float(_etp(open_lv))
+                    official = float(_etp(open_lv))
+                    if buy_lv is None or buy_lv + 1e-8 < official:
+                        buy_lv = official
                 except Exception:  # noqa: BLE001
                     buy_lv = None
             touched = (
