@@ -1273,6 +1273,60 @@ def session_open_usable(quote: dict[str, Any] | None = None, **px: Any) -> float
     return round(open_px, 4)
 
 
+def session_print_low(quote: dict[str, Any] | None = None, **px: Any) -> float | None:
+    """当日已印最低；缺最低时不用开盘凑（开盘可能是昨收垫的）。"""
+    q = quote if isinstance(quote, dict) else {}
+    raw = px.get("low_px", q.get("low"))
+    try:
+        low_px = float(raw or 0)
+    except (TypeError, ValueError):
+        return None
+    if low_px <= 0:
+        return None
+    return round(low_px, 4)
+
+
+def reprintable_buy_cost(
+    *,
+    cost: float,
+    session_low: float | None,
+    official_open: float | None = None,
+    official_buy: float | None = None,
+    session_high: float | None = None,
+) -> float | None:
+    """今买成本低于已印最低时，返回应改写的成本；否则 None。
+
+    优先今日核定买点（最高已触达），否则今开，再否则今低。
+    """
+    try:
+        c = float(cost)
+    except (TypeError, ValueError):
+        return None
+    try:
+        low = float(session_low or 0)
+    except (TypeError, ValueError):
+        low = 0.0
+    if c <= 0 or low <= 0 or c + 1e-12 >= low:
+        return None
+    try:
+        buy = float(official_buy or 0)
+    except (TypeError, ValueError):
+        buy = 0.0
+    try:
+        high = float(session_high or 0)
+    except (TypeError, ValueError):
+        high = 0.0
+    if buy > 0 and buy + 1e-12 >= low and (high <= 0 or high + 1e-12 >= buy):
+        return round(buy, 4)
+    try:
+        op = float(official_open or 0)
+    except (TypeError, ValueError):
+        op = 0.0
+    if op > 0 and op + 1e-12 >= low:
+        return round(op, 4)
+    return round(low, 4)
+
+
 def slot_fill_decision(
     *,
     signal_px: float,

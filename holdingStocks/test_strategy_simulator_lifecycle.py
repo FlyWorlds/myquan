@@ -772,6 +772,34 @@ class TestSessionGatesPaperUntouched(_TmpSim):
         self.assertAlmostEqual(float(book["exit_price"]), 6.88, places=2)
         self.assertEqual(book["exit_time"], "2026-09-30 09:30:00")
 
+    def test_stale_buy_level_below_open_is_rebased(self) -> None:
+        """昨收垫买点 16.93、今开 17.82：须按 18.27 过门，17.82 现价不得买。"""
+        blocked = _eval(
+            strategy_id="strategy16",
+            symbol="002866",
+            live_last=17.82,
+            quote_ts="2026-10-12 09:31:00",
+            buy_level=16.93,
+            sell_level=16.50,
+            allow_entry=True,
+            day_open=17.82,
+            now=datetime(2026, 10, 12, 9, 31),
+        )
+        self.assertIsNone(blocked["transition"])
+        filled = _eval(
+            strategy_id="strategy16",
+            symbol="002866",
+            live_last=18.30,
+            quote_ts="2026-10-12 09:35:00",
+            buy_level=16.93,
+            sell_level=16.50,
+            allow_entry=True,
+            day_open=17.82,
+            now=datetime(2026, 10, 12, 9, 35),
+        )
+        self.assertEqual(filled["transition"], "BUY")
+        self.assertAlmostEqual(float(filled["book"]["entry_price"]), 18.30, places=2)
+
     def test_weekend_now_blocks_even_if_weekday_quote(self) -> None:
         r = _eval(
             strategy_id="strategy16",

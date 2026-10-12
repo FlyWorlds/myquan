@@ -352,6 +352,52 @@ class TestCapitalAllocationV2(unittest.TestCase):
         self.assertEqual(self.book["account_cash"], 100.0)
         self.assertEqual(int(self.book["positions"].get("600000", {}).get("qty") or 0), 0)
 
+    def test_apply_blocks_unprintable_fill(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            idx.apply_paper_slot_buy(
+                code="002866",
+                meta={"name": "传艺科技", "market": "深证"},
+                price=16.93,
+                qty=3400,
+                buy_time="2026-10-12 09:31:00",
+                session="2026-10-12",
+                session_low=17.82,
+            )
+        self.assertIn("UNPRINTABLE_FILL", str(ctx.exception))
+        self.assertEqual(int(self.book["positions"].get("002866", {}).get("qty") or 0), 0)
+
+    def test_reprice_unprintable_today_buy(self) -> None:
+        self.book["positions"]["002866"] = {
+            "name": "传艺科技",
+            "qty": 3400,
+            "cost": 16.93,
+            "today_cost": 16.93,
+            "buy_time": "2026-10-12 09:31:00",
+            "available": 0,
+            "overnight_peak": 16.93,
+        }
+        self.book["account_cash"] = 177161.0
+        ok = idx.reprice_unprintable_today_buy(
+            "002866",
+            quote={
+                "session": "2026-10-12",
+                "open": 17.82,
+                "low": 17.82,
+                "high": 19.5,
+                "last": 19.03,
+            },
+            entry_pct=0.025,
+        )
+        self.assertTrue(ok)
+        pos = self.book["positions"]["002866"]
+        self.assertAlmostEqual(float(pos["cost"]), 18.27, places=2)
+        self.assertAlmostEqual(float(pos["today_cost"]), 18.27, places=2)
+        self.assertAlmostEqual(
+            float(self.book["account_cash"]),
+            177161.0 - (18.27 - 16.93) * 3400,
+            places=1,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

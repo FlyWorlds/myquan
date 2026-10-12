@@ -77,6 +77,26 @@ def test_slot_fill_first_tier_uses_last_within_1pct():
     assert too_high is None
 
 
+def test_reprintable_buy_cost_prefers_official_buy():
+    from watch_config import reprintable_buy_cost
+
+    assert reprintable_buy_cost(cost=18.27, session_low=17.82) is None
+    assert reprintable_buy_cost(
+        cost=16.93,
+        session_low=17.82,
+        official_open=17.82,
+        official_buy=18.27,
+        session_high=19.5,
+    ) == 18.27
+    assert reprintable_buy_cost(
+        cost=16.93,
+        session_low=17.82,
+        official_open=17.82,
+        official_buy=18.27,
+        session_high=18.10,
+    ) == 17.82
+
+
 def test_slot_fill_rejects_signal_below_session_low():
     """昨收垫买点 16.93、今低 17.82：不得按未印出的价格成交。"""
     from watch_config import session_open_usable

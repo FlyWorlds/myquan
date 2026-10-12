@@ -116,6 +116,7 @@ from strategy.open_break import (
     REASON_STOP,
     TICK_SIZE,
     bar_shape,
+    entry_trigger_price,
     entry_filters_ok,
     format_trigger_md,
     cannot_buy_limit_up,
@@ -199,6 +200,8 @@ from watch_config import (
     is_signal_window,
     calendar_is_trading_day,
     session_open_usable,
+    session_print_low,
+    reprintable_buy_cost,
     is_auction_quote_ts,
     timestamp_in_signal_window,
     trust_quote_day_high,
@@ -4548,6 +4551,78 @@ def update_high_after_stop(
     return rec
 
 
+def reprice_unprintable_today_buy(
+    code: str,
+    *,
+    quote: dict[str, Any],
+    entry_pct: float,
+    tick: float = TICK_SIZE,
+) -> bool:
+    """今买成本低于当日最低：改到今日核定买点并补扣现金。返回是否改过。"""
+    sess = str((quote or {}).get("session") or trading_session_date())[:10]
+    data = load_holdings()
+    pos = (data.get("positions") or {}).get(code)
+    if not isinstance(pos, dict):
+        return False
+    qty = int(pos.get("qty") or 0)
+    if qty <= 0:
+        return False
+    if not is_t1_buy_day(pos.get("buy_time"), sess):
+        return False
+    try:
+        cost = float(pos.get("cost") or 0)
+    except (TypeError, ValueError):
+        return False
+    low = session_print_low(quote)
+    official_open = session_open_usable(quote)
+    official_buy = None
+    if official_open:
+        official_buy = float(entry_trigger_price(official_open, entry_pct=entry_pct, tick=tick))
+    try:
+        high = float((quote or {}).get("high") or 0)
+    except (TypeError, ValueError):
+        high = 0.0
+    new_cost = reprintable_buy_cost(
+        cost=cost,
+        session_low=low,
+        official_open=official_open,
+        official_buy=official_buy,
+        session_high=high if high > 0 else None,
+    )
+    if new_cost is None or abs(new_cost - cost) < 1e-9:
+        return False
+    delta = round((new_cost - cost) * qty, 2)
+    cash = _account_cash(data)
+    if cash is not None:
+        data["account_cash"] = round(float(cash) - delta, 2)
+    pos["cost"] = new_cost
+    pos["today_cost"] = new_cost
+    try:
+        peak0 = float(pos.get("overnight_peak") or 0)
+    except (TypeError, ValueError):
+        peak0 = 0.0
+    if peak0 <= 0 or abs(peak0 - cost) < 1e-9:
+        pos["overnight_peak"] = new_cost
+        pos["overnight_peak_session"] = sess
+    note = str(pos.get("note") or "")
+    tag = f"成本订正{cost}->{new_cost}（低于今低{low}）"
+    if tag not in note:
+        pos["note"] = f"{tag}；{note}" if note else tag
+    mem = data.setdefault("factor_memory", {})
+    if not isinstance(mem, dict):
+        mem = {}
+        data["factor_memory"] = mem
+    rec = mem.setdefault(_code_key(code), {})
+    if isinstance(rec, dict):
+        rec["last_buy_factor_px"] = new_cost
+        rec["last_buy_factor_date"] = sess
+    save_holdings(data)
+    print(
+        f"[{_now()}] 今买成本不可印出 {code}: {cost} < 今低 {low} → {new_cost}，现金{delta:+.2f}"
+    )
+    return True
+
+
 def apply_paper_slot_buy(
     *,
     code: str,
@@ -4946,19 +5021,27 @@ def _apply_portfolio_slots(
 
             def _fill_of(row: dict[str, Any]) -> dict[str, Any] | None:
                 try:
-                    signal = float(
-                        row.get("买点")
-                        or row.get("已触发因子价")
-                        or row.get("买入侧价")
-                        or 0
-                    )
                     last = float(row.get("现价") or 0)
                 except (TypeError, ValueError):
                     return None
                 try:
-                    session_low = float(row.get("最低") or row.get("开盘") or 0)
+                    session_low = float(row.get("最低") or 0)
                 except (TypeError, ValueError):
                     session_low = 0.0
+                signal = 0.0
+                for key in ("买点", "已触发因子价", "买入侧价"):
+                    try:
+                        px = float(row.get(key) or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if px <= 0:
+                        continue
+                    if session_low > 0 and px + 1e-12 < session_low:
+                        continue
+                    signal = px
+                    break
+                if signal <= 0:
+                    return None
                 return slot_fill_decision(
                     signal_px=signal,
                     last_px=last,
@@ -7454,6 +7537,16 @@ def collect_rows(
                 stop_pct_for_levels = base_stop_pct
             pos_early = positions.get(code, {})
             qty_early = int(pos_early.get("qty") or 0)
+            if qty_early > 0 and reprice_unprintable_today_buy(
+                code,
+                quote=q,
+                entry_pct=float(entry_pct),
+                tick=tick,
+            ):
+                holdings = load_holdings()
+                positions = holdings.get("positions", {})
+                pos_early = positions.get(code, {})
+                qty_early = int(pos_early.get("qty") or 0)
             buy_time_early = pos_early.get("buy_time")
             cost_early = pos_early.get("cost")
             peak_early = pos_early.get("peak_high")
