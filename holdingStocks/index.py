@@ -198,6 +198,7 @@ from watch_config import (
     is_exit_executable,
     is_signal_window,
     calendar_is_trading_day,
+    session_open_usable,
     is_auction_quote_ts,
     timestamp_in_signal_window,
     trust_quote_day_high,
@@ -4556,11 +4557,12 @@ def apply_paper_slot_buy(
     note: str = "槽位触买(自动)",
     buy_time: str | None = None,
     session: str | None = None,
+    session_low: float | None = None,
 ) -> dict[str, Any]:
     """纸面自动入仓：写 qty/成本/buy_time；扣减 account_cash（若有）。
 
     buy_time 用触发时刻（1m 触达或 5s 行情 last_ts），不是进程扫到的现在。
-    成交价：新触发=买点；平仓前已触买的第一梯队=现价（不得超过买点 +1%）。
+    成交价：新触发=买点（须 ≥ 当日最低，否则拒）；平仓前已触买的第一梯队=现价（不得超过买点 +1%）。
     Capital V2：不允许加仓；不允许把现金买成负数（ALLOW_NEGATIVE_CASH_FOR_BUY=False）。
     传 session 时 buy_time 必须落在该交易日，否则拒买（跨日 buy_time 会绕过 T+1）。
     """
@@ -4568,6 +4570,12 @@ def apply_paper_slot_buy(
     qty = int(qty)
     if qty <= 0 or price <= 0:
         raise ValueError("价格/数量必须 > 0")
+    try:
+        low_px = float(session_low or 0)
+    except (TypeError, ValueError):
+        low_px = 0.0
+    if low_px > 0 and price + 1e-12 < low_px:
+        raise ValueError("UNPRINTABLE_FILL")
     if session:
         bt = str(buy_time or "").strip()
         if bt and not bt.startswith("9999"):
@@ -4947,12 +4955,17 @@ def _apply_portfolio_slots(
                     last = float(row.get("现价") or 0)
                 except (TypeError, ValueError):
                     return None
+                try:
+                    session_low = float(row.get("最低") or row.get("开盘") or 0)
+                except (TypeError, ValueError):
+                    session_low = 0.0
                 return slot_fill_decision(
                     signal_px=signal,
                     last_px=last,
                     trigger_ts=_row_trigger_ts(row, side="buy"),
                     freed_at=freed_at,
                     overshoot=SLOT_FIRST_TIER_MAX_OVERSHOOT,
+                    session_low=session_low if session_low > 0 else None,
                 )
 
             ranked: list[tuple[str, str, str, dict[str, Any], dict[str, Any]]] = []
@@ -5018,6 +5031,10 @@ def _apply_portfolio_slots(
             }
             fill_kind = "现价" if dec.get("kind") == "last" else "买点"
             try:
+                row_low = float(r.get("最低") or r.get("开盘") or 0)
+            except (TypeError, ValueError):
+                row_low = 0.0
+            try:
                 pos = apply_paper_slot_buy(
                     code=code,
                     meta=meta,
@@ -5026,6 +5043,7 @@ def _apply_portfolio_slots(
                     note=f"槽位触买(自动·{fill_kind})",
                     buy_time=_row_trigger_ts(r, side="buy"),
                     session=str(session)[:10],
+                    session_low=row_low if row_low > 0 else None,
                 )
             except ValueError as e:
                 reason = str(e) or "INSUFFICIENT_CASH"
@@ -7517,7 +7535,8 @@ def collect_rows(
             low_for_lv = float(q["low"]) if threshold_ok else float(
                 cost_h or q.get("prev_close") or 0
             )
-            open_for_lv = float(q["open"]) if threshold_ok else float(
+            official_open = session_open_usable(q) if threshold_ok else None
+            open_for_lv = float(official_open) if official_open else float(
                 q.get("prev_close") or q.get("open") or 0
             )
             lv = strategy_levels(
@@ -7581,6 +7600,8 @@ def collect_rows(
             open_buy = float(lv.get("open_buy") or lv["buy_trigger"])
             hit_open = q["high"] + 1e-12 >= open_buy
             hit_buy_raw = hit_open
+            if threshold_ok and official_open is None:
+                hit_buy_raw = False
             path_buy_px = None
             path_buy_ts = None
             if (

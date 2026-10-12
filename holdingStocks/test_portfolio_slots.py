@@ -77,6 +77,30 @@ def test_slot_fill_first_tier_uses_last_within_1pct():
     assert too_high is None
 
 
+def test_slot_fill_rejects_signal_below_session_low():
+    """昨收垫买点 16.93、今低 17.82：不得按未印出的价格成交。"""
+    from watch_config import session_open_usable
+
+    assert session_open_usable({"open": 16.52, "low": 17.82, "last": 17.82}) is None
+    assert session_open_usable({"open": 17.82, "low": 17.82, "last": 19.3}) == 17.82
+    assert session_open_usable({"open": 16.52, "low": 16.52, "_preopen_baseline": True}) is None
+    dec = slot_fill_decision(
+        signal_px=16.93,
+        last_px=17.82,
+        trigger_ts="2026-10-12 09:31:00",
+        session_low=17.82,
+    )
+    assert dec is None
+    ok = slot_fill_decision(
+        signal_px=18.27,
+        last_px=18.30,
+        trigger_ts="2026-10-12 09:40:00",
+        session_low=17.82,
+    )
+    assert ok is not None
+    assert abs(float(ok["fill_px"]) - 18.27) < 1e-9
+
+
 def test_slot_fill_after_close_uses_signal_px():
     dec = slot_fill_decision(
         signal_px=21.07,

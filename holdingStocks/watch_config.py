@@ -1247,6 +1247,32 @@ def _slot_ts_key(ts: Any) -> str:
     return s
 
 
+def session_open_usable(quote: dict[str, Any] | None = None, **px: Any) -> float | None:
+    """今日开盘能否用来算买点。
+
+    盘前把昨收垫进 open 时（``_preopen_baseline``），或行情 open 低于当日最低，
+    视为未核定开盘：不算触买、不成交。
+    """
+    q = quote if isinstance(quote, dict) else {}
+    if q.get("_preopen_baseline"):
+        return None
+    raw_open = px.get("open_px", q.get("open"))
+    raw_low = px.get("low_px", q.get("low"))
+    try:
+        open_px = float(raw_open or 0)
+    except (TypeError, ValueError):
+        return None
+    if open_px <= 0:
+        return None
+    try:
+        low_px = float(raw_low or 0)
+    except (TypeError, ValueError):
+        low_px = 0.0
+    if low_px > 0 and open_px + 1e-8 < low_px:
+        return None
+    return round(open_px, 4)
+
+
 def slot_fill_decision(
     *,
     signal_px: float,
@@ -1255,12 +1281,14 @@ def slot_fill_decision(
     freed_at: str | None = None,
     overshoot: float = SLOT_FIRST_TIER_MAX_OVERSHOOT,
     tick: float = TICK_SIZE,
+    session_low: float | None = None,
 ) -> dict[str, Any] | None:
     """空槽成交价：平仓腾出 vs 新触发。
 
     · 无平仓时刻（开盘空槽/从未腾槽）：按买点成交
     · 触发早于平仓（第一梯队）：现价成交，且现价 ≤ 买点×(1+overshoot)；超限本轮不买
     · 平仓后才触发：按买点成交
+    · 成交价不得低于当日已印最低（昨收垫出来的买点低于今低则拒）
     """
     try:
         sig = float(signal_px or 0)
@@ -1272,6 +1300,10 @@ def slot_fill_decision(
         last = 0.0
     if sig <= 0 or last <= 0:
         return None
+    try:
+        low = float(session_low or 0)
+    except (TypeError, ValueError):
+        low = 0.0
     trig = _slot_ts_key(trigger_ts)
     freed = _slot_ts_key(freed_at)
     cap = sig * (1.0 + float(overshoot))
@@ -1281,9 +1313,13 @@ def slot_fill_decision(
         px = floor_to_tick(last, tick)
         if px <= 0:
             return None
+        if low > 0 and px + 1e-12 < low:
+            return None
         return {"fill_px": round(float(px), 4), "kind": "last"}
     px = floor_to_tick(sig, tick)
     if px <= 0:
+        return None
+    if low > 0 and px + 1e-12 < low:
         return None
     return {"fill_px": round(float(px), 4), "kind": "signal"}
 
