@@ -18,7 +18,8 @@ POSITION_DAY_PNL =
   昨仓 (mark - previous_close) * qty；
   今买 (mark - buy_cost) * qty
 STOCK_DAY_CHANGE = (mark - previous_close) / previous_close * 100
-  · 新交易日尚无有效现价：显示 0（不得沿用上一交易日涨跌幅）
+  · 00:00–09:15 尚未进入集合竞价：展示上一有效收盘涨跌幅
+  · 09:15 后新交易日尚无有效现价：显示 0（不得沿用上一交易日涨跌幅）
 
 ACCOUNT_OPEN_ROLLOVER = account_total_open(T+1) = closing_equity(T)
 ACCOUNT_TODAY_PNL = current_equity - account_total_open
@@ -30,6 +31,10 @@ from __future__ import annotations
 from typing import Any
 
 from watch_config import (
+    AUCTION_START_HOUR,
+    AUCTION_START_MINUTE,
+    _clock_minutes,
+    calendar_is_trading_day,
     normalize_signal_session,
     prev_trading_day,
     trading_session_date,
@@ -51,11 +56,23 @@ def previous_trading_session(session: Any | None = None) -> str:
     return str(prev_trading_day(sess))
 
 
+def preserve_previous_session_quote(now: Any | None = None) -> bool:
+    """交易日 00:00–09:15：页面展示仍沿用上一交易日收盘行情。
+
+    9:15 是项目内日内状态重置点；此前虽然日历 session 已切到新交易日，
+    但集合竞价尚未开始，不应把上一收盘涨跌幅清成 0。
+    """
+    if not calendar_is_trading_day(now):
+        return False
+    auction_start = AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
+    return _clock_minutes(now) < auction_start
+
+
 def promote_quote_session(session: Any, *, now: Any | None = None) -> str:
     """行情盘前常仍标上一交易日；信号/账户日与日历对齐。"""
     cal = current_trading_session(now)
     raw = normalize_signal_session(session, now=now)
-    if str(raw)[:10] < cal[:10]:
+    if str(raw)[:10] < cal[:10] and not preserve_previous_session_quote(now):
         return cal
     return str(raw)[:10]
 
@@ -82,12 +99,22 @@ def sanitize_day_change_for_session(
 ) -> float | None:
     """新交易日不得沿用上一交易日涨跌幅。
 
-    · quote_session < calendar：尚无本 session 有效行情 → 0
+    · 00:00–09:15：集合竞价未开始，允许展示上一交易日收盘涨跌幅
+    · 09:15 后 quote_session < calendar：尚无本 session 有效行情 → 0
     · 否则：优先用 (mark/prev_close-1)；缺省才用传入 day_chg_pct
     """
     cal = str(calendar_session or "")[:10]
     q_sess = str(quote_session or "")[:10]
     if cal and q_sess and q_sess < cal:
+        if preserve_previous_session_quote():
+            chg = stock_day_change_pct(mark, previous_close)
+            if chg is not None:
+                return chg
+            if day_chg_pct is not None and day_chg_pct != "":
+                try:
+                    return round(float(day_chg_pct), 2)
+                except (TypeError, ValueError):
+                    return None
         return 0.0
     chg = stock_day_change_pct(mark, previous_close)
     if chg is not None:

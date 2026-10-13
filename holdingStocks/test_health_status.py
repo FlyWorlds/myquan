@@ -34,6 +34,10 @@ class TestHealthStatus(unittest.TestCase):
         issue = classify_health_issue("something_new")
         self.assertEqual(issue["severity"], DISPLAY_ONLY)
 
+    def test_source_disagreement_blocks_trading(self) -> None:
+        issue = classify_health_issue("source_disagree")
+        self.assertEqual(issue["severity"], BLOCK_TRADING)
+
 
 if __name__ == "__main__":
     unittest.main()

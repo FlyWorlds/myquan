@@ -161,6 +161,7 @@ class QuoteHub:
         self.sse_last_ok_ts = 0.0
         self.quote_last_ok_ts = 0.0
         self.quote_last_ok_clock = ""
+        self.source_last_ok: dict[str, tuple[float, str]] = {}
 
     def mark_quote_ok(self, source: str = "") -> None:
         """任意外网行情成功（SSE tick 或新浪批量）都刷新，供顶栏判断断网。"""
@@ -168,6 +169,8 @@ class QuoteHub:
         clock = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.quote_last_ok_ts = now
         self.quote_last_ok_clock = clock
+        src = str(source or "unknown").strip() or "unknown"
+        self.source_last_ok[src] = (now, clock)
         if source in ("em_sse", "sse", ""):
             self.sse_ok = True
             self.sse_last_ok_ts = now
@@ -188,11 +191,21 @@ class QuoteHub:
         had = last > 0
         age = (time.time() - last) if had else None
         ok = bool(had and age is not None and age <= float(max_age_sec))
+        source_ages = {
+            src: {
+                "at": clock,
+                "ageSec": round(time.time() - ts, 1),
+                "ok": (time.time() - ts) <= float(max_age_sec),
+            }
+            for src, (ts, clock) in sorted(self.source_last_ok.items())
+        }
         return {
             "feedOk": ok,
             "quoteStale": bool(had and not ok),
             "quoteAt": self.quote_last_ok_clock or None,
             "quoteAgeSec": None if age is None else round(age, 1),
+            "dataSources": sorted(self.source_last_ok.keys()),
+            "sourceAges": source_ages,
         }
 
     def seed_from_quote(self, sina: str, quote: dict[str, Any]) -> None:

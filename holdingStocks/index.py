@@ -85,6 +85,7 @@ try:
         needs_session_rollover,
         overnight_preopen_quote,
         previous_trading_session,
+        preserve_previous_session_quote,
         promote_quote_session,
         sanitize_day_change_for_session,
     )
@@ -96,6 +97,7 @@ except ImportError:  # pragma: no cover - package import path
         needs_session_rollover,
         overnight_preopen_quote,
         previous_trading_session,
+        preserve_previous_session_quote,
         promote_quote_session,
         sanitize_day_change_for_session,
     )
@@ -401,6 +403,11 @@ _STRATEGY16B_DYNAMIC: dict[str, Any] = {
     "params": {},
     "pool": {},
     "watchlist": [],
+}
+_STRATEGY16B_QUOTE_CACHE: dict[str, Any] = {
+    "at": 0.0,
+    "codes": (),
+    "quotes": {},
 }
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
 # 账本唯一持有者：进程内同一对象、串行写、写前版本检查、原子落盘（见 holdings_store.py）
@@ -1466,6 +1473,94 @@ def _query_float_or_none(
     return max(float(lo), min(float(hi), val))
 
 
+def _strategy16b_num(raw: Any) -> float | None:
+    if raw is None:
+        return None
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(val):
+        return None
+    return val
+
+
+def _strategy16b_quote_map(codes: set[str]) -> dict[str, dict[str, Any]]:
+    clean = tuple(sorted(c for c in codes if _code_key(c)))
+    if not clean:
+        return {}
+    now = time.time()
+    cached_codes = tuple(_STRATEGY16B_QUOTE_CACHE.get("codes") or ())
+    if (
+        cached_codes == clean
+        and now - float(_STRATEGY16B_QUOTE_CACHE.get("at") or 0.0) <= 8.0
+    ):
+        return dict(_STRATEGY16B_QUOTE_CACHE.get("quotes") or {})
+    try:
+        quotes = fetch_sina_batch([_sina_of(c) for c in clean])
+    except Exception:  # noqa: BLE001
+        quotes = {}
+    by_code: dict[str, dict[str, Any]] = {}
+    for sina, q in (quotes or {}).items():
+        code = _code_key(str(sina))
+        if code and isinstance(q, Mapping):
+            by_code[code] = dict(q)
+    _STRATEGY16B_QUOTE_CACHE["at"] = now
+    _STRATEGY16B_QUOTE_CACHE["codes"] = clean
+    _STRATEGY16B_QUOTE_CACHE["quotes"] = by_code
+    return by_code
+
+
+def _apply_strategy16b_display_quote(row: dict[str, Any], quote: Mapping[str, Any]) -> None:
+    """16B 展示用行情补齐。
+
+    交易判定仍由 collect_rows 的保守 quote 负责；16B Tab 是条件选股结果展示，
+    收盘后/次日盘前可以显示上一有效快照的真实日涨跌，避免一片 0.00%。
+    """
+    last = _strategy16b_num(quote.get("last"))
+    prev = _strategy16b_num(quote.get("prev_close"))
+    chg = _strategy16b_num(quote.get("day_chg_pct"))
+    if chg is None and last is not None and prev is not None and prev > 0:
+        chg = price_chg_pct(last, prev)
+    if chg is None:
+        return
+    row_chg = _strategy16b_num(row.get("当日涨幅"))
+    if row.get("当日涨幅") is not None and row_chg is not None and abs(row_chg) > 1e-9:
+        return
+    digits = 2
+    tick = _strategy16b_num(row.get("_tick"))
+    if tick is not None:
+        try:
+            digits = _px_digits(float(tick))
+        except Exception:  # noqa: BLE001
+            digits = 2
+    row["当日涨幅"] = round(float(chg), 2)
+    row["_day_chg_source"] = "strategy16b_sina_batch"
+    session = str(quote.get("session") or "")[:10]
+    if session:
+        row["交易日"] = session
+    ts = str(quote.get("last_ts") or "")
+    if ts:
+        row["_quote_ts"] = ts
+        row["更新"] = ts[11:19] if len(ts) >= 19 else ts
+    for src, dst in (
+        ("open", "开盘"),
+        ("high", "最高"),
+        ("high", "今日最高"),
+        ("low", "最低"),
+        ("last", "现价"),
+        ("prev_close", "昨收"),
+    ):
+        val = _strategy16b_num(quote.get(src))
+        if val is not None and val > 0:
+            row[dst] = round(float(val), digits)
+    open_px = _strategy16b_num(row.get("开盘"))
+    live_px = _strategy16b_num(row.get("现价"))
+    if open_px is not None and live_px is not None and open_px > 0:
+        row["较开盘点"] = points_vs_open(float(open_px), float(live_px))
+        row["较开盘涨幅"] = pct_vs_open(float(open_px), float(live_px))
+
+
 def _strategy16b_select_params(path: str) -> dict[str, Any]:
     qs = parse_qs(urlparse(path).query)
     return {
@@ -1535,6 +1630,10 @@ def _strategy16b_watch_items_from_payload(payload: Mapping[str, Any]) -> list[di
         item["pool_src"] = "strategy16b"
         item["池来源"] = "条件选股"
         item["concept"] = it.get("concepts") or it.get("concept")
+        item["_selected_price"] = it.get("price")
+        item["_selected_chg_pct"] = it.get("chg_pct")
+        item["_selected_amount"] = it.get("amount")
+        item["_selected_as_of"] = payload.get("as_of") or payload.get("label")
         thr = thrs.get(code)
         if thr is not None:
             item["pct"] = float(thr)
@@ -1570,6 +1669,7 @@ def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
         _code_key(str(w.get("code") or "")): w
         for w in _strategy16b_watchlist()
     }
+    quote_by_code = _strategy16b_quote_map(codes)
     out: list[dict[str, Any]] = []
     for r in rows:
         code = _code_key(str(r.get("代码") or ""))
@@ -1581,6 +1681,29 @@ def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
         row["池来源"] = "条件选股"
         if meta.get("concept"):
             row["concept"] = meta.get("concept")
+        selected_chg = _strategy16b_num(meta.get("_selected_chg_pct"))
+        selected_price = _strategy16b_num(meta.get("_selected_price"))
+        row_day_chg = _strategy16b_num(row.get("当日涨幅"))
+        # 16B 动态池的候选来自全 A 即时筛选；当单票实时源在盘前/收盘后回退到
+        # overnight quote 时，day_chg_pct 会被清零，导致页面“日内涨跌”漏显。
+        # 对 16B 展示行，用选股时的涨跌幅补齐显示口径，不反向污染正式策略16池。
+        if selected_chg is not None and (
+            row.get("当日涨幅") is None
+            or row_day_chg is None
+            or abs(float(row_day_chg)) <= 1e-9
+        ):
+            row["当日涨幅"] = round(float(selected_chg), 2)
+            row["_day_chg_source"] = "strategy16b_select"
+            if row.get("昨收") is None:
+                live_px = _strategy16b_num(row.get("现价")) or selected_price
+                denom = 1.0 + float(selected_chg) / 100.0
+                if live_px is not None and denom > 0:
+                    row["昨收"] = round(float(live_px) / denom, 2)
+        if selected_price is not None and row.get("现价") is None:
+            row["现价"] = round(float(selected_price), 2)
+        quote = quote_by_code.get(code)
+        if quote:
+            _apply_strategy16b_display_quote(row, quote)
         out.append(row)
     return out
 
@@ -2481,9 +2604,20 @@ def _quote_from_sina_spot(spot: dict[str, Any]) -> dict[str, Any]:
     """新浪快照 → collect_rows 可用的 quote dict（无分钟 K）。"""
     prev = spot.get("prev_close")
     last = float(spot["last"])
-    sess = promote_quote_session(spot.get("session"))
+    raw_sess = str(spot.get("session") or "")[:10]
+    sess = promote_quote_session(raw_sess)
+    if raw_sess and raw_sess < sess:
+        q = overnight_preopen_quote(
+            calendar_session=sess,
+            previous_close=last,
+            last_ts=str(spot.get("last_ts") or _now()),
+        )
+        q["_day_bars"] = pd.DataFrame()
+        q["_quote_source"] = "sina_stale_preopen"
+        q["name"] = str(spot.get("name") or "").strip()
+        return q
     day_chg = sanitize_day_change_for_session(
-        quote_session=spot.get("session"),
+        quote_session=raw_sess,
         calendar_session=sess,
         mark=last,
         previous_close=prev,
@@ -2914,6 +3048,8 @@ def _attach_strategy_pnl_fields(
     """
     from strategy_simulator import (
         apply_book_to_row,
+        bootstrap_book_from_factor26_replay,
+        empty_book,
         ensure_bootstrapped,
         ensure_bootstrapped_from_factor26_replay,
         evaluate_live_transition,
@@ -3052,6 +3188,60 @@ def _attach_strategy_pnl_fields(
         row["策略回放触发侧"] = rec.get("last_trigger_side")
         row["策略回放触发价"] = rec.get("last_trigger_px")
         row["策略回放来源"] = rec.get("source")
+        backtest_return = rec.get("return_pct")
+        backtest_holding = rec.get("holding")
+        backtest_trades = rec.get("trades")
+        backtest_entry = None
+        backtest_entry_time = None
+        backtest_exit = None
+        backtest_exit_time = None
+        backtest_cash = None
+        backtest_shares = None
+        backtest_single = None
+        backtest_model = str(rec.get("source") or "daily_open_break_replay")
+        if isinstance(replay_info, dict) and replay_info.get("source") == "1m":
+            bt_book = empty_book(strategy_id=sid, symbol=code)
+            bootstrap_book_from_factor26_replay(bt_book, replay_info, persist=False)
+            if last > 0:
+                mark_book(bt_book, last, quote_ts=quote_ts)
+            backtest_return = bt_book.get("cumulative_return_pct")
+            backtest_holding = str(bt_book.get("state") or "") == "LONG"
+            backtest_trades = bt_book.get("trades")
+            backtest_entry = bt_book.get("entry_price")
+            backtest_entry_time = bt_book.get("entry_time")
+            backtest_exit = bt_book.get("exit_price")
+            backtest_exit_time = bt_book.get("exit_time")
+            backtest_cash = bt_book.get("virtual_cash")
+            backtest_shares = bt_book.get("virtual_shares")
+            backtest_single = bt_book.get("single_return_pct")
+            backtest_model = "factor26_1m_replay"
+        if backtest_return is not None:
+            row["策略收益%"] = backtest_return
+            row["策略累计持有"] = bool(backtest_holding)
+            row["策略模拟持有"] = bool(backtest_holding)
+            row["策略模拟状态"] = "LONG" if bool(backtest_holding) else "FLAT"
+            row["策略状态"] = "策略持有" if bool(backtest_holding) else "空仓"
+            row["策略收益语义"] = "backtest_replay"
+            row["策略收益范围"] = "symbol"
+            row["策略历史口径"] = backtest_model
+            row["策略实时口径"] = "backtest_replay_mark_to_live"
+            row["策略退出口径"] = backtest_model
+            if backtest_trades is not None:
+                try:
+                    row["策略累计笔数"] = int(backtest_trades or 0)
+                except (TypeError, ValueError):
+                    pass
+            if backtest_entry is not None or backtest_exit is not None:
+                row["策略入场价"] = backtest_entry
+                row["策略入场时间"] = backtest_entry_time
+                row["策略出场价"] = backtest_exit
+                row["策略出场时间"] = backtest_exit_time
+            if backtest_cash is not None:
+                row["策略虚拟现金"] = backtest_cash
+            if backtest_shares is not None:
+                row["策略虚拟股数"] = backtest_shares
+            if backtest_single is not None:
+                row["单笔收入%"] = backtest_single
     except Exception:  # noqa: BLE001
         pass
 
@@ -7360,8 +7550,13 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
                 if not prev_day.empty:
                     prev_close = float(prev_day.iloc[-1]["close"])
 
-    spot_sess = promote_quote_session(spot.get("session") if spot else None)
-    spot_ok = spot is not None and spot_sess == today
+    spot_raw_session = str((spot or {}).get("session") or "")[:10]
+    spot_ok = spot is not None and spot_raw_session == today
+    if spot is not None and spot_raw_session and spot_raw_session < today and preserve_previous_session_quote():
+        q = _quote_from_sina_spot(spot)
+        q["_day_bars"] = pd.DataFrame()
+        q["_quote_source"] = "sina_previous_session_before_auction"
+        return q
 
     # 当日分钟线已到：OHLC 用分钟，现价优先新浪实时
     if not day.empty:

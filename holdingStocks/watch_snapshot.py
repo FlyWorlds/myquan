@@ -1066,6 +1066,10 @@ def apply_feed_health(
         snap["quoteAt"] = snap.get("clock")
     if health.get("quoteAgeSec") is not None:
         snap["quoteAgeSec"] = health.get("quoteAgeSec")
+    if health.get("dataSources") is not None:
+        snap["dataSources"] = list(health.get("dataSources") or [])
+    if health.get("sourceAges") is not None:
+        snap["sourceAges"] = dict(health.get("sourceAges") or {})
     try:
         try:
             from health_status import classify_snapshot_health

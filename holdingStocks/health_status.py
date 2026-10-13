@@ -30,6 +30,12 @@ def classify_health_issue(issue: str, **ctx: Any) -> dict[str, Any]:
             "severity": BLOCK_TRADING,
             "reason": "行情源过期，禁止自动买卖，只能沿用旧快照展示。",
         }
+    if kind in {"source_disagree", "quote_source_disagree"}:
+        return {
+            "issue": kind,
+            "severity": BLOCK_TRADING,
+            "reason": "多源行情关键字段不一致，禁止自动买卖，等待下一轮对账或人工复核。",
+        }
     if kind in {"daily_missing", "daily_gap", "daily_source_failed"}:
         return {
             "issue": kind,

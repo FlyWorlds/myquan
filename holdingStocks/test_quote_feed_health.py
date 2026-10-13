@@ -31,6 +31,8 @@ class TestQuoteHealth(unittest.TestCase):
         self.assertTrue(h["feedOk"])
         self.assertFalse(h["quoteStale"])
         self.assertTrue(h["quoteAt"])
+        self.assertEqual(h["dataSources"], ["sina_batch"])
+        self.assertIn("sina_batch", h["sourceAges"])
 
     def test_old_tick_stale(self) -> None:
         hub = QuoteHub()
@@ -50,11 +52,19 @@ class TestQuoteHealth(unittest.TestCase):
         snap = {"clock": "2026-09-14 12:01:00"}
         apply_feed_health(
             snap,
-            {"feedOk": True, "quoteStale": False, "quoteAt": "12:00"},
+            {
+                "feedOk": True,
+                "quoteStale": False,
+                "quoteAt": "12:00",
+                "dataSources": ["sina_batch"],
+                "sourceAges": {"sina_batch": {"ageSec": 1.0}},
+            },
             keep_stale=True,
         )
         self.assertTrue(snap["quoteStale"])
         self.assertTrue(snap["feedOk"])
+        self.assertEqual(snap["dataSources"], ["sina_batch"])
+        self.assertIn("sina_batch", snap["sourceAges"])
 
     def test_0925_resets_auction_open_high_low(self) -> None:
         """9:15–9:25 指示价不得污染正式开盘及其后买点。"""

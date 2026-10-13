@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
+
 _ROOT = Path(__file__).resolve().parents[1]
 _HOLD = Path(__file__).resolve().parent
 for p in (str(_ROOT), str(_HOLD)):
@@ -78,16 +80,28 @@ class TestTradingDayHelpers(unittest.TestCase):
 
     def test_day_change_resets_across_session(self) -> None:
         # 周五涨幅不得带到周一
-        self.assertEqual(
-            td.sanitize_day_change_for_session(
-                quote_session="2026-09-18",
-                calendar_session="2026-09-21",
-                mark=10.5,
-                previous_close=10.0,
-                day_chg_pct=5.0,
-            ),
-            0.0,
-        )
+        with patch("trading_day.preserve_previous_session_quote", return_value=False):
+            self.assertEqual(
+                td.sanitize_day_change_for_session(
+                    quote_session="2026-09-18",
+                    calendar_session="2026-09-21",
+                    mark=10.5,
+                    previous_close=10.0,
+                    day_chg_pct=5.0,
+                ),
+                0.0,
+            )
+        with patch("trading_day.preserve_previous_session_quote", return_value=True):
+            self.assertEqual(
+                td.sanitize_day_change_for_session(
+                    quote_session="2026-09-18",
+                    calendar_session="2026-09-21",
+                    mark=10.5,
+                    previous_close=10.0,
+                    day_chg_pct=5.0,
+                ),
+                5.0,
+            )
         self.assertEqual(
             td.stock_day_change_pct(10.60, 10.50),
             0.95,  # round((10.6/10.5-1)*100, 2) = 0.95
@@ -375,6 +389,101 @@ class TestWeekendNoNewSession(unittest.TestCase):
             td.current_trading_session(dt.datetime(2026, 9, 19, 12)),
             "2026-09-18",
         )
+
+
+class TestPreopenDayChangeGuard(unittest.TestCase):
+    def test_sina_previous_session_spot_becomes_zero_after_0915_baseline(self) -> None:
+        spot = {
+            "session": "2026-10-13",
+            "open": 18.53,
+            "high": 19.89,
+            "low": 17.89,
+            "last": 19.89,
+            "prev_close": 19.88,
+            "last_ts": "2026-10-13 15:00:00",
+            "name": "圣阳股份",
+        }
+        with patch("index.promote_quote_session", return_value="2026-10-14"):
+            q = idx._quote_from_sina_spot(spot)
+
+        self.assertEqual(q["session"], "2026-10-14")
+        self.assertEqual(q["last"], 19.89)
+        self.assertEqual(q["prev_close"], 19.89)
+        self.assertEqual(q["day_chg_pct"], 0.0)
+        self.assertTrue(q["_preopen_baseline"])
+
+    def test_fetch_today_quote_does_not_promote_stale_sina_after_0915(self) -> None:
+        spot = {
+            "session": "2026-10-13",
+            "open": 18.53,
+            "high": 19.89,
+            "low": 17.89,
+            "last": 19.89,
+            "prev_close": 19.88,
+            "last_ts": "2026-10-13 15:00:00",
+            "name": "圣阳股份",
+        }
+        minutes = pd.DataFrame(
+            [
+                {
+                    "ts": pd.Timestamp("2026-10-13 15:00:00"),
+                    "open": 18.53,
+                    "high": 19.89,
+                    "low": 17.89,
+                    "close": 19.89,
+                }
+            ]
+        )
+        with (
+            patch("index.trading_session_date", return_value="2026-10-14"),
+            patch("index.preserve_previous_session_quote", return_value=False),
+            patch("index.fetch_sina_spot", return_value=spot),
+            patch("index.pull_akshare_1m", return_value=minutes),
+        ):
+            q = idx.fetch_today_quote("sz002580")
+
+        self.assertEqual(q["session"], "2026-10-14")
+        self.assertEqual(q["last"], 19.89)
+        self.assertEqual(q["prev_close"], 19.89)
+        self.assertEqual(q["day_chg_pct"], 0.0)
+
+    def test_fetch_today_quote_preserves_previous_close_change_before_0915(self) -> None:
+        spot = {
+            "session": "2026-10-13",
+            "open": 18.53,
+            "high": 19.89,
+            "low": 17.89,
+            "last": 19.89,
+            "prev_close": 19.88,
+            "last_ts": "2026-10-13 15:00:00",
+            "name": "圣阳股份",
+        }
+        minutes = pd.DataFrame(
+            [
+                {
+                    "ts": pd.Timestamp("2026-10-13 15:00:00"),
+                    "open": 18.53,
+                    "high": 19.89,
+                    "low": 17.89,
+                    "close": 19.89,
+                }
+            ]
+        )
+        with (
+            patch("index.trading_session_date", return_value="2026-10-14"),
+            patch("index.preserve_previous_session_quote", return_value=True),
+            patch("index.promote_quote_session", return_value="2026-10-13"),
+            patch("index.sanitize_day_change_for_session", return_value=0.05),
+            patch("index.fetch_sina_spot", return_value=spot),
+            patch("index.pull_akshare_1m", return_value=minutes),
+        ):
+            q = idx.fetch_today_quote("sz002580")
+
+        self.assertEqual(q["session"], "2026-10-13")
+        self.assertEqual(q["last"], 19.89)
+        self.assertEqual(q["prev_close"], 19.88)
+        self.assertEqual(q["day_chg_pct"], 0.05)
+        self.assertEqual(q["_quote_source"], "sina_previous_session_before_auction")
 
 
 if __name__ == "__main__":

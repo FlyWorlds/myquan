@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import math
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
@@ -386,16 +388,91 @@ class TestStrategyReturnLifecycle(unittest.TestCase):
             prev_entry_mode="yin_or_small_yang",
             limit_down_pct=0.10,
         )
-        self.assertEqual(row["策略收益语义"], "strategy_simulator_ledger")
+        self.assertEqual(row["策略收益语义"], "backtest_replay")
         self.assertEqual(row["策略收益范围"], "symbol")
-        self.assertEqual(row["策略历史口径"], "daily_open_break_fixed_stop")
-        self.assertEqual(row["策略实时口径"], "quote_touch_row_levels")
-        self.assertEqual(row["策略退出口径"], "row_sell_level_live")
+        self.assertIn(
+            row["策略历史口径"],
+            ("factor26_1m_replay", "daily_fallback", "daily_open_break_replay"),
+        )
+        self.assertEqual(row["策略实时口径"], "backtest_replay_mark_to_live")
+        self.assertIn(
+            row["策略退出口径"],
+            ("factor26_1m_replay", "daily_fallback", "daily_open_break_replay"),
+        )
         self.assertEqual(row["策略起算"], STRATEGY_PNL_START)
         self.assertIn("策略累计持有", row)
         self.assertIn("策略收益%", row)
         self.assertIn("策略模拟状态", row)
         self.assertIsInstance(row["策略累计持有"], bool)
+
+    def test_attach_uses_factor26_backtest_replay_as_primary_return(self) -> None:
+        """策略收益主字段按回测买卖，不因 live simulator 空账本显示 0。"""
+        import index as watch_index
+        import strategy_simulator as sim
+
+        replay = {
+            "source": "1m",
+            "holding": True,
+            "last_trigger_side": "buy",
+            "last_trigger_px": 10.0,
+            "trades": [
+                {
+                    "date": "2026-10-13",
+                    "side": "buy",
+                    "px": 10.0,
+                    "ts": "2026-10-13 09:31:00",
+                }
+            ],
+        }
+        daily = _daily(
+            [
+                _bar("2026-10-12", 9.8, 10.0, 9.7, 9.8),
+                _bar("2026-10-13", 10.0, 11.0, 9.9, 11.0),
+            ]
+        )
+        row = {
+            "代码": "600001",
+            "开盘": 10.0,
+            "现价": 11.0,
+            "买点": 10.5,
+            "止损": 9.8,
+            "过门OK": False,
+            "开盘复核OK": False,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            state = Path(td) / "strategy_sim_state.json"
+            events = Path(td) / "strategy_signal_events.json"
+            with (
+                mock.patch.object(sim, "STATE_FILE", state),
+                mock.patch.object(sim, "EVENTS_FILE", events),
+                mock.patch.object(watch_index, "_replay_last_factor_triggers_cached", return_value=replay),
+            ):
+                sim.reset_all_state()
+                watch_index._attach_strategy_pnl_fields(
+                    row,
+                    w={"sina": "sh600001", "code": "600001"},
+                    daily=daily,
+                    q={
+                        "session": "2026-10-13",
+                        "open": 10.0,
+                        "high": 11.0,
+                        "low": 9.9,
+                        "last": 11.0,
+                        "last_ts": "2026-10-13 15:00:00",
+                    },
+                    entry_pct=0.025,
+                    stop_pct=0.025,
+                    tick=TICK_SIZE,
+                    prev_entry_mode="yin_or_small_yang",
+                    limit_down_pct=0.10,
+                )
+
+        self.assertEqual(row["策略收益语义"], "backtest_replay")
+        self.assertEqual(row["策略历史口径"], "factor26_1m_replay")
+        self.assertEqual(row["策略模拟状态"], "LONG")
+        self.assertEqual(row["策略状态"], "策略持有")
+        self.assertTrue(row["策略累计持有"])
+        self.assertGreater(float(row["策略收益%"]), 0.0)
 
     def test_paper_replay_dual_status_labels(self) -> None:
         """纸面 / 回放双态：只用 策略累计持有，禁止用收益%反推；互不覆盖。"""
