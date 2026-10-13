@@ -211,6 +211,22 @@ def _split_passthrough(argv: list[str]) -> list[str]:
     return argv
 
 
+def _pull_remote_holdings_for_watch() -> None:
+    """盯盘启动以远程 holdings-ledger 为持仓真源。"""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from holdings_sync import pull_holdings
+
+    print("[start_watch] 拉取远程持仓（holdings-ledger，远程为准）…")
+    result = pull_holdings(force=True, quiet=False)
+    if result != "pulled":
+        raise SystemExit(
+            "[start_watch] 远程持仓不可用，已停止启动，避免使用本机旧持仓。\n"
+            "  请先在有最新账本的设备执行: python index.py holdings-push --force\n"
+            "  确认离线调试才使用: python start_watch.py --no-ledger-pull"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="启动 Web 盯盘（Python 数据 API + Nuxt 页面）",
@@ -239,7 +255,7 @@ def main() -> int:
     parser.add_argument(
         "--no-ledger-pull",
         action="store_true",
-        help="启动时不拉取远程持仓（本机 holdings.json 为准）",
+        help="离线调试：启动时不拉取远程持仓（本机 holdings.json 为准）",
     )
     parser.add_argument(
         "extra",
@@ -257,14 +273,15 @@ def main() -> int:
     _prepare_start(force=bool(args.force))
     if not args.no_ledger_pull:
         try:
-            if str(ROOT) not in sys.path:
-                sys.path.insert(0, str(ROOT))
-            from holdings_sync import pull_holdings
-
-            print("[start_watch] 拉取远程持仓（holdings-ledger）…")
-            pull_holdings(quiet=False)
+            _pull_remote_holdings_for_watch()
         except Exception as e:  # noqa: BLE001
-            print(f"[start_watch] 远程持仓拉取失败（继续本机账本）: {e}")
+            if isinstance(e, SystemExit):
+                raise
+            raise SystemExit(
+                "[start_watch] 远程持仓拉取失败，已停止启动，避免使用本机旧持仓。\n"
+                f"  错误: {e}\n"
+                "  确认离线调试才使用: python start_watch.py --no-ledger-pull"
+            ) from e
     py = _resolve_python()
     npm = _resolve_npm()
     _ensure_node_modules(npm)
@@ -286,8 +303,9 @@ def main() -> int:
         watch_args.append("--no-wechat")
     if args.wechat_login:
         watch_args.append("--wechat-login")
-    if args.no_ledger_pull:
-        watch_args.append("--no-ledger-pull")
+    # start_watch 已在同一进程里完成（或显式跳过）远程账本拉取；
+    # 后端 watch 不再重复拉，避免冷启动二次 fetch/覆盖判断拖慢首屏。
+    watch_args.append("--no-ledger-pull")
     watch_args.extend(extra)
 
     env = _loopback_env()

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -89,6 +90,19 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     return out
 
 
+def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
+def _backup_path(path: Path) -> Path:
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return path.with_name(f"{path.name}.bak_{stamp}")
+
+
 def find_live_void_conflicts(
     *,
     trades_path: Path = TRADES,
@@ -119,6 +133,105 @@ def find_live_void_conflicts(
             )
         )
     return issues
+
+
+def find_open_position_void_conflicts(
+    *,
+    holdings_path: Path = ROOT / "holdings.json",
+    voided_path: Path = VOIDED_TRADES,
+) -> list[IntegrityIssue]:
+    """Open paper positions must not be backed by a voided BUY."""
+    holdings = _load_json(holdings_path, {})
+    positions = holdings.get("positions") if isinstance(holdings, dict) else {}
+    if not isinstance(positions, dict):
+        return []
+    voided = _load_jsonl(voided_path)
+    voided_buys: dict[str, dict[str, Any]] = {}
+    for row in voided:
+        if str(row.get("side") or "").lower() != "buy":
+            continue
+        code = _code(row.get("code") or row.get("symbol"))
+        if code:
+            voided_buys[code] = row
+    issues: list[IntegrityIssue] = []
+    for code_raw, pos in positions.items():
+        code = _code(code_raw)
+        if not code or code not in voided_buys or not isinstance(pos, dict):
+            continue
+        try:
+            qty = int(pos.get("qty") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        if qty <= 0:
+            continue
+        buy = voided_buys[code]
+        if str(pos.get("buy_time") or "")[:19] != str(buy.get("time") or "")[:19]:
+            continue
+        try:
+            same_cost = abs(float(pos.get("cost") or 0) - float(buy.get("price") or 0)) <= 1e-4
+        except (TypeError, ValueError):
+            same_cost = False
+        if not same_cost:
+            continue
+        issues.append(
+            IntegrityIssue(
+                code=code,
+                severity=BLOCK_TRADING,
+                kind="open_position_backed_by_voided_buy",
+                message=f"{code} 当前持仓对应的 BUY 已在 voided trades 中作废",
+                detail={
+                    "buy_time": pos.get("buy_time"),
+                    "qty": qty,
+                    "cost": pos.get("cost"),
+                    "voided_reason": buy.get("voided_reason") or buy.get("void_reason"),
+                },
+            )
+        )
+    return issues
+
+
+def repair_live_void_conflicts(
+    *,
+    root: Path = ROOT,
+    apply: bool = False,
+) -> dict[str, Any]:
+    """Remove live trade/ledger entries that have already been voided.
+
+    This is intentionally conservative: it only removes exact live rows that
+    also exist in ``trades.voided.jsonl``. It does not invent replacement buys.
+    """
+    trades_path = root / "trades.jsonl"
+    ledger_path = root / "trade_ledger.json"
+    live = _load_jsonl(trades_path)
+    voided = _load_jsonl(root / "trades.voided.jsonl")
+    conflict_keys = {_trade_key(row) for row in voided}
+    kept = [row for row in live if _trade_key(row) not in conflict_keys]
+    removed = [row for row in live if _trade_key(row) in conflict_keys]
+
+    ledger_removed = 0
+    ledger = _load_json(ledger_path, {})
+    if isinstance(ledger, dict) and isinstance(ledger.get("entries"), list):
+        before = list(ledger["entries"])
+        after = [row for row in before if _trade_key(row) not in conflict_keys]
+        ledger_removed = len(before) - len(after)
+        ledger["entries"] = after
+
+    if apply and removed:
+        trades_path.replace(_backup_path(trades_path))
+        _write_jsonl(trades_path, kept)
+        if ledger_removed and isinstance(ledger, dict):
+            ledger_path.replace(_backup_path(ledger_path))
+            ledger["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            tmp = ledger_path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp.replace(ledger_path)
+
+    return {
+        "apply": bool(apply),
+        "removed_trades": len(removed),
+        "removed_ledger_entries": ledger_removed,
+        "trade_keys": [list(_trade_key(row)) for row in removed],
+    }
 
 
 def find_strategy16_event_threshold_issues(
@@ -278,6 +391,10 @@ def run_integrity_checks(
             trades_path=root / "trades.jsonl",
             voided_path=root / "trades.voided.jsonl",
         ),
+        *find_open_position_void_conflicts(
+            holdings_path=root / "holdings.json",
+            voided_path=root / "trades.voided.jsonl",
+        ),
         *find_strategy16_event_threshold_issues(
             events_path=root / "strategy_signal_events.json",
             start_date=strategy16_start_date,
@@ -294,7 +411,17 @@ def main() -> int:
     ap.add_argument("--root", type=Path, default=ROOT, help="holdingStocks runtime directory")
     ap.add_argument("--strategy16-start-date", default=None)
     ap.add_argument("--json", action="store_true", help="Print machine-readable JSON")
+    ap.add_argument(
+        "--repair-live-void-conflicts",
+        action="store_true",
+        help="Remove exact live trade/ledger rows that already exist in voided trades.",
+    )
+    ap.add_argument("--apply", action="store_true", help="Apply repair actions.")
     args = ap.parse_args()
+
+    repair: dict[str, Any] | None = None
+    if args.repair_live_void_conflicts:
+        repair = repair_live_void_conflicts(root=args.root, apply=bool(args.apply))
 
     issues = run_integrity_checks(
         root=args.root,
@@ -302,7 +429,10 @@ def main() -> int:
     )
     payload = [asdict(x) for x in issues]
     if args.json:
-        print(json.dumps({"ok": not issues, "issues": payload}, ensure_ascii=False, indent=2))
+        out: dict[str, Any] = {"ok": not issues, "issues": payload}
+        if repair is not None:
+            out["repair"] = repair
+        print(json.dumps(out, ensure_ascii=False, indent=2))
     elif not issues:
         print("runtime integrity ok")
     else:

@@ -96,7 +96,7 @@ WATCH_DAILY_WARM_WORKERS=16 python holdingStocks/index.py watch --ui-dev
 - 因子27核心龙头池，默认近3个月。
 - 主板、非 ST、价格上限等条件由策略固定参数过滤。
 - 交易内核使用因子26；**因子29** 可在 9:20–9:25 武装后按正式开盘成交。
-- 策略模拟器买入成交价记买点（因子29 记正式开盘），现价只盯市。发现时刻的现价不算入场价，避免策略持有但单笔收益和策略累计停在 0。行情快刷改入场前要用该股自己的买入阈值；快照里没有阈值时不改入场，避免按默认 2.5% 把买点记高。
+- 策略模拟器买入成交价记买点（因子29 记正式开盘），现价只盯市。发现时刻的现价不算入场价，避免策略持有但单笔收益和策略累计停在 0。行情快刷改入场前要用该股自己的买入阈值；快照里没有阈值时先查 `backtest/strategy16_core_leader/thr_2026.json`，仍缺失才兜底默认 2.5%。
 - 公共自选池全策略共用。
 - 隔夜已记止损、次日竞价低开开盘保护卖出后，当天过门可回买。
 
@@ -156,6 +156,9 @@ python backtest/strategy1.py --rules
 # 策略16核心龙头池近7日1m回测
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 
+# 策略16个股阈值拟合（{2%,2.5%,3%} 日线开盘突破夏普择优；缺样本兜底2.5%）
+PYTHONPATH=. python backtest/strategy16_core_leader/fit_thr.py
+
 # 因子22同日再买对照
 PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7
 
@@ -181,7 +184,7 @@ python index.py holdings-push
 python index.py holdings-pull
 ```
 
-`holdings-ledger` 分支是多设备运行态真源，包含纸面持仓、成交流水、交割明细，以及策略16/16B 的 simulator 状态与事件。`main` 只放代码；启动 `start_watch.py` 默认先拉远程账本，清空持仓后要执行一次 `holdings-push --force`，另一台设备再启动会得到同一份空仓状态。
+`holdings-ledger` 分支是多设备运行态真源，包含纸面持仓、成交流水、交割明细，以及策略16/16B 的 simulator 状态与事件。`main` 只放代码；启动 `start_watch.py` / `index.py watch` 默认强制以远程账本覆盖本机账本，拉取失败会停止盯盘，避免本机旧持仓参与交易判断。清空持仓后要执行一次 `holdings-push --force`，另一台设备再启动会得到同一份空仓状态；只有确认离线调试时才加 `--no-ledger-pull`。
 
 ## 验证命令
 
@@ -190,6 +193,7 @@ python index.py holdings-pull
 ```bash
 python -m py_compile holdingStocks/index.py
 python -m unittest holdingStocks.test_watch_boot_perf holdingStocks.test_strategy16b_dynamic
+python holdingStocks/runtime_integrity.py --strategy16-start-date 2026-10-08
 python holdingStocks/run_all_tests.py --skip-pytest-if-missing
 ```
 

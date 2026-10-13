@@ -150,7 +150,7 @@ python -m pytest -q ../                 # 全量测试（需 pytest）
 | `trade_ledger.py` | 交割单 JSON 账本（`trade_ledger.json`）；买入入槽/卖出平仓落库；API 读模型对仍持仓 BUY 按现价盯市「单笔盈亏」（不写回 ledger） |
 | `index.py` | 盯盘主程序 / JSON 推送 / 微信 / 买卖记账 |
 | `holdings_sync.py` | Win/Mac 账本：`holdings-push` / `holdings-pull` → `origin/holdings-ledger` |
-| `start_watch.py` | 一键启动 API+Nuxt；默认先拉远程持仓；`--stop` / `--force` 回收端口 |
+| `start_watch.py` | 一键启动 API+Nuxt；默认强制拉远程持仓，失败即停；`--stop` / `--force` 回收端口 |
 | `watch_process.py` | Windows 端口/PID 回收（Ctrl+C 孤儿进程） |
 | `quote_feed.py` | 行情聚合 |
 | `wechat_notify.py` | 微信推送 |
@@ -196,7 +196,7 @@ cd holdingStocks/watch-ui && npm install && npm run dev
   - `alert_sticky` / `closed_today` / `slot_queue` 等容器只用 `reset_container` 原地清空，不换绑；9:15 状态重置（含启动补跑）改为持 `refresh_lock`，与扫描互斥；行情快刷抬 HWM 与写盘在存储锁内完成。
   - `holdings-pull` / `holdings-push` / `repair_void_stale_buy.py` 写账本同样走文件锁 + 原子替换。
   - 回归：`test_holdings_store`。
-- `holdings-pull` 的 `git fetch` 加 20s 超时，网络挂起时降级用本机账本。
+- `holdings-pull` 的 `git fetch` 加 20s 超时；盯盘启动默认以远程账本为准，拉取失败即停，只有 `--no-ledger-pull` 离线调试才用本机账本。
 
 **顶栏红字不只看本机 WebSocket**。`:8765` 在本机，断外网时 WS 仍可能显示已连接、hub 里还有断开前的现价。快照带 `feedOk` / `quoteStale` / `quoteAt`（最近一次东财 SSE 或新浪批量成功）；超过约 40s 没收外网行情，顶栏红字「行情中断，数据停在 HH:MM:SS」。刷新线程卡住时仍有 **2s 时钟心跳**，页面时钟继续走，不要把「本机 WS 还开着」当成行情正常。前端 `updatedAt` 超过 20s 也红字「服务停滞」。午休无成交只要新浪兜底还通，不红。
 
@@ -246,7 +246,7 @@ python index.py holdings-push   # 本机账本 → origin/holdings-ledger（给�
 python index.py holdings-pull   # 远程账本 → 本机；丢掉 holdings_watch.json 旧缓存
 ```
 
-**Win / Mac 同一份持仓**：当前生产真源仍是本机 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细）以及 `strategy_sim_state.json` / `strategy_signal_events.json`（策略16/16B 累计），经独立分支 `holdings-ledger` 同步（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` 默认先 `holdings-pull`。盘后在有成交的那台 `holdings-push`，另一台开盯盘前会自动拉。清仓后要 `holdings-push --force`，另一台设备再启动即可得到同一份空仓状态；离线用 `--no-ledger-pull`。
+**Win / Mac 同一份持仓**：当前生产真源仍是本机 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细）以及 `strategy_sim_state.json` / `strategy_signal_events.json`（策略16/16B 累计），经独立分支 `holdings-ledger` 同步（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` / `index.py watch` 默认强制从远程 `holdings-ledger` 覆盖本机账本，远程不可用时停止盯盘，避免旧持仓参与交易判断。盘后在有成交的那台 `holdings-push --force`，另一台开盯盘前会自动拉。清仓后也要 `holdings-push --force`，另一台设备再启动即可得到同一份空仓状态；只有确认离线调试时才用 `--no-ledger-pull`。
 
 **Remote Paper State（Phase R1，未切生产）**：目标改为远程 PostgreSQL 单真源 + 单 writer lease（防双机重复成交）。本阶段仅落地 `paper_state/` 接口、schema、迁移 dry-run 与单测；**watch 仍写本地 JSON**。设计与命令见 [`docs/REMOTE_PAPER_STATE.md`](docs/REMOTE_PAPER_STATE.md)。
 

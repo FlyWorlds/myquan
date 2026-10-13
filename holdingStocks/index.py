@@ -11656,6 +11656,21 @@ def cmd_holdings_pull(args: argparse.Namespace) -> None:
         raise SystemExit(2)
 
 
+def _pull_remote_holdings_for_watch() -> None:
+    """盯盘以 origin/holdings-ledger 为持仓真源，失败即停。"""
+    from holdings_sync import pull_holdings
+
+    print(f"[{_now()}] 拉取远程持仓（holdings-ledger，远程为准）")
+    result = pull_holdings(force=True, quiet=False)
+    if result == "pulled":
+        _HOLDINGS_CACHE.clear()
+        return
+    raise SystemExit(
+        "远程持仓不可用，已停止盯盘，避免使用本机旧持仓。"
+        "确认离线调试才加 --no-ledger-pull。"
+    )
+
+
 def cmd_watch(args: argparse.Namespace) -> None:
     """长驻进程：东财 SSE/新浪兜底行情 + 本地 HTTP/WS 推页。
 
@@ -11666,13 +11681,14 @@ def cmd_watch(args: argparse.Namespace) -> None:
     atexit.register(_release_watch_lock)
     if not bool(getattr(args, "no_ledger_pull", False)):
         try:
-            from holdings_sync import pull_holdings
-
-            result = pull_holdings(quiet=False)
-            if result == "pulled":
-                _HOLDINGS_CACHE.clear()
+            _pull_remote_holdings_for_watch()
         except Exception as e:  # noqa: BLE001
-            print(f"[{_now()}] 远程持仓拉取失败（继续用本机账本）: {e}")
+            if isinstance(e, SystemExit):
+                raise
+            raise SystemExit(
+                f"远程持仓拉取失败，已停止盯盘，避免使用本机旧持仓: {e}。"
+                "确认离线调试才加 --no-ledger-pull。"
+            ) from e
     global _ws_hub, _watch_feed
     interval = max(2, int(args.interval))
     host = str(args.host)
@@ -12335,7 +12351,7 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument(
         "--no-ledger-pull",
         action="store_true",
-        help="启动时不拉取 origin/holdings-ledger（离线或本机为准）",
+        help="离线调试：启动时不拉取 origin/holdings-ledger（本机账本为准）",
     )
     w.set_defaults(func=cmd_watch)
 
