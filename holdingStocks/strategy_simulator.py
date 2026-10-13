@@ -579,7 +579,12 @@ def mark_book(book: dict[str, Any], mark: float, *, quote_ts: str | None = None)
         sync_flat_cumulative(book)
 
 
-def _official_buy_from_open(day_open: float | None) -> float | None:
+def _official_buy_from_open(
+    day_open: float | None,
+    *,
+    entry_pct: float | None = None,
+    tick: float | None = None,
+) -> float | None:
     try:
         open_lv = float(day_open or 0)
     except (TypeError, ValueError):
@@ -595,7 +600,15 @@ def _official_buy_from_open(day_open: float | None) -> float | None:
         if parent not in sys.path:
             sys.path.insert(0, parent)
         from strategy.open_break import entry_trigger_price as _etp
-    return float(_etp(open_lv))
+    kwargs: dict[str, float] = {}
+    try:
+        if entry_pct is not None:
+            kwargs["entry_pct"] = float(entry_pct)
+        if tick is not None:
+            kwargs["tick"] = float(tick)
+    except (TypeError, ValueError):
+        return None
+    return float(_etp(open_lv, **kwargs))
 
 
 def _void_today_unprinted_long(
@@ -906,6 +919,8 @@ def evaluate_live_transition(
     stale_after: float | None = None,
     t0: bool = False,
     day_open: float | None = None,
+    entry_pct: float | None = None,
+    tick: float | None = None,
 ) -> dict[str, Any]:
     """用 live last 撞 buy/sell level；仅状态转换产生事件。
 
@@ -982,7 +997,9 @@ def evaluate_live_transition(
         if not is_signal_window(now):
             book = force_book if force_book is not None else get_book(strategy_id, symbol)
             sess_closed = _session_of(quote_ts or eval_t)
-            official = _official_buy_from_open(day_open)
+            official = _official_buy_from_open(
+                day_open, entry_pct=entry_pct, tick=tick
+            )
             if official and _void_today_unprinted_long(
                 book, official_buy=official, session=sess_closed
             ):
@@ -1017,7 +1034,9 @@ def evaluate_live_transition(
         transition: str | None = None
         session = _session_of(quote_ts or eval_t)
 
-        official = _official_buy_from_open(day_open)
+        official = _official_buy_from_open(
+            day_open, entry_pct=entry_pct, tick=tick
+        )
         if official and _void_today_unprinted_long(
             book, official_buy=official, session=session
         ):
@@ -1040,7 +1059,12 @@ def evaluate_live_transition(
                 if buy_lv is None or buy_lv + 1e-8 < official:
                     buy_lv = official
             elif open_lv > 0:
-                buy_lv = _official_buy_from_open(open_lv) or buy_lv
+                buy_lv = (
+                    _official_buy_from_open(
+                        open_lv, entry_pct=entry_pct, tick=tick
+                    )
+                    or buy_lv
+                )
             touched = (
                 allow_entry and buy_lv is not None and buy_lv > 0 and last + 1e-12 >= buy_lv
             )

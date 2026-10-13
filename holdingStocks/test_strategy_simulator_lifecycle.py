@@ -852,6 +852,37 @@ class TestSessionGatesPaperUntouched(_TmpSim):
         self.assertEqual(voided["book"]["state"], "FLAT")
         self.assertAlmostEqual(float(voided["book"]["virtual_cash"]), 100000.0, places=1)
 
+    def test_official_buy_uses_symbol_entry_pct(self) -> None:
+        """个股 3% 阈值不能被默认 2.5% 审查放过。"""
+        blocked = _eval(
+            strategy_id="strategy16",
+            symbol="002580",
+            live_last=19.50,
+            quote_ts="2026-10-13 09:31:00",
+            buy_level=18.35,
+            sell_level=18.00,
+            allow_entry=True,
+            day_open=19.00,
+            entry_pct=0.03,
+            tick=0.01,
+            now=datetime(2026, 10, 13, 9, 31),
+        )
+        self.assertIsNone(blocked["transition"])
+        filled = _eval(
+            strategy_id="strategy16",
+            symbol="002580",
+            live_last=19.57,
+            quote_ts="2026-10-13 09:32:00",
+            buy_level=18.35,
+            sell_level=18.00,
+            allow_entry=True,
+            day_open=19.00,
+            entry_pct=0.03,
+            tick=0.01,
+            now=datetime(2026, 10, 13, 9, 32),
+        )
+        self.assertEqual(filled["transition"], "BUY")
+
     def test_weekend_now_blocks_even_if_weekday_quote(self) -> None:
         r = _eval(
             strategy_id="strategy16",

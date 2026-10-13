@@ -512,9 +512,42 @@ def patch_row_live_quote(
     )
     high = _as_pos_float(quote.get("high") if quote else None)
     low = _as_pos_float(quote.get("low") if quote else None)
-    if open_px is not None and row.get("开盘") is None:
+    open_finalized = bool((quote or {}).get("_open_finalized", True))
+    if open_px is not None and (
+        row.get("开盘") is None
+        or (
+            open_finalized
+            and abs(float(row.get("开盘") or 0) - float(open_px)) > 1e-9
+        )
+    ):
         row["开盘"] = round(open_px, digits)
         changed = True
+    row["_open_finalized"] = open_finalized
+    if quote:
+        row["_quote_ts"] = str(
+            quote.get("last_ts")
+            or quote.get("ts")
+            or quote.get("time")
+            or quote.get("timestamp")
+            or ""
+        )
+    # 快刷也必须同步重算核定买点；否则全量扫描留下的竞价旧买点会继续喂给 simulator。
+    if open_finalized and open_px is not None:
+        try:
+            from watch_config import official_buy_trigger
+
+            entry_pct = float(row.get("_entry_pct"))
+            tick = float(row.get("_tick") or 0.01)
+            official_buy = official_buy_trigger(
+                open_px, entry_pct=entry_pct, tick=tick
+            )
+        except (ImportError, TypeError, ValueError):
+            official_buy = None
+        if official_buy is not None and row.get("买点") != official_buy:
+            row["买点"] = official_buy
+            if row.get("买入侧价") is not None:
+                row["买入侧价"] = official_buy
+            changed = True
     if prev is not None:
         old_prev = row.get("昨收")
         row["昨收"] = round(prev, digits)
@@ -661,7 +694,12 @@ def patch_row_live_quote(
 
                 q_ts = None
                 if quote:
-                    q_ts = quote.get("ts") or quote.get("time") or quote.get("timestamp")
+                    q_ts = (
+                        quote.get("last_ts")
+                        or quote.get("ts")
+                        or quote.get("time")
+                        or quote.get("timestamp")
+                    )
                 if not q_ts:
                     sess = str(row.get("交易日") or "")[:10]
                     q_ts = f"{sess} {_dt.now().strftime('%H:%M:%S')}" if sess else _dt.now().strftime(
@@ -669,7 +707,11 @@ def patch_row_live_quote(
                     )
                 buy_lv = row.get("买点") if row.get("买点") is not None else row.get("买入侧价")
                 sell_lv = row.get("止损") if row.get("止损") is not None else row.get("卖出侧价")
-                allow = bool(row.get("过门OK")) or str(row.get("已触买") or "") == "是"
+                open_audit_ok = bool(row.get("开盘复核OK"))
+                allow = open_audit_ok and (
+                    bool(row.get("过门OK"))
+                    or str(row.get("已触买") or "") == "是"
+                )
                 before_st = row.get("策略模拟状态")
                 before_ret = row.get("策略收益%")
                 before_single = row.get("单笔收入%")
@@ -686,6 +728,8 @@ def patch_row_live_quote(
                     t0=bool(row.get("t0")),
                     day_open=row.get("开盘")
                     or (quote.get("open") if isinstance(quote, dict) else None),
+                    entry_pct=row.get("_entry_pct"),
+                    tick=row.get("_tick"),
                     now=_dt.now(),
                 )
                 book = get_book(str(strategy_id), code)

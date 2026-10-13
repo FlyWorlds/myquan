@@ -69,6 +69,34 @@ def _fnum(v: Any) -> float | None:
     return x
 
 
+def _quote_session_and_clock(ts: Any) -> tuple[str, str]:
+    """行情戳 → (YYYY-MM-DD, HH:MM:SS)；缺失部分返回空串。"""
+    s = str(ts or "").strip().replace("T", " ", 1)
+    if len(s) >= 19 and s[4:5] == "-" and s[10:11] == " ":
+        return s[:10], s[11:19]
+    if len(s) >= 8 and s[2:3] == ":":
+        return "", s[:8]
+    return "", ""
+
+
+def _open_is_final(ts: Any) -> bool:
+    """9:25 开盘价核定后才允许该快照成为交易基准。"""
+    _session, clock = _quote_session_and_clock(ts)
+    return bool(clock and clock >= "09:25:00")
+
+
+def _continuous_quote(ts: Any) -> bool:
+    _session, clock = _quote_session_and_clock(ts)
+    return ("09:30:00" <= clock <= "11:30:00") or (
+        "13:00:00" <= clock < "15:00:00"
+    )
+
+
+def _open_result_only(ts: Any) -> bool:
+    _session, clock = _quote_session_and_clock(ts)
+    return "09:25:00" <= clock < "09:30:00"
+
+
 @dataclass
 class QuoteSnapshot:
     sina: str
@@ -81,6 +109,7 @@ class QuoteSnapshot:
     day_chg_pct: float | None
     last_ts: str
     source: str = "seed"
+    open_finalized: bool = False
     day_bars: Any = field(default=None, repr=False)
 
     def as_quote_dict(self) -> dict[str, Any]:
@@ -100,6 +129,9 @@ class QuoteSnapshot:
             "last_ts": self.last_ts,
             "_day_bars": bars,
             "_quote_source": self.source,
+            "_open_finalized": bool(self.open_finalized),
+            # 兼容 session_open_usable：9:15–9:25 的指示价绝不能算买点。
+            "_preopen_baseline": not bool(self.open_finalized),
         }
 
 
@@ -164,6 +196,11 @@ class QuoteHub:
             day_chg_pct=quote.get("day_chg_pct"),
             last_ts=str(quote.get("last_ts") or ""),
             source="seed",
+            open_finalized=bool(
+                quote.get("_open_finalized")
+                if quote.get("_open_finalized") is not None
+                else _open_is_final(quote.get("last_ts"))
+            ),
             day_bars=quote.get("_day_bars"),
         )
         with self._lock:
@@ -184,34 +221,72 @@ class QuoteHub:
         source: str = "tick",
     ) -> bool:
         sina = str(sina).lower()
+        tick_ts = str(last_ts or datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        tick_session, _tick_clock = _quote_session_and_clock(tick_ts)
+        tick_open_final = _open_is_final(tick_ts)
+        tick_continuous = _continuous_quote(tick_ts)
+        tick_open_result = _open_result_only(tick_ts)
         with self._lock:
             cur = self._quotes.get(sina)
-            if cur is None:
+            if cur is None or (
+                tick_session
+                and str(cur.session or "")[:10]
+                and tick_session != str(cur.session)[:10]
+            ):
                 if last is None or last <= 0:
                     return False
                 o = float(open_px or last)
-                h = float(high or last)
-                l = float(low or last)
+                # 竞价阶段不继承供应商累计 high/low；午休/收盘冷启动仍保留当日 OHLC。
+                if tick_open_final and not tick_open_result:
+                    h = max(float(high or last), float(last), o)
+                    l0 = float(low or last)
+                    l = min(l0, float(last), o) if l0 > 0 else min(float(last), o)
+                else:
+                    h = max(o, float(last))
+                    l = min(o, float(last))
                 pc = prev_close
                 chg = price_chg_pct(last, pc)
                 self._quotes[sina] = QuoteSnapshot(
                     sina=sina,
-                    session=datetime.now().strftime("%Y-%m-%d"),
+                    session=tick_session or datetime.now().strftime("%Y-%m-%d"),
                     open=o,
                     high=max(h, float(last)),
                     low=min(l, float(last)) if l > 0 else float(last),
                     last=float(last),
                     prev_close=pc,
                     day_chg_pct=chg,
-                    last_ts=last_ts or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    last_ts=tick_ts,
                     source=source,
+                    open_finalized=tick_open_final,
                 )
                 self._gen += 1
                 self.updated.set()
                 return True
 
             changed = False
-            if open_px is not None and open_px > 0 and cur.open <= 0:
+            # 关键边界：首次收到 9:25+ 快照时，整段重置 OHLC，彻底丢弃
+            # 9:15–9:25 的竞价指示 open/high/low；不能只改 last。
+            if tick_open_final and not cur.open_finalized:
+                o = float(open_px or last or 0)
+                px = float(last or o)
+                if o <= 0 or px <= 0:
+                    return False
+                cur.open = o
+                cur.last = px
+                cur.high = max(o, px)
+                cur.low = min(o, px)
+                cur.open_finalized = True
+                changed = True
+            elif tick_open_final and open_px is not None and open_px > 0:
+                # 正式开盘价晚到/来源切换时允许纠正；旧实现 cur.open>0 后永不更新，
+                # 正是本次 18.35/59.97 错买的根因。
+                if abs(cur.open - float(open_px)) > 1e-9:
+                    cur.open = float(open_px)
+                    changed = True
+                    if tick_open_result:
+                        cur.high = max(cur.open, float(last or cur.last))
+                        cur.low = min(cur.open, float(last or cur.last))
+            elif open_px is not None and open_px > 0 and cur.open <= 0:
                 cur.open = float(open_px)
                 changed = True
             if prev_close is not None and prev_close > 0:
@@ -221,7 +296,11 @@ class QuoteHub:
             if last is not None and last > 0 and abs(cur.last - last) > 1e-9:
                 cur.last = float(last)
                 changed = True
-            if high is not None and high > 0:
+            if tick_open_result and cur.open_finalized:
+                # 9:25–9:30 只有核定开盘结果，没有连续竞价路径。
+                cur.high = max(cur.open, cur.last)
+                cur.low = min(cur.open, cur.last)
+            elif high is not None and high > 0:
                 nh = max(cur.high, float(high), cur.last)
                 if nh > cur.high + 1e-12:
                     cur.high = nh
@@ -229,7 +308,9 @@ class QuoteHub:
             elif last is not None and last > 0 and last > cur.high:
                 cur.high = float(last)
                 changed = True
-            if low is not None and low > 0:
+            if tick_open_result and cur.open_finalized:
+                pass
+            elif low is not None and low > 0:
                 nl = min(cur.low, float(low), cur.last) if cur.low > 0 else float(low)
                 if cur.low <= 0 or nl < cur.low - 1e-12:
                     cur.low = nl
@@ -238,7 +319,9 @@ class QuoteHub:
                 cur.low = float(last)
                 changed = True
             if last_ts:
-                cur.last_ts = last_ts
+                cur.last_ts = tick_ts
+            if tick_session:
+                cur.session = tick_session
             if cur.prev_close is not None and cur.last > 0:
                 cur.day_chg_pct = price_chg_pct(cur.last, cur.prev_close)
             cur.source = source

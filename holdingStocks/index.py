@@ -202,6 +202,7 @@ from watch_config import (
     session_open_usable,
     session_print_low,
     official_buy_trigger,
+    open_audit_reject_reason,
     session_high_prints_buy,
     buy_fill_reject_reason,
     reprintable_buy_cost,
@@ -2601,6 +2602,8 @@ _M1_CACHE: dict[str, tuple[float, str, pd.DataFrame]] = {}
 _M1_CACHE_TTL_SEC = 45.0
 _VOL20_CACHE: dict[str, tuple[str, float | None]] = {}
 _M1_EMPTY_TTL_SEC = 15.0  # 拉空/失败：短负缓存，避免每轮狂打接口
+# 单股正式开盘复核：成功后按 session 缓存；失败不缓存，下一轮继续拉取。
+_OPEN_AUDIT_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
 
 
 def _daily_last_trade_date(daily: pd.DataFrame) -> Any | None:
@@ -2616,12 +2619,14 @@ def _daily_last_trade_date(daily: pd.DataFrame) -> Any | None:
 def _invalidate_date_signal_caches(*, reason: str = "") -> None:
     """跨日/启动：清日线与依赖过门/前日的派生缓存。"""
     global _DAILY_CACHE, _VOL20_CACHE, _REPLAY_CACHE, _STRATEGY_PNL_CACHE, _M1_CACHE
+    global _OPEN_AUDIT_CACHE
     global _SIGNAL_CACHE_DAY
     _DAILY_CACHE.clear()
     _VOL20_CACHE.clear()
     _REPLAY_CACHE.clear()
     _STRATEGY_PNL_CACHE.clear()
     _M1_CACHE.clear()
+    _OPEN_AUDIT_CACHE.clear()
     _SIGNAL_CACHE_DAY = None
     note = f" · {reason}" if reason else ""
     print(f"[{_now()}] 已清空日期相关信号缓存（日线/回放/1m）{note}")
@@ -2981,12 +2986,15 @@ def _attach_strategy_pnl_fields(
     sell_lv = row.get("止损")
     if sell_lv is None:
         sell_lv = row.get("卖出侧价")
-    allow_entry = bool(row.get("过门OK"))
+    open_audit_ok = bool(row.get("开盘复核OK"))
+    allow_entry = bool(row.get("过门OK")) and open_audit_ok
     # 已触买粘滞：允许 simulator 在仍 FLAT 时补登（与展示一致）
-    if str(row.get("已触买") or "") == "是":
+    if str(row.get("已触买") or "") == "是" and open_audit_ok:
         allow_entry = True
     quote_ts = None
-    if q.get("ts"):
+    if q.get("last_ts"):
+        quote_ts = str(q.get("last_ts"))
+    elif q.get("ts"):
         quote_ts = str(q.get("ts"))
     elif q.get("time"):
         quote_ts = str(q.get("time"))
@@ -3009,6 +3017,8 @@ def _attach_strategy_pnl_fields(
                     persist=True,
                     t0=bool(w.get("t0")),
                     day_open=session_open_usable(q) or q.get("open"),
+                    entry_pct=float(entry_pct),
+                    tick=float(tick),
                     now=datetime.now(),
                 )
     book = get_book(sid, code)
@@ -5048,6 +5058,13 @@ def _apply_portfolio_slots(
             freed_at = peek_slot_freed_at(data, session)
 
             def _fill_of(row: dict[str, Any]) -> dict[str, Any] | None:
+                # 成交前独立复核：不能只相信上游 row["买点"]。核定开盘、
+                # 个股阈值、行情时刻任一不一致都拒绝，防竞价缓存污染后直接落账。
+                if not bool(row.get("开盘复核OK")):
+                    return None
+                quote_ts = str(row.get("_quote_ts") or "")
+                if not timestamp_in_signal_window(quote_ts):
+                    return None
                 try:
                     last = float(row.get("现价") or 0)
                 except (TypeError, ValueError):
@@ -5072,6 +5089,22 @@ def _apply_portfolio_slots(
                         official = 0.0
                 if official <= 0:
                     return None
+                try:
+                    open_px = float(row.get("开盘") or 0)
+                    entry_pct = float(row.get("_entry_pct"))
+                    tick = float(row.get("_tick") or TICK_SIZE)
+                except (TypeError, ValueError):
+                    return None
+                if row.get("_open_finalized") is False:
+                    return None
+                expected = official_buy_trigger(
+                    open_px, entry_pct=entry_pct, tick=tick
+                )
+                if expected is None or abs(float(expected) - official) > max(
+                    1e-8, tick / 10.0
+                ):
+                    return None
+                official = float(expected)
                 if session_low > 0 and official + 1e-12 < session_low:
                     return None
                 if not session_high_prints_buy(
@@ -5112,6 +5145,36 @@ def _apply_portfolio_slots(
             if not ranked:
                 break
             _tier, _trig, code, r, dec = ranked[0]
+            try:
+                audit_now = audit_single_stock_open(
+                    code=code,
+                    expected_open=float(r.get("开盘") or 0),
+                    session=str(r.get("交易日") or session),
+                    tick=float(r.get("_tick") or TICK_SIZE),
+                    force=True,
+                )
+            except (TypeError, ValueError):
+                audit_now = {
+                    "ok": False,
+                    "reason": "OPEN_AUDIT_INVALID",
+                    "audited_open": None,
+                    "quote_ts": None,
+                }
+            r["开盘复核OK"] = bool(audit_now.get("ok"))
+            r["开盘复核"] = (
+                "一致"
+                if audit_now.get("ok")
+                else str(audit_now.get("reason") or "OPEN_AUDIT_UNAVAILABLE")
+            )
+            r["复核开盘"] = audit_now.get("audited_open")
+            r["开盘复核时间"] = audit_now.get("quote_ts")
+            if not audit_now.get("ok"):
+                r["过门OK"] = False
+                r["资金规则"] = str(
+                    audit_now.get("reason") or "OPEN_AUDIT_UNAVAILABLE"
+                )
+                used.add(code)
+                continue
             try:
                 if cannot_buy_limit_up(
                     prev_close=r.get("昨收"),
@@ -7116,6 +7179,54 @@ def fetch_sina_spot(sina: str) -> dict[str, Any] | None:
     }
 
 
+def audit_single_stock_open(
+    *,
+    code: str,
+    expected_open: float | None,
+    session: str,
+    tick: float = TICK_SIZE,
+    force: bool = False,
+    fetcher: Callable[[str], dict[str, Any] | None] | None = None,
+) -> dict[str, Any]:
+    """单独拉一只股票行情复核正式开盘；失败关闭，不允许过门/成交。"""
+    day = str(session or "")[:10]
+    ck = _code_key(str(code))
+    key = (day, ck)
+    if not force and key in _OPEN_AUDIT_CACHE:
+        cached = dict(_OPEN_AUDIT_CACHE[key])
+        cached["cached"] = True
+        return cached
+    pull = fetcher or fetch_sina_spot
+    try:
+        quote = pull(_sina_of(ck))
+    except Exception as e:  # noqa: BLE001
+        return {
+            "ok": False,
+            "reason": "OPEN_AUDIT_UNAVAILABLE",
+            "error": type(e).__name__,
+            "audited_open": None,
+            "cached": False,
+        }
+    reason = open_audit_reject_reason(
+        expected_open=expected_open,
+        audited_quote=quote,
+        expected_session=day,
+        tick=tick,
+    )
+    audited_open = session_open_usable(quote) if isinstance(quote, dict) else None
+    out = {
+        "ok": reason is None,
+        "reason": reason,
+        "audited_open": audited_open,
+        "quote_ts": str((quote or {}).get("last_ts") or ""),
+        "source": "single_stock_sina",
+        "cached": False,
+    }
+    if reason is None:
+        _OPEN_AUDIT_CACHE[key] = dict(out)
+    return out
+
+
 def _day_key_series(ts: pd.Series) -> pd.Series:
     """统一按日历日比较，避免 datetime64[us] 与 Timestamp 直接比较报错。"""
     return pd.to_datetime(ts).dt.strftime("%Y-%m-%d")
@@ -8107,7 +8218,30 @@ def collect_rows(
             # 仅连续竞价才自动结算（午休/收盘后不再把展示清成「否」）。
             # 已触买同理：午休/收盘保留盘中触达，9:30 前仍可降成「将买入」。
             preview_ok = threshold_ok
-            signal_ok = signal_ok_global
+            # 墙钟进入 09:30 还不够：必须已收到 09:30+ 的真实行情。
+            # 否则 09:25 最后一帧会在 09:30 被伪装成可执行触发。
+            signal_ok = bool(
+                signal_ok_global
+                and timestamp_in_signal_window(q.get("last_ts"))
+            )
+            open_audit_ok = False
+            open_audit_reason = "OPEN_AUDIT_PENDING"
+            open_audit_px = None
+            open_audit_ts = None
+            if bool(allow_entry and hit_buy and preview_ok and signal_ok):
+                audit = audit_single_stock_open(
+                    code=code,
+                    expected_open=official_open,
+                    session=str(q["session"]),
+                    tick=tick,
+                )
+                open_audit_ok = bool(audit.get("ok"))
+                open_audit_reason = str(audit.get("reason") or "OK")
+                open_audit_px = audit.get("audited_open")
+                open_audit_ts = audit.get("quote_ts")
+                if not open_audit_ok:
+                    # 失败关闭：即使聚合 high/last 已撞买点，也不得标触买或落账。
+                    hit_buy = False
             hit_path_settle = bool(hit_stop)  # 仅 1m/路径；现价旁路只用于展示
             hit_path = bool(hit_stop)
             try:
@@ -8654,6 +8788,10 @@ def collect_rows(
                         "较开盘点": vs,
                         "较开盘涨幅": vs_pct,
                         "阈值%": pct_pct,
+                        "_entry_pct": float(entry_pct),
+                        "_tick": float(tick),
+                        "_quote_ts": str(q.get("last_ts") or ""),
+                        "_open_finalized": bool(q.get("_open_finalized", True)),
                         "池来源": pool_label or None,
                         "pool_src": pool_src or None,
                         "买点": buy_show,
@@ -9052,7 +9190,9 @@ def collect_rows(
                     ts=buy_time,
                     quote=q,
                 )
-            entry_for_overlay = bool(allow_entry and preview_ok and signal_ok)
+            entry_for_overlay = bool(
+                allow_entry and preview_ok and signal_ok and open_audit_ok
+            )
             if not (_paper_hold and hit_stop_show):
                 sig = _overlay_buy_signal_on_hold(
                     sig,
@@ -9138,6 +9278,10 @@ def collect_rows(
                     "较开盘点": vs,
                     "较开盘涨幅": vs_pct,
                     "阈值%": pct_pct,
+                    "_entry_pct": float(entry_pct),
+                    "_tick": float(tick),
+                    "_quote_ts": str(q.get("last_ts") or ""),
+                    "_open_finalized": bool(q.get("_open_finalized", True)),
                     "池来源": pool_label or None,
                     "pool_src": pool_src or None,
                     "买点": float(lv.get("open_buy") or lv["buy_trigger"]),
@@ -9194,7 +9338,11 @@ def collect_rows(
                     else q["last_ts"],
                     "market_phase": phase_label,
                     "过门": gate_label,
-                    "过门OK": allow_entry,
+                    "过门OK": bool(allow_entry and open_audit_ok),
+                    "开盘复核": "一致" if open_audit_ok else open_audit_reason,
+                    "开盘复核OK": bool(open_audit_ok),
+                    "复核开盘": open_audit_px,
+                    "开盘复核时间": open_audit_ts,
                     "前日形态": prev_shape,
                     "阈值就绪": preview_ok,
                     "竞价参考": auction_ref,

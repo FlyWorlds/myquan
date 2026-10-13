@@ -1256,11 +1256,16 @@ def _slot_ts_key(ts: Any) -> str:
 def session_open_usable(quote: dict[str, Any] | None = None, **px: Any) -> float | None:
     """今日开盘能否用来算买点。
 
-    盘前把昨收垫进 open 时（``_preopen_baseline``），或行情 open 低于当日最低，
-    视为未核定开盘：不算触买、不成交。
+    盘前把昨收垫进 open、行情戳仍早于 09:25、QuoteHub 尚未完成 09:25
+    边界重置，或行情 open 低于当日最低时，均视为未核定：不算触买、不成交。
     """
     q = quote if isinstance(quote, dict) else {}
-    if q.get("_preopen_baseline"):
+    if q.get("_preopen_baseline") or q.get("_open_finalized") is False:
+        return None
+    quote_clock = _quote_clock_hms(
+        q.get("last_ts") or q.get("ts") or q.get("time") or q.get("timestamp")
+    )
+    if quote_clock and quote_clock < "09:25:00":
         return None
     raw_open = px.get("open_px", q.get("open"))
     raw_low = px.get("low_px", q.get("low"))
@@ -1293,6 +1298,40 @@ def official_buy_trigger(
     if open_px <= 0:
         return None
     return round(float(entry_trigger_price(open_px, entry_pct=entry_pct, tick=tick)), 4)
+
+
+def open_audit_reject_reason(
+    *,
+    expected_open: float | None,
+    audited_quote: dict[str, Any] | None,
+    expected_session: str | None,
+    tick: float = TICK_SIZE,
+) -> str | None:
+    """单股行情正式开盘复核。None=一致；其余均须失败关闭。
+
+    复核源必须给出当日、09:25 后的核定开盘；与聚合行情开盘按最小价位一致。
+    """
+    if not isinstance(audited_quote, dict):
+        return "OPEN_AUDIT_UNAVAILABLE"
+    session = str(audited_quote.get("session") or "")[:10]
+    expected_day = str(expected_session or "")[:10]
+    if not session or not expected_day or session != expected_day:
+        return "OPEN_AUDIT_SESSION_MISMATCH"
+    audited_open = session_open_usable(audited_quote)
+    if audited_open is None:
+        return "OPEN_AUDIT_NOT_FINAL"
+    try:
+        expected = float(expected_open or 0)
+        audit = float(audited_open)
+        tick_f = float(tick)
+    except (TypeError, ValueError):
+        return "OPEN_AUDIT_INVALID"
+    if expected <= 0 or audit <= 0 or tick_f <= 0:
+        return "OPEN_AUDIT_INVALID"
+    tolerance = max(1e-8, tick_f / 10.0)
+    if abs(expected - audit) > tolerance:
+        return "OPEN_AUDIT_MISMATCH"
+    return None
 
 
 def session_high_prints_buy(

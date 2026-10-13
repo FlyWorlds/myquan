@@ -118,15 +118,20 @@ def _void_paper(
     ):
         h["factor_memory"].pop(code)
         print(f"删除 factor_memory.{code}")
-    draft = (h.get("day_settlements") or {}).get(sess)
-    if isinstance(draft, dict):
+    # 正式字段是 daily_settlements；兼容早期误拼 day_settlements。
+    for settlement_key in ("daily_settlements", "day_settlements"):
+        draft = (h.get(settlement_key) or {}).get(sess)
+        if not isinstance(draft, dict):
+            continue
         for key in ("positions", "closing_marks"):
             rows = draft.get(key)
             if isinstance(rows, list):
                 n0 = len(rows)
-                draft[key] = [r for r in rows if _code6(str(r.get("code") or "")) != code]
+                draft[key] = [
+                    r for r in rows if _code6(str(r.get("code") or "")) != code
+                ]
                 if len(draft[key]) != n0:
-                    print(f"day_settlements.{sess}.{key} 去掉 {code}")
+                    print(f"{settlement_key}.{sess}.{key} 去掉 {code}")
     return buy, new_trades, ledger, h, buy_amt
 
 

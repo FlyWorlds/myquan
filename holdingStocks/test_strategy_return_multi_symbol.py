@@ -263,6 +263,7 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
                 "持仓": 0,
                 "持仓状态": "空仓",
                 "过门OK": True,
+                "开盘复核OK": True,
                 "买点": 10.0,
                 "止损": 9.5,
             }
@@ -295,6 +296,7 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
                 "持仓": 500,
                 "持仓状态": "已经买入",
                 "过门OK": True,
+                "开盘复核OK": True,
                 "买点": 10.0,
                 "止损": 9.5,
             }
@@ -353,6 +355,7 @@ class TestStrategyReturnMultiSymbol(unittest.TestCase):
                 sina = f"{'sh' if code.startswith('6') else 'sz'}{code}"
                 row: dict[str, Any] = {
                     "过门OK": True,
+                    "开盘复核OK": True,
                     "买点": 10.0,
                     "止损": 9.5,
                 }

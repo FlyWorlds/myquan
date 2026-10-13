@@ -158,6 +158,25 @@ def test_slot_fill_rejects_signal_below_session_low():
     assert session_open_usable({"open": 16.52, "low": 17.82, "last": 17.82}) is None
     assert session_open_usable({"open": 17.82, "low": 17.82, "last": 19.3}) == 17.82
     assert session_open_usable({"open": 16.52, "low": 16.52, "_preopen_baseline": True}) is None
+    assert session_open_usable(
+        {"open": 18.35, "low": 18.35, "last_ts": "2026-10-13 09:24:59"}
+    ) is None
+    assert session_open_usable(
+        {
+            "open": 18.35,
+            "low": 18.35,
+            "last_ts": "2026-10-13 09:30:00",
+            "_open_finalized": False,
+        }
+    ) is None
+    assert session_open_usable(
+        {
+            "open": 19.0,
+            "low": 19.0,
+            "last_ts": "2026-10-13 09:30:00",
+            "_open_finalized": True,
+        }
+    ) == 19.0
     dec = slot_fill_decision(
         signal_px=16.93,
         last_px=17.82,
@@ -173,6 +192,99 @@ def test_slot_fill_rejects_signal_below_session_low():
     )
     assert ok is not None
     assert abs(float(ok["fill_px"]) - 18.27) < 1e-9
+
+
+def test_single_stock_open_audit_fail_closed():
+    from watch_config import open_audit_reject_reason
+
+    good = {
+        "session": "2026-10-13",
+        "open": 18.53,
+        "low": 18.13,
+        "last_ts": "2026-10-13 09:31:00",
+        "_open_finalized": True,
+    }
+    assert (
+        open_audit_reject_reason(
+            expected_open=18.53,
+            audited_quote=good,
+            expected_session="2026-10-13",
+            tick=0.01,
+        )
+        is None
+    )
+    assert (
+        open_audit_reject_reason(
+            expected_open=17.90,
+            audited_quote=good,
+            expected_session="2026-10-13",
+            tick=0.01,
+        )
+        == "OPEN_AUDIT_MISMATCH"
+    )
+    assert (
+        open_audit_reject_reason(
+            expected_open=18.53,
+            audited_quote={**good, "last_ts": "2026-10-13 09:24:59"},
+            expected_session="2026-10-13",
+            tick=0.01,
+        )
+        == "OPEN_AUDIT_NOT_FINAL"
+    )
+    assert (
+        open_audit_reject_reason(
+            expected_open=18.53,
+            audited_quote=None,
+            expected_session="2026-10-13",
+            tick=0.01,
+        )
+        == "OPEN_AUDIT_UNAVAILABLE"
+    )
+
+
+def test_runtime_single_stock_open_audit_force_refetch():
+    import index as idx
+
+    idx._OPEN_AUDIT_CACHE.clear()
+    calls: list[str] = []
+
+    def _pull(_sina: str):
+        calls.append(_sina)
+        return {
+            "session": "2026-10-13",
+            "open": 60.0,
+            "high": 66.0,
+            "low": 59.59,
+            "last": 65.0,
+            "last_ts": "2026-10-13 09:32:00",
+        }
+
+    first = idx.audit_single_stock_open(
+        code="002636",
+        expected_open=60.0,
+        session="2026-10-13",
+        tick=0.01,
+        fetcher=_pull,
+    )
+    cached = idx.audit_single_stock_open(
+        code="002636",
+        expected_open=60.0,
+        session="2026-10-13",
+        tick=0.01,
+        fetcher=_pull,
+    )
+    forced = idx.audit_single_stock_open(
+        code="002636",
+        expected_open=60.0,
+        session="2026-10-13",
+        tick=0.01,
+        force=True,
+        fetcher=_pull,
+    )
+    assert first["ok"] and cached["ok"] and forced["ok"]
+    assert cached["cached"] is True
+    assert len(calls) == 2
+    idx._OPEN_AUDIT_CACHE.clear()
 
 
 def test_slot_fill_after_close_uses_signal_px():
@@ -1569,6 +1681,40 @@ def test_patch_live_quote_today_buy_not_day_change():
     }
     rebased = rebase_holdings_day_pnl([missing_buy], session="2026-10-08")[0]
     assert rebased["当日盈亏"] == round((53.04 - 52.34) * 1100, 2)
+
+
+def test_patch_live_quote_replaces_auction_open_and_buy_level():
+    """快刷收到正式开盘后必须覆盖竞价 open/买点，不能等下一轮全量扫描。"""
+    from watch_snapshot import patch_row_live_quote
+
+    row = {
+        "代码": "002580",
+        "持仓": 0,
+        "现价": 18.35,
+        "开盘": 17.90,
+        "买点": 18.35,
+        "_entry_pct": 0.025,
+        "_tick": 0.01,
+        "_open_finalized": False,
+        "交易日": "2026-10-13",
+    }
+    changed = patch_row_live_quote(
+        row,
+        {
+            "last": 19.00,
+            "open": 19.00,
+            "high": 19.00,
+            "low": 19.00,
+            "prev_close": 17.80,
+            "session": "2026-10-13",
+            "last_ts": "2026-10-13 09:30:00",
+            "_open_finalized": True,
+        },
+    )
+    assert changed
+    assert row["开盘"] == 19.00
+    assert row["买点"] == 19.48
+    assert row["_quote_ts"] == "2026-10-13 09:30:00"
 
 
 def test_infer_bought_today_respects_overnight_buy_time():
