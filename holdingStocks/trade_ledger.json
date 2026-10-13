@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-12 10:24:31",
+  "updated_at": "2026-10-13 09:30:03",
   "entries": [
     {
       "id": "a84c3947d6de",
@@ -744,6 +744,54 @@
       "reason": "槽位触买(自动·买点)",
       "reason_detail": "槽位触买(自动·买点)",
       "note": "槽位触买(自动·买点)"
+    },
+    {
+      "id": "96dc5540e838",
+      "time": "2026-10-13 09:30:00",
+      "session": "2026-10-13",
+      "side": "sell",
+      "code": "002866",
+      "name": "传艺科技",
+      "market": "深证",
+      "price": 17.24,
+      "qty": 3400,
+      "after_qty": 0,
+      "amount": 58616.0,
+      "cost": 18.27,
+      "pnl": -3502.0,
+      "pnl_pct": -5.64,
+      "day_pnl": -6494.0,
+      "day_pnl_pct": -9.97,
+      "account_cash_after": 231719.0,
+      "action_kind": "full",
+      "buy_time": "2026-10-12 09:31:00",
+      "reason": "止损成交(自动)",
+      "reason_detail": "止损成交(自动)",
+      "note": "止损成交(自动)"
+    },
+    {
+      "id": "fd0f720e203b",
+      "time": "2026-10-13 09:30:00",
+      "session": "2026-10-13",
+      "side": "sell",
+      "code": "600072",
+      "name": "中船科技",
+      "market": "上证",
+      "price": 9.13,
+      "qty": 6100,
+      "after_qty": 0,
+      "amount": 55693.0,
+      "cost": 9.55,
+      "pnl": -2562.0,
+      "pnl_pct": -4.4,
+      "day_pnl": -2318.0,
+      "day_pnl_pct": -4.0,
+      "account_cash_after": 287412.0,
+      "action_kind": "full",
+      "buy_time": "2026-10-12 09:32:00",
+      "reason": "止损成交(自动)",
+      "reason_detail": "止损成交(自动)",
+      "note": "止损成交(自动)"
     }
   ]
 }

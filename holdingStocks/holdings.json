@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-12 11:58:24",
+  "updated_at": "2026-10-13 09:49:28",
   "positions": {
     "001309": {
       "name": "德明利",
@@ -2688,7 +2688,7 @@
       "peak_high_at": "2026-10-09 14:16:35",
       "last_quote_at": "2026-10-12 09:31:21",
       "overnight_peak": 14.84,
-      "overnight_peak_session": "2026-10-12",
+      "overnight_peak_session": "2026-10-13",
       "stop_noted": false,
       "stop_noted_px": null,
       "stop_noted_session": null
@@ -2744,19 +2744,22 @@
     "002866": {
       "name": "传艺科技",
       "market": "深证",
-      "qty": 3400,
-      "available": 0,
-      "cost": 18.27,
-      "today_cost": 18.27,
-      "buy_time": "2026-10-12 09:31:00",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
       "tp_stage": 0,
       "last_tp_ts": null,
-      "note": "槽位触买(订正·今日买点)",
+      "note": "止损成交@17.24 (2026-10-13)",
       "peak_high": 19.5,
       "peak_high_at": "2026-10-12 09:34:41",
-      "last_quote_at": "2026-10-12 11:30:00",
-      "overnight_peak": 18.27,
-      "overnight_peak_session": "2026-10-12"
+      "last_quote_at": "2026-10-13 09:30:00",
+      "overnight_peak": 19.5,
+      "overnight_peak_session": "2026-10-13",
+      "stop_noted": false,
+      "stop_noted_px": null,
+      "stop_noted_session": null
     },
     "001266": {
       "name": "宏英智能",
@@ -2881,19 +2884,22 @@
     "600072": {
       "name": "中船科技",
       "market": "上证",
-      "qty": 6100,
-      "available": 0,
-      "cost": 9.55,
-      "today_cost": 9.55,
-      "buy_time": "2026-10-12 09:32:00",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
       "tp_stage": 0,
       "last_tp_ts": null,
-      "note": "槽位触买(自动·买点)",
+      "note": "止损成交@9.13 (2026-10-13)",
       "peak_high": 9.64,
       "peak_high_at": "2026-10-12 10:31:38",
-      "last_quote_at": "2026-10-12 11:30:00",
-      "overnight_peak": 9.59,
-      "overnight_peak_session": "2026-10-12"
+      "last_quote_at": "2026-10-13 09:30:01",
+      "overnight_peak": 9.64,
+      "overnight_peak_session": "2026-10-13",
+      "stop_noted": false,
+      "stop_noted_px": null,
+      "stop_noted_session": null
     },
     "600760": {
       "name": "中航沈飞",
@@ -2977,8 +2983,8 @@
       "peak_high": 5.69,
       "peak_high_at": "2026-10-09 09:31:48",
       "last_quote_at": "2026-10-12 09:30:27",
-      "overnight_peak": 5.58,
-      "overnight_peak_session": "2026-10-12",
+      "overnight_peak": 5.69,
+      "overnight_peak_session": "2026-10-13",
       "stop_noted": false,
       "stop_noted_px": null,
       "stop_noted_session": null
@@ -3009,172 +3015,157 @@
     }
   },
   "realized_today": {
-    "002454": {
-      "session": "2026-10-12",
-      "name": "松芝股份",
+    "002866": {
+      "session": "2026-10-13",
+      "name": "传艺科技",
       "market": "深证",
-      "qty": 10500,
-      "price": 5.42,
-      "cost": 5.58,
-      "pnl": -1680.0,
-      "pnl_pct": -2.87,
-      "day_base": 57855.0,
-      "day_pnl": -945.0,
-      "day_pnl_pct": -1.63,
+      "qty": 3400,
+      "price": 17.24,
+      "cost": 18.27,
+      "pnl": -3502.0,
+      "pnl_pct": -5.64,
+      "day_base": 65110.0,
+      "day_pnl": -6494.0,
+      "day_pnl_pct": -9.97,
       "reason": "止损成交",
-      "time": "2026-10-12 09:30:00",
-      "first_hit_ts": "2026-10-12 09:30:00",
-      "triggered_at": "2026-10-12 09:30:00",
-      "filled_at": "2026-10-12 09:30:00",
-      "decision_at": "2026-10-12 09:30:00",
+      "time": "2026-10-13 09:30:00",
+      "first_hit_ts": "2026-10-13 09:30:00",
+      "triggered_at": "2026-10-13 09:30:00",
+      "filled_at": "2026-10-13 09:30:00",
+      "decision_at": "2026-10-13 09:30:00",
       "exit_kind": "open_protect",
       "action_kind": "full",
-      "buy_time": "2026-10-09 09:30:15",
-      "prior_stop_noted": true,
-      "prior_stop_noted_session": "2026-10-12",
-      "after_qty": 0,
-      "full_exit": true,
-      "allow_intraday_rebuy": true,
-      "high_after_stop": 5.52,
-      "low_after_stop": 5.29,
-      "rebound_pct": 3.37,
-      "miss_pnl": 1890.0
-    },
-    "000756": {
-      "session": "2026-10-12",
-      "name": "新华制药",
-      "market": "深证",
-      "qty": 4000,
-      "price": 14.46,
-      "cost": 14.55,
-      "pnl": -360.0,
-      "pnl_pct": -0.62,
-      "day_base": 59240.0,
-      "day_pnl": -1400.0,
-      "day_pnl_pct": -2.36,
-      "reason": "止损成交",
-      "time": "2026-10-12 09:31:18",
-      "first_hit_ts": "2026-10-12 09:31:18",
-      "triggered_at": "2026-10-12 09:31:18",
-      "filled_at": "2026-10-12 09:31:18",
-      "decision_at": "2026-10-12 09:31:18",
-      "exit_kind": "last",
-      "action_kind": "full",
-      "buy_time": "2026-10-09 09:31:00",
-      "prior_stop_noted": true,
-      "prior_stop_noted_session": "2026-10-12",
+      "buy_time": "2026-10-12 09:31:00",
+      "prior_stop_noted": false,
+      "prior_stop_noted_session": null,
       "after_qty": 0,
       "full_exit": true,
       "allow_intraday_rebuy": false,
-      "high_after_stop": 14.84,
-      "low_after_stop": 14.06,
-      "rebound_pct": 3.27,
-      "miss_pnl": 1880.0
+      "high_after_stop": 17.37,
+      "low_after_stop": 17.24,
+      "rebound_pct": 3.39,
+      "miss_pnl": 1938.0
+    },
+    "600072": {
+      "session": "2026-10-13",
+      "name": "中船科技",
+      "market": "上证",
+      "qty": 6100,
+      "price": 9.13,
+      "cost": 9.55,
+      "pnl": -2562.0,
+      "pnl_pct": -4.4,
+      "day_base": 58011.0,
+      "day_pnl": -2318.0,
+      "day_pnl_pct": -4.0,
+      "reason": "止损成交",
+      "time": "2026-10-13 09:30:00",
+      "first_hit_ts": "2026-10-13 09:30:00",
+      "triggered_at": "2026-10-13 09:30:00",
+      "filled_at": "2026-10-13 09:30:00",
+      "decision_at": "2026-10-13 09:30:00",
+      "exit_kind": "open_protect",
+      "action_kind": "full",
+      "buy_time": "2026-10-12 09:32:00",
+      "prior_stop_noted": true,
+      "prior_stop_noted_session": "2026-10-13",
+      "after_qty": 0,
+      "full_exit": true,
+      "allow_intraday_rebuy": true,
+      "high_after_stop": 9.54,
+      "low_after_stop": 9.13,
+      "rebound_pct": 2.25,
+      "miss_pnl": 1281.0
     }
   },
-  "account_total": 295326.0,
-  "account_cash": 173103.0,
-  "account_total_open": 297362.0,
-  "account_total_open_session": "2026-10-12",
-  "last_session": "2026-10-12",
+  "account_total": 290812.0,
+  "account_cash": 287412.0,
+  "account_total_open": 297765.0,
+  "account_total_open_session": "2026-10-13",
+  "last_session": "2026-10-13",
   "alert_sticky": {
-    "002454": {
+    "002866": {
+      "stop_touched": true,
+      "touch_stop": 17.24,
+      "stop_hit_ts": "2026-10-13 09:30:00",
+      "session": "2026-10-13",
       "bg_class": "warn-sell",
       "alert": "已触止损",
       "pending_sell": true,
-      "建议挂单": 5.54,
-      "挂单说明": "未到3%峰值回落2.5%@5.54；9:25 可挂单；9:30 起才结算止损",
       "near_stop": true,
-      "session": "2026-10-12",
-      "stop_touched": true,
-      "touch_stop": 5.38,
-      "stop_hit_ts": "2026-10-12 09:30:00"
+      "建议挂单": 17.24,
+      "挂单说明": "买点硬保护@17.24；9:25 可挂单；9:30 起才结算止损"
     },
-    "000756": {
+    "600072": {
+      "stop_touched": true,
+      "touch_stop": 9.22,
+      "stop_hit_ts": "2026-10-13 09:30:00",
+      "session": "2026-10-13",
       "bg_class": "warn-sell",
       "alert": "已触止损",
       "pending_sell": true,
-      "建议挂单": 14.46,
-      "挂单说明": "距未到3%峰值回落2.5%在1%内（止14.46）",
       "near_stop": true,
-      "session": "2026-10-12",
-      "stop_touched": true,
-      "touch_stop": 14.45,
-      "stop_hit_ts": "2026-10-12 09:31:18"
+      "建议挂单": 9.39,
+      "挂单说明": "未到3%峰值回落2.5%@9.39；9:25 可挂单；9:30 起才结算止损"
+    },
+    "001266": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:31:00",
+      "session": "2026-10-13"
+    },
+    "603042": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:30:00",
+      "session": "2026-10-13"
+    },
+    "600353": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:31:00",
+      "session": "2026-10-13"
+    },
+    "601208": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:30:26",
+      "session": "2026-10-13"
+    },
+    "002962": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:31:00",
+      "session": "2026-10-13"
     },
     "002841": {
-      "stop_touched": true,
-      "touch_stop": 44.87,
-      "stop_hit_ts": "2026-10-12 09:32:00",
-      "session": "2026-10-12"
-    },
-    "002093": {
       "buy_touched": true,
-      "buy_hit_ts": "2026-10-12 09:33:00",
-      "session": "2026-10-12"
+      "buy_hit_ts": "2026-10-13 09:31:00",
+      "session": "2026-10-13"
     },
     "600967": {
       "buy_touched": true,
-      "buy_hit_ts": "2026-10-12 09:36:00",
-      "session": "2026-10-12"
-    },
-    "601609": {
-      "buy_touched": true,
-      "buy_hit_ts": "2026-10-12 09:40:00",
-      "session": "2026-10-12"
-    },
-    "601519": {
+      "buy_hit_ts": "2026-10-13 09:33:34",
+      "session": "2026-10-13",
       "stop_touched": true,
-      "touch_stop": 8.93,
-      "stop_hit_ts": "2026-10-12 09:48:00",
-      "session": "2026-10-12"
+      "touch_stop": 12.45,
+      "stop_hit_ts": "2026-10-13 09:35:00"
+    },
+    "002104": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:37:00",
+      "session": "2026-10-13"
+    },
+    "000070": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:37:36",
+      "session": "2026-10-13"
+    },
+    "600760": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:43:00",
+      "session": "2026-10-13"
     },
     "002922": {
-      "buy_touched": true,
-      "buy_hit_ts": "2026-10-12 09:32:00",
-      "session": "2026-10-12"
-    },
-    "002430": {
-      "buy_touched": true,
-      "buy_hit_ts": "2026-10-12 10:05:00",
-      "session": "2026-10-12"
-    },
-    "603659": {
       "stop_touched": true,
-      "touch_stop": 22.22,
-      "stop_hit_ts": "2026-10-12 10:06:00",
-      "session": "2026-10-12"
-    },
-    "603301": {
-      "stop_touched": true,
-      "touch_stop": 79.21,
-      "stop_hit_ts": "2026-10-12 09:50:00",
-      "session": "2026-10-12"
-    },
-    "000049": {
-      "stop_touched": true,
-      "touch_stop": 22.36,
-      "stop_hit_ts": "2026-10-12 11:00:00",
-      "session": "2026-10-12"
-    },
-    "600063": {
-      "bg_class": "warn-sell",
-      "alert": "将止损",
-      "pending_sell": true,
-      "建议挂单": 5.37,
-      "挂单说明": "距买点硬保护在1%内（止5.37）",
-      "near_stop": true,
-      "session": "2026-10-12"
-    },
-    "002866": {
-      "buy_touched": true,
-      "buy_hit_ts": "2026-10-12 09:31:00",
-      "session": "2026-10-12"
-    },
-    "600072": {
-      "buy_touched": true,
-      "buy_hit_ts": "2026-10-12 09:32:00",
-      "session": "2026-10-12"
+      "touch_stop": 19.6,
+      "stop_hit_ts": "2026-10-13 09:47:00",
+      "session": "2026-10-13"
     }
   },
   "strategy": {
@@ -3389,8 +3380,8 @@
   },
   "factor_memory": {
     "601208": {
-      "last_buy_factor_px": 52.34,
-      "last_buy_factor_date": "2026-10-08",
+      "last_buy_factor_px": 43.57,
+      "last_buy_factor_date": "2026-10-13",
       "last_sell_factor_px": 49.18,
       "last_sell_factor_date": "2026-10-09"
     },
@@ -3414,10 +3405,6 @@
     },
     "603920": {
       "last_buy_factor_px": 45.64,
-      "last_buy_factor_date": "2026-10-08"
-    },
-    "002636": {
-      "last_buy_factor_px": 82.0,
       "last_buy_factor_date": "2026-10-08"
     },
     "600330": {
@@ -3461,12 +3448,12 @@
       "last_buy_factor_date": "2026-10-09"
     },
     "002841": {
-      "last_buy_factor_px": 45.53,
-      "last_buy_factor_date": "2026-10-09"
+      "last_buy_factor_px": 42.85,
+      "last_buy_factor_date": "2026-10-13"
     },
     "002104": {
-      "last_buy_factor_px": 10.18,
-      "last_buy_factor_date": "2026-10-09"
+      "last_buy_factor_px": 10.1,
+      "last_buy_factor_date": "2026-10-13"
     },
     "002558": {
       "last_buy_factor_px": 22.54,
@@ -3482,7 +3469,9 @@
     },
     "002866": {
       "last_buy_factor_px": 18.27,
-      "last_buy_factor_date": "2026-10-12"
+      "last_buy_factor_date": "2026-10-12",
+      "last_sell_factor_px": 17.24,
+      "last_sell_factor_date": "2026-10-13"
     },
     "002093": {
       "last_buy_factor_px": 7.01,
@@ -3490,11 +3479,13 @@
     },
     "600072": {
       "last_buy_factor_px": 9.55,
-      "last_buy_factor_date": "2026-10-12"
+      "last_buy_factor_date": "2026-10-12",
+      "last_sell_factor_px": 9.13,
+      "last_sell_factor_date": "2026-10-13"
     },
     "600967": {
-      "last_buy_factor_px": 12.81,
-      "last_buy_factor_date": "2026-10-12"
+      "last_buy_factor_px": 12.51,
+      "last_buy_factor_date": "2026-10-13"
     },
     "601609": {
       "last_buy_factor_px": 10.97,
@@ -3507,6 +3498,30 @@
     "002430": {
       "last_buy_factor_px": 25.83,
       "last_buy_factor_date": "2026-10-12"
+    },
+    "001266": {
+      "last_buy_factor_px": 34.96,
+      "last_buy_factor_date": "2026-10-13"
+    },
+    "603042": {
+      "last_buy_factor_px": 14.3,
+      "last_buy_factor_date": "2026-10-13"
+    },
+    "600353": {
+      "last_buy_factor_px": 23.69,
+      "last_buy_factor_date": "2026-10-13"
+    },
+    "002962": {
+      "last_buy_factor_px": 13.37,
+      "last_buy_factor_date": "2026-10-13"
+    },
+    "000070": {
+      "last_buy_factor_px": 14.46,
+      "last_buy_factor_date": "2026-10-13"
+    },
+    "600760": {
+      "last_buy_factor_px": 44.21,
+      "last_buy_factor_date": "2026-10-13"
     }
   },
   "factor2": {
@@ -3514,11 +3529,11 @@
     "peak": 326457.0,
     "in_add_zone": false,
     "last_action": "hold",
-    "last_label": "回撤9.5% 观望（加仓≥20% / 减仓≤10%）",
-    "last_session": "2026-10-12",
+    "last_label": "回撤10.9% 观望（加仓≥20% / 减仓≤10%）",
+    "last_session": "2026-10-13",
     "suggest_amount": 0.0,
-    "dd_pct": 9.54,
-    "equity": 295326.0,
+    "dd_pct": 10.92,
+    "equity": 290812.0,
     "thresholds": {
       "hist_max_dd": 0.26,
       "avg_yearly_max_dd": 0.19,
@@ -3565,23 +3580,23 @@
     "603042",
     "603659"
   ],
-  "watch_status_reset_session": "2026-10-12",
+  "watch_status_reset_session": "2026-10-13",
   "closed_today": {
-    "002454": {
-      "session": "2026-10-12",
-      "name": "松芝股份",
-      "qty": 10500,
-      "price": 5.42,
-      "day_pnl": -945.0,
-      "day_pnl_pct": -1.63
+    "002866": {
+      "session": "2026-10-13",
+      "name": "传艺科技",
+      "qty": 3400,
+      "price": 17.24,
+      "day_pnl": -6494.0,
+      "day_pnl_pct": -9.97
     },
-    "000756": {
-      "session": "2026-10-12",
-      "name": "新华制药",
-      "qty": 4000,
-      "price": 14.46,
-      "day_pnl": -1400.0,
-      "day_pnl_pct": -2.36
+    "600072": {
+      "session": "2026-10-13",
+      "name": "中船科技",
+      "qty": 6100,
+      "price": 9.13,
+      "day_pnl": -2318.0,
+      "day_pnl_pct": -4.0
     }
   },
   "updated_host": "WIN-IDCFVK9G3SU",
@@ -4109,20 +4124,20 @@
     },
     "2026-10-12": {
       "session": "2026-10-12",
-      "recorded_at": "2026-10-12 11:32:05",
-      "final": false,
-      "draft": true,
+      "recorded_at": "2026-10-12 15:00:27",
+      "final": true,
+      "draft": false,
       "settle_kind": "POSITION_SETTLEMENT",
-      "account_total": 296867.0,
+      "account_total": 297765.0,
       "account_open": 297362.0,
       "paper_equity_base": 300000.0,
       "paper_pnl_start": "2026-09-09",
-      "day_pnl": -495.0,
-      "day_pnl_pct": -0.17,
-      "equity_day_pnl": -495.0,
+      "day_pnl": 403.0,
+      "day_pnl_pct": 0.14,
+      "equity_day_pnl": 403.0,
       "day_pnl_vs_equity": 0.0,
-      "total_pnl": -3133.0,
-      "total_pnl_pct": -1.04,
+      "total_pnl": -2235.0,
+      "total_pnl_pct": -0.74,
       "settled_count": 2,
       "settled_day_pnl": -2345.0,
       "positions": [
@@ -4131,18 +4146,18 @@
           "name": "传艺科技",
           "qty": 3400,
           "cost": 18.27,
-          "last": 18.85,
-          "day_pnl": 1972.0,
-          "upnl": 1972.0
+          "last": 19.15,
+          "day_pnl": 2992.0,
+          "upnl": 2992.0
         },
         {
           "code": "600072",
           "name": "中船科技",
           "qty": 6100,
           "cost": 9.55,
-          "last": 9.53,
-          "day_pnl": -122.0,
-          "upnl": -122.0
+          "last": 9.51,
+          "day_pnl": -244.0,
+          "upnl": -244.0
         }
       ],
       "closing_marks": [
@@ -4151,9 +4166,9 @@
           "name": "传艺科技",
           "qty": 3400,
           "cost": 18.27,
-          "close": 18.85,
-          "day_pnl": 1972.0,
-          "upnl": 1972.0,
+          "close": 19.15,
+          "day_pnl": 2992.0,
+          "upnl": 2992.0,
           "settle_kind": "POSITION_SETTLEMENT"
         },
         {
@@ -4161,9 +4176,9 @@
           "name": "中船科技",
           "qty": 6100,
           "cost": 9.55,
-          "close": 9.53,
-          "day_pnl": -122.0,
-          "upnl": -122.0,
+          "close": 9.51,
+          "day_pnl": -244.0,
+          "upnl": -244.0,
           "settle_kind": "POSITION_SETTLEMENT"
         }
       ],
@@ -4187,12 +4202,53 @@
           "pnl": -360.0
         }
       ]
+    },
+    "2026-10-13": {
+      "session": "2026-10-13",
+      "recorded_at": "2026-10-13 09:49:28",
+      "final": false,
+      "draft": true,
+      "settle_kind": "POSITION_SETTLEMENT",
+      "account_total": 292353.0,
+      "account_open": 297765.0,
+      "paper_equity_base": 300000.0,
+      "paper_pnl_start": "2026-09-09",
+      "day_pnl": -5412.0,
+      "day_pnl_pct": -1.82,
+      "equity_day_pnl": -5412.0,
+      "day_pnl_vs_equity": 0.0,
+      "total_pnl": -7647.0,
+      "total_pnl_pct": -2.55,
+      "settled_count": 2,
+      "settled_day_pnl": -8812.0,
+      "positions": [],
+      "closing_marks": [],
+      "closed_today": [
+        {
+          "code": "600072",
+          "name": "中船科技",
+          "qty": 6100,
+          "price": 9.13,
+          "cost": 9.55,
+          "day_pnl": -2318.0,
+          "pnl": -2562.0
+        },
+        {
+          "code": "002866",
+          "name": "传艺科技",
+          "qty": 3400,
+          "price": 17.24,
+          "cost": 18.27,
+          "day_pnl": -6494.0,
+          "pnl": -3502.0
+        }
+      ]
     }
   },
   "paper_equity_base": 300000.0,
   "paper_pnl_start": "2026-09-09",
   "slot_queue": {
-    "session": "2026-10-12",
+    "session": "2026-10-13",
     "freed_at": []
   }
 }
