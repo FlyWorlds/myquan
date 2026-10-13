@@ -471,6 +471,39 @@ def _as_px_digits(row: dict[str, Any]) -> int:
         return 2
 
 
+def _row_entry_pct(row: dict[str, Any]) -> float | None:
+    """个股买入阈值。快照会丢掉 `_entry_pct`，公开的 entryPct / 阈值% 仍在。
+
+    取不到时调用方不得改写入场：否则模拟器会按默认 2.5% 重算核定买点，
+    把已经按 +2% 入账的价格再记高一档。
+    """
+    for key in ("_entry_pct", "entryPct"):
+        raw = row.get(key)
+        if raw in (None, ""):
+            continue
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if val > 0:
+            return val
+    text = str(row.get("阈值%") or "").strip().replace("％", "%")
+    if text.endswith("%"):
+        text = text[:-1].strip()
+    body = text
+    if body.startswith("±"):
+        body = body[1:]
+    elif body.startswith("+"):
+        body = body[1:].split("/", 1)[0]
+    else:
+        return None
+    try:
+        val = float(body) / 100.0
+    except (TypeError, ValueError):
+        return None
+    return val if val > 0 else None
+
+
 def _quote_last(q: dict[str, Any] | None) -> float | None:
     if not q:
         return None
@@ -541,10 +574,12 @@ def patch_row_live_quote(
             try:
                 from watch_config import official_buy_trigger
 
-                entry_pct = float(row.get("_entry_pct"))
+                entry_pct = _row_entry_pct(row)
                 tick = float(row.get("_tick") or 0.01)
-                official_buy = official_buy_trigger(
-                    open_px, entry_pct=entry_pct, tick=tick
+                official_buy = (
+                    official_buy_trigger(open_px, entry_pct=entry_pct, tick=tick)
+                    if entry_pct is not None
+                    else None
                 )
             except (ImportError, TypeError, ValueError):
                 official_buy = None
@@ -720,27 +755,32 @@ def patch_row_live_quote(
                 before_st = row.get("策略模拟状态")
                 before_ret = row.get("策略收益%")
                 before_single = row.get("单笔收入%")
-                evaluate_live_transition(
-                    strategy_id=str(strategy_id),
-                    symbol=code,
-                    live_last=float(last),
-                    quote_ts=str(q_ts) if q_ts else None,
-                    buy_level=float(buy_lv) if buy_lv is not None else None,
-                    sell_level=float(sell_lv) if sell_lv is not None else None,
-                    allow_entry=allow,
-                    reason="quote_patch",
-                    persist=True,
-                    t0=bool(row.get("t0")),
-                    day_open=row.get("开盘")
-                    or (quote.get("open") if isinstance(quote, dict) else None),
-                    entry_pct=row.get("_entry_pct"),
-                    tick=row.get("_tick"),
-                    now=_dt.now(),
-                    open_fill=bool(row.get("因子29买OK") or row.get("_f29_hit_buy")),
-                    auction_open_sell=bool(
-                        row.get("因子29卖OK") or row.get("_f29_hit_sell")
-                    ),
-                )
+                entry_pct = _row_entry_pct(row)
+                open_fill = bool(row.get("因子29买OK") or row.get("_f29_hit_buy"))
+                # 没有个股阈值时禁止改写入场。快照行没有 `_entry_pct`，
+                # 若仍交给模拟器，会按默认 2.5% 把已核定买点再记高。
+                if entry_pct is not None or open_fill:
+                    evaluate_live_transition(
+                        strategy_id=str(strategy_id),
+                        symbol=code,
+                        live_last=float(last),
+                        quote_ts=str(q_ts) if q_ts else None,
+                        buy_level=float(buy_lv) if buy_lv is not None else None,
+                        sell_level=float(sell_lv) if sell_lv is not None else None,
+                        allow_entry=allow,
+                        reason="quote_patch",
+                        persist=True,
+                        t0=bool(row.get("t0")),
+                        day_open=row.get("开盘")
+                        or (quote.get("open") if isinstance(quote, dict) else None),
+                        entry_pct=entry_pct,
+                        tick=row.get("_tick"),
+                        now=_dt.now(),
+                        open_fill=open_fill,
+                        auction_open_sell=bool(
+                            row.get("因子29卖OK") or row.get("_f29_hit_sell")
+                        ),
+                    )
                 book = get_book(str(strategy_id), code)
                 apply_book_to_row(row, book)
                 if (

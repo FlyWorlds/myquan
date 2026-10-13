@@ -611,6 +611,78 @@ def _official_buy_from_open(
     return float(_etp(open_lv, **kwargs))
 
 
+def _resolved_live_buy_level(
+    buy_level: float | None,
+    *,
+    day_open: float | None,
+    official: float | None,
+    open_fill: bool,
+    entry_pct: float | None,
+    tick: float | None,
+) -> float | None:
+    """因子29 成交锚=正式开盘；因子26 成交锚=不低于核定买点的行内买点。"""
+    try:
+        buy_lv = float(buy_level) if buy_level is not None else None
+    except (TypeError, ValueError):
+        buy_lv = None
+    try:
+        open_lv = float(day_open) if day_open is not None else 0.0
+    except (TypeError, ValueError):
+        open_lv = 0.0
+    if open_fill and open_lv > 0:
+        return open_lv
+    if official is not None:
+        try:
+            off = float(official)
+        except (TypeError, ValueError):
+            off = 0.0
+        if off > 0 and (buy_lv is None or buy_lv + 1e-8 < off):
+            return off
+    if (buy_lv is None or buy_lv <= 0) and open_lv > 0:
+        rebuilt = _official_buy_from_open(open_lv, entry_pct=entry_pct, tick=tick)
+        if rebuilt and rebuilt > 0:
+            return float(rebuilt)
+    if buy_lv is not None and buy_lv > 0:
+        return buy_lv
+    return None
+
+
+def _restate_same_day_entry(
+    book: dict[str, Any],
+    *,
+    level: float,
+    session: str,
+) -> bool:
+    """当日入场价高于策略买点时，按买点重开虚拟仓。
+
+    盯盘中途才看到已经突破的票，若把当时现价写成 entry，现价不再变动时
+    单笔收益和策略累计都会停在 0。回测成交价是买点，这里与之对齐。
+    """
+    if str(book.get("state") or "") != "LONG":
+        return False
+    if _session_of(book.get("entry_time")) != str(session)[:10]:
+        return False
+    try:
+        entry = float(book.get("entry_price") or 0)
+        shares = float(book.get("virtual_shares") or 0)
+        level_f = float(level)
+    except (TypeError, ValueError):
+        return False
+    if entry <= 0 or shares <= 0 or level_f <= 0:
+        return False
+    if entry <= level_f + 1e-8:
+        return False
+    cash = float(book.get("virtual_cash") or 0.0) + shares * entry
+    new_shares, cash_left, _ = _buy_shares(cash, level_f)
+    if new_shares < LOT:
+        return False
+    book["virtual_shares"] = new_shares
+    book["virtual_cash"] = cash_left
+    book["entry_price"] = round(level_f, 4)
+    book["single_return_pct"] = None
+    return True
+
+
 def _void_today_unprinted_long(
     book: dict[str, Any],
     *,
@@ -708,6 +780,71 @@ def _buy_shares(cash: float, px: float) -> tuple[float, float, float]:
     if cost > cash:
         return 0.0, cash, 0.0
     return float(raw), cash - cost, 0.0
+
+
+_AUDITED_FILLS: set[str] = set()
+
+
+def _align_today_buy_event(
+    strategy_id: str,
+    symbol: str,
+    session: str,
+    fill_px: float,
+    buy_level: float | None,
+    entry_pct: float | None,
+) -> bool:
+    """当日 BUY 事件价与账本入场不一致时，改成核定买点并留下原价。
+
+    重记入场只改账本、不改事件时，对账会看到两套价格。
+    """
+    with _LOCK:
+        if not EVENTS_FILE.is_file():
+            return False
+        try:
+            raw = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return False
+        if not isinstance(raw, dict):
+            return False
+        evs = raw.get("events")
+        if not isinstance(evs, list):
+            return False
+        code = _code_key(symbol)
+        day = str(session)[:10]
+        changed = False
+        for e in evs:
+            if not isinstance(e, dict):
+                continue
+            if str(e.get("strategy_id") or "") != str(strategy_id):
+                continue
+            if _code_key(str(e.get("symbol") or "")) != code:
+                continue
+            if str(e.get("side") or "").upper() != "BUY":
+                continue
+            if str(e.get("trading_session_date") or e.get("trigger_time") or "")[:10] != day:
+                continue
+            try:
+                px = float(e.get("trigger_price") or 0)
+            except (TypeError, ValueError):
+                continue
+            if abs(px - float(fill_px)) <= 1e-6:
+                continue
+            if e.get("previous_trigger_price") is None:
+                e["previous_trigger_price"] = e.get("trigger_price")
+            e["trigger_price"] = round(float(fill_px), 4)
+            if buy_level is not None:
+                e["buy_level"] = buy_level
+            if entry_pct is not None:
+                e["entry_pct"] = entry_pct
+            e["audit_note"] = "fill_aligned_to_symbol_buy"
+            changed = True
+        if not changed:
+            return False
+        raw["updated_at"] = _now_str()
+        tmp = EVENTS_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(EVENTS_FILE)
+        return True
 
 
 def _append_event(event: dict[str, Any]) -> None:
@@ -1057,28 +1194,19 @@ def evaluate_live_transition(
                 _drop_today_buy_events(strategy_id, symbol, session)
             state = "FLAT"
 
+        try:
+            open_lv = float(day_open) if day_open is not None else 0.0
+        except (TypeError, ValueError):
+            open_lv = 0.0
+        buy_lv = _resolved_live_buy_level(
+            buy_level,
+            day_open=day_open,
+            official=official,
+            open_fill=open_fill,
+            entry_pct=entry_pct,
+            tick=tick,
+        )
         if state == "FLAT":
-            try:
-                buy_lv = float(buy_level) if buy_level is not None else None
-            except (TypeError, ValueError):
-                buy_lv = None
-            try:
-                open_lv = float(day_open) if day_open is not None else 0.0
-            except (TypeError, ValueError):
-                open_lv = 0.0
-            # 因子29：买点就是正式开盘。因子26：买点必须是今开突破阈值。
-            if open_fill and open_lv > 0:
-                buy_lv = open_lv
-            elif official is not None:
-                if buy_lv is None or buy_lv + 1e-8 < official:
-                    buy_lv = official
-            elif open_lv > 0:
-                buy_lv = (
-                    _official_buy_from_open(
-                        open_lv, entry_pct=entry_pct, tick=tick
-                    )
-                    or buy_lv
-                )
             touched = (
                 allow_entry and buy_lv is not None and buy_lv > 0 and last + 1e-12 >= buy_lv
             )
@@ -1090,7 +1218,8 @@ def evaluate_live_transition(
                 out["skipped"] = "wait_auction"
                 touched = False
             if touched:
-                fill_px = last
+                # 成交价=策略买点，不用发现时刻的现价。现价只用于随后盯市。
+                fill_px = float(buy_lv) if buy_lv and buy_lv > 0 else last
                 entry_ts = str(quote_ts or eval_t)
                 if open_fill and open_lv > 0:
                     fill_px = open_lv
@@ -1122,6 +1251,7 @@ def evaluate_live_transition(
                         "reason": reason,
                         "trading_session_date": str(book["entry_time"])[:10],
                         "buy_level": buy_lv,
+                        "entry_pct": entry_pct,
                         "execution_model": "quote_touch_row_levels",
                     }
         elif state == "LONG":
@@ -1202,7 +1332,31 @@ def evaluate_live_transition(
                     "execution_model": "quote_touch_row_levels",
                 }
             else:
+                if buy_lv is not None and buy_lv > 0:
+                    _restate_same_day_entry(book, level=float(buy_lv), session=session)
                 mark_book(book, last, quote_ts=quote_ts)
+                if persist and force_book is None and buy_lv is not None and buy_lv > 0:
+                    try:
+                        entry_now = float(book.get("entry_price") or 0)
+                    except (TypeError, ValueError):
+                        entry_now = 0.0
+                    audit_key = (
+                        f"{strategy_id}|{_code_key(symbol)}|{session}|{entry_now:.4f}"
+                    )
+                    if (
+                        entry_now > 0
+                        and abs(entry_now - float(buy_lv)) <= 1e-6
+                        and audit_key not in _AUDITED_FILLS
+                    ):
+                        _align_today_buy_event(
+                            strategy_id,
+                            symbol,
+                            session,
+                            entry_now,
+                            buy_lv,
+                            entry_pct,
+                        )
+                        _AUDITED_FILLS.add(audit_key)
         else:
             book["state"] = "FLAT"
             mark_book(book, last, quote_ts=quote_ts)

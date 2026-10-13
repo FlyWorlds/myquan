@@ -75,7 +75,8 @@ class TestSimulatorLifecycle(_TmpSim):
         )
         self.assertEqual(r["transition"], "BUY")
         self.assertEqual(r["book"]["state"], "LONG")
-        self.assertEqual(r["book"]["entry_price"], 10.08)
+        self.assertEqual(r["book"]["entry_price"], 10.0)
+        self.assertAlmostEqual(float(r["book"]["single_return_pct"]), 0.8, places=2)
         self.assertEqual(r["book"]["entry_time"], "2026-09-23 09:31:05")
         self.assertGreater(float(r["book"]["virtual_shares"]), 0)
         self.assertEqual(r["event"]["execution_model"], "quote_touch_row_levels")
@@ -141,7 +142,7 @@ class TestSimulatorLifecycle(_TmpSim):
         b2 = sim.get_book("strategy16", "600330")
         self.assertGreater(float(b2["cumulative_return_pct"]), r1)
         self.assertAlmostEqual(
-            float(b2["single_return_pct"]), (10.50 / 10.08 - 1) * 100, places=2
+            float(b2["single_return_pct"]), (10.50 / 10.0 - 1) * 100, places=2
         )
 
     def test_sell_transition_and_freeze(self) -> None:
@@ -200,7 +201,7 @@ class TestSimulatorLifecycle(_TmpSim):
             allow_entry=True,
         )
         self.assertEqual(r["transition"], "BUY")
-        self.assertEqual(r["book"]["entry_price"], 10.2)
+        self.assertEqual(r["book"]["entry_price"], 10.0)
         self.assertEqual(int(r["book"]["trades"]), 1)
 
     def test_ten_signals_all_simulated(self) -> None:
@@ -309,7 +310,7 @@ class TestLiveRealtime(_TmpSim):
         )
         self.assertEqual(r1["transition"], "BUY")
         self.assertEqual(r1["book"]["entry_time"], "2026-09-23 09:31:05")
-        self.assertEqual(r1["book"]["entry_price"], 10.21)
+        self.assertEqual(r1["book"]["entry_price"], 10.20)
 
     def test_live_sell_intraminute(self) -> None:
         _eval(
@@ -388,7 +389,136 @@ class TestLiveRealtime(_TmpSim):
             allow_entry=True,
         )
         self.assertEqual(r["transition"], "BUY")
-        self.assertEqual(r["book"]["entry_price"], 10.30)
+        self.assertEqual(r["book"]["entry_price"], 10.0)
+        self.assertAlmostEqual(float(r["book"]["single_return_pct"]), 3.0, places=2)
+
+    def test_late_spot_entry_restates_to_buy_and_marks_return(self) -> None:
+        """已突破后才看到的票：入场价改回买点，单笔和累计不再停在 0。"""
+        book = sim.empty_book(strategy_id="strategy16", symbol="603042")
+        book["state"] = "LONG"
+        book["entry_price"] = 16.12
+        book["entry_time"] = "2026-10-13 14:14:57"
+        book["virtual_shares"] = 5800.0
+        book["virtual_cash"] = 100000.0 - 16.12 * 5800.0
+        book["single_return_pct"] = 0.0
+        book["cumulative_return_pct"] = 0.0
+        r = _eval(
+            strategy_id="strategy16",
+            symbol="603042",
+            live_last=16.12,
+            quote_ts="2026-10-13 14:19:06",
+            buy_level=14.64,
+            sell_level=13.5,
+            allow_entry=True,
+            now=datetime(2026, 10, 13, 14, 19, 6),
+            force_book=book,
+        )
+        self.assertIsNone(r["transition"])
+        self.assertEqual(r["book"]["state"], "LONG")
+        self.assertAlmostEqual(float(r["book"]["entry_price"]), 14.64, places=2)
+        self.assertAlmostEqual(
+            float(r["book"]["single_return_pct"]),
+            (16.12 / 14.64 - 1.0) * 100.0,
+            places=2,
+        )
+        self.assertGreater(float(r["book"]["cumulative_return_pct"]), 0.0)
+
+    def test_stripped_quote_row_does_not_lift_symbol_buy(self) -> None:
+        """快照丢掉 `_entry_pct` 后，快刷必须用阈值% 保持个股买点，不能改记默认 2.5%。"""
+        from watch_snapshot import _row_entry_pct, patch_row_live_quote
+
+        self.assertAlmostEqual(_row_entry_pct({"阈值%": "+2.0/-2.5"}), 0.02)
+        self.assertIsNone(_row_entry_pct({}))
+        _eval(
+            strategy_id="strategy16",
+            symbol="603042",
+            live_last=16.12,
+            quote_ts="2026-10-13 14:40:00",
+            buy_level=14.64,
+            sell_level=13.99,
+            allow_entry=True,
+            day_open=14.35,
+            entry_pct=0.02,
+            tick=0.01,
+            now=datetime(2026, 10, 13, 14, 40, 0),
+        )
+        row = {
+            "代码": "603042",
+            "交易日": "2026-10-13",
+            "开盘": 14.35,
+            "买点": 14.64,
+            "止损": 13.99,
+            "阈值%": "+2.0/-2.5",
+            "开盘复核OK": True,
+            "过门OK": True,
+            "已触买": "是",
+            "现价": 16.10,
+        }
+        patch_row_live_quote(
+            row,
+            {"last": 16.12, "open": 14.35, "last_ts": "2026-10-13 14:42:09"},
+            strategy_id="strategy16",
+        )
+        book = sim.get_book("strategy16", "603042")
+        self.assertEqual(book["state"], "LONG")
+        self.assertAlmostEqual(float(book["entry_price"]), 14.64, places=2)
+        bare = {
+            "代码": "603042",
+            "交易日": "2026-10-13",
+            "开盘": 14.35,
+            "买点": 14.64,
+            "止损": 13.99,
+            "开盘复核OK": True,
+            "过门OK": True,
+            "已触买": "是",
+            "现价": 16.12,
+        }
+        patch_row_live_quote(
+            bare,
+            {"last": 16.13, "open": 14.35, "last_ts": "2026-10-13 14:43:00"},
+            strategy_id="strategy16",
+        )
+        book = sim.get_book("strategy16", "603042")
+        self.assertAlmostEqual(float(book["entry_price"]), 14.64, places=2)
+
+    def test_buy_event_aligns_when_book_entry_is_symbol_buy(self) -> None:
+        """重记后事件价仍是旧现价时，下一次评估把事件改成核定买点，并留下原价。"""
+        sim._AUDITED_FILLS.clear()
+        _eval(
+            strategy_id="strategy16",
+            symbol="603042",
+            live_last=16.12,
+            quote_ts="2026-10-13 14:40:00",
+            buy_level=14.64,
+            sell_level=13.99,
+            allow_entry=True,
+            day_open=14.35,
+            entry_pct=0.02,
+            tick=0.01,
+            now=datetime(2026, 10, 13, 14, 40, 0),
+        )
+        raw = json.loads(self._events.read_text(encoding="utf-8"))
+        raw["events"][0]["trigger_price"] = 14.71
+        raw["events"][0]["buy_level"] = 14.71
+        self._events.write_text(json.dumps(raw), encoding="utf-8")
+        sim._AUDITED_FILLS.clear()
+        _eval(
+            strategy_id="strategy16",
+            symbol="603042",
+            live_last=16.12,
+            quote_ts="2026-10-13 14:42:09",
+            buy_level=14.64,
+            sell_level=13.99,
+            allow_entry=True,
+            day_open=14.35,
+            entry_pct=0.02,
+            tick=0.01,
+            now=datetime(2026, 10, 13, 14, 42, 9),
+        )
+        ev = json.loads(self._events.read_text(encoding="utf-8"))["events"][0]
+        self.assertAlmostEqual(float(ev["trigger_price"]), 14.64, places=2)
+        self.assertAlmostEqual(float(ev["previous_trigger_price"]), 14.71, places=2)
+        self.assertEqual(ev.get("audit_note"), "fill_aligned_to_symbol_buy")
 
     def test_gap_down_trigger(self) -> None:
         _eval(
@@ -798,7 +928,8 @@ class TestSessionGatesPaperUntouched(_TmpSim):
             now=datetime(2026, 10, 12, 9, 35),
         )
         self.assertEqual(filled["transition"], "BUY")
-        self.assertAlmostEqual(float(filled["book"]["entry_price"]), 18.30, places=2)
+        self.assertAlmostEqual(float(filled["book"]["entry_price"]), 18.27, places=2)
+        self.assertGreater(float(filled["book"]["single_return_pct"]), 0.0)
 
     def test_open_print_below_official_buy_is_not_a_hit(self) -> None:
         """五方：过期买点 14.82 / 今开 14.83，开盘现价不得当成突破。"""
