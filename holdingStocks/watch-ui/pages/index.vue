@@ -360,7 +360,14 @@ const closedCount = computed(() => closedHoldings.value.length)
 
       <section v-show="activeTab === 'strategy1'">
         <StrategyInfoPanel v-if="strategy1Tab" :tab="strategy1Tab" class="mb-4" />
-        <Strategy1Panel v-if="snapshot" :rows="snapshot.strategy1" :phase="snapshot.phase" :slot-meta="snapshot.slotMeta" pool-category="策略池" />
+        <Strategy1Panel
+          v-if="snapshot"
+          :rows="snapshot.strategy1"
+          :phase="snapshot.phase"
+          :slot-meta="snapshot.slotMeta"
+          pool-category="策略池"
+          status-mode="paper"
+        />
         <StrategyPicksPanel :picks="strategy1Tab?.picks" />
       </section>
 
@@ -411,6 +418,7 @@ const closedCount = computed(() => closedHoldings.value.length)
           :phase="snapshot.phase"
           :slot-meta="snapshot.slotMeta"
           pool-category="因子27"
+          status-mode="strategy"
         />
         <StrategyPicksPanel :picks="strategy16Tab?.picks" />
       </section>
@@ -503,6 +511,7 @@ const closedCount = computed(() => closedHoldings.value.length)
           :phase="snapshot.phase"
           :slot-meta="snapshot.slotMeta"
           pool-category="条件选股"
+          status-mode="strategy"
         />
         <StrategyPicksPanel :picks="strategy16bDynamicPicks" />
       </section>
@@ -514,6 +523,7 @@ const closedCount = computed(() => closedHoldings.value.length)
           :phase="snapshot.phase"
           :slot-meta="snapshot.slotMeta"
           pool-category="紫阳真君"
+          status-mode="strategy"
         />
         <StrategyPicksPanel :picks="strategy17Tab?.picks" />
       </section>

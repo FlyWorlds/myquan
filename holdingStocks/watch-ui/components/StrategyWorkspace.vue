@@ -107,6 +107,7 @@ watch(
           :rows="rows"
           focus="chg"
           :pool-category="strategyId === 'strategy16' ? '因子27' : '策略池'"
+          :status-mode="strategyId === 'strategy1' ? 'paper' : 'strategy'"
         />
         <p v-else class="text-sm text-ui-text-2">暂无涨幅数据。</p>
       </slot>
@@ -119,6 +120,7 @@ watch(
           :rows="rows"
           focus="pnl"
           :pool-category="strategyId === 'strategy16' ? '因子27' : '策略池'"
+          :status-mode="strategyId === 'strategy1' ? 'paper' : 'strategy'"
         />
         <p v-else class="text-sm text-ui-text-2">暂无策略累计数据。</p>
       </slot>

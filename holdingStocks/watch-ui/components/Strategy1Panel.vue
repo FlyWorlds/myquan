@@ -9,6 +9,7 @@ const props = defineProps<{
   phase?: string
   slotMeta?: { max?: number; occupiedCount?: number; free?: number; weight?: number }
   poolCategory?: string
+  statusMode?: 'paper' | 'strategy'
 }>()
 
 const steps = [
@@ -40,12 +41,15 @@ type SortKey = 'dayChg' | 'strategyPnl'
 type SortDir = 'desc' | 'asc'
 const sortKey = ref<SortKey | null>(null)
 const sortDir = ref<SortDir>('desc')
-/** 快刷会改当日涨幅；行序钉住，避免整表跟着 tick 乱跳 */
-const SORT_HOLD_MS = 3000
-const pinnedCodes = ref<string[] | null>(null)
-let holdTimer: ReturnType<typeof setTimeout> | undefined
+/** 排序态冻结整张表；取消排序后再接回实时快照。 */
+type DecoratedRow = {
+  row: HoldingRow
+  visual: ReturnType<typeof resolveSignalVisual>
+  tags: LegendId[]
+}
+const sortedRowsSnapshot = ref<DecoratedRow[] | null>(null)
 
-const decoratedRows = computed(() =>
+const decoratedRows = computed<DecoratedRow[]>(() =>
   (props.rows || []).map((row) => {
     const visual = resolveSignalVisual(row)
     const tags = collectLegendIds(row) as LegendId[]
@@ -99,62 +103,25 @@ function compareSorted(
 function snapshotOrder() {
   const key = sortKey.value
   if (!key) {
-    pinnedCodes.value = null
+    sortedRowsSnapshot.value = null
     return
   }
   const dir = sortDir.value === 'desc' ? -1 : 1
-  pinnedCodes.value = [...visibleDecorated()]
-    .sort((a, b) => compareSorted(a, b, key, dir))
-    .map((x) => rowCode(x.row))
-}
-
-function scheduleOrderRefresh() {
-  if (!import.meta.client || holdTimer != null) return
-  holdTimer = setTimeout(() => {
-    holdTimer = undefined
-    snapshotOrder()
-  }, SORT_HOLD_MS)
+  sortedRowsSnapshot.value = [...visibleDecorated()].sort((a, b) => compareSorted(a, b, key, dir))
 }
 
 watch([sortKey, sortDir, selectedFilters], () => {
-  if (holdTimer != null) {
-    clearTimeout(holdTimer)
-    holdTimer = undefined
-  }
   snapshotOrder()
-})
-
-watch(
-  () => props.rows,
-  () => {
-    if (!sortKey.value) return
-    if (pinnedCodes.value == null) snapshotOrder()
-    else scheduleOrderRefresh()
-  },
-)
-
-onUnmounted(() => {
-  if (holdTimer != null) clearTimeout(holdTimer)
 })
 
 const filteredRows = computed(() => {
   const list = visibleDecorated()
   const key = sortKey.value
   if (!key) return list
-  const order = pinnedCodes.value
-  if (!order?.length) {
-    const dir = sortDir.value === 'desc' ? -1 : 1
-    return [...list].sort((a, b) => compareSorted(a, b, key, dir))
-  }
-  const rank = new Map(order.map((code, i) => [code, i]))
-  return [...list].sort((a, b) => {
-    const ca = rowCode(a.row)
-    const cb = rowCode(b.row)
-    const ia = rank.get(ca) ?? order.length
-    const ib = rank.get(cb) ?? order.length
-    if (ia !== ib) return ia - ib
-    return ca.localeCompare(cb)
-  })
+  const frozen = sortedRowsSnapshot.value
+  if (frozen != null) return frozen
+  const dir = sortDir.value === 'desc' ? -1 : 1
+  return [...list].sort((a, b) => compareSorted(a, b, key, dir))
 })
 
 function toggleFilter(id: LegendId) {
@@ -302,6 +269,27 @@ function paperStatusLabel(r: HoldingRow): string {
   return '空仓'
 }
 
+function primaryStatusLabel(r: HoldingRow): string {
+  return props.statusMode === 'paper' ? paperStatusLabel(r) : strategyStatusLabel(r)
+}
+
+function primaryStatusClass(r: HoldingRow, visual: { badgeClass: string }): string {
+  if (props.statusMode === 'paper') return visual.badgeClass
+  return strategyStatusLabel(r) === '策略持有'
+    ? 'signal-badge signal-badge-hold-paper'
+    : 'signal-badge signal-badge-flat'
+}
+
+function primaryStatusTitle(r: HoldingRow): string {
+  return props.statusMode === 'paper'
+    ? `纸面：${paperStatusLabel(r)}；策略：${strategyStatusLabel(r)}`
+    : `策略：${strategyStatusLabel(r)}；纸面：${paperStatusLabel(r)}`
+}
+
+function showPaperDebug(r: HoldingRow): boolean {
+  return props.statusMode !== 'paper' && (Number(r.持仓) > 0 || paperStatusLabel(r) !== '空仓')
+}
+
 /** 策略累计 tooltip。 */
 function strategyCumTitle(r: HoldingRow): string {
   const start = String(r.策略起算 || '回放起点')
@@ -333,9 +321,9 @@ const SINGLE_SIGNAL_TITLE =
         <template v-else-if="sortKey === 'strategyPnl'"> · 已按策略累计{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
       </div>
       <div class="mt-1 text-xs text-ui-text-3">
-        状态=策略模拟器（空仓/策略持有），与纸面仓独立；纸面仅 debug 小字。
+        状态={{ props.statusMode === 'paper' ? '纸面仓位/预警' : '策略模拟器（空仓/策略持有）' }}；策略状态与纸面仓独立。
         策略累计=该策略+标的虚拟账本；单笔收入=入场价→现价；图例可点筛选。
-        点「日内涨跌 / 策略累计」表头可排序（数字实时刷，行序约 3 秒重排，避免乱跳）。
+        点「日内涨跌 / 策略累计」表头可排序（数字实时刷，行序锁定；再点表头重排/切换方向）。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button
@@ -378,7 +366,7 @@ const SINGLE_SIGNAL_TITLE =
               <th class="px-3 py-2.5">标的</th>
               <th
                 class="min-w-[5.5rem] px-3 py-2.5"
-                title="策略模拟器状态（空仓/策略持有）；与纸面仓独立"
+                :title="props.statusMode === 'paper' ? '纸面仓位/预警状态；悬停可看策略状态' : '策略模拟器状态（空仓/策略持有）；与纸面仓独立'"
               >状态</th>
               <th class="px-3 py-2.5">距买点</th>
               <th class="px-3 py-2.5">竞价/开盘</th>
@@ -457,13 +445,13 @@ const SINGLE_SIGNAL_TITLE =
               <td class="px-3 py-2.5 align-top">
                 <span
                   class="inline-block max-w-[7rem] truncate"
-                  :class="strategyStatusLabel(r) === '策略持有' ? 'signal-badge signal-badge-hold-paper' : visual.badgeClass"
-                  :title="`策略：${strategyStatusLabel(r)}`"
+                  :class="primaryStatusClass(r, visual)"
+                  :title="primaryStatusTitle(r)"
                 >
-                  {{ strategyStatusLabel(r) }}
+                  {{ primaryStatusLabel(r) }}
                 </span>
                 <div
-                  v-if="Number(r.持仓) > 0 || paperStatusLabel(r) !== '空仓'"
+                  v-if="showPaperDebug(r)"
                   class="mt-1 text-[10px] text-ui-text-3"
                   :title="'纸面仓（Paper，非策略主状态）'"
                 >
