@@ -26,22 +26,162 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from backtest.factor1_monthly_top3 import (  # noqa: E402
-    _metrics_from_equity,
-    simulate_open_break,
-)
 from holdingStocks.watch_config import (  # noqa: E402
     code_key,
     load_core_leader_payload,
 )
+from strategy.costs import (  # noqa: E402
+    ENGINE_COMMISSION_RATE as COMMISSION,
+    SLIPPAGE_VALUE as SLIP,
+    STAMP_TAX_RATE as STAMP,
+)
 from strategy.data import fetch_daily  # noqa: E402
-from strategy.open_break import DEFAULT_PCT  # noqa: E402
+from strategy.open_break import (  # noqa: E402
+    DEFAULT_BAN_DOUBLE_YANG,
+    DEFAULT_BAN_SINGLE_YANG,
+    DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+    DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+    DEFAULT_PCT,
+    TICK_SIZE,
+    entry_trigger_price,
+    limit_down_state,
+    prev_day_allows_entry,
+    should_block_entry_by_yang,
+    stop_trigger_price,
+)
 
 OUT_DIR = Path(__file__).resolve().parent
 THR_PATH = OUT_DIR / "thr_2026.json"
 CANDIDATES = (0.02, 0.025, 0.03)
 FIT_START = "20260101"
 DEFAULT_THR = float(DEFAULT_PCT)
+TARGET_PCT = 0.95
+LOT = 100
+
+
+def simulate_open_break(
+    o: np.ndarray,
+    h: np.ndarray,
+    l: np.ndarray,
+    c: np.ndarray,
+    *,
+    thr: float,
+    initial_cash: float = 100_000.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Local lightweight open-break replay for threshold fitting.
+
+    Kept local so this script can run without importing backtest.factor1_monthly_top3,
+    which pulls the whole strategy package during module initialization.
+    """
+    n = len(o)
+    equity = np.empty(n, dtype=np.float64)
+    holding_arr = np.zeros(n, dtype=np.int8)
+    cash = float(initial_cash)
+    shares = 0.0
+    buy_i = -1
+    tick = TICK_SIZE
+
+    for i in range(n):
+        oi, hi, li, ci = float(o[i]), float(h[i]), float(l[i]), float(c[i])
+        if oi <= 0 or ci <= 0:
+            equity[i] = cash + shares * (ci if ci > 0 else 0.0)
+            holding_arr[i] = 1 if shares > 0 else 0
+            continue
+
+        buy_px = entry_trigger_price(oi, entry_pct=thr, tick=tick)
+        stop_px = stop_trigger_price(oi, stop_pct=thr, tick=tick)
+
+        if shares > 0:
+            if i > buy_i and li <= stop_px + 1e-12:
+                prev_c = float(c[i - 1]) if i > 0 else ci
+                lim = limit_down_state(
+                    prev_close=prev_c,
+                    open_px=oi,
+                    high_px=hi,
+                    low_px=li,
+                    close_px=ci,
+                    limit_down_pct=0.10,
+                    tick=tick,
+                )
+                if not bool(lim["locked"]):
+                    sell_px = float(lim["limit_px"] if bool(lim["opened"]) else stop_px)
+                    sell_px *= 1.0 - SLIP
+                    proceeds = shares * sell_px
+                    cash += proceeds - proceeds * COMMISSION - proceeds * STAMP
+                    shares = 0.0
+                    buy_i = -1
+        elif i >= 1:
+            po, pc = float(o[i - 1]), float(c[i - 1])
+            allows = prev_day_allows_entry(
+                po,
+                pc,
+                prev_small_yang_pct=thr,
+                prev_entry_mode="yin_or_small_yang",
+            )
+            blocked = False
+            if i >= 2:
+                blocked = should_block_entry_by_yang(
+                    float(o[i - 2]),
+                    float(c[i - 2]),
+                    po,
+                    pc,
+                    tick=tick,
+                    ban_double_yang=DEFAULT_BAN_DOUBLE_YANG,
+                    ban_single_yang=DEFAULT_BAN_SINGLE_YANG,
+                    double_yang_combined_min_pct=DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
+                    double_yang_combined_mode=DEFAULT_DOUBLE_YANG_COMBINED_MODE,
+                )
+            if allows and (not blocked) and (hi + 1e-12 >= buy_px):
+                px = buy_px * (1.0 + SLIP)
+                raw = math.floor((cash * TARGET_PCT) / (px * LOT)) * LOT
+                if raw >= LOT:
+                    cost = raw * px
+                    fee = cost * COMMISSION
+                    if cost + fee <= cash:
+                        cash -= cost + fee
+                        shares = float(raw)
+                        buy_i = i
+
+        equity[i] = cash + shares * ci
+        holding_arr[i] = 1 if shares > 0 else 0
+    return equity, holding_arr
+
+
+def _metrics_from_equity(equity: np.ndarray, close: np.ndarray) -> dict[str, float]:
+    if len(equity) < 2 or equity[0] <= 0:
+        return {
+            "total_return_pct": np.nan,
+            "max_drawdown_pct": np.nan,
+            "sharpe_ratio": np.nan,
+            "bh_return_pct": np.nan,
+            "bh_max_drawdown_pct": np.nan,
+            "excess_return_pct": np.nan,
+        }
+    ret = equity[-1] / equity[0] - 1.0
+    peak = np.maximum.accumulate(equity)
+    dd = equity / peak - 1.0
+    max_dd = float(-dd.min()) * 100.0
+    rets = np.diff(equity) / equity[:-1]
+    rets = rets[np.isfinite(rets)]
+    sharpe = (
+        float(np.mean(rets) / np.std(rets, ddof=1) * math.sqrt(242))
+        if len(rets) >= 5 and float(np.std(rets, ddof=1)) > 1e-12
+        else 0.0
+    )
+    c0, c1 = float(close[0]), float(close[-1])
+    bh = (c1 / c0 - 1.0) * 100.0 if c0 > 0 else np.nan
+    cpeak = np.maximum.accumulate(close.astype(float))
+    cdd = close / cpeak - 1.0
+    bh_dd = float(-cdd.min()) * 100.0
+    strat = ret * 100.0
+    return {
+        "total_return_pct": strat,
+        "max_drawdown_pct": max_dd,
+        "sharpe_ratio": sharpe,
+        "bh_return_pct": bh,
+        "bh_max_drawdown_pct": bh_dd,
+        "excess_return_pct": strat - bh if np.isfinite(bh) else np.nan,
+    }
 
 
 def _sina(code: str) -> str:

@@ -26,6 +26,7 @@ REGRESSION_MODULES = (
     "test_watch_boot_perf",
     "test_trading_calendar",
     "test_health_status",
+    "test_runtime_integrity",
     "test_stale_sticky_crossday",
     "test_holdings_store",
     "test_strategy_simulator_lifecycle",

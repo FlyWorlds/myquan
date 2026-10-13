@@ -474,8 +474,8 @@ def _as_px_digits(row: dict[str, Any]) -> int:
 def _row_entry_pct(row: dict[str, Any]) -> float | None:
     """个股买入阈值。快照会丢掉 `_entry_pct`，公开的 entryPct / 阈值% 仍在。
 
-    取不到时调用方不得改写入场：否则模拟器会按默认 2.5% 重算核定买点，
-    把已经按 +2% 入账的价格再记高一档。
+    这里只解析行内已有信息；策略十六缺行内阈值时，由
+    ``_strategy16_entry_pct_for_code`` 统一回表/兜底。
     """
     for key in ("_entry_pct", "entryPct"):
         raw = row.get(key)
@@ -502,6 +502,37 @@ def _row_entry_pct(row: dict[str, Any]) -> float | None:
     except (TypeError, ValueError):
         return None
     return val if val > 0 else None
+
+
+def _strategy16_entry_pct_for_code(code: Any) -> float | None:
+    """策略十六阈值真源：回测阈值表优先，缺失兜底 DEFAULT_PCT。"""
+    c = _code_key(code)
+    if not c:
+        return None
+    try:
+        from watch_config import DEFAULT_PCT, load_strategy16_thr_map
+    except ImportError:  # pragma: no cover
+        from holdingStocks.watch_config import DEFAULT_PCT, load_strategy16_thr_map
+
+    thrs = load_strategy16_thr_map()
+    try:
+        return float(thrs[c]) if c in thrs else float(DEFAULT_PCT)
+    except (TypeError, ValueError):
+        return float(DEFAULT_PCT)
+
+
+def _resolved_row_entry_pct(row: dict[str, Any], strategy_id: str | None = None) -> float | None:
+    pct = _row_entry_pct(row)
+    if pct is not None:
+        return pct
+    if str(strategy_id or "") == "strategy16":
+        pct = _strategy16_entry_pct_for_code(row.get("代码") or row.get("code"))
+        if pct is not None:
+            row["entryPct"] = float(pct)
+            row["_entry_pct"] = float(pct)
+            row.setdefault("阈值%", f"±{float(pct) * 100:.1f}")
+        return pct
+    return None
 
 
 def _quote_last(q: dict[str, Any] | None) -> float | None:
@@ -574,13 +605,9 @@ def patch_row_live_quote(
             try:
                 from watch_config import official_buy_trigger
 
-                entry_pct = _row_entry_pct(row)
+                entry_pct = _resolved_row_entry_pct(row, strategy_id)
                 tick = float(row.get("_tick") or 0.01)
-                official_buy = (
-                    official_buy_trigger(open_px, entry_pct=entry_pct, tick=tick)
-                    if entry_pct is not None
-                    else None
-                )
+                official_buy = official_buy_trigger(open_px, entry_pct=entry_pct, tick=tick)
             except (ImportError, TypeError, ValueError):
                 official_buy = None
         if official_buy is not None and row.get("买点") != official_buy:
@@ -755,10 +782,9 @@ def patch_row_live_quote(
                 before_st = row.get("策略模拟状态")
                 before_ret = row.get("策略收益%")
                 before_single = row.get("单笔收入%")
-                entry_pct = _row_entry_pct(row)
+                entry_pct = _resolved_row_entry_pct(row, strategy_id)
                 open_fill = bool(row.get("因子29买OK") or row.get("_f29_hit_buy"))
-                # 没有个股阈值时禁止改写入场。快照行没有 `_entry_pct`，
-                # 若仍交给模拟器，会按默认 2.5% 把已核定买点再记高。
+                # 策略十六缺行内阈值时已回表/兜底 DEFAULT_PCT；其他策略仍需显式阈值。
                 if entry_pct is not None or open_fill:
                     evaluate_live_transition(
                         strategy_id=str(strategy_id),

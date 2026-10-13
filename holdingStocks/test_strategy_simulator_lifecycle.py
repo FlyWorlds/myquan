@@ -481,6 +481,42 @@ class TestLiveRealtime(_TmpSim):
         book = sim.get_book("strategy16", "603042")
         self.assertAlmostEqual(float(book["entry_price"]), 14.64, places=2)
 
+    def test_stripped_fresh_row_without_entry_pct_uses_strategy16_fallback(self) -> None:
+        """全新策略16快照行缺阈值时，回表失败也用默认 2.5% 新开模拟仓。"""
+        from watch_snapshot import patch_row_live_quote
+
+        row = {
+            "代码": "603042",
+            "交易日": "2026-10-13",
+            "开盘": 14.35,
+            "买点": 14.64,
+            "止损": 13.99,
+            "开盘复核OK": True,
+            "过门OK": True,
+            "已触买": "是",
+            "现价": 16.10,
+        }
+        with (
+            mock.patch("watch_config.is_signal_window", return_value=True),
+            mock.patch("watch_config.load_strategy16_thr_map", return_value={}),
+            mock.patch("strategy_simulator.is_quote_stale", return_value=False),
+        ):
+            patch_row_live_quote(
+                row,
+                {
+                    "last": 16.12,
+                    "open": 14.35,
+                    "last_ts": "2026-10-13 14:42:09",
+                },
+                strategy_id="strategy16",
+            )
+        book = sim.get_book("strategy16", "603042")
+        self.assertEqual(book["state"], "LONG")
+        self.assertAlmostEqual(float(book["entry_price"]), 14.71, places=2)
+        self.assertAlmostEqual(float(row["entryPct"]), 0.025, places=4)
+        raw = json.loads(self._events.read_text(encoding="utf-8"))
+        self.assertAlmostEqual(float(raw["events"][0]["entry_pct"]), 0.025, places=4)
+
     def test_buy_event_aligns_when_book_entry_is_symbol_buy(self) -> None:
         """重记后事件价仍是旧现价时，下一次评估把事件改成核定买点，并留下原价。"""
         sim._AUDITED_FILLS.clear()
