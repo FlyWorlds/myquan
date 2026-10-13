@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-13 09:54:02",
+  "updated_at": "2026-10-13 09:56:34",
   "entries": [
     {
       "id": "a84c3947d6de",
@@ -864,6 +864,54 @@
       "reason": "槽位触买(自动·买点)",
       "reason_detail": "槽位触买(自动·买点)",
       "note": "槽位触买(自动·买点)"
+    },
+    {
+      "id": "97e220c61952",
+      "time": "2026-10-13 09:56:30",
+      "session": "2026-10-13",
+      "side": "sell",
+      "code": "600072",
+      "name": "中船科技",
+      "market": "",
+      "price": 9.36,
+      "qty": 6100,
+      "after_qty": 0,
+      "amount": 57096.0,
+      "cost": 9.55,
+      "pnl": -1159.0,
+      "pnl_pct": null,
+      "day_pnl": null,
+      "day_pnl_pct": null,
+      "account_cash_after": 176506.0,
+      "action_kind": "",
+      "buy_time": null,
+      "reason": "开盘保护纠价 9.31->9.36（原按抬高止损记账）",
+      "reason_detail": "开盘保护纠价 9.31->9.36（原按抬高止损记账）",
+      "note": "开盘保护纠价 9.31->9.36（原按抬高止损记账）"
+    },
+    {
+      "id": "ec79a1bccebb",
+      "time": "2026-10-13 09:56:34",
+      "session": "2026-10-13",
+      "side": "sell",
+      "code": "600072",
+      "name": "中船科技",
+      "market": "",
+      "price": 9.31,
+      "qty": 6100,
+      "after_qty": 0,
+      "amount": 56791.0,
+      "cost": 9.55,
+      "pnl": -1464.0,
+      "pnl_pct": null,
+      "day_pnl": null,
+      "day_pnl_pct": null,
+      "account_cash_after": 176201.0,
+      "action_kind": "",
+      "buy_time": null,
+      "reason": "开盘保护纠价 9.36->9.31（原按抬高止损记账）",
+      "reason_detail": "开盘保护纠价 9.36->9.31（原按抬高止损记账）",
+      "note": "开盘保护纠价 9.36->9.31（原按抬高止损记账）"
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-13 09:55:25",
+  "updated_at": "2026-10-13 09:56:41",
   "positions": {
     "001309": {
       "name": "德明利",
@@ -650,12 +650,12 @@
       "note": "槽位触买(自动·买点)",
       "peak_high": 44.23,
       "peak_high_at": "2026-10-13 09:30:26",
-      "last_quote_at": "2026-10-13 09:55:23",
+      "last_quote_at": "2026-10-13 09:56:38",
       "overnight_peak": 44.23,
       "overnight_peak_session": "2026-10-13",
-      "stop_noted": false,
-      "stop_noted_px": null,
-      "stop_noted_session": null
+      "stop_noted": true,
+      "stop_noted_px": 43.12,
+      "stop_noted_session": "2026-10-13"
     },
     "603306": {
       "name": "华懋科技",
@@ -2776,10 +2776,10 @@
       "peak_high_at": "2026-10-13 09:54:00",
       "overnight_peak": 36.54,
       "overnight_peak_session": "2026-10-13",
-      "last_quote_at": "2026-10-13 09:55:24",
-      "stop_noted": true,
-      "stop_noted_px": 35.62,
-      "stop_noted_session": "2026-10-13"
+      "last_quote_at": "2026-10-13 09:56:39",
+      "stop_noted": false,
+      "stop_noted_px": null,
+      "stop_noted_session": null
     },
     "002430": {
       "name": "杭氧股份",
@@ -3087,7 +3087,7 @@
       "note_fix": "开盘保护纠价"
     }
   },
-  "account_total": 286815.0,
+  "account_total": 286497.0,
   "account_cash": 176201.0,
   "account_total_open": 297765.0,
   "account_total_open_session": "2026-10-13",
@@ -3107,7 +3107,7 @@
     },
     "600072": {
       "stop_touched": true,
-      "touch_stop": 9.31,
+      "touch_stop": 9.3,
       "stop_hit_ts": "2026-10-13 09:30:00",
       "session": "2026-10-13",
       "bg_class": "warn-sell",
@@ -3191,14 +3191,29 @@
       "buy_hit_ts": "2026-10-13 09:31:00",
       "session": "2026-10-13"
     },
-    "601208": {
+    "002454": {
       "buy_touched": true,
-      "buy_hit_ts": "2026-10-13 09:30:26",
+      "buy_hit_ts": "2026-10-13 09:39:00",
+      "session": "2026-10-13"
+    },
+    "002703": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:31:00",
+      "session": "2026-10-13"
+    },
+    "002253": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:31:00",
       "session": "2026-10-13"
     },
     "001266": {
       "buy_touched": true,
       "buy_hit_ts": "2026-10-13 09:31:00",
+      "session": "2026-10-13"
+    },
+    "601208": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:30:26",
       "session": "2026-10-13"
     }
   },
@@ -3454,8 +3469,8 @@
       "last_sell_factor_date": "2026-10-08"
     },
     "002454": {
-      "last_buy_factor_px": 5.58,
-      "last_buy_factor_date": "2026-10-09",
+      "last_buy_factor_px": 5.3,
+      "last_buy_factor_date": "2026-10-13",
       "last_sell_factor_px": 5.42,
       "last_sell_factor_date": "2026-10-12"
     },
@@ -3564,6 +3579,14 @@
     "002636": {
       "last_buy_factor_px": 61.5,
       "last_buy_factor_date": "2026-10-13"
+    },
+    "002703": {
+      "last_buy_factor_px": 14.53,
+      "last_buy_factor_date": "2026-10-13"
+    },
+    "002253": {
+      "last_buy_factor_px": 8.54,
+      "last_buy_factor_date": "2026-10-13"
     }
   },
   "factor2": {
@@ -3571,11 +3594,11 @@
     "peak": 326457.0,
     "in_add_zone": false,
     "last_action": "hold",
-    "last_label": "回撤12.1% 观望（加仓≥20% / 减仓≤10%）",
+    "last_label": "回撤12.2% 观望（加仓≥20% / 减仓≤10%）",
     "last_session": "2026-10-13",
     "suggest_amount": 0.0,
-    "dd_pct": 12.14,
-    "equity": 286815.0,
+    "dd_pct": 12.24,
+    "equity": 286497.0,
     "thresholds": {
       "hist_max_dd": 0.26,
       "avg_yearly_max_dd": 0.19,
@@ -4247,61 +4270,61 @@
     },
     "2026-10-13": {
       "session": "2026-10-13",
-      "recorded_at": "2026-10-13 09:55:19",
+      "recorded_at": "2026-10-13 09:56:41",
       "final": false,
       "draft": true,
       "settle_kind": "POSITION_SETTLEMENT",
-      "account_total": 288356.0,
+      "account_total": 288038.0,
       "account_open": 297765.0,
       "paper_equity_base": 300000.0,
       "paper_pnl_start": "2026-09-09",
-      "day_pnl": -9409.0,
-      "day_pnl_pct": -3.16,
-      "equity_day_pnl": -9409.0,
+      "day_pnl": -9727.0,
+      "day_pnl_pct": -3.27,
+      "equity_day_pnl": -9727.0,
       "day_pnl_vs_equity": 0.0,
-      "total_pnl": -11644.0,
-      "total_pnl_pct": -3.88,
+      "total_pnl": -11962.0,
+      "total_pnl_pct": -3.99,
       "settled_count": 2,
       "settled_day_pnl": -7714.0,
       "positions": [
         {
-          "code": "601208",
-          "name": "东材科技",
-          "qty": 1300,
-          "cost": 44.23,
-          "last": 43.63,
-          "day_pnl": -780.0,
-          "upnl": -780.0
-        },
-        {
           "code": "001266",
           "name": "宏英智能",
           "qty": 1500,
           "cost": 36.54,
-          "last": 35.93,
-          "day_pnl": -915.0,
-          "upnl": -915.0
+          "last": 36.03,
+          "day_pnl": -765.0,
+          "upnl": -765.0
+        },
+        {
+          "code": "601208",
+          "name": "东材科技",
+          "qty": 1300,
+          "cost": 44.23,
+          "last": 43.27,
+          "day_pnl": -1248.0,
+          "upnl": -1248.0
         }
       ],
       "closing_marks": [
         {
-          "code": "601208",
-          "name": "东材科技",
-          "qty": 1300,
-          "cost": 44.23,
-          "close": 43.63,
-          "day_pnl": -780.0,
-          "upnl": -780.0,
-          "settle_kind": "POSITION_SETTLEMENT"
-        },
-        {
           "code": "001266",
           "name": "宏英智能",
           "qty": 1500,
           "cost": 36.54,
-          "close": 35.93,
-          "day_pnl": -915.0,
-          "upnl": -915.0,
+          "close": 36.03,
+          "day_pnl": -765.0,
+          "upnl": -765.0,
+          "settle_kind": "POSITION_SETTLEMENT"
+        },
+        {
+          "code": "601208",
+          "name": "东材科技",
+          "qty": 1300,
+          "cost": 44.23,
+          "close": 43.27,
+          "day_pnl": -1248.0,
+          "upnl": -1248.0,
           "settle_kind": "POSITION_SETTLEMENT"
         }
       ],
