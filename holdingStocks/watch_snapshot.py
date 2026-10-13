@@ -532,17 +532,22 @@ def patch_row_live_quote(
             or ""
         )
     # 快刷也必须同步重算核定买点；否则全量扫描留下的竞价旧买点会继续喂给 simulator。
+    # 因子29 武装后买点锁定正式开盘，不得被突破阈值盖掉。
     if open_finalized and open_px is not None:
-        try:
-            from watch_config import official_buy_trigger
+        f29_open = bool(row.get("因子29买OK") or row.get("_f29_hit_buy"))
+        if f29_open:
+            official_buy = round(float(open_px), 4)
+        else:
+            try:
+                from watch_config import official_buy_trigger
 
-            entry_pct = float(row.get("_entry_pct"))
-            tick = float(row.get("_tick") or 0.01)
-            official_buy = official_buy_trigger(
-                open_px, entry_pct=entry_pct, tick=tick
-            )
-        except (ImportError, TypeError, ValueError):
-            official_buy = None
+                entry_pct = float(row.get("_entry_pct"))
+                tick = float(row.get("_tick") or 0.01)
+                official_buy = official_buy_trigger(
+                    open_px, entry_pct=entry_pct, tick=tick
+                )
+            except (ImportError, TypeError, ValueError):
+                official_buy = None
         if official_buy is not None and row.get("买点") != official_buy:
             row["买点"] = official_buy
             if row.get("买入侧价") is not None:
@@ -731,6 +736,10 @@ def patch_row_live_quote(
                     entry_pct=row.get("_entry_pct"),
                     tick=row.get("_tick"),
                     now=_dt.now(),
+                    open_fill=bool(row.get("因子29买OK") or row.get("_f29_hit_buy")),
+                    auction_open_sell=bool(
+                        row.get("因子29卖OK") or row.get("_f29_hit_sell")
+                    ),
                 )
                 book = get_book(str(strategy_id), code)
                 apply_book_to_row(row, book)

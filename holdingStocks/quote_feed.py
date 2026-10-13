@@ -97,6 +97,12 @@ def _open_result_only(ts: Any) -> bool:
     return "09:25:00" <= clock < "09:30:00"
 
 
+def _auction_lock_quote(ts: Any) -> bool:
+    """9:20–9:25 不可撤单竞价：只记独立路径，不进正式 OHLC。"""
+    _session, clock = _quote_session_and_clock(ts)
+    return "09:20:00" <= clock < "09:25:00"
+
+
 @dataclass
 class QuoteSnapshot:
     sina: str
@@ -110,6 +116,10 @@ class QuoteSnapshot:
     last_ts: str
     source: str = "seed"
     open_finalized: bool = False
+    auction_baseline: float | None = None
+    auction_high: float | None = None
+    auction_low: float | None = None
+    auction_ts: str = ""
     day_bars: Any = field(default=None, repr=False)
 
     def as_quote_dict(self) -> dict[str, Any]:
@@ -132,6 +142,10 @@ class QuoteSnapshot:
             "_open_finalized": bool(self.open_finalized),
             # 兼容 session_open_usable：9:15–9:25 的指示价绝不能算买点。
             "_preopen_baseline": not bool(self.open_finalized),
+            "_auction_baseline": self.auction_baseline,
+            "_auction_high": self.auction_high,
+            "_auction_low": self.auction_low,
+            "_auction_ts": self.auction_ts or None,
         }
 
 
@@ -201,7 +215,16 @@ class QuoteHub:
                 if quote.get("_open_finalized") is not None
                 else _open_is_final(quote.get("last_ts"))
             ),
+            auction_baseline=quote.get("_auction_baseline"),
+            auction_high=quote.get("_auction_high"),
+            auction_low=quote.get("_auction_low"),
+            auction_ts=str(quote.get("_auction_ts") or ""),
             day_bars=quote.get("_day_bars"),
+        )
+        self._absorb_auction_path(
+            snap,
+            last=float(quote.get("last") or 0),
+            last_ts=str(quote.get("last_ts") or ""),
         )
         with self._lock:
             self._quotes[sina] = snap
@@ -258,6 +281,11 @@ class QuoteHub:
                     last_ts=tick_ts,
                     source=source,
                     open_finalized=tick_open_final,
+                )
+                self._absorb_auction_path(
+                    self._quotes[sina],
+                    last=float(last),
+                    last_ts=tick_ts,
                 )
                 self._gen += 1
                 self.updated.set()
@@ -325,10 +353,48 @@ class QuoteHub:
             if cur.prev_close is not None and cur.last > 0:
                 cur.day_chg_pct = price_chg_pct(cur.last, cur.prev_close)
             cur.source = source
+            if self._absorb_auction_path(cur, last=last, last_ts=tick_ts):
+                changed = True
             if changed:
                 self._gen += 1
                 self.updated.set()
             return changed
+
+    @staticmethod
+    def _absorb_auction_path(
+        snap: QuoteSnapshot,
+        *,
+        last: float | None,
+        last_ts: str,
+    ) -> bool:
+        """9:20–9:25 指示现价写入独立路径；9:25 重置 OHLC 时不得擦掉。"""
+        if not _auction_lock_quote(last_ts):
+            return False
+        try:
+            px = float(last or 0)
+        except (TypeError, ValueError):
+            return False
+        if px <= 0:
+            return False
+        changed = False
+        if snap.auction_baseline is None or float(snap.auction_baseline) <= 0:
+            snap.auction_baseline = round(px, 4)
+            snap.auction_high = round(px, 4)
+            snap.auction_low = round(px, 4)
+            changed = True
+        else:
+            high0 = float(snap.auction_high or px)
+            low0 = float(snap.auction_low or px)
+            if px > high0 + 1e-12:
+                snap.auction_high = round(px, 4)
+                changed = True
+            if px < low0 - 1e-12:
+                snap.auction_low = round(px, 4)
+                changed = True
+        if str(snap.auction_ts or "") != str(last_ts):
+            snap.auction_ts = str(last_ts)
+            changed = True
+        return changed
 
     def get_quote(self, sina: str) -> dict[str, Any] | None:
         sina = str(sina).lower()

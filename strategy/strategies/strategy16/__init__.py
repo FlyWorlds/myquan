@@ -1,4 +1,4 @@
-"""策略十六·核心龙头：因子27 季度宇宙 + 因子26/2 买卖（因子22 默认关）。"""
+"""策略十六·核心龙头：因子27 季度宇宙 + 因子26/29/2 买卖（因子22 默认关）。"""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ register_strategy(
         name=STRATEGY_NAME,
         description=(
             "核心龙头：通达信活跃概念偏高、每概念≤2、池约30只、主板非ST非科创创业百元以下；"
-            "滚动近3个月冻结选股；买卖走因子26 多层止盈 + 因子2 预警；因子22 默认关（研究对照）"
+            "滚动近3个月冻结选股；买卖走因子26 多层止盈 + 因子29 竞价末段按开盘撮合 + 因子2 预警；因子22 默认关（研究对照）"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy16,
@@ -53,7 +53,7 @@ register_strategy(
             "watch_tab": True,
             "universe": "factor27",
             "horizon": "rolling_3m",
-            "factors": ("factor26", "factor2", "factor27", "factor22"),
+            "factors": ("factor26", "factor29", "factor2", "factor27", "factor22"),
             "pool_manual_additions": ("600330", "600552"),
         },
     ),

@@ -3020,6 +3020,8 @@ def _attach_strategy_pnl_fields(
                     entry_pct=float(entry_pct),
                     tick=float(tick),
                     now=datetime.now(),
+                    open_fill=bool(row.get("因子29买OK") or row.get("_f29_hit_buy")),
+                    auction_open_sell=bool(row.get("因子29卖OK") or row.get("_f29_hit_sell")),
                 )
     book = get_book(sid, code)
     if last > 0:
@@ -4075,6 +4077,71 @@ def _restore_session_buy_hit(
     return bool(hit_buy_raw)
 
 
+def _apply_factor29_auction(
+    *,
+    quote: dict[str, Any],
+    sticky: dict[str, Any],
+    code: str,
+    session: str,
+    official_open: float | None,
+    entry_pct: float,
+    tick: float,
+    qty: int,
+) -> dict[str, Any]:
+    """9:20–9:25 路径武装因子29；成交价只认正式开盘。"""
+    from strategy.factors.factor29 import (
+        fill_at_official_open,
+        merge_auction_path,
+        signal as f29_signal,
+    )
+
+    st = sticky.get(code) if isinstance(sticky.get(code), dict) else None
+    path = merge_auction_path(quote=quote, sticky=st, session=session)
+    if path.get("baseline") and path.get("high") and path.get("low"):
+        _sticky_put(
+            sticky,
+            code,
+            session,
+            {
+                "f29_path": {
+                    "session": str(session)[:10],
+                    "baseline": path.get("baseline"),
+                    "high": path.get("high"),
+                    "low": path.get("low"),
+                    "ts": path.get("ts"),
+                }
+            },
+        )
+    sig = f29_signal(
+        baseline_px=path.get("baseline"),
+        auction_high=path.get("high"),
+        auction_low=path.get("low"),
+        threshold_pct=float(entry_pct),
+        tick=float(tick),
+    )
+    fill = fill_at_official_open(official_open)
+    hit_buy = bool(sig.get("hit_buy")) and fill is not None
+    hit_sell = bool(sig.get("hit_sell")) and fill is not None and int(qty or 0) > 0
+    label = "缺路径"
+    if sig.get("ready"):
+        if hit_buy and hit_sell:
+            label = "买·卖·开盘"
+        elif hit_buy:
+            label = "买·开盘"
+        elif hit_sell:
+            label = "卖·开盘"
+        else:
+            label = "未达阈值"
+    return {
+        "path": path,
+        "sig": sig,
+        "fill": fill,
+        "hit_buy": hit_buy,
+        "hit_sell": hit_sell,
+        "label": label,
+    }
+
+
 def _stamp_buy_touched(
     sticky: dict[str, Any],
     code: str,
@@ -5097,6 +5164,29 @@ def _apply_portfolio_slots(
                     return None
                 if row.get("_open_finalized") is False:
                     return None
+                f29_open = bool(row.get("因子29买OK") or row.get("_f29_hit_buy"))
+                if f29_open:
+                    if open_px <= 0:
+                        return None
+                    official = float(open_px)
+                    if session_low > 0 and official + 1e-12 < session_low:
+                        return None
+                    if not session_high_prints_buy(
+                        session_high=session_high if session_high > 0 else None,
+                        official_buy=official,
+                    ):
+                        return None
+                    return slot_fill_decision(
+                        signal_px=official,
+                        last_px=last,
+                        trigger_ts=_row_trigger_ts(row, side="buy"),
+                        freed_at=freed_at,
+                        overshoot=SLOT_FIRST_TIER_MAX_OVERSHOOT,
+                        session_low=session_low if session_low > 0 else None,
+                        official_buy=official,
+                        session_high=session_high if session_high > 0 else None,
+                        fill_mode="official_open",
+                    )
                 expected = official_buy_trigger(
                     open_px, entry_pct=entry_pct, tick=tick
                 )
@@ -5214,7 +5304,11 @@ def _apply_portfolio_slots(
                 "name": str(r.get("名称") or code),
                 "market": str(r.get("市场") or ""),
             }
-            fill_kind = "现价" if dec.get("kind") == "last" else "买点"
+            fill_kind = (
+                "开盘"
+                if dec.get("kind") == "official_open"
+                else ("现价" if dec.get("kind") == "last" else "买点")
+            )
             try:
                 row_low = float(r.get("最低") or r.get("开盘") or 0)
             except (TypeError, ValueError):
@@ -7629,6 +7723,13 @@ def collect_rows(
     stopped_this_scan = False
 
     for w in _scan_watchlist(holdings):
+        f29 = {
+            "hit_buy": False,
+            "hit_sell": False,
+            "label": "缺路径",
+            "path": {},
+            "fill": None,
+        }
         code = w["code"]
         pool_src = str(w.get("pool_src") or "")
         if not pool_src:
@@ -7850,9 +7951,20 @@ def collect_rows(
                 replay=replay,
                 qty=qty_early,
             )
-            official_buy = official_buy_trigger(
+            f26_buy = official_buy_trigger(
                 official_open, entry_pct=entry_pct, tick=tick
             )
+            f29 = _apply_factor29_auction(
+                quote=q,
+                sticky=sticky,
+                code=code,
+                session=str(q["session"]),
+                official_open=official_open,
+                entry_pct=float(entry_pct),
+                tick=tick,
+                qty=qty_early,
+            )
+            official_buy = f26_buy
             if official_buy:
                 open_buy = float(official_buy)
                 lv["buy_trigger"] = open_buy
@@ -7861,9 +7973,15 @@ def collect_rows(
                 open_buy = float(lv.get("open_buy") or lv["buy_trigger"])
             hit_open = session_high_prints_buy(
                 session_high=q.get("high"),
-                official_buy=official_buy,
+                official_buy=f26_buy,
             )
-            hit_buy_raw = hit_open
+            if f29["hit_buy"] and f29["fill"]:
+                # 因子29：买入点就是正式开盘，不再用 ceil(开盘×阈值)
+                open_buy = float(f29["fill"])
+                official_buy = open_buy
+                lv["buy_trigger"] = open_buy
+                lv["open_buy"] = open_buy
+            hit_buy_raw = bool(hit_open or f29["hit_buy"])
             if threshold_ok and official_open is None:
                 hit_buy_raw = False
             path_buy_px = None
@@ -7871,7 +7989,7 @@ def collect_rows(
             if (
                 str(FACTOR_ID).lower() in ("factor26", "f26", "26")
                 and threshold_ok
-                and hit_buy_raw
+                and hit_open
                 and qty_early <= 0
             ):
                 bars_buy = q.get("_day_bars")
@@ -7884,8 +8002,13 @@ def collect_rows(
                     open_px=float(official_open or q["open"]),
                     entry_pct=float(entry_pct),
                     tick=tick,
-                    official_buy=official_buy,
+                    official_buy=f26_buy,
                 )
+            if f29["hit_buy"]:
+                hit_buy_raw = True
+                if official_open and not path_buy_ts:
+                    path_buy_ts = session_open_bell_ts(str(q["session"]))
+                    path_buy_px = float(official_open)
             # 当日粘滞：已触买进预警后整天保留（有 1m / 现价离开买点也不摘）
             # 但最高未印到核定买点时，盘前/竞价错戳一律作废
             _st_buy = sticky.get(code) if isinstance(sticky.get(code), dict) else None
@@ -8517,6 +8640,27 @@ def collect_rows(
                 buy_time=buy_time,
                 session=str(q["session"]),
             )
+            if (
+                f29.get("hit_sell")
+                and qty > 0
+                and sellable > 0
+                and not t1_today
+                and official_open
+                and preview_ok
+                and signal_ok
+                and not _exit_dec.get("hit")
+            ):
+                _exit_dec = dict(_exit_dec or {})
+                _exit_dec.update(
+                    {
+                        "hit": True,
+                        "hit_show": True,
+                        "fill_px": float(official_open),
+                        "kind": "open_protect",
+                        "reason": "f29_auction_open",
+                        "open_bell": True,
+                    }
+                )
             # open_bell sticky / 09:30 时刻仅连续竞价后写入，避免竞价期伪触发时间
             if _exit_dec.get("open_bell") and signal_ok:
                 _bell = session_open_bell_ts(str(q["session"]))
@@ -9343,6 +9487,14 @@ def collect_rows(
                     "开盘复核OK": bool(open_audit_ok),
                     "复核开盘": open_audit_px,
                     "开盘复核时间": open_audit_ts,
+                    "因子29": f29.get("label"),
+                    "因子29买OK": bool(f29.get("hit_buy")),
+                    "因子29卖OK": bool(f29.get("hit_sell")),
+                    "_f29_hit_buy": bool(f29.get("hit_buy")),
+                    "_f29_hit_sell": bool(f29.get("hit_sell")),
+                    "竞价基准": f29.get("path", {}).get("baseline"),
+                    "竞价最高": f29.get("path", {}).get("high"),
+                    "竞价最低": f29.get("path", {}).get("low"),
                     "前日形态": prev_shape,
                     "阈值就绪": preview_ok,
                     "竞价参考": auction_ref,

@@ -33,6 +33,7 @@ REGRESSION_MODULES = (
     "test_strategy_cumulative_regression",
     "strategy.test_factor26_exit_priority",
     "strategy.test_factor26_characterization",
+    "strategy.test_factor29",
     "strategy.test_cross_resolution_harness",
     "strategy.test_full_exit_orchestration",
 )

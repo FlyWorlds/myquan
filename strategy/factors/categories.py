@@ -85,6 +85,7 @@ FACTOR_CATEGORY: dict[str, str] = {
     "factor26": "execution",
     "factor27": "sentiment",
     "factor28": "sentiment",
+    "factor29": "execution",
     "cf1": "reversal",
 }
 

@@ -118,6 +118,44 @@ class TestQuoteHealth(unittest.TestCase):
         self.assertEqual(q["open"], 63.96)
         self.assertGreaterEqual(q["low"], 63.96)
 
+    def test_auction_lock_path_survives_0925_reset(self) -> None:
+        hub = QuoteHub()
+        hub.apply_tick(
+            "sz002580",
+            last=17.70,
+            open_px=17.70,
+            last_ts="2026-10-13 09:15:30",
+        )
+        hub.apply_tick(
+            "sz002580",
+            last=17.90,
+            open_px=17.90,
+            last_ts="2026-10-13 09:20:00",
+        )
+        hub.apply_tick(
+            "sz002580",
+            last=18.35,
+            open_px=17.90,
+            last_ts="2026-10-13 09:24:50",
+        )
+        pre = hub.get_quote("sz002580")
+        self.assertAlmostEqual(float(pre["_auction_baseline"]), 17.90, places=2)
+        self.assertAlmostEqual(float(pre["_auction_high"]), 18.35, places=2)
+        hub.apply_tick(
+            "sz002580",
+            last=18.53,
+            open_px=18.53,
+            high=18.53,
+            low=18.53,
+            last_ts="2026-10-13 09:25:01",
+        )
+        q = hub.get_quote("sz002580")
+        self.assertEqual(q["open"], 18.53)
+        self.assertEqual(q["high"], 18.53)
+        self.assertAlmostEqual(float(q["_auction_baseline"]), 17.90, places=2)
+        self.assertAlmostEqual(float(q["_auction_high"]), 18.35, places=2)
+        self.assertNotAlmostEqual(float(q["_auction_high"]), 18.53, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

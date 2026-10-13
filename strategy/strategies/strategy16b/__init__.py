@@ -39,7 +39,7 @@ register_strategy(
         id=STRATEGY_ID,
         name=STRATEGY_NAME,
         description=(
-            "策略16B复刻策略16的因子27核心龙头池与因子26买卖内核；"
+            "策略16B复刻策略16的因子27核心龙头池与因子26/29买卖内核；"
             "区别是盯盘页面可动态配置回看月份、价格上限、板块/ST过滤等条件，"
             "再从全A概念成分重新生成候选池。"
         ),
@@ -57,7 +57,7 @@ register_strategy(
             "watch_tab": True,
             "universe": "factor27",
             "horizon": "rolling_3m",
-            "factors": ("factor26", "factor2", "factor27", "factor22"),
+            "factors": ("factor26", "factor29", "factor2", "factor27", "factor22"),
             "custom_select_ui": True,
             "tab_order": 16.1,
         },

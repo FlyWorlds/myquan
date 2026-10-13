@@ -1,6 +1,6 @@
 """盯盘标的池与代码工具（唯一真源；index 从此处导入）。
 
-当前锁定：**默认策略 = 策略十六（核心龙头） = 因子27 + 因子26 + 因子2 + 因子22**。
+当前锁定：**默认策略 = 策略十六（核心龙头） = 因子27 + 因子26 + 因子29 + 因子2 + 因子22**。
 默认交易池：因子27 核心龙头近 3 个月冻结池 ∪ **公共自选池**（天通/凯盛/东材/金安，
 `SELF_WATCHLIST_PICKS`；策略一/十五/十六与 effective 并集均并入，非仅策略十六）。
 策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
@@ -53,11 +53,12 @@ from strategy.watch_universe import (
     ziyang_codes,
 )
 
-# 默认定盘：策略十六 + 因子27/因子26/因子2/因子22
+# 默认定盘：策略十六 + 因子27/因子26/因子29/因子2（因子22 默认关）
 STRATEGY_ID = "strategy16"
 FACTOR_ID = "factor26"
 FACTOR2_ID = "factor2"
 FACTOR22_ID = "factor22"
+FACTOR29_ID = "factor29"
 FACTOR4_ID = "factor4"
 STRATEGY_NAME = "策略十六·核心龙头"
 # 策略三（旧号策略七）才叠因子4；默认核心龙头关闭
@@ -1449,6 +1450,7 @@ def slot_fill_decision(
     session_low: float | None = None,
     official_buy: float | None = None,
     session_high: float | None = None,
+    fill_mode: str = "default",
 ) -> dict[str, Any] | None:
     """空槽成交价：平仓腾出 vs 新触发。
 
@@ -1457,7 +1459,23 @@ def slot_fill_decision(
     · 平仓后才触发：按买点成交
     · 成交价不得低于当日已印最低，也不得低于今日核定买点
     · 当日最高未印到核定买点则拒（开盘价附近的假突破不算）
+    · fill_mode=official_open：因子29 竞价武装，一律按正式开盘成交，不用现价
     """
+    if str(fill_mode or "") == "official_open":
+        try:
+            open_fill = float(official_buy or signal_px or 0)
+        except (TypeError, ValueError):
+            return None
+        if open_fill <= 0:
+            return None
+        if buy_fill_reject_reason(
+            fill_px=open_fill,
+            official_buy=open_fill,
+            session_high=session_high,
+            session_low=session_low,
+        ):
+            return None
+        return {"fill_px": round(float(open_fill), 4), "kind": "official_open"}
     try:
         sig = float(signal_px or 0)
     except (TypeError, ValueError):

@@ -921,6 +921,8 @@ def evaluate_live_transition(
     day_open: float | None = None,
     entry_pct: float | None = None,
     tick: float | None = None,
+    open_fill: bool = False,
+    auction_open_sell: bool = False,
 ) -> dict[str, Any]:
     """用 live last 撞 buy/sell level；仅状态转换产生事件。
 
@@ -997,9 +999,14 @@ def evaluate_live_transition(
         if not is_signal_window(now):
             book = force_book if force_book is not None else get_book(strategy_id, symbol)
             sess_closed = _session_of(quote_ts or eval_t)
-            official = _official_buy_from_open(
+            official_break = _official_buy_from_open(
                 day_open, entry_pct=entry_pct, tick=tick
             )
+            try:
+                open_closed = float(day_open or 0)
+            except (TypeError, ValueError):
+                open_closed = 0.0
+            official = open_closed if (open_fill and open_closed > 0) else official_break
             if official and _void_today_unprinted_long(
                 book, official_buy=official, session=sess_closed
             ):
@@ -1034,9 +1041,14 @@ def evaluate_live_transition(
         transition: str | None = None
         session = _session_of(quote_ts or eval_t)
 
-        official = _official_buy_from_open(
+        official_break = _official_buy_from_open(
             day_open, entry_pct=entry_pct, tick=tick
         )
+        try:
+            open_lv0 = float(day_open or 0)
+        except (TypeError, ValueError):
+            open_lv0 = 0.0
+        official = open_lv0 if (open_fill and open_lv0 > 0) else official_break
         if official and _void_today_unprinted_long(
             book, official_buy=official, session=session
         ):
@@ -1054,8 +1066,10 @@ def evaluate_live_transition(
                 open_lv = float(day_open) if day_open is not None else 0.0
             except (TypeError, ValueError):
                 open_lv = 0.0
-            # 有核定今开时，买点必须是今开突破阈值；开盘价本身不是突破
-            if official is not None:
+            # 因子29：买点就是正式开盘。因子26：买点必须是今开突破阈值。
+            if open_fill and open_lv > 0:
+                buy_lv = open_lv
+            elif official is not None:
                 if buy_lv is None or buy_lv + 1e-8 < official:
                     buy_lv = official
             elif open_lv > 0:
@@ -1076,11 +1090,16 @@ def evaluate_live_transition(
                 out["skipped"] = "wait_auction"
                 touched = False
             if touched:
-                shares, cash_left, _ = _buy_shares(float(book["virtual_cash"]), last)
+                fill_px = last
+                entry_ts = str(quote_ts or eval_t)
+                if open_fill and open_lv > 0:
+                    fill_px = open_lv
+                    entry_ts = f"{session} 09:30:00"
+                shares, cash_left, _ = _buy_shares(float(book["virtual_cash"]), fill_px)
                 if shares >= LOT:
                     book["state"] = "LONG"
-                    book["entry_price"] = round(last, 4)
-                    book["entry_time"] = str(quote_ts or eval_t)
+                    book["entry_price"] = round(fill_px, 4)
+                    book["entry_time"] = entry_ts
                     book["exit_price"] = None
                     book["exit_time"] = None
                     book["gap_rebuy_ok"] = False
@@ -1097,7 +1116,7 @@ def evaluate_live_transition(
                         "strategy_id": strategy_id,
                         "symbol": _code_key(symbol),
                         "side": "BUY",
-                        "trigger_price": round(last, 4),
+                        "trigger_price": round(fill_px, 4),
                         "trigger_time": book["entry_time"],
                         "quote_timestamp": quote_ts,
                         "reason": reason,
@@ -1110,7 +1129,13 @@ def evaluate_live_transition(
                 sell_lv = float(sell_level) if sell_level is not None else None
             except (TypeError, ValueError):
                 sell_lv = None
+            try:
+                open_f = float(day_open or 0)
+            except (TypeError, ValueError):
+                open_f = 0.0
             touched = sell_lv is not None and sell_lv > 0 and last <= sell_lv + 1e-12
+            if auction_open_sell and open_f > 0:
+                touched = True
             if touched and not t0 and _session_of(book.get("entry_time")) == session:
                 out["skipped"] = "t1_locked"
                 touched = False
@@ -1123,12 +1148,12 @@ def evaluate_live_transition(
                 fill_px = last
                 exit_ts = str(quote_ts or eval_t)
                 used_open_protect = False
-                try:
-                    open_f = float(day_open or 0)
-                except (TypeError, ValueError):
-                    open_f = 0.0
                 hms = _session_clock(quote_ts or eval_t)
-                if (
+                if auction_open_sell and open_f > 0:
+                    fill_px = open_f
+                    exit_ts = f"{session} 09:30:00"
+                    used_open_protect = True
+                elif (
                     sell_lv is not None
                     and open_f > 0
                     and open_f <= float(sell_lv) + 1e-12

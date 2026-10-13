@@ -1,4 +1,4 @@
-"""策略十六·核心龙头 · 因子绑定（宇宙=因子27；买卖走因子26）。"""
+"""策略十六·核心龙头 · 因子绑定（宇宙=因子27；买卖走因子26 + 因子29）。"""
 
 from __future__ import annotations
 
@@ -61,6 +61,17 @@ FACTOR_BINDINGS = (
         label="核心龙头近3个月池",
         role="universe",
         filter_desc="通达信活跃概念偏高；每概念≤2；池约30只；主板非ST非科创创业、百元以下；滚动近3个月冻结",
+        enabled=True,
+    ),
+    bind_factor(
+        "factor29",
+        label="竞价末段强度",
+        role="both",
+        threshold_source="strategy16_symbol_entry_pct",
+        window_start="09:20:00",
+        window_end="09:25:00",
+        execution="official_open_after_single_stock_audit",
+        filter_desc="9:20后首个有效指示价为基准，撮合前按个股阈值对称武装买卖；9:25单股复核后按正式开盘撮合，卖出遵守T+1",
         enabled=True,
     ),
     bind_factor(

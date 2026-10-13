@@ -1875,3 +1875,31 @@ def test_record_daily_settlement_once_final():
         data["daily_settlements"] = backup
         save_holdings(data)
 
+
+def test_factor29_fill_locks_official_open():
+    dec = slot_fill_decision(
+        signal_px=18.35,
+        last_px=19.00,
+        trigger_ts="2026-10-13 09:30:00",
+        freed_at=None,
+        official_buy=18.53,
+        session_high=18.53,
+        session_low=18.53,
+        fill_mode="official_open",
+    )
+    assert dec is not None
+    assert dec["kind"] == "official_open"
+    assert abs(float(dec["fill_px"]) - 18.53) < 1e-9
+    first_tier = slot_fill_decision(
+        signal_px=18.35,
+        last_px=19.18,
+        trigger_ts="2026-10-13 09:30:00",
+        freed_at="2026-10-13 09:31:00",
+        official_buy=18.53,
+        session_high=19.18,
+        session_low=18.53,
+        fill_mode="official_open",
+    )
+    assert first_tier is not None
+    assert abs(float(first_tier["fill_px"]) - 18.53) < 1e-9
+
