@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-13 09:49:28",
+  "updated_at": "2026-10-13 09:55:25",
   "positions": {
     "001309": {
       "name": "德明利",
@@ -640,19 +640,19 @@
     "601208": {
       "name": "东材科技",
       "market": "上证",
-      "qty": 0,
-      "available": null,
-      "cost": null,
-      "today_cost": null,
-      "buy_time": null,
+      "qty": 1300,
+      "available": 0,
+      "cost": 44.23,
+      "today_cost": 44.23,
+      "buy_time": "2026-10-13 09:30:26",
       "tp_stage": 0,
       "last_tp_ts": null,
-      "note": "止损成交@49.18 (2026-10-09)",
-      "peak_high": 53.04,
-      "peak_high_at": "2026-10-08 09:33:33",
-      "last_quote_at": "2026-10-09 09:30:13",
-      "overnight_peak": 52.34,
-      "overnight_peak_session": "2026-10-09",
+      "note": "槽位触买(自动·买点)",
+      "peak_high": 44.23,
+      "peak_high_at": "2026-10-13 09:30:26",
+      "last_quote_at": "2026-10-13 09:55:23",
+      "overnight_peak": 44.23,
+      "overnight_peak_session": "2026-10-13",
       "stop_noted": false,
       "stop_noted_px": null,
       "stop_noted_session": null
@@ -2764,14 +2764,22 @@
     "001266": {
       "name": "宏英智能",
       "market": "深证",
-      "qty": 0,
-      "available": null,
-      "cost": null,
-      "today_cost": null,
-      "buy_time": null,
+      "qty": 1500,
+      "available": 0,
+      "cost": 36.54,
+      "today_cost": 36.54,
+      "buy_time": "2026-10-13 09:31:00",
       "tp_stage": 0,
       "last_tp_ts": null,
-      "note": ""
+      "note": "槽位触买(自动·买点)",
+      "peak_high": 37.01,
+      "peak_high_at": "2026-10-13 09:54:00",
+      "overnight_peak": 36.54,
+      "overnight_peak_session": "2026-10-13",
+      "last_quote_at": "2026-10-13 09:55:24",
+      "stop_noted": true,
+      "stop_noted_px": 35.62,
+      "stop_noted_session": "2026-10-13"
     },
     "002430": {
       "name": "杭氧股份",
@@ -2891,7 +2899,7 @@
       "buy_time": null,
       "tp_stage": 0,
       "last_tp_ts": null,
-      "note": "止损成交@9.13 (2026-10-13)",
+      "note": "止损成交@9.31 (2026-10-13)",
       "peak_high": 9.64,
       "peak_high_at": "2026-10-12 10:31:38",
       "last_quote_at": "2026-10-13 09:30:01",
@@ -3051,13 +3059,13 @@
       "name": "中船科技",
       "market": "上证",
       "qty": 6100,
-      "price": 9.13,
+      "price": 9.31,
       "cost": 9.55,
-      "pnl": -2562.0,
-      "pnl_pct": -4.4,
+      "pnl": -1464.0,
+      "pnl_pct": -2.51,
       "day_base": 58011.0,
-      "day_pnl": -2318.0,
-      "day_pnl_pct": -4.0,
+      "day_pnl": -1220.0,
+      "day_pnl_pct": -2.1,
       "reason": "止损成交",
       "time": "2026-10-13 09:30:00",
       "first_hit_ts": "2026-10-13 09:30:00",
@@ -3074,12 +3082,13 @@
       "allow_intraday_rebuy": true,
       "high_after_stop": 9.54,
       "low_after_stop": 9.13,
-      "rebound_pct": 2.25,
-      "miss_pnl": 1281.0
+      "rebound_pct": 5.18,
+      "miss_pnl": 2867.0,
+      "note_fix": "开盘保护纠价"
     }
   },
-  "account_total": 290812.0,
-  "account_cash": 287412.0,
+  "account_total": 286815.0,
+  "account_cash": 176201.0,
   "account_total_open": 297765.0,
   "account_total_open_session": "2026-10-13",
   "last_session": "2026-10-13",
@@ -3098,7 +3107,7 @@
     },
     "600072": {
       "stop_touched": true,
-      "touch_stop": 9.22,
+      "touch_stop": 9.31,
       "stop_hit_ts": "2026-10-13 09:30:00",
       "session": "2026-10-13",
       "bg_class": "warn-sell",
@@ -3108,11 +3117,6 @@
       "建议挂单": 9.39,
       "挂单说明": "未到3%峰值回落2.5%@9.39；9:25 可挂单；9:30 起才结算止损"
     },
-    "001266": {
-      "buy_touched": true,
-      "buy_hit_ts": "2026-10-13 09:31:00",
-      "session": "2026-10-13"
-    },
     "603042": {
       "buy_touched": true,
       "buy_hit_ts": "2026-10-13 09:30:00",
@@ -3121,11 +3125,6 @@
     "600353": {
       "buy_touched": true,
       "buy_hit_ts": "2026-10-13 09:31:00",
-      "session": "2026-10-13"
-    },
-    "601208": {
-      "buy_touched": true,
-      "buy_hit_ts": "2026-10-13 09:30:26",
       "session": "2026-10-13"
     },
     "002962": {
@@ -3165,6 +3164,41 @@
       "stop_touched": true,
       "touch_stop": 19.6,
       "stop_hit_ts": "2026-10-13 09:47:00",
+      "session": "2026-10-13"
+    },
+    "002580": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:31:00",
+      "session": "2026-10-13"
+    },
+    "002636": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:32:00",
+      "session": "2026-10-13"
+    },
+    "000049": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:31:00",
+      "session": "2026-10-13"
+    },
+    "603920": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:33:00",
+      "session": "2026-10-13"
+    },
+    "603659": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:31:00",
+      "session": "2026-10-13"
+    },
+    "601208": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:30:26",
+      "session": "2026-10-13"
+    },
+    "001266": {
+      "buy_touched": true,
+      "buy_hit_ts": "2026-10-13 09:31:00",
       "session": "2026-10-13"
     }
   },
@@ -3404,16 +3438,16 @@
       "last_buy_factor_date": "2026-10-08"
     },
     "603920": {
-      "last_buy_factor_px": 45.64,
-      "last_buy_factor_date": "2026-10-08"
+      "last_buy_factor_px": 39.36,
+      "last_buy_factor_date": "2026-10-13"
     },
     "600330": {
       "last_buy_factor_px": 27.72,
       "last_buy_factor_date": "2026-10-08"
     },
     "603659": {
-      "last_buy_factor_px": 22.41,
-      "last_buy_factor_date": "2026-10-09"
+      "last_buy_factor_px": 21.54,
+      "last_buy_factor_date": "2026-10-13"
     },
     "600000": {
       "last_sell_factor_px": 9.5,
@@ -3440,8 +3474,8 @@
       "last_buy_factor_date": "2026-10-09"
     },
     "000049": {
-      "last_buy_factor_px": 22.89,
-      "last_buy_factor_date": "2026-10-09"
+      "last_buy_factor_px": 21.93,
+      "last_buy_factor_date": "2026-10-13"
     },
     "600063": {
       "last_buy_factor_px": 5.5,
@@ -3480,7 +3514,7 @@
     "600072": {
       "last_buy_factor_px": 9.55,
       "last_buy_factor_date": "2026-10-12",
-      "last_sell_factor_px": 9.13,
+      "last_sell_factor_px": 9.31,
       "last_sell_factor_date": "2026-10-13"
     },
     "600967": {
@@ -3522,6 +3556,14 @@
     "600760": {
       "last_buy_factor_px": 44.21,
       "last_buy_factor_date": "2026-10-13"
+    },
+    "002580": {
+      "last_buy_factor_px": 18.74,
+      "last_buy_factor_date": "2026-10-13"
+    },
+    "002636": {
+      "last_buy_factor_px": 61.5,
+      "last_buy_factor_date": "2026-10-13"
     }
   },
   "factor2": {
@@ -3529,11 +3571,11 @@
     "peak": 326457.0,
     "in_add_zone": false,
     "last_action": "hold",
-    "last_label": "回撤10.9% 观望（加仓≥20% / 减仓≤10%）",
+    "last_label": "回撤12.1% 观望（加仓≥20% / 减仓≤10%）",
     "last_session": "2026-10-13",
     "suggest_amount": 0.0,
-    "dd_pct": 10.92,
-    "equity": 290812.0,
+    "dd_pct": 12.14,
+    "equity": 286815.0,
     "thresholds": {
       "hist_max_dd": 0.26,
       "avg_yearly_max_dd": 0.19,
@@ -3594,9 +3636,9 @@
       "session": "2026-10-13",
       "name": "中船科技",
       "qty": 6100,
-      "price": 9.13,
-      "day_pnl": -2318.0,
-      "day_pnl_pct": -4.0
+      "price": 9.31,
+      "day_pnl": -1220.0,
+      "day_pnl_pct": -2.1
     }
   },
   "updated_host": "WIN-IDCFVK9G3SU",
@@ -4205,33 +4247,73 @@
     },
     "2026-10-13": {
       "session": "2026-10-13",
-      "recorded_at": "2026-10-13 09:49:28",
+      "recorded_at": "2026-10-13 09:55:19",
       "final": false,
       "draft": true,
       "settle_kind": "POSITION_SETTLEMENT",
-      "account_total": 292353.0,
+      "account_total": 288356.0,
       "account_open": 297765.0,
       "paper_equity_base": 300000.0,
       "paper_pnl_start": "2026-09-09",
-      "day_pnl": -5412.0,
-      "day_pnl_pct": -1.82,
-      "equity_day_pnl": -5412.0,
+      "day_pnl": -9409.0,
+      "day_pnl_pct": -3.16,
+      "equity_day_pnl": -9409.0,
       "day_pnl_vs_equity": 0.0,
-      "total_pnl": -7647.0,
-      "total_pnl_pct": -2.55,
+      "total_pnl": -11644.0,
+      "total_pnl_pct": -3.88,
       "settled_count": 2,
-      "settled_day_pnl": -8812.0,
-      "positions": [],
-      "closing_marks": [],
+      "settled_day_pnl": -7714.0,
+      "positions": [
+        {
+          "code": "601208",
+          "name": "东材科技",
+          "qty": 1300,
+          "cost": 44.23,
+          "last": 43.63,
+          "day_pnl": -780.0,
+          "upnl": -780.0
+        },
+        {
+          "code": "001266",
+          "name": "宏英智能",
+          "qty": 1500,
+          "cost": 36.54,
+          "last": 35.93,
+          "day_pnl": -915.0,
+          "upnl": -915.0
+        }
+      ],
+      "closing_marks": [
+        {
+          "code": "601208",
+          "name": "东材科技",
+          "qty": 1300,
+          "cost": 44.23,
+          "close": 43.63,
+          "day_pnl": -780.0,
+          "upnl": -780.0,
+          "settle_kind": "POSITION_SETTLEMENT"
+        },
+        {
+          "code": "001266",
+          "name": "宏英智能",
+          "qty": 1500,
+          "cost": 36.54,
+          "close": 35.93,
+          "day_pnl": -915.0,
+          "upnl": -915.0,
+          "settle_kind": "POSITION_SETTLEMENT"
+        }
+      ],
       "closed_today": [
         {
           "code": "600072",
           "name": "中船科技",
           "qty": 6100,
-          "price": 9.13,
+          "price": 9.31,
           "cost": 9.55,
-          "day_pnl": -2318.0,
-          "pnl": -2562.0
+          "day_pnl": -1220.0,
+          "pnl": -1464.0
         },
         {
           "code": "002866",
