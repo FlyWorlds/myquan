@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-13 09:56:41",
+  "updated_at": "2026-10-13 16:53:08",
   "positions": {
     "001309": {
       "name": "德明利",
@@ -640,22 +640,22 @@
     "601208": {
       "name": "东材科技",
       "market": "上证",
-      "qty": 1300,
-      "available": 0,
-      "cost": 44.23,
-      "today_cost": 44.23,
-      "buy_time": "2026-10-13 09:30:26",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
       "tp_stage": 0,
       "last_tp_ts": null,
-      "note": "槽位触买(自动·买点)",
-      "peak_high": 44.23,
-      "peak_high_at": "2026-10-13 09:30:26",
-      "last_quote_at": "2026-10-13 09:56:38",
-      "overnight_peak": 44.23,
-      "overnight_peak_session": "2026-10-13",
-      "stop_noted": true,
-      "stop_noted_px": 43.12,
-      "stop_noted_session": "2026-10-13"
+      "note": "",
+      "peak_high": null,
+      "peak_high_at": null,
+      "last_quote_at": null,
+      "overnight_peak": null,
+      "overnight_peak_session": null,
+      "stop_noted": false,
+      "stop_noted_px": null,
+      "stop_noted_session": null
     },
     "603306": {
       "name": "华懋科技",
@@ -684,14 +684,22 @@
     "002636": {
       "name": "金安国纪",
       "market": "深证",
-      "qty": 0,
-      "available": null,
-      "cost": null,
-      "today_cost": null,
-      "buy_time": null,
+      "qty": 900,
+      "available": 0,
+      "cost": 61.5,
+      "today_cost": 61.5,
+      "buy_time": "2026-10-13 09:32:00",
       "tp_stage": 0,
       "last_tp_ts": null,
-      "note": ""
+      "note": "槽位触买(订正·用户指定买点)",
+      "peak_high": 61.5,
+      "peak_high_at": "2026-10-13 09:32:00",
+      "last_quote_at": null,
+      "overnight_peak": 61.5,
+      "overnight_peak_session": "2026-10-13",
+      "stop_noted": false,
+      "stop_noted_px": null,
+      "stop_noted_session": null
     },
     "000880": {
       "name": "潍柴重机",
@@ -2720,14 +2728,22 @@
     "002580": {
       "name": "圣阳股份",
       "market": "深证",
-      "qty": 0,
-      "available": null,
-      "cost": null,
-      "today_cost": null,
-      "buy_time": null,
+      "qty": 3000,
+      "available": 0,
+      "cost": 19.0,
+      "today_cost": 19.0,
+      "buy_time": "2026-10-13 09:31:00",
       "tp_stage": 0,
       "last_tp_ts": null,
-      "note": ""
+      "note": "槽位触买(订正·用户指定买点)",
+      "peak_high": 19.0,
+      "peak_high_at": "2026-10-13 09:31:00",
+      "last_quote_at": null,
+      "overnight_peak": 19.0,
+      "overnight_peak_session": "2026-10-13",
+      "stop_noted": false,
+      "stop_noted_px": null,
+      "stop_noted_session": null
     },
     "002962": {
       "name": "五方光电",
@@ -2764,19 +2780,19 @@
     "001266": {
       "name": "宏英智能",
       "market": "深证",
-      "qty": 1500,
-      "available": 0,
-      "cost": 36.54,
-      "today_cost": 36.54,
-      "buy_time": "2026-10-13 09:31:00",
+      "qty": 0,
+      "available": null,
+      "cost": null,
+      "today_cost": null,
+      "buy_time": null,
       "tp_stage": 0,
       "last_tp_ts": null,
-      "note": "槽位触买(自动·买点)",
-      "peak_high": 37.01,
-      "peak_high_at": "2026-10-13 09:54:00",
-      "overnight_peak": 36.54,
-      "overnight_peak_session": "2026-10-13",
-      "last_quote_at": "2026-10-13 09:56:39",
+      "note": "",
+      "peak_high": null,
+      "peak_high_at": null,
+      "overnight_peak": null,
+      "overnight_peak_session": null,
+      "last_quote_at": null,
       "stop_noted": false,
       "stop_noted_px": null,
       "stop_noted_session": null
@@ -3088,7 +3104,7 @@
     }
   },
   "account_total": 286497.0,
-  "account_cash": 176201.0,
+  "account_cash": 176160.0,
   "account_total_open": 297765.0,
   "account_total_open_session": "2026-10-13",
   "last_session": "2026-10-13",
@@ -3204,16 +3220,6 @@
     "002253": {
       "buy_touched": true,
       "buy_hit_ts": "2026-10-13 09:31:00",
-      "session": "2026-10-13"
-    },
-    "001266": {
-      "buy_touched": true,
-      "buy_hit_ts": "2026-10-13 09:31:00",
-      "session": "2026-10-13"
-    },
-    "601208": {
-      "buy_touched": true,
-      "buy_hit_ts": "2026-10-13 09:30:26",
       "session": "2026-10-13"
     }
   },
@@ -3664,7 +3670,7 @@
       "day_pnl_pct": -2.1
     }
   },
-  "updated_host": "WIN-IDCFVK9G3SU",
+  "updated_host": "wangxiangyudeMacBook-Pro.local",
   "daily_settlements": {
     "2026-09-14": {
       "session": "2026-09-14",
