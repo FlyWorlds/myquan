@@ -126,6 +126,9 @@ def _show_file(repo: Path, spec: str, dest: Path) -> bool:
 
 def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
     """从 origin/holdings-ledger 覆盖本机纸面账本和策略模拟账本。"""
+    from database_holdings import database_enabled
+    if database_enabled():
+        raise RuntimeError("Database is authoritative; legacy Git holdings pull is disabled")
     repo = repo_root()
     # 盯盘启动同步路径：网络挂起时不能无限堵 API（超时由调用方降级为本机账本）
     fetch = _run(
@@ -199,6 +202,9 @@ def pull_holdings(*, force: bool = False, quiet: bool = False) -> str:
 
 
 def push_holdings(*, force: bool = False) -> str:
+    from database_holdings import database_enabled
+    if database_enabled():
+        raise RuntimeError("Database is authoritative; legacy Git holdings push is disabled")
     """把本机纸面账本 + 策略模拟账本推到 origin/holdings-ledger。"""
     if not HOLDINGS_FILE.is_file():
         raise SystemExit("没有 holdings.json，无法推送")

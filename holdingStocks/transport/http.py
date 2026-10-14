@@ -167,9 +167,18 @@ def build_watch_request_handler(
                 return
             if path == "/api/trades":
                 from trade_ledger import api_trades_payload
-
-                status, payload = api_trades_payload(self.path)
-                self._send_json(payload, status=status)
+                try:
+                    status, payload = api_trades_payload(self.path)
+                    self._send_json(payload, status=status)
+                except Exception:
+                    self._send_json({"error": "database trade ledger unavailable"}, status=503)
+                return
+            if path == "/api/holdings/state":
+                try:
+                    from database_holdings import request_state
+                    self._send_json(request_state())
+                except Exception:
+                    self._send_json({"error": "database holdings unavailable"}, status=503)
                 return
             if path in ("/api/snapshot", f"/{watch_meta_file.name}"):
                 with snap_lock:

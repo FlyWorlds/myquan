@@ -32,6 +32,8 @@ spring:
       query-timeout: 5
   jackson:
     time-zone: Asia/Shanghai
+    deserialization:
+      use-big-decimal-for-floats: true
   lifecycle:
     timeout-per-shutdown-phase: 10s
 

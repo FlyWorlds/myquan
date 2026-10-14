@@ -10,12 +10,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/holdings")
 public class HoldingsController {
     private final HoldingsService holdings;
+    private final PaperStateService state;
 
-    public HoldingsController(HoldingsService holdings) { this.holdings = holdings; }
+    public HoldingsController(HoldingsService holdings, PaperStateService state) { this.holdings = holdings; this.state=state; }
 
     @GetMapping
     public Map<String, Object> snapshot() { return holdings.snapshot(); }
 
     @PostMapping("/sync")
-    public Map<String, Object> sync() { return holdings.sync(); }
+    public Map<String, Object> sync() {
+        return state.syncLegacy();
+    }
 }

@@ -51,6 +51,10 @@ def empty_ledger() -> dict[str, Any]:
 
 
 def load_ledger() -> dict[str, Any]:
+    from database_holdings import database_enabled
+    if database_enabled():
+        from index import _HOLDINGS_STORE
+        return _HOLDINGS_STORE.ledger()
     with _LOCK:
         if not LEDGER_FILE.is_file():
             return empty_ledger()
@@ -67,6 +71,12 @@ def load_ledger() -> dict[str, Any]:
 
 
 def save_ledger(data: dict[str, Any]) -> None:
+    from database_holdings import database_enabled
+    if database_enabled():
+        from index import _HOLDINGS_STORE, load_holdings
+        data["updated_at"] = _now()
+        _HOLDINGS_STORE.save(load_holdings(), ledger=data)
+        return
     with _LOCK:
         data["updated_at"] = _now()
         tmp = LEDGER_FILE.with_suffix(".json.tmp")
@@ -410,6 +420,9 @@ def backfill_from_trades_jsonl(
     force: bool = False,
 ) -> int:
     """从 trades.jsonl 冷启动灌入（账本为空或 force）。"""
+    from database_holdings import database_enabled
+    if database_enabled():
+        return 0  # Historical records are imported once; never backfill from stale local files.
     path = trades_path or (ROOT / "trades.jsonl")
     with _LOCK:
         data = load_ledger()

@@ -2,6 +2,7 @@
 import type { HoldingRow, StrategyPicks } from '~/types/snapshot'
 
 const store = useWatchStore()
+const { error: databaseError } = useDatabaseHoldings()
 const { snapshot, strategies, wsStatus, wsDisconnected, privacyHidden } = storeToRefs(store)
 
 const activeTab = ref('holdings')
@@ -232,6 +233,9 @@ const closedCount = computed(() => closedHoldings.value.length)
     <header class="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-ui-hairline pb-4">
       <div>
         <h1 class="text-2xl font-bold text-ui-text">持仓盯盘</h1>
+        <p class="text-xs" :class="databaseError ? 'text-ui-danger' : 'text-ui-text-2'">
+          {{ databaseError || (store.paperState ? `数据库持仓 · 版本 ${store.paperState.revision}` : '连接数据库持仓…') }}
+        </p>
         <p class="text-sm text-ui-text-2">
           <span class="sensitive">{{ snapshot?.strategy?.name || '策略一' }}</span>
           · {{ snapshot?.strategy?.factorsLabel }}

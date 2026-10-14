@@ -62,6 +62,9 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
+if __name__ == "__main__":
+    sys.modules.setdefault("index", sys.modules[__name__])
+
 import akshare as ak
 import pandas as pd
 import requests
@@ -411,7 +414,9 @@ _STRATEGY16B_QUOTE_CACHE: dict[str, Any] = {
 }
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
 # 账本唯一持有者：进程内同一对象、串行写、写前版本检查、原子落盘（见 holdings_store.py）
-_HOLDINGS_STORE = HoldingsStore(
+from database_holdings import DatabaseHoldingsStore, database_enabled, paper_mutation
+
+_HOLDINGS_STORE = (DatabaseHoldingsStore if database_enabled() else HoldingsStore)(
     _HOLDINGS_CACHE,
     path=lambda: HOLDINGS_FILE,
     normalize=lambda d: _normalize_holdings(d),
@@ -2353,6 +2358,7 @@ def publish_watch_snapshot(
 
     portfolio_codes = set(portfolio_pool_codes(holdings_meta))
     account = _build_watch_account_summary(rows)
+    paper_revision = _HOLDINGS_CACHE.get("token") if database_enabled() else None
     # 账户/结算 session 跟日历；行上交易日盘前常滞后，不得拖慢日初锚
     session_today = _calendar_signal_session()
     row_sess = next(
@@ -2447,6 +2453,8 @@ def publish_watch_snapshot(
         portfolio_codes=portfolio_codes,
         strategy_codes=strategy_watchlist_codes(),
     )
+    if paper_revision is not None:
+        snapshot["paperRevision"] = paper_revision
     _enrich_snapshot_comprehensive_trade_returns(snapshot)
     apply_feed_health(snapshot, _current_feed_health())
     keep_last = False
@@ -2527,7 +2535,7 @@ def _seed_boot_watch_snapshot() -> None:
         return
     from holdings_sync import snapshot_cache_stale
 
-    if snapshot_cache_stale():
+    if database_enabled() or snapshot_cache_stale():
         if WATCH_META_FILE.is_file():
             print(f"[{_now()}] 丢弃过期 holdings_watch.json（账本更新）")
             try:
@@ -3829,6 +3837,9 @@ def _apply_trigger_date_fields(
 
 
 def _holdings_file_mtime() -> float:
+    if database_enabled():
+        _HOLDINGS_STORE.load()
+        return float(_HOLDINGS_CACHE.get("mtime") or 0)
     try:
         return HOLDINGS_FILE.stat().st_mtime if HOLDINGS_FILE.exists() else 0.0
     except OSError:
@@ -3934,6 +3945,7 @@ def _prev_settlement_account_total(
     return _as_money(rec.get("account_total"))
 
 
+@paper_mutation
 def _ensure_account_open_session(
     data: dict[str, Any],
     *,
@@ -3982,6 +3994,7 @@ def purge_fake_slot_closed(data: dict[str, Any], session: str) -> int:
     return len(drop)
 
 
+@paper_mutation
 def heal_watch_ledger(*, session: str | None = None) -> dict[str, Any]:
     """每轮自愈：隔夜解锁、修复仅现金日初、清掉非法「止损已记」/假三槽平仓。不改 qty / 成本 / 买入时间。
 
@@ -4850,6 +4863,7 @@ def _today_opened_cost(rows: list[dict[str, Any]], session: str | None = None) -
     return round(total, 2)
 
 
+@paper_mutation
 def _sync_account_total(rows: list[dict[str, Any]]) -> float | None:
     """有现金登记时，用 现金+市值 回写总资产。"""
     data = load_holdings()
@@ -4991,6 +5005,7 @@ def update_high_after_stop(
     return rec
 
 
+@paper_mutation
 def reprice_unprintable_today_buy(
     code: str,
     *,
@@ -5063,6 +5078,7 @@ def reprice_unprintable_today_buy(
     return True
 
 
+@paper_mutation
 def apply_paper_slot_buy(
     *,
     code: str,
@@ -5151,8 +5167,7 @@ def apply_paper_slot_buy(
         traces.pop(_code_key(code), None)
     session = str(hit_ts)[:10]
     pop_slot_freed_at(data, session)
-    save_holdings(data)
-    append_trade(
+    _commit_trade(
         {
             "time": hit_ts,
             "side": "buy",
@@ -5170,7 +5185,7 @@ def apply_paper_slot_buy(
             "reason": "买入入槽",
             "note": note,
             "reason_detail": note,
-        }
+        }, holdings=data
     )
     try:
         from wechat_notify import notify_trade_fill
@@ -5263,6 +5278,13 @@ def _paper_slot_qty(
     return int(qty)
 
 
+def _trades_text() -> str:
+    if database_enabled():
+        return "\n".join(json.dumps(r, ensure_ascii=False) for r in _HOLDINGS_STORE.trades()
+                         if not r.get("reset_archived"))
+    return TRADES_FILE.read_text(encoding="utf-8") if TRADES_FILE.exists() else ""
+
+
 def today_slot_buy_ranks(
     session: str,
     *,
@@ -5278,9 +5300,7 @@ def today_slot_buy_ranks(
         return ranks
     raw = text
     if raw is None:
-        if not TRADES_FILE.exists():
-            return ranks
-        raw = TRADES_FILE.read_text(encoding="utf-8")
+        raw = _trades_text()
     for line in raw.splitlines():
         line = line.strip()
         if not line:
@@ -5321,8 +5341,7 @@ def today_new_symbol_codes(
     raw = text
     if raw is None:
         try:
-            tp = Path(__file__).resolve().parent / "trades.jsonl"
-            raw = tp.read_text(encoding="utf-8") if tp.exists() else ""
+            raw = _trades_text()
         except OSError:
             raw = ""
     seen: list[str] = []
@@ -5977,6 +5996,7 @@ def overnight_gap_rebuy_allowed(
     return bool(buy_day and buy_day < sess)
 
 
+@paper_mutation
 def apply_exit_fill(
     *,
     code: str,
@@ -6026,6 +6046,9 @@ def apply_exit_fill(
     prior_noted_sess = str(pos.get("stop_noted_session") or "")[:10]
     buy_day = str(buy_time or pos.get("buy_time") or "")[:10]
     old_qty = int(pos.get("qty") or 0)
+    if str(action_kind or "") == "half" and int(pos.get("tp_stage") or 0) >= 1:
+        # A repeated half-exit signal cannot halve the same position cycle twice.
+        return existing or {}
     sell_qty = max(0, min(int(qty), old_qty))
     if sell_qty <= 0:
         return existing or {}
@@ -6147,8 +6170,7 @@ def apply_exit_fill(
     if new_qty <= 0:
         append_slot_freed_at(data, session, rec.get("time") or rec.get("first_hit_ts"))
 
-    save_holdings(data)
-    append_trade(
+    _commit_trade(
         {
             "time": rec["time"],
             "side": "sell",
@@ -6171,7 +6193,7 @@ def apply_exit_fill(
             "reason": reason,
             "note": trade_note,
             "reason_detail": trade_note,
-        }
+        }, holdings=data
     )
     try:
         from wechat_notify import notify_trade_fill
@@ -6968,6 +6990,7 @@ def paper_exit_decision(
         return legacy
 
 
+@paper_mutation
 def correct_realized_open_protect_fill(
     *,
     code: str,
@@ -7070,9 +7093,8 @@ def correct_realized_open_protect_fill(
     if isinstance(sticky, dict) and isinstance(sticky.get(code), dict):
         sticky[code]["touch_stop"] = new_px
         sticky[code]["stop_hit_ts"] = bell
-    save_holdings(data)
     meta_name = str((pos or {}).get("name") or rec.get("name") or code)
-    append_trade(
+    _commit_trade(
         {
             "time": _now(),
             # 纠价是对原成交的修正，不是新卖出；交割单不得再显示一笔 qty→0。
@@ -7086,11 +7108,12 @@ def correct_realized_open_protect_fill(
             "pnl": rec.get("pnl"),
             "adjustment_kind": "open_protect_reprice",
             "note": f"开盘保护纠价 {old_px}->{new_px}（原按抬高止损记账）",
-        }
+        }, holdings=data
     )
     return rec
 
 
+@paper_mutation
 def correct_realized_false_open_to_path_ladder(
     *,
     code: str,
@@ -7254,8 +7277,7 @@ def correct_realized_false_open_to_path_ladder(
         mem_rec["last_sell_factor_date"] = sess
         mem_rec["last_half_px"] = half_px_r
 
-    save_holdings(data)
-    append_trade(
+    append_trades([
         {
             "time": str(half_ts),
             "side": "sell",
@@ -7267,9 +7289,7 @@ def correct_realized_false_open_to_path_ladder(
             "cost": round(cost_f, 4),
             "pnl": None if half_pnl is None else round(float(half_pnl), 2),
             "note": f"{REASON_HALF}(纠假开盘保护·路径)",
-        }
-    )
-    append_trade(
+        },
         {
             "time": str(clear_ts),
             "side": "sell",
@@ -7281,9 +7301,7 @@ def correct_realized_false_open_to_path_ladder(
             "cost": round(cost_f, 4),
             "pnl": None if clear_pnl is None else round(float(clear_pnl), 2),
             "note": f"{REASON_STOP}(纠假开盘保护·峰值回落)",
-        }
-    )
-    append_trade(
+        },
         {
             "time": _now(),
             "side": "sell",
@@ -7299,7 +7317,7 @@ def correct_realized_false_open_to_path_ladder(
                 f"（现金轧差{new_proceeds - old_proceeds:+.2f}）"
             ),
         }
-    )
+    ], holdings=data)
     return rec
 
 
@@ -7591,7 +7609,32 @@ def settle_due_paper_stops(
     return n
 
 
-def append_trade(record: dict[str, Any]) -> None:
+def _commit_trade(record: dict[str, Any], *, holdings: dict[str, Any]) -> None:
+    if database_enabled():
+        append_trades([record], holdings=holdings)
+        return
+    save_holdings(holdings)
+    append_trade(record)
+
+
+def append_trades(records: list[dict[str, Any]], *, holdings: dict[str, Any]) -> None:
+    if database_enabled():
+        holdings["updated_at"] = _now()
+        _HOLDINGS_STORE.save(holdings, records=records)
+        return
+    save_holdings(holdings)
+    for record in records:
+        append_trade(record)
+
+
+def append_trade(record: dict[str, Any], *, holdings: dict[str, Any] | None = None) -> None:
+    if database_enabled():
+        data = holdings if holdings is not None else load_holdings()
+        data["updated_at"] = _now()
+        _HOLDINGS_STORE.save(data, records=[record])
+        return
+    if holdings is not None:
+        save_holdings(holdings)
     with TRADES_FILE.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
     try:
@@ -10359,6 +10402,8 @@ def _last_open_lots_from_trades(*, text: str | None = None) -> dict[str, dict[st
     """昨仓未记账卖出时，用 trades.jsonl 最后一档买量估已平仓当日盈亏。"""
     if text is not None:
         return _parse_open_lots(text)
+    if database_enabled():
+        return _parse_open_lots(_trades_text())
     try:
         mtime = TRADES_FILE.stat().st_mtime if TRADES_FILE.exists() else None
     except OSError:
@@ -10384,7 +10429,7 @@ def _trade_records_for_code(code: str, *, text: str | None = None) -> list[dict[
     raw = text
     if raw is None:
         try:
-            raw = TRADES_FILE.read_text(encoding="utf-8") if TRADES_FILE.exists() else ""
+            raw = _trades_text()
         except OSError:
             raw = ""
     out: list[dict[str, Any]] = []
@@ -11054,9 +11099,9 @@ def _ever_held_codes() -> set[str]:
             codes.add(_code_key(code))
     for code in data.get("realized_today") or {}:
         codes.add(_code_key(code))
-    if TRADES_FILE.exists():
+    if database_enabled() or TRADES_FILE.exists():
         try:
-            for line in TRADES_FILE.read_text(encoding="utf-8").splitlines():
+            for line in _trades_text().splitlines():
                 line = line.strip()
                 if not line:
                     continue
@@ -11288,6 +11333,7 @@ def cmd_status(args: argparse.Namespace) -> None:
 
 
 
+@paper_mutation
 def cmd_set_account(args: argparse.Namespace) -> None:
     total = float(args.total)
     if total <= 0:
@@ -11299,6 +11345,7 @@ def cmd_set_account(args: argparse.Namespace) -> None:
     print(f"已设总资产: {data['account_total']:.2f} 元")
 
 
+@paper_mutation
 def cmd_set_cash(args: argparse.Namespace) -> None:
     cash = float(args.cash)
     if cash < 0:
@@ -11309,6 +11356,7 @@ def cmd_set_cash(args: argparse.Namespace) -> None:
     print(f"已设可用现金: {data['account_cash']:.2f} 元")
 
 
+@paper_mutation
 def cmd_set_cost(args: argparse.Namespace) -> None:
     """仅登记/修改成本价（可不填数量）。"""
     meta = _find_meta(args.code)
@@ -11349,6 +11397,7 @@ def cmd_set_cost(args: argparse.Namespace) -> None:
     )
 
 
+@paper_mutation
 def cmd_buy(args: argparse.Namespace) -> None:
     meta = _find_meta(args.code)
     code = meta["code"]
@@ -11415,8 +11464,7 @@ def cmd_buy(args: argparse.Namespace) -> None:
         )
     except (TypeError, ValueError):
         cash_after = None
-    save_holdings(data)
-    append_trade(
+    _commit_trade(
         {
             "time": _now(),
             "side": "buy",
@@ -11434,7 +11482,7 @@ def cmd_buy(args: argparse.Namespace) -> None:
             "reason": "买入入槽",
             "note": args.note or "手动买入",
             "reason_detail": args.note or "手动买入",
-        }
+        }, holdings=data
     )
     print(
         f"买入记录: {meta['market']}{code} {meta['name']} "
@@ -11443,6 +11491,7 @@ def cmd_buy(args: argparse.Namespace) -> None:
     )
 
 
+@paper_mutation
 def cmd_sell(args: argparse.Namespace) -> None:
     meta = _find_meta(args.code)
     code = meta["code"]
@@ -11537,8 +11586,7 @@ def cmd_sell(args: argparse.Namespace) -> None:
     else:
         pos["note"] = f"{reason}@{price}×{qty} 剩{new_qty} ({session})"
 
-    save_holdings(data)
-    append_trade(
+    _commit_trade(
         {
             "time": _now(),
             "side": "sell",
@@ -11562,7 +11610,7 @@ def cmd_sell(args: argparse.Namespace) -> None:
             "reason": reason,
             "note": note or reason,
             "reason_detail": note or reason,
-        }
+        }, holdings=data
     )
     print(
         f"卖出记录: {meta['market']}{code} {meta['name']} "
@@ -11570,6 +11618,7 @@ def cmd_sell(args: argparse.Namespace) -> None:
     )
 
 
+@paper_mutation
 def cmd_clear(args: argparse.Namespace) -> None:
     meta = _find_meta(args.code)
     code = meta["code"]
@@ -11591,6 +11640,7 @@ def cmd_clear(args: argparse.Namespace) -> None:
     print(f"已清空持仓: {code} {meta['name']}")
 
 
+@paper_mutation
 def reset_paper_account() -> dict[str, Any]:
     """清仓并重置全部纸面盯盘状态（CLI / HTTP 共用）。
 
@@ -11655,7 +11705,11 @@ def reset_paper_account() -> dict[str, Any]:
 
     # 2) 当日成交行移出 trades.jsonl（保留历史），否则日买次数仍占满
     n_archived = 0
-    if TRADES_FILE.exists():
+    if database_enabled():
+        def stamp(book):
+            book["updated_at"] = _now()
+        n_archived = _HOLDINGS_STORE.reset_session_trades(sess, data, stamp=stamp)
+    elif TRADES_FILE.exists():
         try:
             lines = TRADES_FILE.read_text(encoding="utf-8").splitlines()
             keep: list[str] = []
@@ -11683,8 +11737,9 @@ def reset_paper_account() -> dict[str, Any]:
         except OSError as e:
             print(f"归档当日成交失败（继续）: {e}")
 
-    save_holdings(data)
-    _HOLDINGS_CACHE.clear()
+    if not database_enabled():
+        save_holdings(data)
+        _HOLDINGS_CACHE.clear()
     _ensure_signal_day_caches(force=True)
     try:
         from wechat_notify import STATE_FILE
@@ -11723,10 +11778,10 @@ def cmd_clear_all(_: argparse.Namespace) -> None:
     print(f"盯盘下一轮将按默认策略重新扫描入槽（日最多买 {info['max_buys_per_day']}）。")
 
 def cmd_history(_: argparse.Namespace) -> None:
-    if not TRADES_FILE.exists():
+    if not database_enabled() and not TRADES_FILE.exists():
         print("暂无成交记录")
         return
-    lines = TRADES_FILE.read_text(encoding="utf-8").strip().splitlines()
+    lines = _trades_text().strip().splitlines()
     rows = [json.loads(x) for x in lines if x.strip()]
     if not rows:
         print("暂无成交记录")
@@ -12216,12 +12271,18 @@ def cmd_watch_stop(_: argparse.Namespace) -> None:
 
 
 def cmd_holdings_push(args: argparse.Namespace) -> None:
+    if database_enabled():
+        raise SystemExit("持仓已由数据库管理，无需 Git push；持仓修改自动写入数据库。")
     from holdings_sync import push_holdings
 
     push_holdings(force=bool(getattr(args, "force", False)))
 
 
 def cmd_holdings_pull(args: argparse.Namespace) -> None:
+    if database_enabled():
+        _HOLDINGS_STORE.reload_from_disk()
+        print("已刷新数据库持仓")
+        return
     from holdings_sync import pull_holdings
 
     global _HOLDINGS_CACHE
@@ -12233,6 +12294,13 @@ def cmd_holdings_pull(args: argparse.Namespace) -> None:
 
 def _pull_remote_holdings_for_watch() -> None:
     """盯盘以 origin/holdings-ledger 为持仓真源，失败即停。"""
+    if database_enabled():
+        try:
+            _HOLDINGS_STORE.reload_from_disk()
+        except Exception as exc:
+            raise SystemExit(f"数据库持仓不可用，已停止盯盘: {exc}") from exc
+        print(f"[{_now()}] 数据库持仓就绪，revision={_HOLDINGS_CACHE.get('token')}")
+        return
     from holdings_sync import pull_holdings
 
     print(f"[{_now()}] 拉取远程持仓（holdings-ledger，远程为准）")

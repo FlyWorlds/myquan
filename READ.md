@@ -63,7 +63,9 @@ bash backend/run.sh
 - 测试/打包：`bash backend/run.sh test` / `bash backend/run.sh package`
 - 本机用户名和密码固定写在 `backend/config/application-local.properties`，按用户要求纳入 Git，仅用于本地开发；其他机器可修改该文件或使用 `SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD` 覆盖，不要在公网环境复用。
 
-后台与 Python 盯盘独立启动。已完成数据库连接、版本迁移及持仓单向快照：`POST /api/holdings/sync` 手动同步当前账本的实际持仓，`GET /api/holdings` 查询数据库持仓。MySQL 表为 `paper_holdings`、`paper_holdings_sync`，默认读取 `holdingStocks/holdings.json`，可用 `HOLDINGS_FILE` 覆盖路径。此阶段不自动同步、不从数据库反写交易账本，远程账本仍为持仓权威来源；一分钟行情入库、Java 页面接入和持仓权威迁库仍待实施。
+后台与 Python 盯盘独立启动，先启动 Java 后台，再启动原来的盯盘命令。持仓、现金、成交流水和交割明细已切换为 MySQL 权威账本，默认 `HOLDINGS_STORAGE=database`，Java API 地址由 `PAPER_BACKEND_URL` 指定（默认 `http://127.0.0.1:8080`）。前端经 `/api/holdings/state` 请求 Java 后端读取数据库；行情仍走实时行情源。买卖会将持仓、现金和交割记录在同一数据库事务中写入，数据库不可用时阻断更新，不回退本地文件。
+
+完整账本表 `paper_account_state` 保存账户与全部状态；`paper_holdings`、`paper_trade_history`、`paper_delivery_entries` 是同事务更新的查询表，不要直接修改这些投影表。初始化迁移仅执行一次：`POST /api/paper/state/migrate`，已迁移后返回409，旧 `/api/holdings/sync` 禁止覆盖数据库。修改接口 `PUT /api/paper/state` 要求版本号和幂等请求ID。原本地文件保留为迁移备份，不再用于生产更新。所有设备必须配置同一个后端，不能各用自己的 localhost 数据库期待自动同步；当前建议只运行一个交易写入进程。
 
 ## 启动加载顺序
 
@@ -157,7 +159,7 @@ GET /api/strategy16b/select
 
 - `holdings_watch.json` 是本机快照缓存，不是账本真源。
 - 纸面账本、交易和状态文件不要手工乱改。
-- Win/Mac 持仓同步走 `origin/holdings-ledger`。
+- Win/Mac 持仓共享须连接同一 Java 后端/MySQL；不再通过 Git 同步持仓。
 - 外网行情断开时，本机 WebSocket 仍可能正常，页面以 `quoteStale` / `feedOk` 显示行情健康。
 - 微信扫描预警与纸面/策略模拟自动成交只在 **A 股交易日连续竞价**；周末和交易所休市日不推扫描预警、不成交（`market_phase=closed`）。
 - 纸面买入分两条：因子26 只认今日核定开盘突破买点；**因子29** 只用 9:20–9:25 路径决定是否买，成交价锁正式开盘。**9:15–9:19 竞价指示价不参与买卖**，9:25 重置正式 OHLC 但保留竞价末段路径；9:30 必须已有新报价。候选触买后再**单独拉该股票行情复核开盘价**，与聚合行情按 tick 一致才过门；Paper 落账前再强制拉一次。接口失败、日期/时刻未核定、开盘失配或成交价低于买点均拒绝。
@@ -206,11 +208,11 @@ python strategy/run_ziyang_pool.py
 
 ```bash
 cd holdingStocks
-python index.py holdings-push
+# 重新读取数据库持仓
 python index.py holdings-pull
 ```
 
-`holdings-ledger` 分支是多设备运行态真源，包含纸面持仓、成交流水、交割明细，以及策略16/16B 的 simulator 状态与事件。`main` 只放代码；启动 `start_watch.py` / `index.py watch` 默认强制以远程账本覆盖本机账本，拉取失败会停止盯盘，避免本机旧持仓参与交易判断。清空持仓后要执行一次 `holdings-push --force`，另一台设备再启动会得到同一份空仓状态；只有确认离线调试时才加 `--no-ledger-pull`。
+持仓账本已经切换为数据库。生产模式的 `holdings-push` 与旧 Git pull 不再可用；`holdings-pull` 只刷新数据库读取。盯盘启动检查数据库账本，失败即停止。`--no-ledger-pull` 只跳过启动检查，不会切回本地文件。离线测试须显式设置 `HOLDINGS_STORAGE=local_json`，不得用于多设备实盘模拟同步。策略16/16B 的独立 simulator 文件此次未迁库，不能将它与纸面持仓账户混为一谈。
 
 ## 验证命令
 
@@ -320,6 +322,6 @@ result = aq.run_backtest(
 ## 开发约定
 
 - 改策略/因子时，同步更新 `strategy/README.md`、`docs/` 和本文。
-- 不要把 `holdingStocks/strategy_sim_state.json`、`holdingStocks/strategy_signal_events.json`、运行快照和账本缓存当普通代码改；它们由 `origin/holdings-ledger` 同步。
+- 不要把 `holdingStocks/strategy_sim_state.json`、`holdingStocks/strategy_signal_events.json`、运行快照和旧账本文件当普通代码改；纸面账户由MySQL保存，独立策略simulator仍是运行态文件，未迁入本次账户库。
 - 提交前至少跑 `holdingStocks/run_all_tests.py --skip-pytest-if-missing`。
 - 涉及前端时，再跑 `holdingStocks/watch-ui` 的构建或本地 dev 验证。

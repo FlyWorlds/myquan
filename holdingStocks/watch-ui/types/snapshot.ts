@@ -403,6 +403,7 @@ export interface WatchSnapshot {
     factorsLabel?: string
   }
   account: WatchAccount
+  paperRevision?: number
   slotMeta?: SlotMeta
   indices: IndexQuote[]
   holdings: HoldingRow[]

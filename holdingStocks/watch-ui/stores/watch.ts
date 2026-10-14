@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { shallowRef, ref, computed } from 'vue'
 import type { StrategyTab, WatchSnapshot } from '~/types/snapshot'
+import type { DatabasePaperState } from '~/composables/useDatabaseHoldings'
+import { mergeDatabaseHoldings } from '~/utils/databaseHoldings'
 
 function readPrivacyHidden(): boolean {
   if (!import.meta.client) return false
@@ -18,16 +20,27 @@ function isFeedAlertStatus(msg: string): boolean {
 }
 
 export const useWatchStore = defineStore('watch', () => {
-  const snapshot = shallowRef<WatchSnapshot | null>(null)
+  const rawSnapshot = shallowRef<WatchSnapshot | null>(null)
+  const paperState = shallowRef<DatabasePaperState | null>(null)
+  const snapshot = computed<WatchSnapshot | null>(() => {
+    const raw = rawSnapshot.value
+    const state = paperState.value
+    if (!raw || !state) return raw
+    return mergeDatabaseHoldings(raw, state)
+  })
   const strategies = ref<StrategyTab[]>([])
   const wsStatus = ref('连接中…')
   const privacyHidden = ref(readPrivacyHidden())
 
   function setSnapshot(data: WatchSnapshot) {
-    snapshot.value = data
+    rawSnapshot.value = data
     if (data.strategies?.length) {
       strategies.value = data.strategies
     }
+  }
+
+  function setPaperState(data: DatabasePaperState) {
+    if (!paperState.value || data.revision >= paperState.value.revision) paperState.value = data
   }
 
   function setStrategies(list: StrategyTab[]) {
@@ -49,6 +62,8 @@ export const useWatchStore = defineStore('watch', () => {
 
   return {
     snapshot,
+    paperState,
+    setPaperState,
     strategies,
     wsStatus,
     wsDisconnected,

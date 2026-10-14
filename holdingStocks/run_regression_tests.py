@@ -8,10 +8,12 @@
 from __future__ import annotations
 
 import sys
+import os
 import unittest
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
+os.environ["HOLDINGS_STORAGE"] = "local_json"  # Isolate legacy fixtures from the production database.
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 _ROOT = _HERE.parent
@@ -34,6 +36,7 @@ REGRESSION_MODULES = (
     "tests.test_sina_boards",
     "test_stale_sticky_crossday",
     "test_holdings_store",
+    "test_database_holdings",
     "test_strategy_simulator_lifecycle",
     "test_gap_rebuy",
     "test_strategy_cumulative_regression",

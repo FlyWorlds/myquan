@@ -10,6 +10,7 @@ import argparse
 import importlib.util
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,7 @@ def _run(cmd: list[str]) -> int:
 
 
 def main() -> int:
+    os.environ["HOLDINGS_STORAGE"] = "local_json"
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "--skip-pytest-if-missing",

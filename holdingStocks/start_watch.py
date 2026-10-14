@@ -215,6 +215,14 @@ def _pull_remote_holdings_for_watch() -> None:
     """盯盘启动以远程 holdings-ledger 为持仓真源。"""
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
+    from database_holdings import database_enabled, request_state
+    if database_enabled():
+        try:
+            state = request_state()
+        except Exception as exc:
+            raise SystemExit(f"[start_watch] 数据库持仓不可用，停止启动: {exc}") from exc
+        print(f"[start_watch] 数据库持仓就绪 revision={state['revision']}")
+        return
     from holdings_sync import pull_holdings
 
     print("[start_watch] 拉取远程持仓（holdings-ledger，远程为准）…")
@@ -255,7 +263,7 @@ def main() -> int:
     parser.add_argument(
         "--no-ledger-pull",
         action="store_true",
-        help="离线调试：启动时不拉取远程持仓（本机 holdings.json 为准）",
+        help="跳过启动账本检查；数据库模式仍从数据库读写，不会切回本地",
     )
     parser.add_argument(
         "extra",

@@ -46,7 +46,7 @@ public class HoldingsService {
         return transactions.execute(status -> {
             var metadata = jdbc.queryForMap("SELECT * FROM paper_holdings_sync WHERE id = 1 FOR UPDATE");
             var positions = jdbc.queryForList("SELECT * FROM paper_holdings ORDER BY code");
-            return Map.of("source", "paper-ledger", "metadata", metadata, "positions", positions,
+            return Map.of("source", "mysql", "metadata", metadata, "positions", positions,
                     "count", positions.size());
         });
     }
@@ -93,6 +93,25 @@ public class HoldingsService {
                     Timestamp.valueOf(LocalDateTime.now(ZoneId.of("Asia/Shanghai"))));
             return Map.of("changed", true, "count", holdings.size(), "sourceUpdatedAt", updated);
         });
+    }
+
+    public void validatePositions(JsonNode positions) {
+        try { parse(positions); }
+        catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid position quantity or cost.");
+        }
+    }
+
+    public void replaceProjection(JsonNode positions) {
+        var holdings = parse(positions);
+        jdbc.update("DELETE FROM paper_holdings");
+        for (var holding : holdings) {
+            jdbc.update("""
+                    INSERT INTO paper_holdings (code,name,market,qty,available,cost,buy_time,peak_high,note)
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                    """, holding.code(),holding.name(),holding.market(),holding.qty(),holding.available(),
+                    holding.cost(),holding.buyTime(),holding.peakHigh(),holding.note());
+        }
     }
 
     private List<Holding> parse(JsonNode positions) {
