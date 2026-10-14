@@ -48,6 +48,23 @@ python start_watch.py --stop
 WATCH_DAILY_WARM_WORKERS=16 python holdingStocks/index.py watch --ui-dev
 ```
 
+## Java 后台与本地数据库
+
+新增独立目录 [`backend/`](backend/README.md)：Java 21 语言目标、Spring Boot 3.5.16、JDBC/HikariCP、Flyway，连接本地 MySQL `127.0.0.1:3306/myquan`。数据库使用截图中确认的 MySQL，不再按此前 PostgreSQL 建设建议实施。
+
+从项目根目录启动：
+
+```bash
+bash backend/run.sh
+```
+
+- 健康检查：`http://127.0.0.1:8080/actuator/health`
+- 数据库状态：`http://127.0.0.1:8080/api/system/status`
+- 测试/打包：`bash backend/run.sh test` / `bash backend/run.sh package`
+- 本机用户名和密码固定写在 `backend/config/application-local.properties`，按用户要求纳入 Git，仅用于本地开发；其他机器可修改该文件或使用 `SPRING_DATASOURCE_USERNAME`、`SPRING_DATASOURCE_PASSWORD` 覆盖，不要在公网环境复用。
+
+后台与 Python 盯盘独立启动。已完成数据库连接、版本迁移及持仓单向快照：`POST /api/holdings/sync` 手动同步当前账本的实际持仓，`GET /api/holdings` 查询数据库持仓。MySQL 表为 `paper_holdings`、`paper_holdings_sync`，默认读取 `holdingStocks/holdings.json`，可用 `HOLDINGS_FILE` 覆盖路径。此阶段不自动同步、不从数据库反写交易账本，远程账本仍为持仓权威来源；一分钟行情入库、Java 页面接入和持仓权威迁库仍待实施。
+
 ## 启动加载顺序
 
 盯盘冷启动分三段，目的是先让页面可用，再补齐重数据：
