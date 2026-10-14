@@ -40,6 +40,20 @@ class DatabaseHoldingsTests(unittest.TestCase):
             self.assertEqual(self.state["holdings"]["account_cash"],5635)
             self.assertFalse(self.path.exists())
 
+    def test_nested_transaction_and_expired_cache_do_not_reload_pending_mutation(self):
+        with patch("database_holdings.request_state",side_effect=self.request) as request:
+            with self.store.transaction():
+                book=self.store.load()
+                book["account_cash"]=9000
+                self.store._read_at=0
+                with self.store.transaction():
+                    self.assertEqual(self.store.load(force=True)["account_cash"],9000)
+                    self.assertEqual(self.store.snapshot()["holdings"]["account_cash"],10000)
+                self.assertEqual(request.call_count,1)
+                self.store.save(book)
+            self.assertEqual(self.state["holdings"]["account_cash"],9000)
+            self.assertEqual(self.store._transaction_depth,0)
+
     def test_conflict_rolls_back_memory_instead_of_merging_cash(self):
         with patch("database_holdings.request_state",side_effect=self.request):
             book=self.store.load()

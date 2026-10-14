@@ -1326,6 +1326,13 @@ def _build_watch_account_summary(
     session_for_open = (
         str(session)[:10] if session else _calendar_signal_session()
     )
+    if database_enabled():
+        from account_reconciliation import account_summary
+        state = _HOLDINGS_STORE.snapshot()
+        summary = account_summary(state, rows, session_for_open)
+        summary["totalPnlStart"] = str(state["holdings"].get("paper_pnl_start") or PAPER_PNL_START)[:10]
+        summary["factor2Summary"] = format_factor2_summary(state["holdings"].get("factor2"))
+        return summary
     open_day_pnl = 0.0
     row_day_pnl_total = 0.0
     total_mv = 0.0
@@ -2358,7 +2365,7 @@ def publish_watch_snapshot(
 
     portfolio_codes = set(portfolio_pool_codes(holdings_meta))
     account = _build_watch_account_summary(rows)
-    paper_revision = _HOLDINGS_CACHE.get("token") if database_enabled() else None
+    paper_revision = account.get("paperRevision") if database_enabled() else None
     # 账户/结算 session 跟日历；行上交易日盘前常滞后，不得拖慢日初锚
     session_today = _calendar_signal_session()
     row_sess = next(
@@ -2509,6 +2516,12 @@ def publish_watch_snapshot(
                 to_send = snapshot
                 published = True
     _broadcast_watch_snapshot(to_send)
+    if database_enabled() and not keep_last and paper_revision is not None:
+        try:
+            from account_history import enqueue_account_snapshot
+            enqueue_account_snapshot(to_send, session=session_today, revision=int(paper_revision))
+        except Exception as exc:
+            print(f"[{_now()}] 账户快照入库跳过: {type(exc).__name__}")
     _mark_watch_front_ready(to_send)
     if keep_last:
         _log_watch_snapshot_push(
@@ -7008,6 +7021,10 @@ def correct_realized_open_protect_fill(
     含：工作卖价从未被当日最高印到（竞价脏峰抬止损）→ 按开盘纠价。
     """
     data = load_holdings()
+    if database_enabled():
+        # Committed PATH fills cannot become opening fills based on later daily OHLC.
+        # Corrections require an explicit audited adjustment, never a display-time reprice.
+        return (data.get("realized_today") or {}).get(code)
     _purge_stale_realized(data, session)
     rec = (data.get("realized_today") or {}).get(code)
     if not isinstance(rec, dict):
@@ -10458,6 +10475,9 @@ def _paper_trade_cycle_return(
     老的「单笔收入%」是触发价到现价；分批止盈后会只看最后一腿。
     这里用 trades.jsonl 重建当前买入周期，让 400+200+300 这类分批卖出合成一笔。
     """
+    if database_enabled() and trades_text is None:
+        from account_reconciliation import cycle_return
+        return cycle_return(_HOLDINGS_STORE.snapshot(), row)
     code = _code_key(str(row.get("代码") or row.get("code") or ""))
     if not code:
         return None

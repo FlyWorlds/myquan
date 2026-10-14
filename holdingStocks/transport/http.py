@@ -180,6 +180,18 @@ def build_watch_request_handler(
                 except Exception:
                     self._send_json({"error": "database holdings unavailable"}, status=503)
                 return
+            if path in ("/api/holdings/history", "/api/holdings/closed"):
+                try:
+                    import os
+                    from urllib.request import urlopen
+                    base=os.environ.get("PAPER_BACKEND_URL","http://127.0.0.1:8080").rstrip("/")
+                    endpoint="account-snapshots" if path.endswith("history") else "closed"
+                    query=urlparse(self.path).query
+                    with urlopen(base+"/api/paper/"+endpoint+("?"+query if query else ""),timeout=5) as response:
+                        self._send_json(json.load(response))
+                except Exception:
+                    self._send_json({"error":"account history unavailable"},status=503)
+                return
             if path in ("/api/snapshot", f"/{watch_meta_file.name}"):
                 with snap_lock:
                     snap = get_last_snapshot()

@@ -351,7 +351,19 @@ def list_ledger_entries(
     holdings: dict[str, Any] | None = None,
     marks: dict[str, float] | None = None,
 ) -> dict[str, Any]:
-    data = load_ledger()
+    from database_holdings import database_enabled
+    reconciliation_issues = []
+    revision = None
+    if database_enabled():
+        from index import _HOLDINGS_STORE
+        from account_reconciliation import effective_deliveries
+        state = _HOLDINGS_STORE.snapshot()
+        effective, reconciliation_issues = effective_deliveries(state)
+        data = dict(state["ledger"], entries=effective)
+        holdings = state["holdings"]
+        revision = state["revision"]
+    else:
+        data = load_ledger()
     rows = [e for e in (data.get("entries") or []) if isinstance(e, dict)]
     if code:
         ck = _code_key(code)
@@ -394,6 +406,8 @@ def list_ledger_entries(
     total_pnl = realized + unrealized
     return {
         "updated_at": data.get("updated_at"),
+        "paperRevision": revision,
+        "reconciliationIssues": reconciliation_issues,
         "total": total,
         "offset": off,
         "limit": lim,
@@ -402,10 +416,10 @@ def list_ledger_entries(
         "summary": {
             "buy_amount": round(buy_amt, 2),
             "sell_amount": round(sell_amt, 2),
-            "sell_pnl": round(realized, 2),
-            "realized_pnl": round(realized, 2),
+            "sell_pnl": None if reconciliation_issues else round(realized, 2),
+            "realized_pnl": None if reconciliation_issues else round(realized, 2),
             "unrealized_pnl": round(unrealized, 2),
-            "total_pnl": round(total_pnl, 2),
+            "total_pnl": None if reconciliation_issues else round(total_pnl, 2),
             "count": total,
             "month": month_key or None,
         },

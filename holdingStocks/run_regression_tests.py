@@ -37,6 +37,8 @@ REGRESSION_MODULES = (
     "test_stale_sticky_crossday",
     "test_holdings_store",
     "test_database_holdings",
+    "test_account_history",
+    "test_account_reconciliation",
     "test_strategy_simulator_lifecycle",
     "test_gap_rebuy",
     "test_strategy_cumulative_regression",

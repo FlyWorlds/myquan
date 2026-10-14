@@ -104,3 +104,41 @@ V3 was applied to real MySQL, and the complete local state was imported and reco
 This MySQL server reports version 26.7.0. Flyway logs an untested-version warning;
 the initial migration was verified successfully. Future MySQL-specific migrations
 must also be verified on the actual server rather than only on H2.
+
+## Account Valuation History
+
+Database read/write review and remaining historical evidence gaps are documented
+in `../docs/ACCOUNT_DB_AUDIT_20261014.md`. Run `python backup_database.py --verify-restore`
+for a consistent SQL backup with isolated restore/projection verification. Backup
+files and manifests are in ignored `logs/backups/`; this command does not restore
+over the production database or schedule recurring backups.
+
+V4 adds `paper_account_snapshots`: total/day PnL amounts and percentages,
+position percentage, cash, market value, equity, account revision, Shanghai
+observation time, and holding/closed-row JSON snapshots. While watch runs,
+a bounded asynchronous worker records the first complete valuation each minute.
+This is account observation history, not minute OHLC data or backfilled history.
+Missing valuations remain NULL or are rejected; a truly flat position is 0%.
+
+Database-mode equity is database cash plus marked position value. Total PnL is
+equity minus initial capital. Daily PnL combines all realized fills for the session
+with open-position daily PnL; partial sales must not collapse into the last fill.
+`equityDayPnl` and `dayPnlVsEquity` retain the comparison with the stored opening
+equity anchor for auditing. A discrepancy requires reconciliation, not changing
+cash to force the numbers to agree. The API verifies cash, quantity, cost, market
+value, total PnL and position percentage before accepting a snapshot.
+
+```bash
+curl 'http://127.0.0.1:8080/api/paper/account-snapshots?day=2026-10-14&limit=100'
+curl 'http://127.0.0.1:8080/api/paper/closed?day=2026-10-14&limit=100'
+curl 'http://127.0.0.1:8765/api/holdings/history?limit=100'
+curl 'http://127.0.0.1:8765/api/holdings/closed?limit=100'
+```
+
+`paper_closed_trades` is a SQL view of final exit fills in the existing delivery
+ledger, not a second writable trade table. Its `last_fill_pnl` and
+`last_fill_pnl_pct` describe only that final fill, not an entire multi-fill cycle.
+All partial sales remain in `paper_delivery_entries`; historical legacy entries
+are preserved rather than silently deleted. Account history failures do not alter
+the authoritative trading ledger. V4 was verified on real MySQL; 20 backend tests
+and 232 default Python regression tests passed for this addition.

@@ -58,6 +58,7 @@ class DatabaseHoldingsStore(HoldingsStore):
         super().__init__(*args, **kwargs)
         self._state: dict[str, Any] | None = None
         self._read_at = 0.0
+        self._transaction_depth = 0
 
     def _accept(self, state: dict[str, Any]) -> dict[str, Any]:
         cur = self.cache.get("data")
@@ -76,6 +77,8 @@ class DatabaseHoldingsStore(HoldingsStore):
 
     def load(self, *, force: bool = False) -> dict[str, Any]:
         with self.lock:
+            if self._transaction_depth and self.cache.get("data") is not None:
+                return self.cache["data"]
             if not force and self.cache.get("data") is not None and time.monotonic() - self._read_at < 1:
                 return self.cache["data"]
             state = request_state()
@@ -123,6 +126,13 @@ class DatabaseHoldingsStore(HoldingsStore):
             assert self._state is not None
             return copy.deepcopy(self._state["trades"])
 
+    def snapshot(self) -> dict[str, Any]:
+        """One committed revision for cash, positions, deliveries and corrections."""
+        with self.lock:
+            self.load()
+            assert self._state is not None
+            return copy.deepcopy(self._state)
+
     def ledger(self) -> dict[str, Any]:
         with self.lock:
             self.load()
@@ -161,7 +171,9 @@ class DatabaseHoldingsStore(HoldingsStore):
         @contextlib.contextmanager
         def scope():
             with self.lock:
-                self.load(force=True)
+                if not self._transaction_depth:
+                    self.load(force=True)
+                self._transaction_depth += 1
                 try:
                     yield
                 except Exception:
@@ -169,6 +181,8 @@ class DatabaseHoldingsStore(HoldingsStore):
                         self._accept(self._state)
                     self._read_at = 0
                     raise
+                finally:
+                    self._transaction_depth -= 1
         return scope()
 
 

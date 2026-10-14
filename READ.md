@@ -50,6 +50,8 @@ WATCH_DAILY_WARM_WORKERS=16 python holdingStocks/index.py watch --ui-dev
 
 ## Java 后台与本地数据库
 
+数据库备份与恢复验证：`python backend/backup_database.py --verify-restore`（恢复至独立测试库，不覆盖当前库）。只读账户/策略对账：`python holdingStocks/audit_database_account.py`，输出 `backend/logs/account-audit.json`。第一批逻辑审查及尚待补证的历史问题见 `docs/ACCOUNT_DB_AUDIT_20261014.md`。
+
 新增独立目录 [`backend/`](backend/README.md)：Java 21 语言目标、Spring Boot 3.5.16、JDBC/HikariCP、Flyway，连接本地 MySQL `127.0.0.1:3306/myquan`。数据库使用截图中确认的 MySQL，不再按此前 PostgreSQL 建设建议实施。
 
 从项目根目录启动：
@@ -66,6 +68,8 @@ bash backend/run.sh
 后台与 Python 盯盘独立启动，先启动 Java 后台，再启动原来的盯盘命令。持仓、现金、成交流水和交割明细已切换为 MySQL 权威账本，默认 `HOLDINGS_STORAGE=database`，Java API 地址由 `PAPER_BACKEND_URL` 指定（默认 `http://127.0.0.1:8080`）。前端经 `/api/holdings/state` 请求 Java 后端读取数据库；行情仍走实时行情源。买卖会将持仓、现金和交割记录在同一数据库事务中写入，数据库不可用时阻断更新，不回退本地文件。
 
 完整账本表 `paper_account_state` 保存账户与全部状态；`paper_holdings`、`paper_trade_history`、`paper_delivery_entries` 是同事务更新的查询表，不要直接修改这些投影表。初始化迁移仅执行一次：`POST /api/paper/state/migrate`，已迁移后返回409，旧 `/api/holdings/sync` 禁止覆盖数据库。修改接口 `PUT /api/paper/state` 要求版本号和幂等请求ID。原本地文件保留为迁移备份，不再用于生产更新。所有设备必须配置同一个后端，不能各用自己的 localhost 数据库期待自动同步；当前建议只运行一个交易写入进程。
+
+账户统计已加入 `paper_account_snapshots`：盯盘运行时，每分钟异步记录首个完整的总收益、今日收益（金额及百分比）、仓位比例、现金、持仓市值、总资产与持仓/今日平仓明细。缺失行情不伪装成零，不反造过去的统计历史。数据库模式总资产按“数据库现金＋持仓市值”计算，不用今日盈亏倒推现金；今日盈亏包含分批卖出的全部已实现盈亏，保留与日初权益锚的差额便于对账。查询 `http://127.0.0.1:8765/api/holdings/history`。平仓交易本来已在交割表中，新增 `paper_closed_trades` 视图与 `/api/holdings/closed` 查询；其中末笔盈亏不是整笔综合收益，分批卖出仍须查询全部交割记录。
 
 ## 启动加载顺序
 

@@ -419,6 +419,18 @@ def account_today_return_pct(day_pnl: Any, account_open: Any) -> float | None:
     return round(day / open_f * 100.0, 2)
 
 
+def _database_day_pnl(account: dict[str, Any], holdings: list[dict[str, Any]]) -> float | None:
+    closed = account.get("settledDayPnl")
+    if closed is None:
+        if account.get("settledCount") != 0:
+            return None
+        closed = 0.0
+    active = [row for row in holdings if int(row.get("持仓") or 0) > 0]
+    if any(row.get("当日盈亏") is None for row in active):
+        return None
+    return round(float(closed) + sum(float(row["当日盈亏"]) for row in active), 2)
+
+
 def apply_day_linked_account_equity(account: dict[str, Any]) -> dict[str, Any]:
     """总资产/总收益随今日盈亏滚动：总资产 = 日初锁定 + 今日盈亏。
 
@@ -429,6 +441,23 @@ def apply_day_linked_account_equity(account: dict[str, Any]) -> dict[str, Any]:
     day = acc.get("dayPnl")
     open_eq = acc.get("accountOpen")
     acc["dayPnlPct"] = account_today_return_pct(day, open_eq)
+    if acc.get("equityBasis") == "cash_plus_market_value":
+        # Database cash is authoritative; never synthesize it from daily PnL.
+        cash = acc.get("availableCash")
+        mv = acc.get("marketValue")
+        if cash is not None and mv is not None:
+            total = round(float(cash) + float(mv), 2)
+            acc["accountTotal"] = total
+            base = acc.get("paperEquityBase")
+            if base is not None and float(base) > 0:
+                acc["totalPnl"] = round(total - float(base), 2)
+                acc["totalPnlPct"] = round(acc["totalPnl"] / float(base) * 100.0, 2)
+            acc["positionPct"] = round(float(mv) / total * 100.0, 1) if total > 0 else None
+            if open_eq is not None:
+                acc["equityDayPnl"] = round(total - float(open_eq), 2)
+                if day is not None:
+                    acc["dayPnlVsEquity"] = round(float(day) - acc["equityDayPnl"], 2)
+        return acc
     if day is None or open_eq is None:
         return acc
     try:
@@ -932,11 +961,16 @@ def patch_snapshot_live_quotes(
         if qty > 0 and r.get("市值") is not None:
             total_mv += float(r["市值"])
     acc = dict(snap.get("account") or {})
-    if has_day:
+    if acc.get("equityBasis") == "cash_plus_market_value":
+        acc["dayPnl"] = _database_day_pnl(acc, holdings)
+        changed = True
+    elif has_day:
         acc["dayPnl"] = round(day_sum, 2)
         changed = True
     if total_mv > 0:
         acc["marketValue"] = round(total_mv, 2)
+    elif acc.get("equityBasis") == "cash_plus_market_value" and not any(int(r.get("持仓") or 0)>0 for r in holdings):
+        acc["marketValue"] = 0.0
     snap["account"] = apply_day_linked_account_equity(acc)
     return changed
 
@@ -961,7 +995,12 @@ def rebase_snapshot_day_pnl(snap: dict[str, Any], *, session: str) -> dict[str, 
         has_day = True
         day_sum += float(r["当日盈亏"])
     acc = dict(out.get("account") or {})
-    if has_day:
+    if acc.get("equityBasis") == "cash_plus_market_value":
+        if str(acc.get("settledSession") or "")[:10] != str(session)[:10]:
+            acc.pop("settledDayPnl", None)
+            acc.pop("settledCount", None)
+        acc["dayPnl"] = _database_day_pnl(acc, holdings)
+    elif has_day:
         acc["dayPnl"] = round(day_sum, 2)
     else:
         acc["dayPnl"] = None
