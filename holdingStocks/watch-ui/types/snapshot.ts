@@ -6,6 +6,8 @@ export interface WatchAccount {
   dayPnl?: number | null
   dayPnlPct?: number | null
   equityDayPnl?: number | null
+  rowDayPnl?: number | null
+  dayPnlVsRows?: number | null
   accountTotal?: number | null
   accountOpen?: number | null
   availableCash?: number | null
@@ -49,6 +51,9 @@ export interface HoldingRow {
   较开盘涨幅?: number | null
   策略收益?: number | null
   '策略收益%'?: number | null
+  综合策略收益?: number | null
+  '综合策略收益%'?: number | null
+  策略收益成本额?: number | null
   策略起算?: string
   /** strategy_simulator_ledger：策略模拟器虚拟账本 */
   策略收益语义?: string | null
@@ -79,9 +84,22 @@ export interface HoldingRow {
   盈亏状态?: string | null
   盈亏说明?: string | null
   已实现?: boolean
-  /** 单笔收入%：信号触发价→现价理论收益（≠持仓成本/策略累计） */
+  /** 单笔收入%：信号触发价→现价理论收益（旧口径） */
   '单笔收入%'?: number | null
   单笔收入?: number | null
+  /** 综合单笔收入%：纸面整笔交易加权收益，含分批卖出和剩余仓 MTM */
+  '综合单笔收入%'?: number | null
+  综合单笔收入?: number | null
+  综合单笔成本额?: number | null
+  综合单笔卖出数量?: number | null
+  综合单笔持仓数量?: number | null
+  综合单笔腿数?: number | null
+  综合单笔来源?: string | null
+  策略单笔成本额?: number | null
+  策略单笔收益?: number | null
+  '策略单笔收益%'?: number | null
+  策略单笔卖出数量?: number | null
+  策略单笔已实现收益?: number | null
   当日盈亏?: number | null
   '当日盈亏%'?: number | null
   卖出数量?: number | null

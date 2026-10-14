@@ -1,0 +1,256 @@
+{
+  "baseline": "2026-09-30",
+  "cutoff": "2026-10-14 14:14:00",
+  "benchmarks": [
+    {
+      "name": "上证综指",
+      "code": "sh000001",
+      "base_price": 3842.195,
+      "end_price": 3772.861,
+      "return_pct": -1.8045414144779337,
+      "excess_pct_points": 0.3834880811446004
+    },
+    {
+      "name": "深证成指",
+      "code": "sz399001",
+      "base_price": 12887.62,
+      "end_price": 12139.612,
+      "return_pct": -5.804081746668521,
+      "excess_pct_points": 4.383028413335188
+    },
+    {
+      "name": "全池等权买入持有价格参考",
+      "code": "pool_buyhold",
+      "return_pct": -6.8201912050056555
+    }
+  ],
+  "index_history": [
+    {
+      "date": "2026-10-08",
+      "index": "上证综指",
+      "price": 3811.904,
+      "return_pct": -0.7883774769370189
+    },
+    {
+      "date": "2026-10-09",
+      "index": "上证综指",
+      "price": 3813.791,
+      "return_pct": -0.7392649253877059
+    },
+    {
+      "date": "2026-10-12",
+      "index": "上证综指",
+      "price": 3797.242,
+      "return_pct": -1.1699822627430412
+    },
+    {
+      "date": "2026-10-13",
+      "index": "上证综指",
+      "price": 3800.864,
+      "return_pct": -1.075713231629316
+    },
+    {
+      "date": "2026-10-14",
+      "index": "上证综指",
+      "price": 3772.861,
+      "return_pct": -1.8045414144779337
+    },
+    {
+      "date": "2026-10-08",
+      "index": "深证成指",
+      "price": 12620.897,
+      "return_pct": -2.0696063353823235
+    },
+    {
+      "date": "2026-10-09",
+      "index": "深证成指",
+      "price": 12641.858,
+      "return_pct": -1.9069618750397699
+    },
+    {
+      "date": "2026-10-12",
+      "index": "深证成指",
+      "price": 12384.869,
+      "return_pct": -3.9010383608455212
+    },
+    {
+      "date": "2026-10-13",
+      "index": "深证成指",
+      "price": 12353.699,
+      "return_pct": -4.142898378443816
+    },
+    {
+      "date": "2026-10-14",
+      "index": "深证成指",
+      "price": 12139.612,
+      "return_pct": -5.804081746668521
+    }
+  ],
+  "sell_reasons": [
+    {
+      "reason": "hard_from_cost",
+      "sum": -4530.999999999999,
+      "count": 10
+    },
+    {
+      "reason": "ladder_half_10",
+      "sum": 1053.000000000001,
+      "count": 2
+    },
+    {
+      "reason": "peak_pullback_clear",
+      "sum": 317.9999999999996,
+      "count": 1
+    },
+    {
+      "reason": "t1_peak_trail",
+      "sum": -1639.0000000000002,
+      "count": 15
+    },
+    {
+      "reason": "vol_giveback",
+      "sum": 1814.0000000000007,
+      "count": 7
+    }
+  ],
+  "buy_cohorts": [
+    {
+      "buy_time": "2026-10-08",
+      "sum": -3312.66,
+      "count": 8
+    },
+    {
+      "buy_time": "2026-10-09",
+      "sum": -468.18,
+      "count": 5
+    },
+    {
+      "buy_time": "2026-10-12",
+      "sum": -1964.12,
+      "count": 5
+    },
+    {
+      "buy_time": "2026-10-13",
+      "sum": 2061.81,
+      "count": 17
+    },
+    {
+      "buy_time": "2026-10-14",
+      "sum": -579.97,
+      "count": 2
+    }
+  ],
+  "closed_trades": 34,
+  "closed_winners": 9,
+  "closed_win_rate_pct": 26.47058823529412,
+  "avg_closed_win_pct": 4.575555555555557,
+  "avg_closed_loss_pct": -3.4144,
+  "losing_symbols": 21,
+  "winning_symbols": 8,
+  "pool_declining_symbols": 31,
+  "mean_sampled_exposure_pct": 20.068343191475456,
+  "latest_exposure_pct": 7.031927439273375,
+  "hard_exits_at_opening_minute": 10,
+  "top_losing_symbols": [
+    {
+      "code": "002866",
+      "name": "传艺科技",
+      "initial_cash": 8823.529411764706,
+      "final_equity": 8025.06,
+      "return_pct": -9.05,
+      "n_buys": 2,
+      "n_sells": 1,
+      "n_open": 1,
+      "net_profit": -798.47,
+      "gross_realized": -448.0,
+      "gross_floating": -324.0,
+      "fees_and_slippage": 26.47,
+      "cash": 1585.06,
+      "market_value": 6440.0,
+      "closed_cycles": 1,
+      "accounting_verified": true
+    },
+    {
+      "code": "600330",
+      "name": "天通股份",
+      "initial_cash": 8823.529411764706,
+      "final_equity": 8064.75,
+      "return_pct": -8.6,
+      "n_buys": 2,
+      "n_sells": 2,
+      "n_open": 0,
+      "net_profit": -758.78,
+      "gross_realized": -720.0,
+      "gross_floating": 0.0,
+      "fees_and_slippage": 38.78,
+      "cash": 8064.75,
+      "market_value": 0.0,
+      "closed_cycles": 2,
+      "accounting_verified": true
+    },
+    {
+      "code": "600072",
+      "name": "中船科技",
+      "initial_cash": 8823.529411764706,
+      "final_equity": 8300.14,
+      "return_pct": -5.93,
+      "n_buys": 2,
+      "n_sells": 1,
+      "n_open": 1,
+      "net_profit": -523.39,
+      "gross_realized": -252.0,
+      "gross_floating": -240.0,
+      "fees_and_slippage": 31.39,
+      "cash": 732.14,
+      "market_value": 7568.0,
+      "closed_cycles": 1,
+      "accounting_verified": true
+    },
+    {
+      "code": "002453",
+      "name": "华软科技",
+      "initial_cash": 8823.529411764706,
+      "final_equity": 8352.7,
+      "return_pct": -5.34,
+      "n_buys": 2,
+      "n_sells": 2,
+      "n_open": 0,
+      "net_profit": -470.83,
+      "gross_realized": -426.0,
+      "gross_floating": 0.0,
+      "fees_and_slippage": 44.83,
+      "cash": 8352.7,
+      "market_value": 0.0,
+      "closed_cycles": 2,
+      "accounting_verified": true
+    },
+    {
+      "code": "601609",
+      "name": "金田股份",
+      "initial_cash": 8823.529411764706,
+      "final_equity": 8360.61,
+      "return_pct": -5.25,
+      "n_buys": 1,
+      "n_sells": 1,
+      "n_open": 0,
+      "net_profit": -462.92,
+      "gross_realized": -440.0,
+      "gross_floating": 0.0,
+      "fees_and_slippage": 22.92,
+      "cash": 8360.61,
+      "market_value": 0.0,
+      "closed_cycles": 1,
+      "accounting_verified": true
+    }
+  ],
+  "accounting": {
+    "net_profit": -4263.16,
+    "gross_realized": -2985.0,
+    "gross_floating": -552.0,
+    "fees_and_slippage": 726.16,
+    "cash": 274940.84,
+    "market_value": 20796.0,
+    "closed_cycles": 34,
+    "accounting_verified": true
+  }
+}

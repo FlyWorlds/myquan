@@ -1455,9 +1455,10 @@ def slot_fill_decision(
     """空槽成交价：平仓腾出 vs 新触发。
 
     · 无平仓时刻（开盘空槽/从未腾槽）：按买点成交
-    · 触发早于平仓（第一梯队）：现价成交，且现价 ≤ 买点×(1+overshoot)；超限本轮不买
+    · 触发早于平仓（第一梯队）：现价成交，且现价 ≤ 买点×(1+overshoot)；超限本轮不买。
+      若当日最高已印到核定买点，释放空槽后允许按回落后的更低现价补槽。
     · 平仓后才触发：按买点成交
-    · 成交价不得低于当日已印最低，也不得低于今日核定买点
+    · 成交价不得低于当日已印最低；普通成交不得低于今日核定买点
     · 当日最高未印到核定买点则拒（开盘价附近的假突破不算）
     · fill_mode=official_open：因子29 竞价武装，一律按正式开盘成交，不用现价
     """
@@ -1499,12 +1500,18 @@ def slot_fill_decision(
         px = floor_to_tick(last, tick)
         if px <= 0:
             return None
-        if buy_fill_reject_reason(
+        reject = buy_fill_reject_reason(
             fill_px=px,
             official_buy=official_buy,
             session_high=session_high,
             session_low=low if low > 0 else None,
+        )
+        if reject == "FILL_BELOW_BUY" and session_high_prints_buy(
+            session_high=session_high,
+            official_buy=official_buy,
         ):
+            reject = None
+        if reject:
             return None
         return {"fill_px": round(float(px), 4), "kind": "last"}
     px = floor_to_tick(sig, tick)

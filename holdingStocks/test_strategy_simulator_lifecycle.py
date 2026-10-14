@@ -1090,6 +1090,10 @@ class TestApplyRow(_TmpSim):
         self.assertTrue(row["策略累计持有"])
         self.assertEqual(row["持仓"], 0)
         self.assertEqual(row["持仓状态"], "空仓")
+        self.assertEqual(row["策略收益成本额"], 100000.0)
+        self.assertAlmostEqual(float(row["策略收益"]), 4750.0, places=2)
+        self.assertEqual(row["综合策略收益"], row["策略收益"])
+        self.assertEqual(row["综合策略收益%"], row["策略收益%"])
 
     def test_reset_strategy_books_zeroes_and_stamps_bootstrap(self) -> None:
         _eval(

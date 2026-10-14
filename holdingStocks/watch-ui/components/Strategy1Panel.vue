@@ -69,7 +69,7 @@ const filterCounts = computed(() => {
 
 function sortValue(row: HoldingRow, key: SortKey): number | null {
   if (key === 'dayChg') return asNum(row.当日涨幅)
-  return asNum(row['策略收益%'])
+  return asNum(row['综合策略收益%'] ?? row['策略收益%'])
 }
 
 function rowCode(row: HoldingRow): string {
@@ -220,32 +220,15 @@ function signalTriggerPx(r: HoldingRow): number | null {
 }
 
 /**
- * 单笔收入% = SIGNAL TRADE RETURN：触发价 → 现价（或平仓价）。
- * 不是持仓成本收益，也不是策略累计收益。
+ * 综合单笔收入优先用整笔纸面交易：分批卖出 realized + 剩余仓 MTM。
+ * 无纸面成交时展示后端计算的策略整笔收益。
  */
 function tradeIncomePct(r: HoldingRow): number | null {
-  const backend = asNum(r['单笔收入%'] ?? r.单笔收入)
-  if (backend != null) return backend
-  const trigger = signalTriggerPx(r)
-  if (trigger == null || trigger <= 0) return null
-  const qty = Number(r.持仓 || 0)
-  const pos = String(r.持仓状态 || '')
-  const sold =
-    Boolean(r.已实现) ||
-    Boolean(r.槽位留痕) ||
-    (qty <= 0 &&
-      (pos.includes('平仓') ||
-        pos.includes('已止损') ||
-        pos === '当日禁买' ||
-        asNum(r.成交价) != null))
-  if (sold) {
-    const exit = asNum(r.成交价)
-    if (exit == null || exit <= 0) return null
-    return (exit / trigger - 1) * 100
-  }
-  const mark = asNum(r.现价)
-  if (mark == null || mark <= 0) return null
-  return (mark / trigger - 1) * 100
+  const comprehensive = asNum(r['综合单笔收入%'])
+  if (comprehensive != null) return comprehensive
+  const strategy = asNum(r['策略单笔收益%'])
+  if (strategy != null) return strategy
+  return null
 }
 
 /** 策略主状态：来自 Strategy Simulator（空仓/策略持有），不跟纸面 qty。 */
@@ -290,11 +273,13 @@ function showPaperDebug(r: HoldingRow): boolean {
   return props.statusMode !== 'paper' && (Number(r.持仓) > 0 || paperStatusLabel(r) !== '空仓')
 }
 
-/** 策略累计 tooltip。 */
+/** 综合策略收益 tooltip。 */
 function strategyCumTitle(r: HoldingRow): string {
   const start = String(r.策略起算 || '回放起点')
+  const amount = asNum(r.综合策略收益 ?? r.策略收益)
+  const amountText = amount == null ? '' : ` 盈利金额 ${fmtNum(amount, 2)}；`
   const base =
-    `单票策略虚拟账本自 ${start} 的累计收益；与模拟账户实际持仓独立。`
+    `单票策略虚拟账本自 ${start} 的综合收益；${amountText}按权益金额/初始资金计算，含回测买卖与当前持有 MTM，与纸面账户实际持仓独立。`
   if (strategyStatusLabel(r) === '策略持有') {
     return `${base} 当前收益包含现价 MTM。`
   }
@@ -302,7 +287,15 @@ function strategyCumTitle(r: HoldingRow): string {
 }
 
 const SINGLE_SIGNAL_TITLE =
-  '当前信号单笔理论收益（策略入场价→现价/退出价）；≠策略累计、≠纸面成本收益'
+  '综合单笔收入：整笔盈利金额÷买入成本额；含分批卖出和剩余持仓浮盈，无纸面成交时采用策略回测整笔收益'
+
+function tradeIncomeTitle(r: HoldingRow): string {
+  const source = r.综合单笔来源 === 'trades_jsonl_cycle' ? '纸面实际成交' : '策略回测成交'
+  const pnl = asNum(r.综合单笔收入)
+  const base = asNum(r.综合单笔成本额)
+  if (pnl == null || base == null) return '尚无完整的整笔成交成本和盈亏记录'
+  return `${source}：整笔盈亏 ${fmtNum(pnl, 2)} / 买入成本额 ${fmtNum(base, 2)}；含分批卖出和剩余持仓浮盈`
+}
 </script>
 
 <template>
@@ -318,12 +311,12 @@ const SINGLE_SIGNAL_TITLE =
         · 每槽约 {{ Math.round((slotMeta.weight ?? 0.3) * 100) }}%
         · 默认按距买点升序（自选优先）
         <template v-if="sortKey === 'dayChg'"> · 已按日内涨跌{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
-        <template v-else-if="sortKey === 'strategyPnl'"> · 已按策略累计{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
+        <template v-else-if="sortKey === 'strategyPnl'"> · 已按综合策略收益{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
       </div>
       <div class="mt-1 text-xs text-ui-text-3">
         状态={{ props.statusMode === 'paper' ? '纸面仓位/预警' : '策略模拟器（空仓/策略持有）' }}；策略状态与纸面仓独立。
-        策略累计=该策略+标的虚拟账本；单笔收入=入场价→现价；图例可点筛选。
-        点「日内涨跌 / 策略累计」表头可排序（数字实时刷，行序锁定；再点表头重排/切换方向）。
+        综合策略收益=该策略+标的虚拟账本；综合单笔收入=纸面整笔交易加权收益；图例可点筛选。
+        点「日内涨跌 / 综合策略收益」表头可排序（数字实时刷，行序锁定；再点表头重排/切换方向）。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
         <button
@@ -395,13 +388,13 @@ const SINGLE_SIGNAL_TITLE =
                   type="button"
                   class="inline-flex items-center gap-0.5 font-semibold hover:text-accent"
                   :class="sortKey === 'strategyPnl' ? 'text-accent' : ''"
-                  :title="sortTitle('strategyPnl', '策略累计')"
+                  :title="sortTitle('strategyPnl', '综合策略收益')"
                   @click="toggleSort('strategyPnl')"
                 >
-                  策略累计<span class="tabular-nums text-[10px]">{{ sortMark('strategyPnl') }}</span>
+                  综合策略收益<span class="tabular-nums text-[10px]">{{ sortMark('strategyPnl') }}</span>
                 </button>
               </th>
-              <th class="px-3 py-2.5" :title="SINGLE_SIGNAL_TITLE">单笔收入</th>
+              <th class="px-3 py-2.5" :title="SINGLE_SIGNAL_TITLE">综合单笔收入</th>
               <th class="px-3 py-2.5">前日</th>
               <th class="px-3 py-2.5">过门</th>
               <th class="px-3 py-2.5">阈值</th>
@@ -496,9 +489,9 @@ const SINGLE_SIGNAL_TITLE =
                 class="sensitive px-3 py-2.5"
                 :title="strategyCumTitle(r)"
               >
-                <ChgText :chg="r['策略收益%']">{{ fmtSignedPct(r['策略收益%']) }}</ChgText>
+                <ChgText :chg="r['综合策略收益%'] ?? r['策略收益%']">{{ fmtSignedPct(r['综合策略收益%'] ?? r['策略收益%']) }}</ChgText>
               </td>
-              <td class="sensitive px-3 py-2.5 tabular-nums" :title="SINGLE_SIGNAL_TITLE">
+              <td class="sensitive px-3 py-2.5 tabular-nums" :title="tradeIncomeTitle(r)">
                 <ChgText :chg="tradeIncomePct(r)">{{ fmtSignedPct(tradeIncomePct(r)) }}</ChgText>
               </td>
               <td class="px-3 py-2.5">{{ r.前日形态 || '-' }}</td>

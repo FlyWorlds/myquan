@@ -27,6 +27,7 @@ REGRESSION_MODULES = (
     "test_trading_calendar",
     "test_health_status",
     "test_runtime_integrity",
+    "test_comprehensive_trade_return",
     "test_watch_remote_ledger",
     "test_sectors_watch_fast",
     "tests.test_market_data_sources",

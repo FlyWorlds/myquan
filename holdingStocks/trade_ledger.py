@@ -102,6 +102,8 @@ def build_ledger_entry(
         side = "buy"
     elif side in ("卖", "卖出", "stop"):
         side = "sell"
+    elif side not in ("buy", "sell"):
+        side = str(record.get("side") or "").strip().lower()
     code = _code_key(str(record.get("code") or ""))
     price = _as_float(record.get("price")) or 0.0
     qty = int(record.get("qty") or 0)
@@ -160,6 +162,8 @@ def record_trade_ledger(
         except Exception:  # noqa: BLE001
             holdings = None
     entry = build_ledger_entry(record, holdings=holdings)
+    if entry.get("side") not in ("buy", "sell"):
+        return entry
     if not entry.get("code") or entry.get("qty", 0) <= 0:
         return entry
     with _LOCK:
@@ -357,7 +361,14 @@ def list_ledger_entries(
         else:
             month_key = ""
     rows = enrich_open_buy_marks(rows, holdings=holdings, marks=marks)
-    rows = list(reversed(rows))  # 新→旧
+    rows = [
+        e
+        for _, e in sorted(
+            enumerate(rows),
+            key=lambda it: (str(it[1].get("time") or ""), it[0]),
+            reverse=True,
+        )
+    ]  # 新→旧；同一时间保持后写入的记录靠前
     total = len(rows)
     lim = max(1, min(int(limit or 500), 2000))
     off = max(0, int(offset or 0))
@@ -417,7 +428,9 @@ def backfill_from_trades_jsonl(
                 continue
             if not isinstance(rec, dict):
                 continue
-            entries.append(build_ledger_entry(rec, holdings=None))
+            entry = build_ledger_entry(rec, holdings=None)
+            if entry.get("side") in ("buy", "sell"):
+                entries.append(entry)
         data["entries"] = entries
         data["backfilled_from"] = str(path.name)
         data["backfilled_at"] = _now()

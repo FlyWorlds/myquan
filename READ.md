@@ -156,6 +156,15 @@ python backtest/strategy1.py --rules
 # 策略16核心龙头池近7日1m回测
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 
+# 策略16指定日期区间复算，按完整买入周期合并分批卖出并核对现金/权益
+python backtest/strategy16_core_leader/run_month_review.py --start 2026-10-01 --end 2026-10-13
+# 包含今天盘中已完成分钟，各股票截到共同时间估值（end 须为今天）
+python backtest/strategy16_core_leader/run_month_review.py --start 2026-10-01 --end 2026-10-14 --intraday
+# 全池等权：30万元均分每只股票，独立资金，不受5槽/日增2只限制
+python backtest/strategy16_core_leader/run_month_review.py --start 2026-10-01 --end 2026-10-14 --intraday --all-pool
+# 同区间追加 --offline 使用已保存分钟数据；产物位于 strategy16_core_leader/review_<起日>_<止日>/
+# 固定当前池/当前阈值，未重建历史选股；阈值拟合窗重叠时属于样本内复算，不含竞价路径。
+
 # 策略16个股阈值拟合（{2%,2.5%,3%} 日线开盘突破夏普择优；缺样本兜底2.5%）
 PYTHONPATH=. python backtest/strategy16_core_leader/fit_thr.py
 

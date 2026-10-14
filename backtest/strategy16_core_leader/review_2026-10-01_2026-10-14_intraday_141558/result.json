@@ -1,0 +1,672 @@
+{
+  "requested_start": "2026-10-01",
+  "requested_end": "2026-10-14",
+  "pool_size": 34,
+  "threshold_fit_end": "2026-10-13",
+  "accounting": {
+    "net_profit": -16829.48,
+    "gross_realized": -10994.0,
+    "gross_floating": -4494.0,
+    "fees_and_slippage": 1341.48,
+    "cash": 173562.52,
+    "market_value": 109608.0,
+    "closed_cycles": 8,
+    "accounting_verified": true
+  },
+  "portfolio": {
+    "trades": [
+      {
+        "date": "2026-10-08",
+        "ts": "2026-10-08 09:31:00",
+        "side": "buy",
+        "code": "601208",
+        "name": "东材科技",
+        "px": 52.34,
+        "shares": 1100,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 1
+      },
+      {
+        "date": "2026-10-08",
+        "ts": "2026-10-08 09:34:00",
+        "side": "buy",
+        "code": "002169",
+        "name": "智光电气",
+        "px": 12.97,
+        "shares": 4600,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 2
+      },
+      {
+        "date": "2026-10-09",
+        "ts": "2026-10-09 09:31:00",
+        "side": "sell",
+        "code": "002169",
+        "name": "智光电气",
+        "px": 12.3,
+        "shares": 4600,
+        "pnl_pct": -0.0517,
+        "exit_reason": "hard_from_cost",
+        "slots_after": 1
+      },
+      {
+        "date": "2026-10-09",
+        "ts": "2026-10-09 09:31:00",
+        "side": "sell",
+        "code": "601208",
+        "name": "东材科技",
+        "px": 49.18,
+        "shares": 1100,
+        "pnl_pct": -0.0604,
+        "exit_reason": "hard_from_cost",
+        "slots_after": 0
+      },
+      {
+        "date": "2026-10-09",
+        "ts": "2026-10-09 09:31:00",
+        "side": "buy",
+        "code": "000756",
+        "name": "新华制药",
+        "px": 14.48,
+        "shares": 4000,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 1
+      },
+      {
+        "date": "2026-10-09",
+        "ts": "2026-10-09 09:31:00",
+        "side": "buy",
+        "code": "002454",
+        "name": "松芝股份",
+        "px": 5.55,
+        "shares": 10500,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 2
+      },
+      {
+        "date": "2026-10-12",
+        "ts": "2026-10-12 09:30:00",
+        "side": "sell",
+        "code": "002454",
+        "name": "松芝股份",
+        "px": 5.48,
+        "shares": 10500,
+        "pnl_pct": -0.0126,
+        "exit_reason": "t1_peak_trail",
+        "slots_after": 1
+      },
+      {
+        "date": "2026-10-12",
+        "ts": "2026-10-12 09:31:00",
+        "side": "sell",
+        "code": "000756",
+        "name": "新华制药",
+        "px": 14.46,
+        "shares": 4000,
+        "pnl_pct": -0.0014,
+        "exit_reason": "t1_peak_trail",
+        "slots_after": 0
+      },
+      {
+        "date": "2026-10-12",
+        "ts": "2026-10-12 09:31:00",
+        "side": "buy",
+        "code": "002866",
+        "name": "传艺科技",
+        "px": 18.36,
+        "shares": 3100,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 1
+      },
+      {
+        "date": "2026-10-12",
+        "ts": "2026-10-12 09:34:00",
+        "side": "buy",
+        "code": "002703",
+        "name": "浙江世宝",
+        "px": 15.32,
+        "shares": 3800,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 2
+      },
+      {
+        "date": "2026-10-13",
+        "ts": "2026-10-13 09:31:00",
+        "side": "sell",
+        "code": "002703",
+        "name": "浙江世宝",
+        "px": 14.5,
+        "shares": 3800,
+        "pnl_pct": -0.0535,
+        "exit_reason": "hard_from_cost",
+        "slots_after": 1
+      },
+      {
+        "date": "2026-10-13",
+        "ts": "2026-10-13 09:31:00",
+        "side": "sell",
+        "code": "002866",
+        "name": "传艺科技",
+        "px": 17.24,
+        "shares": 3100,
+        "pnl_pct": -0.061,
+        "exit_reason": "hard_from_cost",
+        "slots_after": 0
+      },
+      {
+        "date": "2026-10-13",
+        "ts": "2026-10-13 09:31:00",
+        "side": "buy",
+        "code": "001266",
+        "name": "宏英智能",
+        "px": 36.36,
+        "shares": 1500,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 1
+      },
+      {
+        "date": "2026-10-13",
+        "ts": "2026-10-13 09:32:00",
+        "side": "buy",
+        "code": "002580",
+        "name": "圣阳股份",
+        "px": 19.09,
+        "shares": 2900,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 2
+      },
+      {
+        "date": "2026-10-14",
+        "ts": "2026-10-14 09:31:00",
+        "side": "sell",
+        "code": "001266",
+        "name": "宏英智能",
+        "px": 37.41,
+        "shares": 1500,
+        "pnl_pct": 0.0289,
+        "exit_reason": "vol_giveback",
+        "slots_after": 1
+      },
+      {
+        "date": "2026-10-14",
+        "ts": "2026-10-14 09:31:00",
+        "side": "buy",
+        "code": "002866",
+        "name": "传艺科技",
+        "px": 16.91,
+        "shares": 3400,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 2
+      },
+      {
+        "date": "2026-10-14",
+        "ts": "2026-10-14 09:36:00",
+        "side": "sell",
+        "code": "002580",
+        "name": "圣阳股份",
+        "px": 19.57,
+        "shares": 2900,
+        "pnl_pct": 0.0251,
+        "exit_reason": "vol_giveback",
+        "slots_after": 1
+      },
+      {
+        "date": "2026-10-14",
+        "ts": "2026-10-14 10:14:00",
+        "side": "buy",
+        "code": "600072",
+        "name": "中船科技",
+        "px": 9.76,
+        "shares": 5800,
+        "kind": "open",
+        "source": "trigger",
+        "slots_after": 2
+      }
+    ],
+    "equity": [
+      {
+        "date": "2026-10-08",
+        "equity": 295687.5,
+        "cash": 182635.5,
+        "n_pos": 2,
+        "codes": "002169,601208",
+        "ret_pct": -1.44
+      },
+      {
+        "date": "2026-10-09",
+        "equity": 293909.56,
+        "cash": 176814.56,
+        "n_pos": 2,
+        "codes": "000756,002454",
+        "ret_pct": -2.03
+      },
+      {
+        "date": "2026-10-12",
+        "equity": 291445.29,
+        "cash": 176752.29,
+        "n_pos": 2,
+        "codes": "002703,002866",
+        "ret_pct": -2.85
+      },
+      {
+        "date": "2026-10-13",
+        "equity": 289047.65,
+        "cash": 175101.65,
+        "n_pos": 2,
+        "codes": "001266,002580",
+        "ret_pct": -3.65
+      },
+      {
+        "date": "2026-10-14",
+        "equity": 283170.52,
+        "cash": 173562.52,
+        "n_pos": 2,
+        "codes": "002866,600072",
+        "ret_pct": -5.61
+      }
+    ],
+    "skipped_buys": [
+      {
+        "day": "2026-10-08",
+        "ts": "2026-10-08 09:35:00",
+        "code": "002453",
+        "name": "华软科技",
+        "px": 4.87,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-08",
+        "ts": "2026-10-08 09:39:00",
+        "code": "002636",
+        "name": "金安国纪",
+        "px": 82.0,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-08",
+        "ts": "2026-10-08 09:43:00",
+        "code": "600330",
+        "name": "天通股份",
+        "px": 27.59,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-08",
+        "ts": "2026-10-08 09:47:00",
+        "code": "600063",
+        "name": "皖维高新",
+        "px": 5.45,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-08",
+        "ts": "2026-10-08 09:48:00",
+        "code": "600346",
+        "name": "恒力石化",
+        "px": 16.68,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-08",
+        "ts": "2026-10-08 10:06:00",
+        "code": "603659",
+        "name": "璞泰来",
+        "px": 22.05,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-09",
+        "ts": "2026-10-09 09:42:00",
+        "code": "603659",
+        "name": "璞泰来",
+        "px": 22.52,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-09",
+        "ts": "2026-10-09 09:47:00",
+        "code": "002453",
+        "name": "华软科技",
+        "px": 4.81,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-09",
+        "ts": "2026-10-09 10:54:00",
+        "code": "000049",
+        "name": "德赛电池",
+        "px": 22.89,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-09",
+        "ts": "2026-10-09 13:04:00",
+        "code": "600063",
+        "name": "皖维高新",
+        "px": 5.47,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-09",
+        "ts": "2026-10-09 13:23:00",
+        "code": "002841",
+        "name": "视源股份",
+        "px": 45.75,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-09",
+        "ts": "2026-10-09 14:08:00",
+        "code": "002558",
+        "name": "巨人网络",
+        "px": 22.54,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-12",
+        "ts": "2026-10-12 09:37:00",
+        "code": "600072",
+        "name": "中船科技",
+        "px": 9.59,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-12",
+        "ts": "2026-10-12 09:40:00",
+        "code": "601609",
+        "name": "金田股份",
+        "px": 10.97,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-12",
+        "ts": "2026-10-12 10:05:00",
+        "code": "002430",
+        "name": "杭氧股份",
+        "px": 25.83,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 09:32:00",
+        "code": "002636",
+        "name": "金安国纪",
+        "px": 61.5,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 09:34:00",
+        "code": "601208",
+        "name": "东材科技",
+        "px": 44.23,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 09:35:00",
+        "code": "600760",
+        "name": "中航沈飞",
+        "px": 43.57,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 09:39:00",
+        "code": "002454",
+        "name": "松芝股份",
+        "px": 5.31,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 10:10:00",
+        "code": "000070",
+        "name": "特发信息",
+        "px": 14.54,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 10:14:00",
+        "code": "600330",
+        "name": "天通股份",
+        "px": 21.86,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 10:26:00",
+        "code": "002962",
+        "name": "五方光电",
+        "px": 13.53,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 10:38:00",
+        "code": "603042",
+        "name": "华脉科技",
+        "px": 14.64,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 11:26:00",
+        "code": "002253",
+        "name": "川大智胜",
+        "px": 8.6,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 11:29:00",
+        "code": "600552",
+        "name": "凯盛科技",
+        "px": 14.25,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 11:30:00",
+        "code": "002430",
+        "name": "杭氧股份",
+        "px": 25.42,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 13:01:00",
+        "code": "002453",
+        "name": "华软科技",
+        "px": 4.79,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 13:07:00",
+        "code": "601609",
+        "name": "金田股份",
+        "px": 10.69,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 13:11:00",
+        "code": "002415",
+        "name": "海康威视",
+        "px": 33.88,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 13:14:00",
+        "code": "000725",
+        "name": "京东方Ａ",
+        "px": 5.36,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 13:19:00",
+        "code": "002841",
+        "name": "视源股份",
+        "px": 43.09,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 13:20:00",
+        "code": "600549",
+        "name": "厦门钨业",
+        "px": 41.0,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-13",
+        "ts": "2026-10-13 13:59:00",
+        "code": "600072",
+        "name": "中船科技",
+        "px": 9.59,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      },
+      {
+        "day": "2026-10-14",
+        "ts": "2026-10-14 10:30:00",
+        "code": "002841",
+        "name": "视源股份",
+        "px": 43.65,
+        "kind": "open",
+        "source": "trigger",
+        "reason": "max_buys_per_day"
+      }
+    ],
+    "open_positions": [
+      {
+        "code": "002866",
+        "name": "传艺科技",
+        "buy_day": "2026-10-14",
+        "buy_px": 16.91,
+        "last_px": 16.1,
+        "shares": 3400,
+        "pnl_pct": -0.0479
+      },
+      {
+        "code": "600072",
+        "name": "中船科技",
+        "buy_day": "2026-10-14",
+        "buy_px": 9.76,
+        "last_px": 9.46,
+        "shares": 5800,
+        "pnl_pct": -0.0307
+      }
+    ],
+    "summary": {
+      "window_days": 5,
+      "calendar": [
+        "2026-10-08",
+        "2026-10-09",
+        "2026-10-12",
+        "2026-10-13",
+        "2026-10-14"
+      ],
+      "max_slots": 5,
+      "slot_weight": 0.2,
+      "initial_cash": 300000.0,
+      "final_equity": 283170.52,
+      "return_pct": -5.61,
+      "max_dd_pct": -5.61,
+      "dd_peak_date": null,
+      "dd_trough_date": "2026-10-14",
+      "n_buys": 10,
+      "n_sells": 8,
+      "n_closed": 8,
+      "avg_closed_pnl_pct": -2.33,
+      "n_open": 2,
+      "n_skipped_or_queued": 34,
+      "exit_mode": "half_gain",
+      "buy_mode": "open",
+      "reserve_empty": 0,
+      "max_overnight": 5,
+      "max_buys_per_day": 2
+    }
+  },
+  "intraday": true,
+  "requested_cutoff": "2026-10-14 14:15:58.211260",
+  "replay_cutoff": "2026-10-14 14:14:00"
+}

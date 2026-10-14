@@ -76,6 +76,9 @@ def empty_book(
         "cumulative_return_pct": 0.0,
         "single_return_pct": None,
         "closed_trade_return_pct": None,
+        "single_cost_base": None,
+        "single_realized_pnl": 0.0,
+        "single_sold_shares": 0.0,
         "bootstrapped": False,
         "bootstrap_cutoff": None,
         "bootstrap_source": None,
@@ -197,6 +200,9 @@ def bootstrap_book_from_daily_ohlc(
     trades = 0
     closed_ret = None
     cutoff = None
+    single_base = None
+    single_pnl = 0.0
+    single_sold = 0.0
 
     for i in idxs:
         row = df.iloc[i]
@@ -230,6 +236,8 @@ def bootstrap_book_from_daily_ohlc(
                 continue
             if l <= sell_lv + 1e-12:
                 px = sell_lv
+                single_pnl += shares * (px - float(entry_price))
+                single_sold += shares
                 cash = cash + shares * px
                 shares = 0.0
                 state = "FLAT"
@@ -250,6 +258,9 @@ def bootstrap_book_from_daily_ohlc(
                 shares = sh
                 state = "LONG"
                 entry_price = round(buy_lv, 4)
+                single_base = sh * buy_lv
+                single_pnl = 0.0
+                single_sold = 0.0
                 entry_time = f"{cutoff} 09:30:00"
                 exit_price = None
                 exit_time = None
@@ -267,6 +278,9 @@ def bootstrap_book_from_daily_ohlc(
     book["exit_time"] = exit_time
     book["trades"] = int(trades)
     book["closed_trade_return_pct"] = closed_ret
+    book["single_cost_base"] = single_base
+    book["single_realized_pnl"] = single_pnl
+    book["single_sold_shares"] = single_sold
     book["bootstrapped"] = True
     book["bootstrap_cutoff"] = cutoff
     book["bootstrap_source"] = "daily_ohlc_touch"
@@ -333,6 +347,9 @@ def bootstrap_book_from_factor26_replay(
     sells = 0
     last_mark = None
     cutoff = None
+    single_base = None
+    single_pnl = 0.0
+    single_sold = 0.0
 
     for t in trades:
         side = str(t.get("side") or "").lower()
@@ -352,6 +369,9 @@ def bootstrap_book_from_factor26_replay(
             shares = sh
             state = "LONG"
             entry_price = round(px, 4)
+            single_base = sh * px
+            single_pnl = 0.0
+            single_sold = 0.0
             entry_time = ts or (f"{cutoff} 09:30:00" if cutoff else None)
             exit_price = None
             exit_time = None
@@ -365,6 +385,8 @@ def bootstrap_book_from_factor26_replay(
                 noted_shares = 0.0
             if noted_shares > 0:
                 sell_shares = min(shares, noted_shares)
+            single_pnl += sell_shares * (px - float(entry_price))
+            single_sold += sell_shares
             cash += sell_shares * px
             shares -= sell_shares
             if shares <= 1e-9:
@@ -373,7 +395,7 @@ def bootstrap_book_from_factor26_replay(
                 exit_price = round(px, 4)
                 exit_time = ts or (f"{cutoff} 15:00:00" if cutoff else None)
                 if entry_price and entry_price > 0:
-                    closed_ret = round((px / float(entry_price) - 1.0) * 100.0, 2)
+                    closed_ret = round(single_pnl / single_base * 100.0, 2)
                 entry_price = None
                 entry_time = None
                 sells += 1
@@ -388,6 +410,9 @@ def bootstrap_book_from_factor26_replay(
     book["exit_time"] = exit_time
     book["trades"] = int(sells)
     book["closed_trade_return_pct"] = closed_ret
+    book["single_cost_base"] = single_base
+    book["single_realized_pnl"] = single_pnl
+    book["single_sold_shares"] = single_sold
     book["bootstrapped"] = True
     book["bootstrap_cutoff"] = cutoff
     book["bootstrap_source"] = "factor26_1m_replay"
@@ -549,6 +574,11 @@ def equity_of(book: dict[str, Any], mark: float | None = None) -> float:
     return cash + shares * px_f
 
 
+def return_amount_of(book: dict[str, Any], mark: float | None = None) -> float:
+    init = float(book.get("initial_cash") or INITIAL_CASH)
+    return round(equity_of(book, mark) - init, 2)
+
+
 def mark_book(book: dict[str, Any], mark: float, *, quote_ts: str | None = None) -> None:
     """LONG：随 mark 更新累计；FLAT：equity=cash，cumulative 冻结（≠清零）。"""
     try:
@@ -679,6 +709,9 @@ def _restate_same_day_entry(
     book["virtual_shares"] = new_shares
     book["virtual_cash"] = cash_left
     book["entry_price"] = round(level_f, 4)
+    book["single_cost_base"] = new_shares * level_f
+    book["single_realized_pnl"] = 0.0
+    book["single_sold_shares"] = 0.0
     book["single_return_pct"] = None
     return True
 
@@ -715,6 +748,9 @@ def _void_today_unprinted_long(
     book["single_return_pct"] = None
     book["closed_trade_return_pct"] = None
     book["gap_rebuy_ok"] = False
+    book["single_cost_base"] = None
+    book["single_realized_pnl"] = 0.0
+    book["single_sold_shares"] = 0.0
     book["last_mark"] = None
     sync_flat_cumulative(book)
     return True
@@ -1236,6 +1272,9 @@ def evaluate_live_transition(
                     book["virtual_cash"] = cash_left
                     book["closed_trade_return_pct"] = None
                     book["single_return_pct"] = 0.0
+                    book["single_cost_base"] = shares * fill_px
+                    book["single_realized_pnl"] = 0.0
+                    book["single_sold_shares"] = 0.0
                     mark_book(book, last, quote_ts=quote_ts)
                     transition = "BUY"
                     event = {
@@ -1293,6 +1332,9 @@ def evaluate_live_transition(
                     exit_ts = f"{session} 09:30:00"
                     used_open_protect = True
                 proceeds = shares * fill_px
+                book["single_cost_base"] = book.get("single_cost_base") or shares * entry
+                book["single_realized_pnl"] = float(book.get("single_realized_pnl") or 0.0) + shares * (fill_px - entry)
+                book["single_sold_shares"] = float(book.get("single_sold_shares") or 0.0) + shares
                 book["virtual_cash"] = float(book.get("virtual_cash") or 0.0) + proceeds
                 book["virtual_shares"] = 0.0
                 book["state"] = "FLAT"
@@ -1390,7 +1432,10 @@ def apply_book_to_row(row: dict[str, Any], book: dict[str, Any]) -> None:
     row["策略虚拟股数"] = book.get("virtual_shares")
     row["策略虚拟现金"] = book.get("virtual_cash")
     row["策略收益%"] = book.get("cumulative_return_pct")
-    row["策略收益"] = None
+    row["策略收益"] = return_amount_of(book)
+    row["综合策略收益%"] = book.get("cumulative_return_pct")
+    row["综合策略收益"] = row["策略收益"]
+    row["策略收益成本额"] = book.get("initial_cash") or INITIAL_CASH
     row["策略收益语义"] = "strategy_simulator_ledger"
     row["策略收益范围"] = "symbol"
     row["策略历史口径"] = book.get("bootstrap_model") or "daily_open_break_fixed_stop"
@@ -1398,6 +1443,19 @@ def apply_book_to_row(row: dict[str, Any], book: dict[str, Any]) -> None:
     row["策略退出口径"] = book.get("exit_model") or "row_sell_level_live"
     row["策略累计持有"] = state == "LONG"
     row["单笔收入%"] = book.get("single_return_pct")
+    base = float(book.get("single_cost_base") or 0.0)
+    shares = float(book.get("virtual_shares") or 0.0)
+    entry = float(book.get("entry_price") or 0.0)
+    if base <= 0 and state == "LONG" and shares > 0 and entry > 0:
+        base = shares * entry
+    pnl = float(book.get("single_realized_pnl") or 0.0)
+    if state == "LONG" and shares > 0 and entry > 0:
+        pnl += shares * (float(book.get("last_mark") or entry) - entry)
+    row["策略单笔成本额"] = round(base, 2) if base > 0 else None
+    row["策略单笔收益"] = round(pnl, 2) if base > 0 else None
+    row["策略单笔收益%"] = round(pnl / base * 100.0, 2) if base > 0 else None
+    row["策略单笔卖出数量"] = book.get("single_sold_shares") or 0
+    row["策略单笔已实现收益"] = float(book.get("single_realized_pnl") or 0.0)
     # 不覆盖 Paper 已写入的成交/预警时刻（今日平仓卡片「触发」以纸面为准）
     if not row.get("信号时间"):
         if book.get("entry_time"):

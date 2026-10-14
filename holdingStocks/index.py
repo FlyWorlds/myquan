@@ -1260,6 +1260,52 @@ def _day_pnl_for_account_row(
         return None
 
 
+def _ledger_realized_day_pnl(
+    session: str | None,
+    *,
+    codes: set[str] | None = None,
+) -> tuple[float | None, float | None, int]:
+    """今日已实现盈亏优先按交割单逐笔汇总，覆盖同一代码分笔卖出。"""
+    sess = str(session or "")[:10]
+    if not sess:
+        return None, None, 0
+    try:
+        from trade_ledger import load_ledger
+    except Exception:  # noqa: BLE001
+        return None, None, 0
+    try:
+        entries = load_ledger().get("entries") or []
+    except Exception:  # noqa: BLE001
+        return None, None, 0
+    total_pnl = 0.0
+    total_day = 0.0
+    count = 0
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        if str(e.get("side") or "").lower() != "sell":
+            continue
+        if str(e.get("session") or str(e.get("time") or "")[:10])[:10] != sess:
+            continue
+        code = str(e.get("code") or "").strip().zfill(6)[-6:]
+        if codes is not None and code not in codes:
+            continue
+        if e.get("pnl") is not None:
+            try:
+                total_pnl += float(e.get("pnl") or 0)
+            except (TypeError, ValueError):
+                pass
+        if e.get("day_pnl") is not None:
+            try:
+                total_day += float(e.get("day_pnl") or 0)
+            except (TypeError, ValueError):
+                pass
+        count += 1
+    if count <= 0:
+        return None, None, 0
+    return round(total_pnl, 2), round(total_day, 2), count
+
+
 def _build_watch_account_summary(
     rows: list[dict[str, Any]],
     *,
@@ -1275,13 +1321,15 @@ def _build_watch_account_summary(
     session_for_open = (
         str(session)[:10] if session else _calendar_signal_session()
     )
-    total_day_pnl = 0.0
+    open_day_pnl = 0.0
+    row_day_pnl_total = 0.0
     total_mv = 0.0
     total_mv_no_cost = 0.0
     total_cost = 0.0
     settled_pnl = 0.0
     settled_day = 0.0
     settled_n = 0
+    settled_codes_today: set[str] = set()
     has_day = False
     for r in rows:
         qty = int(r.get("持仓") or 0)
@@ -1289,10 +1337,15 @@ def _build_watch_account_summary(
         in_pnl = _row_counts_in_watch_pnl(r, session=session_for_open)
         day_v = _day_pnl_for_account_row(r, session=session_for_open)
         if day_v is not None and in_pnl:
-            total_day_pnl += day_v
+            row_day_pnl_total += day_v
+            if qty > 0:
+                open_day_pnl += day_v
             has_day = True
         if realized and in_pnl:
             settled_n += 1
+            code = str(r.get("代码") or r.get("code") or "").strip().zfill(6)[-6:]
+            if code:
+                settled_codes_today.add(code)
             if r.get("浮盈") is not None:
                 settled_pnl += float(r["浮盈"])
             if day_v is not None:
@@ -1329,7 +1382,8 @@ def _build_watch_account_summary(
         if total_pnl is not None and equity_base > 0
         else None
     )
-    # 有日初锁定时，用权益日变化做结算核对（展示仍用分票加总）
+    # 有日初锁定时，权益日变化保留作校验；展示今日盈亏优先用交割单
+    # 逐笔已实现 + 当前持仓当日浮动，避免 realized_today 按 code 覆盖漏掉分笔卖出。
     equity_day = None
     if (
         account_total is not None
@@ -1349,7 +1403,28 @@ def _build_watch_account_summary(
         if isinstance(holdings_meta.get("factor2"), dict)
         else None
     )
-    day_pnl_out = round(total_day_pnl, 2) if has_day else None
+    ledger_settled_pnl, ledger_settled_day, ledger_settled_n = (
+        _ledger_realized_day_pnl(
+            session_for_open,
+            codes=settled_codes_today if settled_codes_today else set(),
+        )
+    )
+    if ledger_settled_n > 0:
+        if ledger_settled_pnl is not None:
+            settled_pnl = ledger_settled_pnl
+        if ledger_settled_day is not None:
+            settled_day = ledger_settled_day
+        settled_n = ledger_settled_n
+        day_pnl_out = round(open_day_pnl + float(settled_day or 0.0), 2)
+        row_day_pnl = round(row_day_pnl_total, 2) if has_day else None
+    else:
+        row_day_pnl = round(row_day_pnl_total, 2) if has_day else None
+        day_pnl_out = row_day_pnl
+    day_pnl_vs_rows = (
+        round(float(day_pnl_out) - float(row_day_pnl), 2)
+        if day_pnl_out is not None and row_day_pnl is not None
+        else None
+    )
     summary = {
         "totalPnl": total_pnl,
         "totalPnlPct": total_pnl_pct,
@@ -1360,6 +1435,8 @@ def _build_watch_account_summary(
         "dayPnl": day_pnl_out,
         "dayPnlPct": account_today_return_pct(day_pnl_out, account_open),
         "equityDayPnl": equity_day,
+        "rowDayPnl": row_day_pnl,
+        "dayPnlVsRows": day_pnl_vs_rows,
         "accountTotal": account_total,
         "accountOpen": account_open,
         "availableCash": available_cash,
@@ -1936,7 +2013,7 @@ def _attach_hwm_row_fields(
 
 
 def _iter_snapshot_price_rows(snap: dict[str, Any]):
-    for key in ("holdings", "strategy1", "strategy16", "strategy17"):
+    for key in ("holdings", "strategy1", "strategy16", "strategy16b", "strategy17"):
         for r in snap.get(key) or []:
             if isinstance(r, dict):
                 yield r
@@ -1949,6 +2026,28 @@ def _iter_snapshot_price_rows(snap: dict[str, Any]):
         for r in s15.get("rows") or s15.get("stocks") or []:
             if isinstance(r, dict):
                 yield r
+
+
+def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any]) -> bool:
+    """出站快照兜底：所有页面行都补齐纸面整笔收益，避免显示最后一腿收益。"""
+    changed = False
+    for r in _iter_snapshot_price_rows(snap):
+        before = (
+            r.get("综合单笔收入%"),
+            r.get("综合单笔收入"),
+            r.get("综合单笔成本额"),
+            r.get("综合单笔腿数"),
+        )
+        _enrich_comprehensive_trade_return(r)
+        after = (
+            r.get("综合单笔收入%"),
+            r.get("综合单笔收入"),
+            r.get("综合单笔成本额"),
+            r.get("综合单笔腿数"),
+        )
+        if after != before:
+            changed = True
+    return changed
 
 
 def _sync_snapshot_hwm_from_quotes(
@@ -2142,6 +2241,8 @@ def publish_live_quote_patch() -> bool:
             snap["strategy17"] = s17
     except Exception:  # noqa: BLE001
         pass
+    if _enrich_snapshot_comprehensive_trade_returns(snap):
+        changed = True
     _stamp_snapshot_liveness(snap)
     # 竞态：全量扫描已写入更新快照 → 放弃本轮
     if _last_watch_snapshot is not base:
@@ -2346,6 +2447,7 @@ def publish_watch_snapshot(
         portfolio_codes=portfolio_codes,
         strategy_codes=strategy_watchlist_codes(),
     )
+    _enrich_snapshot_comprehensive_trade_returns(snapshot)
     apply_feed_health(snapshot, _current_feed_health())
     keep_last = False
     published = False
@@ -2362,6 +2464,7 @@ def publish_watch_snapshot(
                 session=session_today or None,
             )
             apply_feed_health(snap, _current_feed_health(), keep_stale=True)
+            _enrich_snapshot_comprehensive_trade_returns(snap)
             _last_watch_snapshot = snap
             to_send = snap
             keep_last = True
@@ -2388,6 +2491,7 @@ def publish_watch_snapshot(
                 ):
                     snap = rebase_snapshot_day_pnl(snap, session=session_today)
                     _last_snapshot_digest = None
+                _enrich_snapshot_comprehensive_trade_returns(snap)
                 _stamp_snapshot_liveness(snap, clock=clock_now)
                 _last_watch_snapshot = snap
                 to_send = snap
@@ -3061,9 +3165,37 @@ def _attach_strategy_pnl_fields(
     row["策略起算"] = STRATEGY_PNL_START
     sid = str(STRATEGY_ID)
     code = str(w.get("code") or row.get("代码") or "")
+
+    def _strategy_amount_from_equity(
+        cash: Any,
+        shares: Any,
+        mark: Any,
+        *,
+        initial: float = 100_000.0,
+    ) -> float | None:
+        try:
+            cash_f = float(cash or 0.0)
+            shares_f = float(shares or 0.0)
+            init_f = float(initial or 0.0)
+        except (TypeError, ValueError):
+            return None
+        if init_f <= 0:
+            return None
+        equity = cash_f
+        if shares_f > 0:
+            try:
+                mark_f = float(mark or 0.0)
+            except (TypeError, ValueError):
+                mark_f = 0.0
+            if mark_f <= 0:
+                return None
+            equity += shares_f * mark_f
+        return round(equity - init_f, 2)
     if row.get("error") or not q.get("session") or not code:
         row["策略收益%"] = None
         row["策略收益"] = None
+        row["综合策略收益%"] = None
+        row["综合策略收益"] = None
         row["策略累计持有"] = False
         row["策略累计笔数"] = None
         row["策略模拟状态"] = "FLAT"
@@ -3165,6 +3297,8 @@ def _attach_strategy_pnl_fields(
     else:
         sync_flat_cumulative(book)
     apply_book_to_row(row, book)
+    row["综合策略收益%"] = row.get("策略收益%")
+    row["综合策略收益"] = row.get("策略收益")
     try:
         row["策略累计笔数"] = int(book.get("trades") or 0)
     except (TypeError, ValueError):
@@ -3217,6 +3351,17 @@ def _attach_strategy_pnl_fields(
             backtest_model = "factor26_1m_replay"
         if backtest_return is not None:
             row["策略收益%"] = backtest_return
+            row["综合策略收益%"] = backtest_return
+            amt = _strategy_amount_from_equity(backtest_cash, backtest_shares, last)
+            if amt is None:
+                try:
+                    amt = round(float(backtest_return) / 100.0 * 100000.0, 2)
+                except (TypeError, ValueError):
+                    amt = None
+            if amt is not None:
+                row["策略收益"] = amt
+            row["综合策略收益"] = row.get("策略收益")
+            row["策略收益成本额"] = 100000.0
             row["策略累计持有"] = bool(backtest_holding)
             row["策略模拟持有"] = bool(backtest_holding)
             row["策略模拟状态"] = "LONG" if bool(backtest_holding) else "FLAT"
@@ -3242,6 +3387,11 @@ def _attach_strategy_pnl_fields(
                 row["策略虚拟股数"] = backtest_shares
             if backtest_single is not None:
                 row["单笔收入%"] = backtest_single
+            if isinstance(replay_info, dict) and replay_info.get("source") == "1m":
+                single_row: dict[str, Any] = {}
+                apply_book_to_row(single_row, bt_book)
+                for key in ("策略单笔成本额", "策略单笔收益", "策略单笔收益%", "策略单笔卖出数量", "策略单笔已实现收益"):
+                    row[key] = single_row.get(key)
     except Exception:  # noqa: BLE001
         pass
 
@@ -4776,7 +4926,7 @@ def _forget_slot_closed(code: str) -> None:
 def _remember_slot_closed(row: dict[str, Any]) -> None:
     """记下今日三槽平仓；下一交易日用 session 对不上来清空展示。"""
     sess = str(row.get("交易日") or "")[:10]
-    code = _code_key(str(row.get("代码") or ""))
+    code = _code_key(str(row.get("代码") or row.get("code") or ""))
     if not sess or not code:
         return
     try:
@@ -5269,6 +5419,12 @@ def _apply_portfolio_slots(
             continue
         # 只从当前默认策略池入场（strategy16=核心龙头）；旧 portfolio_pool 遗留票不买
         if code not in strategy_codes:
+            if _row_hit_buy(r):
+                note = str(r.get("挂单说明") or "")
+                tag = "资金规则未开仓:NOT_AUTO_BUY_POOL（不在默认策略自动买入池）"
+                if tag not in note:
+                    r["挂单说明"] = f"{tag}；{note}" if note else tag
+                r["资金规则"] = "NOT_AUTO_BUY_POOL"
             continue
         pos = str(r.get("持仓状态") or "")
         if pos in ("当日禁买",):
@@ -5282,6 +5438,17 @@ def _apply_portfolio_slots(
             continue
         rank = int(buy_ranks.get(code, 10_000))
         candidates.append((rank, dist, code, r))
+
+    def _mark_slot_buy_skip(row: dict[str, Any], reason: str, detail: str = "") -> None:
+        if not reason:
+            return
+        note = str(row.get("挂单说明") or "")
+        suffix = f"（{detail}）" if detail else ""
+        tag = f"资金规则未开仓:{reason}{suffix}"
+        if tag not in note:
+            row["挂单说明"] = f"{tag}；{note}" if note else tag
+        row["资金规则"] = reason
+
     candidates.sort(key=lambda x: (x[0], x[1], x[2]))
     # 展示：空槽附近票标候选；已触买信号无论能否入槽都标候选（预警≠成交）
     selected = candidates[: max(0, free)]
@@ -5318,13 +5485,16 @@ def _apply_portfolio_slots(
                 # 成交前独立复核：不能只相信上游 row["买点"]。核定开盘、
                 # 个股阈值、行情时刻任一不一致都拒绝，防竞价缓存污染后直接落账。
                 if not bool(row.get("开盘复核OK")):
+                    _mark_slot_buy_skip(row, "OPEN_AUDIT_NOT_OK", str(row.get("开盘复核") or ""))
                     return None
                 quote_ts = str(row.get("_quote_ts") or "")
                 if not timestamp_in_signal_window(quote_ts):
+                    _mark_slot_buy_skip(row, "QUOTE_NOT_IN_SIGNAL_WINDOW", quote_ts)
                     return None
                 try:
                     last = float(row.get("现价") or 0)
                 except (TypeError, ValueError):
+                    _mark_slot_buy_skip(row, "INVALID_LAST")
                     return None
                 try:
                     session_low = float(row.get("最低") or 0)
@@ -5345,28 +5515,34 @@ def _apply_portfolio_slots(
                     except (TypeError, ValueError):
                         official = 0.0
                 if official <= 0:
+                    _mark_slot_buy_skip(row, "INVALID_BUY_LEVEL")
                     return None
                 try:
                     open_px = float(row.get("开盘") or 0)
                     entry_pct = float(row.get("_entry_pct"))
                     tick = float(row.get("_tick") or TICK_SIZE)
                 except (TypeError, ValueError):
+                    _mark_slot_buy_skip(row, "ENTRY_PCT_MISSING")
                     return None
                 if row.get("_open_finalized") is False:
+                    _mark_slot_buy_skip(row, "OPEN_NOT_FINALIZED")
                     return None
                 f29_open = bool(row.get("因子29买OK") or row.get("_f29_hit_buy"))
                 if f29_open:
                     if open_px <= 0:
+                        _mark_slot_buy_skip(row, "INVALID_OPEN")
                         return None
                     official = float(open_px)
                     if session_low > 0 and official + 1e-12 < session_low:
+                        _mark_slot_buy_skip(row, "UNPRINTABLE_FILL", "开盘低于当日已印最低")
                         return None
                     if not session_high_prints_buy(
                         session_high=session_high if session_high > 0 else None,
                         official_buy=official,
                     ):
+                        _mark_slot_buy_skip(row, "BUY_NOT_PRINTED", "最高未印到核定买点")
                         return None
-                    return slot_fill_decision(
+                    dec = slot_fill_decision(
                         signal_px=official,
                         last_px=last,
                         trigger_ts=_row_trigger_ts(row, side="buy"),
@@ -5377,31 +5553,60 @@ def _apply_portfolio_slots(
                         session_high=session_high if session_high > 0 else None,
                         fill_mode="official_open",
                     )
+                    if dec is None:
+                        _mark_slot_buy_skip(row, "FILL_REJECTED")
+                    return dec
                 expected = official_buy_trigger(
                     open_px, entry_pct=entry_pct, tick=tick
                 )
                 if expected is None or abs(float(expected) - official) > max(
                     1e-8, tick / 10.0
                 ):
+                    _mark_slot_buy_skip(row, "OPEN_AUDIT_MISMATCH", "核定买点与行内买点不一致")
                     return None
                 official = float(expected)
                 if session_low > 0 and official + 1e-12 < session_low:
+                    _mark_slot_buy_skip(row, "UNPRINTABLE_FILL", "买点低于当日已印最低")
                     return None
                 if not session_high_prints_buy(
                     session_high=session_high if session_high > 0 else None,
                     official_buy=official,
                 ):
+                    _mark_slot_buy_skip(row, "BUY_NOT_PRINTED", "最高未印到核定买点")
                     return None
-                return slot_fill_decision(
+                trig = _row_trigger_ts(row, side="buy")
+                dec = slot_fill_decision(
                     signal_px=official,
                     last_px=last,
-                    trigger_ts=_row_trigger_ts(row, side="buy"),
+                    trigger_ts=trig,
                     freed_at=freed_at,
                     overshoot=SLOT_FIRST_TIER_MAX_OVERSHOOT,
                     session_low=session_low if session_low > 0 else None,
                     official_buy=official,
                     session_high=session_high if session_high > 0 else None,
                 )
+                if dec is None:
+                    cap = official * (1.0 + float(SLOT_FIRST_TIER_MAX_OVERSHOOT))
+                    detail = ""
+                    reason = "FILL_REJECTED"
+                    if freed_at and trig and not trig.startswith("9999") and trig < str(freed_at):
+                        if last > cap + 1e-12:
+                            reason = "FIRST_TIER_OVER_MAX"
+                            detail = f"现价{last:.2f}高于买点1%上限{cap:.2f}"
+                        elif last + 1e-12 < official:
+                            reason = "FILL_BELOW_BUY"
+                            detail = f"释放空槽后现价{last:.2f}低于核定买点{official:.2f}"
+                    if reason == "FILL_REJECTED":
+                        reject = buy_fill_reject_reason(
+                            fill_px=last,
+                            official_buy=official,
+                            session_high=session_high if session_high > 0 else None,
+                            session_low=session_low if session_low > 0 else None,
+                        )
+                        if reject:
+                            reason = reject
+                    _mark_slot_buy_skip(row, reason, detail)
+                return dec
 
             ranked: list[tuple[str, str, str, dict[str, Any], dict[str, Any]]] = []
             for _rank, _dist, code, r in hit_queue:
@@ -5418,6 +5623,9 @@ def _apply_portfolio_slots(
                     continue
                 dec = _fill_of(r)
                 if dec is None:
+                    reason = str(r.get("资金规则") or "FILL_REJECTED")
+                    skipped.append({"code": code, "reason": reason})
+                    used.add(code)
                     continue
                 tier = "0" if dec.get("kind") == "last" else "1"
                 ranked.append((tier, trig, code, r, dec))
@@ -6867,7 +7075,8 @@ def correct_realized_open_protect_fill(
     append_trade(
         {
             "time": _now(),
-            "side": "sell",
+            # 纠价是对原成交的修正，不是新卖出；交割单不得再显示一笔 qty→0。
+            "side": "adjust",
             "code": code,
             "name": meta_name,
             "price": new_px,
@@ -6875,6 +7084,7 @@ def correct_realized_open_protect_fill(
             "after_qty": 0,
             "cost": round(cost_f, 4),
             "pnl": rec.get("pnl"),
+            "adjustment_kind": "open_protect_reprice",
             "note": f"开盘保护纠价 {old_px}->{new_px}（原按抬高止损记账）",
         }
     )
@@ -9853,6 +10063,7 @@ def collect_rows(
         _enrich_side_price_fields(r)
         _finalize_position_row(r)
         enrich_signal_single_return(r)
+        _enrich_comprehensive_trade_return(r)
         code = _code_key(str(r.get("代码") or ""))
         if code in portfolio_codes:
             _enrich_float_pnl(r)
@@ -9976,12 +10187,14 @@ def collect_rows(
     for r in rows:
         _finalize_position_row(r)
         enrich_signal_single_return(r)
+        _enrich_comprehensive_trade_return(r)
     for r in rows:
         if int(r.get("持仓") or 0) > 0:
             _forget_slot_closed(str(r.get("代码") or ""))
         _enrich_closed_day_pnl(r)
         _finalize_position_row(r)
         enrich_signal_single_return(r)
+        _enrich_comprehensive_trade_return(r)
     if rows:
         rows[0]["_slot_meta"] = slot_info
     return sort_watch_rows(rows)
@@ -10079,7 +10292,7 @@ def _is_closed_trace_row(
         return False
     if bool(row.get("已实现")):
         return True
-    code = _code_key(str(row.get("代码") or ""))
+    code = _code_key(str(row.get("代码") or row.get("code") or ""))
     if not code:
         return False
     sess = str(row.get("交易日") or "")[:10]
@@ -10164,6 +10377,173 @@ def _last_open_lots_from_trades(*, text: str | None = None) -> dict[str, dict[st
     return lots
 
 
+def _trade_records_for_code(code: str, *, text: str | None = None) -> list[dict[str, Any]]:
+    ck = _code_key(str(code or ""))
+    if not ck:
+        return []
+    raw = text
+    if raw is None:
+        try:
+            raw = TRADES_FILE.read_text(encoding="utf-8") if TRADES_FILE.exists() else ""
+        except OSError:
+            raw = ""
+    out: list[dict[str, Any]] = []
+    for line in str(raw or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        if _code_key(str(rec.get("code") or "")) == ck:
+            out.append(rec)
+    return out
+
+
+def _paper_trade_cycle_return(
+    row: dict[str, Any],
+    *,
+    trades_text: str | None = None,
+) -> dict[str, Any] | None:
+    """整笔纸面交易收益：已卖分腿 realized + 剩余仓 MTM，加权除以成本额。
+
+    老的「单笔收入%」是触发价到现价；分批止盈后会只看最后一腿。
+    这里用 trades.jsonl 重建当前买入周期，让 400+200+300 这类分批卖出合成一笔。
+    """
+    code = _code_key(str(row.get("代码") or row.get("code") or ""))
+    if not code:
+        return None
+    try:
+        open_qty = int(row.get("持仓") or 0)
+    except (TypeError, ValueError):
+        open_qty = 0
+    buy_time_hint = str(row.get("买入时间") or row.get("buy_time") or "").strip()
+    book = load_holdings()
+    realized_rec = (book.get("realized_today") or {}).get(code)
+    if isinstance(realized_rec, dict):
+        buy_time_hint = buy_time_hint or str(realized_rec.get("buy_time") or "").strip()
+    records = _trade_records_for_code(code, text=trades_text)
+    buys = [
+        r
+        for r in records
+        if str(r.get("side") or "").lower() in ("buy", "买入")
+        and (not buy_time_hint or str(r.get("time") or "") == buy_time_hint)
+    ]
+    if not buys:
+        buys = [r for r in records if str(r.get("side") or "").lower() in ("buy", "买入")]
+    if not buys:
+        return None
+    buy = buys[-1]
+    buy_ts = str(buy.get("time") or "")
+    try:
+        buy_qty = int(buy.get("qty") or buy.get("after_qty") or 0)
+        buy_px = float(buy.get("avg_cost") or buy.get("cost") or buy.get("price") or 0)
+    except (TypeError, ValueError):
+        return None
+    if buy_qty <= 0 or buy_px <= 0:
+        return None
+
+    sell_recs: list[dict[str, Any]] = []
+    for rec in records:
+        if str(rec.get("side") or "").lower() not in ("sell", "卖出", "stop", REASON_STOP):
+            continue
+        if buy_ts and str(rec.get("time") or "") < buy_ts:
+            continue
+        rec_buy_ts = str(rec.get("buy_time") or "").strip()
+        if buy_ts and rec_buy_ts and rec_buy_ts != buy_ts:
+            continue
+        if not rec.get("session") or not rec.get("action_kind"):
+            continue
+        sell_recs.append(rec)
+
+    realized_pnl = 0.0
+    realized_cost = 0.0
+    sold_qty = 0
+    for rec in sell_recs:
+        try:
+            qty = int(rec.get("qty") or 0)
+            cost = float(rec.get("cost") or buy_px)
+        except (TypeError, ValueError):
+            continue
+        if qty <= 0 or cost <= 0:
+            continue
+        sold_qty += qty
+        realized_cost += cost * qty
+        try:
+            pnl = float(rec.get("pnl"))
+        except (TypeError, ValueError):
+            try:
+                pnl = (float(rec.get("price") or 0) - cost) * qty
+            except (TypeError, ValueError):
+                pnl = 0.0
+        realized_pnl += pnl
+
+    open_cost = _as_money(row.get("成本")) or buy_px
+    open_pnl = 0.0
+    open_base = 0.0
+    mark = _as_money(row.get("现价"))
+    if open_qty > 0 and open_cost and open_cost > 0 and mark and mark > 0:
+        open_base = float(open_cost) * open_qty
+        open_pnl = (float(mark) - float(open_cost)) * open_qty
+
+    base = realized_cost + open_base
+    total_pnl = realized_pnl + open_pnl
+    if base <= 0:
+        return None
+    total_qty = sold_qty + max(0, open_qty)
+    return {
+        "pnl": round(total_pnl, 2),
+        "pnl_pct": round(total_pnl / base * 100.0, 2),
+        "base": round(base, 2),
+        "sold_qty": int(sold_qty),
+        "open_qty": int(max(0, open_qty)),
+        "buy_time": buy_ts or None,
+        "buy_price": round(float(buy_px), 4),
+        "legs": len(sell_recs) + (1 if open_qty > 0 else 0),
+        "source": "trades_jsonl_cycle",
+    }
+
+
+def _enrich_comprehensive_trade_return(row: dict[str, Any]) -> None:
+    rec = _paper_trade_cycle_return(row)
+    if not rec:
+        # 只有策略回测成交的股票也可展示整笔收益，明确标记为虚拟账本。
+        base = _as_money(row.get("策略单笔成本额"))
+        pnl = _as_money(row.get("策略单笔收益"))
+        shares = _as_money(row.get("策略虚拟股数")) or 0.0
+        entry = _as_money(row.get("策略入场价"))
+        mark = _as_money(row.get("现价"))
+        if base and shares > 0 and entry and entry > 0 and mark and mark > 0:
+            pnl = (_as_money(row.get("策略单笔已实现收益")) or 0.0) + shares * (mark - entry)
+        if not base and shares > 0 and entry and entry > 0 and mark and mark > 0:
+            base = shares * entry
+            pnl = shares * (mark - entry)
+        if base and base > 0 and pnl is not None:
+            rec = {
+                "pnl": round(pnl, 2),
+                "pnl_pct": round(pnl / base * 100.0, 2),
+                "base": round(base, 2),
+                "sold_qty": row.get("策略单笔卖出数量") or 0,
+                "open_qty": shares,
+                "legs": None,
+                "source": "strategy_simulator_cycle",
+            }
+        else:
+            for key in ("综合单笔收入", "综合单笔收入%", "综合单笔成本额", "综合单笔卖出数量", "综合单笔持仓数量", "综合单笔腿数", "综合单笔来源"):
+                row.pop(key, None)
+            return
+    row["综合单笔收入"] = rec["pnl"]
+    row["综合单笔收入%"] = rec["pnl_pct"]
+    row["综合单笔成本额"] = rec["base"]
+    row["综合单笔卖出数量"] = rec["sold_qty"]
+    row["综合单笔持仓数量"] = rec["open_qty"]
+    row["综合单笔腿数"] = rec["legs"]
+    row["综合单笔来源"] = rec["source"]
+
+
 def _row_overnight_high_ok(row: dict[str, Any]) -> bool:
     """已平仓/实仓行：昨日策略持有或策略买入才允许用昨高。
 
@@ -10228,7 +10608,7 @@ def _closed_1m_bars(row: dict[str, Any]) -> pd.DataFrame | None:
     bars = row.get("_day_bars")
     if isinstance(bars, pd.DataFrame) and not bars.empty:
         return bars
-    code = _code_key(str(row.get("代码") or ""))
+    code = _code_key(str(row.get("代码") or row.get("code") or ""))
     sess = str(row.get("交易日") or "")[:10]
     if not code or not sess:
         return None
@@ -10251,7 +10631,7 @@ def _closed_path_fill(
     bars: pd.DataFrame | None,
 ) -> float | None:
     """已平仓成交价：因子26 first_session_exit_fill（1 分钟第一次触达）。"""
-    sina = _sina_of(_code_key(str(row.get("代码") or "")))
+    sina = _sina_of(_code_key(str(row.get("代码") or row.get("code") or "")))
     sess = str(row.get("交易日") or "")[:10]
     vol = None
     if sina and sess and not os.environ.get("PYTEST_CURRENT_TEST"):
@@ -10344,7 +10724,7 @@ def _enrich_closed_day_pnl(
     """已平仓卡片：今买相对买入价、昨仓相对昨收；已实现优先用 realized_today 记账。"""
     if row.get("error") or not _is_closed_trace_row(row, lots=lots, traces=traces):
         return
-    code = _code_key(str(row.get("代码") or ""))
+    code = _code_key(str(row.get("代码") or row.get("code") or ""))
     sess = str(row.get("交易日") or "")[:10]
     book = load_holdings()
     realized_rec = (book.get("realized_today") or {}).get(code)

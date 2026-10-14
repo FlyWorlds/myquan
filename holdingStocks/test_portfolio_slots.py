@@ -77,6 +77,22 @@ def test_slot_fill_first_tier_uses_last_within_1pct():
     assert too_high is None
 
 
+def test_slot_fill_first_tier_allows_pullback_after_printed_buy():
+    """先触买、后释放空槽：当日已印买点后，允许用回落现价补槽。"""
+    dec = slot_fill_decision(
+        signal_px=16.91,
+        last_px=16.36,
+        trigger_ts="2026-10-14 09:31:00",
+        freed_at="2026-10-14 10:01:00",
+        session_low=16.02,
+        official_buy=16.91,
+        session_high=17.48,
+    )
+    assert dec is not None
+    assert dec["kind"] == "last"
+    assert abs(float(dec["fill_px"]) - 16.36) < 1e-9
+
+
 def test_reprintable_buy_cost_prefers_official_buy():
     from watch_config import reprintable_buy_cost
 
@@ -1902,4 +1918,3 @@ def test_factor29_fill_locks_official_open():
     )
     assert first_tier is not None
     assert abs(float(first_tier["fill_px"]) - 18.53) < 1e-9
-

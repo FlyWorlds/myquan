@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "id": "benchmark-comparison",
+      "title": "10月组合与指数表现",
+      "queries": [{
+        "id": "matched-returns",
+        "source": {
+          "label": "策略16回测与新浪指数行情",
+          "files": [{"label": "result.json"}, {"label": "benchmark_comparison.csv"}],
+          "links": [{"label": "上证综指行情", "url": "https://finance.sina.com.cn/realstock/company/sh000001/nc.shtml"}, {"label": "深证成指行情", "url": "https://finance.sina.com.cn/realstock/company/sz399001/nc.shtml"}],
+          "metricDefinitions": [{"label": "全池策略收益", "definition": "30万元均分34只股票独立资金，按信号买卖，含费用、滑点与持仓浮盈亏。指数为9月30日收盘至10月14日14:14的价格涨跌。"}],
+          "caveats": ["固定当前股票池与参数，阈值拟合窗与评价窗重叠，不含竞价路径及9月隔夜仓。", "指数满仓价格收益与低仓位策略风险暴露不同，超额收益不等于风险调整后的alpha。"],
+          "evidenceFlow": [{"kind": "validation", "title": "时点对齐", "detail": "两只指数均取得14:14的分钟收盘价，与全池组合共同截止时点一致。"}]
+        },
+        "reportingPeriod": "2026-09-30收盘至2026-10-14 14:14，上海时间",
+        "columns": ["对象", "基准值", "截止值", "收益率百分比"],
+        "rows": [
+          {"对象": "策略16全池", "基准值": 300000, "截止值": 295736.84, "收益率百分比": -1.4210533333},
+          {"对象": "上证综指", "基准值": 3842.195, "截止值": 3772.861, "收益率百分比": -1.8045414145},
+          {"对象": "深证成指", "基准值": 12887.62, "截止值": 12139.612, "收益率百分比": -5.8040817467}
+        ],
+        "methods": [{"language": "calculation", "code": "组合净亏 / 300000 × 100 = -1.4210533333%\n上证：(3772.861 / 3842.195 - 1) × 100 = -1.8045414145%\n深证：(12139.612 / 12887.62 - 1) × 100 = -5.8040817467%"}]
+      }]
+    },
+    {
+      "id": "loss-decomposition",
+      "title": "亏损来源与交易胜率",
+      "queries": [{
+        "id": "fills-and-cycles",
+        "source": {
+          "label": "全池成交与整笔周期对账",
+          "files": [{"label": "trades.csv"}, {"label": "cycles.csv"}, {"label": "exit_reason_contributions.csv"}, {"label": "buy_date_contributions.csv"}],
+          "metricDefinitions": [{"label": "盈亏分解", "definition": "按实际成交数量计算卖出毛盈亏，合并分批卖出为整笔交易，再加持仓毛浮盈亏并扣费用与滑点。"}],
+          "caveats": ["卖出规则贡献是会计归因，不能单凭规则分组证明止损设计导致亏损。仅5个交易日，不足以验证长期胜率。"],
+          "evidenceFlow": [{"kind": "validation", "title": "分解对账", "detail": "卖出分腿毛盈亏合计等于-2985元；-2985-552-726.16=-4263.16元，与账户权益差额一致。"}]
+        },
+        "reportingPeriod": "2026-10-08至2026-10-14 14:14，上海时间",
+        "columns": ["指标", "数值"],
+        "rows": [
+          {"指标": "已实现毛盈亏，元", "数值": -2985},
+          {"指标": "持仓毛浮盈亏，元", "数值": -552},
+          {"指标": "费用及滑点，元", "数值": 726.16},
+          {"指标": "硬保护10次毛盈亏，元", "数值": -4531},
+          {"指标": "T+1隔夜回落15次毛盈亏，元", "数值": -1639},
+          {"指标": "10月8日8笔买入当前净盈亏，元", "数值": -3312.66},
+          {"指标": "完整平仓回合数", "数值": 34},
+          {"指标": "盈利回合数", "数值": 9},
+          {"指标": "完整平仓胜率，百分比", "数值": 26.4705882353}
+        ],
+        "methods": [{"language": "python", "code": "closed = cycles[cycles['remaining_qty'] == 0]\nwin_rate_pct = (closed['net_pnl'] > 0).mean() * 100\ncohorts = cycles.groupby(cycles['buy_time'].str[:10])['net_pnl'].agg(['sum', 'count'])"}]
+      }]
+    },
+    {
+      "id": "pool-and-exposure",
+      "title": "股票池下跌与持仓暴露",
+      "queries": [{
+        "id": "pool-reference",
+        "source": {
+          "label": "34只股票价格参考及组合权益",
+          "files": [{"label": "pool_buyhold_reference.csv"}, {"label": "equity.csv"}],
+          "metricDefinitions": [{"label": "股票池价格收益参考", "definition": "34只股票从9月30日前复权收盘到14:14价格涨跌的均值，包含所有股票。仓位为各日末及当前时点持仓市值占权益比例。"}],
+          "caveats": ["股票池价格参考未计费用和整手限制，与实际资金组合口径不同。", "20.07%为5个日末/当前采样点仓位均值，不是时间加权日内平均仓位。"]
+        },
+        "reportingPeriod": "2026-09-30收盘至2026-10-14 14:14，上海时间",
+        "columns": ["指标", "数值"],
+        "rows": [
+          {"指标": "全池买入持有价格收益均值，百分比", "数值": -6.8201912050},
+          {"指标": "下跌股票数", "数值": 31},
+          {"指标": "日末/当前仓位均值，百分比", "数值": 20.0683431915},
+          {"指标": "当前仓位，百分比", "数值": 7.0319274393}
+        ],
+        "methods": [{"language": "python", "code": "bh['buyhold_return_pct'].mean()\nexposures = [(e['equity'] - e['cash']) / e['equity'] * 100 for e in result['portfolio']['equity']]\nmean_sampled_exposure_pct = sum(exposures) / len(exposures)"}]
+      }]
+    }
+  ]
+}

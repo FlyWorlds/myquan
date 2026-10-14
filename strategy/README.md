@@ -261,6 +261,16 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --buy-mode open_or_attack 
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 7 --fit-thr
 # 本周 5 日核对（不覆盖默认 REPORT）
 PYTHONPATH=. python backtest/strategy1_pool_1m/run.py --pool strategy16 --days 5 --source ak --tag _week202609
+# 指定完整日期区间，空仓开始，按当前组合限制复算并对账
+python backtest/strategy16_core_leader/run_month_review.py --start 2026-10-01 --end 2026-10-13
+# 使用同次保存的分钟数据复跑，不请求行情接口
+python backtest/strategy16_core_leader/run_month_review.py --start 2026-10-01 --end 2026-10-13 --offline
+# 今日盘中：排除未完成分钟，按全池共同截止时点估值
+python backtest/strategy16_core_leader/run_month_review.py --start 2026-10-01 --end 2026-10-14 --intraday
+# 全池等权独立资金组合（保留整手与现金，无5槽/日增2只限制）
+python backtest/strategy16_core_leader/run_month_review.py --start 2026-10-01 --end 2026-10-14 --intraday --all-pool
+# 已保存全池报告的盈亏诊断与同截止时间上证/深证对比（读取新浪指数）
+python backtest/strategy16_core_leader/analyze_month_review.py backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558_all_pool
 # Legacy vs Unified Exit 真实分钟只读回放（不成交、不修改生产开关）
 python backtest/exit_decision_replay/run.py --days 10 --source ak --refresh
 python backtest/exit_decision_replay/find_cases.py --rule WORKING_STOP --days 10 --source ak
