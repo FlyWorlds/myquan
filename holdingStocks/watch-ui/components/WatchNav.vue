@@ -17,7 +17,10 @@ function linkClass(path: string) {
         <NuxtLink to="/strategies" :class="linkClass('/strategies')">策略说明</NuxtLink>
         <NuxtLink to="/factors" :class="linkClass('/factors')">因子说明</NuxtLink>
       </div>
-      <ThemeToggle />
+      <div class="flex items-center gap-1">
+        <WechatConnect />
+        <ThemeToggle />
+      </div>
     </div>
   </nav>
 </template>

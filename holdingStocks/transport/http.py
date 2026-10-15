@@ -80,6 +80,21 @@ def build_watch_request_handler(
             self.end_headers()
             self.wfile.write(body)
 
+        def _wechat_login(self, *, start: bool = False, test: bool = False) -> None:
+            # Authentication QR data is only available to our local UI.
+            allowed_hosts = {"127.0.0.1", "localhost", "::1"}
+            host = urlparse("http://" + self.headers.get("Host", "")).hostname
+            origin = self.headers.get("Origin")
+            expected = {f"http://{h}:{self.server.server_port}" for h in ("127.0.0.1", "localhost")}
+            expected.update({"http://127.0.0.1:3000", "http://localhost:3000"})
+            if (self.client_address[0] not in allowed_hosts or host not in allowed_hosts
+                    or (origin and origin not in expected)
+                    or self.headers.get("Sec-Fetch-Site") == "cross-site"):
+                self._send_json({"error": "local origin required"}, status=403)
+                return
+            from wechat_login import login
+            self._send_json(login.send_test() if test else login.start() if start else login.status())
+
         @staticmethod
         def _content_type(path: Path) -> str:
             ext = path.suffix.lower()
@@ -118,6 +133,9 @@ def build_watch_request_handler(
 
         def do_GET(self) -> None:  # noqa: N802
             path = self.path.split("?", 1)[0]
+            if path == "/api/wechat/login":
+                self._wechat_login()
+                return
             if path in ("/api/condition-buy/report", "/api/condition-buy/report.csv"):
                 from condition_order_report import comparison_report, comparison_csv
 
@@ -238,6 +256,12 @@ def build_watch_request_handler(
             self.send_error(404, "Not Found")
 
         def do_POST(self) -> None:  # noqa: N802
+            if self.path.split("?", 1)[0] == "/api/wechat/test":
+                self._wechat_login(test=True)
+                return
+            if self.path.split("?", 1)[0] == "/api/wechat/login":
+                self._wechat_login(start=True)
+                return
             if self.path.split("?", 1)[0] == "/api/front-rendered":
                 ready = bool(on_front_rendered and on_front_rendered())
                 self._send_json({"ready": ready}, status=200 if ready else 503)

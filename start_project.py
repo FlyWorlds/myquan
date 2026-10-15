@@ -361,6 +361,8 @@ def python_command(opts, prior=None):
     no_wechat = opts.no_wechat
     if no_wechat is None:
         no_wechat = "--no-wechat" in (prior or {}).get("command", [])
+    if getattr(opts, "wechat_login", False):
+        no_wechat = False
     env = dict(os.environ, HOLDINGS_STORAGE="database", TZ="Asia/Shanghai",
                PAPER_BACKEND_URL=f"http://{HOST}:{opts.backend_port}", PYTHONUNBUFFERED="1")
     for key in ("NO_PROXY", "no_proxy"):
@@ -368,6 +370,29 @@ def python_command(opts, prior=None):
     command = [python, "-u", str(ROOT / "holdingStocks/index.py"), "watch", "--no-ui-dev",
                "--no-open", "--port", str(opts.port), "--no-wechat" if no_wechat else "--wechat-optional"]
     return command, env
+
+
+def prepare_wechat_terminal(opts, command, env):
+    """Keep interactive login in the launching terminal, before detaching Python."""
+    if "--no-wechat" in command:
+        return
+    force = bool(getattr(opts, "wechat_login", False))
+    if not force:
+        print("[微信] 需要扫码时，点击页面右上角「微信连接」；也可使用 --wechat-login 在终端扫码。")
+        return
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        raise LaunchError("微信扫码需要交互终端，请在终端运行 bash start.sh --wechat-login。")
+    print("[微信] 前台检查登录；需要扫码时二维码会显示在当前终端。已登录时不会重复扫码。", flush=True)
+    script = (
+        "from wechat_notify import prepare_wechat_for_watch; "
+        f"ok, detail = prepare_wechat_for_watch(send_test=False, force_login={force!r}); "
+        "print('[微信] 登录检查完成' if ok else '[微信] 登录检查未通过：' + detail); "
+        "raise SystemExit(0 if ok else 1)"
+    )
+    result = subprocess.run([command[0], "-u", "-c", script], cwd=ROOT / "holdingStocks",
+                            env=env, check=False)
+    if result.returncode:
+        print("[微信] 登录未就绪，继续启动盯盘；可在终端运行 bash start.sh --wechat-login 重试。")
 
 
 def replace_service(opts):
@@ -403,6 +428,7 @@ def replace_service(opts):
                     None, f"http://{HOST}:{opts.backend_port}"):
                 raise LaunchError("单服务替换不能静默切换账户后台，请保持原backend-port。")
             command, env = python_command(opts, prior)
+            prepare_wechat_terminal(opts, command, env)
             cwd, probe = ROOT, watch_ready
         else:
             require_service("python", opts.port, watch_ready)
@@ -453,6 +479,7 @@ def start(opts):
         start_service("java", opts.backend_port, java, ROOT / "backend", java_env,
                       backend_ready, state, created, opts.timeout)
         require_account(opts.backend_port)
+        prepare_wechat_terminal(opts, command, env)
         start_service("python", opts.port, command, ROOT, env, watch_ready, state, created, opts.timeout)
         if opts.ui_dev:
             node_env.update(WATCH_API_HOST=HOST, WATCH_API_PORT=str(opts.port), NUXT_PORT=str(opts.ui_port))
@@ -521,11 +548,14 @@ def main():
     notifications = parser.add_mutually_exclusive_group()
     notifications.add_argument("--no-wechat", dest="no_wechat", action="store_true", default=None)
     notifications.add_argument("--wechat", dest="no_wechat", action="store_false", help="开启微信通知；未指定时沿用已管理Python的通知开关")
+    parser.add_argument("--wechat-login", action="store_true", help="在当前终端强制微信扫码登录，然后启动/复用盯盘")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--backend-port", type=int, default=8080)
     parser.add_argument("--ui-port", type=int, default=3000)
     parser.add_argument("--timeout", type=float, default=120)
     opts = parser.parse_args()
+    if opts.wechat_login and opts.no_wechat:
+        parser.error("--wechat-login 与 --no-wechat 不能同时使用")
     if any(not 1 <= p <= 65535 for p in (opts.port, opts.backend_port, opts.ui_port)) or not math.isfinite(opts.timeout) or opts.timeout <= 0:
         parser.error("端口必须在1～65535，超时必须大于0")
     if len({opts.port, opts.backend_port, opts.ui_port}) != 3:

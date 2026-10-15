@@ -13539,6 +13539,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
         print("\n已停止盯盘")
     finally:
         stop.set()
+        from wechat_login import login as wechat_browser_login
+        wechat_browser_login.close()
         if minute_backup_thread is not None:
             minute_backup_thread.join(timeout=22)
         try:

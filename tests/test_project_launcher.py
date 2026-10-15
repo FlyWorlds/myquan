@@ -32,6 +32,44 @@ class ProjectLauncherTests(unittest.TestCase):
         return argparse.Namespace(**dict(dict(port=8765, backend_port=8080, ui_port=3000,
                      timeout=2, no_open=True, no_wechat=False, ui_dev=False), **changes))
 
+    def test_wechat_login_keeps_terminal_streams_and_runs_before_detach(self):
+        with patch.object(launcher.sys.stdin, "isatty", return_value=True), \
+             patch.object(launcher.sys.stdout, "isatty", return_value=True), \
+             patch.object(launcher.subprocess, "run", return_value=Mock(returncode=0)) as run:
+            launcher.prepare_wechat_terminal(self.opts(wechat_login=True), ["/python", "--wechat-optional"], {})
+        args, kwargs = run.call_args
+        self.assertIn("send_test=False, force_login=True", args[0][-1])
+        for stream in ("stdin", "stdout", "stderr", "capture_output", "start_new_session"):
+            self.assertNotIn(stream, kwargs)
+
+    def test_forced_login_without_terminal_does_not_launch_hidden_qr(self):
+        with patch.object(launcher.sys.stdin, "isatty", return_value=False), \
+             patch.object(launcher.subprocess, "run") as run:
+            with self.assertRaises(launcher.LaunchError):
+                launcher.prepare_wechat_terminal(self.opts(wechat_login=True), ["/python"], {})
+        run.assert_not_called()
+
+    def test_wechat_disabled_skips_terminal_login(self):
+        with patch.object(launcher.subprocess, "run") as run:
+            launcher.prepare_wechat_terminal(self.opts(), ["/python", "--no-wechat"], {})
+        run.assert_not_called()
+
+    def test_forced_login_enables_wechat_when_prior_service_disabled_it(self):
+        with patch.object(launcher, "resolve_python", return_value="/python"):
+            command, _ = launcher.python_command(self.opts(no_wechat=None, wechat_login=True),
+                {"command": ["/python", "--no-wechat"]})
+        self.assertIn("--wechat-optional", command)
+        self.assertNotIn("--no-wechat", command)
+
+    def test_background_login_never_waits_for_an_invisible_qr(self):
+        from holdingStocks import wechat_notify
+        with patch.object(wechat_notify.sys.stdin, "isatty", return_value=False), \
+             patch.object(wechat_notify.subprocess, "run") as run:
+            ok, detail = wechat_notify.run_weixin_channels_login()
+        self.assertFalse(ok)
+        self.assertIn("bash start.sh --wechat-login", detail)
+        run.assert_not_called()
+
     def test_unknown_port_is_never_reclaimed(self):
         with patch.object(launcher, "port_open", return_value=True), \
              patch.object(launcher, "service_matches", return_value=False), \

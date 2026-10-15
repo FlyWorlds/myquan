@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -737,6 +738,39 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _current_weixin_account(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Follow a replacement QR account only when it belongs to the same recipient."""
+    if cfg.get("channel") != "openclaw-weixin":
+        return cfg
+    state = Path(os.environ.get("OPENCLAW_STATE_DIR") or Path.home() / ".openclaw") / "openclaw-weixin"
+    account = str(cfg.get("account") or "")
+    if re.fullmatch(r"[\w.-]+", account) and (state / "accounts" / f"{account}.json").is_file():
+        return cfg
+    target = str(cfg.get("target") or "").split("@")[0]
+    if not target:
+        return cfg
+    try:
+        ids = json.loads((state / "accounts.json").read_text(encoding="utf-8"))
+        if not isinstance(ids, list):
+            return cfg
+        matches = []
+        for aid in ids:
+            if not isinstance(aid, str) or not re.fullmatch(r"[\w.-]+", aid):
+                continue
+            path = state / "accounts" / f"{aid}.json"
+            if not path.is_file():
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if (isinstance(data, dict) and data.get("token")
+                    and str(data.get("userId") or "").split("@")[0] == target):
+                matches.append(aid)
+        if len(matches) == 1:
+            return dict(cfg, account=matches[0])
+    except (OSError, ValueError, TypeError):
+        pass
+    return cfg
+
+
 def load_config() -> dict[str, Any]:
     cfg = dict(_DEFAULT_CONFIG)
     if CONFIG_FILE.exists():
@@ -746,7 +780,7 @@ def load_config() -> dict[str, Any]:
                 cfg.update({k: v for k, v in raw.items() if v is not None})
         except (OSError, json.JSONDecodeError):
             pass
-    return cfg
+    return _current_weixin_account(cfg)
 
 
 def save_default_config(*, force: bool = False) -> Path:
@@ -1115,8 +1149,14 @@ def _env_with_node(cfg: dict[str, Any]) -> dict[str, str]:
 
 def _resolve_openclaw_node(openclaw_bin: str, env: dict[str, str]) -> tuple[str, list[str]]:
     """把 openclaw.cmd 解析成 node + openclaw.mjs，便于 argv 保留换行。"""
-    bin_path = Path(str(openclaw_bin))
+    import shutil
+
+    located = shutil.which(str(openclaw_bin), path=env.get("PATH"))
+    bin_path = Path(located or str(openclaw_bin))
     candidates: list[Path] = []
+    resolved = bin_path.resolve()
+    if resolved.name == "openclaw.mjs" and resolved.is_file():
+        candidates.append(resolved)
     if bin_path.suffix.lower() in {".cmd", ".bat"}:
         candidates.append(bin_path.parent / "node_modules" / "openclaw" / "openclaw.mjs")
     # PATH 里找同目录
@@ -1138,6 +1178,11 @@ def _resolve_openclaw_node(openclaw_bin: str, env: dict[str, str]) -> tuple[str,
         return str(openclaw_bin), []
 
     node_exe = "node"
+    # npm global installs use bin/openclaw -> lib/node_modules/openclaw/openclaw.mjs.
+    # Pin the sibling Node explicitly; a nested CLI must not rediscover an old system Node.
+    for candidate in (bin_path.parent / "node", bin_path.parent / "node.exe"):
+        if candidate.is_file():
+            return str(candidate), [str(mjs)]
     node_dir = Path(mjs).parents[2]  # .../nvm/v24.15.0/node_modules/openclaw → v24.15.0
     # parents: openclaw, node_modules, v24.15.0
     if (node_dir / "node.exe").is_file():
@@ -1912,6 +1957,10 @@ def run_weixin_channels_login(
     必须继承 stdin/stdout（二维码/确认），故不 capture。
     已登录时多数版本会很快返回；未登录则终端内完成扫码。
     """
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        detail = "当前服务在后台，没有扫码终端；请在项目终端运行 bash start.sh --wechat-login。"
+        print(f"[{_now()}] [WECHAT] {detail}", flush=True)
+        return False, detail
     cfg = config or load_config()
     channel = str(cfg.get("channel") or "openclaw-weixin")
     to = float(

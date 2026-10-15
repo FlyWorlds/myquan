@@ -423,6 +423,10 @@ const closedCount = computed(() => closedHoldings.value.length)
           :slot-meta="snapshot.slotMeta"
           pool-category="因子27"
           status-mode="strategy"
+          hide-position-high
+          hide-buy-distance
+          day-change-after-name
+          trade-sides-after-day-high
         />
         <StrategyPicksPanel :picks="strategy16Tab?.picks" />
       </section>

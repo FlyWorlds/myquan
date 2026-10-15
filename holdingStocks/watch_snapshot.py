@@ -10,6 +10,16 @@ from typing import Any, Callable
 SNAPSHOT_VERSION = 1
 
 
+def _public_panel_json(value: Any) -> Any:
+    """Exclude internal row context from nested outbound panel payloads."""
+    if isinstance(value, dict):
+        return {k: _public_panel_json(v) for k, v in value.items()
+                if not str(k).startswith("_")}
+    if isinstance(value, (list, tuple)):
+        return [_public_panel_json(v) for v in value]
+    return value
+
+
 def _row_json(row: dict[str, Any]) -> dict[str, Any]:
     """collect_rows 行 → JSON 可序列化 dict（保留中文键，与现有逻辑一致）。"""
     out: dict[str, Any] = {}
@@ -1207,7 +1217,7 @@ def build_watch_snapshot(
         ]
     ))
     if strategy16b is not None:
-        strategy16b_rows = _fill_stock_names(list(strategy16b))
+        strategy16b_rows = _fill_stock_names([_row_json(r) for r in strategy16b])
     else:
         strategy16b_rows = _fill_stock_names([dict(r) for r in strategy16_rows])
     try:
@@ -1217,7 +1227,7 @@ def build_watch_snapshot(
     except Exception:  # noqa: BLE001
         s17_codes = set()
     if strategy17 is not None:
-        strategy17_rows = _fill_stock_names(list(strategy17))
+        strategy17_rows = _fill_stock_names([_row_json(r) for r in strategy17])
     else:
         strategy17_rows = _fill_stock_names(_sort_pool_rows(
             [
@@ -1270,9 +1280,9 @@ def build_watch_snapshot(
         "indices": [_index_json(ix) for ix in indices],
         "holdings": holdings,
         "strategy1": strategy1_rows,
-        "strategy3": strategy3 or {},
-        "strategy8": strategy8 or {},
-        "strategy15": strategy15 or {},
+        "strategy3": _public_panel_json(strategy3 or {}),
+        "strategy8": _public_panel_json(strategy8 or {}),
+        "strategy15": _public_panel_json(strategy15 or {}),
         "strategy16": strategy16_rows,
         "strategy16b": strategy16b_rows,
         "strategy17": strategy17_rows,

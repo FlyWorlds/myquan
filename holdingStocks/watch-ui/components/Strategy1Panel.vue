@@ -11,6 +11,10 @@ const props = defineProps<{
   slotMeta?: { max?: number; occupiedCount?: number; free?: number; weight?: number }
   poolCategory?: string
   statusMode?: 'paper' | 'strategy'
+  hidePositionHigh?: boolean
+  hideBuyDistance?: boolean
+  dayChangeAfterName?: boolean
+  tradeSidesAfterDayHigh?: boolean
 }>()
 
 const steps = [
@@ -160,7 +164,7 @@ function sortMark(key: SortKey): string {
 function sortTitle(key: SortKey, label: string): string {
   if (sortKey.value !== key) return `按${label}排序（高→低）`
   if (sortDir.value === 'desc') return `当前：${label}高→低，再点改为低→高`
-  return `当前：${label}低→高，再点恢复默认（距买点）`
+  return `当前：${label}低→高，再点恢复默认${props.hideBuyDistance ? '' : '（距买点）'}`
 }
 
 function categoryOf(r: HoldingRow): string {
@@ -319,7 +323,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
         四槽持仓 {{ slotMeta.occupiedCount ?? 0 }}/{{ slotMeta.max ?? 4 }}
         · 空槽 {{ slotMeta.free ?? '-' }}
         · 每槽约 {{ Math.round((slotMeta.weight ?? 0.3) * 100) }}%
-        · 默认按距买点升序（自选优先）
+        <template v-if="!hideBuyDistance"> · 默认按距买点升序（自选优先）</template>
         <template v-if="sortKey === 'dayChg'"> · 已按日内涨跌{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
         <template v-else-if="sortKey === 'strategyPnl'"> · 已按综合策略收益{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
       </div>
@@ -367,22 +371,38 @@ function tradeIncomeTitle(r: HoldingRow): string {
             <tr>
               <th class="px-3 py-2.5">分类</th>
               <th class="px-3 py-2.5">标的</th>
+              <th v-if="dayChangeAfterName" class="px-3 py-2.5">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-0.5 font-semibold hover:text-accent"
+                  :class="sortKey === 'dayChg' ? 'text-accent' : ''"
+                  :title="sortTitle('dayChg', '日内涨跌')"
+                  @click="toggleSort('dayChg')"
+                >
+                  日内涨跌<span class="tabular-nums text-[10px]">{{ sortMark('dayChg') }}</span>
+                </button>
+              </th>
               <th
                 class="min-w-[5.5rem] px-3 py-2.5"
                 :title="props.statusMode === 'paper' ? '纸面仓位/预警状态；悬停可看策略状态' : '策略模拟器状态（空仓/策略持有）；与纸面仓独立'"
               >状态</th>
-              <th class="px-3 py-2.5">距买点</th>
+              <th v-if="!hideBuyDistance" class="px-3 py-2.5">距买点</th>
               <th class="px-3 py-2.5">竞价/开盘</th>
               <th class="px-3 py-2.5">现价</th>
               <th
                 class="px-3 py-2.5"
                 title="行情 API dayHigh；≠ trailing HWM"
               >今日最高</th>
+              <template v-if="tradeSidesAfterDayHigh">
+              <th class="px-3 py-2.5">买入侧</th>
+              <th class="px-3 py-2.5">卖出侧</th>
+              </template>
               <th
+                v-if="!hidePositionHigh"
                 class="px-3 py-2.5"
                 title="positions.peak_high；与自动卖出 trailing 同源"
               >持仓最高</th>
-              <th class="px-3 py-2.5">
+              <th v-if="!dayChangeAfterName" class="px-3 py-2.5">
                 <button
                   type="button"
                   class="inline-flex items-center gap-0.5 font-semibold hover:text-accent"
@@ -408,15 +428,17 @@ function tradeIncomeTitle(r: HoldingRow): string {
               <th class="px-3 py-2.5">前日</th>
               <th class="px-3 py-2.5">过门</th>
               <th class="px-3 py-2.5">阈值</th>
+              <template v-if="!tradeSidesAfterDayHigh">
               <th class="px-3 py-2.5">买入侧</th>
               <th class="px-3 py-2.5">卖出侧</th>
+              </template>
               <th class="px-3 py-2.5">因子侧</th>
               <th class="px-3 py-2.5">说明</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!filteredRows.length">
-              <td colspan="18" class="px-3 py-8 text-center text-sm text-ui-text-3">
+              <td :colspan="18 - Number(!!hidePositionHigh) - Number(!!hideBuyDistance)" class="px-3 py-8 text-center text-sm text-ui-text-3">
                 无匹配标的
                 <button
                   v-if="selectedFilters.length"
@@ -445,6 +467,9 @@ function tradeIncomeTitle(r: HoldingRow): string {
                   </StockNameHover>
                 </div>
               </td>
+              <td v-if="dayChangeAfterName" class="sensitive px-3 py-2.5">
+                <ChgText :chg="r.当日涨幅">{{ fmtSignedPct(r.当日涨幅) }}</ChgText>
+              </td>
               <td class="px-3 py-2.5 align-top">
                 <span
                   class="inline-block max-w-[7rem] truncate"
@@ -470,7 +495,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
                 <div v-if="r.槽位候选" class="mt-1 text-[10px] text-accent">槽位候选</div>
                 <div v-if="r.因子触发" class="mt-1 text-[10px] text-ui-text-3">{{ r.因子触发 }}</div>
               </td>
-              <td class="sensitive px-3 py-2.5 tabular-nums">
+              <td v-if="!hideBuyDistance" class="sensitive px-3 py-2.5 tabular-nums">
                 <span v-if="r['距买点%'] != null && Number(r['距买点%']) < 9000">
                   {{ Number(r['距买点%']).toFixed(2) }}%
                 </span>
@@ -482,33 +507,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
                 class="sensitive px-3 py-2.5 tabular-nums"
                 title="行情 dayHigh"
               >{{ fmtNum(r.今日最高 ?? r.最高, r['价位小数'] ?? 2) }}</td>
-              <td
-                class="sensitive px-3 py-2.5 tabular-nums"
-                :title="r.持仓最高时间 ? `peak_high @ ${r.持仓最高时间}` : 'positions.peak_high'"
-              >
-                <div>{{ fmtNum(r.持仓最高 ?? r.峰值, r['价位小数'] ?? 2) }}</div>
-                <div
-                  v-if="r.持仓最高时间"
-                  class="mt-0.5 font-mono text-[10px] text-ui-text-3"
-                >{{ r.持仓最高时间 }}</div>
-              </td>
-              <td class="sensitive px-3 py-2.5">
-                <ChgText :chg="r.当日涨幅">{{ fmtSignedPct(r.当日涨幅) }}</ChgText>
-              </td>
-              <td
-                class="sensitive px-3 py-2.5"
-                :title="strategyCumTitle(r)"
-              >
-                <ChgText :chg="r['综合策略收益%'] ?? r['策略收益%']">{{ fmtSignedPct(r['综合策略收益%'] ?? r['策略收益%']) }}</ChgText>
-                <span v-if="r.策略历史状态 === 'legacy_checkpoint_unverified'" class="block text-[10px] text-amber-400" title="原本地检查点保留，历史成交未完整核验；新成交已逐笔入库">历史待核验</span>
-              </td>
-              <td class="sensitive px-3 py-2.5 tabular-nums" :title="tradeIncomeTitle(r)">
-                <ChgText :chg="tradeIncomePct(r)">{{ fmtSignedPct(tradeIncomePct(r)) }}</ChgText>
-                <span v-if="r.收益账本 === 'strategy16_database' && Number(r.策略虚拟股数) > 0 && Number(r.策略单笔卖出数量) > 0" class="block text-[10px] text-ui-text-2">综合本轮 {{ fmtSignedPct(r['综合单笔收入%']) }}</span>
-              </td>
-              <td class="px-3 py-2.5">{{ r.前日形态 || '-' }}</td>
-              <td class="px-3 py-2.5 font-semibold" :class="r.过门OK ? 'text-up' : 'text-ui-text-2'">{{ r.过门 || '-' }}</td>
-              <td class="px-3 py-2.5">{{ r['阈值%'] || '-' }}</td>
+              <template v-if="tradeSidesAfterDayHigh">
               <td class="sensitive px-3 py-2.5 align-top">
                 <div v-if="r.阈值就绪" class="font-semibold text-up">
                   {{ fmtNum(r.买入侧价 ?? r.买点, r['价位小数'] ?? 2) }}
@@ -527,6 +526,55 @@ function tradeIncomeTitle(r: HoldingRow): string {
                   止损 {{ fmtNum(r.未触发因子价, r['价位小数'] ?? 2) }}
                 </div>
               </td>
+              </template>
+              <td
+                v-if="!hidePositionHigh"
+                class="sensitive px-3 py-2.5 tabular-nums"
+                :title="r.持仓最高时间 ? `peak_high @ ${r.持仓最高时间}` : 'positions.peak_high'"
+              >
+                <div>{{ fmtNum(r.持仓最高 ?? r.峰值, r['价位小数'] ?? 2) }}</div>
+                <div
+                  v-if="r.持仓最高时间"
+                  class="mt-0.5 font-mono text-[10px] text-ui-text-3"
+                >{{ r.持仓最高时间 }}</div>
+              </td>
+              <td v-if="!dayChangeAfterName" class="sensitive px-3 py-2.5">
+                <ChgText :chg="r.当日涨幅">{{ fmtSignedPct(r.当日涨幅) }}</ChgText>
+              </td>
+              <td
+                class="sensitive px-3 py-2.5"
+                :title="strategyCumTitle(r)"
+              >
+                <ChgText :chg="r['综合策略收益%'] ?? r['策略收益%']">{{ fmtSignedPct(r['综合策略收益%'] ?? r['策略收益%']) }}</ChgText>
+                <span v-if="r.策略历史状态 === 'legacy_checkpoint_unverified'" class="block text-[10px] text-amber-400" title="原本地检查点保留，历史成交未完整核验；新成交已逐笔入库">历史待核验</span>
+              </td>
+              <td class="sensitive px-3 py-2.5 tabular-nums" :title="tradeIncomeTitle(r)">
+                <ChgText :chg="tradeIncomePct(r)">{{ fmtSignedPct(tradeIncomePct(r)) }}</ChgText>
+                <span v-if="r.收益账本 === 'strategy16_database' && Number(r.策略虚拟股数) > 0 && Number(r.策略单笔卖出数量) > 0" class="block text-[10px] text-ui-text-2">综合本轮 {{ fmtSignedPct(r['综合单笔收入%']) }}</span>
+              </td>
+              <td class="px-3 py-2.5">{{ r.前日形态 || '-' }}</td>
+              <td class="px-3 py-2.5 font-semibold" :class="r.过门OK ? 'text-up' : 'text-ui-text-2'">{{ r.过门 || '-' }}</td>
+              <td class="px-3 py-2.5">{{ r['阈值%'] || '-' }}</td>
+              <template v-if="!tradeSidesAfterDayHigh">
+              <td class="sensitive px-3 py-2.5 align-top">
+                <div v-if="r.阈值就绪" class="font-semibold text-up">
+                  {{ fmtNum(r.买入侧价 ?? r.买点, r['价位小数'] ?? 2) }}
+                </div>
+                <div v-else class="text-ui-text-3">-</div>
+                <div v-if="r.已触发因子侧 === '买入' && r.已触发因子价 != null" class="mt-0.5 text-[10px] text-up">
+                  上次 {{ fmtNum(r.已触发因子价, r['价位小数'] ?? 2) }}
+                </div>
+              </td>
+              <td class="sensitive px-3 py-2.5 align-top">
+                <div v-if="r.阈值就绪" class="font-semibold text-down">
+                  {{ fmtNum(r.卖出侧价 ?? r.止损, r['价位小数'] ?? 2) }}
+                </div>
+                <div v-else class="text-ui-text-3">-</div>
+                <div v-if="r.未触发因子侧 === '卖出' && r.未触发因子价 != null" class="mt-0.5 text-[10px] text-down">
+                  止损 {{ fmtNum(r.未触发因子价, r['价位小数'] ?? 2) }}
+                </div>
+              </td>
+              </template>
               <td class="px-3 py-2.5 align-top">
                 <div class="font-semibold">{{ r.因子侧 || '-' }}</div>
                 <div v-if="r.因子价 != null" class="text-xs text-ui-text-2">

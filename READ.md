@@ -51,7 +51,10 @@ bash start.sh --restart                # 重启启动器管理的服务，代码
 bash start.sh --ui-dev                 # 开发模式：Nuxt 前端 :3000
 bash start.sh --no-open                # 不自动打开浏览器
 bash start.sh --no-wechat              # 关闭微信通知，不改变模拟交易逻辑
+bash start.sh --wechat-login           # 在当前终端强制微信扫码登录
 ```
+
+需要扫码时，点击页面右上角主题切换旁的「微信连接」，生成二维码后用微信扫一扫，也可点击「打开扫码链接」。页面会显示等待扫码、手机确认和连接成功状态；已有通道可点「重新扫码连接」。扫码成功后给机器人发一条消息以刷新预警会话。弹窗中的「测试微信推送」会向已配置的接收人发送一条测试消息，并显示实际发送结果；发送期间不能重复点击。也可在项目终端运行 `bash start.sh --wechat-login` 使用终端扫码；默认启动不等待终端扫码，后台自检结果记录在 `backend/logs/project-launcher/python.log`。
 
 ### 单独启动 / 替换服务
 
