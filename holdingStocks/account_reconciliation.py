@@ -71,10 +71,24 @@ def effective_deliveries(state: dict[str, Any]):
     return entries, issues
 
 
-def account_summary(state: dict[str, Any], rows: list[dict[str, Any]], session: str):
+class AccountReadModel:
+    """Revision-scoped read model; corrected entries are indexed once, never written."""
+    def __init__(self, state):
+        self.state = state
+        self.entries, self.issues = effective_deliveries(state)
+        self.by_code = {}
+        for entry in self.entries:
+            self.by_code.setdefault(entry.get("code"), []).append(entry)
+
+    def cycle_return(self, row):
+        return cycle_return(self.state, row, read_model=self)
+
+
+def account_summary(state: dict[str, Any], rows: list[dict[str, Any]], session: str, *, read_model=None):
     from strategy.akq_math import session_day_pnl
     book = state["holdings"]
-    entries, issues = effective_deliveries(state)
+    model = read_model or AccountReadModel(state)
+    entries, issues = model.entries, list(model.issues)
     by_code = {}
     for row in rows:
         if row.get("代码") in by_code and int(row.get("持仓") or 0) > 0:
@@ -133,11 +147,12 @@ def account_summary(state: dict[str, Any], rows: list[dict[str, Any]], session: 
                 dayPnlVsEquity=round(day - (total - anchor), 2) if day is not None and total is not None and anchor is not None else None)
 
 
-def cycle_return(state, row):
+def cycle_return(state, row, *, read_model=None):
     code = str(row.get("代码") or row.get("code") or "")
-    entries, issues = effective_deliveries(state)
-    if issues:
+    model = read_model or AccountReadModel(state)
+    if model.issues:
         return None
+    entries = model.by_code.get(code, [])
     pos = state["holdings"].get("positions", {}).get(code, {})
     qty = int(pos.get("qty") or 0)
     hint = str(pos.get("buy_time") or "") if qty > 0 else str(

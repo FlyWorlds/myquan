@@ -1328,8 +1328,9 @@ def _build_watch_account_summary(
     )
     if database_enabled():
         from account_reconciliation import account_summary
-        state = _HOLDINGS_STORE.snapshot()
-        summary = account_summary(state, rows, session_for_open)
+        model = _HOLDINGS_STORE.read_model()
+        state = model.state
+        summary = account_summary(state, rows, session_for_open, read_model=model)
         summary["totalPnlStart"] = str(state["holdings"].get("paper_pnl_start") or PAPER_PNL_START)[:10]
         summary["factor2Summary"] = format_factor2_summary(state["holdings"].get("factor2"))
         return summary
@@ -2043,6 +2044,9 @@ def _iter_snapshot_price_rows(snap: dict[str, Any]):
 def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any]) -> bool:
     """出站快照兜底：所有页面行都补齐纸面整笔收益，避免显示最后一腿收益。"""
     changed = False
+    model = _HOLDINGS_STORE.read_model() if database_enabled() else None
+    if model is not None and snap.get("paperRevision") is not None and snap["paperRevision"] != model.state["revision"]:
+        return False  # A newer ledger must not mix into an older published account frame.
     for r in _iter_snapshot_price_rows(snap):
         before = (
             r.get("综合单笔收入%"),
@@ -2050,7 +2054,10 @@ def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any]) -> bool:
             r.get("综合单笔成本额"),
             r.get("综合单笔腿数"),
         )
-        _enrich_comprehensive_trade_return(r)
+        if model is None:
+            _enrich_comprehensive_trade_return(r)
+        else:
+            _enrich_comprehensive_trade_return(r, read_model=model)
         after = (
             r.get("综合单笔收入%"),
             r.get("综合单笔收入"),
@@ -2230,6 +2237,8 @@ def publish_live_quote_patch() -> bool:
     base = _last_watch_snapshot
     if not isinstance(base, dict) or base.get("type") != "snapshot":
         return False
+    if base.get("boot") and database_enabled():
+        return _publish_boot_holdings_preview(get_quote=feed.get_quote)
     snap = clone_snapshot_for_quote_patch(base)
     try:
         from watch_config import sina_of
@@ -2611,6 +2620,32 @@ def _seed_boot_watch_snapshot() -> None:
         "sectors": {},
         "strategies": _watch_tabs_with_live_s8({}),
     }
+    if database_enabled():
+        _publish_boot_holdings_preview(get_quote=(_watch_feed.get_quote if _watch_feed else None))
+
+
+def _publish_boot_holdings_preview(*, get_quote=None) -> bool:
+    """Only committed inventory and cached live quotes; no daily IO or trading writes."""
+    global _last_watch_snapshot
+    from boot_holdings import build_boot_holdings
+    base = _last_watch_snapshot
+    if not isinstance(base, dict) or not base.get("boot"):
+        return False
+    model = _HOLDINGS_STORE.read_model()
+    rows, account = build_boot_holdings(model, session=_calendar_signal_session(),
+                                       clock=_now(), get_quote=get_quote)
+    snap = dict(base, holdings=rows, account=account, paperRevision=model.state["revision"])
+    occupied = [r["代码"] for r in rows if int(r.get("持仓") or 0)>0]
+    snap["slotMeta"] = dict(base.get("slotMeta") or {}, occupied=occupied,
+                            occupiedCount=len(occupied), free=max(0, 4-len(occupied)))
+    _stamp_snapshot_liveness(snap)
+    snap["blockTrading"] = True
+    with _WATCH_SNAP_LOCK:
+        if _last_watch_snapshot is not base:
+            return False
+        _last_watch_snapshot = snap
+    _broadcast_watch_snapshot(snap)
+    return True
 
 
 # 兼容旧名
@@ -10476,8 +10511,7 @@ def _paper_trade_cycle_return(
     这里用 trades.jsonl 重建当前买入周期，让 400+200+300 这类分批卖出合成一笔。
     """
     if database_enabled() and trades_text is None:
-        from account_reconciliation import cycle_return
-        return cycle_return(_HOLDINGS_STORE.snapshot(), row)
+        return _HOLDINGS_STORE.read_model().cycle_return(row)
     code = _code_key(str(row.get("代码") or row.get("code") or ""))
     if not code:
         return None
@@ -10572,8 +10606,8 @@ def _paper_trade_cycle_return(
     }
 
 
-def _enrich_comprehensive_trade_return(row: dict[str, Any]) -> None:
-    rec = _paper_trade_cycle_return(row)
+def _enrich_comprehensive_trade_return(row: dict[str, Any], *, read_model=None) -> None:
+    rec = read_model.cycle_return(row) if read_model is not None else _paper_trade_cycle_return(row)
     if not rec:
         # 只有策略回测成交的股票也可展示整笔收益，明确标记为虚拟账本。
         base = _as_money(row.get("策略单笔成本额"))

@@ -27,6 +27,7 @@ export function mergeDatabaseHoldings(raw: WatchSnapshot, state: DatabasePaperSt
     if (pos.qty <= 0 || known.has(code)) continue
     compatible = false
     rows.unshift({ 代码: code, 名称: pos.name || code, 市场: pos.market, 持仓: pos.qty,
+      置顶: true,
       可用: pos.available ?? null, 成本: pos.cost ?? null, 买入时间: pos.buy_time ?? null,
       持仓状态: '已经买入' })
   }

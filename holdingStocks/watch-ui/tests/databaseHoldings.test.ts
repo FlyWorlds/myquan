@@ -13,6 +13,14 @@ test('matching holdings retain the coherent quote-based account summary', () => 
   assert.equal(result.account.totalPnl, 20)
 })
 
+test('database-only startup positions are pinned to the actual holding section', () => {
+  const result = mergeDatabaseHoldings({ account: {}, holdings: [] } as any, state())
+  assert.equal(result.holdings[0].置顶, true)
+  assert.equal(result.holdings[0].持仓, 2)
+  assert.equal(result.holdings[0].现价, undefined)
+  assert.equal(result.account.totalPnl, null)
+})
+
 test('new holdings do not retain the old account return or holding status', () => {
   const database = state()
   database.holdings.positions['002841'].qty = 0

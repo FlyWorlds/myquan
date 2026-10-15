@@ -59,8 +59,11 @@ class DatabaseHoldingsStore(HoldingsStore):
         self._state: dict[str, Any] | None = None
         self._read_at = 0.0
         self._transaction_depth = 0
+        self._read_model = None
 
     def _accept(self, state: dict[str, Any]) -> dict[str, Any]:
+        if self._state is None or state["revision"] != self._state["revision"]:
+            self._read_model = None
         cur = self.cache.get("data")
         if not isinstance(cur, dict):
             cur = copy.deepcopy(state["holdings"])
@@ -132,6 +135,15 @@ class DatabaseHoldingsStore(HoldingsStore):
             self.load()
             assert self._state is not None
             return copy.deepcopy(self._state)
+
+    def read_model(self):
+        with self.lock:
+            self.load()
+            assert self._state is not None
+            if self._read_model is None:
+                from account_reconciliation import AccountReadModel
+                self._read_model = AccountReadModel(copy.deepcopy(self._state))
+            return self._read_model
 
     def ledger(self) -> dict[str, Any]:
         with self.lock:

@@ -54,6 +54,23 @@ class DatabaseHoldingsTests(unittest.TestCase):
             self.assertEqual(self.state["holdings"]["account_cash"],9000)
             self.assertEqual(self.store._transaction_depth,0)
 
+    def test_read_model_is_reused_until_committed_revision_changes(self):
+        with patch("database_holdings.request_state",side_effect=self.request), \
+             patch("account_reconciliation.effective_deliveries",wraps=__import__("account_reconciliation").effective_deliveries) as corrected:
+            first=self.store.read_model()
+            for _ in range(100):
+                self.assertIs(self.store.read_model(),first)
+            self.assertEqual(corrected.call_count,1)
+            book=self.store.load()
+            book["account_cash"]=9000
+            self.assertEqual(self.store.read_model().state["holdings"]["account_cash"],10000)
+            self.store.save(book)
+            second=self.store.read_model()
+            self.assertIsNot(second,first)
+            self.assertEqual(second.state["holdings"]["account_cash"],9000)
+            self.assertEqual(first.state["holdings"]["account_cash"],10000)
+            self.assertEqual(corrected.call_count,2)
+
     def test_conflict_rolls_back_memory_instead_of_merging_cash(self):
         with patch("database_holdings.request_state",side_effect=self.request):
             book=self.store.load()
