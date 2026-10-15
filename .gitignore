@@ -26,6 +26,7 @@ holdingStocks/holdings.json.*.tmp
 holdingStocks/holdings_report.html
 holdingStocks/holdings_watch.json
 holdingStocks/holdings_watch.pid
+holdingStocks/holdings_watch.pid.lock
 holdingStocks/trades.jsonl
 holdingStocks/trade_ledger.json
 holdingStocks/strategy_sim_state.json

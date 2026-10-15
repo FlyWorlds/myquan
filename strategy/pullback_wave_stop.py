@@ -1058,6 +1058,7 @@ def eval_multi_tp_bar(
     hard_gap_mode: str = HARD_GAP_IMMEDIATE,
     hard_gap_dump_pct: float = DEFAULT_HARD_GAP_DUMP_PCT,
     tick: float = TICK_SIZE,
+    _observed_quote: bool = False,
 ) -> dict[str, Any]:
     """单根 1m：多层止盈判定。
 
@@ -1094,6 +1095,9 @@ def eval_multi_tp_bar(
     }
 
     def _finish(result: dict[str, Any]) -> dict[str, Any]:
+        if _observed_quote:
+            return {**result, "resolution": "observed_quote", "intrabar_ambiguous": False,
+                    "resolution_policy": "received_price_order"}
         amb = detect_intrabar_ambiguity(
             bar_open=bar_o,
             bar_high=h,
@@ -1273,6 +1277,16 @@ def eval_multi_tp_bar(
         return _finish(_full("peak_pullback_clear", peak_line, downside=True))
 
     return _finish(empty)
+
+
+def eval_factor26_quote(*, price: float, **state: Any) -> dict[str, Any]:
+    """Evaluate one observed price with the shared formulas, never daily OHLC paths.
+
+    Downside gaps fill at the observed price. Upward ladder orders retain their
+    existing paper target-price assumption; this is not an exchange fill claim.
+    """
+    return eval_multi_tp_bar(bar_open=price, bar_high=price, bar_low=price,
+                             _observed_quote=True, **state)
 
 
 # open_dump_stop_price 定义在文件后部；overnight 调用前需已定义。

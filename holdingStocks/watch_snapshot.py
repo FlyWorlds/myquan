@@ -75,6 +75,11 @@ def _strip_holdings_pnl(row: dict[str, Any]) -> dict[str, Any]:
     out = _row_json(row)
     for k in ("浮盈", "浮盈%", "盈亏状态", "盈亏说明", "策略收益", "市值", "成本额", "当日基数"):
         out.pop(k, None)
+    if row.get("策略收益来源") == "database_strategy_book":
+        out.update({"收益账本": "strategy16_database", "综合单笔来源": "database_strategy_cycle",
+            "综合单笔收入": row.get("策略单笔收益"), "综合单笔收入%": row.get("策略单笔收益%"),
+            "综合单笔成本额": row.get("策略单笔成本额"), "综合单笔卖出数量": row.get("策略单笔卖出数量"),
+            "综合单笔持仓数量": row.get("策略虚拟股数")})
     return out
 
 

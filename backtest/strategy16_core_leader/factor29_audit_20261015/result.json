@@ -1,0 +1,916 @@
+{
+  "requested_start": "2026-10-01",
+  "requested_end": "2026-10-13",
+  "source_replay": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558",
+  "pool_size": 34,
+  "pool_order": [
+    "600330",
+    "600552",
+    "601208",
+    "002636",
+    "002273",
+    "000070",
+    "000756",
+    "002703",
+    "001282",
+    "002580",
+    "002962",
+    "002866",
+    "001266",
+    "002430",
+    "002415",
+    "002453",
+    "601609",
+    "603042",
+    "000049",
+    "000725",
+    "002841",
+    "002558",
+    "000682",
+    "002169",
+    "000920",
+    "600072",
+    "600760",
+    "600346",
+    "603659",
+    "002253",
+    "000803",
+    "002454",
+    "600549",
+    "600063"
+  ],
+  "threshold_fit_end": "2026-10-13",
+  "threshold_overlap": true,
+  "minute_rows": 32378,
+  "auction_rows": 0,
+  "comparable_sessions": 0,
+  "comparison_status": "blocked_missing_point_in_time_auction_paths_and_factor29_engine",
+  "factor29_on": null,
+  "factor26_only_reference": {
+    "summary": {
+      "window_days": 4,
+      "calendar": [
+        "2026-10-08",
+        "2026-10-09",
+        "2026-10-12",
+        "2026-10-13"
+      ],
+      "max_slots": 5,
+      "slot_weight": 0.2,
+      "initial_cash": 300000.0,
+      "final_equity": 289047.65,
+      "return_pct": -3.65,
+      "max_dd_pct": -3.65,
+      "dd_peak_date": null,
+      "dd_trough_date": "2026-10-13",
+      "n_buys": 8,
+      "n_sells": 6,
+      "n_closed": 6,
+      "avg_closed_pnl_pct": -4.01,
+      "n_open": 2,
+      "n_skipped_or_queued": 33,
+      "exit_mode": "half_gain",
+      "buy_mode": "open",
+      "reserve_empty": 0,
+      "max_overnight": 5,
+      "max_buys_per_day": 2
+    },
+    "accounting": {
+      "net_profit": -10952.35,
+      "gross_realized": -13961.0,
+      "gross_floating": 4045.0,
+      "fees_and_slippage": 1036.35,
+      "cash": 175101.65,
+      "market_value": 113946.0,
+      "closed_cycles": 6,
+      "accounting_verified": true
+    }
+  },
+  "coverage": [
+    {
+      "code": "600330",
+      "name": "天通股份",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "600552",
+      "name": "凯盛科技",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "601208",
+      "name": "东材科技",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002636",
+      "name": "金安国纪",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002273",
+      "name": "水晶光电",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "000070",
+      "name": "特发信息",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "000756",
+      "name": "新华制药",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002703",
+      "name": "浙江世宝",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "001282",
+      "name": "三联锻造",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 231,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002580",
+      "name": "圣阳股份",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.03,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002962",
+      "name": "五方光电",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 237,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002866",
+      "name": "传艺科技",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 237,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.03,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "001266",
+      "name": "宏英智能",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002430",
+      "name": "杭氧股份",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002415",
+      "name": "海康威视",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002453",
+      "name": "华软科技",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "601609",
+      "name": "金田股份",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "603042",
+      "name": "华脉科技",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "000049",
+      "name": "德赛电池",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 237,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "000725",
+      "name": "京东方Ａ",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002841",
+      "name": "视源股份",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.03,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002558",
+      "name": "巨人网络",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "000682",
+      "name": "东方电子",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002169",
+      "name": "智光电气",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "000920",
+      "name": "沃顿科技",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "600072",
+      "name": "中船科技",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.03,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "600760",
+      "name": "中航沈飞",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "600346",
+      "name": "恒力石化",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.03,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "603659",
+      "name": "璞泰来",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.03,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002253",
+      "name": "川大智胜",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 237,
+        "2026-10-09": 238,
+        "2026-10-12": 235,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "000803",
+      "name": "山高环能",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.03,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "002454",
+      "name": "松芝股份",
+      "days": 4,
+      "first_ts": "2026-10-08 09:30:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 241,
+        "2026-10-09": 241,
+        "2026-10-12": 241,
+        "2026-10-13": 241
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "600549",
+      "name": "厦门钨业",
+      "days": 4,
+      "first_ts": "2026-10-08 09:31:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 238,
+        "2026-10-09": 238,
+        "2026-10-12": 238,
+        "2026-10-13": 238
+      },
+      "entry_pct": 0.025,
+      "auction_rows": 0,
+      "auction_path_available": false
+    },
+    {
+      "code": "600063",
+      "name": "皖维高新",
+      "days": 4,
+      "first_ts": "2026-10-08 09:30:00",
+      "last_ts": "2026-10-13 15:00:00",
+      "bars_by_day": {
+        "2026-10-08": 241,
+        "2026-10-09": 241,
+        "2026-10-12": 241,
+        "2026-10-13": 241
+      },
+      "entry_pct": 0.02,
+      "auction_rows": 0,
+      "auction_path_available": false
+    }
+  ],
+  "sources": [
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh600330.parquet",
+      "sha256": "03b01528e653e6a2d92aff0e0c2b5ea2487cb73af4c8ac6077f305f8fc4860ff"
+    },
+    {
+      "path": "data_cache/sh600330_daily_qfq.parquet",
+      "sha256": "5774a40b24f62460f320e2f3dfcb56fc13f5d10c3bb41025a0866ec7633713bd"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh600552.parquet",
+      "sha256": "ddf96a431319501cf926fe4e5c7778f736885f0922d7f2e72f1e8009381f4f71"
+    },
+    {
+      "path": "data_cache/sh600552_daily_qfq.parquet",
+      "sha256": "930b2939c5647f655c9c1460c782fdcff75bb30010aa998c2d6050e774ee4429"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh601208.parquet",
+      "sha256": "8fad6f2509a0ec0d6070322d31aa5e12af52fc78aadc3110b410cfced635f389"
+    },
+    {
+      "path": "data_cache/sh601208_daily_qfq.parquet",
+      "sha256": "fc6f523def2539b844adfc0fa720b647fd365c910d81a94078702f386336ae57"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002636.parquet",
+      "sha256": "7d703ad5984ddf83a6a9cebe4aec78019dfdb39b8426d8136eb71e7ee8ed0e1e"
+    },
+    {
+      "path": "data_cache/sz002636_daily_qfq.parquet",
+      "sha256": "d60742f92cfcda45a15b6c0dba884018fb6aa60ff609939569f54d4220e9bcfb"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002273.parquet",
+      "sha256": "bd6c215c1047586e9ade46d706ccafbda8c148ed10a4179a6dabfc7b4bc89d90"
+    },
+    {
+      "path": "data_cache/sz002273_daily_qfq.parquet",
+      "sha256": "37568052dbf070d99836fb1c34aec146808528673bacaef284ab3d7e09c10aae"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz000070.parquet",
+      "sha256": "c5d000e8eba9a1dc810d038cc1ca31d556e473498cc3438c9e3e0e788e96dcdb"
+    },
+    {
+      "path": "data_cache/sz000070_daily_qfq.parquet",
+      "sha256": "79e8adc71040c0c45af6bbcbfbc9dc9d6af1c8440f4603573c2d7bd27af7dd41"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz000756.parquet",
+      "sha256": "5193cbeb56d9b69b1424471e623b5ace155a21af5fe13df5d3bd7823be7fa472"
+    },
+    {
+      "path": "data_cache/sz000756_daily_qfq.parquet",
+      "sha256": "66ee85b2e369b3c39c02cd7210014baefef8056dc644d9677a47cf4b839e41db"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002703.parquet",
+      "sha256": "516d833fd137510dd08d5a39eb1daf977059006dd0d7642be17170c39194e59e"
+    },
+    {
+      "path": "data_cache/sz002703_daily_qfq.parquet",
+      "sha256": "115790dcff667dcff0528464b3498a3c027455c56320d473d75c1f2e7dc5da46"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz001282.parquet",
+      "sha256": "4cc5d0608419b794b87cbbcb6f2d0d84e66ac395cd167afff4597d9ed2232235"
+    },
+    {
+      "path": "data_cache/sz001282_daily_qfq.parquet",
+      "sha256": "ad6def3016de6539b643d4e0adcb3f22a4cbcff27052a6ececd2eebe0336a9a7"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002580.parquet",
+      "sha256": "fe8a6efb4bb00b3afa24160eb3258c0c1cebd2cea2ef6a6b525add778eeccd77"
+    },
+    {
+      "path": "data_cache/sz002580_daily_qfq.parquet",
+      "sha256": "2d2c431edc5917b3ffafa16bbf69b12b0c937e8fdb4c9cf20552b22e45d7c581"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002962.parquet",
+      "sha256": "f3426d7b89bca180178cf7bb258da2ee0683835e5fd819846485e4e520123728"
+    },
+    {
+      "path": "data_cache/sz002962_daily_qfq.parquet",
+      "sha256": "524b7337ba06802892d2e8ad94f3acdbc96710ac5345a53dc8dcef37da97ee15"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002866.parquet",
+      "sha256": "81f0b395ddd4976eeaff5f98fd2f91ef28b10a57147c36c01a16a3276aecf0a2"
+    },
+    {
+      "path": "data_cache/sz002866_daily_qfq.parquet",
+      "sha256": "d864d626d4e9dac6fc0c06967b1028c5841f3fb78291b641d65aad67fd2e6416"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz001266.parquet",
+      "sha256": "aaf6792be2738088fd0cb47347ee7b200c717a0eac14f26120969e76876ba735"
+    },
+    {
+      "path": "data_cache/sz001266_daily_qfq.parquet",
+      "sha256": "d12225394112cf373f0e9fef5ccc4af2eff66a9f22a0d50cd59c74ed3c9b91ba"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002430.parquet",
+      "sha256": "b543d9158cb8216af7ce77c664947843bf4741eec3d1656aced6effaae6e6aa4"
+    },
+    {
+      "path": "data_cache/sz002430_daily_qfq.parquet",
+      "sha256": "2b80b594e05af55459431d8a505f564bddef8304c620acf84c606516623bb666"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002415.parquet",
+      "sha256": "5e26cddb5b0988ff4fcebe72331d3318be285f10554ee146f2e9c0e425709282"
+    },
+    {
+      "path": "data_cache/sz002415_daily_qfq.parquet",
+      "sha256": "7f31a8e29b5388a1a81866d882f95bd44463640daadd9f3e682b2ef1d07cecac"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002453.parquet",
+      "sha256": "3ffffba97eac68718362fc9c065ccdc95432e9e511a49d973f80d01805670092"
+    },
+    {
+      "path": "data_cache/sz002453_daily_qfq.parquet",
+      "sha256": "6f034f57561b05af0455440028718fd16a655303169b7ca5ae72f4c9edc3c7f0"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh601609.parquet",
+      "sha256": "12743a7612a1921a2a6ead633cfc5f829324a6294cf5e7bca21af00b8f6439c6"
+    },
+    {
+      "path": "data_cache/sh601609_daily_qfq.parquet",
+      "sha256": "dd1c130d06f278990dead490da3fcc5b3c0e3c0bbf9dd2c9eb9b49dd269b0e3a"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh603042.parquet",
+      "sha256": "4a7748e83c9d117d317a8bca3a7ca1c6cf92317a6dff14c3fd652c4e174cf30a"
+    },
+    {
+      "path": "data_cache/sh603042_daily_qfq.parquet",
+      "sha256": "9caea429aa67bf739a8dea9c04f5f882d8ebb492e51df5507b9c8c8ab68faba5"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz000049.parquet",
+      "sha256": "be432034c87f414bad68ebfb91c725727774a9a90cedc9e20d47ebc0c4ff109e"
+    },
+    {
+      "path": "data_cache/sz000049_daily_qfq.parquet",
+      "sha256": "45781aaada51da277dc8c1bc36992bd20160d0e7d789ec519feeaa567af91b45"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz000725.parquet",
+      "sha256": "7d9b303538e1b0f4edda7b71a40cb98c3659046f4c2f4afb4faff0df61be87d4"
+    },
+    {
+      "path": "data_cache/sz000725_daily_qfq.parquet",
+      "sha256": "9de67cea4e37df5355254028caa2f4768fc4d55ad0b0371a1af7788286b6d32f"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002841.parquet",
+      "sha256": "b4d507d8a969dcd7e2dc35ef67f6a804b1a0197726a7f27896fa8f00a9f16afa"
+    },
+    {
+      "path": "data_cache/sz002841_daily_qfq.parquet",
+      "sha256": "bc4906263ddf814b882da4ecbad78de440423313283400dc31c5b167ebc38b6b"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002558.parquet",
+      "sha256": "fc61fe4aa0635bded9c17721707723f897a39e5462dbe711be7486692a543717"
+    },
+    {
+      "path": "data_cache/sz002558_daily_qfq.parquet",
+      "sha256": "a16fe9871fc0242ae4d644514be96076b3689a0d77a6c5a5195902cb4481f875"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz000682.parquet",
+      "sha256": "a545b2acd6a24f0ce15ef5319d0c6ec8ba139edab5522bf704e47898e5b75c37"
+    },
+    {
+      "path": "data_cache/sz000682_daily_qfq.parquet",
+      "sha256": "28062d02f3f1b2f4d2f939809a1f91ea03b0d96199ac09edc8e5f2482441971e"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002169.parquet",
+      "sha256": "f84915288169c131cf00106fbaec43ba630603431126a43b185ebf7c32dfeb94"
+    },
+    {
+      "path": "data_cache/sz002169_daily_qfq.parquet",
+      "sha256": "affac4f2b4f1b1ba93100b5961ba32b7211b1560b0eeae77a9bf8b70df167f7c"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz000920.parquet",
+      "sha256": "683bc47c773477063f3357f5bae7a357470fa520bb31cdf22efe06d29db5cda0"
+    },
+    {
+      "path": "data_cache/sz000920_daily_qfq.parquet",
+      "sha256": "d36fc347ed98450b4001890efc3d86ffbdeac2414ed2ec96732afab8f3699807"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh600072.parquet",
+      "sha256": "3af419ba70b3f1278c901a5c3f89529a5a5c88f9e58c3bd5fa8d1e3f3cc1737a"
+    },
+    {
+      "path": "data_cache/sh600072_daily_qfq.parquet",
+      "sha256": "c66581f40937b72da3fad223cd7c840d683202363d5d4297f2ea663064b6556a"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh600760.parquet",
+      "sha256": "6ad9b2c5ee44d64d696a0c0f934fab7259576976a8a4463f009aeb0ba723ca78"
+    },
+    {
+      "path": "data_cache/sh600760_daily_qfq.parquet",
+      "sha256": "92e566812ac976d43c36667dceb47c1536aaad70e158044ff0fee0bc56f56b32"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh600346.parquet",
+      "sha256": "1fa89bf788b90235bf03efadd502a2d79b84c7684112c616ef341e741d984cd3"
+    },
+    {
+      "path": "data_cache/sh600346_daily_qfq.parquet",
+      "sha256": "d591979d9ec8e52e9406c24834bff4a0ef5b1086901e0786c09428546f337036"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh603659.parquet",
+      "sha256": "8d90424efe6d8f61074400c970c6e4e33387177a4d701fbfcc595a3f6d866f5d"
+    },
+    {
+      "path": "data_cache/sh603659_daily_qfq.parquet",
+      "sha256": "dfa8dfd208632338df0637c8def31b1137d65dbb8c7d5b8b2c8928b1091d90f1"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002253.parquet",
+      "sha256": "bd8f3c9561a9f4cd2f96c0199e4e60054d89311d55bd41eb0b23dbc676665831"
+    },
+    {
+      "path": "data_cache/sz002253_daily_qfq.parquet",
+      "sha256": "cac7719edbb16a0468ab0e1b881a15b77893bb5ea10a34a34507f69d0471d22d"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz000803.parquet",
+      "sha256": "f567090435bc4a95e76c8ebb25bebbd4a5e96e2b4e490bd87bcceb62d529a145"
+    },
+    {
+      "path": "data_cache/sz000803_daily_qfq.parquet",
+      "sha256": "9d26afb7d5c29f12f52d7dbe3a9c6c9444481d6f3af7548d05624c1c3e5755b3"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002454.parquet",
+      "sha256": "28dbbd0ba3b935e799ea6b0382fb6bb63e1d13abe839f69cd2537b5769a497ad"
+    },
+    {
+      "path": "data_cache/sz002454_daily_qfq.parquet",
+      "sha256": "64c8e73b2d4b01b4b66d8979d5b618ac96d97b065f8e9c23412779f88d9ffa41"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh600549.parquet",
+      "sha256": "36261257ea571ee7db3c60fd56001e284d89c55a251a2cc641ecfa287265bd36"
+    },
+    {
+      "path": "data_cache/sh600549_daily_qfq.parquet",
+      "sha256": "66b2176233591ef467798503907fbc07c6a87b1bfb031fba513f96bb823d868b"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh600063.parquet",
+      "sha256": "46747966fa2f5341b7a541af036add2cbb5623f493c0f639f6663b5ff2f9cfb0"
+    },
+    {
+      "path": "data_cache/sh600063_daily_qfq.parquet",
+      "sha256": "06aa4d56675516aaa922124b263cb646018ff9738755f736582f6877a0ac2241"
+    }
+  ],
+  "caveats": [
+    "Baseline engine has no Factor29 entry or exit support; no valid on/off delta is produced.",
+    "A 09:25/09:30 opening bar cannot reconstruct 09:20-09:24:59 indicative-price paths.",
+    "Thresholds overlap the evaluation window; this is not an out-of-sample test.",
+    "Reference starts flat, not from the live paper account; no production state is read or changed.",
+    "Current frozen universe and threshold choices are held fixed; pool-order minute ties are not tick-order proof."
+  ]
+}

@@ -1,6 +1,6 @@
 # myquan 架构与技术栈报告
 
-> 日期：2026-09-17  
+> 日期：2026-10-15
 > 范围：仓库整体分层、盯盘运行时、技术栈与数据边界  
 > 性质：工程说明；研究/纸面用途，非投资建议，不接券商实盘下单
 
@@ -11,10 +11,12 @@
 **myquan** 是一套以 [AKQuant](https://github.com/akfamily/akquant) 为回测内核的 A 股量化研究仓库，叠加：
 
 - **策略/因子注册表**（可插拔 bindings）
-- **纸面盯盘**（四槽、多层止盈、实时行情）
+- **纸面盯盘**（五槽、每日新增两只、多层止盈、实时行情）
 - **Web 前端**（Nuxt 展示信号与账户）
 - **微信出站推送**（OpenClaw，不走大模型）
-- **JSON 账本**（持仓 / 成交流水 / 交割明细）
+- **MySQL权威状态**（行情最新快照 / 持仓 / 成交流水 / 交割明细 / 独立策略收益；JSON仅旧迁移输入或显式离线测试）
+
+策略16当前实时顺序：优先接收行情 → 后台持久化最新快照 → 确认后分发计算信号/估值 → 版本化事务提交成交。分钟采集为首屏后独立研究备份，不参与实时执行。最新表不等同于完整逐笔归档；具体时间、价格与过期拒绝规则见 `QUOTE_DRIVEN_STRATEGY16.md`。
 
 定位：**研究 + 纸面模拟**，不是券商交易系统。
 
@@ -99,9 +101,10 @@
 | `quote_feed.py` | SSE / 新浪行情聚合 |
 | `pullback_wave_stop.py`（strategy） | 因子26 多层止盈真源 |
 | `wechat_notify.py` | OpenClaw 微信出站 |
-| `trade_ledger.py` | 交割单 JSON 账本 |
-| `holdings_sync.py` | Win/Mac 账本推拉 `holdings-ledger` |
-| `start_watch.py` | 一键启动 API + Nuxt |
+| `trade_ledger.py` | 数据库交割单读模型 |
+| `database_holdings.py` | Java/MySQL账户读写、版本校验 |
+| `holdings_sync.py` | 历史local_json离线工具，不是生产同步入口 |
+| 根目录 `start_project.py` | 一键管理Java、Python及可选Nuxt开发服务 |
 
 ---
 
@@ -111,7 +114,7 @@
 行情（SSE 热池 + 新浪批量/叠加池）
     → collect_rows（过门、买点、因子26 1m 路径、开盘保护）
     → 纸面：apply_paper_slot_buy / apply_exit_fill
-    → 账本：holdings.json · trades.jsonl · trade_ledger.json
+    → Java事务 → MySQL持仓、账户、成交流水与交割记录
     → publish_watch_snapshot → /api/snapshot + WS
     → 前端卡片 / 交割单页 /trades
     → 微信：扫描预警（交易日连续竞价）+ 成交即时推送；休市日不扫
@@ -130,11 +133,13 @@
 
 | 端口 | 进程 |
 |------|------|
-| `8765` | Python 数据 API + WebSocket |
-| `3000` | Nuxt 盯盘页 |
+| `3306` | MySQL数据库 |
+| `8080` | Java账户读写后台 |
+| `8765` | Python 数据 API + WebSocket + 静态前端 |
+| `3000` | 可选Nuxt开发服务 |
 | OpenClaw Gateway（如 `18789`） | 微信通道 |
 
-启动：`cd holdingStocks && python start_watch.py`
+统一启动入口：根目录 `bash start.sh` 启动全部；`bash start.sh --service java|python|frontend` 只启动/替换指定服务，其余保持运行（实际命令三选一，不输入竖线）。详见根目录 [READ.md](../READ.md)。Python不再创建Nuxt子进程，也不强制回收未知端口。
 
 ---
 
@@ -142,14 +147,14 @@
 
 | 文件 | 含义 |
 |------|------|
-| `holdings.json` | 持仓、现金、当日已实现、峰值等 |
-| `trades.jsonl` | 成交流水（追加） |
-| `trade_ledger.json` | 交割明细（结构化，供 `/trades`） |
+| MySQL账户及持仓表 | 生产持仓、现金、账户统计等，由Java事务更新 |
+| MySQL成交及交割表 | 成交流水与订正记录，供交割读模型使用 |
+| `holdings.json` / `trades.jsonl` / `trade_ledger.json` | 历史迁移、备份与离线模式文件，非生产真源 |
 | `strategy_sim_state.json` | 策略虚拟账本（单笔累计 / 策略收益） |
 | `strategy_signal_events.json` | 策略模拟成交事件 |
 | `holdings_watch.json` | **本机展示缓存**，非跨机真源 |
 
-跨机：独立 Git 分支 `origin/holdings-ledger`（`holdings-push` / `holdings-pull`）。代码走 `main`，账本不进 main（gitignore）。
+跨机一致性依赖访问同一个Java后台/MySQL，不通过Git同步生产持仓。各设备的localhost数据库彼此独立；Git只同步代码。
 
 ---
 
@@ -160,7 +165,7 @@
 | 类别 | 技术 |
 |------|------|
 | 语言 | Python 3.x |
-| 回测引擎 | **akquant==0.3.21**（Rust 内核 + Python 策略层） |
+| 回测引擎 | requirements固定 **akquant==0.3.22**；本机已安装0.3.21的差异待对齐，启动器提示但不自动升级 |
 | 行情/基本面拉取 | akshare、baostock、requests |
 | 实时报价 | 东财 SSE、新浪 hq |
 | 板块 | pytdx（通达信） |

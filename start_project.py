@@ -330,6 +330,111 @@ def file_hash(path):
     return digest.hexdigest()
 
 
+def require_service(name, port, probe):
+    try:
+        ready = port_open(HOST, port) and service_matches(name, port) and probe(port)
+    except (OSError, ValueError):
+        ready = False
+    if not ready:
+        raise LaunchError(f"依赖 {name} :{port} 未就绪，请先一键启动；单服务命令不会启动或替换其它服务。")
+
+
+def require_account(port):
+    try:
+        book = get_json(f"http://{HOST}:{port}/api/paper/state")
+    except (OSError, ValueError) as exc:
+        raise LaunchError("数据库账户不可读取；检查 Java 日志和迁移状态，不会自动导入/清空账户。") from exc
+    if (not isinstance(book, dict) or not isinstance(book.get("revision"), int)
+            or isinstance(book["revision"], bool) or book["revision"] <= 0):
+        raise LaunchError("数据库账户未初始化，请先确认迁移；启动器不会自动导入或清空持仓。")
+    try:
+        quotes = get_json(f"http://{HOST}:{port}/api/market-quotes")
+    except (OSError, ValueError) as exc:
+        raise LaunchError("行情数据库接口未就绪，请先 bash start.sh --service java；保留现有Python不替换。") from exc
+    if not isinstance(quotes, dict):
+        raise LaunchError("行情数据库接口未就绪，请先 bash start.sh --service java；保留现有Python不替换。")
+    print(f"[启动] 数据库账户已就绪 revision={book['revision']}")
+
+
+def python_command(opts, prior=None):
+    python = resolve_python()
+    no_wechat = opts.no_wechat
+    if no_wechat is None:
+        no_wechat = "--no-wechat" in (prior or {}).get("command", [])
+    env = dict(os.environ, HOLDINGS_STORAGE="database", TZ="Asia/Shanghai",
+               PAPER_BACKEND_URL=f"http://{HOST}:{opts.backend_port}", PYTHONUNBUFFERED="1")
+    for key in ("NO_PROXY", "no_proxy"):
+        env[key] = env.get(key, "") + ",127.0.0.1,localhost,::1"
+    command = [python, "-u", str(ROOT / "holdingStocks/index.py"), "watch", "--no-ui-dev",
+               "--no-open", "--port", str(opts.port), "--no-wechat" if no_wechat else "--wechat-optional"]
+    return command, env
+
+
+def replace_service(opts):
+    """Prepare first, then replace only the selected owned process."""
+    state, created = read_state(), []
+    name = opts.service
+    port = {"java": opts.backend_port, "python": opts.port, "frontend": opts.ui_port}[name]
+    prior = state.get(name, {})
+    owned = same_process(prior)
+    # Never turn a single-service replacement into adoption of an external process.
+    for candidate in {port, prior.get("port", port)}:
+        if port_open(HOST, candidate) and (not owned or candidate != prior.get("port")
+                                          or not service_matches(name, candidate)):
+            raise LaunchError(f":{candidate} 未由启动器登记或归属不匹配，请在原终端停止；不替换未知进程。")
+    if owned and prior.get("port") != port:
+        dependent = "python" if name == "java" else "frontend" if name == "python" else None
+        if dependent and same_process(state.get(dependent, {})):
+            raise LaunchError("其它服务仍依赖原端口，单服务替换不能更换该端口；请保持端口或整体重启。")
+    dev = opts.ui_dev or (not getattr(opts, "ui_static", False) and same_process(state.get("frontend", {})))
+    try:
+        if name == "java":
+            db_host = os.environ.get("DB_HOST", HOST)
+            db_port = int(os.environ.get("DB_PORT", "3306"))
+            if not 1 <= db_port <= 65535 or not port_open(db_host, db_port):
+                raise LaunchError("MySQL依赖未就绪，请先一键启动；单独替换Java不启动或重启数据库。")
+            command, env = java_command()
+            env.update(SERVER_ADDRESS=HOST, SERVER_PORT=str(port))
+            cwd, probe = ROOT / "backend", backend_ready
+        elif name == "python":
+            require_service("java", opts.backend_port, backend_ready)
+            require_account(opts.backend_port)
+            if owned and prior.get("settings", {}).get("PAPER_BACKEND_URL") not in (
+                    None, f"http://{HOST}:{opts.backend_port}"):
+                raise LaunchError("单服务替换不能静默切换账户后台，请保持原backend-port。")
+            command, env = python_command(opts, prior)
+            cwd, probe = ROOT, watch_ready
+        else:
+            require_service("python", opts.port, watch_ready)
+            npm, env = prepare_frontend(dev)
+            if dev:
+                env.update(WATCH_API_HOST=HOST, WATCH_API_PORT=str(opts.port), NUXT_PORT=str(port))
+                command, cwd, probe = [npm, "run", "dev"], ROOT / "holdingStocks/watch-ui", frontend_ready
+        # Build/dependency failures above leave the old service untouched.
+        if prior:
+            stop_owned(prior)
+            if same_process(prior):
+                raise LaunchError(f"{name} 原进程尚未停止，不启动第二个实例。")
+            state.pop(name, None)
+            write_state(state)
+        if name != "frontend" or dev:
+            start_service(name, port, command, cwd, env, probe, state, created, opts.timeout)
+            if name == "java":
+                require_account(port)
+        elif not frontend_ready(opts.port):
+            raise LaunchError("静态页面更新后不可访问，请检查Python日志。")
+        print(f"[启动] 已更新 {name}，其它服务保持运行。")
+        if name == "frontend" and not opts.no_open:
+            webbrowser.open(f"http://{HOST}:{port if dev else opts.port}/")
+        return 0
+    except BaseException:
+        for record in reversed(created):
+            stop_owned(record)
+            state.pop(record["name"], None)
+        write_state(state)
+        raise
+
+
 def start(opts):
     state, created = read_state(), []
     try:
@@ -337,7 +442,7 @@ def start(opts):
         for name, record in state.items():
             if same_process(record) and record.get("port") != desired_ports.get(name):
                 raise LaunchError("已有启动器管理的服务使用其它端口；先 --stop，再变更端口启动。")
-        python = resolve_python()
+        command, env = python_command(opts, state.get("python"))
         npm, node_env = prepare_frontend(opts.ui_dev)
         ensure_mysql()
         if port_open(HOST, opts.backend_port):
@@ -347,20 +452,7 @@ def start(opts):
         java_env.update(SERVER_ADDRESS=HOST, SERVER_PORT=str(opts.backend_port))
         start_service("java", opts.backend_port, java, ROOT / "backend", java_env,
                       backend_ready, state, created, opts.timeout)
-        backend_url = f"http://{HOST}:{opts.backend_port}"
-        try:
-            book = get_json(backend_url + "/api/paper/state")
-        except OSError as exc:
-            raise LaunchError("数据库账户不可读取；检查 Java 日志和迁移状态，不会自动导入/清空账户。") from exc
-        if (not isinstance(book, dict) or not isinstance(book.get("revision"), int)
-                or isinstance(book["revision"], bool) or book["revision"] <= 0):
-            raise LaunchError("数据库账户未初始化，请先确认迁移；启动器不会自动导入或清空持仓。")
-        print(f"[启动] 数据库账户已就绪 revision={book['revision']}")
-        env = dict(os.environ, HOLDINGS_STORAGE="database", PAPER_BACKEND_URL=backend_url, PYTHONUNBUFFERED="1")
-        for key in ("NO_PROXY", "no_proxy"):
-            env[key] = env.get(key, "") + ",127.0.0.1,localhost,::1"
-        command = [python, "-u", str(ROOT / "holdingStocks/index.py"), "watch", "--no-ui-dev",
-                   "--no-open", "--port", str(opts.port), "--no-wechat" if opts.no_wechat else "--wechat-optional"]
+        require_account(opts.backend_port)
         start_service("python", opts.port, command, ROOT, env, watch_ready, state, created, opts.timeout)
         if opts.ui_dev:
             node_env.update(WATCH_API_HOST=HOST, WATCH_API_PORT=str(opts.port), NUXT_PORT=str(opts.ui_port))
@@ -382,9 +474,11 @@ def start(opts):
         raise
 
 
-def stop():
+def stop(service=None):
     state = read_state()
     for name in ("frontend", "python", "java"):
+        if service and name != service:
+            continue
         record = state.get(name)
         if record:
             stop_owned(record)
@@ -399,6 +493,8 @@ def status(opts):
     state = read_state()
     for name, port, probe in (("java", opts.backend_port, backend_ready), ("python", opts.port, watch_ready),
                                ("frontend", opts.ui_port, frontend_ready)):
+        if getattr(opts, "service", None) and opts.service != name:
+            continue
         try:
             ready = port_open(HOST, port) and service_matches(name, port) and probe(port)
         except (OSError, ValueError, LaunchError):
@@ -417,9 +513,14 @@ def main():
     action.add_argument("--stop", action="store_true")
     action.add_argument("--status", action="store_true")
     action.add_argument("--restart", action="store_true", help="重启启动器管理的服务，不停止 MySQL 或手工启动的服务")
-    parser.add_argument("--ui-dev", action="store_true", help="使用 Nuxt 热更新，默认静态前端")
+    parser.add_argument("--service", choices=("java", "python", "frontend"), help="只启动/替换选中的服务，其余保持运行")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--ui-dev", action="store_true", help="使用 Nuxt 热更新，默认静态前端")
+    mode.add_argument("--ui-static", action="store_true", help="更新静态前端；单服务默认沿用已有前端模式")
     parser.add_argument("--no-open", action="store_true")
-    parser.add_argument("--no-wechat", action="store_true")
+    notifications = parser.add_mutually_exclusive_group()
+    notifications.add_argument("--no-wechat", dest="no_wechat", action="store_true", default=None)
+    notifications.add_argument("--wechat", dest="no_wechat", action="store_false", help="开启微信通知；未指定时沿用已管理Python的通知开关")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--backend-port", type=int, default=8080)
     parser.add_argument("--ui-port", type=int, default=3000)
@@ -432,8 +533,13 @@ def main():
     try:
         with operation_lock():
             if opts.restart:
-                stop()
-            return stop() if opts.stop else status(opts) if opts.status else start(opts)
+                if not opts.service:
+                    stop()
+            if opts.stop:
+                return stop(opts.service)
+            if opts.status:
+                return status(opts)
+            return replace_service(opts) if opts.service else start(opts)
     except (LaunchError, OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"[失败] {exc}", file=sys.stderr)
         return 1

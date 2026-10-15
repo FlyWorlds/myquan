@@ -3,6 +3,7 @@ import type { HoldingRow } from '~/types/snapshot'
 import { fmtNum, fmtSignedPct, fmtSignalClock, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual, collectLegendIds } from '~/composables/useSignalVisual'
+import { strategyBookSingleReturn } from '~/utils/strategyBookReturn'
 
 const props = defineProps<{
   rows: HoldingRow[]
@@ -224,6 +225,7 @@ function signalTriggerPx(r: HoldingRow): number | null {
  * 无纸面成交时展示后端计算的策略整笔收益。
  */
 function tradeIncomePct(r: HoldingRow): number | null {
+  if (r.收益账本 === 'strategy16_database') return strategyBookSingleReturn(r)
   const comprehensive = asNum(r['综合单笔收入%'])
   if (comprehensive != null) return comprehensive
   const strategy = asNum(r['策略单笔收益%'])
@@ -275,6 +277,10 @@ function showPaperDebug(r: HoldingRow): boolean {
 
 /** 综合策略收益 tooltip。 */
 function strategyCumTitle(r: HoldingRow): string {
+  if (r.策略收益来源 === 'database_strategy_book') {
+    const warning = r.策略历史状态 === 'legacy_checkpoint_unverified' ? ' 旧历史检查点待核验；新成交逐笔记账。' : ''
+    return `数据库策略账本：历次已实现盈亏＋当前浮盈，收益率以该股票策略初始资金为分母；盈亏金额 ${fmtNum(r.综合策略收益, 2)}；入库后增量 ${fmtNum(r.策略入库后增量盈亏, 2)}；估值 ${r.策略估值时刻 || '未知'}。${warning}`
+  }
   const start = String(r.策略起算 || '回放起点')
   const amount = asNum(r.综合策略收益 ?? r.策略收益)
   const amountText = amount == null ? '' : ` 盈利金额 ${fmtNum(amount, 2)}；`
@@ -287,10 +293,14 @@ function strategyCumTitle(r: HoldingRow): string {
 }
 
 const SINGLE_SIGNAL_TITLE =
-  '综合单笔收入：整笔盈利金额÷买入成本额；含分批卖出和剩余持仓浮盈，无纸面成交时采用策略回测整笔收益'
+  '综合单笔收入：（本轮已实现盈亏＋剩余仓位浮盈）÷本轮买入成本额；以行内账本来源为准'
+const usesDatabaseStrategyBooks = computed(() => props.rows.some(r => r.收益账本 === 'strategy16_database'))
 
 function tradeIncomeTitle(r: HoldingRow): string {
-  const source = r.综合单笔来源 === 'trades_jsonl_cycle' ? '纸面实际成交' : '策略回测成交'
+  if (r.收益账本 === 'strategy16_database' && Number(r.策略虚拟股数) > 0) {
+    return `本次买入 ${fmtNum(r.策略入场价, 2)}，数据库估值价 ${fmtNum(r.策略估值价格, 2)}；剩余浮盈 ${fmtNum(r.本轮浮动盈亏, 2)}。综合本轮盈亏 ${fmtNum(r.综合单笔收入, 2)}，包含已分批卖出收益。`
+  }
+  const source = r.综合单笔来源 === 'database_strategy_cycle' ? '数据库策略本轮交易' : r.综合单笔来源 === 'trades_jsonl_cycle' ? '纸面实际成交' : '策略回测成交'
   const pnl = asNum(r.综合单笔收入)
   const base = asNum(r.综合单笔成本额)
   if (pnl == null || base == null) return '尚无完整的整笔成交成本和盈亏记录'
@@ -315,7 +325,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
       </div>
       <div class="mt-1 text-xs text-ui-text-3">
         状态={{ props.statusMode === 'paper' ? '纸面仓位/预警' : '策略模拟器（空仓/策略持有）' }}；策略状态与纸面仓独立。
-        综合策略收益=该策略+标的虚拟账本；综合单笔收入=纸面整笔交易加权收益；图例可点筛选。
+        综合策略收益=历次已实现盈亏＋当前浮盈；综合单笔收入=本轮已实现盈亏＋剩余仓位浮盈。
         点「日内涨跌 / 综合策略收益」表头可排序（数字实时刷，行序锁定；再点表头重排/切换方向）。
       </div>
       <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -394,7 +404,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
                   综合策略收益<span class="tabular-nums text-[10px]">{{ sortMark('strategyPnl') }}</span>
                 </button>
               </th>
-              <th class="px-3 py-2.5" :title="SINGLE_SIGNAL_TITLE">综合单笔收入</th>
+              <th class="px-3 py-2.5" :title="usesDatabaseStrategyBooks ? '持有按本次买入价与数据库现价计算；全清后冻结本轮实际成交收益' : SINGLE_SIGNAL_TITLE">{{ usesDatabaseStrategyBooks ? '单笔盈亏' : '综合单笔收入' }}</th>
               <th class="px-3 py-2.5">前日</th>
               <th class="px-3 py-2.5">过门</th>
               <th class="px-3 py-2.5">阈值</th>
@@ -490,9 +500,11 @@ function tradeIncomeTitle(r: HoldingRow): string {
                 :title="strategyCumTitle(r)"
               >
                 <ChgText :chg="r['综合策略收益%'] ?? r['策略收益%']">{{ fmtSignedPct(r['综合策略收益%'] ?? r['策略收益%']) }}</ChgText>
+                <span v-if="r.策略历史状态 === 'legacy_checkpoint_unverified'" class="block text-[10px] text-amber-400" title="原本地检查点保留，历史成交未完整核验；新成交已逐笔入库">历史待核验</span>
               </td>
               <td class="sensitive px-3 py-2.5 tabular-nums" :title="tradeIncomeTitle(r)">
                 <ChgText :chg="tradeIncomePct(r)">{{ fmtSignedPct(tradeIncomePct(r)) }}</ChgText>
+                <span v-if="r.收益账本 === 'strategy16_database' && Number(r.策略虚拟股数) > 0 && Number(r.策略单笔卖出数量) > 0" class="block text-[10px] text-ui-text-2">综合本轮 {{ fmtSignedPct(r['综合单笔收入%']) }}</span>
               </td>
               <td class="px-3 py-2.5">{{ r.前日形态 || '-' }}</td>
               <td class="px-3 py-2.5 font-semibold" :class="r.过门OK ? 'text-up' : 'text-ui-text-2'">{{ r.过门 || '-' }}</td>

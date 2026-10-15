@@ -124,7 +124,7 @@ def main() -> None:
     from watch_config import STRATEGY_ID
 
     if args.apply and index._read_watch_lock():
-        raise SystemExit("盯盘仍在运行：先停掉（python start_watch.py --stop）再 --apply")
+        raise SystemExit("盯盘仍在运行：先在项目根目录 bash start.sh --stop；分开启动时在原终端 Ctrl+C，再 --apply")
 
     today = str(index.trading_session_date())
     raw_ev = json.loads(sim.EVENTS_FILE.read_text(encoding="utf-8"))

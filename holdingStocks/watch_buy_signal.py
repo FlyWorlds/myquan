@@ -16,6 +16,7 @@ from typing import Any
 ALERT_HIT_BUY = "已触买"
 ALERT_FILLED = "已触买·已入槽"
 ALERT_SLOT_FULL = "已触买·槽满"
+ALERT_DAILY_LIMIT = "已触买·当日新增额度已满"
 ALERT_NOT_SLOTTED = "已触买·未入槽"
 # 历史文案：曾作弱信号；现已废弃，仅用于清除粘滞/兼容
 ALERT_PRICE_NO_GATE = "触买价·未过门"
@@ -145,9 +146,8 @@ def annotate_unfilled_buy_signals(
     log: Any | None = None,
 ) -> tuple[int, int]:
     """触买=信号，入槽=成交。返回 (未入槽触买数, 0)；未过门不标注。"""
-    free_buy = int(slot_meta.get("freeBuy") or slot_meta.get("free") or 0)
+    free_buy = int(slot_meta.get("freeBuy", slot_meta.get("free", 0)) or 0)
     buys_left = int(slot_meta.get("buysLeft") or 0)
-    slot_blocked = free_buy <= 0 or buys_left <= 0
     n_hit = 0
 
     for r in rows:
@@ -175,9 +175,9 @@ def annotate_unfilled_buy_signals(
             continue
 
         if is_buy_hit(r):
-            tag = "槽满" if slot_blocked else "未入槽"
+            tag = "槽满" if free_buy <= 0 else "当日新增额度已满" if buys_left <= 0 else "未入槽"
             r["已触买"] = "是"
-            r["预警"] = ALERT_SLOT_FULL if slot_blocked else ALERT_NOT_SLOTTED
+            r["预警"] = ALERT_SLOT_FULL if free_buy <= 0 else ALERT_DAILY_LIMIT if buys_left <= 0 else ALERT_NOT_SLOTTED
             r["持仓状态"] = "待买入"
             r["因子侧"] = "买入"
             r["近买点"] = True
@@ -186,7 +186,7 @@ def annotate_unfilled_buy_signals(
             r["bg_class"] = "warn-buy"
             r["当日预警"] = True
             buy_px = r.get("买入侧价") or r.get("买点") or r.get("已触发因子价")
-            tip = f"买入信号已触发·未入三槽（{tag}）"
+            tip = f"买入信号已触发·未入槽（{tag}）"
             if buy_px is not None:
                 try:
                     tip += f"@{float(buy_px):.{int(r.get('价位小数') or 2)}f}"

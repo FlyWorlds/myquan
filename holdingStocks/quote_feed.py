@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import socket
 import struct
 import threading
@@ -115,6 +116,8 @@ class QuoteSnapshot:
     day_chg_pct: float | None
     last_ts: str
     source: str = "seed"
+    source_time_verified: bool = False
+    received_at: str = ""
     open_finalized: bool = False
     auction_baseline: float | None = None
     auction_high: float | None = None
@@ -139,6 +142,8 @@ class QuoteSnapshot:
             "last_ts": self.last_ts,
             "_day_bars": bars,
             "_quote_source": self.source,
+            "_source_time_verified": self.source_time_verified,
+            "_received_at": self.received_at or None,
             "_open_finalized": bool(self.open_finalized),
             # 兼容 session_open_usable：9:15–9:25 的指示价绝不能算买点。
             "_preopen_baseline": not bool(self.open_finalized),
@@ -152,11 +157,14 @@ class QuoteSnapshot:
 class QuoteHub:
     """线程安全的当日 OHLC 状态。"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, execution_only: bool = False) -> None:
         self._lock = threading.RLock()
         self._quotes: dict[str, QuoteSnapshot] = {}
         self.updated = threading.Event()
         self._gen = 0
+        self.on_quote: Callable[[str, dict[str, Any]], None] | None = None
+        self._execution_only = execution_only
+        self._execution_hub = None if execution_only else QuoteHub(execution_only=True)
         self.sse_ok = False
         self.sse_last_ok_ts = 0.0
         self.quote_last_ok_ts = 0.0
@@ -255,15 +263,29 @@ class QuoteHub:
         prev_close: float | None = None,
         last_ts: str | None = None,
         source: str = "tick",
+        source_time_verified: bool | None = None,
     ) -> bool:
         sina = str(sina).lower()
+        verified = (bool(last_ts) and source not in ("em_sse", "seed", "daily_prev")
+                    if source_time_verified is None else bool(source_time_verified))
+        verified = verified and bool(last_ts) and last is not None and math.isfinite(float(last)) and last > 0
+        received = datetime.now().isoformat(sep=" ", timespec="microseconds")
         tick_ts = str(last_ts or datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         tick_session, _tick_clock = _quote_session_and_clock(tick_ts)
         tick_open_final = _open_is_final(tick_ts)
         tick_continuous = _continuous_quote(tick_ts)
         tick_open_result = _open_result_only(tick_ts)
         with self._lock:
+            if self._execution_hub is not None and verified:
+                previous = self._execution_hub.get_quote(sina)
+                if previous and tick_ts < previous["last_ts"]:
+                    return False
+                self._execution_hub.on_quote = self.on_quote
+                self._execution_hub.apply_tick(sina, last=last, high=high, low=low, open_px=open_px,
+                    prev_close=prev_close, last_ts=last_ts, source=source, source_time_verified=True)
             cur = self._quotes.get(sina)
+            if self._execution_only and cur and tick_ts < cur.last_ts:
+                return False
             if cur is None or (
                 tick_session
                 and str(cur.session or "")[:10]
@@ -293,6 +315,8 @@ class QuoteHub:
                     day_chg_pct=chg,
                     last_ts=tick_ts,
                     source=source,
+                    source_time_verified=verified,
+                    received_at=received,
                     open_finalized=tick_open_final,
                 )
                 self._absorb_auction_path(
@@ -302,6 +326,8 @@ class QuoteHub:
                 )
                 self._gen += 1
                 self.updated.set()
+                if self._execution_only and self.on_quote is not None:
+                    self.on_quote(sina, self._quotes[sina].as_quote_dict())
                 return True
 
             changed = False
@@ -366,12 +392,21 @@ class QuoteHub:
             if cur.prev_close is not None and cur.last > 0:
                 cur.day_chg_pct = price_chg_pct(cur.last, cur.prev_close)
             cur.source = source
+            cur.source_time_verified = verified
+            cur.received_at = received
             if self._absorb_auction_path(cur, last=last, last_ts=tick_ts):
                 changed = True
             if changed:
                 self._gen += 1
                 self.updated.set()
+            if self._execution_only and self.on_quote is not None and last is not None and last > 0:
+                self.on_quote(sina, cur.as_quote_dict())
             return changed
+
+    def get_execution_quote(self, sina):
+        """Only source-timestamped quotes; display-only SSE cannot poison executable OHLC."""
+        hub = self._execution_hub or self
+        return hub.get_quote(sina)
 
     @staticmethod
     def _absorb_auction_path(
@@ -584,7 +619,7 @@ def fill_preopen_ohlc(
     return open_px, high_px, low_px, last_px
 
 
-def fetch_sina_batch(sinas: list[str]) -> dict[str, dict[str, Any]]:
+def fetch_sina_batch(sinas: list[str], *, timeout=8) -> dict[str, dict[str, Any]]:
     """新浪批量快照 list=sh...,sz..."""
     codes = [s.lower() for s in sinas if s]
     if not codes:
@@ -597,7 +632,7 @@ def fetch_sina_batch(sinas: list[str]) -> dict[str, dict[str, Any]]:
             resp = requests.get(
                 f"https://hq.sinajs.cn/list={','.join(batch)}",
                 headers=_SINA_HEADERS,
-                timeout=8,
+                timeout=timeout,
             )
             text = resp.content.decode("gbk", "ignore")
         except Exception:  # noqa: BLE001
@@ -647,6 +682,9 @@ def fetch_sina_batch(sinas: list[str]) -> dict[str, dict[str, Any]]:
                 "day_chg_pct": price_chg_pct(last_px, prev_close),
                 "last_ts": stamp,
                 "name": stock_name,
+                # Pre-auction indicative prices may be filled; post-auction OHLC may not be invented.
+                "_trade_quality_ok": bool(parts[30] and parts[31]) and (
+                    parts[31] < "09:25:00" or all(_f(i) > 0 for i in (1, 3, 4, 5))),
             }
     return out
 
@@ -677,6 +715,24 @@ class SinaBatchPoller:
         self._fallback_active = False
 
     def run(self) -> None:
+        chunks = [self.sinas[i:i+50] for i in range(0, len(self.sinas), 50)]
+        # The first hot batch has its own cadence; a slow cold batch cannot stall it.
+        groups = [chunks[0]] if chunks else [[]]
+        for chunk in chunks[1:4]:
+            groups.append(list(chunk))
+        for i, chunk in enumerate(chunks[4:]):
+            groups[1+i % 3].extend(chunk)
+        threads = [threading.Thread(target=self._run_group, args=(group,), daemon=True,
+                                    name=f"sina-poll-{i+1}") for i, group in enumerate(groups[1:])]
+        for thread in threads:
+            thread.start()
+        try:
+            self._run_group(groups[0])
+        finally:
+            for thread in threads:
+                thread.join(timeout=2)
+
+    def _run_group(self, sinas) -> None:
         while not self.stop.is_set():
             healthy = self.hub.sse_healthy()
             if not self.always and healthy:
@@ -690,20 +746,26 @@ class SinaBatchPoller:
                 self.on_log("SSE 不健康，启用新浪批量兜底")
                 self._fallback_active = True
             try:
-                batch = fetch_sina_batch(self.sinas)
-                if batch:
-                    self.hub.mark_quote_ok("sina_batch")
-                for sina, spot in batch.items():
-                    self.hub.apply_tick(
-                        sina,
-                        last=float(spot["last"]),
-                        high=float(spot["high"]),
-                        low=float(spot["low"]),
-                        open_px=float(spot["open"]),
-                        prev_close=float(spot["prev_close"]),
-                        last_ts=str(spot["last_ts"]),
-                        source="sina_batch",
-                    )
+                for i in range(0, len(sinas), 50):
+                    if self.stop.is_set():
+                        break
+                    batch = fetch_sina_batch(sinas[i:i+50], timeout=(2, 3))
+                    if self.stop.is_set():
+                        break
+                    if batch:
+                        self.hub.mark_quote_ok("sina_batch")
+                    for sina, spot in batch.items():
+                        self.hub.apply_tick(
+                            sina,
+                            last=float(spot["last"]),
+                            high=float(spot["high"]),
+                            low=float(spot["low"]),
+                            open_px=float(spot["open"]),
+                            prev_close=float(spot["prev_close"]),
+                            last_ts=str(spot["last_ts"]),
+                            source="sina_batch",
+                            source_time_verified=spot.get("_trade_quality_ok", True),
+                        )
             except Exception as e:  # noqa: BLE001
                 self.on_log(f"新浪批量失败: {e}")
             if self.stop.wait(self.interval):
@@ -783,6 +845,9 @@ class QuoteFeedManager:
 
     def get_quote(self, sina: str) -> dict[str, Any] | None:
         return self.hub.get_quote(sina)
+
+    def get_execution_quote(self, sina: str) -> dict[str, Any] | None:
+        return self.hub.get_execution_quote(sina)
 
     def seed(self, sina: str, quote: dict[str, Any]) -> None:
         self.hub.seed_from_quote(sina, quote)

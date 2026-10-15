@@ -167,5 +167,87 @@ class TestQuoteHealth(unittest.TestCase):
         self.assertNotAlmostEqual(float(q["_auction_high"]), 18.53, places=2)
 
 
+class TestExecutableQuoteIsolation(unittest.TestCase):
+    def test_missing_raw_open_after_auction_cannot_become_an_official_trade_price(self):
+        from unittest.mock import Mock, patch
+        from quote_feed import fetch_sina_batch
+        fields = ["0"]*32
+        fields[0], fields[2], fields[3], fields[4], fields[5] = "Test", "10", "10.26", "10.3", "10"
+        fields[30], fields[31] = "2026-10-15", "09:30:01"
+        payload = ('var hq_str_sz000070="'+','.join(fields)+'";').encode("gbk")
+        with patch("quote_feed.requests.get", return_value=Mock(content=payload)):
+            spot = fetch_sina_batch(["sz000070"])["sz000070"]
+        self.assertFalse(spot["_trade_quality_ok"])
+        hub = QuoteHub()
+        observer = Mock()
+        hub.on_quote = observer
+        hub.apply_tick("sz000070", last=spot["last"], open_px=spot["open"], high=spot["high"],
+                       low=spot["low"], prev_close=spot["prev_close"], last_ts=spot["last_ts"],
+                       source="sina_batch", source_time_verified=spot["_trade_quality_ok"])
+        observer.assert_not_called()
+        self.assertIsNone(hub.get_execution_quote("sz000070"))
+
+    def test_slow_cold_batch_does_not_delay_the_hot_batchs_next_poll(self):
+        import threading
+        from unittest.mock import patch
+        from quote_feed import SinaBatchPoller
+        stop, release, cold_started, hot_twice = (threading.Event() for _ in range(4))
+        hot = [f"sz{i:06d}" for i in range(50)]
+        cold = ["sh600330"]
+        counts = [0]
+        def fetch(codes, **kwargs):
+            self.assertEqual(kwargs["timeout"], (2, 3))
+            if codes == cold:
+                cold_started.set()
+                release.wait(5)
+            else:
+                counts[0] += 1
+                if counts[0] >= 2:
+                    hot_twice.set()
+            return {}
+        poller = SinaBatchPoller(QuoteHub(), hot+cold, stop=stop, interval=1.)
+        worker = threading.Thread(target=poller.run, daemon=True)
+        with patch("quote_feed.fetch_sina_batch", side_effect=fetch):
+            worker.start()
+            try:
+                self.assertTrue(cold_started.wait(1))
+                self.assertTrue(hot_twice.wait(2.5), "hot quotes waited for a slow unrelated batch")
+            finally:
+                stop.set()
+                release.set()
+                worker.join(3)
+        self.assertFalse(worker.is_alive())
+
+    def test_receive_clock_only_sse_cannot_trigger_or_poison_executable_ohlc(self):
+        from unittest.mock import Mock
+        hub = QuoteHub()
+        observer = Mock()
+        hub.on_quote = observer
+        hub.apply_tick("sz000070", last=10.2, open_px=10., high=10.3, low=10., prev_close=10.,
+                       last_ts="2026-10-15 09:30:01", source="sina_batch")
+        hub.apply_tick("sz000070", last=20., open_px=20., high=30., low=1., prev_close=10.,
+                       last_ts="2026-10-15 09:30:02", source="em_sse")
+        self.assertEqual(observer.call_count, 1)
+        self.assertFalse(hub.get_quote("sz000070")["_source_time_verified"])
+        self.assertEqual(hub.get_execution_quote("sz000070")["high"], 10.3)
+        hub.apply_tick("sz000070", last=10.26, open_px=10., high=10.3, low=10., prev_close=10.,
+                       last_ts="2026-10-15 09:30:03", source="sina_batch")
+        sent = observer.call_args.args[1]
+        self.assertEqual((sent["open"], sent["high"], sent["low"]), (10., 10.3, 10.))
+        self.assertTrue(sent["_source_time_verified"])
+
+    def test_older_source_quote_cannot_rollback_execution_or_emit_a_false_trigger(self):
+        from unittest.mock import Mock
+        hub = QuoteHub()
+        observer = Mock()
+        hub.on_quote = observer
+        hub.apply_tick("sz000070", last=10.2, open_px=10., high=10.3, low=10., prev_close=10.,
+                       last_ts="2026-10-15 09:30:03", source="sina_batch")
+        hub.apply_tick("sz000070", last=10.8, open_px=10., high=10.8, low=10., prev_close=10.,
+                       last_ts="2026-10-15 09:30:01", source="sina_batch")
+        self.assertEqual(observer.call_count, 1)
+        self.assertEqual(hub.get_execution_quote("sz000070")["last"], 10.2)
+
+
 if __name__ == "__main__":
     unittest.main()

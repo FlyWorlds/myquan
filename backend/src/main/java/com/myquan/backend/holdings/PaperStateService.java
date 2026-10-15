@@ -116,6 +116,8 @@ public class PaperStateService {
             if (version != input.expectedRevision())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Ledger revision changed; reload before modifying.");
             if (version > 0) validateHistory(decode(current), input);
+            int committedTrades=version>0 ? decode(current).trades().size() : 0;
+            validateLiveAppends(committedTrades,input);
             var now = Timestamp.valueOf(LocalDateTime.now(ZoneId.of("Asia/Shanghai")));
             jdbc.update("UPDATE paper_account_state SET revision=?, holdings=?, trades=?, ledger=?, updated_at=? WHERE id=1",
                     version + 1, input.holdings().toString(), input.trades().toString(), input.ledger().toString(), now);
@@ -139,9 +141,20 @@ public class PaperStateService {
                             entry.path("time").asText(""), entry.toString());
                 }
             }
+            validateLiveAppends(committedTrades,input);
             jdbc.update("INSERT INTO paper_state_writes (request_id,payload_hash,revision) VALUES (?,?,?)", input.requestId(), hash, version+1);
             return new State(version+1, input.holdings(), input.trades(), input.ledger());
         });
+    }
+
+    private void validateLiveAppends(int committedTrades, Write input) {
+        for (int i=committedTrades;i<input.trades().size();i++) {
+            var trade=input.trades().get(i);
+            String model=trade.path("fill_model").asText("");
+            if (java.util.Set.of("paper_stop_at_order_price","factor26_observed_quote","factor26_observed_open").contains(model))
+                LiveFillGuard.check(trade.path("execution_quote_time").asText(trade.path("signal_time").asText()),
+                    trade.path("decision_time").asText(),LocalDateTime.now(ZoneId.of("Asia/Shanghai")));
+        }
     }
 
     private void validateHistory(State current, Write input) {

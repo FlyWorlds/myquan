@@ -34,7 +34,7 @@
 - **因子池**：刷新 `picks_quarter.json`（`python strategy/run_core_leader_pool.py`）
 - **公共自选池**：改 `SELF_WATCHLIST_PICKS`（旧名 `STRATEGY16_EXTRA_PICKS` 仍兼容；**全策略共用**，非仅策略十六）。「选股/池名单」在策略 Tab **底部折叠面板**（默认收起，展开后按分类 Tab 查看）；上方实时信号表整表展示。
 
-**当前**：因子27 as_of **2026-09-30**（30只 / 18概念，有效至 2026-12-30，见 [`docs/FACTOR27.md`](../docs/FACTOR27.md)）+ 自选四票；剔ST/百元股/科创/创业。换池后空槽只买新名单，**实仓不因掉池强平**。改池后需重启 `start_watch.py`。
+**当前**：因子27 as_of **2026-09-30**（30只 / 18概念，有效至 2026-12-30，见 [`docs/FACTOR27.md`](../docs/FACTOR27.md)）+ 自选四票；剔ST/百元股/科创/创业。换池后空槽只买新名单，**实仓不因掉池强平**。改池后在根目录 `bash start.sh --restart`；分开启动时在原终端重启 Python。
 
 回测产物：`backtest/strategy16_core_leader/`。**策略十六开盘阈值**只认 `thr_2026.json`（缺省 `DEFAULT_PCT=2.5%`），不走策略一遗留 `_WATCH_PCT` / 置顶名单里的 pct。
 
@@ -117,7 +117,7 @@ cd holdingStocks && python run_regression_tests.py
 
 **Paper 卖出**：`paper_exit_decision` 当前 **Unified Primary**（`USE_UNIFIED_EXIT_ENGINE=True`），Legacy 只做 Shadow / fallback（`SHADOW_UNIFIED_EXIT_ENGINE=True`）。Shadow 比较不成交、不发微信。
 
-**微信推送（N1）**：预警与成交分模板。扫描只发 **【策略预警】**（将买入 / 已触买未成交 / 槽满 / 将止损 / T+1 暂不可卖 / 跌停不可卖）；**真实 paper 成交**在 `apply_paper_slot_buy` / `apply_exit_fill` 写入仓位与 ledger 之后发 **【模拟买入】** / **【模拟卖出】**（含 reason_code：WORKING_STOP / OPEN_PROTECT / PATH / HALF / EOD_RESERVE）。已成交事件不再被扫描重复推。预警扫描仅默认策略池（strategy16）；实仓 SELL 即使已离开默认池仍推成交通知。Shadow 不发微信。**非交易日**（周末/交易所休市）`is_signal_window` 为假，扫描预警不推、不自动成交；启动「盯盘启动完成」仍可能发一条。`start_watch --no-wechat` / `watch --no-wechat`：**预警与买卖成交都不推**，不影响 paper execution。
+**微信推送（N1）**：预警与成交分模板。扫描只发 **【策略预警】**（将买入 / 已触买未成交 / 槽满 / 将止损 / T+1 暂不可卖 / 跌停不可卖）；**真实 paper 成交**在 `apply_paper_slot_buy` / `apply_exit_fill` 写入仓位与 ledger 之后发 **【模拟买入】** / **【模拟卖出】**（含 reason_code：WORKING_STOP / OPEN_PROTECT / PATH / HALF / EOD_RESERVE）。已成交事件不再被扫描重复推。预警扫描仅默认策略池（strategy16）；实仓 SELL 即使已离开默认池仍推成交通知。Shadow 不发微信。**非交易日**（周末/交易所休市）`is_signal_window` 为假，扫描预警不推、不自动成交；启动「盯盘启动完成」仍可能发一条。根目录 `bash start.sh --no-wechat` / `watch --no-wechat`：**预警与买卖成交都不推**，不影响 paper execution。
 
 **会话失效自动恢复**：`prepare failed` / `ret=-2` 识别为 `SESSION_INVALID`（不空转重试）。盘中改为异步入队（daemon worker），暂停出站并将通知写入有限 pending（同票同预警类型去重）；轮询 `~/.openclaw/openclaw-weixin/accounts/*.context-tokens.json` 的 mtime，检测到 inbound 刷新后再探测发送并 flush。持续失效超过约 5 分钟只打一次 `[WECHAT][ACTION REQUIRED]`。OpenClaw 发送与恢复不阻塞行情/策略/paper。
 
@@ -147,11 +147,12 @@ python -m pytest -q ../                 # 全量测试（需 pytest）
 | `health_status.py` | 健康事件分级：阻断交易 / 仅影响通知 / 仅影响展示 |
 | `factor2_watch.py` | 账户回撤预警 |
 | `factor4_watch.py` | 牛市 regime（策略三 + 因子4 时） |
-| `trade_ledger.py` | 交割单 JSON 账本（`trade_ledger.json`）；买入入槽/卖出平仓落库；API 读模型对仍持仓 BUY 按现价盯市「单笔盈亏」（不写回 ledger） |
+| `trade_ledger.py` | 数据库交割单读模型；仍持仓BUY按现价盯市，已提交订正纳入有效收益，不改写原成交 |
 | `index.py` | 盯盘主程序 / JSON 推送 / 微信 / 买卖记账 |
-| `holdings_sync.py` | Win/Mac 账本：`holdings-push` / `holdings-pull` → `origin/holdings-ledger` |
-| `start_watch.py` | 一键启动 API+Nuxt；默认强制拉远程持仓，失败即停；`--stop` / `--force` 回收端口 |
-| `watch_process.py` | Windows 端口/PID 回收（Ctrl+C 孤儿进程） |
+| `database_holdings.py` | 默认MySQL账户适配器；同一版本读取、事务提交、版本冲突及失败回滚 |
+| `holdings_sync.py` | 历史local_json离线工具；生产持仓不通过Git同步 |
+| 根目录 `start_project.py` / `start.sh` | 正式一键入口：MySQL、Java、Python与前端；只停止自身管理的进程 |
+| `watch_process.py` | 只读PID/端口查询与PID元数据，不强制回收端口 |
 | `quote_feed.py` | 行情聚合 |
 | `wechat_notify.py` | 微信推送 |
 
@@ -159,32 +160,33 @@ python -m pytest -q ../                 # 全量测试（需 pytest）
 
 浏览器 **http://127.0.0.1:3000/sectors** 为板块轮动热力表。**优先通达信概念**（本地配置同步 + pytdx）；行情失败时仅复用**同一交易日且今日列已有排名**的通达信磁盘缓存（≤2 天）。**隔日缓存作废**；通达信只拉到 1 日时拼回磁盘历史，禁止整表覆盖。**启动分步**：先推盯盘/策略快照并实时刷新，板块通达信全市场行情放到首屏之后的后台线程（约 5s）；主循环不再同步 `build_sectors_live_payload`。历史列来自 `/api/sectors/rotation`（约 1 小时缓存，「重载历史」才重拉）；**今日列与成分股现价走盯盘 WebSocket**。点格子只为展开成分名单；再点一次进概念详情（先 lite 出 K 线，再补波段龙头；因子16 评分后置）。
 
-栈对齐 PandaAI 官网：**Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**，叠加 **Tailwind** 与 **自研 `--ui-*` design token**（黑底卡片风）。Python `watch` 只推送 **JSON 快照**（HTTP `/api` + WebSocket `/ws`），不生成 HTML、不托管页面。股票名称移入即预取基本面，约 0.1 秒弹出（行业/概念/题材、市值 PE/PB、同板块关联及关系、产业上下游/主营；`GET /api/stock/profile`）。关联股中文名走全量本地表，缺的再批量东财补，不按大板块前 80 只截断。
+前端使用 **Nuxt 3 / Vue 3 / Pinia / Vite（Nuxt 内置）**、Tailwind与现有设计token。Python提供JSON快照（HTTP `/api` + WebSocket `/ws`），日常模式同时托管已构建的 `watch-ui/dist` 静态页面；不启动Nuxt子进程。开发前端由根目录启动器或独立 `npm run dev` 管理。股票名称移入预取基本面（`GET /api/stock/profile`）；关联股中文名走全量本地表，缺的再批量补，不按大板块前80只截断。
 
 ```bash
-# 推荐：一键（Mac / Windows）
-cd holdingStocks && python start_watch.py --no-wechat
-# 浏览器 http://127.0.0.1:3000/  ·  数据 API/WS :8765
+# 从项目根目录一键启动（macOS/Linux）
+bash start.sh --no-wechat
+bash start.sh --status
+bash start.sh --stop
+bash start.sh --restart
+# 日常前端/API :8765；开发模式用 bash start.sh --ui-dev，前端 :3000
 
-# Windows
-powershell -NoProfile -ExecutionPolicy Bypass -File .\start_watch.ps1 --no-wechat
-# 端口占用 / Ctrl+C 后启不动：
-python start_watch.py --stop      # 停服务并释放 8765、3000
-python start_watch.py --force     # 强制停旧实例并启动
-# 或：python index.py watch-stop
+# 单独启动/替换指定服务，其余保持运行（先一键启动确保依赖就绪）
+bash start.sh --service java
+bash start.sh --service python
+bash start.sh --service frontend
 
-# macOS
-./start_watch.sh --no-wechat
-
-# 或分两终端
-cd holdingStocks && python index.py watch --no-wechat
-cd holdingStocks/watch-ui && npm install && npm run dev
+# 手工调试：先按根目录 READ.md 启动 MySQL，以下各占一个终端
+bash backend/run.sh
+python holdingStocks/index.py watch --wechat-optional --no-open
+# 开发前端（首次先 npm ci）
+cd holdingStocks/watch-ui
+npm run dev
 ```
 
-**启动顺序**：`watch` **先绑定并开始接受** `:8765`（HTTP `/api` + WebSocket `/ws`），再后台做冷启动（新浪批量、**强制按信号交易日重拉日线**、东财 SSE、首屏快照）。日线末根须覆盖「最近已收盘工作日」（15:15 前不含当日）；缺则增量/全量补拉，避免过门/前日沿用旧 parquet。周六日信号日锚定上周五；周一「前日」自然为上周五。`start_watch.py` 等 API 端口就绪后再自己开 Nuxt（并传 `--no-ui-dev`，避免两套前端抢 `:3000`）。此前若等首屏算完才绑端口，池子变大后会超过 120s，页面红字「推送断开，等待重连…」。冷启动期间若有上次 `holdings_watch.json` **且不比 `holdings.json` 旧** 会先展示旧快照，否则丢掉过期缓存并推 `boot` 占位。首屏/轮询**先记录再更新**：行情全失败或持仓/策略十六被滤空时沿用上一份可用快照（`quoteStale`），不覆盖成空表；账本 `occupied` 变了才出新快照。
+**统一启动入口**：根目录 `bash start.sh`启动全部，`--service java/python/frontend`只替换指定服务（参数三选一），完整命令见根目录 [`READ.md`](../READ.md)。顺序为MySQL → Java → Python → 前端；Windows暂用手工调试方式，Java在 `backend` 目录执行 `mvn spring-boot:run`。Python先监听8765并从数据库显示实际持仓，再后台预热行情、日线和策略；boot帧只读，不执行模拟成交或写统计。Python不创建Nuxt子进程，不提供强制抢占未知端口的参数；手工进程须在原终端 `Ctrl+C`，不由启动器强制接管。日线须覆盖最近已完成交易日；行情失败沿用上一份可用快照，不覆盖成空表。
 
 **并行 / 分层冷启动**（2026-09-28）：
-- **OpenClaw / 微信自检并行**：`--wechat-optional`（`start_watch.py` 默认）下 Gateway→通道→测试发送放到后台线程 `wechat-prepare`，拿到盯盘锁后与行情、API 同时进行；启动通知在自检结束后于后台发送。严格模式（不带 `--wechat-optional`）仍同步，失败即中止。
+- **OpenClaw / 微信自检并行**：根目录一键启动默认 `--wechat-optional`，Gateway→通道→测试发送放到后台线程 `wechat-prepare`，拿到盯盘锁后与行情、API同时进行。严格模式仍同步，失败即中止；可用 `--no-wechat` 关闭通知，不改变模拟交易逻辑。
 - **行情分层首屏**：首屏只扫描**热池**（默认策略 + 公共自选 + 持仓）——新浪批量 → 东财 SSE → 热池日线并行预热 → 首屏快照；**策略一池**在首屏后后台补齐（日线预热 → 新浪 seed），完成后并入信号扫描并推「全量快照」。紫阳叠加池、板块仍各自后台加载。启动强制清日线缓存只在最前做一次（原先首屏后再清，热池日线拉两遍）。
 - **账本加载递归修复**：`load_holdings` 为宇宙补空仓位时必须把 `holdings` 显式传给 `effective_watchlist`；此前不传会回调 `load_holdings`，一路递归到 `RecursionError`（被 `primary_watchlist` 吞掉），单次名单构建 60–90s，是「启动很慢」的主因。`load_strategy16_thr_map` 按 mtime 缓存。回归：`test_watch_boot_perf`。
 - **跨日粘滞不得继承**：`alert_sticky` 写入只继承同一 `session` 的旧记录（`_sticky_same_session`）。此前 9:15 清空前加载的扫描会把昨日 `buy_touched`/`buy_hit_ts` 连同新 session 写回，伪造「今日已触买」→ 腾槽现价买入且 `buy_time` 记成昨日、绕过 T+1（2026-09-29 金安国纪）。入槽另有两道闸：触发时刻非当日 → `STALE_BUY_TRIGGER` 不买；`apply_paper_slot_buy(session=)` 拒收跨日 `buy_time`。回归：`test_stale_sticky_crossday`。
@@ -236,17 +238,15 @@ CLI 单次刷新（非 watch）：`python index.py` 终端输出；若 watch 已
 
 ```bash
 cd holdingStocks
-python start_watch.py        # 推荐：数据 API + Web 盯盘（Mac/Windows）
 python index.py              # 终端查看行情 + 持仓
-python index.py watch        # 仅数据后端（不启页面）
+python index.py watch --wechat-optional  # 分开启动Python；可托管静态页面，不创建Nuxt
 python index.py clear-all    # 清仓+重置纸面/策略模拟状态+归档当日成交；账户回到 DEFAULT_ACCOUNT_TOTAL（现 30 万）
 python index.py buy 600552 15.50 400
 python index.py sell 600552 16.20 400
-python index.py holdings-push   # 本机账本 → origin/holdings-ledger（给另一台 Mac/Win）
-python index.py holdings-pull   # 远程账本 → 本机；丢掉 holdings_watch.json 旧缓存
+python index.py holdings-pull   # 默认生产模式重新读取数据库；不拉Git持仓
 ```
 
-**Win / Mac 同一份持仓**：当前生产真源仍是本机 `holdings.json` + `trades.jsonl` + `trade_ledger.json`（交割明细）以及 `strategy_sim_state.json` / `strategy_signal_events.json`（策略16/16B 累计），经独立分支 `holdings-ledger` 同步（不进 `main`）。`holdings_watch.json` 只是本机盯盘展示缓存；账本更新后启动会丢掉过期缓存。`start_watch.py` / `index.py watch` 默认强制从远程 `holdings-ledger` 覆盖本机账本，远程不可用时停止盯盘，避免旧持仓参与交易判断。盘后在有成交的那台 `holdings-push --force`，另一台开盯盘前会自动拉。清仓后也要 `holdings-push --force`，另一台设备再启动即可得到同一份空仓状态；只有确认离线调试时才用 `--no-ledger-pull`。
+**Win / Mac 同一份持仓**：所有设备必须连接同一个Java后台/MySQL，生产真源为数据库账户、持仓、流水和交割记录；不通过Git推拉。数据库不可用则阻断账户更新，不回退本地文件。Git代码不包含MySQL数据，各自的localhost数据库不会自动一致。`holdings_watch.json` 只是本机展示缓存，独立策略simulator仍为本地状态，不能当作数据库账户持仓。
 
 **Remote Paper State（Phase R1，未切生产）**：目标改为远程 PostgreSQL 单真源 + 单 writer lease（防双机重复成交）。本阶段仅落地 `paper_state/` 接口、schema、迁移 dry-run 与单测；**watch 仍写本地 JSON**。设计与命令见 [`docs/REMOTE_PAPER_STATE.md`](docs/REMOTE_PAPER_STATE.md)。
 

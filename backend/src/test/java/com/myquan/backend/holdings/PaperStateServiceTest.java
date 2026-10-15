@@ -140,4 +140,21 @@ class PaperStateServiceTest {
         assertThrows(ResponseStatusException.class, () -> service.write(write(1,"partial","{\"positions\":{}}")));
         assertEquals(100,service.read().holdings().get("account_cash").asInt());
     }
+
+    @Test
+    void delayedLiveFillCannotUseItsOldDecisionTimeToChangeTheAccount() throws Exception {
+        var initial=write(0,"initial-cash","{\"positions\":{},\"account_cash\":300000}");
+        service.write(initial);
+        var old=java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")).minusSeconds(10)
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        var trade=mapper.createObjectNode().put("code","000070").put("side","buy").put("time",old)
+            .put("signal_time",old).put("decision_time",old).put("fill_model","paper_stop_at_order_price");
+        var trades=mapper.createArrayNode().add(trade);
+        var changed=mapper.readTree("{\"positions\":{},\"account_cash\":200000}");
+        assertThrows(ResponseStatusException.class,()->service.write(
+            new PaperStateService.Write(1L,"late-live-fill",changed,trades,initial.ledger())));
+        assertEquals(1,service.read().revision());
+        assertEquals(300000,service.read().holdings().path("account_cash").asInt());
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM paper_trade_history",Integer.class));
+    }
 }

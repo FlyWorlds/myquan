@@ -150,15 +150,15 @@ copy wechat_notify.json.example wechat_notify.json
 ```powershell
 cd D:\Akquan\myquan\holdingStocks
 python index.py watch --interval 5 --port 8765 --no-open
-# 快捷脚本（会加载 Node24）：
-powershell -NoProfile -ExecutionPolicy Bypass -File .\start_watch.ps1
+# Windows使用分开启动：先启动MySQL和Java，前端开发另开终端npm run dev
+# 完整顺序见根目录READ.md，不再使用旧组合启动脚本
 ```
 
 | 参数 | 作用 |
 |------|------|
 | `--no-wechat` | 完全关闭微信（不启 Gateway、不自检、不推送） |
 | `--skip-wechat-check` | 跳过启动自检，仍推送预警 |
-| `--wechat-optional` | 自检失败仍盯盘（自动关推送） |
+| `--wechat-optional` | 自检失败仍盯盘，保留推送开关，不保证通知送达 |
 | `--restart-gateway` | 强制 `openclaw gateway restart` |
 
 复盘命令每次主动推送全文（不受预警 cooldown 限制），并写入 `market_review_latest.txt` / `.json`。
@@ -194,7 +194,7 @@ python index.py review
 # 只生成本地、不推送
 python index.py review --no-wechat
 
-# 长驻数据后端（默认开微信推送；页面另开 start_watch / npm run dev）
+# 长驻数据后端（先启动MySQL和Java；开发页面另开npm run dev）
 # 9:30 起对「默认策略池」推送【策略预警】；真实成交另发【模拟买入】/【模拟卖出】
 python index.py watch --interval 5 --port 8765
 # Web 盯盘：http://127.0.0.1:3000/
@@ -202,8 +202,8 @@ python index.py watch --interval 5 --port 8765
 # 仅数据、不推微信
 python index.py watch --no-wechat
 
-# 一键：数据 API + Web 盯盘
-python start_watch.py
+# macOS/Linux一键：启动数据库检查、Java、Python与静态页面
+bash ../start.sh
 ```
 
 **今日信号推送测试要点**
@@ -215,7 +215,7 @@ python start_watch.py
 | 窗口 | 预警扫描：**9:30–15:00** 连续竞价；**成交推送不限窗口**（纸面买卖一成交就推） |
 | 冷却 | `wechat_notify.json` 的 `cooldown_sec`（测试日可设 120）；成交键另有 30s 去重 |
 | `--no-wechat` | 预警与 BUY/SELL/PARTIAL 成交微信全部关闭；**不改变**仓位/ledger |
-| 阻塞 | `prepare failed` → 微信给机器人发「1」刷新会话。`start_watch` 带 `--wechat-optional` 时自检失败**仍保留推送**，勿当已关闭。OpenClaw 发送仍同步（N2 再做非阻塞） |
+| 阻塞 | `prepare failed` → 微信给机器人发「1」刷新会话。根目录一键启动默认带 `--wechat-optional`，自检失败**仍保留推送**，勿当已关闭。通知送达应单独核验 |
 
 手工推送：
 

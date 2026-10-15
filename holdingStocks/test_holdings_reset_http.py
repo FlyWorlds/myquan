@@ -8,6 +8,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -26,7 +27,7 @@ class _Hub:
         return None
 
 
-def _handler(root: Path, on_reset=None):
+def _handler(root: Path, on_reset=None, on_rendered=None):
     return build_watch_request_handler(
         root=root,
         watch_meta_file=root / "holdings_watch.json",
@@ -39,14 +40,15 @@ def _handler(root: Path, on_reset=None):
         handle_sectors_api=lambda _p: (404, {"error": "no"}),
         watch_ui_dist_ready=lambda: False,
         on_paper_reset=on_reset,
+        on_front_rendered=on_rendered,
     )
 
 
 class TestHoldingsResetHttp(unittest.TestCase):
-    def _serve(self, on_reset=None):
+    def _serve(self, on_reset=None, on_rendered=None):
         self._tmp = TemporaryDirectory()
         root = Path(self._tmp.name)
-        handler = _handler(root, on_reset)
+        handler = _handler(root, on_reset, on_rendered)
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -63,6 +65,39 @@ class TestHoldingsResetHttp(unittest.TestCase):
     def test_missing_callback_503(self) -> None:
         base = self._serve(None)
         req = urllib.request.Request(base + "/api/holdings/reset", data=b"", method="POST")
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(req, timeout=3)
+        self.assertEqual(ctx.exception.code, 503)
+
+    def test_condition_report_missing_snapshot_does_not_offer_csv(self):
+        base = self._serve()
+        with urllib.request.urlopen(base + "/api/condition-buy/report", timeout=3) as response:
+            self.assertFalse(json.load(response)["ready"])
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(base + "/api/condition-buy/report.csv", timeout=3)
+        self.assertEqual(ctx.exception.code, 503)
+
+    def test_condition_report_csv_download(self):
+        base = self._serve()
+        with patch("condition_order_report.comparison_report", return_value={
+                "ready": True, "session": "2026-10-16", "orders": []}):
+            with urllib.request.urlopen(base + "/api/condition-buy/report.csv", timeout=3) as response:
+                self.assertIn("text/csv", response.headers["Content-Type"])
+                self.assertIn("2026-10-16", response.headers["Content-Disposition"])
+                self.assertTrue(response.read().startswith(b"\xef\xbb\xbf"))
+
+    def test_render_notification_only_calls_its_callback(self):
+        called = []
+        base = self._serve(on_reset=lambda: self.fail("must not reset paper account"),
+                           on_rendered=lambda: called.append(True) or True)
+        req = urllib.request.Request(base + "/api/front-rendered", data=b"", method="POST")
+        with urllib.request.urlopen(req, timeout=3) as response:
+            self.assertEqual(json.load(response), {"ready": True})
+        self.assertEqual(called, [True])
+
+    def test_render_notification_unavailable_is_retryable(self):
+        base = self._serve(on_rendered=lambda: False)
+        req = urllib.request.Request(base + "/api/front-rendered", data=b"", method="POST")
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             urllib.request.urlopen(req, timeout=3)
         self.assertEqual(ctx.exception.code, 503)

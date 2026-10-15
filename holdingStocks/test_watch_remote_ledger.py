@@ -10,7 +10,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import index
-import start_watch
 
 
 class WatchRemoteLedgerTests(unittest.TestCase):
@@ -32,19 +31,6 @@ class WatchRemoteLedgerTests(unittest.TestCase):
             sys.modules.pop("holdings_sync", None)
         else:
             sys.modules["holdings_sync"] = old
-
-    def test_start_watch_forces_remote_ledger(self) -> None:
-        calls = self._install_fake_holdings_sync("pulled")
-
-        start_watch._pull_remote_holdings_for_watch()
-
-        self.assertEqual(calls, [{"force": True, "quiet": False}])
-
-    def test_start_watch_stops_when_remote_missing(self) -> None:
-        self._install_fake_holdings_sync("missing-remote")
-
-        with self.assertRaises(SystemExit):
-            start_watch._pull_remote_holdings_for_watch()
 
     def test_index_watch_forces_remote_ledger(self) -> None:
         calls = self._install_fake_holdings_sync("pulled")

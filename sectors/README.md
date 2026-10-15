@@ -65,7 +65,7 @@ Mac/Win 名单不一致时优先复用未过期太久的通达信轮动磁盘缓
 | `GET /api/sectors/focus?concept=名称` | 订阅概念成分/龙头实时报价（随 WS 5s 推送） |
 | `GET /api/sectors/status` | 通达信链路可用性（概念表就绪优先于行情连通） |
 
-启动：`cd holdingStocks && python start_watch.py` → 浏览器打开 `http://127.0.0.1:3000/sectors`。点击热力表格子加载成分股。
+启动：根目录 `bash start.sh`，浏览器打开 `http://127.0.0.1:8765/sectors`。前端开发使用 `bash start.sh --ui-dev`，访问 `http://127.0.0.1:3000/sectors`。分开启动见根目录 [READ.md](../READ.md)。点击热力表格子加载成分股。
 
 | 指标 | 来源 | 说明 |
 |------|------|------|

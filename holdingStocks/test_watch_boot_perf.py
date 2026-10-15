@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+import threading
 from pathlib import Path
 from unittest import mock
 
@@ -106,6 +107,79 @@ class TestBootPrimaryOnlyScan(unittest.TestCase):
         self.assertEqual(len(index._scan_watchlist(holdings, full=True)), len(full))
         index._set_watch_boot_primary_only(False)
         self.assertEqual(len(index._scan_watchlist(holdings)), len(full))
+
+
+class TestManualStartupSafety(unittest.TestCase):
+    def test_legacy_minute_quote_entry_is_blocked_before_provider_io(self):
+        with mock.patch.object(index, "_CONDITION_BUY_ACTIVE", True), \
+             mock.patch.object(index, "pull_akshare_1m") as minute, \
+             mock.patch.object(index, "fetch_sina_spot") as spot:
+            with self.assertRaises(RuntimeError):
+                index.fetch_today_quote("sz000070")
+            minute.assert_not_called()
+            spot.assert_not_called()
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.pid = Path(self.temp.name) / "watch.pid"
+        for item in (mock.patch.object(index,"WATCH_PID_FILE",self.pid),
+                     mock.patch("watch_process.PID_FILE",self.pid)):
+            item.start()
+            self.addCleanup(item.stop)
+
+    def test_unknown_port_is_refused_without_reclaiming(self):
+        with mock.patch("watch_process.describe_listeners",return_value={8765:[999]}), \
+             mock.patch.object(index.os,"killpg") as kill:
+            with self.assertRaises(SystemExit):
+                index._acquire_watch_lock(host="127.0.0.1",port=8765)
+        self.assertFalse(self.pid.exists())
+        kill.assert_not_called()
+
+    def test_live_pid_lock_is_not_overwritten_or_removed(self):
+        original='{"pid":999,"port":8765}'
+        self.pid.write_text(original)
+        with mock.patch("watch_process.pid_alive",return_value=True):
+            with self.assertRaises(SystemExit):
+                index._acquire_watch_lock(host="127.0.0.1",port=8765)
+        self.assertEqual(self.pid.read_text(),original)
+
+    def test_registration_and_release_use_only_own_pid(self):
+        with mock.patch("watch_process.describe_listeners",return_value={}):
+            index._acquire_watch_lock(host="127.0.0.1",port=8765)
+        self.assertEqual(json.loads(self.pid.read_text())["pid"],os.getpid())
+        index._release_watch_lock()
+        self.assertFalse(self.pid.exists())
+
+    def test_legacy_force_and_embedded_frontend_flags_are_rejected(self):
+        parser=index.build_parser()
+        for flag in ("--force","--ui-dev","--ui-static","--ui-dev-port"):
+            with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+                parser.parse_args(["watch",flag])
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            parser.parse_args(["watch-stop"])
+        self.assertEqual(parser.parse_args(["watch","--no-ui-dev"]).func,index.cmd_watch)
+
+    def test_concurrent_manual_starts_register_only_one_writer(self):
+        barrier=threading.Barrier(2)
+        results=[]
+        real_pid=os.getpid()
+        def identity():
+            return {"starter-a":1001,"starter-b":1002}.get(threading.current_thread().name,real_pid)
+        def start():
+            barrier.wait()
+            try:
+                index._acquire_watch_lock(host="127.0.0.1",port=8765)
+                results.append("started")
+            except SystemExit:
+                results.append("refused")
+        with mock.patch.object(index.os,"getpid",side_effect=identity), \
+             mock.patch("watch_process.pid_alive",return_value=True), \
+             mock.patch("watch_process.describe_listeners",return_value={}):
+            threads=[threading.Thread(target=start,name=name) for name in ("starter-a","starter-b")]
+            for thread in threads: thread.start()
+            for thread in threads: thread.join(timeout=5)
+        self.assertEqual(sorted(results),["refused","started"])
 
 
 if __name__ == "__main__":

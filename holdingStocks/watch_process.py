@@ -1,13 +1,9 @@
-"""盯盘进程 / 端口回收（Windows 友好）。
-
-解决 Ctrl+C 后子进程未退出、PID 锁残留、8765/3000 端口占用等问题。
-"""
+"""Read-only process/listener checks and watch PID metadata; stopping belongs to the root launcher."""
 
 from __future__ import annotations
 
 import json
 import os
-import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -157,107 +153,3 @@ def describe_listeners(host: str, ports: list[int]) -> dict[int, list[int]]:
         if pids:
             out[int(port)] = pids
     return out
-
-
-def kill_pid(pid: int, *, force: bool = True) -> bool:
-    if not pid_alive(pid):
-        return True
-    try:
-        if sys.platform == "win32":
-            cmd = ["taskkill", "/T"]
-            if force:
-                cmd.append("/F")
-            cmd.extend(["/PID", str(int(pid))])
-            subprocess.run(
-                cmd,
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        else:
-            os.killpg(os.getpgid(pid), signal.SIGTERM)
-        return not pid_alive(pid)
-    except (OSError, ProcessLookupError, AttributeError):
-        try:
-            if sys.platform == "win32":
-                subprocess.run(
-                    ["taskkill", "/T", "/F", "/PID", str(int(pid))],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            else:
-                os.kill(pid, signal.SIGKILL)
-        except (OSError, ProcessLookupError):
-            pass
-        return not pid_alive(pid)
-
-
-def reclaim_ports(
-    ports: list[int],
-    *,
-    host: str = "127.0.0.1",
-    exclude_pids: set[int] | None = None,
-    force: bool = True,
-) -> list[int]:
-    """结束占用给定端口的进程，返回已尝试结束的 PID。"""
-    exclude = exclude_pids or set()
-    killed: list[int] = []
-    seen: set[int] = set()
-    for port in ports:
-        for pid in find_listeners(host, int(port)):
-            if pid in exclude or pid in seen:
-                continue
-            seen.add(pid)
-            kill_pid(pid, force=force)
-            killed.append(pid)
-    return killed
-
-
-def stop_watch(
-    *,
-    api_port: int = DEFAULT_API_PORT,
-    ui_port: int = DEFAULT_UI_PORT,
-    host: str = "127.0.0.1",
-    force: bool = True,
-) -> dict[str, Any]:
-    """停止盯盘：锁文件 PID + 8765/3000 监听进程。"""
-    killed: list[int] = []
-    lock = read_lock()
-    lock_pid = int(lock.get("pid") or 0) if lock else 0
-    if lock_pid and pid_alive(lock_pid):
-        kill_pid(lock_pid, force=force)
-        killed.append(lock_pid)
-    killed.extend(
-        reclaim_ports(
-            [int(api_port), int(ui_port)],
-            host=host,
-            exclude_pids=set(killed),
-            force=force,
-        )
-    )
-    lock_cleared = clear_lock(only_if_stale=False)
-    remaining = describe_listeners(host, [int(api_port), int(ui_port)])
-    return {
-        "killed": killed,
-        "lock_cleared": lock_cleared,
-        "remaining": remaining,
-    }
-
-
-def format_stop_report(result: dict[str, Any]) -> str:
-    lines: list[str] = []
-    killed = result.get("killed") or []
-    if killed:
-        lines.append(f"已结束进程: {', '.join(str(p) for p in killed)}")
-    else:
-        lines.append("未发现需结束的盯盘进程")
-    if result.get("lock_cleared"):
-        lines.append("已清理 holdings_watch.pid")
-    remaining = result.get("remaining") or {}
-    if remaining:
-        parts = [f":{port}→pid{'/'.join(str(p) for p in pids)}" for port, pids in remaining.items()]
-        lines.append(f"仍有端口占用: {', '.join(parts)}（可管理员权限重试或以 --force 再停）")
-    else:
-        lines.append("端口已释放，可重新启动")
-    return "\n".join(lines)

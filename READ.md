@@ -4,7 +4,34 @@
 
 当前主线是 **策略十六：因子27 核心龙头池 + 因子26 多层止盈 + 因子29 竞价末段按开盘撮合 + 因子2 回撤预警**。盯盘端支持分阶段异步加载：先出持仓，再出默认策略，最后补齐其它策略和观察池。
 
+## 策略16实时报价模式
+
+行情、数据库读取/写入与核对时机统一遵循 [数据使用边界](docs/DATA_SOURCE_CONTRACT.md)：观察价、估值价、成交价分开；数据库参考读取不是新交易事件；页面与账本先对齐版本和时点再比较。
+
+策略16盯盘使用 **实时行情事件 + MySQL账户状态**：启动、列表刷新、条件买入和因子26卖出不拉1分钟K线。日线与正式开盘审核后台准备，未就绪不买；持仓及现价先显示，不等待日线。
+
+实时价格先进入独立接收队列，后台按最多64条/批写入MySQL `market_quote_latest`，确认成功后才通知策略16的买卖、估值和页面读取缓存。接收线程不等数据库；写入失败不回退本地成交。相同股票连续不同价格按接收顺序处理，不合并掉瞬时冲高；最新表不是完整逐笔历史。当前东财SSE没有经过核验的源时间戳，仅用于原始展示/连接健康，不参与成交；策略16计算只消费已入库、保留新浪源时间戳的快照。持仓优先的首批50只独立轮询，其它批次慢不会拖住首批刷新。
+
+客户端成交前同时校验源报价和原始接收时间均不超过5秒，等待平仓/资金计算后重检；Java对新实时成交在入库时再检查服务端时间，过期拒绝。成交记录分开保存挂单价、实收现价、源时间、原始接收时间、决策时间和报价数据库版本。该5秒是过期拒绝上限，不是延迟保证；实际往返时间可查看快照 `quoteStorage` 和成交流水。新表由V7迁移在下次Java启动时创建，本轮没有重启现有服务。
+
+- 9:25后准备过门空仓条件单，9:30后新鲜现价>=挂单价即按挂单价模拟买入；按收到的触发顺序竞争，遵守每日新增2只、同时最多5只等配置。
+- 主板正式开盘较昨收上涨>=9.7%时禁买；20%/30%涨停幅度使用对应19.7%/29.7%边界。这是保守的竞价近涨停过滤，不是全天一字板证明。
+- 因子26按观测现价更新峰值和卖出判断，保留T+1、半仓及全清规则。下穿保护跳价按观测现价成交；上行阶梯仍保留原目标价纸面成交假设。
+- 挂单、峰值、阶段、现金、成交和交割记录保存数据库；状态改变才写入，不逐报价存整份账户。失败不回退本地成交，旧扫描器不并行买卖。
+- 今日最高/最低保留展示及校验，不事后补造成交；分钟线只在独立回测/研究进程使用。策略16收益改读数据库独立策略账本，买卖与现价按金额计算；旧本地检查点保留并标记历史待核验，不再自动分钟bootstrap。
+- 页面首次有效快照渲染完成并通知后端后，延迟15秒启动可选分钟备份；9:15–9:40不发起任务。独立低优先级子进程按持仓→策略池顺序单并发采集，每只成功后30分钟内不重复、失败退避5分钟，单次上限20秒；不扫描全A。数据仅追加到 `data_cache/research_minutes.sqlite3`，记录来源、采集时间和实得范围，不承诺已有整月或完整交易日，不接入实时成交或估值。可用 `MINUTE_BACKUP_ENABLED=0 bash start.sh --service python` 关闭；没有浏览器渲染通知则不启动备份。
+
+详见 [报价驱动边界](docs/QUOTE_DRIVEN_STRATEGY16.md)、[策略数据库收益口径](docs/STRATEGY_DATABASE_ACCOUNTING.md)、[价格与时效复审](docs/SIGNAL_PRICE_TIMELINESS_REVIEW_20261015.md)。本次同时更新Java接口和Python，审核后依次执行 `bash start.sh --service java`、`bash start.sh --service python`；代码不会热替换旧进程，盘中替换有短暂观测空窗。
+
 ## 快速启动
+
+### 同花顺模拟盘对照
+
+每个交易日9:25后，项目按现有策略准备过门且空仓的条件单，仍须等待正式开盘价审核和日线准备完成，不保证9:25:00全池就绪。查看 [条件单对照清单](http://127.0.0.1:8765/api/condition-buy/report)，下载 [CSV](http://127.0.0.1:8765/api/condition-buy/report.csv)。接口只读已发布的数据库条件单状态，不拉分钟线、不重算目标价、不下单；旧日期或9:25前不提供可挂单CSV。清单为已准备部分，`complete=false`，代码排序不是触价先后。
+
+只有 `ARMED` 可用于核对新挂单；`BLOCKED`、`CANCELLED`、`FILLED` 不是新买入建议。导出包含正式开盘、阈值、目标价、过门依据、源行情和武装时间，并预留同花顺挂单/触发/成交时间、实际成交价和数量。`entry_pct` 为小数（0.025表示2.5%）。项目按目标价纸面成交不代表同花顺能以同价成交，跳空、委托延迟及未成交分别记录，不能倒改账本使结果一致。服务须提前启动并保持机器唤醒；聊天提醒不能替代行情服务，休市不出清单。新接口需替换Python服务后生效。
+
+统一使用根目录启动器：可以一键启动全部，也可以单独启动/替换某个服务，其余服务保持运行。旧的盯盘组合启动脚本已移除；Python不再自动启动Nuxt，不强制抢占未知进程的端口。
 
 ### 一键启动（推荐，macOS/Linux）
 
@@ -26,6 +53,23 @@ bash start.sh --no-open                # 不自动打开浏览器
 bash start.sh --no-wechat              # 关闭微信通知，不改变模拟交易逻辑
 ```
 
+### 单独启动 / 替换服务
+
+一键启动后，需要更新哪个服务就执行哪个命令。选中的服务不存在时启动，已由启动器管理时替换；不连带启动或重启其它服务：
+
+```bash
+bash start.sh --service java            # 编译检查后替换Java，Python和前端保持运行
+bash start.sh --service python          # 替换Python，Java和前端保持运行
+bash start.sh --service frontend        # 沿用前端模式：更新静态构建或替换已有Nuxt
+bash start.sh --service frontend --ui-dev     # 单独启动/替换Nuxt开发服务
+bash start.sh --service frontend --ui-static  # 更新静态构建，停掉已管理Nuxt，Python不重启
+bash start.sh --service python --stop   # 仅停止Python
+```
+
+单服务命令本身就会替换旧实例，无需先整体 `--stop`。依赖必须已就绪：Python要求Java与账户可读取，前端要求Python可用；缺少依赖时明确报错，不替用户重启其它服务。构建和依赖检查发生在停止旧实例之前，准备失败保留旧服务；新进程启动失败只清理新实例，所选服务会暂时不可用，修复后重试，不承诺自动回滚。
+
+默认前端是Python托管的静态文件，没有独立前端进程；单独更新前端后刷新浏览器即可。Java/Python替换期间相应接口会短暂不可用，Python行情预热需要重新进行，盘中谨慎执行。替换Python默认沿用原微信通知开关，可显式加 `--no-wechat` 或 `--wechat`。不会清空或重新导入数据库账户，也不结束手工启动的未知服务。服务之间仍依赖原端口，单服务替换不能改掉仍被其它已管理服务使用的端口。
+
 - 已有服务须通过本项目目录和健康接口核验后才复用；不会强制杀掉占用端口的未知进程。重复执行不会重复启动交易进程。
 - 之前手工启动的服务只复用、不接管；`--stop` 不会停止它们，仍需在原终端 `Ctrl+C`。启动器自己启动的服务才纳入停止管理，停止顺序为前端 → Python → Java。
 - Mac 的 Homebrew MySQL 未运行时会尝试启动；Linux 或其它数据库安装方式须先启动数据库。没有数据库账户时会停止启动，不自动导入本地持仓或重置账户。
@@ -43,9 +87,9 @@ MYQUAN_NODE=/path/to/node bash start.sh --ui-dev
 - `--status` 中 Java/Python 就绪表示接口可用，仍可能正在预热行情和策略，不等于交易数据全部就绪。
 - 可使用 `--backend-port`、`--port`、`--ui-port` 指定不同端口。已有启动器管理的服务变更端口前，先 `--stop`。本入口仅面向本机服务；Windows 暂使用下面的分步方式并替换路径/命令。
 
-### 各服务的职责与启动顺序
+### 服务职责
 
-**MySQL → Java 后台 → Python 盯盘 → 打开前端页面**。日常运行只需两个终端：Java 一个，Python 一个；MySQL 为后台服务，前端静态页面由 Python 一起提供，不必另外启动 Node。
+一键启动顺序为 **MySQL → Java后台 → Python盯盘 → 前端页面**。服务在后台运行；单独更新使用上面的 `--service` 命令，默认静态页面不必另外启动Node。
 
 | 服务 | 职责 | 本机地址 |
 | --- | --- | --- |
@@ -57,7 +101,7 @@ MYQUAN_NODE=/path/to/node bash start.sh --ui-dev
 
 当前实际项目根目录为 `/Users/wangxiangyu/Documents/akquan回测/myquan`。以下命令针对这台 Mac；其它设备替换为自己的项目路径和已安装依赖的 Python。Java 后台需要 JDK 21+、Maven 3.6.3+；前端开发/构建建议 Node 22.12+。日常静态模式不需要启动 Node。
 
-### 1. 启动数据库
+### 手工调试：启动数据库
 
 本机使用已有的 Homebrew MySQL，不需要新建或清空数据库：
 
@@ -68,7 +112,9 @@ brew services list
 
 确认 `mysql` 状态为 `started` 即可，已运行时不用重启。连接配置位于 `backend/config/application-local.properties`；数据库名默认 `myquan`，端口默认 `3306`。HexHub 只是数据库管理工具，打开 HexHub 不代表 MySQL 服务已启动。
 
-### 2. 启动 Java 后台（终端一）
+### 手工调试：Java后台（终端一）
+
+以下直接运行方式仅供调试，不会接管一键启动器管理的服务。需要替换已有服务时使用 `--service`，不要同时启动第二个实例。
 
 ```bash
 cd /Users/wangxiangyu/Documents/akquan回测/myquan
@@ -85,7 +131,7 @@ curl http://127.0.0.1:8080/api/paper/state
 
 健康检查应返回 `UP`，完整账户接口应返回持仓与版本号。启动会自动执行尚未应用的 Flyway 表结构迁移。本机账户已迁入数据库，**不要再次执行导入、账户重置或清库**。其它设备首次使用空库时，需要另行确认账户初始化/迁移；只拉取 Git 代码不会带上 MySQL 数据。
 
-### 3. 启动 Python 与日常前端（终端二，推荐）
+### 手工调试：Python（终端二）
 
 本机已经安装项目依赖的 Python 为 `/opt/homebrew/bin/python3`：
 
@@ -94,7 +140,7 @@ cd /Users/wangxiangyu/Documents/akquan回测/myquan
 HOLDINGS_STORAGE=database PAPER_BACKEND_URL=http://127.0.0.1:8080 /opt/homebrew/bin/python3 holdingStocks/index.py watch --no-ui-dev --wechat-optional
 ```
 
-`--no-ui-dev` 使用已构建的前端；`--wechat-optional` 使微信自检失败不阻止盯盘启动，但不表示微信通知已成功。需要完全关闭通知时改用 `--no-wechat`。不想自动打开浏览器时再加 `--no-open`。
+Python默认托管已构建的前端，不启动Nuxt；`--no-ui-dev` 仅保留为显式兼容参数。`--wechat-optional` 使微信自检失败不阻止盯盘启动，但不表示微信通知已成功。需要完全关闭通知时改用 `--no-wechat`。不想自动打开浏览器时再加 `--no-open`。
 
 打开以下地址：
 
@@ -106,32 +152,23 @@ HOLDINGS_STORAGE=database PAPER_BACKEND_URL=http://127.0.0.1:8080 /opt/homebrew/
 
 该模式前端与 Python 共用 `8765`，不需要运行 `npm run dev`。行情、日线及策略数据会分阶段补齐；缺行情期间的收益空值不是 0%，不能用来判断交易数据已就绪。
 
-### 前端开发模式（替代上述 Python 命令）
+### 手工调试：前端开发（终端三）
 
-仅在修改 Vue/TypeScript 页面、需要热更新时使用。MySQL 和 Java 仍按前两步启动，Python 改用：
-
-```bash
-cd /Users/wangxiangyu/Documents/akquan回测/myquan
-/opt/homebrew/bin/python3 holdingStocks/index.py watch --ui-dev --wechat-optional
-```
-
-Python 会尝试启动 Nuxt 开发服务；前端打开 `http://127.0.0.1:3000/`，Python API 仍为 `8765`。不要同时再启动另一个 Python 盯盘进程。首次缺前端依赖时，先在 `holdingStocks/watch-ui` 目录执行 `npm ci`。
-
-如需自己控制前端进程：Python 用 `--no-ui-dev`，另开终端三执行：
+仅在修改 Vue/TypeScript 页面、需要热更新时使用。MySQL、Java和Python须先就绪，Python不创建前端进程。另开终端三执行：
 
 ```bash
 cd /Users/wangxiangyu/Documents/akquan回测/myquan/holdingStocks/watch-ui
 npm run dev
 ```
 
-此时开发页面也打开 `3000`，请求通过 Nuxt 配置转发到 Python。Java 不是 Nuxt 的直接替代服务；只启动 Java，页面不会获得实时行情和策略结果。
+首次缺前端依赖时先执行 `npm ci`。开发页面打开 `http://127.0.0.1:3000/`，请求通过 Nuxt 配置转发到 Python `8765`。不要同时再启动另一个 Python 盯盘进程。Java 不是 Nuxt 的直接替代服务；只启动 Java，页面不会获得实时行情和策略结果。一键开发模式统一用根目录 `bash start.sh --ui-dev`。
 
 ### 修改代码后如何生效
 
-- Python：在对应终端 `Ctrl+C`，重新执行 Python 启动命令。
-- Java：在对应终端 `Ctrl+C`，重新执行 `bash backend/run.sh`。
+- Python：`bash start.sh --service python`。
+- Java：`bash start.sh --service java`。
 - 前端开发模式：Vue/TypeScript 修改通常自动热更新。
-- 前端日常模式：需要先重新构建静态页面，然后刷新浏览器：
+- 前端日常模式：`bash start.sh --service frontend`，然后刷新浏览器。手工调试也可直接构建：
 
 ```bash
 cd /Users/wangxiangyu/Documents/akquan回测/myquan/holdingStocks/watch-ui
@@ -146,11 +183,11 @@ npm run build
 
 | 问题 | 检查与处理 |
 | --- | --- |
-| `8080` / `8765` / `3000` 端口占用 | 先确认原进程是否已运行，不要重复启动或直接加 `--force` |
+| `8080` / `8765` / `3000` 端口占用 | 先确认原进程是否已运行；启动器管理的服务用 `--stop` / `--restart`，分开启动的服务在原终端 `Ctrl+C`，不强制抢占 |
 | Java 提示数据库连接失败 | 检查 `brew services list`、MySQL 端口和本地配置文件 |
 | Python 提示数据库不可用或未迁移 | 先检查 Java 的 `/api/paper/state`；生产模式不回退本地文件 |
 | `No module named ...` | 使用已安装项目依赖的 Python；本机不要混用不同版本的 `python` / `python3` |
-| Nuxt / Node 版本错误 | 确认 `node --version`；日常运行可用 `--no-ui-dev` 避免依赖开发服务器 |
+| Nuxt / Node 版本错误 | 确认 `node --version`；已有最新静态构建时，默认一键启动不需要开发服务器 |
 | 页面有持仓但行情/收益空白 | 等待有效行情与完整扫描补齐，并检查行情源健康状态 |
 | 另一台设备没有相同持仓 | 必须访问同一个 Java 后台/数据库；各自的 `localhost` 不是同一个数据库 |
 
@@ -162,15 +199,7 @@ lsof -nP -iTCP:8080 -iTCP:8765 -iTCP:3000 -sTCP:LISTEN
 
 停止旧进程应优先使用其终端的 `Ctrl+C`。当前仅本机访问，不要直接将无认证的后台暴露到公网。
 
-### 其它启动入口与日志
-
-旧脚本只负责 Python 盯盘及前端，不会代替启动 MySQL / Java：
-
-```bash
-cd /Users/wangxiangyu/Documents/akquan回测/myquan/holdingStocks
-/opt/homebrew/bin/python3 start_watch.py --no-wechat
-/opt/homebrew/bin/python3 start_watch.py --stop
-```
+### 启动加载日志
 
 启动日志应依次出现：
 

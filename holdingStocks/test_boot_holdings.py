@@ -59,6 +59,7 @@ class BootHoldingsTests(unittest.TestCase):
             self.assertTrue(index._last_watch_snapshot["boot"])
             self.assertTrue(index._last_watch_snapshot["blockTrading"])
             self.assertEqual(index._last_watch_snapshot["paperRevision"],4)
+            self.assertEqual(index._last_watch_snapshot["slotMeta"]["free"], index.MAX_POSITION_SYMBOLS-1)
             store.save.assert_not_called()
             index._last_watch_snapshot={"boot":False,"holdings":[{"现价":999}]}
             self.assertFalse(index._publish_boot_holdings_preview())

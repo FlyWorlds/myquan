@@ -1,0 +1,98 @@
+{
+  "end": "2026-10-13",
+  "totals": {
+    "minute_ohlc": {
+      "cycles": 8,
+      "entry_cost": 458464.0,
+      "gross_pnl": -10336.0,
+      "net_pnl": -11371.66,
+      "remaining_symbols": 2
+    },
+    "minute_close_proxy": {
+      "cycles": 8,
+      "entry_cost": 458464.0,
+      "gross_pnl": -11926.0,
+      "net_pnl": -12870.34,
+      "remaining_symbols": 3
+    }
+  },
+  "fixed_entries": 8,
+  "comparison": "fixed_entries_exit_sensitivity_only",
+  "live_tick_backtest_supported": false,
+  "threshold_fit_end": "2026-10-13",
+  "caveats": [
+    "Minute-close observations are proxies, not recorded live ticks.",
+    "Entry times/quantities are fixed from the minute reference; no cash/slot reallocation is simulated.",
+    "Entry minute is excluded because pre/post-entry extremes cannot be separated.",
+    "Opening protection is aligned for comparison; minute labels do not prove timely opening quotes.",
+    "Thresholds overlap evaluation dates; frozen present-day pool has selection bias.",
+    "Totals are sums of fixed-entry cycle PnL, NOT portfolio returns or evidence of superiority."
+  ],
+  "sources": [
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sh601208.parquet",
+      "sha256": "8fad6f2509a0ec0d6070322d31aa5e12af52fc78aadc3110b410cfced635f389"
+    },
+    {
+      "path": "data_cache/sh601208_daily_qfq.parquet",
+      "sha256": "fc6f523def2539b844adfc0fa720b647fd365c910d81a94078702f386336ae57"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002169.parquet",
+      "sha256": "f84915288169c131cf00106fbaec43ba630603431126a43b185ebf7c32dfeb94"
+    },
+    {
+      "path": "data_cache/sz002169_daily_qfq.parquet",
+      "sha256": "affac4f2b4f1b1ba93100b5961ba32b7211b1560b0eeae77a9bf8b70df167f7c"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz000756.parquet",
+      "sha256": "5193cbeb56d9b69b1424471e623b5ace155a21af5fe13df5d3bd7823be7fa472"
+    },
+    {
+      "path": "data_cache/sz000756_daily_qfq.parquet",
+      "sha256": "66ee85b2e369b3c39c02cd7210014baefef8056dc644d9677a47cf4b839e41db"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002454.parquet",
+      "sha256": "28dbbd0ba3b935e799ea6b0382fb6bb63e1d13abe839f69cd2537b5769a497ad"
+    },
+    {
+      "path": "data_cache/sz002454_daily_qfq.parquet",
+      "sha256": "64c8e73b2d4b01b4b66d8979d5b618ac96d97b065f8e9c23412779f88d9ffa41"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002866.parquet",
+      "sha256": "81f0b395ddd4976eeaff5f98fd2f91ef28b10a57147c36c01a16a3276aecf0a2"
+    },
+    {
+      "path": "data_cache/sz002866_daily_qfq.parquet",
+      "sha256": "d864d626d4e9dac6fc0c06967b1028c5841f3fb78291b641d65aad67fd2e6416"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002703.parquet",
+      "sha256": "516d833fd137510dd08d5a39eb1daf977059006dd0d7642be17170c39194e59e"
+    },
+    {
+      "path": "data_cache/sz002703_daily_qfq.parquet",
+      "sha256": "115790dcff667dcff0528464b3498a3c027455c56320d473d75c1f2e7dc5da46"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz001266.parquet",
+      "sha256": "aaf6792be2738088fd0cb47347ee7b200c717a0eac14f26120969e76876ba735"
+    },
+    {
+      "path": "data_cache/sz001266_daily_qfq.parquet",
+      "sha256": "d12225394112cf373f0e9fef5ccc4af2eff66a9f22a0d50cd59c74ed3c9b91ba"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-14_intraday_141558/minutes/sz002580.parquet",
+      "sha256": "fe8a6efb4bb00b3afa24160eb3258c0c1cebd2cea2ef6a6b525add778eeccd77"
+    },
+    {
+      "path": "data_cache/sz002580_daily_qfq.parquet",
+      "sha256": "2d2c431edc5917b3ffafa16bbf69b12b0c937e8fdb4c9cf20552b22e45d7c581"
+    }
+  ],
+  "quantity_conservation_verified": true
+}

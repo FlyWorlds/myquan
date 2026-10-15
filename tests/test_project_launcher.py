@@ -41,6 +41,10 @@ class ProjectLauncherTests(unittest.TestCase):
         spawn.assert_not_called()
         kill.assert_not_called()
 
+    def test_retired_combined_launch_scripts_are_removed(self):
+        for filename in ("start_watch.py", "start_watch.sh", "start_watch.ps1"):
+            self.assertFalse((launcher.ROOT / "holdingStocks" / filename).exists())
+
     def test_healthy_existing_service_is_reused_not_adopted(self):
         state, created = {}, []
         with patch.object(launcher,"port_open",return_value=True), \
@@ -124,6 +128,16 @@ class ProjectLauncherTests(unittest.TestCase):
         with patch.object(launcher,"get_json",return_value={"application":"myquan-backend","status":"UP","database":None}):
             self.assertFalse(launcher.backend_ready(8080))
 
+    def test_old_backend_without_quote_storage_cannot_pass_account_preflight(self):
+        with patch.object(launcher, "get_json", side_effect=[{"revision": 1}, None]), \
+             self.assertRaises(launcher.LaunchError):
+            launcher.require_account(8080)
+        with patch.object(launcher, "get_json", side_effect=[{"revision": 1}, {}]):
+            launcher.require_account(8080)
+        with patch.object(launcher, "get_json", side_effect=[{"revision": 1}, ValueError("bad response")]), \
+             self.assertRaises(launcher.LaunchError):
+            launcher.require_account(8080)
+
     def test_frontend_freshness_and_missing_dist(self):
         ui=self.root / "holdingStocks/watch-ui"
         ui.mkdir(parents=True)
@@ -201,6 +215,142 @@ class ProjectLauncherTests(unittest.TestCase):
         self.assertIn("0.3.21",output.getvalue())
         self.assertIn("0.3.22",output.getvalue())
         self.assertEqual(run.call_count,1)
+
+    @contextlib.contextmanager
+    def replacement_mocks(self, records):
+        launcher.write_state(records)
+        with contextlib.ExitStack() as stack:
+            mocked = {}
+            for name, kwargs in {
+                "same_process": {"side_effect": lambda record: bool(record.get("pid"))},
+                "port_open": {"return_value": True},
+                "service_matches": {"return_value": True},
+                "require_service": {}, "require_account": {}, "ensure_mysql": {},
+                "java_command": {"return_value": (["java"], {})},
+                "resolve_python": {"return_value": "/python"},
+                "prepare_frontend": {"return_value": ("npm", {})},
+                "frontend_ready": {"return_value": True},
+                "stop_owned": {"side_effect": lambda record: record.pop("pid", None)},
+                "start_service": {},
+            }.items():
+                mocked[name] = stack.enter_context(patch.object(launcher, name, **kwargs))
+            yield mocked
+
+    def records(self):
+        return {name: dict(name=name, pid=i+100, birth="birth", port=port)
+                for i, (name, port) in enumerate((("java",8080),("python",8765),("frontend",3000)))}
+
+    def test_replacement_stops_and_starts_only_selected_service(self):
+        for name in ("java", "python", "frontend"):
+            with self.subTest(service=name), self.replacement_mocks(self.records()) as mocks:
+                launcher.replace_service(self.opts(service=name))
+                self.assertEqual([c.args[0]["name"] for c in mocks["stop_owned"].call_args_list], [name])
+                self.assertEqual([c.args[0] for c in mocks["start_service"].call_args_list], [name])
+                self.assertEqual(set(launcher.read_state()), {"java", "python", "frontend"} - {name})
+
+    def test_replacement_preparation_failure_preserves_all_services(self):
+        records = self.records()
+        with self.replacement_mocks(records) as mocks:
+            mocks["java_command"].side_effect = launcher.LaunchError("build failed")
+            with self.assertRaises(launcher.LaunchError):
+                launcher.replace_service(self.opts(service="java"))
+            mocks["stop_owned"].assert_not_called()
+            mocks["start_service"].assert_not_called()
+        self.assertEqual(launcher.read_state(), records)
+
+    def test_replacement_missing_dependency_leaves_old_python_running(self):
+        with self.replacement_mocks(self.records()) as mocks:
+            mocks["require_service"].side_effect = launcher.LaunchError("offline")
+            with self.assertRaises(launcher.LaunchError):
+                launcher.replace_service(self.opts(service="python"))
+            mocks["stop_owned"].assert_not_called()
+
+    def test_java_replacement_never_starts_missing_mysql(self):
+        with self.replacement_mocks(self.records()) as mocks:
+            mocks["port_open"].side_effect = lambda host, port: port != 3306
+            with self.assertRaises(launcher.LaunchError):
+                launcher.replace_service(self.opts(service="java"))
+            mocks["ensure_mysql"].assert_not_called()
+            mocks["java_command"].assert_not_called()
+            mocks["stop_owned"].assert_not_called()
+
+    def test_replacement_refuses_external_target_without_killing(self):
+        with self.replacement_mocks({}) as mocks:
+            with self.assertRaises(launcher.LaunchError):
+                launcher.replace_service(self.opts(service="python"))
+            mocks["stop_owned"].assert_not_called()
+            mocks["start_service"].assert_not_called()
+
+    def test_replacement_cannot_change_port_while_dependent_is_running(self):
+        with self.replacement_mocks(self.records()) as mocks:
+            # The new port is free, but the live Python still points to the old Java port.
+            mocks["port_open"].side_effect = lambda host, port: port != 8081
+            with self.assertRaises(launcher.LaunchError):
+                launcher.replace_service(self.opts(service="java", backend_port=8081))
+            mocks["stop_owned"].assert_not_called()
+
+    def test_static_frontend_update_does_not_restart_python_or_java(self):
+        with self.replacement_mocks(self.records()) as mocks:
+            launcher.replace_service(self.opts(service="frontend", ui_static=True))
+            mocks["prepare_frontend"].assert_called_once_with(False)
+            mocks["start_service"].assert_not_called()
+            self.assertEqual([c.args[0]["name"] for c in mocks["stop_owned"].call_args_list], ["frontend"])
+            self.assertEqual(set(launcher.read_state()), {"java", "python"})
+
+    def test_python_replacement_preserves_notification_switch(self):
+        records = self.records()
+        records["python"]["command"] = ["python", "--no-wechat"]
+        with self.replacement_mocks(records) as mocks:
+            launcher.replace_service(self.opts(service="python", no_wechat=None))
+            self.assertIn("--no-wechat", mocks["start_service"].call_args.args[2])
+
+    def test_failed_replacement_cleans_only_new_target(self):
+        def fail(name, port, command, cwd, env, probe, state, created, timeout):
+            record = dict(name=name, pid=444, birth="new", port=port)
+            state[name] = record
+            created.append(record)
+            raise launcher.LaunchError("timeout")
+        with self.replacement_mocks(self.records()) as mocks:
+            mocks["start_service"].side_effect = fail
+            with self.assertRaises(launcher.LaunchError):
+                launcher.replace_service(self.opts(service="python"))
+            self.assertEqual([c.args[0]["name"] for c in mocks["stop_owned"].call_args_list], ["python", "python"])
+            self.assertEqual(set(launcher.read_state()), {"java", "frontend"})
+
+    def test_stop_single_service_preserves_other_manifest_entries(self):
+        launcher.write_state(self.records())
+        with patch.object(launcher, "stop_owned") as stop:
+            launcher.stop("python")
+        self.assertEqual([c.args[0]["name"] for c in stop.call_args_list], ["python"])
+        self.assertEqual(set(launcher.read_state()), {"java", "frontend"})
+
+    def test_single_service_restart_cli_never_calls_global_stop(self):
+        with patch.object(launcher.sys, "argv", ["start_project.py", "--service", "python", "--restart"]), \
+             patch.object(launcher, "replace_service", return_value=0) as replace, \
+             patch.object(launcher, "stop") as stop:
+            self.assertEqual(launcher.main(), 0)
+        stop.assert_not_called()
+        self.assertEqual(replace.call_args.args[0].service, "python")
+
+    def test_single_service_starts_when_target_is_absent(self):
+        records = self.records()
+        del records["python"]
+        with self.replacement_mocks(records) as mocks:
+            mocks["port_open"].return_value = False
+            launcher.replace_service(self.opts(service="python"))
+            mocks["stop_owned"].assert_not_called()
+            self.assertEqual(mocks["start_service"].call_args.args[0], "python")
+
+    def test_default_static_frontend_has_no_process_to_replace(self):
+        records = self.records()
+        del records["frontend"]
+        with self.replacement_mocks(records) as mocks:
+            mocks["port_open"].return_value = False
+            launcher.replace_service(self.opts(service="frontend"))
+            mocks["prepare_frontend"].assert_called_once_with(False)
+            mocks["stop_owned"].assert_not_called()
+            mocks["start_service"].assert_not_called()
+            self.assertEqual(launcher.read_state(), records)
 
 
 if __name__=="__main__":

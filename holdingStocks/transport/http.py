@@ -25,6 +25,7 @@ def build_watch_request_handler(
     handle_sectors_api: Callable[[str], tuple[int, Any]],
     watch_ui_dist_ready: Callable[[], bool],
     on_paper_reset: Callable[[], Any] | None = None,
+    on_front_rendered: Callable[[], bool] | None = None,
 ) -> type[SimpleHTTPRequestHandler]:
     """返回绑定依赖后的 RequestHandler 类（供 ThreadingHTTPServer 使用）。"""
 
@@ -117,6 +118,26 @@ def build_watch_request_handler(
 
         def do_GET(self) -> None:  # noqa: N802
             path = self.path.split("?", 1)[0]
+            if path in ("/api/condition-buy/report", "/api/condition-buy/report.csv"):
+                from condition_order_report import comparison_report, comparison_csv
+
+                with snap_lock:
+                    report = comparison_report(get_last_snapshot())
+                if path.endswith(".csv"):
+                    if not report["ready"]:
+                        self._send_json(report, status=503)
+                        return
+                    body = comparison_csv(report)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/csv; charset=utf-8")
+                    self.send_header("Content-Disposition", f'attachment; filename="strategy16-{report["session"]}.csv"')
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    self._send_json(report)
+                return
             if path == "/ws":
                 self._handle_ws_upgrade()
                 return
@@ -217,6 +238,10 @@ def build_watch_request_handler(
             self.send_error(404, "Not Found")
 
         def do_POST(self) -> None:  # noqa: N802
+            if self.path.split("?", 1)[0] == "/api/front-rendered":
+                ready = bool(on_front_rendered and on_front_rendered())
+                self._send_json({"ready": ready}, status=200 if ready else 503)
+                return
             path = self.path.split("?", 1)[0]
             if path == "/api/holdings/reset":
                 if on_paper_reset is None:

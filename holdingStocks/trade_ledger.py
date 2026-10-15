@@ -155,6 +155,12 @@ def build_ledger_entry(
         "reason": _reason_text(side, note, reason),
         "reason_detail": str(record.get("reason_detail") or note or reason or ""),
         "note": note,
+        **{k: record[k] for k in (
+            "order_id", "signal_time", "signal_received_at", "decision_time",
+            "fill_model", "quote_source", "order_armed_at", "order_price",
+            "execution_quote_time", "execution_received_at", "observed_price", "quote_age_ms", "queue_age_ms",
+            "quote_db_revision", "quote_db_at",
+        ) if k in record},
     }
 
 

@@ -21,11 +21,46 @@ let pingTimer: number | undefined
 let lastTs: number | null = null
 let lastUpdatedAt: string | null = null
 let started = false
+let renderAcknowledged = false
+let renderPending = false
+let renderAttemptAt = 0
 
 const STALE_PAGE_MS = 20000
 
 export function useWatchWs() {
   const store = useWatchStore()
+  const renderConfig = useRuntimeConfig()
+  const nuxtApp = useNuxtApp()
+
+  async function notifyRendered(data: WatchSnapshot) {
+    if (data.boot) {
+      renderAcknowledged = false
+      return
+    }
+    if (renderAcknowledged || renderPending || Date.now() - renderAttemptAt < 5000) return
+    renderPending = true
+    renderAttemptAt = Date.now()
+    try {
+      if (nuxtApp.isHydrating) {
+        await new Promise<void>((resolve) => nuxtApp.hook('app:mounted', () => resolve()))
+      }
+      await nextTick()
+      // Let the browser paint the committed Vue tree before allowing background IO.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+      if (!started) return
+      const base = import.meta.dev
+        ? `http://${renderConfig.public.watchApiHost || '127.0.0.1'}:${renderConfig.public.watchApiPort || '8765'}`
+        : ''
+      const result = await $fetch<{ ready: boolean }>(`${base}/api/front-rendered`, {
+        method: 'POST', retry: 0, timeout: 3000,
+      })
+      renderAcknowledged = result.ready
+    } catch {
+      // Optional cache warming must never interfere with snapshot rendering.
+    } finally {
+      renderPending = false
+    }
+  }
 
   function applyStatus(data: WatchSnapshot) {
     const alert = wsStatusFromSnapshot(data)
@@ -45,12 +80,14 @@ export function useWatchWs() {
       data.updatedAt === lastUpdatedAt
     if (sameTs && sameAt) {
       applyStatus(data)
+      void notifyRendered(data)
       return
     }
     lastTs = data.ts ?? lastTs
     lastUpdatedAt = data.updatedAt ?? lastUpdatedAt
     store.setSnapshot(data)
     applyStatus(data)
+    void notifyRendered(data)
   }
 
   async function fallbackSync() {
@@ -113,6 +150,7 @@ export function useWatchWs() {
       }
     }
     ws.onclose = () => {
+      renderAcknowledged = false
       ws = null
       if (pingTimer) {
         window.clearInterval(pingTimer)

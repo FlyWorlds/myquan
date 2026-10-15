@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-14 11:29:36",
+  "updated_at": "2026-10-15 09:34:25",
   "events": [
     {
       "event_id": "94adc856-31ba-5d1e-bf75-867ac3efe0e8",
@@ -991485,6 +991485,22 @@
       "entry_pct": 0.03,
       "execution_model": "quote_touch_row_levels",
       "voided_at": "2026-10-14 11:29:36",
+      "void_reason": "BUY_NOT_PRINTED"
+    },
+    {
+      "event_id": "1b13ee54-a353-504b-92cc-250130dd78b7",
+      "strategy_id": "strategy16",
+      "symbol": "002580",
+      "side": "BUY",
+      "trigger_price": 17.61,
+      "trigger_time": "2026-10-15 09:30:00",
+      "quote_timestamp": "2026-10-15 09:34:21",
+      "reason": "collect_rows",
+      "trading_session_date": "2026-10-15",
+      "buy_level": 17.61,
+      "entry_pct": 0.03,
+      "execution_model": "quote_touch_row_levels",
+      "voided_at": "2026-10-15 09:34:25",
       "void_reason": "BUY_NOT_PRINTED"
     }
   ]
