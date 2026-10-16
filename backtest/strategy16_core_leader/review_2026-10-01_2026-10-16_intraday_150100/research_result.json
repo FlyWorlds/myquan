@@ -1,0 +1,455 @@
+{
+  "requested_start": "2026-10-01",
+  "requested_end": "2026-10-16",
+  "sessions": [
+    "2026-10-08",
+    "2026-10-09",
+    "2026-10-12",
+    "2026-10-13",
+    "2026-10-14",
+    "2026-10-15",
+    "2026-10-16"
+  ],
+  "status": "research_only_sparse_minutes_strict_acceptance_failed",
+  "pool_size": 34,
+  "minute_rows": 56607,
+  "missing_source_labels": 37,
+  "minimum_daily_warmup_rows": 52,
+  "summary": {
+    "window_days": 7,
+    "calendar": [
+      "2026-10-08",
+      "2026-10-09",
+      "2026-10-12",
+      "2026-10-13",
+      "2026-10-14",
+      "2026-10-15",
+      "2026-10-16"
+    ],
+    "max_slots": 5,
+    "slot_weight": 0.2,
+    "initial_cash": 300000.0,
+    "final_equity": 281502.47,
+    "return_pct": -6.17,
+    "max_dd_pct": -6.67,
+    "dd_peak_date": null,
+    "dd_trough_date": "2026-10-15",
+    "n_buys": 14,
+    "n_sells": 12,
+    "n_closed": 12,
+    "avg_closed_pnl_pct": -2.32,
+    "n_open": 2,
+    "n_skipped_or_queued": 55,
+    "exit_mode": "half_gain",
+    "buy_mode": "open",
+    "reserve_empty": 0,
+    "max_overnight": 5,
+    "max_buys_per_day": 2
+  },
+  "accounting": {
+    "net_profit": -18497.53,
+    "gross_realized": -16345.0,
+    "gross_floating": -218.0,
+    "fees_and_slippage": 1934.53,
+    "cash": 171174.47,
+    "market_value": 110328.0,
+    "closed_cycles": 12,
+    "accounting_verified": true
+  },
+  "daily_returns": [
+    {
+      "date": "2026-10-08",
+      "day_pnl": -4312.5,
+      "day_return_pct": -1.4375000000000027,
+      "equity": 295687.5,
+      "cumulative_return_pct": -1.4375000000000027,
+      "cash": 182635.5,
+      "positions": 2,
+      "codes": "002169,601208"
+    },
+    {
+      "date": "2026-10-09",
+      "day_pnl": -1777.94,
+      "day_return_pct": -0.6012902134855169,
+      "equity": 293909.56,
+      "cumulative_return_pct": -2.0301466666666657,
+      "cash": 176814.56,
+      "positions": 2,
+      "codes": "000756,002454"
+    },
+    {
+      "date": "2026-10-12",
+      "day_pnl": -2464.27,
+      "day_return_pct": -0.8384449964812357,
+      "equity": 291445.29,
+      "cumulative_return_pct": -2.8515700000000033,
+      "cash": 176752.29,
+      "positions": 2,
+      "codes": "002703,002866"
+    },
+    {
+      "date": "2026-10-13",
+      "day_pnl": -2397.64,
+      "day_return_pct": -0.8226724130624863,
+      "equity": 289047.65,
+      "cumulative_return_pct": -3.6507833333333295,
+      "cash": 175101.65,
+      "positions": 2,
+      "codes": "001266,002580"
+    },
+    {
+      "date": "2026-10-14",
+      "day_pnl": -6367.13,
+      "day_return_pct": -2.2027959749889026,
+      "equity": 282680.52,
+      "cumulative_return_pct": -5.773159999999988,
+      "cash": 173562.52,
+      "positions": 2,
+      "codes": "002866,600072"
+    },
+    {
+      "date": "2026-10-15",
+      "day_pnl": -2681.12,
+      "day_return_pct": -0.9484629503299313,
+      "equity": 279999.4,
+      "cumulative_return_pct": -6.66686666666666,
+      "cash": 169347.4,
+      "positions": 2,
+      "codes": "000070,001266"
+    },
+    {
+      "date": "2026-10-16",
+      "day_pnl": 1503.07,
+      "day_return_pct": 0.5368118645968423,
+      "equity": 281502.47,
+      "cumulative_return_pct": -6.165843333333343,
+      "cash": 171174.47,
+      "positions": 2,
+      "codes": "000756,002430"
+    }
+  ],
+  "caveats": [
+    "研究参考：原严格入口因三联锻造10月15日仅229根分钟记录而终止；本结果保留全部34只，未补造分钟。",
+    "7个交易日均有数据，但逐分钟覆盖不完整；稀疏记录原因未确认，不能声称完整精确回测。",
+    "使用当前冻结股票池、个股阈值；thr_2026拟合截至2026-10-13，与评价窗重叠，非样本外。",
+    "不包含因子29竞价买入；缺历史竞价tick与完整报价事件，不能精确复现当前实时策略。",
+    "30万元空仓开始，未继承9月持仓，不等于实际账户收益。",
+    "沿用现有分钟回测内核、T+1、费用和滑点模型，同分钟竞争按固定池顺序；未证明与报价交易逐笔一致。",
+    "10月尚未结束，本次只到10月16日15:00；未计算未来交易日。"
+  ],
+  "open_positions": [
+    {
+      "code": "000756",
+      "name": "新华制药",
+      "buy_day": "2026-10-16",
+      "buy_px": 13.76,
+      "last_px": 13.7,
+      "shares": 4000,
+      "pnl_pct": -0.0044
+    },
+    {
+      "code": "002430",
+      "name": "杭氧股份",
+      "buy_day": "2026-10-16",
+      "buy_px": 25.23,
+      "last_px": 25.24,
+      "shares": 2200,
+      "pnl_pct": 0.0004
+    }
+  ],
+  "sources": [
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh600330.parquet",
+      "sha256": "2b8891336a4faee4f538b742016fdc5d8fa5df9611ac7282b062f095a471b392"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh600330.parquet",
+      "sha256": "0db1f96d05bc50882dc11d8e781e038b98a5fed058a415b28846270d55d5e536"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh600552.parquet",
+      "sha256": "4bb12ce4ed192b8465137f95d25d1dc7ded2876ded07f0f0c47ddc07160a18e3"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh600552.parquet",
+      "sha256": "6f083bc3a0c1943053f6554a19f2d59b0b09af131c46afb9fbbe8c78760ddbc0"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh601208.parquet",
+      "sha256": "b6f5d120f9b094192b774983cf7aa497fd84d883eac6f877e73c0762b3aa788c"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh601208.parquet",
+      "sha256": "4753dfc7d8cc2c441c250295af82656e9c0ff3a7a1031be216b53478aeea1039"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002636.parquet",
+      "sha256": "2a3a4a9b4e2ed2ed7483058e2abff40f28fcaba1ad8e19fa6f54e6f082ae7d59"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002636.parquet",
+      "sha256": "623a8ff245eebe2ff2a052abe27cf16572b430909e0210c9e8ae022eaae96120"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002273.parquet",
+      "sha256": "018b89ef5a3d8ac507eb244ec1a1736accf39fccfdad70aed56900e04cb0fecc"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002273.parquet",
+      "sha256": "e25ddd6aba081479b33a9b743878eaf7f8b878013a6449bacbe4f6e5f2852f11"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz000070.parquet",
+      "sha256": "33b9feb29b25cf90337c00470ce9c40cd588d86f54b742f78ab625abd060faef"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz000070.parquet",
+      "sha256": "e3b9eba494cacfc907ee9a594478c78318d436ae12078d26a8b5a3871297246b"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz000756.parquet",
+      "sha256": "2b97597f7a563b473f8246a239409a716fc041e96d5c0d7ba5caddc9321e1123"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz000756.parquet",
+      "sha256": "37d38f77ecbfebf351c5f2466daff2c26f7840cba364eef5f9681085e5257700"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002703.parquet",
+      "sha256": "6465eb177d73961cb13cc6a2c67004b5f82e8d3a186da8238be0dfc1222f2892"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002703.parquet",
+      "sha256": "5dd524e1724b44c001b5e58511a88eba91d8165dd7f93e7c55de6e2039f640ed"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz001282.parquet",
+      "sha256": "f904b3a799ebee73ebd811548c02d241c2ae7cc3042ff3710c503886045f92a3"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz001282.parquet",
+      "sha256": "fecd0bdad5e80edb9e1a3ac8614c9e7e7c8ba8a602c7777458c65f1a65029807"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002580.parquet",
+      "sha256": "0f1eb22a09d4c3fcbfa274349a6d3c1f5a6e292edf39fa8e9161a9d4c5034829"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002580.parquet",
+      "sha256": "a258fc170103bb7839dbe72a6d0883456e017dc7e6bbbdb82d689d649cff9234"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002962.parquet",
+      "sha256": "d0acf968acd936f55b373699f39a005b7f8f0decebdafa29bac2292750dcfbe4"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002962.parquet",
+      "sha256": "14a6e868397f3f12e9f3c47cb2b362c0d826a6f2ac2e73c553e267c8880160cf"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002866.parquet",
+      "sha256": "f2b4efdabdb299c7ec05f7b8f101507a2919860fa0ea4d7e246019ebddf2093e"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002866.parquet",
+      "sha256": "f143d2bd18609d53c1711501f672952c772b2bda4b9f5a80103a72453b029fad"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz001266.parquet",
+      "sha256": "e95de4c8d52f5b500c414982422aa5284d05592db2ae89476199e2ab8e0fba8a"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz001266.parquet",
+      "sha256": "cdf9f4529b1d1faa29b22d859adf2c1351feced0969490b2b91ca0e32142f5d5"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002430.parquet",
+      "sha256": "b51f58797e92873137179c29861df8b683d16e235e393cb682fe329f4d6f4747"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002430.parquet",
+      "sha256": "221a6cccf99449a1eaac4f70ac63c650dfe6d3f1cd97528d06ea984b7b8c0919"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002415.parquet",
+      "sha256": "29e04132bfdedba002e3c31c5fd05c992dd345fd0708e74e8817088ffb932ba8"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002415.parquet",
+      "sha256": "04fd45bb11f7322a2d3276131baeab03a434230e0497bc355f77e90fdaa3762d"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002453.parquet",
+      "sha256": "92eda00cc68892a395745d60f347b853ff05b682dfc0f37b7c5245380da8c5ca"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002453.parquet",
+      "sha256": "f662235ce02be753802ab095168ce4ad740b62d5930e524f739388048cdc2bca"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh601609.parquet",
+      "sha256": "109bbea31638b568fb36db596ee38fc0f8db87bdfca7cc689d2f36dcc0c51407"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh601609.parquet",
+      "sha256": "4c51181a99389e47cd43fa4ca5025fb1609bf743456aee3c703ce3f6144d5be6"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh603042.parquet",
+      "sha256": "8c5cf7a63af37a7f90c2c8475473a3d18d23d7e8d37cf6ca1a3208af3d3098b4"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh603042.parquet",
+      "sha256": "eaf5a07dd0f49f04c6c220f5a5a5d2a07c7f64a22e0d49a12b93fb615e968fbf"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz000049.parquet",
+      "sha256": "78d373c1bc1fb3ed255ef3eaa0dd5cf6a8f2d33f37d4b9431f552f4038dc009e"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz000049.parquet",
+      "sha256": "aa3a769eb56c3d57c9fd8c8d66f040625b02257129722815375b30284e21dd57"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz000725.parquet",
+      "sha256": "9d04823e673439b97c57f6ccefc37670276b563516661edbb1e88ca7c953418a"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz000725.parquet",
+      "sha256": "3f97feeeaf6d3b60c70ba78b7ecb148a592b1e672572dca4b4f0060f370410dd"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002841.parquet",
+      "sha256": "91b9348bf7c2c7f6480225c0f4f53a564309c211ce74cc4ebace969a6b7f6444"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002841.parquet",
+      "sha256": "274dd9b54261ec63fa18fefe62a9d041c95707fe8a7cbe38c3aafebb3dfb8e28"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002558.parquet",
+      "sha256": "3cfb2761b88fb3a5e11381c4c860b76b18229e48c5b1775ab534b31760284566"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002558.parquet",
+      "sha256": "f3d98554bb30e5fba0b0f95015483d9c6eacb66b22083bc55b94fd836a560357"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz000682.parquet",
+      "sha256": "58514ba00cb7dc121539033b9b30abba9fbb974f9174afe1a4eed84d2fb1855c"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz000682.parquet",
+      "sha256": "f3bdf0af6979933aa8d47ff1db41d4b7b30ce97f5a942e6331869459f2f57f70"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002169.parquet",
+      "sha256": "a09e32ec6b67d5bba3da1efcd4c40d44d78d8b85455626d33c5ac5e5cb3483e1"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002169.parquet",
+      "sha256": "151e7f7f482ac13a51c173ea6ce50f4ffa5ab2e796c8f31b0b8b265308f7c2d3"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz000920.parquet",
+      "sha256": "38e15e180f3ab03df6b4f74cc0a2c3ffa8cea661f1cc599cc52c3bf59de214b4"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz000920.parquet",
+      "sha256": "1ff024122859a6b335b07c3d27b34913b8d3de5b3cadd8ea21d05e365c96b5ca"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh600072.parquet",
+      "sha256": "c482e99e8778432d88121272e34c823f21f94ffe720e3d7c63c691c0ddc09031"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh600072.parquet",
+      "sha256": "db0f9a11482b339b95523cc648209a49b7d233cea0d66e7025d4083f8242e074"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh600760.parquet",
+      "sha256": "0e0de37afe603c52d165eae360783e10e4299c753b1422bd3c45172728b00cac"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh600760.parquet",
+      "sha256": "03d2f995fd2ad5bb4b147e8b3a07bd3f177b49522382aabb7aadce2871da32da"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh600346.parquet",
+      "sha256": "1b3f5ef7a3dba036201323604560f14b83607e46e402667cdb72997cd0864679"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh600346.parquet",
+      "sha256": "9573c745688cd8c7199a2fbef22d2a431febe7219d77b6b2f4a1f5070565010f"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh603659.parquet",
+      "sha256": "8ce718abd171b593b72a2379e3b9333de097718775aa2d6bf7c738c92c3a33bd"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh603659.parquet",
+      "sha256": "17053d45e19b55eeed5a2447b5c2a177217f42cd0f22202cc713f6a07bacb8d5"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002253.parquet",
+      "sha256": "f766b48b57da061bfc6628ccceb3080127ee1ed62412e29d823700a96240189b"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002253.parquet",
+      "sha256": "73101ee4f82f22b5b0c0e015d282bbef75641df381880f55d053c7880c916d21"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz000803.parquet",
+      "sha256": "e03c1c73324cbb17ce6a5b835990a07adfd4bc0e32d4c2b72a99fbf35848483d"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz000803.parquet",
+      "sha256": "9a78eeca2874451a15c12e9154e3006b60cea4f17655e1e3fceeb5fa9289bef1"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sz002454.parquet",
+      "sha256": "37908a5d20782ddf0a03790d92f632887f5ef85cd1b2111a642c63328aa97c4d"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sz002454.parquet",
+      "sha256": "a862326920a56adc6f9b93364f13dec6e72c494de4d376f9ce20f67d0621e1cf"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh600549.parquet",
+      "sha256": "bcdbed5a6658dd6ca401d8d033f5f92bf32bc934052233c727b238ca1052a98a"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh600549.parquet",
+      "sha256": "02b50a0b443e7995d9377058e7c29cfce50223e160f38dfd1f70b6e569681cfd"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/minutes/sh600063.parquet",
+      "sha256": "fad99ecf64ab555a9101b1cb9bdf58ab1e6fe2ad3e151dd7b953e4417c550083"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/daily/sh600063.parquet",
+      "sha256": "2ef968e924ebcda5c5bb748edfaa8cab8ed33b9500e392ea7752dcb65fa03bce"
+    }
+  ],
+  "configuration": {
+    "initial_cash": 300000.0,
+    "max_slots": 5,
+    "max_buys_per_day": 2,
+    "slot_weight": 0.2,
+    "threshold_fit_end": "2026-10-13"
+  },
+  "code_sources": [
+    {
+      "path": "backtest/strategy1_pool_1m/run.py",
+      "sha256": "2f0104238b8244f0c707988b102139266df46b59271e09fdbdd71addc4b3a168"
+    },
+    {
+      "path": "strategy/pullback_wave_stop.py",
+      "sha256": "37b135436fa8cd31fd06feb06de29c1871d27bd025a8b48194fdca00f4f6d7f4"
+    },
+    {
+      "path": "backtest/strategy16_core_leader/review_2026-10-01_2026-10-16_intraday_150100/run_sparse_reference.py",
+      "sha256": "bfd3122062fa7edf4424a980934f321c3fa53fc5d790ae8468ba6772578559d7"
+    }
+  ]
+}

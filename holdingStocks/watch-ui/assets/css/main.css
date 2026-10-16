@@ -349,20 +349,6 @@
   }
 }
 
-@keyframes signal-trigger-buy-glow {
-  0%,
-  100% {
-    filter: brightness(1);
-    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--watch-up) 75%, transparent),
-      0 0 18px color-mix(in srgb, var(--watch-up) 32%, transparent);
-  }
-  50% {
-    filter: brightness(1.06);
-    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--watch-up) 90%, transparent),
-      0 0 28px color-mix(in srgb, var(--watch-up) 48%, transparent);
-  }
-}
-
 .signal-row {
   transition: background 0.35s var(--ui-ease), box-shadow 0.35s var(--ui-ease);
 }
@@ -389,17 +375,8 @@
   animation: signal-warn-sell-pulse 2.2s ease-in-out infinite;
 }
 
-/* 已触买：纯红高亮（勿混深绿/棕，避免看成卖出） */
-.signal-trigger-buy {
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--watch-up) 55%, var(--ui-surface)) 0%,
-    color-mix(in srgb, var(--watch-up) 28%, var(--ui-surface)) 50%,
-    color-mix(in srgb, var(--watch-up) 48%, var(--ui-surface)) 100%
-  );
-  animation: signal-trigger-buy-glow 1.5s ease-in-out infinite;
-}
-
+/* 已触买：当日固定红色标记，表格与持仓卡片统一，不循环闪烁。 */
+.signal-trigger-buy,
 .signal-trigger-buy-fixed {
   background: color-mix(in srgb, var(--watch-up) 34%, var(--ui-surface));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-up) 55%, transparent);
