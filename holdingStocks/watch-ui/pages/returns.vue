@@ -10,10 +10,19 @@ const error = ref('')
 let request = 0
 async function load() {
   const id = ++request; error.value = ''
-  try { const data = await $fetch<any[]>('/api/holdings/returns-calendar', { query: { year: year.value } }); if (id === request) rows.value = data }
-  catch { if (id === request) { rows.value = []; error.value = '收益数据库读取失败，请重试' } }
+  try { const data = await $fetch<any[]>('/api/holdings/returns-calendar', { query: { year: year.value }, cache: 'no-store', timeout: 10000 }); if (id === request) rows.value = data }
+  catch { if (id === request) { error.value = '收益数据库读取失败，请重试' } }
 }
-watch(year, load, { immediate: true })
+watch(year, load)
+let refreshTimer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  void load()
+  refreshTimer = setInterval(() => void load(), 5000)
+})
+onBeforeUnmount(() => {
+  ++request
+  if (refreshTimer) clearInterval(refreshTimer)
+})
 const daily = computed(() => new Map(rows.value.map(r => [String(r.trading_day).slice(0, 10), r])))
 function aggregate(items: any[]) {
   const valid = items.filter(r => r.day_pnl != null)

@@ -6,14 +6,24 @@ import { resolveSignalVisual } from '~/composables/useSignalVisual'
 import { fmtPositionPct, positionPctOf } from '~/utils/position'
 import { holdingCyclePnl } from '~/utils/holdingCyclePnl'
 
-const props = defineProps<{ row: HoldingRow; accountTotal?: number | null; dense?: boolean }>()
+const props = defineProps<{ row: HoldingRow; accountTotal?: number | null; dense?: boolean; band?: 'inside' | 'outside' }>()
 
 const stickyNote = ref('')
 const noteText = computed(() => {
   const parts = String(props.row.挂单说明 || '')
     .split('；')
     .map((part) => part.trim())
-    .filter((part) => part && !part.startsWith('条件买单@') && !part.startsWith('报价条件单') && !/^(FILLED|ARMED|TRIGGERED|CANCELLED|BLOCKED|failed)$/i.test(part))
+    .filter(
+      (part) =>
+        part &&
+        !part.startsWith('条件买单@') &&
+        !part.startsWith('报价条件单') &&
+        !part.startsWith('买入信号已触发') &&
+        !part.includes('当日新增额度已满') &&
+        !part.includes('槽满') &&
+        !part.includes('未入槽') &&
+        !/^(FILLED|ARMED|TRIGGERED|CANCELLED|BLOCKED|failed)$/i.test(part),
+    )
   const text = [...new Set(parts)].join('；')
   if (text) stickyNote.value = text
   return stickyNote.value
@@ -49,7 +59,17 @@ const hwmTitle = computed(() => {
     : '策略 HWM（peak_high）；自动卖出同用此值'
 })
 
+const touchClock = computed(() => fmtSignalClock(props.row.买信号时间 || props.row.信号时间))
+
+const buyAlertPx = computed(() => {
+  const px = props.row.买入侧价 ?? props.row.买点
+  const n = Number(px)
+  return Number.isFinite(n) && n > 0 ? n : null
+})
+
 const cardClass = computed(() => {
+  if (visual.value.tier === 'trigger-buy') return 'signal-trigger-buy-fixed border-up/50'
+  if (props.band === 'outside') return 'border-ui-hairline'
   const map: Record<string, string> = {
     'trigger-buy': 'signal-trigger-buy border-up/50',
     'warn-buy': 'signal-warn-buy border-up/40',
@@ -71,19 +91,22 @@ const cardClass = computed(() => {
   <article class="holding-card card overflow-hidden p-0 transition" :class="cardClass">
     <div :class="dense ? 'px-3 py-2' : 'p-4'">
       <header class="flex items-start justify-between gap-4">
-        <div class="min-w-0">
-          <h2 class="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-bold">
-            <StockNameHover :code="row.代码" :name="row.名称">
-              <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent" :class="dense ? 'text-sm' : 'text-base'">{{ row.名称 }}</a>
-            </StockNameHover>
-            <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive font-mono text-xs font-normal tabular-nums text-ui-text-2 hover:text-accent">{{ row.代码 }}</a>
-            <span class="text-[10px] font-normal text-ui-text-3">{{ row.市场 }}</span>
-          </h2>
-          <div class="mt-1 flex flex-wrap items-center gap-1.5" :class="dense ? '' : 'mt-2'">
-            <span :class="visual.badgeClass" :title="`${posStatus} · ${visual.badgeText}`">{{ visual.badgeText }}</span>
-            <span v-if="pinned" class="rounded-full border border-ui-hairline px-2 py-0.5 text-[10px] text-ui-text-2">置顶持仓</span>
-            <span v-else-if="slotTrace" class="rounded-full border border-ui-hairline px-2 py-0.5 text-[10px] text-ui-text-2">今日平仓 · 不占槽</span>
-            <span v-if="positionPct != null" class="sensitive text-xs tabular-nums text-ui-text-2" title="仓位占比 = 市值 / 总资产">仓位 {{ fmtPositionPct(positionPct) }}</span>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h2 class="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-bold">
+              <StockNameHover :code="row.代码" :name="row.名称">
+                <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent" :class="dense ? 'text-sm' : 'text-base'">{{ row.名称 }}</a>
+              </StockNameHover>
+              <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive font-mono text-xs font-normal tabular-nums text-ui-text-2 hover:text-accent">{{ row.代码 }}</a>
+              <span class="text-[10px] font-normal text-ui-text-3">{{ row.市场 }}</span>
+            </h2>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span :class="band === 'outside' && visual.tier !== 'trigger-buy' ? 'signal-badge signal-badge-flat' : visual.badgeClass" :title="posStatus">{{ band === 'outside' && visual.tier !== 'trigger-buy' ? '线外' : visual.badgeText }}</span>
+              <span v-if="visual.tier === 'trigger-buy' && touchClock" class="font-mono text-[11px] tabular-nums text-up">{{ touchClock }}</span>
+              <span v-if="pinned" class="rounded-full border border-ui-hairline px-2 py-0.5 text-[10px] text-ui-text-2">置顶持仓</span>
+              <span v-else-if="slotTrace" class="rounded-full border border-ui-hairline px-2 py-0.5 text-[10px] text-ui-text-2">今日平仓 · 不占槽</span>
+              <span v-if="positionPct != null" class="sensitive text-xs tabular-nums text-ui-text-2" title="仓位占比 = 市值 / 总资产">仓位 {{ fmtPositionPct(positionPct) }}</span>
+            </div>
           </div>
         </div>
         <div class="sensitive shrink-0 text-right tabular-nums">
@@ -93,8 +116,8 @@ const cardClass = computed(() => {
         </div>
       </header>
 
-      <div v-if="!dense && (Number(row.持仓) > 0 || slotTrace || row.当日盈亏 != null)" class="mt-3 overflow-x-auto border-y border-ui-hairline py-2.5">
-        <div class="flex w-max min-w-full flex-nowrap items-baseline gap-2 whitespace-nowrap">
+      <div v-if="!dense && (Number(row.持仓) > 0 || slotTrace || row.当日盈亏 != null)" class="mt-3 border-y border-ui-hairline py-2.5">
+        <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <span v-if="Number(row.持仓) > 0 || slotTrace" class="sensitive inline-flex items-baseline gap-x-1 text-xs font-semibold tabular-nums"
             :title="cyclePnl ? `已实现 ${fmtSignedMoney(cyclePnl.realized)}，浮动 ${fmtSignedMoney(cyclePnl.unrealized)}；已减仓 ${cyclePnl.soldQty} 股。收益率按本轮买入金额计算。` : '成交或行情待核对'">
             <span class="text-[10px] font-normal text-ui-text-3">买入后盈亏</span>
@@ -121,6 +144,7 @@ const cardClass = computed(() => {
           <div title="当日行情最高价"><dt class="text-ui-text-3">今日最高</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.今日最高 ?? row.最高, pdg) }}</dd></div>
         </dl>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" :class="dense ? 'mt-1.5' : 'mt-3'">
+          <span v-if="dense" class="text-ui-text-2">买入预警价 <b class="tabular-nums" :class="band === 'outside' ? 'text-ui-text-3' : 'text-up'">{{ buyAlertPx == null ? '—' : fmtNum(buyAlertPx, pdg) }}</b></span>
           <span v-if="row['距买点%'] != null && Number(row['距买点%']) < 9000" class="text-ui-text-2">距买点 <b class="tabular-nums">{{ Number(row['距买点%']).toFixed(2) }}%</b></span>
           <template v-if="!dense">
             <span v-if="row.因子侧 && row.因子侧 !== '-'" class="text-ui-text-2">因子侧 {{ row.因子侧 }}</span>

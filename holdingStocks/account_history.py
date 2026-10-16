@@ -71,7 +71,7 @@ def _worker() -> None:
     global _LAST_KEY, _ERROR_AT
     while True:
         sample = _QUEUE.get()
-        key = sample["tradingDay"] + ":" + sample["observedAt"][:16]
+        key = sample["tradingDay"] + ":" + sample["observedAt"]
         try:
             if key != _LAST_KEY:
                 _post(sample)

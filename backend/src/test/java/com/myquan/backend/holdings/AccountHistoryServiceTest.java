@@ -64,6 +64,20 @@ class AccountHistoryServiceTest {
     }
 
     @Test
+    void newerValuationWithinMinuteReplacesOlderWithoutAddingCalendarRows() throws Exception {
+        var s=sample();
+        service.record(s);
+        var account=(com.fasterxml.jackson.databind.node.ObjectNode)s.account().deepCopy();
+        account.put("dayPnl",25);
+        account.put("dayPnlPct",2.5);
+        assertEquals(true,service.record(new AccountHistoryService.Sample(s.tradingDay(),
+                s.observedAt().plusSeconds(5),s.revision(),account,s.holdings(),s.closed())).get("recorded"));
+        assertEquals(false,service.record(s).get("recorded"));
+        assertEquals(1,service.snapshots(null,10).size());
+        assertEquals("25.00",service.calendar(2026).getFirst().get("DAY_PNL").toString());
+    }
+
+    @Test
     void mismatchingCashOrMissingInventoryDoesNotRecord() throws Exception {
         var s=sample();
         ((com.fasterxml.jackson.databind.node.ObjectNode)s.account()).put("availableCash",99);
@@ -83,6 +97,22 @@ class AccountHistoryServiceTest {
         var row=service.snapshots(null,1).getFirst();
         assertEquals("0.000000",row.get("POSITION_PCT").toString());
         assertNull(row.get("DAY_PNL"));
+    }
+
+    @Test
+    void currentDayValuationAcceptsLaggingSessionMetadataWithoutChangingLedger() throws Exception {
+        var s=sample();
+        var now=LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"));
+        var previous=state.read();
+        var book=(com.fasterxml.jackson.databind.node.ObjectNode)previous.holdings().deepCopy();
+        book.put("last_session",now.toLocalDate().minusDays(1).toString());
+        when(state.read()).thenReturn(new PaperStateService.State(1,book,previous.trades(),previous.ledger()));
+        assertEquals(true,service.record(new AccountHistoryService.Sample(now.toLocalDate(),now,
+                1L,s.account(),s.holdings(),s.closed())).get("recorded"));
+        assertEquals(1,service.calendar(now.getYear()).size());
+        assertEquals(now.toLocalDate().minusDays(1).toString(),book.path("last_session").asText());
+        assertThrows(ResponseStatusException.class,()->service.record(new AccountHistoryService.Sample(
+                now.toLocalDate().plusDays(1),now.plusDays(1),1L,s.account(),s.holdings(),s.closed())));
     }
 
     @Test

@@ -42,7 +42,13 @@ public class AccountHistoryService {
         return transactions.execute(status -> {
             jdbc.queryForMap("SELECT revision FROM paper_account_state WHERE id=1 FOR UPDATE");
             var current=state.read();
-            if (!sample.tradingDay().toString().equals(current.holdings().path("last_session").asText())
+            var storedSession=current.holdings().path("last_session").asText();
+            boolean sameSession=sample.tradingDay().toString().equals(storedSession);
+            // Valuation is read-only; legacy session metadata may lag committed fills.
+            boolean liveSession=sample.tradingDay().equals(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")))
+                    && sample.tradingDay().toString().compareTo(storedSession)>0
+                    && sample.observedAt().toLocalDate().equals(sample.tradingDay());
+            if ((!sameSession && !liveSession)
                     || sample.observedAt().toLocalDate().isBefore(sample.tradingDay())
                     || sample.observedAt().isAfter(LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai")).plusSeconds(30)))
                 throw new ResponseStatusException(HttpStatus.CONFLICT,"Snapshot trading day/time is invalid.");
@@ -90,8 +96,13 @@ public class AccountHistoryService {
                     throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,"Invalid closed-position snapshot row.");
             }
             String key=sample.tradingDay()+":"+sample.observedAt().format(DateTimeFormatter.ofPattern("uuuuMMddHHmm"));
-            var existing=jdbc.queryForList("SELECT snapshot_key FROM paper_account_snapshots WHERE snapshot_key=?",key);
-            if (!existing.isEmpty()) return Map.of("recorded",false,"key",key);
+            var existing=jdbc.query("SELECT observed_at FROM paper_account_snapshots WHERE snapshot_key=?",
+                    (rs, rowNum) -> rs.getTimestamp("observed_at").toLocalDateTime(),key);
+            if (!existing.isEmpty()) {
+                var previous=existing.getFirst();
+                if (!sample.observedAt().isAfter(previous)) return Map.of("recorded",false,"key",key);
+                jdbc.update("DELETE FROM paper_account_snapshots WHERE snapshot_key=?",key);
+            }
             var recordedAccount=(com.fasterxml.jackson.databind.node.ObjectNode)sample.account().deepCopy();
             recordedAccount.put("positionPct",positionPct);
             recordedAccount.put("marketValue",marketValue);

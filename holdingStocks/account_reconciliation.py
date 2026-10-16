@@ -132,6 +132,12 @@ def account_summary(state: dict[str, Any], rows: list[dict[str, Any]], session: 
     pnl = round(total - base, 2) if total is not None and base is not None and base > 0 else None
     anchor = number(book.get("account_total_open")) if book.get("account_total_open_session") == session else None
     day = round(daily + realized_day, 2) if daily_ready else None
+    # Read-only rollover: committed cash + complete daily fills/quotes also
+    # determine opening equity. Never reuse yesterday's opening balance.
+    if anchor is None and total is not None and day is not None:
+        inferred_open = round(total - day, 2)
+        if inferred_open > 0:
+            anchor = inferred_open
     return dict(accountTotal=total, availableCash=cash, marketValue=round(market, 2) if valuation_ready else None,
                 cost=round(cost_total, 2) if valuation_ready else None,
                 paperEquityBase=base, totalPnl=pnl,

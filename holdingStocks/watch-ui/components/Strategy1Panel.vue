@@ -30,7 +30,7 @@ const legend = [
   { id: 'hold-paper', cls: 'signal-badge signal-badge-hold-paper', label: '策略持有' },
   { id: 'ban-buy', cls: 'signal-badge signal-badge-ban-buy', label: '今日平仓' },
   { id: 'warn-buy', cls: 'signal-badge signal-badge-warn-buy', label: '买入预警' },
-  { id: 'trigger-buy', cls: 'signal-badge signal-badge-trigger-buy', label: '已触买（含策略持有叠买）' },
+  { id: 'trigger-buy', cls: 'signal-badge signal-badge-trigger-buy', label: '触买' },
   { id: 'warn-sell', cls: 'signal-badge signal-badge-warn-sell', label: '卖出预警' },
   { id: 'trigger-sell', cls: 'signal-badge signal-badge-trigger-sell', label: '已触止损' },
   { id: 'flat', cls: 'signal-badge signal-badge-flat', label: '空仓' },
@@ -206,7 +206,18 @@ function rowKey(r: HoldingRow): string {
 }
 
 function explanationText(r: HoldingRow): string {
-  return String(r.挂单说明 || r.预警 || '').trim()
+  return String(r.挂单说明 || '')
+    .split('；')
+    .map((part) => part.trim())
+    .filter(
+      (part) =>
+        part &&
+        !part.startsWith('买入信号已触发') &&
+        !part.includes('当日新增额度已满') &&
+        !part.includes('槽满') &&
+        !part.includes('未入槽'),
+    )
+    .join('；')
 }
 
 function toggleExplanation(r: HoldingRow) {
@@ -349,25 +360,21 @@ function tradeIncomeTitle(r: HoldingRow): string {
 
 <template>
   <div>
-    <div class="card mb-4 p-3">
-      <div class="flex flex-wrap gap-2 text-xs">
-        <span v-for="[t, l] in steps" :key="t" class="rounded-full bg-accent/10 px-2 py-1 text-accent">{{ t }} {{ l }}</span>
+    <div
+      class="card mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2"
+      title="状态与纸面仓独立。综合策略收益=历次已实现盈亏＋当前浮盈。点表头可按该列排序，未点时行序保持。"
+    >
+      <div class="flex flex-wrap items-center gap-1.5 text-xs">
+        <span v-for="[t, l] in steps" :key="t" class="rounded-full bg-accent/10 px-2 py-0.5 text-accent">{{ t }} {{ l }}</span>
+        <strong class="ml-1 text-sm text-ui-text">{{ phase || '-' }}</strong>
+        <span v-if="slotMeta" class="text-ui-text-2">
+          四槽 {{ slotMeta.occupiedCount ?? 0 }}/{{ slotMeta.max ?? 4 }}
+          · 空槽 {{ slotMeta.free ?? '-' }}
+        </span>
+        <span v-if="sortKey === 'dayChg'" class="text-ui-text-3">日内涨跌{{ sortDir === 'desc' ? '高→低' : '低→高' }}</span>
+        <span v-else-if="sortKey === 'strategyPnl'" class="text-ui-text-3">综合策略收益{{ sortDir === 'desc' ? '高→低' : '低→高' }}</span>
       </div>
-      <div class="mt-2 text-sm">当前：<strong>{{ phase || '-' }}</strong></div>
-      <div v-if="slotMeta" class="mt-1 text-xs text-ui-text-2">
-        四槽持仓 {{ slotMeta.occupiedCount ?? 0 }}/{{ slotMeta.max ?? 4 }}
-        · 空槽 {{ slotMeta.free ?? '-' }}
-        · 每槽约 {{ Math.round((slotMeta.weight ?? 0.3) * 100) }}%
-        <template v-if="!hideBuyDistance"> · 顺序固定，刷新不重排</template>
-        <template v-if="sortKey === 'dayChg'"> · 已按日内涨跌{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
-        <template v-else-if="sortKey === 'strategyPnl'"> · 已按综合策略收益{{ sortDir === 'desc' ? '高→低' : '低→高' }}</template>
-      </div>
-      <div class="mt-1 text-xs text-ui-text-3">
-        状态={{ props.statusMode === 'paper' ? '纸面仓位/预警' : '策略模拟器（空仓/策略持有）' }}；策略状态与纸面仓独立。
-        综合策略收益=历次已实现盈亏＋当前浮盈；综合单笔收入=本轮已实现盈亏＋剩余仓位浮盈。
-        点「日内涨跌 / 综合策略收益」表头可排序（数字实时刷，行序锁定；再点表头重排/切换方向）。
-      </div>
-      <div class="mt-2 flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <button
           v-for="item in legend"
           :key="item.id"
@@ -401,7 +408,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
       </div>
     </div>
     <div class="watch-table-wrap">
-        <table class="watch-sticky-table">
+        <table class="watch-sticky-table strategy-fixed-table">
           <thead>
             <tr>
               <th class="whitespace-nowrap px-3 py-1.5">分类</th>
@@ -486,7 +493,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
             <tr
               v-for="{ row: r, visual } in filteredRows"
               :key="String(r.代码)"
-              class="border-t border-ui-hairline"
+              class="strategy-fixed-row border-t border-ui-hairline"
               :class="visual.rowClass"
             >
               <td class="whitespace-nowrap px-3 py-1.5 align-middle">
@@ -615,3 +622,22 @@ function tradeIncomeTitle(r: HoldingRow): string {
     </div>
   </div>
 </template>
+<style scoped>
+.strategy-fixed-table :deep(thead th) {
+  height: 2.75rem;
+  padding-top: 0;
+  padding-bottom: 0;
+  vertical-align: middle;
+}
+.strategy-fixed-row {
+  height: 3.5rem;
+}
+.strategy-fixed-row :deep(td) {
+  height: 3.5rem;
+  max-height: 3.5rem;
+  padding-top: 0;
+  padding-bottom: 0;
+  vertical-align: middle;
+  overflow: hidden;
+}
+</style>

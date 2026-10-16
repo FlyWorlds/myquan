@@ -122,14 +122,13 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
 
   // 1. 已触发（空仓侧）
   if (buyTriggered && !sellTriggered) {
-    const tag = alert === '已触买' ? alert : alert.includes('已触买') ? alert : '已触买'
-    return mk('trigger-buy', tag)
+    return mk('trigger-buy', '触买')
   }
   if (sellTriggered && !buyTriggered) {
     return mk('trigger-sell', alert || '已触止损')
   }
   if (buyTriggered && sellTriggered) {
-    return mk('trigger-buy', alert.includes('已触买') ? alert : '已触买')
+    return mk('trigger-buy', '触买')
   }
 
   // 2. 预警带

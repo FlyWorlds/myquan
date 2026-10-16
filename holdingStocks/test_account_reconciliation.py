@@ -61,6 +61,17 @@ class ReconciliationTests(unittest.TestCase):
         state["ledger"]["entries"][0]["day_pnl"]=None
         self.assertIsNone(account_summary(state,self.rows(),"2026-10-14")["dayPnl"])
 
+    def test_stale_opening_session_uses_complete_committed_valuation(self):
+        state = self.state()
+        state["holdings"]["account_total_open_session"] = "2026-10-13"
+        summary = account_summary(state, self.rows(), "2026-10-14")
+        self.assertEqual(summary["accountOpen"], 1010)
+        self.assertEqual(summary["dayPnlPct"], 2.97)
+        state["ledger"]["entries"][0]["day_pnl"] = None
+        summary = account_summary(state, self.rows(), "2026-10-14")
+        self.assertIsNone(summary["accountOpen"])
+        self.assertIsNone(summary["dayPnlPct"])
+
     def test_flat_without_trades_is_real_zero(self):
         state=self.state()
         state["holdings"]["positions"]={}

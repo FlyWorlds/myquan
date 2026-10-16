@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HoldingRow, StrategyPicks } from '~/types/snapshot'
 import { selectionRows } from '~/utils/selectionRows'
-import { stabilizeRows } from '~/utils/stableRowOrder'
+import { orderTouchBuys, stickAlertRows } from '~/utils/alertBoard'
 
 const store = useWatchStore()
 const { error: databaseError } = useDatabaseHoldings()
@@ -221,20 +221,23 @@ const paperHoldings = computed(() => {
   )
 })
 
-const alertOrder = ref<string[]>([])
-const otherHoldings = computed(() => {
-  const taken = new Set(
-    [...slotHoldings.value, ...closedHoldings.value, ...paperHoldings.value].map((r) =>
-      String(r.代码 || ''),
-    ),
-  )
-  const raw = (snapshot.value?.holdings || []).filter((r) => !taken.has(String(r.代码 || '')))
-  return stabilizeRows(alertOrder.value, raw, (r) => String(r.代码 || ''))
-})
-watch(otherHoldings, (rows) => {
-  const next = rows.map((r) => String(r.代码 || ''))
-  if (next.join('|') !== alertOrder.value.join('|')) alertOrder.value = next
-})
+const alertCards = ref<HoldingRow[]>([])
+watch(
+  snapshot,
+  (snap) => {
+    const taken = new Set(
+      [...slotHoldings.value, ...closedHoldings.value, ...paperHoldings.value].map((row) => String(row.代码 || '')),
+    )
+    const incoming = (snap?.holdings || []).filter((row) => !taken.has(String(row.代码 || '')))
+    const quotes = new Map<string, HoldingRow>()
+    for (const row of [...(snap?.strategy1 || []), ...(snap?.strategy16 || [])]) {
+      const code = String(row.代码 || '')
+      if (code && !quotes.has(code)) quotes.set(code, row)
+    }
+    alertCards.value = orderTouchBuys(stickAlertRows(alertCards.value, incoming, taken, quotes))
+  },
+  { immediate: true },
+)
 const slotMeta = computed(() => snapshot.value?.slotMeta)
 const closedCount = computed(() => closedHoldings.value.length)
 </script>
@@ -346,16 +349,23 @@ const closedCount = computed(() => closedHoldings.value.length)
               <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" />
             </div>
           </div>
-          <div v-if="otherHoldings.length" class="space-y-2">
+          <div v-if="alertCards.length" class="space-y-2">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <h2 class="text-sm font-semibold text-ui-text-2">
                 {{ slotHoldings.length || closedHoldings.length || paperHoldings.length ? '预警' : '持仓列表' }}
-                <span class="ml-1 font-normal text-ui-text-3">{{ otherHoldings.length }}</span>
+                <span class="ml-1 font-normal text-ui-text-3">{{ alertCards.length }}</span>
               </h2>
-              <p class="text-xs text-ui-text-3">位置固定，刷新不再重排</p>
+              <p class="text-xs text-ui-text-3">触买当天固定 · 其余红色线内、灰色线外</p>
             </div>
-            <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in otherHoldings" :key="'other-' + String(row.代码)" dense :row="row" :account-total="snapshot?.account?.accountTotal" />
+            <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <HoldingCard
+                v-for="row in alertCards"
+                :key="'other-' + String(row.代码)"
+                dense
+                :band="row.预警线内 === false ? 'outside' : 'inside'"
+                :row="row"
+                :account-total="snapshot?.account?.accountTotal"
+              />
             </div>
           </div>
           <div v-if="paperHoldings.length" class="space-y-2">

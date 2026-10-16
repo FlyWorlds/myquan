@@ -110,6 +110,8 @@ export interface HoldingRow {
   槽位留痕?: boolean
   槽位候选?: boolean
   当日预警?: boolean
+  /** 页面粘滞：本帧仍在预警线内为 true，离开后保留卡片则为 false */
+  预警线内?: boolean
   因子侧?: string
   因子价?: number | null
   因子触发?: string

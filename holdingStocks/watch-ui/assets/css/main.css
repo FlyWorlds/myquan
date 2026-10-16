@@ -400,6 +400,12 @@
   animation: signal-trigger-buy-glow 1.5s ease-in-out infinite;
 }
 
+.signal-trigger-buy-fixed {
+  background: color-mix(in srgb, var(--watch-up) 34%, var(--ui-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--watch-up) 55%, transparent);
+  animation: none;
+}
+
 .signal-trigger-sell {
   background: linear-gradient(
     135deg,
