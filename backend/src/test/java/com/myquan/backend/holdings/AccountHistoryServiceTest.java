@@ -41,6 +41,19 @@ class AccountHistoryServiceTest {
     }
 
     @Test
+    void calendarUsesLastSnapshotWithoutSummingIntradayOrFillingMissingDays() throws Exception {
+        service.record(sample());
+        jdbc.update("UPDATE paper_account_snapshots SET day_pnl=10");
+        var s=sample();
+        service.record(new AccountHistoryService.Sample(s.tradingDay(),s.observedAt().plusMinutes(1),s.revision(),s.account(),s.holdings(),s.closed()));
+        jdbc.update("UPDATE paper_account_snapshots SET day_pnl=25 WHERE observed_at=?",s.observedAt().plusMinutes(1));
+        var rows=service.calendar(2026);
+        assertEquals(1,rows.size());
+        assertEquals("25.00", rows.getFirst().get("DAY_PNL").toString());
+        assertTrue(service.calendar(2025).isEmpty());
+    }
+
+    @Test
     void snapshotStoresMoneyAndPercentSeparatelyAndDeduplicatesMinute() throws Exception {
         assertEquals(true,service.record(sample()).get("recorded"));
         assertEquals(false,service.record(sample()).get("recorded"));

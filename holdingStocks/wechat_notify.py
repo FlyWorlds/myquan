@@ -685,11 +685,11 @@ def in_default_strategy_alert_scope(code: str) -> bool:
 def filter_default_strategy_alert_rows(
     rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """微信扫描名单：只留默认策略池代码。不改变 collect_rows universe。"""
+    """微信扫描名单：默认策略池买入预警，加实际持仓的风险预警。"""
     out: list[dict[str, Any]] = []
     for row in rows:
         code = str(row.get("代码") or "")
-        if code and in_default_strategy_alert_scope(code):
+        if code and (int(row.get("持仓") or 0) > 0 or in_default_strategy_alert_scope(code)):
             out.append(row)
     return out
 

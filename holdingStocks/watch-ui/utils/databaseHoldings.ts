@@ -12,6 +12,7 @@ export function mergeDatabaseHoldings(raw: WatchSnapshot, state: DatabasePaperSt
     const unchanged = qty === Number(row.持仓 || 0)
       && (qty <= 0 || Math.abs(Number(pos?.cost) - Number(row.成本)) < 0.000001)
     if (!unchanged) compatible = false
+    const sameCycleRevision = raw.paperRevision === state.revision
     const cost = qty <= 0 && row.已实现 && unchanged ? row.成本 ?? null : pos?.cost ?? null
     const mark = row.现价
     const pnl = qty > 0 && cost != null && mark != null && mark > 0 ? (mark - cost) * qty : null
@@ -19,6 +20,8 @@ export function mergeDatabaseHoldings(raw: WatchSnapshot, state: DatabasePaperSt
       买入时间: pos?.buy_time ?? null, 名称: pos?.name || row.名称,
       ...(!unchanged ? { 持仓状态: qty > 0 ? '已经买入' : '空仓', 已实现: false,
         当日盈亏: null, '当日盈亏%': null, 综合单笔收入: null, '综合单笔收入%': null } : {}),
+      ...(!sameCycleRevision ? { 综合单笔收入: null, '综合单笔收入%': null,
+        综合单笔成本额: null, 综合单笔卖出数量: null, 综合单笔持仓数量: null, 综合单笔来源: null } : {}),
       ...(qty > 0 ? { 浮盈: pnl, '浮盈%': cost && mark != null && mark > 0 ? (mark / cost - 1) * 100 : null }
         : row.已实现 && unchanged ? {} : { 浮盈: null, '浮盈%': null }) }
   })

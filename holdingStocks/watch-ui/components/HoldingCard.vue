@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
-import { fmtNum, fmtSignedPct, fmtSignalClock } from '~/utils/format'
+import { fmtNum, fmtSignedPct, fmtSignalClock, fmtSignedMoney } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 import { fmtPositionPct, positionPctOf } from '~/utils/position'
+import { holdingCyclePnl } from '~/utils/holdingCyclePnl'
 
 const props = defineProps<{ row: HoldingRow; accountTotal?: number | null }>()
+
+const cyclePnl = computed(() => holdingCyclePnl(props.row))
 
 const positionPct = computed(() => positionPctOf(props.row, props.accountTotal))
 
@@ -35,50 +38,6 @@ const hwmTitle = computed(() => {
     : '策略 HWM（peak_high）；自动卖出同用此值'
 })
 
-const posChipStyle = computed(() => {
-  const s = posStatus.value
-  if (s === '已经买入' || s === '持有' || s === '持有·T+1') {
-    return {
-      color: 'var(--watch-hold)',
-      borderColor: 'color-mix(in srgb, var(--watch-hold) 45%, transparent)',
-      background: 'color-mix(in srgb, var(--watch-hold) 14%, transparent)',
-    }
-  }
-  if (s === '待卖出') {
-    return {
-      color: 'var(--watch-down)',
-      borderColor: 'color-mix(in srgb, var(--watch-down) 45%, transparent)',
-      background: 'color-mix(in srgb, var(--watch-down) 12%, transparent)',
-    }
-  }
-  if (s === '今日平仓' || s === '已平仓' || s === '已触止损平仓' || s === '已止损' || s === '当日禁买') {
-    return {
-      color: 'var(--ui-text-2)',
-      borderColor: 'var(--ui-hairline)',
-      background: 'color-mix(in srgb, var(--ui-text-2) 10%, transparent)',
-    }
-  }
-  if (s === '待买入') {
-    return {
-      color: 'var(--watch-up)',
-      borderColor: 'color-mix(in srgb, var(--watch-up) 45%, transparent)',
-      background: 'color-mix(in srgb, var(--watch-up) 12%, transparent)',
-    }
-  }
-  if (s === '策略持有') {
-    return {
-      color: 'var(--watch-hold-paper)',
-      borderColor: 'color-mix(in srgb, var(--watch-hold-paper) 40%, transparent)',
-      background: 'color-mix(in srgb, var(--watch-hold-paper) 12%, transparent)',
-    }
-  }
-  return {
-    color: 'var(--ui-text-2)',
-    borderColor: 'var(--ui-hairline)',
-    background: 'transparent',
-  }
-})
-
 const cardClass = computed(() => {
   const map: Record<string, string> = {
     'trigger-buy': 'signal-trigger-buy border-up/50',
@@ -98,126 +57,81 @@ const cardClass = computed(() => {
 </script>
 
 <template>
-  <article class="card overflow-hidden p-0 transition" :class="cardClass">
-    <div class="p-3">
-      <header class="mb-2 flex items-start justify-between gap-2">
-        <div>
-          <div class="flex flex-wrap items-center gap-1.5">
-            <span class="rounded-full border border-ui-hairline px-2 py-0.5 text-xs text-accent">{{ row.市场 }}</span>
-            <span
-              v-if="pinned"
-              class="rounded-full px-2 py-0.5 text-xs font-medium"
-              style="color: var(--watch-hold); border: 1px solid color-mix(in srgb, var(--watch-hold) 50%, transparent); background: color-mix(in srgb, var(--watch-hold) 16%, transparent)"
-            >置顶·四槽</span>
-            <span
-              v-else-if="slotTrace"
-              class="rounded-full px-2 py-0.5 text-xs font-medium text-ui-text-2"
-              style="border: 1px solid var(--ui-hairline); background: color-mix(in srgb, var(--ui-text-2) 8%, transparent)"
-            >今日平仓·不占槽</span>
-            <span
-              class="rounded-full border px-2 py-0.5 text-xs font-medium"
-              :style="posChipStyle"
-            >{{ posStatus }}</span>
-            <span
-              v-if="positionPct != null"
-              class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium text-accent"
-              style="border: 1px solid color-mix(in srgb, var(--watch-accent) 45%, transparent); background: color-mix(in srgb, var(--watch-accent) 10%, transparent)"
-              title="仓位占比 = 市值 / 总资产"
-            >
-              仓位 <b class="sensitive tabular-nums">{{ fmtPositionPct(positionPct) }}</b>
-              <span class="h-1 w-10 overflow-hidden rounded-full bg-ui-hairline">
-                <span class="sensitive block h-full rounded-full bg-accent" :style="{ width: `${Math.min(100, positionPct)}%` }" />
-              </span>
-            </span>
-          </div>
-          <h2 class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-bold">
+  <article class="holding-card card overflow-hidden p-0 transition" :class="cardClass">
+    <div class="p-4">
+      <header class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
+          <h2 class="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-bold">
             <StockNameHover :code="row.代码" :name="row.名称">
-              <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive hover:text-accent hover:underline">{{ row.名称 }}</a>
+              <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive text-base hover:text-accent">{{ row.名称 }}</a>
             </StockNameHover>
-            <b class="sensitive tabular-nums">{{ fmtNum(row.现价, pdg) }}</b>
-            <a
-              :href="baiduStockUrl(row.代码, row.名称)"
-              target="_blank"
-              rel="noopener"
-              class="rounded border border-ui-hairline px-1.5 py-0.5 text-[10px] font-normal text-ui-text-2 hover:border-accent hover:text-accent"
-              title="查看行情价格单"
-            >价格</a>
-            <NuxtLink
-              :to="`/trades?code=${row.代码}`"
-              class="rounded border border-ui-hairline px-1.5 py-0.5 text-[10px] font-normal text-ui-text-2 hover:border-accent hover:text-accent"
-              title="查看交割单买卖明细"
-            >交割</NuxtLink>
-            <ChgText class="sensitive text-sm font-semibold tabular-nums" :chg="row.当日涨幅">{{ fmtSignedPct(row.当日涨幅) }}</ChgText>
-            <FloatPnlInline :row="row" />
+            <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive font-mono text-xs font-normal tabular-nums text-ui-text-2 hover:text-accent">{{ row.代码 }}</a>
+            <span class="text-[10px] font-normal text-ui-text-3">{{ row.市场 }}</span>
           </h2>
-          <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="sensitive text-xs text-ui-text-2 hover:text-accent">{{ row.代码 }}</a>
+          <div class="mt-2 flex flex-wrap items-center gap-1.5">
+            <span :class="visual.badgeClass" :title="`${posStatus} · ${visual.badgeText}`">{{ visual.badgeText }}</span>
+            <span v-if="pinned" class="rounded-full border border-ui-hairline px-2 py-0.5 text-[10px] text-ui-text-2">置顶持仓</span>
+            <span v-else-if="slotTrace" class="rounded-full border border-ui-hairline px-2 py-0.5 text-[10px] text-ui-text-2">今日平仓 · 不占槽</span>
+            <span v-if="positionPct != null" class="sensitive text-xs tabular-nums text-ui-text-2" title="仓位占比 = 市值 / 总资产">仓位 {{ fmtPositionPct(positionPct) }}</span>
+          </div>
         </div>
-        <span :class="visual.badgeClass" :title="visual.badgeText">{{ visual.badgeText }}</span>
+        <div class="sensitive shrink-0 text-right tabular-nums">
+          <div class="text-[10px] text-ui-text-3">现价</div>
+          <b class="text-xl leading-tight">{{ fmtNum(row.现价, pdg) }}</b>
+          <ChgText class="ml-2 text-xs font-semibold" :chg="row.当日涨幅">{{ fmtSignedPct(row.当日涨幅) }}</ChgText>
+        </div>
       </header>
-      <p v-if="row.信号时间" class="mb-2 font-mono text-xs font-semibold tabular-nums text-accent">
-        触发 {{ fmtSignalClock(row.信号时间) }}
-      </p>
-      <p v-if="row.当日预警 && !(row.持仓)" class="mb-2 text-xs text-accent">当日预警 · 未登记持仓</p>
-      <p v-if="row.error" class="text-sm text-up">{{ row.error }}</p>
-      <div v-else class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-        <div><span class="text-ui-text-2">持仓状态</span> <b>{{ posStatus }}</b></div>
-        <div>
-          <span class="text-ui-text-2">{{ slotTrace && row.卖出数量 ? '卖出' : '持仓' }}</span>
-          <b class="sensitive">{{ slotTrace && row.卖出数量 ? row.卖出数量 : (row.持仓 ?? 0) }}</b>
+
+      <div v-if="Number(row.持仓) > 0 || slotTrace || row.当日盈亏 != null" class="mt-3 overflow-x-auto border-y border-ui-hairline py-2.5">
+        <div class="flex w-max min-w-full flex-nowrap items-baseline gap-2 whitespace-nowrap">
+          <span v-if="Number(row.持仓) > 0 || slotTrace" class="sensitive inline-flex items-baseline gap-x-1 text-xs font-semibold tabular-nums"
+            :title="cyclePnl ? `已实现 ${fmtSignedMoney(cyclePnl.realized)}，浮动 ${fmtSignedMoney(cyclePnl.unrealized)}；已减仓 ${cyclePnl.soldQty} 股。收益率按本轮买入金额计算。` : '成交或行情待核对'">
+            <span class="text-[10px] font-normal text-ui-text-3">买入后盈亏</span>
+            <template v-if="cyclePnl">
+              <ChgText :chg="cyclePnl.amount">{{ fmtSignedMoney(cyclePnl.amount) }}</ChgText>
+              <ChgText :chg="cyclePnl.pct" class="text-[11px] font-normal">({{ fmtSignedPct(cyclePnl.pct) }})</ChgText>
+            </template>
+            <span v-else class="text-ui-text-3">—</span>
+          </span>
+          <FloatPnlInline :row="row" class="holding-day-pnl" />
         </div>
-        <div><span class="text-ui-text-2">成本</span> <b class="sensitive">{{ row.成本 != null ? fmtNum(row.成本, pdg) : '-' }}</b></div>
-        <div v-if="slotTrace">
-          <span class="text-ui-text-2">平仓价</span>
-          <b class="sensitive">{{ row.成交价 != null ? fmtNum(row.成交价, pdg) : '-' }}</b>
-        </div>
-        <div v-else><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
-        <div v-if="slotTrace"><span class="text-ui-text-2">因子侧</span> <b>{{ row.因子侧 || '-' }}</b></div>
-        <div><span class="text-ui-text-2">因子触发</span> <b>{{ row.因子触发 || '-' }}</b></div>
-        <div v-if="row.信号时间">
-          <span class="text-ui-text-2">触发时刻</span>
-          <b class="ml-1 font-mono tabular-nums">{{ fmtSignalClock(row.信号时间) }}</b>
-        </div>
-        <div v-if="row.阈值就绪" class="col-span-2 grid grid-cols-3 gap-x-3 text-sm">
-          <div>
-            <span class="text-ui-text-2">现价</span>
-            <b class="sensitive ml-1 tabular-nums">{{ fmtNum(row.现价, pdg) }}</b>
-          </div>
-          <div :title="hwmTitle">
-            <span class="text-ui-text-2">持仓最高</span>
-            <b class="sensitive ml-1 tabular-nums">{{ fmtNum(row.持仓最高 ?? row.峰值, pdg) }}</b>
-            <span
-              v-if="row.持仓最高时间"
-              class="ml-1 font-mono text-[10px] text-ui-text-3"
-            >{{ row.持仓最高时间 }}</span>
-          </div>
-          <div>
-            <span class="text-ui-text-2">卖出侧</span>
-            <b class="sensitive ml-1 text-down">{{ fmtNum(row.卖出侧价 ?? row.止损, pdg) }}</b>
-          </div>
-        </div>
-        <div v-if="row.阈值就绪" class="col-span-2 grid grid-cols-2 gap-x-3 text-sm">
-          <div>
-            <span class="text-ui-text-2">买入侧</span>
-            <b class="sensitive ml-1 text-up">{{ fmtNum(row.买入侧价 ?? row.买点, pdg) }}</b>
-          </div>
-          <div
-            v-if="row.今日最高 != null || row.最高 != null"
-            title="行情 API dayHigh；≠ trailing 用的持仓最高"
-          >
-            <span class="text-ui-text-2">今日最高</span>
-            <b class="sensitive ml-1 tabular-nums">{{ fmtNum(row.今日最高 ?? row.最高, pdg) }}</b>
-            <span class="ml-1 text-[10px] text-ui-text-3">行情</span>
-          </div>
-        </div>
-        <div v-if="row['距买点%'] != null && Number(row['距买点%']) < 9000" class="col-span-2 text-sm">
-          <span class="text-ui-text-2">距买点</span>
-          <b class="ml-1 tabular-nums">{{ Number(row['距买点%']).toFixed(2) }}%</b>
-          <span v-if="row.槽位候选" class="ml-2 text-xs text-accent">槽位候选</span>
-          <span v-if="row.已实现" class="ml-2 text-xs text-ui-text-3">当日留痕</span>
-        </div>
-        <div class="col-span-2 text-xs leading-relaxed text-ui-text-2">{{ row.挂单说明 || row.预警 }}</div>
-        <footer class="col-span-2 text-xs text-ui-text-3">更新 {{ row.更新 || '-' }}</footer>
       </div>
+      <p v-if="row.error" class="mt-3 text-sm text-up">{{ row.error }}</p>
+      <template v-else>
+        <dl class="mt-3 grid grid-cols-3 gap-3 text-xs">
+          <div><dt class="text-ui-text-3">{{ slotTrace ? '卖出数量' : '持仓数量' }}</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ slotTrace ? (row.卖出数量 ?? cyclePnl?.soldQty ?? '—') : (row.持仓 ?? 0) }} 股</dd></div>
+          <div><dt class="text-ui-text-3">{{ slotTrace ? '平仓价' : '买入成本' }}</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(slotTrace ? row.成交价 : row.成本, pdg) }}</dd></div>
+          <div><dt class="text-ui-text-3">触发时间</dt><dd class="mt-1 font-mono font-semibold tabular-nums">{{ fmtSignalClock(row.信号时间) || '—' }}</dd></div>
+        </dl>
+        <dl v-if="row.阈值就绪" class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-ui-hairline p-3 text-xs sm:grid-cols-4">
+          <div><dt class="text-ui-text-3">买入侧</dt><dd class="sensitive mt-1 font-semibold tabular-nums text-up">{{ fmtNum(row.买入侧价 ?? row.买点, pdg) }}</dd></div>
+          <div><dt class="text-ui-text-3">卖出侧</dt><dd class="sensitive mt-1 font-semibold tabular-nums text-down">{{ fmtNum(row.卖出侧价 ?? row.止损, pdg) }}</dd></div>
+          <div :title="hwmTitle"><dt class="text-ui-text-3">持仓最高</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.持仓最高 ?? row.峰值, pdg) }}</dd></div>
+          <div title="当日行情最高价"><dt class="text-ui-text-3">今日最高</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.今日最高 ?? row.最高, pdg) }}</dd></div>
+        </dl>
+        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <span v-if="row['距买点%'] != null && Number(row['距买点%']) < 9000" class="text-ui-text-2">距买点 <b class="tabular-nums">{{ Number(row['距买点%']).toFixed(2) }}%</b></span>
+          <span v-if="row.因子侧 && row.因子侧 !== '-'" class="text-ui-text-2">因子侧 {{ row.因子侧 }}</span>
+          <span v-if="row.因子触发 && row.因子触发 !== '-' && row.因子触发 !== '不可用'" class="text-ui-text-2">{{ row.因子触发 }}</span>
+          <span v-if="row.槽位候选" class="text-accent">槽位候选</span>
+          <span v-if="row.当日预警 && !row.持仓" class="text-accent">当日预警 · 未登记持仓</span>
+        </div>
+        <p v-if="row.挂单说明 || row.预警" class="mt-2 break-words text-xs leading-relaxed text-ui-text-2">{{ row.挂单说明 || row.预警 }}</p>
+        <footer class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-ui-hairline pt-2 text-[10px] text-ui-text-3">
+          <span>更新 {{ row.更新 || '—' }}</span>
+          <div class="flex items-center gap-3">
+            <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="hover:text-accent">行情 ↗</a>
+            <NuxtLink :to="`/trades?code=${row.代码}`" class="hover:text-accent">交割 ↗</NuxtLink>
+          </div>
+        </footer>
+      </template>
     </div>
   </article>
 </template>
+<style scoped>
+.holding-card.signal-hold-real {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--watch-hold) 12%, var(--ui-surface)), color-mix(in srgb, var(--watch-hold) 4%, var(--ui-surface)));
+}
+.holding-day-pnl { margin-left: 0; font-size: .75rem; }
+.holding-day-pnl :deep(.text-xs) { font-size: 11px; }
+</style>

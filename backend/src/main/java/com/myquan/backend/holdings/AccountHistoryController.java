@@ -18,6 +18,8 @@ public class AccountHistoryController {
     @GetMapping("/api/paper/account-snapshots")
     public List<Map<String,Object>> snapshots(@RequestParam(required=false) LocalDate day,
             @RequestParam(defaultValue="100") int limit) { return history.snapshots(day,limit); }
+    @GetMapping("/api/paper/returns-calendar")
+    public List<Map<String,Object>> calendar(@RequestParam int year) { return history.calendar(year); }
     @GetMapping("/api/paper/closed")
     public List<Map<String,Object>> closed(@RequestParam(required=false) LocalDate day,
             @RequestParam(defaultValue="100") int limit) { return history.closed(day,limit); }

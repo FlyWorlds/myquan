@@ -44,3 +44,11 @@ test('closed-row realized cost survives while missing quotes never invent return
   const noQuote = { ...raw(), holdings: [{ 代码: '002841', 持仓: 2, 成本: 10, 现价: 0 }] }
   assert.equal(mergeDatabaseHoldings(noQuote as any, state()).holdings[0].浮盈, null)
 })
+
+test('a newer ledger revision invalidates old cycle profit even if cost and quantity match', () => {
+  const input = { ...raw(), paperRevision: 1, holdings: [{ 代码: '002841', 持仓: 2, 成本: 10, 现价: 11,
+    综合单笔来源: 'database_delivery_cycle_with_adjustments', 综合单笔收入: 99, 综合单笔成本额: 100 }] }
+  const result = mergeDatabaseHoldings(input as any, state())
+  assert.equal(result.holdings[0].综合单笔收入, null)
+  assert.equal(result.holdings[0].综合单笔来源, null)
+})

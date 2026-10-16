@@ -2995,6 +2995,8 @@ _VOL20_CACHE: dict[str, tuple[str, float | None]] = {}
 _M1_EMPTY_TTL_SEC = 15.0  # 拉空/失败：短负缓存，避免每轮狂打接口
 # 单股正式开盘复核：成功后按 session 缓存；失败不缓存，下一轮继续拉取。
 _OPEN_AUDIT_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
+from quote_alerts import QuoteAlerts
+_QUOTE_ALERTS = QuoteAlerts()
 
 
 def _daily_last_trade_date(daily: pd.DataFrame) -> Any | None:
@@ -8391,10 +8393,26 @@ def _collect_quote_runtime_rows(get_quote=None):
                 "成交价": rec.get("price"), "止损": rec.get("price"), "卖出侧价": rec.get("price"),
                 "当日盈亏": rec.get("day_pnl"), "当日盈亏%": rec.get("day_pnl_pct"),
                 "浮盈": rec.get("pnl"), "浮盈%": rec.get("pnl_pct"), "平仓时间": rec.get("time")})
+        from condition_buy import auction_entry_blocked
+        official_open = order.get("open") if order else session_open_usable(q)
+        _QUOTE_ALERTS.enrich(row, q, now=datetime.now(), signal=_signal_f26,
+            entry_pct=_watch_pct(w), tick=_watch_tick(w), official_open=official_open,
+            blocked=auction_entry_blocked(official_open, q.get("prev_close"), limit_up_pct=_watch_limit_down_pct(w))
+                or bool(order and order.get("status") in ("BLOCKED", "CANCELLED")))
+        if order:
+            row["开盘记录时间"] = order.get("open_audit_at") or order.get("armed_quote_at")
         if books.get(code):
             apply_database_book_to_row(row, books[code])
         _enrich_comprehensive_trade_return(row, read_model=model)
         rows.append(row)
+    # Publish unfilled signals even when execution is blocked by slots/daily quota.
+    signal_slots = slot_meta(data)
+    opened = {t.get("code") for t in model.state.get("trades", [])
+              if str(t.get("side") or "").lower() == "buy"
+              and str(t.get("session") or t.get("time") or "")[:10] == day
+              and not t.get("reset_archived")}
+    signal_slots["buysLeft"] = max(0, int(MAX_NEW_SYMBOLS_PER_SESSION) - len(opened))
+    _annotate_unfilled_buy_signals(rows, signal_slots)
     return rows
 
 
@@ -12941,6 +12959,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     if _CONDITION_BUY_ACTIVE:
         from database_quotes import DatabaseQuotes
         def observe_quote(sina, quote):
+            _QUOTE_ALERTS.observe(_code_key(sina), quote, datetime.now())
             condition_worker.observe(sina, quote)
             strategy_worker.observe(sina, quote)
             feed.hub.updated.set()
@@ -13228,6 +13247,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         get_strategies_api=_get_strategies_api_cache,
         get_factors_api=_get_factors_api_cache,
         handle_strategy16b_api=_handle_strategy16b_api,
+        on_selection_load=lambda selection: _set_strategy16b_dynamic(selection.get("params") or {}, selection["pool"]),
         handle_sectors_api=_handle_sectors_api,
         watch_ui_dist_ready=_watch_ui_dist_ready,
         on_paper_reset=_on_paper_reset,

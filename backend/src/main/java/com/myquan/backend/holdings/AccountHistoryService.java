@@ -120,6 +120,18 @@ public class AccountHistoryService {
                 : jdbc.queryForList("SELECT * FROM paper_account_snapshots WHERE trading_day=? ORDER BY observed_at DESC LIMIT ?",day,bounded);
     }
 
+    public List<Map<String,Object>> calendar(int year) {
+        if (year<2000 || year>2100) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid year");
+        return jdbc.queryForList("""
+            SELECT s.trading_day,s.day_pnl,s.day_pnl_pct,s.account_total,s.total_pnl,s.observed_at
+            FROM paper_account_snapshots s
+            WHERE s.trading_day>=? AND s.trading_day<? AND NOT EXISTS (
+                SELECT 1 FROM paper_account_snapshots newer WHERE newer.trading_day=s.trading_day
+                AND newer.observed_at>s.observed_at)
+            ORDER BY s.trading_day
+            """, LocalDate.of(year,1,1),LocalDate.of(year+1,1,1));
+    }
+
     public List<Map<String,Object>> closed(LocalDate day, int limit) {
         int bounded=Math.max(1,Math.min(limit,1000));
         return day==null

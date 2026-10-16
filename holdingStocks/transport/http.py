@@ -26,6 +26,7 @@ def build_watch_request_handler(
     watch_ui_dist_ready: Callable[[], bool],
     on_paper_reset: Callable[[], Any] | None = None,
     on_front_rendered: Callable[[], bool] | None = None,
+    on_selection_load: Callable[[dict], Any] | None = None,
 ) -> type[SimpleHTTPRequestHandler]:
     """返回绑定依赖后的 RequestHandler 类（供 ThreadingHTTPServer 使用）。"""
 
@@ -198,6 +199,19 @@ def build_watch_request_handler(
                 status, data = handle_strategy16b_api(self.path)
                 self._send_json(data, status=status)
                 return
+            if path == "/api/holdings/returns-calendar" or path.startswith("/api/strategy16b/groups") or path.startswith("/api/strategy16b/replay/"):
+                try:
+                    from selection_groups import backend, replay_status
+                    if path.startswith("/api/strategy16b/replay/"):
+                        data = replay_status(path.rsplit("/", 1)[-1])
+                    else:
+                        endpoint = "returns-calendar" if path.startswith("/api/holdings/") else "selection-groups" + path[len("/api/strategy16b/groups"):]
+                        query = urlparse(self.path).query
+                        data = backend(endpoint + ("?" + query if query else ""))
+                    self._send_json(data)
+                except Exception:
+                    self._send_json({"error": "数据库读取失败"}, status=503)
+                return
             if path == "/api/strategies":
                 self._send_json(get_strategies_api())
                 return
@@ -267,6 +281,30 @@ def build_watch_request_handler(
                 self._send_json({"ready": ready}, status=200 if ready else 503)
                 return
             path = self.path.split("?", 1)[0]
+            if path in ("/api/strategy16b/groups", "/api/strategy16b/replay", "/api/strategy16b/activate", "/api/strategy16b/groups/default"):
+                try:
+                    from selection_groups import backend, start_replay
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 1000000:
+                        self._send_json({"error": "Invalid request size"}, status=400)
+                        return
+                    body = json.loads(self.rfile.read(length))
+                    if path.endswith("groups/default"):
+                        data = backend("selection-groups/default", body)
+                    elif path.endswith("activate"):
+                        group_id = str(__import__('uuid').UUID(body["groupId"]))
+                        data = json.loads(backend("selection-groups/" + group_id)["payload"])
+                        if on_selection_load is None:
+                            raise ValueError("选股载入不可用")
+                        on_selection_load(data)
+                    else:
+                        data = backend("selection-groups", body) if path.endswith("groups") else start_replay(str(__import__('uuid').UUID(body["groupId"])))
+                    self._send_json(data)
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                except Exception:
+                    self._send_json({"error": "数据库保存或回测启动失败"}, status=503)
+                return
             if path == "/api/holdings/reset":
                 if on_paper_reset is None:
                     self._send_json({"error": "reset unavailable"}, status=503)

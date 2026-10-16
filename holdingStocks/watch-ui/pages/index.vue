@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { HoldingRow, StrategyPicks } from '~/types/snapshot'
+import { selectionRows } from '~/utils/selectionRows'
 
 const store = useWatchStore()
 const { error: databaseError } = useDatabaseHoldings()
@@ -119,8 +120,10 @@ watch(strategy16bExcludeStar, (v) => import.meta.client && localStorage.setItem(
 watch(strategy16bExcludeBse, (v) => import.meta.client && localStorage.setItem('strategy16b_exclude_bse', v ? '1' : '0'))
 
 const strategy16bDynamicPicks = computed(() => strategy16bResult.value?.picks || strategy16bTab.value?.picks)
+const strategy16bListVersion = ref(0)
 const strategy16bDynamicRows = computed(() => {
   const rows = snapshot.value?.strategy16b || []
+  if (strategy16bResult.value) return selectionRows(strategy16bResult.value.picks, rows)
   if (rows.length) return rows
   const codes = new Set((strategy16bDynamicPicks.value?.items || []).map((it) => String(it.code || '').slice(-6)))
   return (snapshot.value?.strategy16 || []).filter((row) => codes.has(String(row.代码 || '')))
@@ -148,11 +151,28 @@ async function runStrategy16bSelect() {
     const res = await $fetch<Strategy16BSelectResponse>(strategy16bQuery(), { cache: 'no-store' })
     if (res.error) throw new Error(res.detail || res.error)
     strategy16bResult.value = res
+    strategy16bListVersion.value++
   } catch (err) {
     strategy16bError.value = err instanceof Error ? err.message : String(err)
   } finally {
     strategy16bLoading.value = false
   }
+}
+
+function loadStrategy16bSelection(selection: Strategy16BSelectResponse) {
+  strategy16bResult.value = selection
+  strategy16bListVersion.value++
+  const p = selection.params as any
+  if (!p) return
+  strategy16bHorizonMonths.value = p.horizon_months
+  strategy16bMaxConcepts.value = p.max_concepts
+  strategy16bPerConcept.value = p.per_concept
+  strategy16bTargetPool.value = p.target_pool
+  strategy16bPriceMax.value = (p.price_max == null ? 'none' : String(p.price_max)) as Strategy16BPriceMax
+  strategy16bExcludeSt.value = p.exclude_st
+  strategy16bExcludeChinext.value = p.exclude_chinext
+  strategy16bExcludeStar.value = p.exclude_star
+  strategy16bExcludeBse.value = p.exclude_bse
 }
 
 function resetStrategy16bParams() {
@@ -432,7 +452,11 @@ const closedCount = computed(() => closedHoldings.value.length)
       </section>
       <section v-show="activeTab === 'strategy16b'">
         <StrategyInfoPanel v-if="strategy16bTab" :tab="strategy16bTab" class="mb-4" />
-        <div class="card mb-4 p-3 space-y-3">
+        <div class="card mb-4 rounded-2xl p-4 sm:p-5 space-y-5">
+          <header class="flex flex-wrap items-center justify-between gap-3">
+            <div><p class="text-xs text-ui-text-3">策略 16B / 股票池</p><h2 class="mt-1 text-lg font-semibold">构建你的选股分组</h2><p class="mt-1 text-xs text-ui-text-3">调整条件筛选，或载入保存的股票池继续研究。</p></div>
+            <span v-if="strategy16bResult" class="rounded-full border border-ui-hairline px-3 py-1 text-xs text-ui-text-2">{{ strategy16bDynamicPicks?.items?.length || 0 }} 只股票</span>
+          </header>
           <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             <label class="text-xs font-semibold text-ui-text-2">
               回看月份
@@ -512,8 +536,10 @@ const closedCount = computed(() => closedHoldings.value.length)
             </template>
           </div>
           <p v-if="strategy16bError" class="text-xs text-ui-danger">{{ strategy16bError }}</p>
+          <SelectionGroups :selection="strategy16bResult" @load="loadStrategy16bSelection" />
         </div>
         <Strategy1Panel
+          :key="strategy16bListVersion"
           v-if="snapshot && strategy16bDynamicRows.length"
           :rows="strategy16bDynamicRows"
           :phase="snapshot.phase"
