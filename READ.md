@@ -331,7 +331,7 @@ GET /api/strategy16b/select
 
 重要口径：
 
-- `holdings_watch.json` 是本机快照缓存，不是账本真源。
+- 盯盘快照写入 MySQL 文档 `watch_snapshot`，由 `GET/PUT /api/documents/watch_snapshot` 读写。它不是账本真源。进程内存只保留当前这一帧，便于页面和 WebSocket 立即显示。预警卡片更紧凑，和策略16表格一样按首次出现顺序固定，刷新不按距买点重排。策略表一行一只股票，状态列不再把行高撑开。条件单说明固定为中文，例如「条件买单@8.32 · 已成交」，不再闪出英文状态。
 - 纸面账本、交易和状态文件不要手工乱改。
 - Win/Mac 持仓共享须连接同一 Java 后端/MySQL；不再通过 Git 同步持仓。
 - 外网行情断开时，本机 WebSocket 仍可能正常，页面以 `quoteStale` / `feedOk` 显示行情健康。
@@ -386,7 +386,13 @@ cd holdingStocks
 python index.py holdings-pull
 ```
 
-持仓账本已经切换为数据库。生产模式的 `holdings-push` 与旧 Git pull 不再可用；`holdings-pull` 只刷新数据库读取。盯盘启动检查数据库账本，失败即停止。`--no-ledger-pull` 只跳过启动检查，不会切回本地文件。离线测试须显式设置 `HOLDINGS_STORAGE=local_json`，不得用于多设备实盘模拟同步。策略16/16B 的独立 simulator 文件此次未迁库，不能将它与纸面持仓账户混为一谈。
+持仓账本已经切换为数据库。生产模式的 `holdings-push` 与旧 Git pull 不再可用；`holdings-pull` 只刷新数据库读取。盯盘启动检查数据库账本，失败即停止。`--no-ledger-pull` 只跳过启动检查，不会切回本地文件。离线测试须显式设置 `HOLDINGS_STORAGE=local_json`，不得用于多设备实盘模拟同步。策略模拟账本、盯盘快照、微信通知配置和股票名称缓存在数据库模式下走 Java 文档接口，不再回写本地 JSON。纸面账户和策略模拟账本仍然分开。Java 更新并重启后执行：
+
+```bash
+python holdingStocks/migrate_runtime_documents.py
+```
+
+该命令在盯盘进程运行时拒绝执行。导入成功后删除对应的本地 JSON。已在 `backend/logs/` 的备份不删除。
 
 ## 验证命令
 
@@ -496,6 +502,6 @@ result = aq.run_backtest(
 ## 开发约定
 
 - 改策略/因子时，同步更新 `strategy/README.md`、`docs/` 和本文。
-- 不要把 `holdingStocks/strategy_sim_state.json`、`holdingStocks/strategy_signal_events.json`、运行快照和旧账本文件当普通代码改；纸面账户由MySQL保存，独立策略simulator仍是运行态文件，未迁入本次账户库。
+- 不要把运行时 JSON 当账本手工改。纸面账户在 MySQL 账户表；策略模拟状态在文档 `strategy_simulator_state` / `strategy_simulator_events`，作废事件在 `strategy_sim_voided_events`。接口是 `GET/PUT /api/documents/{key}` 和 `POST /api/strategy-simulator/voided`。
 - 提交前至少跑 `holdingStocks/run_all_tests.py --skip-pytest-if-missing`。
 - 涉及前端时，再跑 `holdingStocks/watch-ui` 的构建或本地 dev 验证。

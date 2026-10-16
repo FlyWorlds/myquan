@@ -149,10 +149,11 @@
 |------|------|
 | MySQL账户及持仓表 | 生产持仓、现金、账户统计等，由Java事务更新 |
 | MySQL成交及交割表 | 成交流水与订正记录，供交割读模型使用 |
-| `holdings.json` / `trades.jsonl` / `trade_ledger.json` | 历史迁移、备份与离线模式文件，非生产真源 |
-| `strategy_sim_state.json` | 策略虚拟账本（单笔累计 / 策略收益） |
-| `strategy_signal_events.json` | 策略模拟成交事件 |
-| `holdings_watch.json` | **本机展示缓存**，非跨机真源 |
+| `holdings.json` / `trades.jsonl` / `trade_ledger.json` | 已迁入 MySQL 后删除的历史文件；`backend/logs/` 备份仍保留 |
+| `app_documents.strategy_simulator_state` | 策略虚拟账本（单笔累计 / 策略收益），接口读写 |
+| `app_documents.strategy_simulator_events` | 策略模拟成交事件 |
+| `strategy_sim_voided_events` | 已作废的策略模拟事件 |
+| `app_documents.watch_snapshot` | 盯盘展示快照，不是账本真源 |
 
 跨机一致性依赖访问同一个Java后台/MySQL，不通过Git同步生产持仓。各设备的localhost数据库彼此独立；Git只同步代码。
 

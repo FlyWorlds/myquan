@@ -36,6 +36,14 @@ class TestSignalLatency(unittest.TestCase):
         self.assertFalse(snap["holdings"][0]["阈值就绪"])
         self.assertEqual(row["预警"], "竞价观察")
 
+    def test_condition_note_stays_chinese_and_does_not_repeat(self):
+        note = index._condition_display_note(
+            "报价条件单 FILLED；条件买单@8.32 · 已成交；买入侧@8.32 · 卖出侧@7.90",
+            {"status": "FILLED", "price": 8.32},
+        )
+        self.assertEqual(note, "条件买单@8.32 · 已成交；买入侧@8.32 · 卖出侧@7.90")
+        self.assertNotIn("FILLED", note)
+
     def test_missing_signal_clock_is_not_zero_latency(self):
         with patch.object(index, "_current_feed_health", return_value={}):
             snap = index._stamp_snapshot_liveness({}, clock="2026-10-15 09:35:00")

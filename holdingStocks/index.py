@@ -1838,6 +1838,34 @@ def _current_feed_health() -> dict[str, Any]:
         return {"feedOk": False, "quoteStale": True, "quoteAt": None, "quoteAgeSec": None}
 
 
+_CONDITION_STATUS_CN = {
+    "ARMED": "已挂单",
+    "TRIGGERED": "已触发待成交",
+    "FILLED": "已成交",
+    "CANCELLED": "已撤销",
+    "BLOCKED": "未挂上",
+}
+
+
+def _condition_display_note(note: Any, condition: dict[str, Any]) -> str:
+    """条件单只留一句中文状态，去掉英文状态词，避免和信号说明来回覆盖。"""
+    kept: list[str] = []
+    for piece in str(note or "").split("；"):
+        text = piece.strip()
+        if not text or text.startswith("条件买单@") or text.startswith("报价条件单"):
+            continue
+        if text not in kept:
+            kept.append(text)
+    status = _CONDITION_STATUS_CN.get(str(condition.get("status") or ""), "待核验")
+    try:
+        px = f"{float(condition['price']):.2f}"
+    except (TypeError, ValueError, KeyError):
+        px = "-"
+    tip = f"条件买单@{px} · {status}"
+    body = "；".join(kept)
+    return f"{tip}；{body}" if body else tip
+
+
 def _stamp_snapshot_liveness(snap: dict[str, Any], *, clock: str | None = None) -> dict[str, Any]:
     """刷新进程时钟，并按行情源是否还在收外网数据打 quoteStale。"""
     clock_now = clock or _now()
@@ -1889,14 +1917,7 @@ def _stamp_snapshot_liveness(snap: dict[str, Any], *, clock: str | None = None) 
                 out["条件买入价"] = condition.get("price")
                 out["条件单状态"] = condition.get("status")
                 out["条件单原因"] = condition.get("reason")
-                status = {"ARMED": "已挂单", "TRIGGERED": "已触发待成交", "FILLED": "已成交", "CANCELLED": "已撤销"}.get(condition.get("status"), "待核验")
-                tip = f"条件买单@{float(condition['price']):.2f} · {status}"
-                if condition.get("reason"):
-                    tip += f"（{condition['reason']}）"
-                note = str(out.get("挂单说明") or "")
-                if note.startswith("条件买单@") and "；" in note:
-                    note = note.split("；", 1)[1]
-                out["挂单说明"] = f"{tip}；{note}" if note else tip
+                out["挂单说明"] = _condition_display_note(out.get("挂单说明"), condition)
             patched.append(out)
         snap[section] = patched
     return apply_feed_health(snap, _current_feed_health())
@@ -2634,11 +2655,16 @@ def publish_watch_snapshot(
         )
         return WATCH_META_FILE, False
     if published:
-        _atomic_write_text(
-            WATCH_META_FILE,
-            json.dumps(to_send, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        if database_enabled():
+            from runtime_documents import enqueue_document
+
+            enqueue_document("watch_snapshot", to_send)
+        else:
+            _atomic_write_text(
+                WATCH_META_FILE,
+                json.dumps(to_send, ensure_ascii=False),
+                encoding="utf-8",
+            )
     return WATCH_META_FILE, published
 
 
@@ -4246,13 +4272,31 @@ def _as_cash(v: Any) -> float | None:
     return x
 
 
-def _prev_close_from_snapshot(code: str) -> float | None:
-    """CLI 卖出无行情时，用最近盯盘快照的昨收，避免昨仓今日盈亏误用成本。"""
+def _load_watch_snapshot_dict() -> dict[str, Any] | None:
+    """进程内快照优先；数据库模式再读文档。本地 JSON 只给离线测试。"""
+    if isinstance(_last_watch_snapshot, dict):
+        return _last_watch_snapshot
+    if database_enabled():
+        try:
+            from runtime_documents import read_document
+
+            _rev, payload = read_document("watch_snapshot")
+        except Exception:
+            return None
+        return payload if isinstance(payload, dict) else None
     if not WATCH_META_FILE.is_file():
         return None
     try:
         snap = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return snap if isinstance(snap, dict) else None
+
+
+def _prev_close_from_snapshot(code: str) -> float | None:
+    """CLI 卖出无行情时，用最近盯盘快照的昨收，避免昨仓今日盈亏误用成本。"""
+    snap = _load_watch_snapshot_dict()
+    if not isinstance(snap, dict):
         return None
     key = _code_key(code)
     for r in snap.get("holdings") or []:
@@ -8383,8 +8427,8 @@ def _collect_quote_runtime_rows(get_quote=None):
             price = order["price"]
             row.update({"买点": price, "买入侧价": price, "阈值就绪": True,
                 "开盘复核OK": order.get("id") in _CONDITION_VERIFIED_IDS,
-                "条件单状态": order.get("status"), "已触买": "是" if order.get("status") in ("TRIGGERED", "FILLED") else "否",
-                "挂单说明": f"报价条件单 {order.get('status')}；{order.get('reason') or ''}"})
+                "条件单状态": order.get("status"), "条件单原因": order.get("reason"),
+                "已触买": "是" if order.get("status") in ("TRIGGERED", "FILLED") else "否"})
             if q.get("last") and price:
                 row["距买点%"] = (float(q["last"])/float(price)-1)*100
         rec = (data.get("realized_today") or {}).get(code, {})
@@ -11576,11 +11620,12 @@ def cmd_status(args: argparse.Namespace) -> None:
     lock = _read_watch_lock()
     if lock:
         refresh_sec = 5
-        try:
-            meta = json.loads(WATCH_META_FILE.read_text(encoding="utf-8"))
-            refresh_sec = int(meta.get("refreshSec") or meta.get("refresh_sec") or refresh_sec)
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            pass
+        meta = _load_watch_snapshot_dict()
+        if isinstance(meta, dict):
+            try:
+                refresh_sec = int(meta.get("refreshSec") or meta.get("refresh_sec") or refresh_sec)
+            except (TypeError, ValueError):
+                pass
         path = publish_watch_snapshot(rows, indices=indices, refresh_sec=refresh_sec)[0]
         print(f"检测到盯盘进程 (pid={lock.get('pid')})，已推送 JSON 快照: {path.name}")
         url = _report_url_if_watching()
@@ -12016,10 +12061,9 @@ def reset_paper_account() -> dict[str, Any]:
         _HOLDINGS_CACHE.clear()
     _ensure_signal_day_caches(force=True)
     try:
-        from wechat_notify import STATE_FILE
+        from wechat_notify import clear_alert_state
 
-        if STATE_FILE.exists():
-            STATE_FILE.unlink()
+        clear_alert_state()
     except Exception as e:  # noqa: BLE001
         print(f"清微信预警状态失败（继续）: {e}")
     try:
@@ -12837,6 +12881,13 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 "确认离线调试才加 --no-ledger-pull。"
             ) from e
     global _ws_hub, _watch_feed, _CONDITION_BUY_ACTIVE, _STRATEGY_BOOKS_CLIENT, _DATABASE_QUOTES_CLIENT, _CONDITION_EXECUTOR
+    if database_enabled():
+        try:
+            from migrate_runtime_documents import schedule_legacy_import
+
+            schedule_legacy_import()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[{_now()}] 运行时 JSON 入库调度失败（继续）: {exc}")
     interval = max(2, int(args.interval))
     host = str(args.host)
     port = int(args.port)

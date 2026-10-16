@@ -248,12 +248,17 @@ def build_watch_request_handler(
             if path in ("/api/snapshot", f"/{watch_meta_file.name}"):
                 with snap_lock:
                     snap = get_last_snapshot()
-                if snap is None and watch_meta_file.is_file():
+                if snap is None:
                     try:
-                        snap = json.loads(
-                            watch_meta_file.read_text(encoding="utf-8")
-                        )
-                    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                        from database_holdings import database_enabled
+
+                        if database_enabled():
+                            from runtime_documents import read_document
+
+                            _rev, snap = read_document("watch_snapshot")
+                        elif watch_meta_file.is_file():
+                            snap = json.loads(watch_meta_file.read_text(encoding="utf-8"))
+                    except (OSError, TypeError, ValueError, json.JSONDecodeError, RuntimeError):
                         snap = None
                 if snap is None:
                     self._send_json({"error": "snapshot unavailable"}, status=503)

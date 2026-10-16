@@ -56,7 +56,7 @@
 python holdingStocks/audit_database_account.py
 ```
 
-该命令优先读MySQL账户、最新报价和独立策略账本，不再读本地 `strategy_sim_state.json` / `strategy_signal_events.json` 作为真源。读取期间账户版本变化会重读；仍变化则停止并提示择静默时段重试。UI不可用不影响数据库侧计算，但不能声称UI已核验。
+该命令优先读MySQL账户、最新报价和独立策略账本。策略模拟状态与事件也在 MySQL 文档和作废事件表中，不再读本地 JSON 作为真源。读取期间账户版本变化会重读；仍变化则停止并提示择静默时段重试。UI不可用不影响数据库侧计算，但不能声称UI已核验。
 
 报告区分 `operationalChecksPassed`、`uiComparable/uiIssues`、`legacyHistoryResolved`。`scope`仅为数据库金额、数量链和可比UI；`eventHistoryChecked=false`、`historyVerified=false`，不以金额公式对上来证明全部历史触发真实发生。`complete`只表示该报告范围且没有遗留历史/页面待核项，退出码2可能是待核验，不等于当前持仓一定错误。命令只写报告，不改账本、价格或成交。
 

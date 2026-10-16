@@ -771,19 +771,50 @@ def _current_weixin_account(cfg: dict[str, Any]) -> dict[str, Any]:
     return cfg
 
 
+def _database_documents() -> bool:
+    from database_holdings import database_enabled
+
+    return (
+        database_enabled()
+        and CONFIG_FILE == ROOT / "wechat_notify.json"
+        and STATE_FILE == ROOT / "wechat_alert_state.json"
+    )
+
+
 def load_config() -> dict[str, Any]:
     cfg = dict(_DEFAULT_CONFIG)
-    if CONFIG_FILE.exists():
+    raw = None
+    if _database_documents():
+        try:
+            from runtime_documents import read_document, write_document
+
+            _rev, raw = read_document("wechat_notify")
+            if _rev == 0 and CONFIG_FILE.exists():
+                raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    write_document("wechat_notify", raw, 0)
+                    CONFIG_FILE.unlink(missing_ok=True)
+        except (OSError, ValueError, TypeError):
+            raw = None
+    elif CONFIG_FILE.exists():
         try:
             raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                cfg.update({k: v for k, v in raw.items() if v is not None})
         except (OSError, json.JSONDecodeError):
-            pass
+            raw = None
+    if isinstance(raw, dict):
+        cfg.update({k: v for k, v in raw.items() if v is not None})
     return _current_weixin_account(cfg)
 
 
 def save_default_config(*, force: bool = False) -> Path:
+    if _database_documents():
+        from runtime_documents import read_document, write_document
+
+        revision, _current = read_document("wechat_notify")
+        if revision > 0 and not force:
+            return CONFIG_FILE
+        write_document("wechat_notify", _DEFAULT_CONFIG, revision)
+        return CONFIG_FILE
     if CONFIG_FILE.exists() and not force:
         return CONFIG_FILE
     CONFIG_FILE.write_text(
@@ -794,6 +825,22 @@ def save_default_config(*, force: bool = False) -> Path:
 
 
 def _load_state() -> dict[str, Any]:
+    if _database_documents():
+        try:
+            from runtime_documents import read_document, write_document
+
+            _rev, raw = read_document("wechat_alert_state")
+            if _rev == 0 and STATE_FILE.exists():
+                raw = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    write_document("wechat_alert_state", raw, 0)
+                    STATE_FILE.unlink(missing_ok=True)
+            if isinstance(raw, dict):
+                raw.setdefault("sent", {})
+                return raw
+        except (OSError, ValueError, TypeError):
+            return {"sent": {}}
+        return {"sent": {}}
     if not STATE_FILE.exists():
         return {"sent": {}}
     try:
@@ -807,10 +854,26 @@ def _load_state() -> dict[str, Any]:
 
 
 def _save_state(state: dict[str, Any]) -> None:
+    if _database_documents():
+        from runtime_documents import write_merging
+
+        write_merging("wechat_alert_state", state)
+        return
     STATE_FILE.write_text(
         json.dumps(state, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def clear_alert_state() -> None:
+    if _database_documents():
+        from runtime_documents import write_merging
+
+        write_merging("wechat_alert_state", {"sent": {}})
+        STATE_FILE.unlink(missing_ok=True)
+        return
+    if STATE_FILE.exists():
+        STATE_FILE.unlink()
 
 
 def _has_holding(row: dict[str, Any]) -> bool:

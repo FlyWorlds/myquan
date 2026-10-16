@@ -91,4 +91,6 @@ class QuoteAlerts:
         if sig.get('pending_sell') and qty > 0 and str(row.get('买入时间') or '')[:10] < session:
             row['持仓状态'] = '待卖出'
         note = str(row.get('挂单说明') or '')
-        row['挂单说明'] = '；'.join(x for x in (note, sig.get('挂单说明')) if x)
+        extra = str(sig.get('挂单说明') or '').strip()
+        if extra and extra not in note:
+            row['挂单说明'] = '；'.join(x for x in (note, extra) if x)

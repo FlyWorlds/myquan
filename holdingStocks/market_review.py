@@ -293,6 +293,15 @@ def save_review(
     json_path: Path = REVIEW_JSON,
 ) -> tuple[Path, Path]:
     body = text if text is not None else format_review_text(review)
+    from database_holdings import database_enabled
+
+    if database_enabled() and text_path == REVIEW_FILE and json_path == REVIEW_JSON:
+        from runtime_documents import write_merging
+
+        payload = review.to_dict()
+        payload["text"] = body
+        write_merging("market_review", payload)
+        return text_path, json_path
     text_path.write_text(body + "\n", encoding="utf-8")
     json_path.write_text(
         json.dumps(review.to_dict(), ensure_ascii=False, indent=2) + "\n",

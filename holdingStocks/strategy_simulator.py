@@ -33,6 +33,137 @@ LIVE_QUOTE_STALE_AFTER_SECONDS = 15.0
 
 _LOCK = threading.RLock()
 _STATE: dict[str, Any] | None = None
+_STATE_REV = 0
+_EVENTS_REV = 0
+VOID_FILE = ROOT / "strategy_signal_events.voided.json"
+
+
+def _database() -> bool:
+    """生产路径走数据库。测试把 STATE/EVENTS 指到临时文件时仍用文件。"""
+    from database_holdings import database_enabled
+
+    return (
+        database_enabled()
+        and STATE_FILE == ROOT / "strategy_sim_state.json"
+        and EVENTS_FILE == ROOT / "strategy_signal_events.json"
+    )
+
+
+def _normalize_state(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return empty_state()
+    if not isinstance(raw.get("positions"), dict):
+        raw = dict(raw)
+        raw["positions"] = {}
+    return raw
+
+
+def _read_state_blob() -> dict[str, Any]:
+    global _STATE_REV
+    if _database():
+        from runtime_documents import read_document, write_document
+
+        rev, payload = read_document("strategy_simulator_state")
+        if rev == 0 and STATE_FILE.is_file():
+            payload = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("strategy simulator state file is not an object")
+            rev = write_document("strategy_simulator_state", payload, 0)
+            STATE_FILE.unlink(missing_ok=True)
+        _STATE_REV = rev
+        return _normalize_state(payload)
+    if not STATE_FILE.is_file():
+        return empty_state()
+    raw = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    return _normalize_state(raw)
+
+
+def _write_state_blob(data: dict[str, Any]) -> None:
+    global _STATE_REV
+    if _database():
+        from runtime_documents import DocumentStoreError, write_document, write_merging
+
+        try:
+            _STATE_REV = write_document("strategy_simulator_state", data, _STATE_REV)
+        except DocumentStoreError as exc:
+            if "conflict" not in str(exc):
+                raise
+            _STATE_REV = write_merging("strategy_simulator_state", data)
+        return
+    tmp = STATE_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(STATE_FILE)
+
+
+def _empty_events() -> dict[str, Any]:
+    return {"updated_at": None, "events": []}
+
+
+def _read_events_blob() -> dict[str, Any]:
+    global _EVENTS_REV
+    if _database():
+        from runtime_documents import read_document, write_document
+
+        rev, payload = read_document("strategy_simulator_events")
+        if rev == 0 and EVENTS_FILE.is_file():
+            payload = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("strategy simulator events file is not an object")
+            rev = write_document("strategy_simulator_events", payload, 0)
+            EVENTS_FILE.unlink(missing_ok=True)
+        _EVENTS_REV = rev
+        if not isinstance(payload, dict):
+            payload = _empty_events()
+        if not isinstance(payload.get("events"), list):
+            payload["events"] = []
+        return payload
+    if not EVENTS_FILE.is_file():
+        return _empty_events()
+    raw = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return _empty_events()
+    if not isinstance(raw.get("events"), list):
+        raw["events"] = []
+    return raw
+
+
+def _write_events_blob(raw: dict[str, Any]) -> None:
+    global _EVENTS_REV
+    body = {"updated_at": raw.get("updated_at"), "events": list(raw.get("events") or [])}
+    if _database():
+        from runtime_documents import DocumentStoreError, write_document, write_merging
+
+        try:
+            _EVENTS_REV = write_document("strategy_simulator_events", body, _EVENTS_REV)
+        except DocumentStoreError as exc:
+            if "conflict" not in str(exc):
+                raise
+            _EVENTS_REV = write_merging("strategy_simulator_events", body)
+        return
+    tmp = EVENTS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(EVENTS_FILE)
+
+
+def _archive_voided(dropped: list[dict[str, Any]], updated_at: str) -> None:
+    if not dropped:
+        return
+    if _database():
+        from runtime_documents import append_voided
+
+        append_voided(dropped)
+        return
+    prev: list[dict[str, Any]] = []
+    if VOID_FILE.is_file():
+        try:
+            old = json.loads(VOID_FILE.read_text(encoding="utf-8"))
+            prev = list((old or {}).get("events") or []) if isinstance(old, dict) else list(old or [])
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            prev = []
+    VOID_FILE.write_text(
+        json.dumps({"updated_at": updated_at, "events": prev + dropped}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def _now_str() -> str:
@@ -490,37 +621,76 @@ def load_state(*, force: bool = False) -> dict[str, Any]:
     with _LOCK:
         if _STATE is not None and not force:
             return _STATE
+        if _database():
+            _STATE = _read_state_blob()
+            return _STATE
         if not STATE_FILE.is_file():
             _STATE = empty_state()
             return _STATE
         try:
-            raw = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            _STATE = _read_state_blob()
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             _STATE = empty_state()
-            return _STATE
-        if not isinstance(raw, dict):
-            _STATE = empty_state()
-            return _STATE
-        if not isinstance(raw.get("positions"), dict):
-            raw["positions"] = {}
-        _STATE = raw
         return _STATE
 
 
-def save_state(data: dict[str, Any] | None = None) -> None:
-    global _STATE
+_STATE_DIRTY = False
+_STATE_FLUSHER: threading.Thread | None = None
+
+
+def _flush_state_worker() -> None:
+    global _STATE_DIRTY, _STATE_REV
+    while True:
+        with _LOCK:
+            if not _STATE_DIRTY or _STATE is None:
+                return
+            payload = deepcopy(_STATE)
+            revision = _STATE_REV
+            _STATE_DIRTY = False
+        try:
+            from runtime_documents import DocumentStoreError, write_document
+
+            new_revision = write_document("strategy_simulator_state", payload, revision)
+        except DocumentStoreError as exc:
+            print(f"[strategy-simulator] 状态入库失败: {exc}")
+            if "conflict" not in str(exc):
+                with _LOCK:
+                    _STATE_DIRTY = True
+                return
+            from runtime_documents import read_document
+
+            revision, _payload = read_document("strategy_simulator_state")
+            with _LOCK:
+                _STATE_REV = revision
+                _STATE_DIRTY = True
+            continue
+        with _LOCK:
+            _STATE_REV = new_revision
+            if not _STATE_DIRTY:
+                return
+
+
+def _mark_state_dirty() -> None:
+    global _STATE_DIRTY, _STATE_FLUSHER
+    _STATE_DIRTY = True
+    if _STATE_FLUSHER is None or not _STATE_FLUSHER.is_alive():
+        _STATE_FLUSHER = threading.Thread(target=_flush_state_worker, name="strategy-sim-state", daemon=True)
+        _STATE_FLUSHER.start()
+
+
+def save_state(data: dict[str, Any] | None = None, *, sync: bool = True) -> None:
+    global _STATE, _STATE_DIRTY
     with _LOCK:
         if data is not None:
             _STATE = data
         if _STATE is None:
             _STATE = empty_state()
         _STATE["updated_at"] = _now_str()
-        tmp = STATE_FILE.with_suffix(".json.tmp")
-        tmp.write_text(
-            json.dumps(_STATE, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        tmp.replace(STATE_FILE)
+        if _database() and not sync:
+            _mark_state_dirty()
+            return
+        _write_state_blob(_STATE)
+        _STATE_DIRTY = False
 
 
 def reset_all_state() -> None:
@@ -529,20 +699,8 @@ def reset_all_state() -> None:
     with _LOCK:
         _STATE = empty_state()
         _STATE["updated_at"] = _now_str()
-        tmp = STATE_FILE.with_suffix(".json.tmp")
-        tmp.write_text(
-            json.dumps(_STATE, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        tmp.replace(STATE_FILE)
-
-        raw = {"updated_at": _now_str(), "events": []}
-        ev_tmp = EVENTS_FILE.with_suffix(".json.tmp")
-        ev_tmp.write_text(
-            json.dumps(raw, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        ev_tmp.replace(EVENTS_FILE)
+        _write_state_blob(_STATE)
+        _write_events_blob({"updated_at": _now_str(), "events": []})
 
 
 def get_book(strategy_id: str, symbol: str) -> dict[str, Any]:
@@ -758,10 +916,8 @@ def _void_today_unprinted_long(
 
 def _drop_today_buy_events(strategy_id: str, symbol: str, session: str) -> int:
     """把当日该票假 BUY 从事件流挪到 voided，避免重启回放又买回来。"""
-    if not EVENTS_FILE.is_file():
-        return 0
     try:
-        raw = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
+        raw = _read_events_blob()
     except (OSError, TypeError, ValueError, json.JSONDecodeError):
         return 0
     evs = list((raw or {}).get("events") or [])
@@ -786,21 +942,8 @@ def _drop_today_buy_events(strategy_id: str, symbol: str, session: str) -> int:
         return 0
     raw["events"] = keep
     raw["updated_at"] = _now_str()
-    tmp = EVENTS_FILE.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(EVENTS_FILE)
-    void_path = ROOT / "strategy_signal_events.voided.json"
-    prev: list[dict[str, Any]] = []
-    if void_path.is_file():
-        try:
-            old = json.loads(void_path.read_text(encoding="utf-8"))
-            prev = list((old or {}).get("events") or []) if isinstance(old, dict) else list(old or [])
-        except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            prev = []
-    void_path.write_text(
-        json.dumps({"updated_at": raw["updated_at"], "events": prev + dropped}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _write_events_blob(raw)
+    _archive_voided(dropped, raw["updated_at"])
     return len(dropped)
 
 
@@ -834,13 +977,9 @@ def _align_today_buy_event(
     重记入场只改账本、不改事件时，对账会看到两套价格。
     """
     with _LOCK:
-        if not EVENTS_FILE.is_file():
-            return False
         try:
-            raw = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
+            raw = _read_events_blob()
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
-            return False
-        if not isinstance(raw, dict):
             return False
         evs = raw.get("events")
         if not isinstance(evs, list):
@@ -877,36 +1016,26 @@ def _align_today_buy_event(
         if not changed:
             return False
         raw["updated_at"] = _now_str()
-        tmp = EVENTS_FILE.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(EVENTS_FILE)
+        _write_events_blob(raw)
         return True
 
 
 def _append_event(event: dict[str, Any]) -> None:
     with _LOCK:
-        if EVENTS_FILE.is_file():
-            try:
-                raw = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
-            except (OSError, TypeError, ValueError, json.JSONDecodeError):
-                raw = {"updated_at": None, "events": []}
-        else:
-            raw = {"updated_at": None, "events": []}
-        if not isinstance(raw, dict):
-            raw = {"updated_at": None, "events": []}
+        try:
+            raw = _read_events_blob()
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            raw = _empty_events()
         evs = raw.get("events")
         if not isinstance(evs, list):
             evs = []
-        # idempotent: same event_id skip
         eid = str(event.get("event_id") or "")
         if eid and any(str(x.get("event_id")) == eid for x in evs if isinstance(x, dict)):
             return
         evs.append(event)
         raw["events"] = evs
         raw["updated_at"] = _now_str()
-        tmp = EVENTS_FILE.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(EVENTS_FILE)
+        _write_events_blob(raw)
 
 
 def _event_id(
@@ -1410,7 +1539,7 @@ def evaluate_live_transition(
                 _append_event(event)
 
         if persist and force_book is None:
-            save_state()
+            save_state(sync=event is not None or transition is not None)
 
         out["transition"] = transition
         out["book"] = deepcopy(book)

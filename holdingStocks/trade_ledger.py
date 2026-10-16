@@ -262,14 +262,22 @@ def _runtime_mark_prices() -> dict[str, float]:
     if isinstance(snap, dict):
         _ingest_rows(snap.get("holdings"))
     if not marks:
-        meta = ROOT / "holdings_watch.json"
-        if meta.is_file():
-            try:
-                raw = json.loads(meta.read_text(encoding="utf-8"))
-            except (OSError, TypeError, ValueError, json.JSONDecodeError):
-                raw = None
-            if isinstance(raw, dict):
-                _ingest_rows(raw.get("holdings"))
+        raw = None
+        try:
+            from database_holdings import database_enabled
+
+            if database_enabled():
+                from runtime_documents import read_document
+
+                _rev, raw = read_document("watch_snapshot")
+            else:
+                meta = ROOT / "holdings_watch.json"
+                if meta.is_file():
+                    raw = json.loads(meta.read_text(encoding="utf-8"))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError, RuntimeError):
+            raw = None
+        if isinstance(raw, dict):
+            _ingest_rows(raw.get("holdings"))
     return marks
 
 

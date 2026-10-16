@@ -38,22 +38,62 @@ def _is_bad_name(code: str, name: str) -> bool:
     return False
 
 
+_NAME_CACHE_AT = 0.0
+
+
+def _names_database() -> bool:
+    from database_holdings import database_enabled
+
+    return database_enabled()
+
+
+def _clean_names(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(k).zfill(6): str(v).strip()
+        for k, v in raw.items()
+        if v and not _is_bad_name(str(k).zfill(6), str(v))
+    }
+
+
 def _read_name_cache() -> dict[str, str]:
+    global _NAME_CACHE_AT
+    if _names_database():
+        try:
+            from runtime_documents import read_document, write_document
+
+            _rev, payload = read_document("a_share_code_names")
+            if _rev == 0 and _AK_CACHE.is_file():
+                payload = json.loads(_AK_CACHE.read_text(encoding="utf-8"))
+                cleaned = _clean_names(payload)
+                if cleaned:
+                    write_document("a_share_code_names", cleaned, 0)
+                    _AK_CACHE.unlink(missing_ok=True)
+                    _NAME_CACHE_AT = time.time()
+                    return cleaned
+            _NAME_CACHE_AT = time.time() if _rev else 0.0
+            return _clean_names(payload)
+        except Exception:  # noqa: BLE001
+            return {}
     if not _AK_CACHE.is_file():
         return {}
     try:
         raw = json.loads(_AK_CACHE.read_text(encoding="utf-8"))
-        return {
-            str(k).zfill(6): str(v).strip()
-            for k, v in raw.items()
-            if v and not _is_bad_name(str(k).zfill(6), str(v))
-        }
+        return _clean_names(raw)
     except Exception:  # noqa: BLE001
         return {}
 
 
 def _write_name_cache(data: dict[str, str]) -> None:
+    global _NAME_CACHE_AT
     if not data:
+        return
+    if _names_database():
+        from runtime_documents import write_merging
+
+        write_merging("a_share_code_names", dict(sorted(data.items())))
+        _NAME_CACHE_AT = time.time()
         return
     _AK_CACHE.parent.mkdir(parents=True, exist_ok=True)
     _AK_CACHE.write_text(
@@ -63,10 +103,10 @@ def _write_name_cache(data: dict[str, str]) -> None:
 
 
 def _cache_stale(data: dict[str, str]) -> bool:
-    if not data:
+    if not data or len(data) < _CACHE_MIN_SIZE:
         return True
-    if len(data) < _CACHE_MIN_SIZE:
-        return True
+    if _names_database():
+        return _NAME_CACHE_AT <= 0 or (time.time() - _NAME_CACHE_AT) > _CACHE_MAX_AGE_SEC
     if not _AK_CACHE.is_file():
         return True
     return (time.time() - _AK_CACHE.stat().st_mtime) > _CACHE_MAX_AGE_SEC
