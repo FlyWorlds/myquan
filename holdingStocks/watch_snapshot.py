@@ -193,13 +193,13 @@ def filter_portfolio_holdings(
             continue
         # 买点预警：仅默认策略池；不把旧池空壳/别的策略票灌进持仓 Tab
         keep_empty_alert = phase_now in ("continuous", "lunch") or (
-            phase_now == "closed" and _is_buy_hit(r)
+            phase_now == "closed" and (_is_buy_hit(r) or bool(r.get("预警保留")))
         )
         alert_only = (
-            keep_empty_alert
+            (keep_empty_alert or bool(r.get("预警保留")))
             and qty <= 0
             and (not closed_trace)
-            and c in strategy_codes
+            and (c in strategy_codes or bool(r.get("预警保留")))
             and _is_holdings_tab_signal_row(r)
         )
         if qty <= 0 and not closed_trace and not alert_only:
@@ -1188,7 +1188,7 @@ def build_watch_snapshot(
 
     holdings = _fill_stock_names([
         _row_json(r)
-        for r in filter_portfolio_holdings(rows, portfolio_codes=portfolio_codes)
+        for r in filter_portfolio_holdings(rows, portfolio_codes=portfolio_codes, strategy_codes=strategy_codes)
     ])
     try:
         from watch_config import strategy1_codes as _s1_codes_fn
@@ -1213,7 +1213,7 @@ def build_watch_snapshot(
         [
             _strip_holdings_pnl(r)
             for r in rows
-            if code_key(str(r.get("代码") or "")) in s16_codes
+            if code_key(str(r.get("代码") or "")) in s16_codes or r.get("预警保留")
         ]
     ))
     if strategy16b is not None:

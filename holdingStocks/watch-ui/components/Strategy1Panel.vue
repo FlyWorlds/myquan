@@ -12,6 +12,7 @@ const props = defineProps<{
   slotMeta?: { max?: number; occupiedCount?: number; free?: number; weight?: number }
   poolCategory?: string
   statusMode?: 'paper' | 'strategy'
+  signalPriority?: boolean
   hidePositionHigh?: boolean
   hideBuyDistance?: boolean
   dayChangeAfterName?: boolean
@@ -42,7 +43,7 @@ const selectedFilters = ref<LegendId[]>([])
 const hoverExplanationKey = ref('')
 const pinnedExplanationKey = ref('')
 
-/** 表头排序：默认无（后端距买点升序）；点列头 desc→asc→清 */
+/** 表头排序：点列头 desc→asc→恢复默认；策略16默认按信号优先级。 */
 type SortKey = 'dayChg' | 'strategyPnl'
 type SortDir = 'desc' | 'asc'
 const sortKey = ref<SortKey | null>(null)
@@ -132,6 +133,38 @@ watch(
   { immediate: true },
 )
 
+function defaultSignalRank(item: DecoratedRow): number {
+  if (item.tags.includes('warn-buy') || item.tags.includes('warn-sell')) return 0
+  if (item.tags.includes('trigger-buy') || item.row.策略展示状态 === '已触买') return 1
+  if (strategyStatusLabel(item.row) === '策略持有' || Number(item.row.持仓 || 0) > 0) return 2
+  return 3
+}
+
+/** 买入时间优先，避免后续卖出信号覆盖通用信号时间。缺失时间排在组末。 */
+function buyTriggerTime(row: HoldingRow): number | null {
+  for (const raw of [row.首次触买时间, row.买信号时间, row.策略入场时间, row.信号时刻, row.信号时间]) {
+    const match = String(raw || '').match(/(?:^|[T\s])(\d{2}):(\d{2})(?::(\d{2}))?/)
+    if (!match) continue
+    const [, hh, mm, ss = '0'] = match
+    if (Number(hh) < 24 && Number(mm) < 60 && Number(ss) < 60)
+      return Number(hh) * 3600 + Number(mm) * 60 + Number(ss)
+  }
+  return null
+}
+
+function compareDefaultSignals(a: DecoratedRow, b: DecoratedRow): number {
+  if (!props.signalPriority) return 0
+  const rankA = defaultSignalRank(a)
+  const rankB = defaultSignalRank(b)
+  if (rankA !== rankB) return rankA - rankB
+  if (rankA !== 1) return 0
+  const timeA = buyTriggerTime(a.row)
+  const timeB = buyTriggerTime(b.row)
+  if (timeA == null) return timeB == null ? 0 : 1
+  if (timeB == null) return -1
+  return timeA - timeB
+}
+
 const filteredRows = computed(() => {
   const list = visibleDecorated()
   const key = sortKey.value
@@ -144,6 +177,7 @@ const filteredRows = computed(() => {
   const index = new Map(pinnedOrder.value.map((code, i) => [code, i]))
   return [...list].sort(
     (a, b) =>
+      compareDefaultSignals(a, b) ||
       (index.get(rowCode(a.row)) ?? 1_000_000) - (index.get(rowCode(b.row)) ?? 1_000_000) ||
       rowCode(a.row).localeCompare(rowCode(b.row)),
   )
@@ -184,7 +218,7 @@ function sortMark(key: SortKey): string {
 function sortTitle(key: SortKey, label: string): string {
   if (sortKey.value !== key) return `按${label}排序（高→低）`
   if (sortDir.value === 'desc') return `当前：${label}高→低，再点改为低→高`
-  return `当前：${label}低→高，再点恢复默认${props.hideBuyDistance ? '' : '（距买点）'}`
+  return `当前：${label}低→高，再点恢复默认${props.signalPriority ? '（预警→触买→持有）' : props.hideBuyDistance ? '' : '（距买点）'}`
 }
 
 function categoryOf(r: HoldingRow): string {
@@ -270,6 +304,7 @@ function tradeIncomePct(r: HoldingRow): number | null {
 
 /** 策略主状态：来自 Strategy Simulator（空仓/策略持有），不跟纸面 qty。 */
 function strategyStatusLabel(r: HoldingRow): string {
+  if (r.策略展示状态 === '已触买') return '已触买'
   const sim = String(r.策略状态 || '').trim()
   if (sim === '策略持有' || sim === '空仓') return sim
   if (r.策略模拟持有 || r.策略累计持有) return '策略持有'
@@ -295,6 +330,7 @@ function primaryStatusLabel(r: HoldingRow): string {
 
 function primaryStatusClass(r: HoldingRow, visual: { badgeClass: string }): string {
   if (props.statusMode === 'paper') return visual.badgeClass
+  if (strategyStatusLabel(r) === '已触买') return 'signal-badge signal-badge-trigger-buy'
   return strategyStatusLabel(r) === '策略持有'
     ? 'signal-badge signal-badge-hold-paper'
     : 'signal-badge signal-badge-flat'

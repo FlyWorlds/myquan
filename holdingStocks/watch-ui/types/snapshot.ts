@@ -63,6 +63,7 @@ export interface HoldingRow {
   策略模拟状态?: string | null
   策略模拟持有?: boolean | null
   /** 策略主状态：空仓 / 策略持有 */
+  策略展示状态?: string | null
   策略状态?: string | null
   策略入场价?: number | null
   策略入场时间?: string | null
@@ -126,6 +127,7 @@ export interface HoldingRow {
   近止损?: boolean
   信号时间?: string | null
   信号时刻?: string | null
+  首次触买时间?: string | null
   买信号时间?: string | null
   卖信号时间?: string | null
   已触发因子侧?: string

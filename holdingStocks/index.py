@@ -2557,6 +2557,10 @@ def publish_watch_snapshot(
             strategy17_rows = cached_strategy17_rows()
         except Exception:  # noqa: BLE001
             strategy17_rows = []
+    # Retained signals are display data; never feed them back into execution.
+    from alert_retention import LIVE_ALERT_RETENTION
+    rows = [dict(row) for row in rows]
+    LIVE_ALERT_RETENTION.merge(rows, strategy_codes=set(strategy_watchlist_codes()))
     snapshot = build_watch_snapshot(
         rows=rows,
         indices=indices,

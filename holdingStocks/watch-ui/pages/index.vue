@@ -440,6 +440,7 @@ const closedCount = computed(() => closedHoldings.value.length)
         <Strategy1Panel
           v-if="snapshot"
           :rows="snapshot.strategy16 || []"
+          signal-priority
           :phase="snapshot.phase"
           :slot-meta="snapshot.slotMeta"
           pool-category="因子27"
