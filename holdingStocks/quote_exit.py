@@ -50,7 +50,7 @@ def evaluate_quote_exit(pos: dict, quote: dict, *, session: str, now: datetime,
         watermark = pos.get("quote_exit_watermark") or {}
         if watermark.get("cycle") == pos.get("buy_time"):
             previous = timestamp(watermark.get("time"))
-            if previous and (at < previous or (at == previous and watermark.get("price") == quote["last"])):
+            if previous and (at < previous or (at == previous and watermark.get("price") == quote["last"] and watermark.get("high", pos.get("peak_high")) == quote.get("high"))):
                 return None
         overnight = bought.date().isoformat() < session
         available = int(pos.get("available") or 0)
@@ -63,8 +63,12 @@ def evaluate_quote_exit(pos: dict, quote: dict, *, session: str, now: datetime,
             high_px=float(quote["high"]), low_px=float(quote["low"]), close_px=float(quote["last"]),
             limit_down_pct=limit_down_pct_of(str(pos.get("code") or "")), tick=tick)
         executable = available > 0 and not pos.get("hold_lock") and not limit["locked"]
+        # Daily high belongs entirely to this holding only for overnight positions.
+        # For same-day entries it can precede the purchase; keep observed prices.
+        holding_peak = max(cost, float(pos.get("peak_high") or cost),
+                           float(quote["high"]) if overnight else 0)
         result = eval_factor26_quote(price=float(quote["last"]), cost_px=cost,
-            peak_before=max(cost, float(pos.get("peak_high") or cost)), shares=available or qty,
+            peak_before=holding_peak, shares=available or qty,
             tp_stage=int(pos.get("tp_stage") or 0), can_sell=executable,
             overnight_armed=overnight and bool(pos.get("stop_noted")), day_open=float(quote["open"]),
             session_peak_before=float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == session else 0,
@@ -86,6 +90,6 @@ def evaluate_quote_exit(pos: dict, quote: dict, *, session: str, now: datetime,
         if action:
             action = dict(action, shares=min(available, int(action["shares"])))
         return dict(updates=updates, action=action,
-                    watermark=dict(cycle=pos.get("buy_time"), time=quote["last_ts"], price=quote["last"]))
+                    watermark=dict(cycle=pos.get("buy_time"), time=quote["last_ts"], price=quote["last"], high=quote.get("high")))
     except (KeyError, TypeError, ValueError, OverflowError):
         return None

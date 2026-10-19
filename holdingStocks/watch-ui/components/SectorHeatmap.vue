@@ -8,6 +8,22 @@ const props = defineProps<{
   metric: string
 }>()
 
+/** Hide columns with no usable values for the selected metric. Keep source indices aligned. */
+const displayKind = computed(() => {
+  const values = props.kind.by_metric[props.metric]
+  const keep = props.kind.dates.map((_, i) => i).filter(i =>
+    [...(values?.top?.[i] || []), ...(values?.bottom?.[i] || [])]
+      .some(cell => cell.value != null && Number.isFinite(Number(cell.value))),
+  )
+  return {
+    ...props.kind,
+    dates: keep.map(i => props.kind.dates[i]),
+    by_metric: Object.fromEntries(Object.entries(props.kind.by_metric).map(([metric, columns]) => [
+      metric, { top: keep.map(i => columns.top?.[i] || []), bottom: keep.map(i => columns.bottom?.[i] || []) },
+    ])),
+  }
+})
+
 const emit = defineEmits<{
   select: [name: string]
   drill: [name: string]
@@ -57,42 +73,42 @@ defineExpose({ clearSelection, selected })
       <thead>
         <tr>
           <th class="rank-h" />
-          <th v-for="d in kind.dates" :key="d">{{ d }}</th>
+          <th v-for="d in displayKind.dates" :key="d">{{ d }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="r in topN" :key="`t-${r}`">
           <td class="rank">{{ r }}</td>
-          <td v-for="(di) in kind.dates.length" :key="`t-${r}-${di - 1}`">
+          <td v-for="(di) in displayKind.dates.length" :key="`t-${r}-${di - 1}`">
             <button
-              v-if="kind.by_metric[metric]?.top?.[di - 1]?.[r - 1]"
+              v-if="displayKind.by_metric[metric]?.top?.[di - 1]?.[r - 1]"
               type="button"
-              :class="cellClass(r, true, kind.by_metric[metric].top[di - 1][r - 1].name)"
-              @click="onPick(kind.by_metric[metric].top[di - 1][r - 1].name)"
+              :class="cellClass(r, true, displayKind.by_metric[metric].top[di - 1][r - 1].name)"
+              @click="onPick(displayKind.by_metric[metric].top[di - 1][r - 1].name)"
             >
-              <span class="n">{{ kind.by_metric[metric].top[di - 1][r - 1].name }}</span>
-              <span class="v" :class="clsNum(kind.by_metric[metric].top[di - 1][r - 1].value)">
-                {{ fmtVal(metric, kind.by_metric[metric].top[di - 1][r - 1].value) }}
+              <span class="n">{{ displayKind.by_metric[metric].top[di - 1][r - 1].name }}</span>
+              <span class="v" :class="clsNum(displayKind.by_metric[metric].top[di - 1][r - 1].value)">
+                {{ fmtVal(metric, displayKind.by_metric[metric].top[di - 1][r - 1].value) }}
               </span>
             </button>
             <span v-else class="sector-cell empty">-</span>
           </td>
         </tr>
         <tr class="sep">
-          <td :colspan="kind.dates.length + 1" />
+          <td :colspan="displayKind.dates.length + 1" />
         </tr>
         <tr v-for="i in topN" :key="`b-${i}`">
           <td class="rank bot">{{ topN - i + 1 }}</td>
-          <td v-for="(di) in kind.dates.length" :key="`b-${i}-${di - 1}`">
+          <td v-for="(di) in displayKind.dates.length" :key="`b-${i}-${di - 1}`">
             <button
-              v-if="kind.by_metric[metric]?.bottom?.[di - 1]?.[i - 1]"
+              v-if="displayKind.by_metric[metric]?.bottom?.[di - 1]?.[i - 1]"
               type="button"
-              :class="cellClass(topN - i + 1, false, kind.by_metric[metric].bottom[di - 1][i - 1].name)"
-              @click="onPick(kind.by_metric[metric].bottom[di - 1][i - 1].name)"
+              :class="cellClass(topN - i + 1, false, displayKind.by_metric[metric].bottom[di - 1][i - 1].name)"
+              @click="onPick(displayKind.by_metric[metric].bottom[di - 1][i - 1].name)"
             >
-              <span class="n">{{ kind.by_metric[metric].bottom[di - 1][i - 1].name }}</span>
-              <span class="v" :class="clsNum(kind.by_metric[metric].bottom[di - 1][i - 1].value)">
-                {{ fmtVal(metric, kind.by_metric[metric].bottom[di - 1][i - 1].value) }}
+              <span class="n">{{ displayKind.by_metric[metric].bottom[di - 1][i - 1].name }}</span>
+              <span class="v" :class="clsNum(displayKind.by_metric[metric].bottom[di - 1][i - 1].value)">
+                {{ fmtVal(metric, displayKind.by_metric[metric].bottom[di - 1][i - 1].value) }}
               </span>
             </button>
             <span v-else class="sector-cell empty">-</span>

@@ -39,6 +39,18 @@ class TestManualPeak(unittest.TestCase):
             self.assertIsNone(evaluate_quote_exit(self.pos, q, session='2026-10-19', now=now, received_at=now))
         self.assertEqual(self.pos['peak_high'], 11.)
 
+    def test_overnight_position_includes_daily_high(self):
+        self.pos['buy_time'] = '2026-10-16 09:35:00'
+        q = dict(session='2026-10-19', last=10.2, open=10., high=11.3,
+                 low=10., prev_close=10., last_ts=str(self.at))
+        result = evaluate_quote_exit(self.pos, q, session='2026-10-19', now=self.at, received_at=self.at)
+        self.assertEqual(result['updates']['peak_high'], 11.3)
+        self.pos.update(result['updates'])
+        self.pos['quote_exit_watermark'] = result['watermark']
+        q['high'] = 11.5
+        result = evaluate_quote_exit(self.pos, q, session='2026-10-19', now=self.at, received_at=self.at)
+        self.assertEqual(result['updates']['peak_high'], 11.5)
+
     def test_invalid_prices_do_not_change_position(self):
         for value in (0, -1, 'bad', float('nan'), float('inf'), True):
             with self.assertRaises(ValueError):

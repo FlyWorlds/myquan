@@ -230,3 +230,36 @@ def resolve_rotation_payload(
         return merged or fresh
     base = disk if disk_n >= fresh_n else fresh
     return ensure_today_column(base, today=today_s, days=days)
+
+
+def trading_columns_only(payload):
+    """Remove exchange closure columns while preserving metric/date alignment."""
+    if not payload:
+        return payload
+    import re
+    from datetime import date
+    from holdingStocks.trading_calendar import is_trading_day
+    reference = date.fromisoformat(str(payload.get('session') or today_ymd())[:10])
+    kinds = {}
+    for name, block in (payload.get('kinds') or {}).items():
+        dates = block.get('dates') or []
+        keep = []
+        for i, label in enumerate(dates):
+            match = re.fullmatch(r'(\d{2})月(\d{2})日', str(label))
+            if not match:
+                keep.append(i)
+                continue
+            try:
+                day = date(reference.year, int(match[1]), int(match[2]))
+                if day > reference:
+                    day = day.replace(year=day.year - 1)
+                if is_trading_day(day):
+                    keep.append(i)
+            except ValueError:
+                continue
+        metrics = {metric: {**values, **{
+            side: [(values.get(side) or [])[i] if i < len(values.get(side) or []) else []
+                   for i in keep] for side in ('top', 'bottom')}}
+                   for metric, values in (block.get('by_metric') or {}).items()}
+        kinds[name] = {**block, 'dates': [dates[i] for i in keep], 'by_metric': metrics}
+    return {**payload, 'kinds': kinds}

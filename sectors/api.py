@@ -16,6 +16,7 @@ from .live import fetch_concept_member_rows
 from .tdx import tdx_availability, tdx_hq_available
 from .rotation_cache import (
     date_columns,
+    trading_columns_only,
     payload_has_today_column,
     payload_session_fresh,
     resolve_rotation_payload,
@@ -41,7 +42,7 @@ def _load_rotation_disk() -> dict[str, Any] | None:
     if not _ROTATION_CACHE.is_file():
         return None
     try:
-        return json.loads(_ROTATION_CACHE.read_text(encoding="utf-8"))
+        return trading_columns_only(json.loads(_ROTATION_CACHE.read_text(encoding="utf-8")))
     except Exception:
         return None
 
@@ -95,7 +96,7 @@ def get_rotation_payload(*, days: int = 20, top_n: int = 10, refresh: bool = Fal
             and payload_session_fresh(mem, today=today)
             and now - float(_rotation_mem.get("ts") or 0) < _ROTATION_TTL_SEC
         ):
-            return mem
+            return trading_columns_only(mem)
 
         if not refresh:
             disk = _load_rotation_disk()
@@ -139,6 +140,7 @@ def get_rotation_payload(*, days: int = 20, top_n: int = 10, refresh: bool = Fal
             payload = disk
     if not _rotation_has_data(payload):
         raise RuntimeError("板块轮动无数据：通达信与东财均失败")
+    payload = trading_columns_only(payload)
     with _lock:
         _rotation_mem["payload"] = payload
         _rotation_mem["ts"] = time.time()

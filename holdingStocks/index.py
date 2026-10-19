@@ -12635,7 +12635,7 @@ def _execute_quote_exit_if_needed(code, quote, received_at):
     data = _HOLDINGS_CACHE.get("data") or {}
     pos = (data.get("positions") or {}).get(code, {})
     key = (code, pos.get("buy_time"), str(trading_session_date()))
-    observed = (timestamp(quote.get("last_ts")), quote.get("last"))
+    observed = (timestamp(quote.get("last_ts")), quote.get("last"), quote.get("high"))
     prior = _QUOTE_EXIT_OBSERVED.get(key)
     if observed[0] is None or (prior and (observed[0] < prior[0] or observed == prior)):
         return

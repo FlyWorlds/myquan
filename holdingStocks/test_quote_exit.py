@@ -14,10 +14,10 @@ class TestQuoteExit(unittest.TestCase):
     def evaluate(self, price, **changes):
         pos = dict(qty=900, available=900, cost=10., buy_time="2026-10-14 10:00:00", peak_high=10.)
         pos.update(changes)
-        q = quote(last=price, high=max(price, 12.), low=min(price, 9.), last_ts=str(NOW))
+        q = quote(last=price, high=max(price, 10.), low=min(price, 9.), last_ts=str(NOW))
         return evaluate_quote_exit(pos, q, session="2026-10-15", now=NOW, received_at=NOW)
 
-    def test_daily_extremes_do_not_invent_an_exit(self):
+    def test_quote_without_new_high_keeps_current_peak(self):
         result = self.evaluate(10.01)
         self.assertIsNone(result["action"])
         self.assertEqual(result["updates"]["peak_high"], 10.01)
