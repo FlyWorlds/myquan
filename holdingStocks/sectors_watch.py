@@ -1,14 +1,16 @@
-"""板块轮动实时数据 — 并入盯盘 WatchSnapshot（5s 刷新）。"""
+"""板块轮动实时数据 — 并入盯盘 WatchSnapshot（5s 刷新）。
+
+缓存存入 MySQL `app_documents`（`sectors_live_fast`），不再读写本地 JSON 文件。
+性能优化：`_focus_detail_cached` 仅做零网络缓存读取，绝不持有 `_lock` 执行耗时请求，消除与详情页 `setFocus` / `load` 的锁竞争。
+"""
 
 from __future__ import annotations
 
 import threading
 import time
-import json
-from pathlib import Path
 from typing import Any
 
-from sectors.concept_leaders import build_concept_detail
+from sectors.concept_leaders import read_cached_detail_only
 from sectors.live import (
     concept_index_quote,
     fetch_concept_index_spot_live,
@@ -17,14 +19,15 @@ from sectors.live import (
     member_codes_for_concept,
     stock_quotes_by_codes,
 )
-from sectors.sina_boards import fetch_sina_concept_spot_fast
 from sectors.metrics import (
+    all_member_codes,
     build_member_stats_map,
     enrich_concept_row,
     fetch_em_concept_main_flow,
     fetch_member_quotes_sina,
-    all_member_codes,
 )
+from sectors.sina_boards import fetch_sina_concept_spot_fast
+from sectors.store import get_doc, set_doc
 
 _lock = threading.Lock()
 _focus_concept: str | None = None
@@ -44,8 +47,7 @@ _last_fast_cache_load_ts: float = 0.0
 _MEMBER_STATS_INTERVAL = 120.0
 _MAIN_FLOW_INTERVAL = 60.0
 _DEEP_SPOT_INTERVAL = 30.0
-_FAST_CACHE_MAX_AGE = 12 * 3600.0
-_CACHE_FILE = Path(__file__).resolve().parents[1] / "data_cache" / "sectors_live_fast.json"
+_FAST_DOC_KEY = "sectors_live_fast"
 _tick = 0
 
 
@@ -66,6 +68,7 @@ def get_focus_concept() -> str | None:
 
 
 def _focus_detail_cached() -> dict[str, Any] | None:
+    """仅读取已就绪的内存/数据库详情缓存，不阻塞实时线程或锁。"""
     global _focus_detail, _focus_detail_ts
     with _lock:
         concept = _focus_concept
@@ -75,16 +78,19 @@ def _focus_detail_cached() -> dict[str, Any] | None:
         if _focus_detail and _focus_detail.get("concept") == concept:
             if now - _focus_detail_ts < _DETAIL_TTL_SEC:
                 return _focus_detail
-        detail = build_concept_detail(concept, months=6, force=False)
-        if detail.get("error"):
-            return None
-        _focus_detail = detail
-        _focus_detail_ts = now
-        return detail
+
+    detail = read_cached_detail_only(concept)
+    if not detail or detail.get("error"):
+        return None
+    with _lock:
+        if _focus_concept == concept:
+            _focus_detail = detail
+            _focus_detail_ts = time.time()
+    return detail
 
 
 def peek_sectors_live_payload() -> dict[str, Any]:
-    """最近一次板块实时块（无网络）。盯盘主循环用它，避免和板块线程各拉一遍通达信。"""
+    """最近一次板块实时块（优先内存，其次读取数据库缓存）。"""
     cached = _read_fast_cache()
     if cached:
         return cached
@@ -101,18 +107,12 @@ def _read_fast_cache() -> dict[str, Any]:
         if now - _last_fast_cache_load_ts < 2.0:
             return {}
         _last_fast_cache_load_ts = now
-    try:
-        st = _CACHE_FILE.stat()
-        if now - st.st_mtime > _FAST_CACHE_MAX_AGE:
-            return {}
-        payload = json.loads(_CACHE_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    payload = get_doc(_FAST_DOC_KEY, ttl_sec=60.0)
     if not isinstance(payload, dict) or not payload.get("conceptToday"):
         return {}
     cached = dict(payload)
     cached["cache"] = True
-    cached["source"] = f"{cached.get('source') or '新浪板块摘要'}·本地缓存"
+    cached["source"] = f"{cached.get('source') or '同花顺热点轮动'}·数据库缓存"
     with _lock:
         if not _last_payload:
             _last_payload = cached
@@ -122,11 +122,7 @@ def _read_fast_cache() -> dict[str, Any]:
 def _write_fast_cache(payload: dict[str, Any]) -> None:
     if not payload.get("conceptToday"):
         return
-    try:
-        _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
+    set_doc(_FAST_DOC_KEY, payload, async_write=True)
 
 
 def _fast_spot() -> tuple[dict[str, dict[str, Any]], str | None]:
@@ -146,7 +142,7 @@ def build_sectors_live_payload() -> dict[str, Any]:
     now = time.time()
 
     fast_raw, fast_err = _fast_spot()
-    spot_raw = fast_raw or _last_spot
+    spot_raw = dict(fast_raw or _last_spot)
     source = "新浪板块摘要" if fast_raw else live_source()
     if fast_err:
         err = fast_err
@@ -166,12 +162,18 @@ def build_sectors_live_payload() -> dict[str, Any]:
             if deep:
                 _last_spot = deep
                 _last_spot_ts = time.time()
-                if not fast_raw:
-                    spot_raw = deep
-                source = source if fast_raw else live_source()
+                merged = dict(fast_raw)
+                merged.update(deep)
+                spot_raw = merged
+                source = live_source()
         except Exception as e:
             if not err:
                 err = str(e)
+    elif _last_spot:
+        merged = dict(fast_raw)
+        merged.update(_last_spot)
+        spot_raw = merged
+        source = live_source()
 
     if fast_raw and not _last_member_stats and _last_member_stats_attempt_ts <= 0:
         _last_member_stats_attempt_ts = now
@@ -225,11 +227,15 @@ def build_sectors_live_payload() -> dict[str, Any]:
     if focus:
         payload["conceptIndex"] = concept_index_quote(focus, spot)
         detail = _focus_detail_cached()
-        codes = set(member_codes_for_concept(focus, limit=80))
+        codes: set[str] = set()
         if detail:
             codes.update(leader_codes_from_detail(detail))
+        else:
+            from sectors.tdx import lookup_member_codes
+
+            codes.update(lookup_member_codes("概念", focus)[:50])
         try:
-            quotes = stock_quotes_by_codes(sorted(codes))
+            quotes = stock_quotes_by_codes(sorted(codes)) if codes else {}
         except Exception:
             quotes = {}
         payload["quotes"] = quotes

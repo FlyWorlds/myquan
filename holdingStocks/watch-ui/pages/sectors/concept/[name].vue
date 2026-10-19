@@ -61,8 +61,10 @@ const wsLabel = computed(() => {
 
 const sourceBadge = computed(() => {
   const src = detail.value?.source || ''
+  if (src.includes('同花顺')) return '同花顺'
   if (src.includes('通达信')) return '通达信'
   if (src.includes('东财')) return '东财'
+  if (src.includes('新浪')) return '新浪'
   return src || '—'
 })
 
@@ -116,7 +118,7 @@ async function reloadAll(refresh = false) {
 }
 
 onMounted(async () => {
-  await setFocus(conceptName.value)
+  void setFocus(conceptName.value)
   await load()
   void loadScores()
 })
@@ -126,7 +128,7 @@ onBeforeUnmount(() => {
 })
 
 watch(conceptName, async () => {
-  await setFocus(conceptName.value)
+  void setFocus(conceptName.value)
   leaderScores.value = null
   await load()
   void loadScores()

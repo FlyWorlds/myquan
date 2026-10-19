@@ -25,15 +25,15 @@ def session_label(session: str) -> str:
     return s
 
 
-def kind_block(payload: dict[str, Any] | None) -> dict[str, Any]:
+def kind_block(payload: dict[str, Any] | None, kind_name: str = KIND) -> dict[str, Any]:
     if not payload or not isinstance(payload, dict):
         return {}
-    block = (payload.get("kinds") or {}).get(KIND) or {}
+    block = (payload.get("kinds") or {}).get(kind_name) or {}
     return block if isinstance(block, dict) else {}
 
 
-def date_columns(payload: dict[str, Any] | None) -> list[str]:
-    dates = kind_block(payload).get("dates") or []
+def date_columns(payload: dict[str, Any] | None, kind_name: str = KIND) -> list[str]:
+    dates = kind_block(payload, kind_name).get("dates") or []
     return [str(x) for x in dates]
 
 
@@ -86,6 +86,15 @@ def _empty_today_shell(template: dict[str, Any], today: str) -> dict[str, Any]:
         hist_by = kind_block(template).get("by_metric") or {}
         metrics = list(hist_by.keys())
     by_metric = {m: {"top": [[]], "bottom": [[]]} for m in metrics}
+    kinds_out: dict[str, Any] = {}
+    for kname in (template.get("kinds") or {KIND: {}}).keys():
+        kinds_out[kname] = {
+            "dates": [session_label(today)],
+            "by_metric": by_metric,
+            "members": {},
+            "board_count": 0,
+            "fund_note": kind_block(template, kname).get("fund_note"),
+        }
     return {
         "session": today,
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -93,49 +102,32 @@ def _empty_today_shell(template: dict[str, Any], today: str) -> dict[str, Any]:
         "source": template.get("source"),
         "top_n": template.get("top_n"),
         "days": template.get("days"),
-        "kinds": {
-            KIND: {
-                "dates": [session_label(today)],
-                "by_metric": by_metric,
-                "members": {},
-                "board_count": 0,
-                "fund_note": kind_block(template).get("fund_note"),
-            }
-        },
+        "kinds": kinds_out,
     }
 
 
-def splice_today_onto_hist(
-    hist: dict[str, Any] | None,
-    today_payload: dict[str, Any] | None,
+def _splice_single_kind(
+    hist_kind: dict[str, Any],
+    today_kind: dict[str, Any],
     *,
-    days: int = 20,
-    today: str | None = None,
-) -> dict[str, Any] | None:
-    """用 today_payload 的最左列覆盖/插入今日，其余日期列来自 hist。"""
-    if not today_payload or not kind_block(today_payload):
-        return hist
-    today_s = (today or str(today_payload.get("session") or today_ymd()))[:10]
-    if not payload_has_today_column(today_payload, today=today_s):
-        return hist
-    if not hist or not kind_block(hist):
-        return today_payload
-
-    label = session_label(today_s)
-    hist_kind = kind_block(hist)
-    today_kind = kind_block(today_payload)
-    hist_dates = date_columns(hist)
+    label: str,
+    days: int,
+    metrics: list[str],
+) -> dict[str, Any]:
+    if not hist_kind:
+        return today_kind
+    if not today_kind:
+        return hist_kind
+    hist_dates = [str(x) for x in (hist_kind.get("dates") or [])]
     rest_dates = [d for d in hist_dates if d != label]
     new_dates = [label, *rest_dates][: max(1, int(days))]
 
-    metrics = list(today_payload.get("metrics") or hist.get("metrics") or [])
     hist_by = hist_kind.get("by_metric") or {}
     today_by = today_kind.get("by_metric") or {}
-    if not metrics:
-        metrics = list(dict.fromkeys([*today_by.keys(), *hist_by.keys()]))
+    use_metrics = metrics or list(dict.fromkeys([*today_by.keys(), *hist_by.keys()]))
 
     by_metric: dict[str, Any] = {}
-    for metric in metrics:
+    for metric in use_metrics:
         hblock = hist_by.get(metric) or {}
         tblock = today_by.get(metric) or {}
         old_top = _metric_cols(hblock, "top")
@@ -164,6 +156,39 @@ def splice_today_onto_hist(
     members = dict(hist_kind.get("members") or {})
     members.update(today_kind.get("members") or {})
 
+    kind = dict(hist_kind)
+    kind["dates"] = new_dates
+    kind["by_metric"] = by_metric
+    kind["members"] = members
+    kind["board_count"] = today_kind.get("board_count") or hist_kind.get("board_count")
+    if today_kind.get("fund_note"):
+        kind["fund_note"] = today_kind.get("fund_note")
+    if today_kind.get("hot_periods"):
+        kind["hot_periods"] = today_kind.get("hot_periods")
+    if today_kind.get("board_stats"):
+        kind["board_stats"] = today_kind.get("board_stats")
+    return kind
+
+
+def splice_today_onto_hist(
+    hist: dict[str, Any] | None,
+    today_payload: dict[str, Any] | None,
+    *,
+    days: int = 20,
+    today: str | None = None,
+) -> dict[str, Any] | None:
+    """用 today_payload 的最左列覆盖/插入今日，其余日期列来自 hist。"""
+    if not today_payload or not kind_block(today_payload):
+        return hist
+    today_s = (today or str(today_payload.get("session") or today_ymd()))[:10]
+    if not payload_has_today_column(today_payload, today=today_s):
+        return hist
+    if not hist or not kind_block(hist):
+        return today_payload
+
+    label = session_label(today_s)
+    metrics = list(today_payload.get("metrics") or hist.get("metrics") or [])
+
     out = dict(hist)
     out["updated_at"] = str(
         today_payload.get("updated_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -173,15 +198,21 @@ def splice_today_onto_hist(
     out["top_n"] = today_payload.get("top_n") or hist.get("top_n")
     out["days"] = days
     out["metrics"] = metrics
-    kind = dict(hist_kind)
-    kind["dates"] = new_dates
-    kind["by_metric"] = by_metric
-    kind["members"] = members
-    kind["board_count"] = today_kind.get("board_count") or hist_kind.get("board_count")
-    if today_kind.get("fund_note"):
-        kind["fund_note"] = today_kind.get("fund_note")
-    kinds = dict(hist.get("kinds") or {})
-    kinds[KIND] = kind
+
+    all_kinds = list(
+        dict.fromkeys(
+            [*(hist.get("kinds") or {}).keys(), *(today_payload.get("kinds") or {}).keys()]
+        )
+    )
+    kinds: dict[str, Any] = {}
+    for kname in all_kinds:
+        kinds[kname] = _splice_single_kind(
+            kind_block(hist, kname),
+            kind_block(today_payload, kname),
+            label=label,
+            days=days,
+            metrics=metrics,
+        )
     out["kinds"] = kinds
     return out
 
@@ -215,7 +246,7 @@ def resolve_rotation_payload(
     today: str | None = None,
     days: int = 20,
 ) -> dict[str, Any] | None:
-    """合并新拉结果与磁盘历史。短结果不得覆盖长历史。"""
+    """合并新拉结果与缓存历史。短结果不得覆盖长历史。"""
     today_s = today or today_ymd()
     fresh_n = len(date_columns(fresh))
     disk_n = len(date_columns(disk))
@@ -232,20 +263,21 @@ def resolve_rotation_payload(
     return ensure_today_column(base, today=today_s, days=days)
 
 
-def trading_columns_only(payload):
+def trading_columns_only(payload: dict[str, Any] | None) -> dict[str, Any] | None:
     """Remove exchange closure columns while preserving metric/date alignment."""
     if not payload:
         return payload
     import re
     from datetime import date
     from holdingStocks.trading_calendar import is_trading_day
-    reference = date.fromisoformat(str(payload.get('session') or today_ymd())[:10])
+
+    reference = date.fromisoformat(str(payload.get("session") or today_ymd())[:10])
     kinds = {}
-    for name, block in (payload.get('kinds') or {}).items():
-        dates = block.get('dates') or []
+    for name, block in (payload.get("kinds") or {}).items():
+        dates = block.get("dates") or []
         keep = []
         for i, label in enumerate(dates):
-            match = re.fullmatch(r'(\d{2})月(\d{2})日', str(label))
+            match = re.fullmatch(r"(\d{2})月(\d{2})日", str(label))
             if not match:
                 keep.append(i)
                 continue
@@ -257,9 +289,24 @@ def trading_columns_only(payload):
                     keep.append(i)
             except ValueError:
                 continue
-        metrics = {metric: {**values, **{
-            side: [(values.get(side) or [])[i] if i < len(values.get(side) or []) else []
-                   for i in keep] for side in ('top', 'bottom')}}
-                   for metric, values in (block.get('by_metric') or {}).items()}
-        kinds[name] = {**block, 'dates': [dates[i] for i in keep], 'by_metric': metrics}
-    return {**payload, 'kinds': kinds}
+        metrics = {
+            metric: {
+                **values,
+                **{
+                    side: [
+                        (values.get(side) or [])[i]
+                        if i < len(values.get(side) or [])
+                        else []
+                        for i in keep
+                    ]
+                    for side in ("top", "bottom")
+                },
+            }
+            for metric, values in (block.get("by_metric") or {}).items()
+        }
+        kinds[name] = {
+            **block,
+            "dates": [dates[i] for i in keep],
+            "by_metric": metrics,
+        }
+    return {**payload, "kinds": kinds}

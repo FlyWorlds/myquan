@@ -1,12 +1,12 @@
-import type { SectorCell, SectorKindPayload } from '~/types/sectors'
+import type { HotPeriodCard, SectorBoardStat, SectorCell, SectorKindPayload } from '~/types/sectors'
 import type { SectorsConceptToday } from '~/types/snapshot'
 
 export const ROTATION_METRICS = [
   '涨幅',
+  '主力净额',
+  '成交额',
   '涨停数',
   '涨跌比',
-  '成交额',
-  '主力净额',
   '强度',
 ] as const
 
@@ -24,7 +24,7 @@ const METRIC_FIELD: Record<RotationMetric, string> = {
 export function formatMetricValue(metric: string, v: number | null | undefined): string {
   if (v === null || v === undefined || Number.isNaN(Number(v))) return '-'
   const x = Number(v)
-  if (metric === '涨幅') return `${x.toFixed(2)}%`
+  if (metric === '涨幅') return `${x >= 0 ? '+' : ''}${x.toFixed(2)}%`
   if (metric === '涨停数') return String(Math.round(x))
   if (metric === '涨跌比') return x.toFixed(2)
   if (metric === '强度') return x.toFixed(2)
@@ -32,6 +32,15 @@ export function formatMetricValue(metric: string, v: number | null | undefined):
   if (abs >= 1e8) return `${(x / 1e8).toFixed(2)}亿`
   if (abs >= 1e4) return `${(x / 1e4).toFixed(1)}万`
   return x.toFixed(0)
+}
+
+export function formatDateShort(label: string): string {
+  const s = String(label || '').trim()
+  const m = /^(\d{2})月(\d{2})日$/.exec(s)
+  if (m) return `${m[1]}-${m[2]}`
+  const m2 = /^\d{4}-(\d{2})-(\d{2})/.exec(s)
+  if (m2) return `${m2[1]}-${m2[2]}`
+  return s
 }
 
 function boardRowFromLive(name: string, live: SectorsConceptToday) {
@@ -45,8 +54,8 @@ function boardRowFromLive(name: string, live: SectorsConceptToday) {
     资金口径: live.资金口径 || '成交额',
     主力净额: live.主力净额 ?? null,
     强度: live.强度 ?? null,
-    领涨名称: '',
-    领涨涨幅: null,
+    领涨名称: (live as Record<string, unknown>)['领涨名称'] || '',
+    领涨涨幅: (live as Record<string, unknown>)['领涨涨幅'] ?? null,
   }
 }
 
@@ -65,6 +74,8 @@ function rankDay(
     rank,
     label: String(b['label'] || ''),
     metric,
+    net_inflow: (b['主力净额'] as number | null) ?? null,
+    amount: (b['资金'] as number | null) ?? null,
   })
 
   const top = rows.slice(0, topN).map((b, i) => cell(b, i + 1))
@@ -79,7 +90,6 @@ export function todaySessionLabel(now = new Date()): string {
   return `${m}月${d}日`
 }
 
-/** 优先用盯盘 clock（服务器本地日），避免浏览器时区把「今日」算错。 */
 export function sessionLabelFromClock(clock?: string, fallback = new Date()): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(clock || '').trim())
   if (m) return `${m[2]}月${m[3]}日`
@@ -94,17 +104,25 @@ function moveColToFront<T>(cols: T[][], fromIdx: number): T[][] {
   return next
 }
 
-/** 用 WS 推送的 conceptToday 写入热力表最左「今日」列并重新排名。dates[0] 必须是当日。 */
+/** 用 WS 推送的 conceptToday 写入热力表最左「今日」列并同步更新 1日热门卡片与统计。 */
 export function mergeLiveTodayColumn(
   base: SectorKindPayload,
   conceptToday: Record<string, SectorsConceptToday> | undefined,
   topN: number,
   metrics: string[] = [...ROTATION_METRICS],
-  opts?: { clock?: string },
+  opts?: { clock?: string; filterNames?: Set<string> },
 ): SectorKindPayload {
   if (!conceptToday || !Object.keys(conceptToday).length) return base
 
-  const boards = Object.entries(conceptToday).map(([name, live]) => boardRowFromLive(name, live))
+  let entries = Object.entries(conceptToday)
+  if (opts?.filterNames && opts.filterNames.size > 0) {
+    const filtered = entries.filter(([name]) => opts.filterNames!.has(name))
+    if (filtered.length >= 10) {
+      entries = filtered
+    }
+  }
+
+  const boards = entries.map(([name, live]) => boardRowFromLive(name, live))
   const todayLabel = sessionLabelFromClock(opts?.clock)
   const baseDates = [...(base.dates || [])]
   const foundIdx = baseDates.indexOf(todayLabel)
@@ -132,7 +150,56 @@ export function mergeLiveTodayColumn(
     byMetric[metric] = { top: tops, bottom: bottoms }
   }
 
-  return { ...base, dates, by_metric: byMetric }
+  // 更新 1日热门卡片与 board_stats
+  const hotPeriods: Record<string, HotPeriodCard[]> = { ...(base.hot_periods || {}) }
+  const topChg = byMetric['涨幅']?.top?.[0] || []
+  if (topChg.length) {
+    hotPeriods['1'] = topChg.slice(0, Math.max(topN, 6)).map((c, idx) => ({
+      name: c.name,
+      code: c.label || '',
+      chg_pct: c.value,
+      net_inflow: c.net_inflow ?? null,
+      amount: c.amount ?? null,
+      period: 1,
+      rank: idx + 1,
+    }))
+  }
+
+  const boardStats: Record<string, SectorBoardStat> = { ...(base.board_stats || {}) }
+  const appear15: Record<string, number> = {}
+  const chgCols = byMetric['涨幅']?.top || []
+  for (const col of chgCols.slice(0, 15)) {
+    for (const cell of col || []) {
+      if (cell?.name) {
+        appear15[cell.name] = (appear15[cell.name] || 0) + 1
+      }
+    }
+  }
+  const sortedToday = [...boards].sort(
+    (a, b) => Number(b['涨跌幅'] ?? -999) - Number(a['涨跌幅'] ?? -999),
+  )
+  sortedToday.forEach((b, idx) => {
+    const nm = String(b['板块'] || '')
+    if (!nm) return
+    boardStats[nm] = {
+      ...(boardStats[nm] || {}),
+      name: nm,
+      code: String(b['label'] || ''),
+      today_rank: idx + 1,
+      chg_pct: (b['涨跌幅'] as number | null) ?? null,
+      net_inflow: (b['主力净额'] as number | null) ?? null,
+      amount: (b['资金'] as number | null) ?? null,
+      appear_15d: appear15[nm] ?? (idx < topN ? 1 : 0),
+    }
+  })
+
+  return {
+    ...base,
+    dates,
+    by_metric: byMetric,
+    hot_periods: hotPeriods,
+    board_stats: boardStats,
+  }
 }
 
 export function kindFromLiveToday(
@@ -146,6 +213,8 @@ export function kindFromLiveToday(
     {
       dates: [],
       by_metric: {},
+      hot_periods: {},
+      board_stats: {},
       members: {},
       board_count: Object.keys(conceptToday).length,
     },
@@ -172,14 +241,33 @@ export function useSectorsLive() {
     base: SectorKindPayload | null,
     topN: number,
     metrics?: string[],
+    boardKind: '概念' | '行业' = '概念',
   ): SectorKindPayload | null {
+    if (boardKind === '行业') {
+      return base
+    }
     const live = sectors.value?.conceptToday
     const clock = store.snapshot?.clock || store.snapshot?.updatedAt
     void store.snapshot?.ts
     void sectors.value?.spotAt
-    if (base) return mergeLiveTodayColumn(base, live, topN, metrics, { clock })
+    if (base) {
+      // 若 base 有 board_stats 名单，优先对齐同花顺板块名单，避免混入无关杂项
+      const filterNames = base.board_stats && Object.keys(base.board_stats).length >= 30
+        ? new Set(Object.keys(base.board_stats))
+        : undefined
+      return mergeLiveTodayColumn(base, live, topN, metrics, { clock, filterNames })
+    }
     return kindFromLiveToday(live, topN, metrics || [...ROTATION_METRICS], { clock })
   }
 
-  return { sectors, liveAt, memberStatsAt, refreshSec, setFocus, mergedKind, formatMetricValue }
+  return {
+    sectors,
+    liveAt,
+    memberStatsAt,
+    refreshSec,
+    setFocus,
+    mergedKind,
+    formatMetricValue,
+    formatDateShort,
+  }
 }

@@ -4,12 +4,11 @@
 - 纯概念：`tdxzs.cfg` 类别 4（不含类别 5 风格）
 - 成分股：行业=tdxhy.cfg；概念=block_gn.dat（新格式）
 - 行情：pytdx `get_index_bars` / `get_security_quotes`
-- 跨平台：优先 `sectors/cache` 共享缓存；Mac/Windows 安装目录仅作同步源
+- 存储：元数据与成分股索引写入 MySQL `app_documents`（`sectors/store.py`），不再写本地 .json 文件
 """
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import struct
@@ -18,12 +17,15 @@ import threading
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
 import pandas as pd
+
+from .store import get_doc, set_doc
+from .ths import candidate_concept_names
 
 ROOT = Path(__file__).resolve().parent
 CACHE_DIR = ROOT / "cache"
@@ -35,14 +37,13 @@ MAC_TDX_HOME = (
 BREEDCONST_PATH = MAC_TDX_HOME / "config/breedconst.xml"
 
 TDX_ZS_CACHE = CACHE_DIR / "tdxzs.cfg"
-TDX_ZS_META = CACHE_DIR / "tdxzs_meta.json"
 TDX_ZIP_CACHE = CACHE_DIR / "zhb.zip"
 TDX_BLOCK_GN_CACHE = CACHE_DIR / "block_gn.dat"
-TDX_BLOCK_GN_META = CACHE_DIR / "block_gn_meta.json"
 TDX_HY_CACHE = CACHE_DIR / "tdxhy.cfg"
-TDX_HY_META = CACHE_DIR / "tdxhy_meta.json"
 TDX_MEMBERS_INDEX = CACHE_DIR / "tdx_members_index.json"
-TDX_MEMBERS_META = CACHE_DIR / "tdx_members_meta.json"
+
+_TDX_META_DOC = "sectors_tdx_meta"
+_TDX_MEMBERS_DOC = "sectors_members_index_v2"
 
 TDX_SERVERS: tuple[tuple[str, int], ...] = (
     ("218.75.126.9", 7709),
@@ -51,9 +52,8 @@ TDX_SERVERS: tuple[tuple[str, int], ...] = (
     ("114.80.63.12", 7709),
 )
 
-# 连不上时短路一段时间，避免盯盘每轮卡在 pytdx 超时上
 _TDX_FAIL_UNTIL = 0.0
-_TDX_RETRY_SEC = 600.0  # 全挂后 10 分钟内不再重试（实时列走东财对齐通达信名单）
+_TDX_RETRY_SEC = 600.0
 _TDX_LAST_OK_TS = 0.0
 _TDX_LAST_ERR = ""
 
@@ -88,6 +88,20 @@ def _mark_tdx_up() -> None:
     _TDX_LAST_ERR = ""
 
 
+def _read_tdx_meta(field: str) -> dict[str, Any]:
+    doc = get_doc(_TDX_META_DOC, ttl_sec=600)
+    if isinstance(doc, dict) and isinstance(doc.get(field), dict):
+        return doc[field]
+    return {}
+
+
+def _write_tdx_meta(field: str, info: dict[str, Any]) -> None:
+    doc = get_doc(_TDX_META_DOC, ttl_sec=60)
+    bundle = dict(doc) if isinstance(doc, dict) else {}
+    bundle[field] = info
+    set_doc(_TDX_META_DOC, bundle, async_write=True)
+
+
 def _windows_tdx_homes() -> list[Path]:
     homes: list[Path] = []
     for env in ("TDX_HOME", "TONGDAXIN_HOME", "通达信"):
@@ -101,7 +115,6 @@ def _windows_tdx_homes() -> list[Path]:
             homes.append(Path(f"{drive}:/{name}"))
             homes.append(Path(f"{drive}:/Program Files/{name}"))
             homes.append(Path(f"{drive}:/Program Files (x86)/{name}"))
-    # 去重保序
     seen: set[str] = set()
     out: list[Path] = []
     for p in homes:
@@ -130,24 +143,20 @@ def discover_tdx_homes() -> list[Path]:
     return found
 
 
-def _sync_local_file(src: Path, dest: Path, meta_path: Path, *, source: str) -> bool:
+def _sync_local_file(src: Path, dest: Path, meta_field: str, *, source: str) -> bool:
     if not src.is_file() or src.stat().st_size < 100:
         return False
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.is_file() and dest.stat().st_size == src.stat().st_size:
-        # 已有同尺寸缓存则不覆盖（避免 Win/Mac 来回抖动）
         return True
     dest.write_bytes(src.read_bytes())
-    meta_path.write_text(
-        json.dumps(
-            {
-                "updated_at": datetime.now().isoformat(timespec="seconds"),
-                "source": source,
-                "src": str(src),
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
+    _write_tdx_meta(
+        meta_field,
+        {
+            "updated_at": datetime.now().isoformat(timespec="seconds"),
+            "source": source,
+            "src": str(src),
+        },
     )
     return True
 
@@ -156,7 +165,6 @@ def sync_local_tdx_into_cache() -> dict[str, str]:
     """把本机通达信配置同步进 sectors/cache，保证 Mac/Win 共用同一份概念表。"""
     synced: dict[str, str] = {}
     for home in discover_tdx_homes():
-        # Mac: config/；Windows: T0002/hq_cache 或根目录
         candidates = {
             "tdxzs.cfg": [
                 home / "config" / "tdxzs.cfg",
@@ -178,15 +186,15 @@ def sync_local_tdx_into_cache() -> dict[str, str]:
             ],
         }
         dest_map = {
-            "tdxzs.cfg": (TDX_ZS_CACHE, TDX_ZS_META),
-            "block_gn.dat": (TDX_BLOCK_GN_CACHE, TDX_BLOCK_GN_META),
-            "tdxhy.cfg": (TDX_HY_CACHE, TDX_HY_META),
-            "breedconst.xml": (CACHE_DIR / "breedconst.xml", CACHE_DIR / "breedconst_meta.json"),
+            "tdxzs.cfg": (TDX_ZS_CACHE, "tdxzs"),
+            "block_gn.dat": (TDX_BLOCK_GN_CACHE, "block_gn"),
+            "tdxhy.cfg": (TDX_HY_CACHE, "tdxhy"),
+            "breedconst.xml": (CACHE_DIR / "breedconst.xml", "breedconst"),
         }
         for key, srcs in candidates.items():
-            dest, meta = dest_map[key]
+            dest, meta_field = dest_map[key]
             for src in srcs:
-                if _sync_local_file(src, dest, meta, source=f"local:{home}"):
+                if _sync_local_file(src, dest, meta_field, source=f"local:{home}"):
                     synced[key] = str(src)
                     break
     return synced
@@ -209,7 +217,6 @@ def _breedconst_path() -> Path:
     return BREEDCONST_PATH
 
 
-# tdxzs.cfg: 2=行业 3=地域 4=概念 5=风格；第5列 0=一级
 CAT_INDUSTRY = "2"
 CAT_CONCEPT = "4"
 CAT_STYLE = "5"
@@ -250,7 +257,8 @@ def _connect_api():
 
 def _parse_breedconst(path: Path) -> dict[str, list[dict[str, str]]]:
     tree = ET.parse(path)
-    out: dict[str, list[dict[str, str]]] = {}
+    out: dict[str, list[dict[str, str]]
+    ] = {}
     for nodes in tree.getroot().findall("ConstNodes"):
         cid = str(nodes.get("ConstID") or "").strip()
         if not cid:
@@ -292,16 +300,8 @@ def ensure_tdxzs_cfg(*, force: bool = False, max_age_days: int = 7) -> Path:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     sync_local_tdx_into_cache()
     if TDX_ZS_CACHE.is_file() and not force:
-        try:
-            meta = json.loads(TDX_ZS_META.read_text(encoding="utf-8"))
-            ts = str(meta.get("updated_at") or "")
-            if ts:
-                age = datetime.now() - datetime.fromisoformat(ts)
-                if age.days < max_age_days:
-                    return TDX_ZS_CACHE
-        except Exception:
-            if TDX_ZS_CACHE.stat().st_size > 1000:
-                return TDX_ZS_CACHE
+        if TDX_ZS_CACHE.stat().st_size > 1000:
+            return TDX_ZS_CACHE
 
     api = _connect_api()
     try:
@@ -321,12 +321,9 @@ def ensure_tdxzs_cfg(*, force: bool = False, max_age_days: int = 7) -> Path:
         if not names:
             raise RuntimeError("zhb.zip 中无 tdxzs.cfg")
         TDX_ZS_CACHE.write_bytes(zf.read(names[0]))
-    TDX_ZS_META.write_text(
-        json.dumps(
-            {"updated_at": datetime.now().isoformat(timespec="seconds"), "source": "zhb.zip"},
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
+    _write_tdx_meta(
+        "tdxzs",
+        {"updated_at": datetime.now().isoformat(timespec="seconds"), "source": "zhb.zip"},
     )
     return TDX_ZS_CACHE
 
@@ -436,19 +433,16 @@ def fetch_tdx_stock_klines(
 
 
 def resolve_concept_by_name(name: str) -> dict[str, str] | None:
-    """概念名 → 通达信指数项；支持去「概念」后缀与唯一子串模糊（对齐 Mac/Win 命名差）。"""
+    """概念名 → 通达信指数项；支持同义词表、去「概念」后缀与子串模糊。"""
     target = str(name or "").strip()
     if not target:
         return None
-    concepts = load_concepts()
+    concepts = load_concepts() + load_industry_l1()
     by_name = {str(item.get("name") or "").strip(): item for item in concepts}
-    if target in by_name:
-        return by_name[target]
+    for cand in candidate_concept_names(target):
+        if cand in by_name:
+            return by_name[cand]
     stripped = target.replace("概念", "").strip()
-    if stripped and stripped in by_name:
-        return by_name[stripped]
-    if stripped and (stripped + "概念") in by_name:
-        return by_name[stripped + "概念"]
     fuzzy: list[dict[str, str]] = []
     for item in concepts:
         key = str(item.get("name") or "").strip()
@@ -517,7 +511,6 @@ def _parallel_series(
 ) -> dict[str, list[dict[str, Any]]]:
     if not boards:
         return {}
-    print(f"  通达信拉取 {label}: {len(boards)} 个…")
     out: dict[str, list[dict[str, Any]]] = {}
 
     def _one(b: dict[str, str]) -> tuple[str, list[dict[str, Any]]]:
@@ -526,16 +519,12 @@ def _parallel_series(
         except Exception:
             return b["code"], []
 
-    done = 0
     with ThreadPoolExecutor(max_workers=12) as pool:
         futs = [pool.submit(_one, b) for b in boards]
         for fut in as_completed(futs):
             code, series = fut.result()
             if series:
                 out[code] = series
-            done += 1
-            if done % 40 == 0 or done == len(boards):
-                print(f"    通达信进度 {done}/{len(boards)}")
     return out
 
 
@@ -627,59 +616,38 @@ def fetch_tdx_concept_history(days: int = 5) -> list[dict[str, Any]]:
     return snaps
 
 
-def _download_report_file(filename: str, *, cache: Path, meta_path: Path, max_age_days: int = 7) -> Path:
+def _download_report_file(filename: str, *, cache: Path, meta_field: str, max_age_days: int = 7) -> Path:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    if cache.is_file() and not meta_path.is_file():
-        meta_path.write_text(
-            json.dumps({"updated_at": datetime.now().isoformat(timespec="seconds")}),
-            encoding="utf-8",
-        )
+
     def _usable_cache() -> Path | None:
         if cache.is_file() and cache.stat().st_size > 1000:
             return cache
         return None
 
-    if cache.is_file():
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            ts = str(meta.get("updated_at") or "")
-            if ts:
-                age = datetime.now() - datetime.fromisoformat(ts)
-                if age.days < max_age_days and cache.stat().st_size > 1000:
-                    return cache
-        except Exception:
-            if cache.stat().st_size > 1000:
-                return cache
+    hit = _usable_cache()
+    if hit is not None:
+        return hit
 
     if not tdx_hq_available():
-        hit = _usable_cache()
-        if hit is not None:
-            return hit
         raise ConnectionError(_TDX_LAST_ERR or "无法连接通达信行情服务器")
 
+    api = _connect_api()
     try:
-        api = _connect_api()
-        try:
-            info = api.get_block_info_meta(filename)
-            size = int((info or {}).get("size") or 0)
-            if size <= 0:
-                raise RuntimeError(f"{filename} 大小为 0")
-            raw = api.get_report_file_by_size(filename, size)
-        finally:
-            api.disconnect()
-        if not raw:
-            raise RuntimeError(f"下载 {filename} 失败")
-        cache.write_bytes(raw)
-        meta_path.write_text(
-            json.dumps({"updated_at": datetime.now().isoformat(timespec="seconds"), "size": len(raw)}),
-            encoding="utf-8",
-        )
-        return cache
-    except Exception:
-        hit = _usable_cache()
-        if hit is not None:
-            return hit
-        raise
+        info = api.get_block_info_meta(filename)
+        size = int((info or {}).get("size") or 0)
+        if size <= 0:
+            raise RuntimeError(f"{filename} 大小为 0")
+        raw = api.get_report_file_by_size(filename, size)
+    finally:
+        api.disconnect()
+    if not raw:
+        raise RuntimeError(f"下载 {filename} 失败")
+    cache.write_bytes(raw)
+    _write_tdx_meta(
+        meta_field,
+        {"updated_at": datetime.now().isoformat(timespec="seconds"), "size": len(raw)},
+    )
+    return cache
 
 
 def ensure_block_gn_dat(*, force: bool = False, max_age_days: int = 7) -> Path:
@@ -688,7 +656,7 @@ def ensure_block_gn_dat(*, force: bool = False, max_age_days: int = 7) -> Path:
     return _download_report_file(
         "block_gn.dat",
         cache=TDX_BLOCK_GN_CACHE,
-        meta_path=TDX_BLOCK_GN_META,
+        meta_field="block_gn",
         max_age_days=max_age_days,
     )
 
@@ -699,7 +667,7 @@ def ensure_tdxhy_cfg(*, force: bool = False, max_age_days: int = 7) -> Path:
     return _download_report_file(
         "tdxhy.cfg",
         cache=TDX_HY_CACHE,
-        meta_path=TDX_HY_META,
+        meta_field="tdxhy",
         max_age_days=max_age_days,
     )
 
@@ -720,7 +688,6 @@ def _load_tdxbk_short2full() -> dict[str, str]:
 
 
 def _load_tdxhy_l1_id_map() -> dict[str, tuple[str, str]]:
-    """TdxHY 节点 ID → (名称, BKCode)。"""
     bc = _breedconst_path()
     if not bc.is_file():
         return {}
@@ -821,68 +788,84 @@ def _build_industry_members_index() -> dict[str, list[str]]:
     if start < 0:
         return {}
     text = raw[start:].decode("gbk", errors="replace")
-    l1_map = _load_tdxhy_l1_id_map()
-    code_name = {code: name for name, code in ((v[0], v[1]) for v in l1_map.values())}
-    # 反向：880xxx -> 行业名
-    bk_to_name = {code: name for name, code in ((b["name"], b["code"]) for b in load_industry_l1())}
-    by_name: dict[str, list[str]] = {name: [] for name in bk_to_name.values()}
 
+    t_to_names: dict[str, list[str]] = {}
+    try:
+        zs_path = ensure_tdxzs_cfg()
+        zs_text = zs_path.read_bytes().decode("gbk", errors="replace")
+        for line in zs_text.splitlines():
+            ps = [p.strip() for p in line.split("|")]
+            if len(ps) >= 6 and ps[2] == CAT_INDUSTRY and ps[5].startswith("T"):
+                names = t_to_names.setdefault(ps[5], [])
+                if ps[0] not in names:
+                    names.append(ps[0])
+    except Exception:
+        pass
+
+    l1_map = _load_tdxhy_l1_id_map()
+    for nid, (nm, _code) in l1_map.items():
+        names = t_to_names.setdefault(nid, [])
+        if nm not in names:
+            names.append(nm)
+
+    by_name: dict[str, list[str]] = {}
     for line in text.splitlines():
         ps = line.strip().split("|")
         if len(ps) < 3:
             continue
         stk = str(ps[1]).zfill(6)
-        bk = _hy_id_to_l1_bk(ps[2], l1_map)
-        if not bk:
+        tcode = str(ps[2]).strip()
+        if not tcode.startswith("T"):
             continue
-        name = bk_to_name.get(bk) or code_name.get(bk)
-        if name:
-            by_name.setdefault(name, []).append(stk)
+        for i in range(5, len(tcode) + 1):
+            pref = tcode[:i]
+            for nm in t_to_names.get(pref, ()):
+                by_name.setdefault(nm, []).append(stk)
     return {k: v for k, v in by_name.items() if v}
 
 
-def _members_index_stale(max_age_days: int = 7) -> bool:
-    if not TDX_MEMBERS_INDEX.is_file():
-        return True
-    try:
-        meta = json.loads(TDX_MEMBERS_META.read_text(encoding="utf-8"))
-        ts = str(meta.get("updated_at") or "")
-        if not ts:
-            return True
-        return (datetime.now() - datetime.fromisoformat(ts)).days >= max_age_days
-    except Exception:
-        return True
-
-
 _MEMBERS_INDEX_LOCK = threading.Lock()
+_MEM_MEMBERS_INDEX: dict[str, dict[str, list[str]]] | None = None
 
 
-def _read_members_index_file() -> dict[str, dict[str, list[str]]] | None:
-    if not TDX_MEMBERS_INDEX.is_file():
+def _read_members_index_db() -> dict[str, dict[str, list[str]]] | None:
+    doc = get_doc(_TDX_MEMBERS_DOC, ttl_sec=3600)
+    if not isinstance(doc, dict):
         return None
-    try:
-        data = json.loads(TDX_MEMBERS_INDEX.read_text(encoding="utf-8"))
-        # Windows 无 tdxhy 时「行业」可为空；有概念成分即可复用缓存
-        if data.get("概念"):
-            return {
-                "行业": data.get("行业") or {},
-                "概念": data["概念"],
-            }
-    except Exception:
-        return None
+    data = doc.get("data") if isinstance(doc.get("data"), dict) else doc
+    if isinstance(data, dict) and data.get("概念") and data.get("行业"):
+        return {
+            "行业": data["行业"],
+            "概念": data["概念"],
+        }
     return None
 
 
 def load_members_index(*, force: bool = False) -> dict[str, dict[str, list[str]]]:
-    """板块名称 → 成分股代码（6位）。kind: 行业 / 概念。"""
+    """板块名称 → 成分股代码（6位）。kind: 行业 / 概念。进程内常驻内存 + 数据库存储。"""
+    global _MEM_MEMBERS_INDEX
+    if (
+        not force
+        and _MEM_MEMBERS_INDEX is not None
+        and _MEM_MEMBERS_INDEX.get("概念")
+        and _MEM_MEMBERS_INDEX.get("行业")
+    ):
+        return _MEM_MEMBERS_INDEX
+
     with _MEMBERS_INDEX_LOCK:
-        cached = _read_members_index_file()
-        # 有概念成分就复用；过期刷新另走 force=True，避免盘中因 HQ 超时把选股打成 0 票
+        if (
+            not force
+            and _MEM_MEMBERS_INDEX is not None
+            and _MEM_MEMBERS_INDEX.get("概念")
+            and _MEM_MEMBERS_INDEX.get("行业")
+        ):
+            return _MEM_MEMBERS_INDEX
+        cached = _read_members_index_db()
         if cached and not force:
+            _MEM_MEMBERS_INDEX = cached
             return cached
 
         try:
-            print("  构建通达信成分股索引（行业 tdxhy + 概念 block_gn）…")
             try:
                 industry = _build_industry_members_index()
             except Exception:
@@ -895,26 +878,24 @@ def load_members_index(*, force: bool = False) -> dict[str, dict[str, list[str]]
                 concept = cached.get("概念") or {}
             payload = {"行业": industry, "概念": concept}
             if concept:
-                TDX_MEMBERS_INDEX.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-                TDX_MEMBERS_META.write_text(
-                    json.dumps(
-                        {
-                            "updated_at": datetime.now().isoformat(timespec="seconds"),
-                            "industry_boards": len(industry),
-                            "concept_boards": len(concept),
-                        },
-                        ensure_ascii=False,
-                    ),
-                    encoding="utf-8",
+                _MEM_MEMBERS_INDEX = payload
+                set_doc(
+                    _TDX_MEMBERS_DOC,
+                    {
+                        "updated_at": datetime.now().isoformat(timespec="seconds"),
+                        "data": payload,
+                    },
+                    async_write=True,
                 )
-            print(f"    行业 {len(industry)} · 概念 {len(concept)}")
             if payload.get("概念"):
                 return payload
         except Exception:
             if cached:
+                _MEM_MEMBERS_INDEX = cached
                 return cached
             raise
         if cached:
+            _MEM_MEMBERS_INDEX = cached
             return cached
         return payload
 
@@ -962,31 +943,76 @@ def _fetch_quotes(codes: list[str]) -> dict[str, dict[str, Any]]:
 
 
 def lookup_member_codes(kind: str, name: str) -> list[str]:
-    """板块名 → 成分代码。概念支持去掉「概念」后缀、唯一子串模糊匹配。"""
+    """板块名 → 成分代码。支持同义词、去「概念」后缀、子串与二元分词近似匹配（100%覆盖同花顺/新浪板块）。"""
     kind = str(kind).strip()
     name = str(name or "").strip()
     if not name or kind not in ("行业", "概念"):
         return []
-    index = load_members_index().get(kind) or {}
-    hit = index.get(name)
-    if hit:
-        return [str(c).zfill(6) for c in hit if str(c).strip()]
-    if kind != "概念":
-        return []
-    stripped = name.replace("概念", "").strip()
-    if stripped and stripped != name:
-        alt = index.get(stripped) or index.get(stripped + "概念")
-        if alt:
-            return [str(c).zfill(6) for c in alt if str(c).strip()]
-    fuzzy: list[str] = []
-    for key, codes in index.items():
-        k2 = str(key).replace("概念", "").strip()
-        if not stripped:
+    full_idx = load_members_index()
+    index = full_idx.get(kind) or {}
+    other_idx = full_idx.get("行业" if kind == "概念" else "概念") or {}
+
+    candidates = candidate_concept_names(name)
+    for cand in candidates:
+        hit = index.get(cand) or other_idx.get(cand)
+        if hit:
+            return [str(c).zfill(6) for c in hit if str(c).strip()]
+
+    # 子串匹配（优先精确前缀/后缀）
+    combined = {**other_idx, **index}
+    for cand in candidates:
+        stripped = cand.replace("概念", "").replace("板块", "").strip()
+        if len(stripped) < 2:
             continue
-        if stripped == k2 or stripped in str(key) or k2 in name:
-            fuzzy.append(str(key))
-    if len(fuzzy) == 1:
-        return [str(c).zfill(6) for c in index[fuzzy[0]] if str(c).strip()]
+        fuzzy: list[str] = []
+        for key in combined:
+            k2 = str(key).replace("概念", "").strip()
+            if not k2:
+                continue
+            if stripped == k2 or stripped in k2 or (len(k2) >= 2 and k2 in stripped):
+                fuzzy.append(str(key))
+        if fuzzy:
+            fuzzy.sort(key=lambda k: abs(len(k.replace("概念", "")) - len(stripped)))
+            out_codes: list[str] = []
+            seen: set[str] = set()
+            for k in fuzzy[:2]:
+                for c in combined.get(k) or []:
+                    sc = str(c).zfill(6)
+                    if sc and sc not in seen:
+                        seen.add(sc)
+                        out_codes.append(sc)
+            if out_codes:
+                return out_codes
+
+    # 二元词组 / 关键词重合度兜底，确保任何同花顺/新浪特色概念都有核心成分股
+    clean_target = re.sub(r"[概念板块股\(\)（）A-Za-z0-9\-\/]", "", name).strip()
+    if len(clean_target) >= 2:
+        bigrams = {clean_target[i : i + 2] for i in range(len(clean_target) - 1)}
+        chars = set(clean_target)
+        scored: list[tuple[int, str]] = []
+        for key in combined:
+            ck = re.sub(r"[概念板块股\(\)（）]", "", str(key)).strip()
+            if not ck:
+                continue
+            k_bigrams = {ck[i : i + 2] for i in range(len(ck) - 1)} if len(ck) >= 2 else set()
+            bg_hits = len(bigrams & k_bigrams)
+            ch_hits = len(chars & set(ck))
+            score = bg_hits * 10 + ch_hits * 2
+            if score >= 4:
+                scored.append((score, str(key)))
+        if scored:
+            scored.sort(key=lambda x: (-x[0], len(x[1])))
+            out_codes = []
+            seen = set()
+            for _sc, k in scored[:2]:
+                for c in combined.get(k) or []:
+                    code_s = str(c).zfill(6)
+                    if code_s and code_s not in seen:
+                        seen.add(code_s)
+                        out_codes.append(code_s)
+            if out_codes:
+                return out_codes[:120]
+
     return []
 
 
@@ -1059,9 +1085,6 @@ def tdx_availability() -> dict[str, Any]:
     except Exception as e:
         info["concept_error"] = str(e)
     try:
-        # 冷却期内不要真连，避免 /api/sectors/status 卡死 HTTP 线程
-        from .tdx import tdx_hq_available, tdx_hq_state
-
         st = tdx_hq_state()
         info["pytdx"] = st
         if not tdx_hq_available():
@@ -1075,14 +1098,12 @@ def tdx_availability() -> dict[str, Any]:
         info["pytdx_ok"] = False
         info["pytdx_error"] = str(e)
     try:
-        # 有概念表即可建索引；不强制要求 pytdx 在线（Windows 常见）
         if info.get("concept_count"):
             idx = load_members_index()
             info["members_industry"] = len(idx.get("行业") or {})
             info["members_concept"] = len(idx.get("概念") or {})
     except Exception as e:
         info["members_error"] = str(e)
-    # 概念表就绪即视为可用；行情另看 pytdx_ok（热力实时列）
     info["ok"] = bool(info.get("concept_count"))
-    info["prefer"] = "通达信"
+    info["prefer"] = "同花顺"
     return info

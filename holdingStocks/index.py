@@ -954,11 +954,12 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
         return 200, {"ok": True, "focusConcept": concept}
     if api_path == "/api/sectors/members":
         name = unquote(str((qs.get("name") or qs.get("concept") or [""])[0]).strip())
+        kind = unquote(str((qs.get("kind") or ["概念"])[0]).strip()) or "概念"
         limit = max(20, min(_api_int(qs, "limit", 80), 200))
         if not name:
             return 400, {"error": "缺少 name"}
         try:
-            data = get_concept_members(name, limit=limit)
+            data = get_concept_members(name, limit=limit, kind=kind)
             if data.get("error") and not data.get("members"):
                 return 404, data
             return 200, data
@@ -5086,24 +5087,6 @@ def _sync_account_total(rows: list[dict[str, Any]]) -> float | None:
     return total
 
 
-@paper_mutation
-def update_holding_peak(payload):
-    from manual_peak import update_peak
-    data = load_holdings()
-    # Freeze the original overnight reference before a manual correction;
-    # opening protection must never use a peak introduced by the editor.
-    code = str(payload.get("code") or "") if isinstance(payload, dict) else ""
-    pos = (data.get("positions") or {}).get(code)
-    if pos and int(pos.get("qty") or 0) > 0:
-        quote = _execution_quote(_sina_of(code)) or {}
-        freeze_overnight_peak_for_session(pos, session=str(trading_session_date()),
-            cost=pos.get("cost"), prev_close=quote.get("prev_close"),
-            open_px=quote.get("open"), qty=pos.get("qty"))
-    result = update_peak(data, payload)
-    save_holdings(data)
-    return result
-
-
 def save_holdings(data: dict[str, Any]) -> None:
     from holdings_sync import current_host
 
@@ -8326,8 +8309,7 @@ def freeze_overnight_peak_for_session(
     frozen_ok = str(pos.get("overnight_peak_session") or "") == sess
     at_peak = str(pos.get("peak_high_at") or "")
     # 今日竞价戳抬上去的脏峰：作废已冻 overnight，按昨收/成本重算
-    if (frozen_ok and at_peak[:10] == sess and is_auction_quote_ts(at_peak)
-            and at_peak != str(pos.get("peak_manual_at") or "")):
+    if frozen_ok and at_peak[:10] == sess and is_auction_quote_ts(at_peak):
         frozen_ok = False
     seed = 0.0
     if frozen_ok:
@@ -12598,6 +12580,17 @@ def _store_condition_drafts(drafts: list[dict[str, Any]], active_codes: set[str]
             _CONDITION_VERIFIED_IDS.add(draft["id"])
 
 
+@paper_mutation
+def _save_historical_holding_peak(code, buy_time, peak):
+    data = load_holdings()
+    pos = (data.get("positions") or {}).get(code, {})
+    if int(pos.get("qty") or 0) <= 0 or pos.get("buy_time") != buy_time:
+        return
+    if peak and peak[0] > float(pos.get("peak_high") or pos.get("cost") or 0):
+        pos.update(peak_high=peak[0], peak_high_at=peak[1], peak_history_source="unadjusted_holding_history")
+        save_holdings(data)
+
+
 def _quote_daily_vol(sina, day):
     hit = _VOL20_CACHE.get(sina)
     if hit and hit[0] == day:
@@ -13325,7 +13318,6 @@ def cmd_watch(args: argparse.Namespace) -> None:
         on_selection_load=lambda selection: _set_strategy16b_dynamic(selection.get("params") or {}, selection["pool"]),
         handle_sectors_api=_handle_sectors_api,
         watch_ui_dist_ready=_watch_ui_dist_ready,
-        on_peak_update=update_holding_peak,
         on_paper_reset=_on_paper_reset,
         on_front_rendered=_on_front_rendered,
     )
@@ -13359,6 +13351,32 @@ def cmd_watch(args: argparse.Namespace) -> None:
             log=lambda msg: print(f"[{_now()}] [MINUTE_BACKUP] {msg}"))
         minute_backup_thread = threading.Thread(target=backup.run, name="research-minute-backup", daemon=True)
         minute_backup_thread.start()
+    def holding_peak_history_loop():
+        from copy import deepcopy
+        from holding_peak_history import fetch_holding_history_peak
+        completed = set()
+        while not stop.is_set():
+            if is_threshold_ready():
+                session = str(trading_session_date())
+                positions = deepcopy((_HOLDINGS_CACHE.get("data") or {}).get("positions") or {})
+                for code, pos in positions.items():
+                    bought = pos.get("buy_time")
+                    key = (code, bought, session)
+                    if stop.is_set():
+                        return
+                    if int(pos.get("qty") or 0) <= 0 or not bought or bought[:10] >= session or key in completed:
+                        continue
+                    try:
+                        peak = fetch_holding_history_peak(_sina_of(code), bought, session)
+                        if peak is not None and is_threshold_ready():
+                            _save_historical_holding_peak(code, bought, peak)
+                            completed.add(key)
+                    except Exception as exc:
+                        print(f"[{_now()}] 持仓历史峰值补齐失败 {code}: {type(exc).__name__}")
+            stop.wait(60)
+
+    if _CONDITION_BUY_ACTIVE:
+        threading.Thread(target=holding_peak_history_loop, name="holding-peak-history", daemon=True).start()
     heartbeat_worker.start()
     sectors_worker.start()
     if _CONDITION_BUY_ACTIVE:

@@ -1,14 +1,15 @@
-"""概念龙头股评分 API（编排层，打分真源见 strategy/factor16_leader_score.py）。"""
+"""概念龙头股评分 API（编排层，打分真源见 strategy/factor16_leader_score.py）。
+
+缓存存入 MySQL `app_documents`（`sectors/store.py`），不再写本地 .json 文件。
+"""
 
 from __future__ import annotations
 
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
-from backtest.ai_concept_f1_f13_report import OOS_START, THR, _today_ymd, _to_symbol, fetch_one
+from backtest.ai_concept_f1_f13_report import THR, _today_ymd, _to_symbol, fetch_one
 from strategy.factor16_leader_score import (
     DEFAULT_PARAMS,
     eval_stock_metrics_from_daily,
@@ -18,9 +19,7 @@ from strategy.factor16_leader_score import (
 
 from .concept_leaders import _stock_name_map
 from .live import member_codes_for_concept
-
-ROOT = Path(__file__).resolve().parent
-CACHE_DIR = ROOT / "cache"
+from .store import get_doc, make_doc_key, set_doc
 
 DEFAULT_START = "2025-01-01"
 TOP_N = int(DEFAULT_PARAMS["top_k"])
@@ -131,9 +130,8 @@ def rank_concept_leaders(
     }
 
 
-def _cache_path(concept: str) -> Path:
-    safe = concept.replace("/", "_").replace("\\", "_")
-    return CACHE_DIR / f"leader_score_{safe}.json"
+def _doc_key(concept: str) -> str:
+    return make_doc_key("sectors_leader", concept)
 
 
 def get_concept_scored_leaders(
@@ -144,23 +142,20 @@ def get_concept_scored_leaders(
     top_n: int = TOP_N,
     force: bool = False,
 ) -> dict[str, Any]:
-    cache = _cache_path(concept_name)
+    key = _doc_key(concept_name)
     end_iso = end or _ymd_to_iso(_today_ymd())
-    if cache.is_file() and not force:
-        try:
-            cached = json.loads(cache.read_text(encoding="utf-8"))
+    if not force:
+        cached = get_doc(key, ttl_sec=600)
+        if isinstance(cached, dict):
             if (
                 cached.get("start") == start
-                and cached.get("end", "")[:10] == end_iso[:10]
+                and str(cached.get("end") or "")[:10] == end_iso[:10]
                 and cached.get("leaders")
             ):
                 return cached
-        except Exception:
-            pass
     payload = rank_concept_leaders(
         concept_name, start=start, end=end, top_n=top_n
     )
     if payload.get("leaders"):
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        set_doc(key, payload, async_write=True)
     return payload

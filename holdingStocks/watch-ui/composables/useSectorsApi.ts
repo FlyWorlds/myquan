@@ -51,9 +51,10 @@ export function useSectorsApi() {
     )
   }
 
-  async function fetchConceptMembers(name: string, limit = 80) {
+  async function fetchConceptMembers(name: string, limit = 80, kind = '概念') {
     const qs = new URLSearchParams({
       name,
+      kind,
       limit: String(limit),
     })
     return apiGet<SectorMembersPayload>(`/api/sectors/members?${qs}`)

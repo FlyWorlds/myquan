@@ -4,6 +4,34 @@ export interface SectorCell {
   rank: number
   label?: string
   metric?: string
+  net_inflow?: number | null
+  amount?: number | null
+  leader_name?: string
+  leader_chg?: number | null
+}
+
+export interface HotPeriodCard {
+  name: string
+  code?: string
+  chg_pct: number | null
+  net_inflow?: number | null
+  amount?: number | null
+  leader_name?: string
+  leader_chg_pct?: number | null
+  period?: number
+  rank?: number
+}
+
+export interface SectorBoardStat {
+  name: string
+  code?: string
+  today_rank?: number | null
+  chg_pct?: number | null
+  net_inflow?: number | null
+  amount?: number | null
+  appear_15d?: number
+  leader_name?: string
+  leader_chg_pct?: number | null
 }
 
 export interface SectorMember {
@@ -24,6 +52,8 @@ export interface SectorKindPayload {
       bottom: SectorCell[][]
     }
   >
+  hot_periods?: Record<string, HotPeriodCard[]>
+  board_stats?: Record<string, SectorBoardStat>
   members: Record<string, SectorMember[]>
   fund_note?: string
   board_count?: number
@@ -76,6 +106,7 @@ export interface ConceptRallySegment {
 
 export interface ConceptDetailPayload {
   concept: string
+  resolved_concept?: string
   code: string
   source: string
   updated_at: string

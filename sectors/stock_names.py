@@ -1,27 +1,24 @@
-"""A 股代码 → 名称映射（板块成分股展示用）。"""
+"""A 股代码 → 名称映射（板块成分股展示用，复用数据库 a_share_code_names）。"""
 
 from __future__ import annotations
 
-import json
+import sys
 from pathlib import Path
 from typing import Any
 
 _CACHE: dict[str, str] | None = None
-_CACHE_PATH = (
-    Path(__file__).resolve().parents[1] / "holdingStocks" / "cache" / "a_share_code_names.json"
-)
+_HOLDING_DIR = Path(__file__).resolve().parents[1] / "holdingStocks"
+if str(_HOLDING_DIR) not in sys.path:
+    sys.path.insert(0, str(_HOLDING_DIR))
 
 
-def _load_cache_file() -> dict[str, str]:
-    if not _CACHE_PATH.is_file():
-        return {}
+def _load_from_holding_names() -> dict[str, str]:
     try:
-        raw = json.loads(_CACHE_PATH.read_text(encoding="utf-8"))
-        if isinstance(raw, dict):
-            return {str(k).zfill(6): str(v) for k, v in raw.items()}
+        from stock_names import name_by_code
+
+        return dict(name_by_code())
     except Exception:
         return {}
-    return {}
 
 
 def _load_akshare() -> dict[str, str]:
@@ -46,7 +43,7 @@ def stock_name_map(*, refresh: bool = False) -> dict[str, str]:
     global _CACHE
     if _CACHE is not None and not refresh:
         return _CACHE
-    merged = _load_cache_file()
+    merged = _load_from_holding_names()
     if len(merged) < 1000:
         merged = {**_load_akshare(), **merged}
     _CACHE = merged

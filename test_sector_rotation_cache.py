@@ -1,7 +1,8 @@
-"""板块轮动缓存规则 — 防止隔日表头、短结果覆盖长历史。"""
+"""板块轮动缓存与数据库键规则 — 防止隔日表头、短结果覆盖长历史、校验多周期热门卡片保留。"""
 
 from __future__ import annotations
 
+import re
 import unittest
 
 from sectors.rotation_cache import (
@@ -13,13 +14,14 @@ from sectors.rotation_cache import (
     session_label,
     splice_today_onto_hist,
 )
+from sectors.store import make_doc_key
 
 
 def _cell(name: str, value: float, rank: int = 1) -> dict:
     return {"name": name, "value": value, "rank": rank, "label": "", "metric": "涨幅"}
 
 
-def _payload(session: str, date_names: list[str], tops: list[list[dict]], *, source="通达信概念"):
+def _payload(session: str, date_names: list[str], tops: list[list[dict]], *, source="同花顺热点轮动"):
     return {
         "session": session,
         "updated_at": f"{session} 23:00:00",
@@ -60,12 +62,20 @@ class RotationCacheTests(unittest.TestCase):
             ["2026-09-02", "2026-09-01"],
             [[_cell("军贸", 2.4)], [_cell("次新", 1.0)]],
         )
-        today = _payload("2026-09-03", ["2026-09-03"], [[_cell("影视", 2.5)]])
+        today = _payload("2026-09-03", ["2026-09-03"], [[_cell("兵装重组概念", 3.51)]])
+        today["kinds"]["概念"]["hot_periods"] = {
+            "1": [{"name": "兵装重组概念", "chg_pct": 3.51, "net_inflow": -1.41e8}]
+        }
+        today["kinds"]["概念"]["board_stats"] = {
+            "兵装重组概念": {"name": "兵装重组概念", "today_rank": 1, "appear_15d": 2}
+        }
         out = splice_today_onto_hist(hist, today, days=20, today="2026-09-03")
         assert out is not None
         self.assertEqual(date_columns(out)[:3], ["09月03日", "09月02日", "09月01日"])
-        self.assertEqual(out["kinds"]["概念"]["by_metric"]["涨幅"]["top"][0][0]["name"], "影视")
+        self.assertEqual(out["kinds"]["概念"]["by_metric"]["涨幅"]["top"][0][0]["name"], "兵装重组概念")
         self.assertEqual(out["kinds"]["概念"]["by_metric"]["涨幅"]["top"][1][0]["name"], "军贸")
+        self.assertEqual(out["kinds"]["概念"]["hot_periods"]["1"][0]["name"], "兵装重组概念")
+        self.assertEqual(out["kinds"]["概念"]["board_stats"]["兵装重组概念"]["appear_15d"], 2)
         self.assertEqual(out["session"], "2026-09-03")
 
     def test_one_day_fresh_must_not_replace_20day_hist(self) -> None:
@@ -104,6 +114,11 @@ class RotationCacheTests(unittest.TestCase):
         assert out is not None
         self.assertEqual(date_columns(out)[0], "09月03日")
         self.assertEqual(date_columns(out)[1], "09月02日")
+
+    def test_doc_key_matches_java_constraint(self) -> None:
+        for name in ("兵装重组概念", "DRG/DIP", "海上丝路", "共封装光学(CPO)"):
+            k = make_doc_key("sectors_detail", name)
+            self.assertRegex(k, r"^[a-z][a-z0-9_]{0,63}$")
 
 
 if __name__ == "__main__":

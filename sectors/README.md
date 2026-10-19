@@ -1,81 +1,25 @@
-# 板块轮动
+# 板块热点轮动（同花顺优先 + 数据库存储）
 
-行业 / 概念 Tab；按涨幅、涨停数、资金排序；前 10 / 后 10 **近 5 日**热力表；点击板块高亮追踪并下钻个股。
+对齐同花顺 App「热点轮动」界面：
+- 支持 **概念板块 / 行业板块** 切换，以及 **涨幅 / 主力净额 / 成交额 / 涨停数 / 涨跌比 / 强度** 指标切换
+- **热门板块卡片（1日 | 3日 | 5日 | 10日）**：展示区间累计涨幅与主力资金净买/净卖（亿元）
+- **多日轮动排名表**：展示近 N 个交易日板块排名，点击任意板块跨日红框联动高亮追踪
+- **底部浮动详情栏**：展示当日涨幅、排名、近 15 个交易日上榜次数、板块成分股，并支持一键进入板块指数 K 线与波段龙头详情页
 
-## 用法
+## 数据源优先级与容灾回退
 
-```bash
-cd myquan/sectors
+| 模块 | 第一优先级 | 自动回退链路 |
+|------|-----------|-------------|
+| 轮动排行与热门卡片 | **同花顺** (`sectors/ths.py`：`d.10jqka.com.cn` 指数日线 + 行业/概念实时) | 东方财富 (`sectors/rotation.py`) → 新浪 (`sectors/sina_boards.py`) → 通达信 (`sectors/tdx.py`) |
+| 板块详情 K 线与波段龙头 | **同花顺板块指数 K 线** (`last.js` + `today.js` / `akshare`) | 东财板块 K 线（含跨源同义词映射，如 `海上丝路` ↔ `一带一路`）→ 通达信指数 K 线 → 成分股等权合成指数 K 线 |
+| 板块成分股下钻 | **同花顺板块成分股** | 东方财富成分股 → 通达信本地成分索引 → 新浪板块成分股 |
 
-python index.py
-python index.py --no-limitup          # 跳过涨停统计，更快
-python index.py --days 5 --no-members --no-open
-```
+## 存储架构（MySQL 数据库 `app_documents`）
 
-报告：`sectors_rotation.html`
-
-## 数据口径
-
-| 类型 | 来源 | 说明 |
-|------|------|------|
-| 行业 | 同花顺 `q.10jqka.com.cn/thshy` | 约 90 个行业板块，与 App「行业板块」一致 |
-| 概念 | 同花顺 `q.10jqka.com.cn/gn` | 纯概念（剔除沪股通等通道类） |
-| 成分股 | 同花顺板块详情页 | 与 App 下钻列表一致 |
-
-**Mac / Windows 通用**：走同花顺官网接口 + akshare，不读本地通达信/同花顺安装目录；另一台电脑只要 `pip install akshare py_mini_racer` 和网络即可。
-
-不可用时回退东财。
-
-## 文件
-
-| 文件 | 作用 |
-|------|------|
-| `index.py` | CLI 入口 |
-| `ths.py` | 同花顺行业/概念/成分股 |
-| `data.py` | 成分股回退（东财） |
-| `rotation.py` | 指标、历史、快照 |
-| `report.py` | 轮动 HTML |
-| `tdx.py` | 通达信行业/概念/成分股 + pytdx |
-| `tdx_rotation.py` | 通达信概念轮动 payload |
-| `concept_leaders.py` | 概念波段龙头统计 |
-| `leader_score.py` | 因子16 概念龙头评分（编排层，真源 `strategy/factor16_leader_score.py`） |
-| `api.py` | Web API 数据层 |
-| `snapshots/` | 按日快照 |
-| `cache/` | 同花顺代码映射、涨停缓存 |
-
-**Web 行情（盯盘 `/sectors`）**：
-
-1. **结构**：通达信概念名单 + 成分（`sectors/cache` 的 `tdxzs.cfg` / `block_gn`；本机通达信安装目录可同步进 cache）
-2. **今日列实时**：后台线程约 5s 拉一次现价 → 写入 `snapshot.sectors.conceptToday` → WS 推前端重排最左「今日」列  
-   - pytdx 通 → 直拉通达信概念指数  
-   - pytdx 挂 → **东财现价对齐通达信名单**（冷却 10 分钟内不再扫服务器，避免卡死）
-3. **历史列**：通达信日线排行缓存（磁盘 `tdx_rotation_api.json`，约 1h；点「重载历史」强制刷新）
-4. **概念 K 线/波段**：磁盘缓存 + stale-while-revalidate（研究用，不是盘中 tick）
-
-Mac/Win 名单不一致时优先复用未过期太久的通达信轮动磁盘缓存（≤2 天）。行情彻底失败才整表回退东财。
-
-`holdingStocks` watch 服务提供 API，Nuxt 前端 `/sectors` 热力表 + 概念 K 线龙头图。
-
-| 接口 | 说明 |
-|------|------|
-| `GET /api/sectors/members?name=` | 板块成分股（通达信索引优先，名称对不上则东财） |
-| `GET /api/sectors/concept/{名称}?months=6&lite=1` | **lite**：仅 K 线+成分预览（秒开）；不带 `lite` 再补波段龙头 |
-| `GET /api/sectors/concept/{名称}?months=6` | 完整：K 线 + 近半年波段龙头（通达信失败则东财；磁盘缓存 + stale-while-revalidate） |
-| `GET /api/sectors/concept/{名称}/leaders?start=2025-01-01&top_n=5` | **因子16** 概念龙头 Top5（2025至今；前端在 K 线之后再拉） |
-| `GET /api/sectors/focus?concept=名称` | 订阅概念成分/龙头实时报价（随 WS 5s 推送） |
-| `GET /api/sectors/status` | 通达信链路可用性（概念表就绪优先于行情连通） |
-
-启动：根目录 `bash start.sh`，浏览器打开 `http://127.0.0.1:8765/sectors`。前端开发使用 `bash start.sh --ui-dev`，访问 `http://127.0.0.1:3000/sectors`。分开启动见根目录 [READ.md](../READ.md)。点击热力表格子加载成分股。
-
-| 指标 | 来源 | 说明 |
-|------|------|------|
-| 涨幅 | 通达信概念指数 | pytdx 实时/历史 |
-| 成交额 | 通达信概念指数 | 指数 amount 字段 |
-| 涨停数 | **可算** | 成分股现价聚合（新浪，~30s 刷新） |
-| 涨跌比 | **可算** | 成分上涨家数 ÷ 下跌家数 |
-| 主力净额 | **东财补充** | 概念名称近似匹配，非通达信直连 |
-| 强度 | **可算** | 合成：涨幅 × (1+涨跌比/5) + 涨停数×0.35 |
-
-Web 筛选框支持以上 6 项；历史列仅涨幅/成交额来自通达信，其余以「今日」列实时为准。
-
-`tdx.py` 为通达信真源；`rotation.py` 默认同花顺；`tdx_rotation.py` + `api.py` + `live.py` 供 Web 通达信概念轮动。
+所有板块轮动、实时快照、代码映射、板块详情与龙头评分均通过 `sectors/store.py` 读写 Java 后端 `/api/documents/{key}`（底层存储在 MySQL `app_documents` 表），**不再读写本地 `.json` 缓存文件**：
+- `sectors_rotation_api`：板块热门轮动主数据（含概念/行业、1/3/5/10日热门卡片、多日排名、上榜次数统计）
+- `sectors_live_fast`：5s 实时板块行情快照
+- `sectors_ths_codes`：同花顺行业代码、概念代码、指数 `clid` 映射表
+- `sectors_members_index`：板块成分股索引
+- `sectors_detail_<hash>`：各板块近半年指数 K 线与上涨波段龙头
+- `sectors_leader_<hash>`：各板块因子 16 龙头评分
