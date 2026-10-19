@@ -361,7 +361,7 @@ function statusTitle(r: HoldingRow): string {
   return bits.join(' · ')
 }
 
-/** 综合策略收益 tooltip。 */
+/** 策略收益 tooltip。 */
 function strategyCumTitle(r: HoldingRow): string {
   if (r.策略收益来源 === 'database_strategy_book') {
     const warning = r.策略历史状态 === 'legacy_checkpoint_unverified' ? ' 旧历史检查点待核验；新成交逐笔记账。' : ''
@@ -382,6 +382,21 @@ const SINGLE_SIGNAL_TITLE =
   '综合单笔收入：（本轮已实现盈亏＋剩余仓位浮盈）÷本轮买入成本额；以行内账本来源为准'
 const usesDatabaseStrategyBooks = computed(() => props.rows.some(r => r.收益账本 === 'strategy16_database'))
 
+/** 当前可见股票的等权平均，缺失值不参与，零值和负值正常参与。 */
+function meanReturn(getValue: (row: HoldingRow) => number | null): number | null {
+  const values = filteredRows.value.map(({ row }) => getValue(row)).filter((v): v is number => v != null && Number.isFinite(v))
+  return values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : null
+}
+const averageStrategyReturn = computed(() => meanReturn(row => asNum(row['综合策略收益%'] ?? row['策略收益%'])))
+const averageTradeReturn = computed(() => meanReturn(tradeIncomePct))
+
+function fmtReturnPct(value: unknown): string {
+  const number = asNum(value)
+  if (number == null) return '—'
+  const rounded = number.toFixed(1)
+  return `${rounded === '-0.0' ? '0.0' : rounded}%`
+}
+
 function tradeIncomeTitle(r: HoldingRow): string {
   if (r.收益账本 === 'strategy16_database' && Number(r.策略虚拟股数) > 0) {
     return `本次买入 ${fmtNum(r.策略入场价, 2)}，数据库估值价 ${fmtNum(r.策略估值价格, 2)}；剩余浮盈 ${fmtNum(r.本轮浮动盈亏, 2)}。综合本轮盈亏 ${fmtNum(r.综合单笔收入, 2)}，包含已分批卖出收益。`
@@ -398,7 +413,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
   <div>
     <div
       class="card mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2"
-      title="状态与纸面仓独立。综合策略收益=历次已实现盈亏＋当前浮盈。点表头可按该列排序，未点时行序保持。"
+      title="状态与纸面仓独立。策略收益=历次已实现盈亏＋当前浮盈。点表头可按该列排序，未点时行序保持。"
     >
       <div class="flex flex-wrap items-center gap-1.5 text-xs">
         <span v-for="[t, l] in steps" :key="t" class="rounded-full bg-accent/10 px-2 py-0.5 text-accent">{{ t }} {{ l }}</span>
@@ -408,7 +423,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
           · 空槽 {{ slotMeta.free ?? '-' }}
         </span>
         <span v-if="sortKey === 'dayChg'" class="text-ui-text-3">日内涨跌{{ sortDir === 'desc' ? '高→低' : '低→高' }}</span>
-        <span v-else-if="sortKey === 'strategyPnl'" class="text-ui-text-3">综合策略收益{{ sortDir === 'desc' ? '高→低' : '低→高' }}</span>
+        <span v-else-if="sortKey === 'strategyPnl'" class="text-ui-text-3">策略收益{{ sortDir === 'desc' ? '高→低' : '低→高' }}</span>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <button
@@ -496,13 +511,13 @@ function tradeIncomeTitle(r: HoldingRow): string {
                   type="button"
                   class="inline-flex items-center gap-0.5 font-semibold hover:text-accent"
                   :class="sortKey === 'strategyPnl' ? 'text-accent' : ''"
-                  :title="sortTitle('strategyPnl', '综合策略收益')"
+                  :title="sortTitle('strategyPnl', '策略收益') + '；括号内为当前可见股票有效收益率的算术平均，含负值'"
                   @click="toggleSort('strategyPnl')"
                 >
-                  综合策略收益<span class="tabular-nums text-[10px]">{{ sortMark('strategyPnl') }}</span>
+                  策略收益（{{ fmtReturnPct(averageStrategyReturn) }}）<span class="tabular-nums text-[10px]">{{ sortMark('strategyPnl') }}</span>
                 </button>
               </th>
-              <th class="whitespace-nowrap px-3 py-1.5" :title="usesDatabaseStrategyBooks ? '持有按本次买入价与数据库现价计算；全清后冻结本轮实际成交收益' : SINGLE_SIGNAL_TITLE">{{ usesDatabaseStrategyBooks ? '单笔盈亏' : '综合单笔收入' }}</th>
+              <th class="whitespace-nowrap px-3 py-1.5" :title="(usesDatabaseStrategyBooks ? '持有按本次买入价与数据库现价计算；全清后冻结本轮实际成交收益' : SINGLE_SIGNAL_TITLE) + '；括号内为当前可见股票有效单笔收益率的算术平均，含负值'">单笔收益（{{ fmtReturnPct(averageTradeReturn) }}）</th>
               <th class="whitespace-nowrap px-3 py-1.5">前日</th>
               <th class="whitespace-nowrap px-3 py-1.5">过门</th>
               <th class="whitespace-nowrap px-3 py-1.5">阈值</th>
@@ -594,10 +609,10 @@ function tradeIncomeTitle(r: HoldingRow): string {
                 class="sensitive whitespace-nowrap px-3 py-1.5 align-middle"
                 :title="strategyCumTitle(r)"
               >
-                <ChgText :chg="r['综合策略收益%'] ?? r['策略收益%']">{{ fmtSignedPct(r['综合策略收益%'] ?? r['策略收益%']) }}</ChgText>
+                <ChgText :chg="r['综合策略收益%'] ?? r['策略收益%']">{{ fmtReturnPct(r['综合策略收益%'] ?? r['策略收益%']) }}</ChgText>
               </td>
               <td class="sensitive whitespace-nowrap px-3 py-1.5 align-middle tabular-nums" :title="tradeIncomeTitle(r)">
-                <ChgText :chg="tradeIncomePct(r)">{{ fmtSignedPct(tradeIncomePct(r)) }}</ChgText>
+                <ChgText :chg="tradeIncomePct(r)">{{ fmtReturnPct(tradeIncomePct(r)) }}</ChgText>
               </td>
               <td class="whitespace-nowrap px-3 py-1.5 align-middle">{{ r.前日形态 || '-' }}</td>
               <td class="whitespace-nowrap px-3 py-1.5 align-middle font-semibold" :class="r.过门OK ? 'text-up' : 'text-ui-text-2'">{{ r.过门 || '-' }}</td>
