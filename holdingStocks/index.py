@@ -5086,6 +5086,24 @@ def _sync_account_total(rows: list[dict[str, Any]]) -> float | None:
     return total
 
 
+@paper_mutation
+def update_holding_peak(payload):
+    from manual_peak import update_peak
+    data = load_holdings()
+    # Freeze the original overnight reference before a manual correction;
+    # opening protection must never use a peak introduced by the editor.
+    code = str(payload.get("code") or "") if isinstance(payload, dict) else ""
+    pos = (data.get("positions") or {}).get(code)
+    if pos and int(pos.get("qty") or 0) > 0:
+        quote = _execution_quote(_sina_of(code)) or {}
+        freeze_overnight_peak_for_session(pos, session=str(trading_session_date()),
+            cost=pos.get("cost"), prev_close=quote.get("prev_close"),
+            open_px=quote.get("open"), qty=pos.get("qty"))
+    result = update_peak(data, payload)
+    save_holdings(data)
+    return result
+
+
 def save_holdings(data: dict[str, Any]) -> None:
     from holdings_sync import current_host
 
@@ -8308,7 +8326,8 @@ def freeze_overnight_peak_for_session(
     frozen_ok = str(pos.get("overnight_peak_session") or "") == sess
     at_peak = str(pos.get("peak_high_at") or "")
     # 今日竞价戳抬上去的脏峰：作废已冻 overnight，按昨收/成本重算
-    if frozen_ok and at_peak[:10] == sess and is_auction_quote_ts(at_peak):
+    if (frozen_ok and at_peak[:10] == sess and is_auction_quote_ts(at_peak)
+            and at_peak != str(pos.get("peak_manual_at") or "")):
         frozen_ok = False
     seed = 0.0
     if frozen_ok:
@@ -8387,6 +8406,7 @@ def _collect_quote_runtime_rows(get_quote=None):
     model = _HOLDINGS_STORE.read_model()
     data = model.state["holdings"]
     day = _calendar_signal_session()
+    calculation_ready = is_threshold_ready()
     quote_fn = (_DATABASE_QUOTES_CLIENT.get if _CONDITION_BUY_ACTIVE and _DATABASE_QUOTES_CLIENT is not None
                 else get_quote or (_watch_feed.get_quote if _watch_feed else lambda _: None))
     held_rows, _ = build_boot_holdings(model, session=day, clock=_now(), get_quote=quote_fn)
@@ -8412,7 +8432,7 @@ def _collect_quote_runtime_rows(get_quote=None):
                 "昨收": q.get("prev_close"), "当日涨幅": q.get("day_chg_pct"), "更新": q.get("last_ts"),
                 "报价数据库版本": q.get("_database_quote_revision"),
                 "报价用途": "历史参考" if q.get("_reference_only") else "已确认报价"})
-        if row["持仓"] > 0 and pos.get("cost") and pos.get("peak_high"):
+        if calculation_ready and row["持仓"] > 0 and pos.get("cost") and pos.get("peak_high"):
             _, stop = working_stop_price(cost_px=float(pos["cost"]), peak_high=float(pos["peak_high"]),
                 session_peak=float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == day else 0,
                 day_open=float(q.get("open") or 0),
@@ -8420,13 +8440,13 @@ def _collect_quote_runtime_rows(get_quote=None):
                 vol20_daily=_quote_daily_vol(w["sina"], day), tick=_watch_tick(w))
             row.update({"止损": stop, "卖出侧价": stop})
         daily = _DAILY_CACHE.get(w["sina"])
-        if daily and daily[0] == day:
+        if calculation_ready and daily and daily[0] == day:
             allow, gate, shape = _entry_gate_detail(*_prev_bars_from_daily(daily[1], day),
                 entry_pct=_watch_pct(w), tick=_watch_tick(w),
                 prev_entry_mode=str(w.get("prev_entry_mode") or "yin_or_small_yang"))
             row.update({"过门OK": allow, "过门": gate, "前日形态": shape})
         book = data.get("condition_buy_orders") or {}
-        order = (book.get("orders") or {}).get(code) if book.get("session") == day else None
+        order = (book.get("orders") or {}).get(code) if calculation_ready and book.get("session") == day else None
         if order:
             price = order["price"]
             row.update({"买点": price, "买入侧价": price, "阈值就绪": True,
@@ -13305,6 +13325,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         on_selection_load=lambda selection: _set_strategy16b_dynamic(selection.get("params") or {}, selection["pool"]),
         handle_sectors_api=_handle_sectors_api,
         watch_ui_dist_ready=_watch_ui_dist_ready,
+        on_peak_update=update_holding_peak,
         on_paper_reset=_on_paper_reset,
         on_front_rendered=_on_front_rendered,
     )

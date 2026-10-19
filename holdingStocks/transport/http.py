@@ -24,6 +24,7 @@ def build_watch_request_handler(
     handle_strategy16b_api: Callable[[str], tuple[int, Any]] | None = None,
     handle_sectors_api: Callable[[str], tuple[int, Any]],
     watch_ui_dist_ready: Callable[[], bool],
+    on_peak_update: Callable[[dict], Any] | None = None,
     on_paper_reset: Callable[[], Any] | None = None,
     on_front_rendered: Callable[[], bool] | None = None,
     on_selection_load: Callable[[dict], Any] | None = None,
@@ -309,6 +310,21 @@ def build_watch_request_handler(
                     self._send_json({"error": str(exc)}, status=400)
                 except Exception:
                     self._send_json({"error": "数据库保存或回测启动失败"}, status=503)
+                return
+            if path == "/api/holdings/peak":
+                if on_peak_update is None:
+                    self._send_json({"error": "峰值编辑暂不可用"}, status=503)
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if not 0 < length <= 4096:
+                        raise ValueError("请求长度无效")
+                    payload = json.loads(self.rfile.read(length))
+                    self._send_json(on_peak_update(payload))
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                except Exception:
+                    self._send_json({"error": "峰值保存失败，请刷新后重试"}, status=503)
                 return
             if path == "/api/holdings/reset":
                 if on_paper_reset is None:

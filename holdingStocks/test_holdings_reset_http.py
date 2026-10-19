@@ -27,7 +27,7 @@ class _Hub:
         return None
 
 
-def _handler(root: Path, on_reset=None, on_rendered=None):
+def _handler(root: Path, on_reset=None, on_rendered=None, on_peak=None):
     return build_watch_request_handler(
         root=root,
         watch_meta_file=root / "holdings_watch.json",
@@ -39,16 +39,17 @@ def _handler(root: Path, on_reset=None, on_rendered=None):
         get_factors_api=lambda: {},
         handle_sectors_api=lambda _p: (404, {"error": "no"}),
         watch_ui_dist_ready=lambda: False,
+        on_peak_update=on_peak,
         on_paper_reset=on_reset,
         on_front_rendered=on_rendered,
     )
 
 
 class TestHoldingsResetHttp(unittest.TestCase):
-    def _serve(self, on_reset=None, on_rendered=None):
+    def _serve(self, on_reset=None, on_rendered=None, on_peak=None):
         self._tmp = TemporaryDirectory()
         root = Path(self._tmp.name)
-        handler = _handler(root, on_reset, on_rendered)
+        handler = _handler(root, on_reset, on_rendered, on_peak)
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -61,6 +62,23 @@ class TestHoldingsResetHttp(unittest.TestCase):
             self.server.server_close()
         if getattr(self, "_tmp", None):
             self._tmp.cleanup()
+
+    def test_peak_edit_endpoint(self):
+        callback = unittest.mock.Mock(return_value={"ok": True, "peak": 12.3})
+        base = self._serve(on_peak=callback)
+        payload = {"code": "600000", "peak": 12.3, "buyTime": "2026-10-19 10:00:00", "expectedPeak": 12}
+        request = urllib.request.Request(base + "/api/holdings/peak", data=json.dumps(payload).encode(), method="POST")
+        with urllib.request.urlopen(request, timeout=3) as response:
+            self.assertEqual(json.load(response)["peak"], 12.3)
+        callback.assert_called_once_with(payload)
+
+    def test_peak_edit_validation_error(self):
+        callback = unittest.mock.Mock(side_effect=ValueError("峰值已更新"))
+        base = self._serve(on_peak=callback)
+        request = urllib.request.Request(base + "/api/holdings/peak", data=b"{}", method="POST")
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(request, timeout=3)
+        self.assertEqual(ctx.exception.code, 400)
 
     def test_missing_callback_503(self) -> None:
         base = self._serve(None)

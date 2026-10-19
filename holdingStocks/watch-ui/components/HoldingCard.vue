@@ -55,9 +55,55 @@ const slotTrace = computed(
 const hwmTitle = computed(() => {
   const at = props.row.持仓最高时间
   return at
-    ? `策略 HWM（peak_high），形成 ${at}；自动卖出同用此值`
-    : '策略 HWM（peak_high）；自动卖出同用此值'
+    ? `买入后最高价，形成于 ${at}`
+    : '买入后最高价'
 })
+
+const editingPeak = ref(false)
+const peakInput = ref('')
+const peakError = ref('')
+const savingPeak = ref(false)
+const peakEditor = ref<HTMLInputElement | null>(null)
+const savedPeak = ref<number | null>(null)
+const peakEditBase = ref<number | null>(null)
+const peakEditCycle = ref<string | null>(null)
+const displayedPeak = computed(() => savedPeak.value ?? props.row.持仓最高 ?? props.row.峰值)
+watch(() => [props.row.代码, props.row.买入时间, props.row.持仓最高], () => { savedPeak.value = null })
+
+async function editPeak() {
+  if (Number(props.row.持仓) <= 0 || savingPeak.value) return
+  peakEditBase.value = Number(displayedPeak.value ?? props.row.成本)
+  peakEditCycle.value = props.row.买入时间 || null
+  peakInput.value = String(displayedPeak.value ?? props.row.成本 ?? '')
+  peakError.value = ''
+  editingPeak.value = true
+  await nextTick()
+  peakEditor.value?.focus()
+  peakEditor.value?.select()
+}
+
+async function savePeak() {
+  if (savingPeak.value) return
+  const peak = Number(peakInput.value)
+  if (!Number.isFinite(peak) || peak <= 0) {
+    peakError.value = '请输入大于零的价格'
+    return
+  }
+  savingPeak.value = true
+  peakError.value = ''
+  try {
+    const result = await $fetch<{ peak: number }>('/api/holdings/peak', {
+      method: 'POST',
+      body: { code: props.row.代码, peak, buyTime: peakEditCycle.value, expectedPeak: peakEditBase.value },
+    })
+    savedPeak.value = result.peak
+    editingPeak.value = false
+  } catch (error: any) {
+    peakError.value = error?.data?.error || '保存失败，请刷新后重试'
+  } finally {
+    savingPeak.value = false
+  }
+}
 
 const touchClock = computed(() => fmtSignalClock(props.row.买信号时间 || props.row.信号时间))
 
@@ -132,15 +178,32 @@ const cardClass = computed(() => {
       </div>
       <p v-if="row.error" class="mt-3 text-sm text-up">{{ row.error }}</p>
       <template v-else>
-        <dl v-if="!dense" class="mt-3 grid grid-cols-3 gap-3 text-xs">
+        <dl v-if="!dense" class="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
           <div><dt class="text-ui-text-3">{{ slotTrace ? '卖出数量' : '持仓数量' }}</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ slotTrace ? (row.卖出数量 ?? cyclePnl?.soldQty ?? '—') : (row.持仓 ?? 0) }} 股</dd></div>
           <div><dt class="text-ui-text-3">{{ slotTrace ? '平仓价' : '买入成本' }}</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(slotTrace ? row.成交价 : row.成本, pdg) }}</dd></div>
+          <div :title="Number(row.持仓) > 0 ? `${hwmTitle}；双击修改` : hwmTitle">
+            <dt class="text-ui-text-3">峰值</dt>
+            <dd class="sensitive mt-1 font-semibold tabular-nums">
+              <div v-if="editingPeak" class="space-y-1">
+                <input ref="peakEditor" v-model="peakInput" type="number" min="0" step="any" aria-label="峰值价格"
+                  class="w-full rounded border border-ui-hairline bg-ui-surface px-2 py-1 text-ui-text"
+                  :disabled="savingPeak" @keydown.enter.prevent="savePeak" @keydown.esc="!savingPeak && (editingPeak = false)">
+                <div class="flex gap-2">
+                  <button type="button" class="text-accent" :disabled="savingPeak" @click="savePeak">{{ savingPeak ? '保存中' : '保存' }}</button>
+                  <button type="button" class="text-ui-text-3" :disabled="savingPeak" @click="editingPeak = false">取消</button>
+                </div>
+              </div>
+              <button v-else-if="Number(row.持仓) > 0" type="button" class="cursor-text hover:text-accent"
+                aria-label="峰值，双击或按回车修改" @dblclick="editPeak" @keydown.enter.prevent="editPeak">{{ fmtNum(displayedPeak, pdg) }}</button>
+              <span v-else>{{ fmtNum(displayedPeak, pdg) }}</span>
+              <p v-if="peakError" role="alert" class="mt-1 text-xs font-normal text-up">{{ peakError }}</p>
+            </dd>
+          </div>
           <div><dt class="text-ui-text-3">触发时间</dt><dd class="mt-1 font-mono font-semibold tabular-nums">{{ fmtSignalClock(row.信号时间) || '—' }}</dd></div>
         </dl>
         <dl v-if="!dense && row.阈值就绪" class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-ui-hairline p-3 text-xs sm:grid-cols-4">
           <div><dt class="text-ui-text-3">买入侧</dt><dd class="sensitive mt-1 font-semibold tabular-nums text-up">{{ fmtNum(row.买入侧价 ?? row.买点, pdg) }}</dd></div>
           <div><dt class="text-ui-text-3">卖出侧</dt><dd class="sensitive mt-1 font-semibold tabular-nums text-down">{{ fmtNum(row.卖出侧价 ?? row.止损, pdg) }}</dd></div>
-          <div :title="hwmTitle"><dt class="text-ui-text-3">持仓最高</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.持仓最高 ?? row.峰值, pdg) }}</dd></div>
           <div title="当日行情最高价"><dt class="text-ui-text-3">今日最高</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.今日最高 ?? row.最高, pdg) }}</dd></div>
         </dl>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" :class="dense ? 'mt-1.5' : 'mt-3'">
