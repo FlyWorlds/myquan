@@ -1,4 +1,5 @@
 export interface WatchAccount {
+  dayPnlStarted?: boolean
   totalPnl?: number | null
   totalPnlPct?: number | null
   totalPnlStart?: string | null

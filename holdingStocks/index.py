@@ -2133,7 +2133,8 @@ def _iter_snapshot_price_rows(snap: dict[str, Any]):
 
 def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any]) -> bool:
     """出站快照兜底：所有页面行都补齐纸面整笔收益，避免显示最后一腿收益。"""
-    changed = False
+    from day_pnl_window import apply_day_pnl_window
+    changed = apply_day_pnl_window(snap)
     model = _HOLDINGS_STORE.read_model() if database_enabled() else None
     if model is not None and snap.get("paperRevision") is not None and snap["paperRevision"] != model.state["revision"]:
         return False  # A newer ledger must not mix into an older published account frame.

@@ -4,6 +4,9 @@ import { fmtSignedMoney, fmtSignedPct } from '~/utils/format'
 
 const props = defineProps<{ row: HoldingRow; block?: boolean }>()
 
+const watchStore = useWatchStore()
+const dayReady = computed(() => watchStore.snapshot?.account?.dayPnlStarted !== false)
+
 const closed = computed(() => {
   const qty = Number(props.row.持仓 || 0)
   const pos = String(props.row.持仓状态 || '')
@@ -57,6 +60,7 @@ function vsCost(last: number, cost: number, qty: number) {
 
 /** 今买始终相对买入价。昨仓才信后端当日盈亏；缺失时按昨收补，不回退成本。 */
 const dayPnl = computed(() => {
+  if (!dayReady.value) return null
   const qty = Number(props.row.持仓 || 0)
   const last = Number(props.row.现价)
   const cost = Number(props.row.成本)
@@ -75,6 +79,7 @@ const dayPnl = computed(() => {
 const amount = computed(() => dayPnl.value)
 
 const pct = computed(() => {
+  if (!dayReady.value) return null
   const qty = Number(props.row.持仓 || 0)
   const last = Number(props.row.现价)
   const cost = Number(props.row.成本)
