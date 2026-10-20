@@ -151,7 +151,7 @@ python -m pytest -q ../                 # 全量测试（需 pytest）
 | `index.py` | 盯盘主程序 / JSON 推送 / 微信 / 买卖记账 |
 | `database_holdings.py` | 默认MySQL账户适配器；同一版本读取、事务提交、版本冲突及失败回滚 |
 | `holdings_sync.py` | 历史local_json离线工具；生产持仓不通过Git同步 |
-| 根目录 `start_project.py` / `start.sh` | 正式一键入口：MySQL、Java、Python与前端；只停止自身管理的进程 |
+| 根目录 `start_project.py` / `start.sh` | 正式一键入口：MySQL、Java、Python与前端；启动前清理上次登记及严格识别的本项目旧服务，MySQL保持运行 |
 | `watch_process.py` | 只读PID/端口查询与PID元数据，不强制回收端口 |
 | `quote_feed.py` | 行情聚合 |
 | `wechat_notify.py` | 微信推送 |
@@ -266,3 +266,9 @@ python index.py holdings-pull   # 默认生产模式重新读取数据库；不�
 持仓预警池与策略16信号通过 Java documents API 存入 MySQL `app_documents`（键 `watch_alert_retention`）。展示快照恢复已保存信号，刷新、重启、暂时离开实时池不会提前清除；按上海时区，在下一个交易日 09:00 起的首次快照更新时清理，周末及交易日历休市日顺延。保留字段仅用于展示，不回流到下单或仓位计算。数据库写入失败会在后续快照更新时重试；离线 `HOLDINGS_STORAGE=local_json` 模式仅在内存保留。
 
 策略16买入后，状态栏在同一保留期内显示「已触买」，到下一交易日09:00后恢复账本的「策略持有」状态；实际策略账本与仓位即时更新，延迟仅作用于展示。
+
+### 启动端口登记与旧进程清理
+
+`bash start.sh` 默认重新启动项目服务，不再静默复用旧进程。启动器在 `backend/logs/project-launcher/state.json` 保存服务端口、PID、进程启动时间及启动命令。下次启动先完成环境/构建检查，再按前端→Python→Java的顺序停止旧项目进程，核验旧端口释放后启动新服务；旧端口与新配置不同也会清理。
+
+对以前手动启动但尚未登记的当前端口，只有命令路径和工作目录都明确属于本项目时才登记并替换；未知端口占用会报错，不会按端口盲目杀进程。MySQL不参与清理。`bash start.sh --service python` 等单服务命令仍仅替换指定服务；整体 `--restart` 与普通启动采用相同清理流程。

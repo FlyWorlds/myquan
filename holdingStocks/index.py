@@ -8411,7 +8411,7 @@ def _collect_quote_runtime_rows(get_quote=None):
             "已触买": "否", "已触止损": "否", "阈值就绪": False,
             "价位小数": _px_digits(_watch_tick(w)), "阈值%": f"±{_watch_pct(w)*100:.1f}"})
         if q:
-            row.update({"现价": q.get("last"), "开盘": q.get("open"), "今日最高": q.get("high"),
+            row.update({"现价": q.get("last"), "开盘": q.get("open"), "今日最高": q.get("high"), "今日最低": q.get("low"),
                 "昨收": q.get("prev_close"), "当日涨幅": q.get("day_chg_pct"), "更新": q.get("last_ts"),
                 "报价数据库版本": q.get("_database_quote_revision"),
                 "报价用途": "历史参考" if q.get("_reference_only") else "已确认报价"})
@@ -8454,6 +8454,12 @@ def _collect_quote_runtime_rows(get_quote=None):
             row["开盘记录时间"] = order.get("open_audit_at") or order.get("armed_quote_at")
         if books.get(code):
             apply_database_book_to_row(row, books[code])
+        pending_sell = pos.get("open_peak_sell_order") or {}
+        if (calculation_ready and row["持仓"] > 0 and pending_sell.get("session") == day
+                and pending_sell.get("cycle") == pos.get("buy_time") and pending_sell.get("status") == "ARMED"
+                and datetime.now().strftime("%H:%M:%S") < "09:30:00"):
+            row.update({"持仓状态": "待卖出", "预警": "低开峰值回落·待开盘卖出",
+                        "近止损": True, "挂单说明": "9:25后准备卖单，9:30按有效开盘价模拟成交"})
         _enrich_comprehensive_trade_return(row, read_model=model)
         rows.append(row)
     # Publish unfilled signals even when execution is blocked by slots/daily quota.
@@ -12708,10 +12714,42 @@ def _execution_quote(sina):
     return result if isinstance(result, dict) else None
 
 
+@paper_mutation
+def _prepare_open_peak_sells():
+    from open_peak_sell import draft_open_peak_sell
+    from condition_buy import fresh_quote
+    now = datetime.now()
+    if not calendar_is_trading_day(now) or not "09:25:00" <= now.strftime("%H:%M:%S") < "09:30:00":
+        return
+    data = load_holdings()
+    changed = False
+    session = str(trading_session_date())
+    for code, pos in (data.get("positions") or {}).items():
+        if int(pos.get("qty") or 0) <= 0:
+            continue
+        sina = _sina_of(code)
+        q = (_DATABASE_QUOTES_CLIENT.get(sina) if _DATABASE_QUOTES_CLIENT is not None
+             else _watch_feed.get_quote(sina) if _watch_feed else None)
+        if not q or not fresh_quote(q, session, now):
+            continue
+        draft = draft_open_peak_sell(pos, q, session=session, now=now,
+            vol20_daily=_quote_daily_vol(sina, session))
+        old = pos.get("open_peak_sell_order")
+        if draft and draft != old:
+            pos["open_peak_sell_order"] = draft
+            changed = True
+        elif not draft and old and old.get("session") == session and old.get("status") == "ARMED":
+            old["status"] = "CANCELLED"
+            changed = True
+    if changed:
+        save_holdings(data)
+
+
 def _settle_condition_open_protect(data: dict[str, Any], now: datetime) -> None:
     """At the bell, apply the existing overnight-open rule before allocating buys."""
     from condition_buy import fresh_quote
     from quote_exit import overnight_note_updates
+    from open_peak_sell import open_peak_sell_ready
     from strategy.exit_rules.overnight_open_protect import evaluate_overnight_open_protect
     day = str(trading_session_date())
     if not is_signal_window(now) or not "09:30:00" <= now.strftime("%H:%M:%S") <= "09:30:05":
@@ -12735,18 +12773,24 @@ def _settle_condition_open_protect(data: dict[str, Any], now: datetime) -> None:
             continue
         pos.update(overnight_note_updates(pos, q, day))
         sellable = _sellable_qty(pos, qty, bought, day)
+        if sellable <= 0:
+            continue
         frozen = freeze_overnight_peak_for_session(pos, session=day, cost=pos.get("cost"),
             prev_close=q.get("prev_close"), open_px=q["open"], qty=qty)
         result = evaluate_overnight_open_protect(dict(cost=pos.get("cost"), open_px=q["open"],
             prev_close=q.get("prev_close"), peak_high=frozen,
             qty=qty, buy_time=bought, session=day, overnight_high_ok=True))
-        if not result.triggered:
+        pending = pos.get("open_peak_sell_order")
+        armed = open_peak_sell_ready(pending, pos, q, session=day, now=now)
+        if not result.triggered and not armed:
             continue
+        if armed:
+            pending["status"] = "FILLED"
         apply_exit_fill(code=code, meta=dict(name=pos.get("name") or code, market=pos.get("market") or ""),
             fill_px=q["open"], qty=sellable, cost=pos.get("cost"), session=day, buy_time=bought,
             prev_close=q.get("prev_close"), open_px=q["open"], px_digits=2,
-            reason="止损成交", trade_note="开盘保护成交(实时·条件单前置)", action_kind="full",
-            first_hit_ts=q["last_ts"], exit_kind="open_protect",
+            reason="止损成交", trade_note="低开峰值回落·9:25准备·9:30开盘成交" if armed else "开盘保护成交(实时·条件单前置)", action_kind="full",
+            first_hit_ts=q["last_ts"], exit_kind="open_peak_sell" if armed else "open_protect",
             execution_meta=dict(signal_time=q["last_ts"], decision_time=_now(),
                 execution_quote_time=q["last_ts"], observed_price=float(q["last"]),
                 quote_db_revision=q.get("_database_quote_revision"), quote_db_at=q.get("_database_quote_at"),
@@ -13045,6 +13089,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         warming: dict[str, Any] = {}
         warm_after: dict[str, float] = {}
         previous_pool: set[str] | None = None
+        peak_sell_prepare_after = 0.0
         with ThreadPoolExecutor(max_workers=4, thread_name_prefix="condition-open-audit") as audits, \
                 ThreadPoolExecutor(max_workers=2, thread_name_prefix="condition-reference-data") as references:
             while not stop.is_set():
@@ -13053,6 +13098,9 @@ def cmd_watch(args: argparse.Namespace) -> None:
                     stop.wait(.5)
                     continue
                 try:
+                    if time.monotonic() >= peak_sell_prepare_after:
+                        _prepare_open_peak_sells()
+                        peak_sell_prepare_after = time.monotonic() + 1
                     items = strategy_watchlist()
                     active = {_code_key(w["code"]) for w in items}
                     held_items = _holding_watchlist(_HOLDINGS_CACHE.get("data") or {})

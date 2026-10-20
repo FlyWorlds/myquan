@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HoldingRow, StrategyPicks } from '~/types/snapshot'
 import { selectionRows } from '~/utils/selectionRows'
-import { orderTouchBuys, stickAlertRows } from '~/utils/alertBoard'
+import { createAlertPriceOrder, orderTouchBuys, stickAlertRows } from '~/utils/alertBoard'
 
 const store = useWatchStore()
 const { error: databaseError } = useDatabaseHoldings()
@@ -215,6 +215,11 @@ const paperHoldings = computed(() => {
 })
 
 const alertCards = ref<HoldingRow[]>([])
+const alertPriceOrder = createAlertPriceOrder(10_000)
+let alertSortTimer: ReturnType<typeof setTimeout> | undefined
+onBeforeUnmount(() => {
+  if (alertSortTimer != null) clearTimeout(alertSortTimer)
+})
 watch(
   snapshot,
   (snap) => {
@@ -227,7 +232,16 @@ watch(
       const code = String(row.代码 || '')
       if (code && !quotes.has(code)) quotes.set(code, row)
     }
-    alertCards.value = orderTouchBuys(stickAlertRows(alertCards.value, incoming, taken, quotes))
+    const latest = stickAlertRows(alertCards.value, incoming, taken, quotes)
+    const now = performance.now()
+    alertCards.value = orderTouchBuys(alertPriceOrder.update(latest, now))
+    // Never debounce the snapshot or restart this timer on each quote.
+    if (import.meta.client && alertSortTimer == null && alertCards.value.length) {
+      alertSortTimer = setTimeout(() => {
+        alertSortTimer = undefined
+        alertCards.value = orderTouchBuys(alertPriceOrder.update(alertCards.value, performance.now()))
+      }, alertPriceOrder.remaining(now))
+    }
   },
   { immediate: true },
 )

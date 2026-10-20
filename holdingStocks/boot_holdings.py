@@ -34,7 +34,7 @@ def build_boot_holdings(model, *, session, clock, get_quote=None):
             mark, cost = number(q.get("last")), number(pos.get("cost"))
             if valid and mark is not None and mark > 0:
                 row.update({"现价": mark, "昨收": number(q.get("prev_close")),
-                            "开盘": number(q.get("open")), "今日最高": number(q.get("high")),
+                            "开盘": number(q.get("open")), "今日最高": number(q.get("high")), "今日最低": number(q.get("low")),
                             "当日涨幅": number(q.get("day_chg_pct")), "更新": q.get("last_ts"),
                             "报价数据库版本": q.get("_database_quote_revision"),
                             "报价用途": "历史参考" if q.get("_reference_only") else "已确认报价",

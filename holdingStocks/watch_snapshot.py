@@ -718,6 +718,7 @@ def patch_row_live_quote(
             row["今日最高"] = day_high
     if low is not None and low > 0:
         row["最低"] = round(min(low, last), digits)
+        row["今日最低"] = row["最低"]
 
     buy = _as_pos_float(row.get("买点"))
     if buy is not None and buy > 0:

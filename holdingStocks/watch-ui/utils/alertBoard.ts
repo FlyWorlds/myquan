@@ -83,3 +83,46 @@ export function stickAlertRows<T extends AlertRow>(
   }
   return out
 }
+
+/** Throttle price-driven movement; membership and row values always update immediately. */
+export function createAlertPriceOrder(intervalMs = 10_000) {
+  let order: string[] = []
+  let lastSortedAt = -Infinity
+
+  function distance(row: AlertRow): number {
+    const last = Number(row.现价)
+    const buy = Number(row.买入侧价 ?? row.买点)
+    if (last > 0 && buy > 0) return Math.abs(last / buy - 1)
+    const stored = row['距买点%']
+    return stored != null && Number.isFinite(Number(stored)) ? Math.abs(Number(stored)) / 100 : Infinity
+  }
+
+  return {
+    remaining(now: number) {
+      return Math.max(0, lastSortedAt + intervalMs - now)
+    },
+    update<T extends AlertRow>(rows: T[], now: number): T[] {
+      if (!rows.length) {
+        order = []
+        lastSortedAt = -Infinity
+        return []
+      }
+      const previous = new Map(order.map((code, i) => [code, i]))
+      let next = [...rows].sort((a, b) =>
+        (previous.get(codeOf(a)) ?? Infinity) - (previous.get(codeOf(b)) ?? Infinity),
+      )
+      if (now - lastSortedAt >= intervalMs) {
+        // Stable ties retain the previous order; touch-buy priority is applied separately.
+        next = next.sort((a, b) => {
+          const band = Number(a.预警线内 === false) - Number(b.预警线内 === false)
+          if (band) return band
+          const da = distance(a), db = distance(b)
+          return da === db ? 0 : da < db ? -1 : 1
+        })
+        lastSortedAt = now
+      }
+      order = next.map(codeOf)
+      return next
+    },
+  }
+}

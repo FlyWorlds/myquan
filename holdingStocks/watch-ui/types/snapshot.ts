@@ -44,6 +44,8 @@ export interface HoldingRow {
   /** 行情 API dayHigh（≠ trailing HWM） */
   最高?: number | null
   今日最高?: number | null
+  今日最低?: number | null
+  最低?: number | null
   /** positions.peak_high：自动卖出 trailing SoT */
   持仓最高?: number | null
   峰值?: number | null

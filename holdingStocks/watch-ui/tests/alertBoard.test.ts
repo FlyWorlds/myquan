@@ -48,3 +48,35 @@ test('a newly entered stock is appended and a filled position leaves the board',
   assert.equal(next[0].预警线内, false)
   assert.equal(next[1].预警线内, true)
 })
+
+import { createAlertPriceOrder } from '../utils/alertBoard.ts'
+
+test('price values refresh immediately while positions move no more often than every 10 seconds', () => {
+  const order = createAlertPriceOrder()
+  const rows = [{ 代码: 'A', 现价: 9.9, 买点: 10 }, { 代码: 'B', 现价: 9.5, 买点: 10 }]
+  assert.deepEqual(order.update(rows, 0).map(r => r.代码), ['A', 'B'])
+  const updated = [{ ...rows[0], 现价: 9 }, { ...rows[1], 现价: 9.99 }]
+  const early = order.update(updated, 9999)
+  assert.deepEqual(early.map(r => r.代码), ['A', 'B'])
+  assert.equal(early[1].现价, 9.99)
+  assert.deepEqual(order.update(updated, 10000).map(r => r.代码), ['B', 'A'])
+})
+
+test('new alerts enter instantly without triggering a price reshuffle of existing alerts', () => {
+  const order = createAlertPriceOrder()
+  order.update([{ 代码: 'A', 现价: 9.9, 买点: 10 }, { 代码: 'B', 现价: 9.5, 买点: 10 }], 0)
+  const next = order.update([{ 代码: 'B', 现价: 9.99, 买点: 10 }, { 代码: 'A', 现价: 9, 买点: 10 },
+    { 代码: 'C', 现价: 9.999, 买点: 10 }], 1000)
+  assert.deepEqual(next.map(r => r.代码), ['A', 'B', 'C'])
+  assert.equal(order.remaining(1000), 9000)
+  assert.deepEqual(order.update(next, 10000).map(r => r.代码), ['C', 'B', 'A'])
+})
+
+test('continuous quotes do not postpone sorting and occupied stocks leave immediately', () => {
+  const order = createAlertPriceOrder()
+  order.update([{ 代码: 'A', 现价: 9.9, 买点: 10 }, { 代码: 'B', 现价: 9, 买点: 10 }], 0)
+  const changed = [{ 代码: 'A', 现价: 9, 买点: 10 }, { 代码: 'B', 现价: 9.99, 买点: 10 }]
+  for (let now = 1000; now < 10000; now += 1000) order.update(changed, now)
+  assert.deepEqual(order.update(changed, 10000).map(r => r.代码), ['B', 'A'])
+  assert.deepEqual(order.update([changed[0]], 10001).map(r => r.代码), ['A'])
+})
