@@ -9,11 +9,49 @@ import org.springframework.http.HttpStatus;
 
 @RestController
 public class SelectionGroupController {
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
     private final JdbcTemplate jdbc;
     public SelectionGroupController(JdbcTemplate jdbc) { this.jdbc=jdbc; }
     @GetMapping("/api/paper/selection-groups")
     public List<Map<String,Object>> list() {
-        return jdbc.queryForList("SELECT g.id,g.name,g.created_at FROM strategy_selection_groups g LEFT JOIN strategy_selection_preferences p ON p.id=1 ORDER BY CASE WHEN g.id=p.default_group_id THEN 0 ELSE 1 END,g.created_at DESC LIMIT 500");
+        var rows = jdbc.queryForList("SELECT g.id,g.name,g.created_at,g.payload FROM strategy_selection_groups g LEFT JOIN strategy_selection_preferences p ON p.id=1 ORDER BY CASE WHEN g.id=p.default_group_id THEN 0 ELSE 1 END,g.created_at DESC LIMIT 500");
+        var out = new ArrayList<Map<String,Object>>(rows.size());
+        for (var r : rows) {
+            var item = new LinkedHashMap<String,Object>();
+            item.put("id", r.get("id") != null ? r.get("id") : r.get("ID"));
+            item.put("name", r.get("name") != null ? r.get("name") : r.get("NAME"));
+            item.put("created_at", r.get("created_at") != null ? r.get("created_at") : r.get("CREATED_AT"));
+            Object raw = r.get("payload") != null ? r.get("payload") : r.get("PAYLOAD");
+            summarizePayload(item, raw == null ? "" : raw.toString());
+            out.add(item);
+        }
+        return out;
+    }
+    private static void summarizePayload(Map<String,Object> item, String raw) {
+        try {
+            JsonNode root = MAPPER.readTree(raw);
+            JsonNode items = root.path("picks").path("items");
+            if (!items.isArray()) items = root.path("pool").path("picks");
+            if (!items.isArray()) return;
+            var codes = new ArrayList<String>();
+            var names = new ArrayList<String>();
+            for (JsonNode n : items) {
+                String code = n.path("code").asText("").trim();
+                String name = n.path("name").asText("").trim();
+                if (!code.isEmpty()) codes.add(code);
+                if (names.size() < 2 && (!name.isEmpty() || !code.isEmpty())) {
+                    names.add(!name.isEmpty() ? name : code);
+                }
+            }
+            item.put("stock_count", codes.size());
+            if (!names.isEmpty()) item.put("preview", String.join("、", names));
+            if (!codes.isEmpty()) {
+                var md = java.security.MessageDigest.getInstance("SHA-256");
+                byte[] digest = md.digest(String.join(",", codes).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                item.put("fingerprint", java.util.HexFormat.of().formatHex(digest));
+            }
+        } catch (Exception ignored) {
+        }
     }
     @GetMapping("/api/paper/selection-groups/default")
     public Map<String,Object> defaultGroup() {

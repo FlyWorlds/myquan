@@ -301,7 +301,9 @@ def build_watch_request_handler(
                         data = json.loads(backend("selection-groups/" + group_id)["payload"])
                         if on_selection_load is None:
                             raise ValueError("选股载入不可用")
-                        on_selection_load(data)
+                        loaded = on_selection_load(data)
+                        if isinstance(loaded, dict):
+                            data = loaded
                     else:
                         data = backend("selection-groups", body) if path.endswith("groups") else start_replay(str(__import__('uuid').UUID(body["groupId"])))
                     self._send_json(data)

@@ -1,6 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
 import { stabilizeRows } from '~/utils/stableRowOrder'
+import { createStatusDebouncer } from '~/utils/alertBoard'
 import { fmtNum, fmtSignedPct, fmtSignalClock, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual, collectLegendIds } from '~/composables/useSignalVisual'
@@ -56,9 +57,37 @@ type DecoratedRow = {
 }
 const sortedRowsSnapshot = ref<DecoratedRow[] | null>(null)
 const pinnedOrder = ref<string[]>([])
+const statusDebouncer = createStatusDebouncer(3_000)
+const debouncedRows = ref<HoldingRow[]>([])
+let statusTimer: ReturnType<typeof setTimeout> | undefined
+onBeforeUnmount(() => {
+  if (statusTimer != null) clearTimeout(statusTimer)
+})
+
+function armStatusTimer(now: number) {
+  if (!import.meta.client || statusTimer != null || !debouncedRows.value.length) return
+  const wait = statusDebouncer.remaining(now)
+  if (wait <= 0) return
+  statusTimer = setTimeout(() => {
+    statusTimer = undefined
+    const t = performance.now()
+    debouncedRows.value = statusDebouncer.update(props.rows || [], t)
+    armStatusTimer(t)
+  }, wait)
+}
+
+watch(
+  () => props.rows,
+  (rows) => {
+    const now = performance.now()
+    debouncedRows.value = statusDebouncer.update(rows || [], now)
+    armStatusTimer(now)
+  },
+  { immediate: true },
+)
 
 const decoratedRows = computed<DecoratedRow[]>(() =>
-  (props.rows || []).map((row) => {
+  (debouncedRows.value || []).map((row) => {
     const visual = resolveSignalVisual(row)
     const tags = collectLegendIds(row) as LegendId[]
     return { row, visual, tags }

@@ -1582,31 +1582,40 @@ def _strategy16b_num(raw: Any) -> float | None:
 
 
 def _strategy16b_quote_map(codes: set[str]) -> dict[str, dict[str, Any]]:
-    if _CONDITION_BUY_ACTIVE:
-        return {code: q for code in codes if (q := _execution_quote(_sina_of(code)))}
     clean = tuple(sorted(c for c in codes if _code_key(c)))
     if not clean:
         return {}
+    by_code: dict[str, dict[str, Any]] = {}
+    if _CONDITION_BUY_ACTIVE:
+        for code in clean:
+            q = _execution_quote(_sina_of(code))
+            if isinstance(q, Mapping) and q:
+                by_code[code] = dict(q)
+    missing = tuple(c for c in clean if c not in by_code)
+    if not missing:
+        return by_code
     now = time.time()
     cached_codes = tuple(_STRATEGY16B_QUOTE_CACHE.get("codes") or ())
     if (
         cached_codes == clean
         and now - float(_STRATEGY16B_QUOTE_CACHE.get("at") or 0.0) <= 8.0
     ):
-        return dict(_STRATEGY16B_QUOTE_CACHE.get("quotes") or {})
+        cached = dict(_STRATEGY16B_QUOTE_CACHE.get("quotes") or {})
+        return {**cached, **by_code}
     try:
-        quotes = fetch_sina_batch([_sina_of(c) for c in clean])
+        quotes = fetch_sina_batch([_sina_of(c) for c in missing])
     except Exception:  # noqa: BLE001
         quotes = {}
-    by_code: dict[str, dict[str, Any]] = {}
+    fetched: dict[str, dict[str, Any]] = {}
     for sina, q in (quotes or {}).items():
         code = _code_key(str(sina))
         if code and isinstance(q, Mapping):
-            by_code[code] = dict(q)
+            fetched[code] = dict(q)
+    merged = {**fetched, **by_code}
     _STRATEGY16B_QUOTE_CACHE["at"] = now
     _STRATEGY16B_QUOTE_CACHE["codes"] = clean
-    _STRATEGY16B_QUOTE_CACHE["quotes"] = by_code
-    return by_code
+    _STRATEGY16B_QUOTE_CACHE["quotes"] = merged
+    return merged
 
 
 def _apply_strategy16b_display_quote(row: dict[str, Any], quote: Mapping[str, Any]) -> None:
@@ -1657,6 +1666,18 @@ def _apply_strategy16b_display_quote(row: dict[str, Any], quote: Mapping[str, An
     if open_px is not None and live_px is not None and open_px > 0:
         row["较开盘点"] = points_vs_open(float(open_px), float(live_px))
         row["较开盘涨幅"] = pct_vs_open(float(open_px), float(live_px))
+        if is_threshold_ready() and not row.get("阈值就绪"):
+            entry_pct = _strategy16b_num(row.get("_entry_pct")) or float(DEFAULT_PCT)
+            tick_val = float(tick if tick is not None and tick > 0 else TICK_SIZE)
+            buy_px = official_buy_trigger(float(open_px), entry_pct=entry_pct, tick=tick_val)
+            stop_px = round(float(open_px) * (1.0 - float(DEFAULT_PCT)), digits)
+            if buy_px is not None and buy_px > 0:
+                row["阈值就绪"] = True
+                row.setdefault("买点", buy_px)
+                row.setdefault("买入侧价", buy_px)
+                row.setdefault("止损", stop_px)
+                row.setdefault("卖出侧价", stop_px)
+                row["距买点%"] = round((float(live_px) / float(buy_px) - 1.0) * 100.0, 2)
 
 
 def _strategy16b_select_params(path: str) -> dict[str, Any]:
@@ -1674,12 +1695,21 @@ def _strategy16b_select_params(path: str) -> dict[str, Any]:
     }
 
 
+def _strategy16b_extract_pick_list(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    raw_picks = payload.get("picks")
+    if isinstance(raw_picks, Mapping):
+        raw_picks = raw_picks.get("items")
+    if not isinstance(raw_picks, list):
+        pool = payload.get("pool")
+        if isinstance(pool, Mapping) and isinstance(pool.get("picks"), list):
+            raw_picks = pool.get("picks")
+    return [it for it in (raw_picks or []) if isinstance(it, Mapping)]
+
+
 def _strategy16b_picks_from_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
-    for i, it in enumerate(payload.get("picks") or [], 1):
-        if not isinstance(it, Mapping):
-            continue
-        code = _code_key(str(it.get("code") or ""))
+    for i, it in enumerate(_strategy16b_extract_pick_list(payload), 1):
+        code = _code_key(str(it.get("code") or it.get("symbol") or ""))
         if not code:
             continue
         items.append(
@@ -1714,10 +1744,8 @@ def _strategy16b_watch_items_from_payload(payload: Mapping[str, Any]) -> list[di
     thrs = load_strategy16_thr_map()
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for it in payload.get("picks") or []:
-        if not isinstance(it, Mapping):
-            continue
-        code = _code_key(str(it.get("code") or ""))
+    for it in _strategy16b_extract_pick_list(payload):
+        code = _code_key(str(it.get("code") or it.get("symbol") or ""))
         if not code or code in seen:
             continue
         seen.add(code)
@@ -1741,13 +1769,42 @@ def _strategy16b_watch_items_from_payload(payload: Mapping[str, Any]) -> list[di
     return out
 
 
-def _set_strategy16b_dynamic(params: Mapping[str, Any], payload: Mapping[str, Any]) -> None:
-    global _last_snapshot_digest
+def _set_strategy16b_dynamic(params: Mapping[str, Any], payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    global _last_snapshot_digest, _last_watch_snapshot
     with _STRATEGY16B_LOCK:
         _STRATEGY16B_DYNAMIC["params"] = dict(params)
         _STRATEGY16B_DYNAMIC["pool"] = dict(payload)
         _STRATEGY16B_DYNAMIC["watchlist"] = _strategy16b_watch_items_from_payload(payload)
     _last_snapshot_digest = None
+    base_rows: list[dict[str, Any]] = []
+    with _WATCH_SNAP_LOCK:
+        if isinstance(_last_watch_snapshot, dict):
+            for section in ("strategy16b", "strategy16", "strategy1", "holdings"):
+                for r in _last_watch_snapshot.get(section) or []:
+                    if isinstance(r, dict):
+                        base_rows.append(r)
+    built_rows = _strategy16b_rows_from_rows(base_rows)
+    with _WATCH_SNAP_LOCK:
+        if isinstance(_last_watch_snapshot, dict) and _last_watch_snapshot.get("type") == "snapshot":
+            snap = dict(_last_watch_snapshot)
+            snap["strategy16b"] = built_rows
+            _last_watch_snapshot = snap
+            _broadcast_watch_snapshot(snap)
+    return built_rows
+
+
+def _activate_strategy16b_selection(selection: Mapping[str, Any]) -> dict[str, Any]:
+    params = selection.get("params") if isinstance(selection.get("params"), Mapping) else {}
+    pool = selection.get("pool") if isinstance(selection.get("pool"), Mapping) else {}
+    merged_payload: dict[str, Any] = dict(pool)
+    if not _strategy16b_extract_pick_list(merged_payload) and isinstance(selection.get("picks"), Mapping):
+        merged_payload["picks"] = selection["picks"].get("items") or []
+    rows = _set_strategy16b_dynamic(params, merged_payload)
+    out = dict(selection)
+    if "picks" not in out or not isinstance(out.get("picks"), Mapping):
+        out["picks"] = _strategy16b_picks_from_payload(merged_payload)
+    out["rows"] = rows
+    return out
 
 
 def _strategy16b_watchlist() -> list[dict[str, Any]]:
@@ -1760,27 +1817,54 @@ def _strategy16b_codes() -> set[str]:
 
 
 def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    codes = _strategy16b_codes()
+    watchlist = _strategy16b_watchlist()
+    if not watchlist:
+        return []
+    codes = {_code_key(str(w.get("code") or "")) for w in watchlist if _code_key(str(w.get("code") or ""))}
     if not codes:
         return []
-    meta_by_code = {
-        _code_key(str(w.get("code") or "")): w
-        for w in _strategy16b_watchlist()
-    }
-    quote_by_code = _strategy16b_quote_map(codes)
-    out: list[dict[str, Any]] = []
+    rows_by_code: dict[str, dict[str, Any]] = {}
     for r in rows:
         code = _code_key(str(r.get("代码") or ""))
-        if code not in codes:
+        if code and code in codes and code not in rows_by_code:
+            rows_by_code[code] = r
+    quote_by_code = _strategy16b_quote_map(codes)
+    out: list[dict[str, Any]] = []
+    for w in watchlist:
+        code = _code_key(str(w.get("code") or ""))
+        if not code:
             continue
-        row = dict(r)
-        meta = meta_by_code.get(code) or {}
+        existing = rows_by_code.get(code)
+        if existing is not None:
+            row = dict(existing)
+        else:
+            pct = float(w.get("entry_pct") or w.get("pct") or DEFAULT_PCT)
+            tick = float(w.get("tick") or TICK_SIZE)
+            row = {
+                "代码": code,
+                "名称": str(w.get("name") or code),
+                "市场": w.get("market"),
+                "交易日": _calendar_signal_session(),
+                "持仓": 0,
+                "持仓状态": "空仓",
+                "策略状态": "空仓",
+                "已触买": "否",
+                "已触止损": "否",
+                "阈值就绪": False,
+                "价位小数": _px_digits(tick),
+                "阈值%": f"±{pct * 100:.1f}",
+                "_entry_pct": pct,
+                "_tick": tick,
+                "现价": None,
+                "当日涨幅": None,
+                "昨收": None,
+            }
         row["pool_src"] = "strategy16b"
         row["池来源"] = "条件选股"
-        if meta.get("concept"):
-            row["concept"] = meta.get("concept")
-        selected_chg = _strategy16b_num(meta.get("_selected_chg_pct"))
-        selected_price = _strategy16b_num(meta.get("_selected_price"))
+        if w.get("concept"):
+            row["concept"] = w.get("concept")
+        selected_chg = _strategy16b_num(w.get("_selected_chg_pct"))
+        selected_price = _strategy16b_num(w.get("_selected_price"))
         row_day_chg = _strategy16b_num(row.get("当日涨幅"))
         # 16B 动态池的候选来自全 A 即时筛选；当单票实时源在盘前/收盘后回退到
         # overnight quote 时，day_chg_pct 会被清零，导致页面“日内涨跌”漏显。
@@ -1812,12 +1896,15 @@ def _handle_strategy16b_api(path: str) -> tuple[int, Any]:
 
         params = _strategy16b_select_params(path)
         payload = build_quarter_pool(fetch=True, **params)
-        _set_strategy16b_dynamic(params, payload)
+        if not payload.get("n_concepts"):
+            return 503, {"error": "概念行情暂不可用，筛选未完成", "detail": "未获取到有效概念成交额；请重试。原股票池保持不变。"}
+        rows = _set_strategy16b_dynamic(params, payload)
         return 200, {
             "strategyId": "strategy16b",
             "params": params,
             "pool": payload,
             "picks": _strategy16b_picks_from_payload(payload),
+            "rows": rows,
         }
     except Exception as exc:  # noqa: BLE001
         return 500, {"error": "strategy16b select failed", "detail": str(exc)}
@@ -13364,7 +13451,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         get_strategies_api=_get_strategies_api_cache,
         get_factors_api=_get_factors_api_cache,
         handle_strategy16b_api=_handle_strategy16b_api,
-        on_selection_load=lambda selection: _set_strategy16b_dynamic(selection.get("params") or {}, selection["pool"]),
+        on_selection_load=_activate_strategy16b_selection,
         handle_sectors_api=_handle_sectors_api,
         watch_ui_dist_ready=_watch_ui_dist_ready,
         on_paper_reset=_on_paper_reset,

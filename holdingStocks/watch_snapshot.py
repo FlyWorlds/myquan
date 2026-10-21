@@ -279,6 +279,25 @@ def filter_portfolio_holdings(
             return s
         return "9999-99-99 99:99:99"
 
+    has_buy_time = any(
+        (int(r.get("持仓") or 0) > 0 or bool(r.get("槽位占用")))
+        and bool(str(r.get("买入时间") or r.get("buy_time") or "").strip())
+        for r in picked
+    )
+
+    def _buy_time_desc_key(r: dict[str, Any]) -> tuple[int, float, str]:
+        """纸面持仓：按买入时间降序（最近买入排最前）；无买入时间排后。"""
+        raw = str(r.get("买入时间") or r.get("buy_time") or "").strip().replace("T", " ")
+        if raw:
+            for fmt, ln in (("%Y-%m-%d %H:%M:%S", 19), ("%Y-%m-%d %H:%M", 16), ("%Y-%m-%d", 10)):
+                try:
+                    dt = datetime.strptime(raw[:ln], fmt)
+                    return (0, -dt.timestamp(), "")
+                except ValueError:
+                    continue
+            return (0, 0.0, "".join(chr(max(0, 0xFFFF - ord(ch))) for ch in raw[:19]))
+        return (1, 0.0, "")
+
     def _sort_key(r: dict[str, Any]) -> tuple:
         qty = int(r.get("持仓") or 0)
         pos = str(r.get("持仓状态") or "")
@@ -290,6 +309,8 @@ def filter_portfolio_holdings(
             tier = 2
         else:
             tier = 3
+        if tier == 0 and has_buy_time:
+            return (tier, _buy_time_desc_key(r), str(r.get("代码") or ""))
         try:
             dist = float(r.get("距买点%") if r.get("距买点%") is not None else 9_999.0)
         except (TypeError, ValueError):

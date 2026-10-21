@@ -288,21 +288,25 @@ def _spot_has_activity(df: pd.DataFrame) -> bool:
     if df is None or df.empty:
         return False
     for col in ("总成交额", "资金", "成交额"):
-        if col in df.columns and df[col].notna().any():
+        if col in df.columns and (pd.to_numeric(df[col], errors="coerce") > 0).any():
             return True
     return False
 
 
 def _spot_from_rotation_cache() -> pd.DataFrame:
     """盘前/行情空时：用板块轮动缓存成分成交额聚合（偏高概念）。"""
-    path = ROOT / "sectors" / "cache" / "tdx_rotation_api.json"
-    if not path.is_file():
-        return pd.DataFrame()
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return pd.DataFrame()
+    from sectors.store import get_doc
+    raw = get_doc("sectors_rotation_api", ttl_sec=60) or {}
     kind = ((raw.get("kinds") or {}).get("概念") or {})
+    stats = kind.get("board_stats") or {}
+    if stats:
+        rows = [{"板块": name, "label": rec.get("code") or "",
+                 "涨跌幅": rec.get("chg_pct"), "资金": rec.get("amount"),
+                 "总成交额": rec.get("amount"), "成交额": rec.get("amount")}
+                for name, rec in stats.items() if isinstance(rec, dict)]
+        frame = pd.DataFrame(rows)
+        if _spot_has_activity(frame):
+            return frame
     members = kind.get("members") or {}
     rows: list[dict[str, Any]] = []
     if isinstance(members, dict) and members:
@@ -355,9 +359,50 @@ def _spot_from_rotation_cache() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _pure_concept_spot_live() -> tuple[pd.DataFrame, str]:
+    """仅拉取纯概念板块实时成交额与涨跌幅（排除行业板块混入与90次慢请求）。"""
+    from sectors.sina_boards import fetch_sina_concept_spot_fast
+    from sectors.ths import (
+        THS_CONCEPT_SKIP,
+        candidate_concept_names,
+        load_concept_clid_map,
+        load_concept_code_map,
+    )
+
+    sina_spot = fetch_sina_concept_spot_fast(timeout=2.5)
+    if not sina_spot:
+        return pd.DataFrame(), ""
+    clid_map = load_concept_clid_map()
+    code_map = load_concept_code_map()
+    out: dict[str, dict[str, Any]] = {}
+    for ths_name, detail_code in code_map.items():
+        if ths_name in THS_CONCEPT_SKIP:
+            continue
+        clid = clid_map.get(ths_name, detail_code)
+        for cand in candidate_concept_names(ths_name):
+            src_row = sina_spot.get(cand)
+            if src_row:
+                row = dict(src_row)
+                row["name"] = ths_name
+                row["code"] = clid
+                out[ths_name] = row
+                break
+    for name, row in sina_spot.items():
+        if name not in THS_CONCEPT_SKIP:
+            out.setdefault(name, row)
+    return _spot_dict_to_df(out), "sina_concept_live"
+
+
 def fetch_concept_spot() -> pd.DataFrame:
-    """活跃度：通达信盘中报价 → 东财现价 → 轮动缓存昨收 → 通达信指数 K。"""
+    """活跃度：新浪/同花顺纯概念实时 → 通达信盘中报价 → 东财现价 → 轮动缓存昨收 → 同花顺/通达信概念日K。"""
     global _LAST_SPOT_SOURCE
+    try:
+        df, src = _pure_concept_spot_live()
+        if _spot_has_activity(df):
+            _LAST_SPOT_SOURCE = src
+            return df
+    except Exception:
+        pass
     try:
         from sectors.live import _spot_from_tdx
 
@@ -380,6 +425,15 @@ def fetch_concept_spot() -> pd.DataFrame:
     if _spot_has_activity(cached):
         _LAST_SPOT_SOURCE = "rotation_cache_last_session"
         return cached
+    try:
+        from sectors.ths import fetch_ths_concept_spot
+
+        df = fetch_ths_concept_spot()
+        if _spot_has_activity(df):
+            _LAST_SPOT_SOURCE = "ths_concept_kline"
+            return df
+    except Exception:
+        pass
     try:
         from sectors.tdx import fetch_tdx_concept_spot
 
@@ -466,13 +520,8 @@ def _enrich_member_quotes(df: pd.DataFrame) -> pd.DataFrame:
 
 def _members_from_rotation_cache(name: str) -> pd.DataFrame:
     """轮动缓存里已有成分现价/涨跌/成交额（通达信 HQ 挂掉时的成分回退）。"""
-    path = ROOT / "sectors" / "cache" / "tdx_rotation_api.json"
-    if not path.is_file():
-        return pd.DataFrame()
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return pd.DataFrame()
+    from sectors.store import get_doc
+    raw = get_doc("sectors_rotation_api", ttl_sec=60) or {}
     members = ((raw.get("kinds") or {}).get("概念") or {}).get("members") or {}
     if not isinstance(members, dict):
         return pd.DataFrame()
@@ -521,7 +570,7 @@ def fetch_concept_members(name: str) -> pd.DataFrame:
 
     df = pd.DataFrame()
     try:
-        payload = fetch_concept_member_rows(name, limit=80)
+        payload = fetch_concept_member_rows(name, limit=250)
         df = pd.DataFrame(payload.get("members") or [])
     except Exception:
         df = pd.DataFrame()
@@ -529,7 +578,79 @@ def fetch_concept_members(name: str) -> pd.DataFrame:
         cached = _members_from_rotation_cache(name)
         if not cached.empty:
             df = cached
+    if (
+        _members_have_price(df)
+        and "涨跌幅" in df.columns
+        and (pd.to_numeric(df["涨跌幅"], errors="coerce").abs() > 1e-9).any()
+    ):
+        return df
     return _enrich_member_quotes(df)
+
+
+def _cached_horizon_return_pct(code: str, horizon_months: int) -> float | None:
+    """若本地 data_cache 有个股日线 parquet，读取近 N 个月区间涨跌幅辅助不同回看周期排序。"""
+    c = "".join(ch for ch in str(code or "") if ch.isdigit()).zfill(6)[-6:]
+    if not c:
+        return None
+    prefix = "sh" if c.startswith(("5", "6", "9")) else "sz"
+    candidates = (
+        ROOT / "data_cache" / f"{prefix}{c}_daily_qfq.parquet",
+        ROOT / "data_cache" / "ai_concept" / f"{prefix}{c}_daily_qfq.parquet",
+    )
+    bars_need = max(15, int(horizon_months or 3) * 21)
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            df = pd.read_parquet(path, columns=["close"])
+            if df is None or len(df) < 5:
+                continue
+            closes = pd.to_numeric(df["close"], errors="coerce").dropna()
+            if len(closes) < 5:
+                continue
+            start_px = float(closes.iloc[-min(len(closes), bars_need)])
+            end_px = float(closes.iloc[-1])
+            if start_px > 0 and end_px > 0:
+                return (end_px / start_px - 1.0) * 100.0
+        except Exception:
+            continue
+    return None
+
+
+def _rank_live_candidates(
+    candidates: list[dict[str, Any]],
+    *,
+    horizon_months: int,
+    max_concepts: int,
+) -> list[dict[str, Any]]:
+    """按回看月份与概念覆盖范围对全概念候选龙头综合排序，确保调整回看月份/概念数/每概念均生效。"""
+    import math
+
+    months = max(1, int(horizon_months or DEFAULT_HORIZON_MONTHS))
+    n_c = max(1, int(max_concepts or DEFAULT_MAX_CONCEPTS))
+
+    def _score(it: dict[str, Any]) -> tuple[float, float, float, str]:
+        chg = float(it.get("chg_pct") or 0.0)
+        amt = max(0.0, float(it.get("amount") or 0.0))
+        amt_log = math.log10(amt + 1.0) if amt > 0 else 0.0
+        hits = int(it.get("_concept_hits") or 1)
+        rank_in_c = int(it.get("rank_in_concept") or 1)
+        c_rank = int(it.get("_concept_rank") or 1)
+        c_chg = float(it.get("_concept_chg_pct") or 0.0)
+        h_ret = _num(it.get("_horizon_ret_pct"))
+        if months <= 1:
+            s = chg * 3.0 + c_chg * 1.2 + hits * 1.5 - (rank_in_c - 1) * 3.5 - (c_rank / n_c) * 4.0
+        elif months == 2:
+            s = chg * 2.2 + amt_log * 1.8 + hits * 2.8 - (rank_in_c - 1) * 3.0 - (c_rank / n_c) * 3.0
+        elif months == 3:
+            s = chg * 1.8 + amt_log * 2.6 + hits * 3.8 - (rank_in_c - 1) * 4.0 - (c_rank / n_c) * 2.5
+        else:
+            s = chg * 1.0 + amt_log * 4.5 + hits * 5.0 - (rank_in_c - 1) * 2.5 - (c_rank / n_c) * 1.2
+        if h_ret is not None:
+            s += max(-30.0, min(60.0, float(h_ret))) * (0.08 * months)
+        return (s, chg, amt, str(it.get("code") or ""))
+
+    return sorted(candidates, key=_score, reverse=True)
 
 
 def build_quarter_pool(
@@ -548,9 +669,9 @@ def build_quarter_pool(
     members_by_concept: dict[str, Any] | None = None,
     fetch: bool = True,
 ) -> dict[str, Any]:
-    """构建核心龙头池（滚动近 3 个月冻结）。fetch=False 时仅用传入的 spot / members。
+    """构建核心龙头池（滚动近 N 个月冻结）。fetch=False 时仅用传入的 spot / members。
 
-    按活跃概念从高到低填池：每概念≤K，去重后凑满 target_pool（默认 30）即停。
+    按活跃概念（Top max_concepts）提取每概念前 K 只龙头，再去重汇总至 target_pool。
     """
     end_d = today or date.today()
     as_of = end_d.isoformat()
@@ -588,47 +709,96 @@ def build_quarter_pool(
             except Exception:  # noqa: BLE001
                 return name, pd.DataFrame()
 
-        with ThreadPoolExecutor(max_workers=min(4, len(concepts))) as pool:
+        with ThreadPoolExecutor(max_workers=min(8, len(concepts))) as pool:
             futs = [pool.submit(_one, c["name"]) for c in concepts]
             for fut in as_completed(futs):
                 name, df = fut.result()
                 members_by_concept[name] = df
 
     members_by_concept = members_by_concept or {}
-    for c in concepts:
-        name = str(c["name"])
-        members = members_by_concept.get(name)
-        leaders = pick_leaders_from_members(
-            members if members is not None else pd.DataFrame(),
-            concept=name,
-            per_concept=per_concept,
-            price_max=price_max,
-            exclude_st=exclude_st,
-            exclude_chinext=exclude_chinext,
-            exclude_star=exclude_star,
-            exclude_bse=exclude_bse,
-        )
-        new_leaders: list[dict[str, Any]] = []
-        for item in leaders:
-            code = item["code"]
-            if code in seen:
-                item = dict(item)
-                item["duplicate"] = True
-                for prev in picks:
-                    if prev.get("code") == code:
-                        extra = str(prev.get("concepts") or prev.get("concept") or "")
-                        if name not in extra.split(" / "):
-                            prev["concepts"] = f"{extra} / {name}" if extra else name
-                        break
-                continue
+    if not fetch:
+        for c in concepts:
+            name = str(c["name"])
+            members = members_by_concept.get(name)
+            leaders = pick_leaders_from_members(
+                members if members is not None else pd.DataFrame(),
+                concept=name,
+                per_concept=per_concept,
+                price_max=price_max,
+                exclude_st=exclude_st,
+                exclude_chinext=exclude_chinext,
+                exclude_star=exclude_star,
+                exclude_bse=exclude_bse,
+            )
+            new_leaders: list[dict[str, Any]] = []
+            for item in leaders:
+                code = item["code"]
+                if code in seen:
+                    item = dict(item)
+                    item["duplicate"] = True
+                    for prev in picks:
+                        if prev.get("code") == code:
+                            extra = str(prev.get("concepts") or prev.get("concept") or "")
+                            if name not in extra.split(" / "):
+                                prev["concepts"] = f"{extra} / {name}" if extra else name
+                            break
+                    continue
+                if target_pool > 0 and len(seen) >= int(target_pool):
+                    break
+                seen.add(code)
+                picks.append(item)
+                new_leaders.append(item)
+            c["picked"] = len(new_leaders)
             if target_pool > 0 and len(seen) >= int(target_pool):
                 break
-            seen.add(code)
-            picks.append(item)
-            new_leaders.append(item)
-        c["picked"] = len(new_leaders)
-        if target_pool > 0 and len(seen) >= int(target_pool):
-            break
+    else:
+        candidates_by_code: dict[str, dict[str, Any]] = {}
+        for idx, c in enumerate(concepts, 1):
+            name = str(c["name"])
+            members = members_by_concept.get(name)
+            leaders = pick_leaders_from_members(
+                members if members is not None else pd.DataFrame(),
+                concept=name,
+                per_concept=per_concept,
+                price_max=price_max,
+                exclude_st=exclude_st,
+                exclude_chinext=exclude_chinext,
+                exclude_star=exclude_star,
+                exclude_bse=exclude_bse,
+            )
+            for item in leaders:
+                code = item["code"]
+                existing = candidates_by_code.get(code)
+                if existing is not None:
+                    extra = str(existing.get("concepts") or existing.get("concept") or "")
+                    if name not in extra.split(" / "):
+                        existing["concepts"] = f"{extra} / {name}" if extra else name
+                    existing["_concept_hits"] = int(existing.get("_concept_hits") or 1) + 1
+                    if int(item.get("rank_in_concept") or 99) < int(existing.get("rank_in_concept") or 99):
+                        existing["rank_in_concept"] = item.get("rank_in_concept")
+                    continue
+                cand = dict(item)
+                cand["_concept_hits"] = 1
+                cand["_concept_rank"] = int(c.get("rank") or idx)
+                cand["_concept_chg_pct"] = _num(c.get("chg_pct")) or 0.0
+                cand["_horizon_ret_pct"] = _cached_horizon_return_pct(code, horizon_months)
+                candidates_by_code[code] = cand
+
+        ranked = _rank_live_candidates(
+            list(candidates_by_code.values()),
+            horizon_months=horizon_months,
+            max_concepts=max_concepts,
+        )
+        selected = ranked[: int(target_pool)] if target_pool > 0 else ranked
+        picked_by_concept: dict[str, int] = {}
+        for item in selected:
+            clean = {k: v for k, v in item.items() if not str(k).startswith("_")}
+            primary_concept = str(clean.get("concept") or "")
+            if primary_concept:
+                picked_by_concept[primary_concept] = picked_by_concept.get(primary_concept, 0) + 1
+            picks.append(clean)
+        for c in concepts:
+            c["picked"] = picked_by_concept.get(str(c["name"]), 0)
 
     for i, item in enumerate(picks, 1):
         item["rank"] = i

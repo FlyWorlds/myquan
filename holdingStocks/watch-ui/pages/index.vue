@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HoldingRow, StrategyPicks } from '~/types/snapshot'
 import { selectionRows } from '~/utils/selectionRows'
-import { createAlertPriceOrder, orderTouchBuys, stickAlertRows } from '~/utils/alertBoard'
+import { createAlertPriceOrder, createHoldingPriceOrder, orderTouchBuys, stickAlertRows } from '~/utils/alertBoard'
 
 const store = useWatchStore()
 const { error: databaseError } = useDatabaseHoldings()
@@ -84,6 +84,7 @@ interface Strategy16BSelectResponse {
     errors?: string[]
   }
   picks?: StrategyPicks
+  rows?: HoldingRow[]
   error?: string
   detail?: string
 }
@@ -100,6 +101,9 @@ const strategy16bExcludeChinext = ref(storedBool('strategy16b_exclude_chinext', 
 const strategy16bExcludeStar = ref(storedBool('strategy16b_exclude_star', true))
 const strategy16bExcludeBse = ref(storedBool('strategy16b_exclude_bse', true))
 const strategy16bLoading = ref(false)
+const strategy16bGroupLoading = ref(false)
+const strategy16bElapsed = ref(0)
+let strategy16bRequest = 0
 const strategy16bError = ref('')
 const strategy16bResult = ref<Strategy16BSelectResponse | null>(null)
 
@@ -113,12 +117,31 @@ watch(strategy16bExcludeChinext, (v) => import.meta.client && localStorage.setIt
 watch(strategy16bExcludeStar, (v) => import.meta.client && localStorage.setItem('strategy16b_exclude_star', v ? '1' : '0'))
 watch(strategy16bExcludeBse, (v) => import.meta.client && localStorage.setItem('strategy16b_exclude_bse', v ? '1' : '0'))
 
+const strategy16bParamsDirty = computed(() => {
+  const p = strategy16bResult.value?.params as Record<string, unknown> | undefined
+  if (!p) return true
+  const pPrice = p.price_max == null ? 'none' : String(Number(p.price_max))
+  return (
+    Number(p.horizon_months ?? 3) !== Number(strategy16bHorizonMonths.value) ||
+    Number(p.max_concepts ?? 40) !== Number(strategy16bMaxConcepts.value) ||
+    Number(p.per_concept ?? 2) !== Number(strategy16bPerConcept.value) ||
+    Number(p.target_pool ?? 30) !== Number(strategy16bTargetPool.value) ||
+    pPrice !== strategy16bPriceMax.value ||
+    Boolean(p.exclude_st ?? true) !== Boolean(strategy16bExcludeSt.value) ||
+    Boolean(p.exclude_chinext ?? true) !== Boolean(strategy16bExcludeChinext.value) ||
+    Boolean(p.exclude_star ?? true) !== Boolean(strategy16bExcludeStar.value) ||
+    Boolean(p.exclude_bse ?? true) !== Boolean(strategy16bExcludeBse.value)
+  )
+})
+
 const strategy16bDynamicPicks = computed(() => strategy16bResult.value?.picks || strategy16bTab.value?.picks)
 const strategy16bListVersion = ref(0)
 const strategy16bDynamicRows = computed(() => {
-  const rows = snapshot.value?.strategy16b || []
-  if (strategy16bResult.value) return selectionRows(strategy16bResult.value.picks, rows)
-  if (rows.length) return rows
+  const snapRows = snapshot.value?.strategy16b || []
+  const resultRows = strategy16bResult.value?.rows || []
+  const mergedRows = [...resultRows, ...snapRows]
+  if (strategy16bResult.value) return selectionRows(strategy16bResult.value.picks, mergedRows)
+  if (snapRows.length) return snapRows
   const codes = new Set((strategy16bDynamicPicks.value?.items || []).map((it) => String(it.code || '').slice(-6)))
   return (snapshot.value?.strategy16 || []).filter((row) => codes.has(String(row.代码 || '')))
 })
@@ -138,35 +161,52 @@ function strategy16bQuery() {
   return `/api/strategy16b/select?${qs.toString()}`
 }
 
-async function runStrategy16bSelect() {
+async function runStrategy16bSelect(): Promise<Strategy16BSelectResponse | null> {
+  if (strategy16bLoading.value) return null
+  const request = ++strategy16bRequest
+  strategy16bElapsed.value = 0
+  const timer = setInterval(() => { strategy16bElapsed.value++ }, 1000)
   strategy16bLoading.value = true
   strategy16bError.value = ''
   try {
-    const res = await $fetch<Strategy16BSelectResponse>(strategy16bQuery(), { cache: 'no-store' })
+    const res = await $fetch<Strategy16BSelectResponse>(strategy16bQuery(), { cache: 'no-store', timeout: 180_000, retry: 0 })
+    if (request !== strategy16bRequest) return null
     if (res.error) throw new Error(res.detail || res.error)
     strategy16bResult.value = res
     strategy16bListVersion.value++
+    return res
   } catch (err) {
-    strategy16bError.value = err instanceof Error ? err.message : String(err)
+    if (request === strategy16bRequest) strategy16bError.value = (err as any)?.data?.detail || (err as any)?.data?.error || (err instanceof Error ? err.message : String(err))
+    return null
   } finally {
+    clearInterval(timer)
     strategy16bLoading.value = false
   }
 }
 
+async function ensureStrategy16bSelection(): Promise<Strategy16BSelectResponse | null> {
+  if (!strategy16bResult.value || strategy16bParamsDirty.value) {
+    return await runStrategy16bSelect()
+  }
+  return strategy16bResult.value
+}
+
 function loadStrategy16bSelection(selection: Strategy16BSelectResponse) {
+  strategy16bRequest++
+  strategy16bError.value = ''
   strategy16bResult.value = selection
   strategy16bListVersion.value++
   const p = selection.params as any
   if (!p) return
-  strategy16bHorizonMonths.value = p.horizon_months
-  strategy16bMaxConcepts.value = p.max_concepts
-  strategy16bPerConcept.value = p.per_concept
-  strategy16bTargetPool.value = p.target_pool
-  strategy16bPriceMax.value = (p.price_max == null ? 'none' : String(p.price_max)) as Strategy16BPriceMax
-  strategy16bExcludeSt.value = p.exclude_st
-  strategy16bExcludeChinext.value = p.exclude_chinext
-  strategy16bExcludeStar.value = p.exclude_star
-  strategy16bExcludeBse.value = p.exclude_bse
+  if (p.horizon_months != null) strategy16bHorizonMonths.value = Number(p.horizon_months)
+  if (p.max_concepts != null) strategy16bMaxConcepts.value = Number(p.max_concepts)
+  if (p.per_concept != null) strategy16bPerConcept.value = Number(p.per_concept)
+  if (p.target_pool != null) strategy16bTargetPool.value = Number(p.target_pool)
+  strategy16bPriceMax.value = (p.price_max == null ? 'none' : String(Number(p.price_max))) as Strategy16BPriceMax
+  if (p.exclude_st != null) strategy16bExcludeSt.value = Boolean(p.exclude_st)
+  if (p.exclude_chinext != null) strategy16bExcludeChinext.value = Boolean(p.exclude_chinext)
+  if (p.exclude_star != null) strategy16bExcludeStar.value = Boolean(p.exclude_star)
+  if (p.exclude_bse != null) strategy16bExcludeBse.value = Boolean(p.exclude_bse)
 }
 
 function resetStrategy16bParams() {
@@ -187,7 +227,7 @@ const loading = computed(() => {
 })
 const bootWarming = computed(() => Boolean(snapshot.value?.boot))
 
-const slotHoldings = computed(() =>
+const rawSlotHoldings = computed(() =>
   (snapshot.value?.holdings || []).filter(
     (r) => Boolean(r.置顶) && Number(r.持仓) > 0,
   ),
@@ -201,30 +241,82 @@ const closedHoldings = computed(() =>
   }),
 )
 
-function isPaperHoldRow(r: (typeof slotHoldings.value)[number]) {
+function isPaperHoldRow(r: (typeof rawSlotHoldings.value)[number]) {
   return Number(r.持仓) <= 0 && String(r.持仓状态 || '') === '策略持有'
 }
 
-const paperHoldings = computed(() => {
+const rawPaperHoldings = computed(() => {
   const taken = new Set(
-    [...slotHoldings.value, ...closedHoldings.value].map((r) => String(r.代码 || '')),
+    [...rawSlotHoldings.value, ...closedHoldings.value].map((r) => String(r.代码 || '')),
   )
   return (snapshot.value?.holdings || []).filter(
     (r) => !taken.has(String(r.代码 || '')) && isPaperHoldRow(r),
   )
 })
 
+const slotHoldings = ref<HoldingRow[]>([])
+const paperHoldings = ref<HoldingRow[]>([])
 const alertCards = ref<HoldingRow[]>([])
-const alertPriceOrder = createAlertPriceOrder(10_000)
+const slotHoldingOrder = createHoldingPriceOrder(10_000, 3_000)
+const paperHoldingOrder = createHoldingPriceOrder(10_000, 3_000)
+const alertPriceOrder = createAlertPriceOrder(10_000, 3_000)
+let slotSortTimer: ReturnType<typeof setTimeout> | undefined
+let paperSortTimer: ReturnType<typeof setTimeout> | undefined
 let alertSortTimer: ReturnType<typeof setTimeout> | undefined
 onBeforeUnmount(() => {
+  if (slotSortTimer != null) clearTimeout(slotSortTimer)
+  if (paperSortTimer != null) clearTimeout(paperSortTimer)
   if (alertSortTimer != null) clearTimeout(alertSortTimer)
 })
+
+function armSlotTimer(now: number) {
+  if (!import.meta.client || slotSortTimer != null || !slotHoldings.value.length) return
+  const wait = slotHoldingOrder.remaining(now)
+  if (wait <= 0) return
+  slotSortTimer = setTimeout(() => {
+    slotSortTimer = undefined
+    const t = performance.now()
+    slotHoldings.value = slotHoldingOrder.update(rawSlotHoldings.value, t)
+    armSlotTimer(t)
+  }, wait)
+}
+
+function armPaperTimer(now: number) {
+  if (!import.meta.client || paperSortTimer != null || !paperHoldings.value.length) return
+  const wait = paperHoldingOrder.remaining(now)
+  if (wait <= 0) return
+  paperSortTimer = setTimeout(() => {
+    paperSortTimer = undefined
+    const t = performance.now()
+    paperHoldings.value = paperHoldingOrder.update(rawPaperHoldings.value, t)
+    armPaperTimer(t)
+  }, wait)
+}
+
+function armAlertTimer(now: number) {
+  if (!import.meta.client || alertSortTimer != null || !alertCards.value.length) return
+  const wait = alertPriceOrder.remaining(now)
+  if (wait <= 0) return
+  alertSortTimer = setTimeout(() => {
+    alertSortTimer = undefined
+    const t = performance.now()
+    alertCards.value = orderTouchBuys(alertPriceOrder.update(alertCards.value, t))
+    armAlertTimer(t)
+  }, wait)
+}
+
 watch(
   snapshot,
   (snap) => {
+    const now = performance.now()
+    slotHoldings.value = slotHoldingOrder.update(rawSlotHoldings.value, now)
+    armSlotTimer(now)
+
+    paperHoldings.value = paperHoldingOrder.update(rawPaperHoldings.value, now)
+    armPaperTimer(now)
+
     const taken = new Set(
-      [...slotHoldings.value, ...closedHoldings.value, ...paperHoldings.value].map((row) => String(row.代码 || '')),
+      [...rawSlotHoldings.value, ...closedHoldings.value, ...rawPaperHoldings.value].map((row) => String(row.代码 || '')),
     )
     const incoming = (snap?.holdings || []).filter((row) => !taken.has(String(row.代码 || '')))
     const quotes = new Map<string, HoldingRow>()
@@ -233,15 +325,9 @@ watch(
       if (code && !quotes.has(code)) quotes.set(code, row)
     }
     const latest = stickAlertRows(alertCards.value, incoming, taken, quotes)
-    const now = performance.now()
     alertCards.value = orderTouchBuys(alertPriceOrder.update(latest, now))
     // Never debounce the snapshot or restart this timer on each quote.
-    if (import.meta.client && alertSortTimer == null && alertCards.value.length) {
-      alertSortTimer = setTimeout(() => {
-        alertSortTimer = undefined
-        alertCards.value = orderTouchBuys(alertPriceOrder.update(alertCards.value, performance.now()))
-      }, alertPriceOrder.remaining(now))
-    }
+    armAlertTimer(now)
   },
   { immediate: true },
 )
@@ -502,10 +588,11 @@ const closedCount = computed(() => closedHoldings.value.length)
               </select>
             </label>
             <div class="flex items-end gap-2">
-              <button type="button" class="btn btn-primary" :disabled="strategy16bLoading" @click="runStrategy16bSelect">
-                {{ strategy16bLoading ? '筛选中…' : '从全A筛选' }}
+              <button type="button" class="btn btn-primary" :disabled="strategy16bLoading || strategy16bGroupLoading" :aria-busy="strategy16bLoading" @click="runStrategy16bSelect">
+                <svg v-if="strategy16bLoading" class="mr-2 inline-block h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" /><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" /></svg>
+                {{ strategy16bLoading ? `筛选中 ${strategy16bElapsed}s` : '从全A筛选' }}
               </button>
-              <button type="button" class="btn btn-ghost" @click="resetStrategy16bParams">
+              <button type="button" class="btn btn-ghost" :disabled="strategy16bLoading || strategy16bGroupLoading" @click="resetStrategy16bParams">
                 重置
               </button>
             </div>
@@ -531,13 +618,15 @@ const closedCount = computed(() => closedHoldings.value.length)
           <div class="text-xs text-ui-text-3">
             <template v-if="strategy16bResult?.pool">
               当前条件生成 {{ strategy16bResult.pool.n_picks ?? 0 }} 只 / {{ strategy16bResult.pool.n_used_concepts ?? 0 }} 个概念 · 来源 {{ strategy16bResult.pool.source || '—' }}
+              <span v-if="strategy16bParamsDirty" class="ml-2 text-accent">（上方筛选条件已变更，点击「从全A筛选」或直接「保存分组」将按新条件重新筛选）</span>
             </template>
             <template v-else>
               默认等同策略16参数；点击生成后从全A概念成分重新选股，不覆盖策略16正式池。
             </template>
           </div>
           <p v-if="strategy16bError" class="text-xs text-ui-danger">{{ strategy16bError }}</p>
-          <SelectionGroups :selection="strategy16bResult" @load="loadStrategy16bSelection" />
+          <p v-if="strategy16bLoading" role="status" aria-live="polite" class="text-sm text-accent">正在获取概念与成分股行情并应用筛选条件，请稍候；完成后更新股票池。</p>
+          <SelectionGroups :selection="strategy16bResult" :params-dirty="strategy16bParamsDirty" :prepare-selection="ensureStrategy16bSelection" :disabled="strategy16bLoading" @busy="strategy16bGroupLoading = $event" @load="loadStrategy16bSelection" />
         </div>
         <Strategy1Panel
           :key="strategy16bListVersion"

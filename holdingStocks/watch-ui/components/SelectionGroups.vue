@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { toRaw } from 'vue'
-const props = defineProps<{ selection: any }>()
-const emit = defineEmits<{ load: [selection: any] }>()
+const props = defineProps<{
+  selection: any
+  disabled?: boolean
+  paramsDirty?: boolean
+  prepareSelection?: () => Promise<any>
+}>()
+const emit = defineEmits<{ load: [selection: any]; busy: [pending: boolean] }>()
 const groups = ref<any[]>([])
 const selected = ref('')
 const defaultId = ref('')
@@ -10,11 +15,21 @@ const name = ref('')
 const error = ref('')
 const notice = ref('')
 const pending = ref('initial')
-const busy = computed(() => !!pending.value)
+const busy = computed(() => !!pending.value || !!props.disabled)
+watch(pending, value => emit('busy', !!value), { immediate: true })
 const job = ref<any>(null)
 const selectedGroup = computed(() => groups.value.find(g => g.id === selected.value))
 const loadedGroup = computed(() => groups.value.find(g => g.id === loadedId.value))
 const defaultGroup = computed(() => groups.value.find(g => g.id === defaultId.value))
+const duplicateGroup = computed(() => selectedGroup.value?.fingerprint
+  ? groups.value.find(g => g.id !== selected.value && g.fingerprint === selectedGroup.value.fingerprint)
+  : null)
+function groupLabel(group: any) {
+  const count = group.stock_count == null ? '' : ` · ${group.stock_count}只`
+  const preview = group.preview ? ` (${group.preview}等)` : ''
+  const created = String(group.created_at || '').replace('T', ' ').slice(0, 16)
+  return `${group.id === defaultId.value ? '★ ' : ''}${group.name}${count}${preview}${created ? ` · ${created}` : ''}`
+}
 let loadedSelection: any = null
 let timer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
@@ -48,20 +63,28 @@ onMounted(async () => {
   } catch (e: any) { error.value = e.data?.error || '默认分组读取失败，请点击刷新分组重试' }
   finally { pending.value = '' }
 })
-onBeforeUnmount(() => { disposed = true; clearTimeout(timer) })
+onBeforeUnmount(() => { disposed = true; clearTimeout(timer); emit('busy', false) })
 async function action(kind: string) {
   if (busy.value) return
   pending.value = kind; error.value = ''; notice.value = ''
   try {
     if (kind === 'save') {
-      const saved = await $fetch<any>('/api/strategy16b/groups', { method: 'POST', body: { name: name.value.trim(), selection: props.selection } })
+      let targetSelection = props.selection
+      if ((!targetSelection?.picks?.items?.length || props.paramsDirty) && props.prepareSelection) {
+        const fresh = await props.prepareSelection()
+        if (!fresh?.picks?.items?.length) {
+          throw new Error('当前条件筛选未完成，暂无法保存分组')
+        }
+        targetSelection = fresh
+      }
+      const saved = await $fetch<any>('/api/strategy16b/groups', { method: 'POST', body: { name: name.value.trim(), selection: targetSelection } })
       await refresh(); selected.value = saved.id
-      loadedId.value = saved.id; loadedSelection = props.selection
+      loadedId.value = saved.id; loadedSelection = targetSelection
       notice.value = '分组已保存，可设为默认供下次自动载入'
     } else if (kind === 'refresh') {
       await refresh(); notice.value = '已更新保存分组'
     } else if (kind === 'load') {
-      await activate(selected.value); notice.value = '已载入分组，股票列表已更新'
+      await activate(selected.value); notice.value = `已载入分组「${selectedGroup.value?.name || ''}」，股票列表已更新`
     } else if (kind === 'default') {
       const id = selected.value
       await $fetch('/api/strategy16b/groups/default', { method: 'POST', body: { groupId: id } })
@@ -96,22 +119,29 @@ async function poll(id: string) {
     <div class="library-grid">
       <div class="library-block">
         <h4 class="font-medium text-sm">保存本次筛选</h4>
-        <p class="library-help">为当前股票池命名，下次直接载入。</p>
+        <p class="library-help">为当前股票池命名，下次直接载入（若已修改上方筛选条件，保存时会自动按新条件重筛）。</p>
         <div class="mt-3 flex flex-wrap gap-2">
-          <input v-model="name" aria-label="分组名称" maxlength="80" placeholder="例如：低价核心龙头" class="library-input flex-1 min-w-0" :disabled="busy" @keyup.enter="name.trim() && selection?.picks?.items?.length && action('save')">
-          <button class="library-button" :disabled="busy || !name.trim() || !selection?.picks?.items?.length" @click="action('save')">{{ pending === 'save' ? '保存中…' : '保存分组' }}</button>
+          <input v-model="name" aria-label="分组名称" maxlength="80" placeholder="例如：低价核心龙头" class="library-input flex-1 min-w-0" :disabled="busy" @keyup.enter="name.trim() && (selection?.picks?.items?.length || prepareSelection) && action('save')">
+          <button class="library-button" :disabled="busy || !name.trim() || (!selection?.picks?.items?.length && !prepareSelection)" @click="action('save')">
+            <svg v-if="pending === 'save'" class="mr-1.5 inline-block h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" /><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" /></svg>
+            {{ pending === 'save' ? '筛选并保存中…' : '保存分组' }}
+          </button>
         </div>
       </div>
       <div class="library-block">
         <div class="flex items-center justify-between gap-2"><h4 class="font-medium text-sm">使用已保存分组</h4><button class="library-link" :disabled="busy" @click="action('refresh')">刷新分组</button></div>
         <p class="library-help">默认分组将在下次进入时自动载入。</p>
         <div class="mt-3 flex flex-wrap gap-2">
-          <select v-model="selected" aria-label="已保存分组" :disabled="busy" class="library-input flex-1 min-w-0"><option value="">{{ groups.length ? '选择一个分组' : '暂无保存分组' }}</option><option v-for="g in groups" :key="g.id" :value="g.id">{{ g.id === defaultId ? '★ ' : '' }}{{ g.name }}</option></select>
-          <button class="library-button library-primary" :disabled="busy || !selected" @click="action('load')">{{ pending === 'load' ? '载入中…' : '载入分组 ↗' }}</button>
+          <select v-model="selected" aria-label="已保存分组" :disabled="busy" class="library-input flex-1 min-w-0"><option value="">{{ groups.length ? '选择一个分组' : '暂无保存分组' }}</option><option v-for="g in groups" :key="g.id" :value="g.id">{{ groupLabel(g) }}</option></select>
+          <button class="library-button library-primary" :disabled="busy || !selected" @click="action('load')">
+            <svg v-if="pending === 'load'" class="mr-1.5 inline-block h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" /><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" /></svg>
+            {{ pending === 'load' ? '载入中…' : '载入分组 ↗' }}
+          </button>
           <button class="library-button" :disabled="busy || !selected || selected === defaultId" @click="action('default')">{{ pending === 'default' ? '设置中…' : selected && selected === defaultId ? '★ 默认分组' : '设为默认' }}</button>
         </div>
       </div>
     </div>
+    <p v-if="duplicateGroup" class="library-help text-ui-danger">提示：当前所选分组与「{{ duplicateGroup.name }}」保存的股票代码完全相同（可能是此前未重新筛选即直接保存所致）。请调整上方条件点击「从全A筛选」后再保存新分组。</p>
     <div class="library-footer flex flex-wrap items-center justify-between gap-3">
       <div><p class="text-sm">当前载入：<strong>{{ loadedGroup?.name || (selection ? '本次筛选结果' : '未载入保存分组') }}</strong></p><p class="library-help">{{ selectedGroup ? `回测对象：${selectedGroup.name}` : '选择保存分组后可回测' }} · 点击回测后才拉取1分钟行情</p></div>
       <button class="library-button" :disabled="busy || !selected" @click="action('replay')">{{ pending === 'replay' ? '回测中…' : '回测近7天 →' }}</button>
