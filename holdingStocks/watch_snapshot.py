@@ -899,6 +899,7 @@ def clone_snapshot_for_quote_patch(snap: dict[str, Any]) -> dict[str, Any]:
         "strategy3",
         "strategy15",
         "strategy16",
+        "strategy16b",
         "strategy17",
     ):
         val = snap.get(key)
@@ -954,7 +955,7 @@ def patch_snapshot_live_quotes(
             changed = True
     snap["holdings"] = holdings
 
-    for key in ("strategy1", "strategy16", "strategy17"):
+    for key in ("strategy1", "strategy16", "strategy16b", "strategy17"):
         rows = list(snap.get(key) or [])
         if not rows:
             continue

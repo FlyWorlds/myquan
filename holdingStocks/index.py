@@ -1586,11 +1586,14 @@ def _strategy16b_quote_map(codes: set[str]) -> dict[str, dict[str, Any]]:
     if not clean:
         return {}
     by_code: dict[str, dict[str, Any]] = {}
+    session_today = _calendar_signal_session()
     if _CONDITION_BUY_ACTIVE:
         for code in clean:
             q = _execution_quote(_sina_of(code))
             if isinstance(q, Mapping) and q:
-                by_code[code] = dict(q)
+                q_sess = str(q.get("session") or "")[:10]
+                if not session_today or not q_sess or q_sess == session_today:
+                    by_code[code] = dict(q)
     missing = tuple(c for c in clean if c not in by_code)
     if not missing:
         return by_code
@@ -1598,7 +1601,7 @@ def _strategy16b_quote_map(codes: set[str]) -> dict[str, dict[str, Any]]:
     cached_codes = tuple(_STRATEGY16B_QUOTE_CACHE.get("codes") or ())
     if (
         cached_codes == clean
-        and now - float(_STRATEGY16B_QUOTE_CACHE.get("at") or 0.0) <= 8.0
+        and now - float(_STRATEGY16B_QUOTE_CACHE.get("at") or 0.0) <= 3.0
     ):
         cached = dict(_STRATEGY16B_QUOTE_CACHE.get("quotes") or {})
         return {**cached, **by_code}
@@ -1618,22 +1621,20 @@ def _strategy16b_quote_map(codes: set[str]) -> dict[str, dict[str, Any]]:
     return merged
 
 
-def _apply_strategy16b_display_quote(row: dict[str, Any], quote: Mapping[str, Any]) -> None:
-    """16B 展示用行情补齐。
+def _apply_strategy16b_display_quote(row: dict[str, Any], quote: Mapping[str, Any]) -> bool:
+    """16B 展示用实时行情覆盖。
 
-    交易判定仍由 collect_rows 的保守 quote 负责；16B Tab 是条件选股结果展示，
-    收盘后/次日盘前可以显示上一有效快照的真实日涨跌，避免一片 0.00%。
+    始终以实时新浪/执行源报价为准计算 (现价/昨收 - 1)*100%，避免分组保存时的历史涨跌幅覆盖当日真实涨跌。
     """
     last = _strategy16b_num(quote.get("last"))
     prev = _strategy16b_num(quote.get("prev_close"))
     chg = _strategy16b_num(quote.get("day_chg_pct"))
-    if chg is None and last is not None and prev is not None and prev > 0:
-        chg = price_chg_pct(last, prev)
+    if last is not None and prev is not None and last > 0 and prev > 0:
+        calc_chg = price_chg_pct(last, prev)
+        if chg is None or abs(float(chg) - float(calc_chg)) > 0.05:
+            chg = calc_chg
     if chg is None:
-        return
-    row_chg = _strategy16b_num(row.get("当日涨幅"))
-    if row.get("当日涨幅") is not None and row_chg is not None and abs(row_chg) > 1e-9:
-        return
+        return False
     digits = 2
     tick = _strategy16b_num(row.get("_tick"))
     if tick is not None:
@@ -1655,6 +1656,7 @@ def _apply_strategy16b_display_quote(row: dict[str, Any], quote: Mapping[str, An
         ("high", "最高"),
         ("high", "今日最高"),
         ("low", "最低"),
+        ("low", "今日最低"),
         ("last", "现价"),
         ("prev_close", "昨收"),
     ):
@@ -1666,7 +1668,7 @@ def _apply_strategy16b_display_quote(row: dict[str, Any], quote: Mapping[str, An
     if open_px is not None and live_px is not None and open_px > 0:
         row["较开盘点"] = points_vs_open(float(open_px), float(live_px))
         row["较开盘涨幅"] = pct_vs_open(float(open_px), float(live_px))
-        if is_threshold_ready() and not row.get("阈值就绪"):
+        if is_threshold_ready():
             entry_pct = _strategy16b_num(row.get("_entry_pct")) or float(DEFAULT_PCT)
             tick_val = float(tick if tick is not None and tick > 0 else TICK_SIZE)
             buy_px = official_buy_trigger(float(open_px), entry_pct=entry_pct, tick=tick_val)
@@ -1678,6 +1680,7 @@ def _apply_strategy16b_display_quote(row: dict[str, Any], quote: Mapping[str, An
                 row.setdefault("止损", stop_px)
                 row.setdefault("卖出侧价", stop_px)
                 row["距买点%"] = round((float(live_px) / float(buy_px) - 1.0) * 100.0, 2)
+    return True
 
 
 def _strategy16b_select_params(path: str) -> dict[str, Any]:
@@ -1706,24 +1709,36 @@ def _strategy16b_extract_pick_list(payload: Mapping[str, Any]) -> list[Mapping[s
     return [it for it in (raw_picks or []) if isinstance(it, Mapping)]
 
 
-def _strategy16b_picks_from_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+def _strategy16b_picks_from_payload(
+    payload: Mapping[str, Any],
+    rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    live_by_code: dict[str, dict[str, Any]] = {}
+    for r in rows or []:
+        if isinstance(r, dict):
+            c = _code_key(str(r.get("代码") or ""))
+            if c:
+                live_by_code[c] = r
     items: list[dict[str, Any]] = []
     for i, it in enumerate(_strategy16b_extract_pick_list(payload), 1):
         code = _code_key(str(it.get("code") or it.get("symbol") or ""))
         if not code:
             continue
+        live_row = live_by_code.get(code) or {}
+        live_px = _strategy16b_num(live_row.get("现价"))
+        live_chg = _strategy16b_num(live_row.get("当日涨幅"))
         items.append(
             {
                 "rank": int(it.get("rank") or i),
                 "symbol": code,
                 "code": code,
-                "name": str(it.get("name") or ""),
+                "name": str(live_row.get("名称") or it.get("name") or ""),
                 "category": "条件选股",
                 "分类": "条件选股",
                 "pool_src": "strategy16b",
                 "concept": it.get("concepts") or it.get("concept"),
-                "price": it.get("price"),
-                "chg_pct": it.get("chg_pct"),
+                "price": live_px if live_px is not None else it.get("price"),
+                "chg_pct": live_chg if live_chg is not None else it.get("chg_pct"),
                 "amount": it.get("amount"),
             }
         )
@@ -1779,7 +1794,7 @@ def _set_strategy16b_dynamic(params: Mapping[str, Any], payload: Mapping[str, An
     base_rows: list[dict[str, Any]] = []
     with _WATCH_SNAP_LOCK:
         if isinstance(_last_watch_snapshot, dict):
-            for section in ("strategy16b", "strategy16", "strategy1", "holdings"):
+            for section in ("strategy16", "strategy1", "holdings", "strategy16b"):
                 for r in _last_watch_snapshot.get(section) or []:
                     if isinstance(r, dict):
                         base_rows.append(r)
@@ -1801,8 +1816,7 @@ def _activate_strategy16b_selection(selection: Mapping[str, Any]) -> dict[str, A
         merged_payload["picks"] = selection["picks"].get("items") or []
     rows = _set_strategy16b_dynamic(params, merged_payload)
     out = dict(selection)
-    if "picks" not in out or not isinstance(out.get("picks"), Mapping):
-        out["picks"] = _strategy16b_picks_from_payload(merged_payload)
+    out["picks"] = _strategy16b_picks_from_payload(merged_payload, rows=rows)
     out["rows"] = rows
     return out
 
@@ -1863,16 +1877,22 @@ def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
         row["池来源"] = "条件选股"
         if w.get("concept"):
             row["concept"] = w.get("concept")
+        quote = quote_by_code.get(code)
+        applied_live = False
+        if quote:
+            applied_live = _apply_strategy16b_display_quote(row, quote)
         selected_chg = _strategy16b_num(w.get("_selected_chg_pct"))
         selected_price = _strategy16b_num(w.get("_selected_price"))
         row_day_chg = _strategy16b_num(row.get("当日涨幅"))
-        # 16B 动态池的候选来自全 A 即时筛选；当单票实时源在盘前/收盘后回退到
-        # overnight quote 时，day_chg_pct 会被清零，导致页面“日内涨跌”漏显。
-        # 对 16B 展示行，用选股时的涨跌幅补齐显示口径，不反向污染正式策略16池。
-        if selected_chg is not None and (
-            row.get("当日涨幅") is None
-            or row_day_chg is None
-            or abs(float(row_day_chg)) <= 1e-9
+        # 仅在无实时批量行情（如离线回放/单测）且行内当日涨幅缺失或为 0 时，才用选股快照涨跌幅兜底。
+        if (
+            not applied_live
+            and selected_chg is not None
+            and (
+                row.get("当日涨幅") is None
+                or row_day_chg is None
+                or abs(float(row_day_chg)) <= 1e-9
+            )
         ):
             row["当日涨幅"] = round(float(selected_chg), 2)
             row["_day_chg_source"] = "strategy16b_select"
@@ -1881,11 +1901,8 @@ def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
                 denom = 1.0 + float(selected_chg) / 100.0
                 if live_px is not None and denom > 0:
                     row["昨收"] = round(float(live_px) / denom, 2)
-        if selected_price is not None and row.get("现价") is None:
+        if not applied_live and selected_price is not None and row.get("现价") is None:
             row["现价"] = round(float(selected_price), 2)
-        quote = quote_by_code.get(code)
-        if quote:
-            _apply_strategy16b_display_quote(row, quote)
         out.append(row)
     return out
 
@@ -1903,7 +1920,7 @@ def _handle_strategy16b_api(path: str) -> tuple[int, Any]:
             "strategyId": "strategy16b",
             "params": params,
             "pool": payload,
-            "picks": _strategy16b_picks_from_payload(payload),
+            "picks": _strategy16b_picks_from_payload(payload, rows=rows),
             "rows": rows,
         }
     except Exception as exc:  # noqa: BLE001

@@ -2,12 +2,24 @@ import type { StockProfile } from '~/types/stockProfile'
 
 const cache = new Map<string, StockProfile>()
 const inflight = new Map<string, Promise<StockProfile>>()
-const SS_PREFIX = 'watch_sp_v2_'
+const SS_PREFIX = 'watch_sp_v3_'
 
 function digitsOf(code?: string | number | null): string {
   const d = String(code || '').replace(/\D/g, '')
   if (d.length < 6) return ''
   return d.slice(-6).padStart(6, '0')
+}
+
+function hasValuation(data?: StockProfile | null): boolean {
+  const v = data?.valuation
+  if (!v) return false
+  return (
+    v.market_cap_yi != null ||
+    v.float_cap_yi != null ||
+    v.pe != null ||
+    v.pe_ttm != null ||
+    v.pb != null
+  )
 }
 
 function readSession(code: string): StockProfile | null {
@@ -16,7 +28,7 @@ function readSession(code: string): StockProfile | null {
     const raw = sessionStorage.getItem(SS_PREFIX + code)
     if (!raw) return null
     const data = JSON.parse(raw) as StockProfile
-    if (!data || data.error) return null
+    if (!data || data.error || !hasValuation(data)) return null
     cache.set(code, data)
     return data
   } catch {
@@ -25,7 +37,7 @@ function readSession(code: string): StockProfile | null {
 }
 
 function writeSession(code: string, data: StockProfile) {
-  if (!import.meta.client || data.error) return
+  if (!import.meta.client || data.error || !hasValuation(data)) return
   try {
     sessionStorage.setItem(SS_PREFIX + code, JSON.stringify(data))
   } catch {
@@ -37,7 +49,9 @@ export function useStockProfile() {
   function peek(code?: string | number | null): StockProfile | null {
     const c = digitsOf(code)
     if (!c) return null
-    return cache.get(c) || readSession(c)
+    const mem = cache.get(c)
+    if (mem && hasValuation(mem)) return mem
+    return readSession(c)
   }
 
   async function load(code?: string | number | null): Promise<StockProfile | null> {
@@ -49,8 +63,10 @@ export function useStockProfile() {
     if (pending) return pending
     const req = $fetch<StockProfile>('/api/stock/profile', { query: { code: c } })
       .then((data) => {
-        cache.set(c, data)
-        writeSession(c, data)
+        if (hasValuation(data)) {
+          cache.set(c, data)
+          writeSession(c, data)
+        }
         inflight.delete(c)
         return data
       })

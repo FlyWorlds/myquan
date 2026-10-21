@@ -132,6 +132,44 @@ class TestStrategy16BDynamicPool(unittest.TestCase):
         self.assertEqual(rows[0]["现价"], 10.0)
         self.assertEqual(rows[0]["昨收"], 9.0)
 
+    def test_dynamic_pool_live_batch_quote_overrides_stale_saved_chg_pct(self) -> None:
+        payload = {
+            "picks": [
+                {
+                    "code": "002636",
+                    "name": "金安国纪",
+                    "concept": "PCB概念",
+                    "price": 60.0,
+                    "chg_pct": -4.15,
+                }
+            ]
+        }
+        index._set_strategy16b_dynamic({"horizon_months": 3}, payload)
+
+        with mock.patch.object(
+            index,
+            "_strategy16b_quote_map",
+            return_value={
+                "002636": {
+                    "session": "2026-10-21",
+                    "open": 64.5,
+                    "high": 65.8,
+                    "low": 64.2,
+                    "last": 65.32,
+                    "prev_close": 64.40,
+                    "day_chg_pct": 1.43,
+                    "last_ts": "2026-10-21 14:20:00",
+                }
+            },
+        ):
+            rows = index._strategy16b_rows_from_rows([])
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["现价"], 65.32)
+        self.assertEqual(rows[0]["昨收"], 64.4)
+        self.assertEqual(rows[0]["当日涨幅"], 1.43)
+        self.assertEqual(rows[0]["_day_chg_source"], "strategy16b_sina_batch")
+
     def test_dynamic_pool_enters_full_scan_even_when_not_strategy16(self) -> None:
         payload = {
             "picks": [

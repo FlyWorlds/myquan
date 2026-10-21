@@ -110,6 +110,16 @@ def _clip(text: str | None, n: int) -> str | None:
     return t[: n - 1] + "…"
 
 
+def _has_valuation(payload: dict[str, Any]) -> bool:
+    val = payload.get("valuation")
+    if not isinstance(val, dict):
+        return False
+    return any(
+        val.get(k) is not None
+        for k in ("market_cap_yi", "float_cap_yi", "pe", "pe_ttm", "pb")
+    )
+
+
 def clear_profile_cache() -> None:
     with _LOCK:
         _CACHE.clear()
@@ -121,7 +131,8 @@ def _cache_get(code: str) -> dict[str, Any] | None:
         if not hit:
             return None
         ts, payload = hit
-        if time.time() - ts > _CACHE_TTL_SEC:
+        ttl = _CACHE_TTL_SEC if _has_valuation(payload) else 5.0
+        if time.time() - ts > ttl:
             _CACHE.pop(code, None)
             return None
         return payload
@@ -248,12 +259,29 @@ def _related_from_boards(
     return out
 
 
-def _fetch_survey(code: str) -> dict[str, Any]:
+def _infer_market_label(code: str) -> str | None:
+    c = normalize_stock_code(code)
+    if not c:
+        return None
+    if c.startswith(("688", "689")):
+        return "上交所科创板A股"
+    if c.startswith(("6", "9")):
+        return "上交所主板A股"
+    if c.startswith(("300", "301")):
+        return "深交所创业板A股"
+    if c.startswith(("00", "002", "003")):
+        return "深交所主板A股"
+    if c.startswith(("8", "4", "92")):
+        return "北交所A股"
+    return None
+
+
+def _fetch_survey_em(code: str) -> dict[str, Any]:
     url = (
         "https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/"
         f"CompanySurveyAjax?code={em_f10_code(code)}"
     )
-    r = requests.get(url, headers=_EM_HEADERS, timeout=4)
+    r = requests.get(url, headers=_EM_HEADERS, timeout=2.2)
     r.raise_for_status()
     data = r.json()
     if not isinstance(data, dict):
@@ -277,13 +305,115 @@ def _fetch_survey(code: str) -> dict[str, Any]:
     }
 
 
-def _fetch_quote(code: str) -> dict[str, Any]:
+def _fetch_survey_sina(code: str) -> dict[str, Any]:
+    """新浪 F10 公司简介兜底（当东财 emweb 在海外/受限网络超时或连接重置时启用）。"""
+    import html
+    import re
+
+    c = normalize_stock_code(code)
+    if not c:
+        return {}
+    url = f"https://vip.stock.finance.sina.com.cn/corp/go.php/vCI_CorpInfo/stockid/{c}.phtml"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Referer": "https://finance.sina.com.cn/",
+    }
+    r = requests.get(url, headers=headers, timeout=2.5)
+    r.raise_for_status()
+    text = r.content.decode("gb18030", errors="ignore")
+    cells = re.findall(r"<td[^>]*>(.*?)</td>", text, flags=re.S | re.I)
+    cleaned: list[str] = []
+    for raw in cells:
+        plain = re.sub(r"<[^>]+>", " ", raw)
+        plain = html.unescape(plain)
+        plain = " ".join(plain.split())
+        cleaned.append(plain)
+    kv: dict[str, str] = {}
+    for i in range(len(cleaned) - 1):
+        k = cleaned[i].rstrip("：:").strip()
+        v = cleaned[i + 1].strip()
+        if k and v and len(k) <= 16 and k not in kv:
+            kv[k] = v
+    return {
+        "full_name": _blank(kv.get("公司名称")),
+        "market": _blank(kv.get("上市市场")) or _infer_market_label(c),
+        "list_date": _blank(kv.get("上市日期")),
+        "registered_capital": _blank(kv.get("注册资本")),
+        "region": _blank(kv.get("所属地区")) or _blank(kv.get("办公地址")),
+        "chairman": _blank(kv.get("董事长")) or _blank(kv.get("法人代表")),
+        "summary": _clip(kv.get("公司简介"), 280),
+        "business_scope": _clip(kv.get("经营范围"), 220),
+        "website": _blank(kv.get("公司网址")),
+    }
+
+
+def _fetch_survey(code: str) -> dict[str, Any]:
+    c = normalize_stock_code(code)
+    out: dict[str, Any] = {}
+    try:
+        out = _fetch_survey_em(c)
+    except Exception:
+        out = {}
+    if not out.get("full_name") and not out.get("summary"):
+        try:
+            sina_survey = _fetch_survey_sina(c)
+            for k, v in sina_survey.items():
+                if v is not None and not out.get(k):
+                    out[k] = v
+        except Exception:
+            pass
+    if not out.get("market"):
+        out["market"] = _infer_market_label(c)
+    return out
+
+
+def _fetch_quote_tencent(code: str) -> dict[str, Any]:
+    """腾讯行情接口（https://qt.gtimg.cn）：单次请求返回总市值/流通市值/PE(动)/PE(TTM)/PB/涨跌幅。"""
+    sina = _sina_of(code).lower()
+    url = f"https://qt.gtimg.cn/q={sina}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Referer": "https://gu.qq.com/",
+    }
+    r = requests.get(url, headers=headers, timeout=2.5)
+    r.raise_for_status()
+    text = r.content.decode("gbk", errors="ignore").strip()
+    if '="' not in text:
+        return {}
+    payload = text.split('="', 1)[1].rstrip('";')
+    parts = payload.split("~")
+    if len(parts) < 47:
+        return {}
+    price = _num(parts[3])
+    prev = _num(parts[4])
+    chg = _num(parts[32])
+    if chg is None and price is not None and prev is not None and prev > 0:
+        chg = round((price / prev - 1.0) * 100.0, 2)
+    pe_ttm = _num(parts[39]) if len(parts) > 39 else None
+    pe_dyn = _num(parts[52]) if len(parts) > 52 else None
+    pe_stat = _num(parts[53]) if len(parts) > 53 else None
+    float_cap = _num(parts[44]) if len(parts) > 44 else None
+    market_cap = _num(parts[45]) if len(parts) > 45 else None
+    pb = _num(parts[46]) if len(parts) > 46 else None
+    return {
+        "name": _blank(parts[1]),
+        "price": price,
+        "chg_pct": chg,
+        "market_cap_yi": round(market_cap, 2) if market_cap and market_cap > 0 else None,
+        "float_cap_yi": round(float_cap, 2) if float_cap and float_cap > 0 else None,
+        "pe": pe_dyn if pe_dyn is not None else pe_ttm,
+        "pe_ttm": pe_ttm if pe_ttm is not None else pe_stat,
+        "pb": pb,
+    }
+
+
+def _fetch_quote_em(code: str) -> dict[str, Any]:
     secid = sina_to_secid(_sina_of(code))
     url = (
         "https://2.push2.eastmoney.com/api/qt/ulist.np/get"
         f"?fltt=2&invt=2&fields=f12,f14,f2,f3,f9,f20,f21,f23,f115&secids={secid}"
     )
-    r = requests.get(url, headers=_QUOTE_HEADERS, timeout=4)
+    r = requests.get(url, headers=_QUOTE_HEADERS, timeout=2.2)
     r.raise_for_status()
     data = r.json()
     rows = ((data or {}).get("data") or {}).get("diff") or []
@@ -298,6 +428,47 @@ def _fetch_quote(code: str) -> dict[str, Any]:
         "pe_ttm": _num(row.get("f115")),
         "pb": _num(row.get("f23")),
     }
+
+
+def _fetch_quote_sina_fallback(code: str) -> dict[str, Any]:
+    from quote_feed import fetch_sina_batch
+
+    sina = _sina_of(code).lower()
+    batch = fetch_sina_batch([sina], timeout=2.5)
+    spot = batch.get(sina) or {}
+    if not spot:
+        return {}
+    return {
+        "name": _blank(spot.get("name")),
+        "price": _num(spot.get("last")),
+        "chg_pct": _num(spot.get("day_chg_pct")),
+    }
+
+
+def _fetch_quote(code: str) -> dict[str, Any]:
+    c = normalize_stock_code(code)
+    out: dict[str, Any] = {}
+    try:
+        out = _fetch_quote_tencent(c)
+    except Exception:
+        out = {}
+    if not any(out.get(k) is not None for k in ("market_cap_yi", "pe", "pb")):
+        try:
+            em_q = _fetch_quote_em(c)
+            for k, v in em_q.items():
+                if v is not None and out.get(k) is None:
+                    out[k] = v
+        except Exception:
+            pass
+    if out.get("price") is None or out.get("chg_pct") is None:
+        try:
+            sina_q = _fetch_quote_sina_fallback(c)
+            for k, v in sina_q.items():
+                if v is not None and out.get(k) is None:
+                    out[k] = v
+        except Exception:
+            pass
+    return out
 
 
 def _fetch_core_themes(code: str) -> list[dict[str, str]]:
@@ -372,7 +543,7 @@ def _secid(code: str) -> str:
 
 
 def _fetch_names_ulist(codes: list[str]) -> dict[str, str]:
-    """东财 2.push2 批量补中文名（push2.eastmoney.com 单票接口常被墙）。"""
+    """批量补中文名（优先新浪批量快照，东财 2.push2 兜底）。"""
     out: dict[str, str] = {}
     cleaned: list[str] = []
     seen: set[str] = set()
@@ -381,8 +552,22 @@ def _fetch_names_ulist(codes: list[str]) -> dict[str, str]:
         if c and c not in seen:
             seen.add(c)
             cleaned.append(c)
-    for i in range(0, len(cleaned), 40):
-        chunk = cleaned[i : i + 40]
+    if not cleaned:
+        return out
+    try:
+        from quote_feed import fetch_sina_batch
+
+        batch = fetch_sina_batch([_sina_of(c) for c in cleaned], timeout=2.5)
+        for sina, spot in (batch or {}).items():
+            c = normalize_stock_code(sina)
+            n = _blank((spot or {}).get("name"))
+            if c and _is_real_name(c, n):
+                out[c] = str(n)
+    except Exception:
+        pass
+    remaining = [c for c in cleaned if c not in out]
+    for i in range(0, len(remaining), 40):
+        chunk = remaining[i : i + 40]
         secids = ",".join(s for s in (_secid(c) for c in chunk) if s)
         if not secids:
             continue
@@ -391,7 +576,7 @@ def _fetch_names_ulist(codes: list[str]) -> dict[str, str]:
                 "https://2.push2.eastmoney.com/api/qt/ulist.np/get"
                 f"?fltt=2&invt=2&fields=f12,f14&secids={secids}"
             )
-            r = requests.get(url, headers=_QUOTE_HEADERS, timeout=4)
+            r = requests.get(url, headers=_QUOTE_HEADERS, timeout=2.2)
             r.raise_for_status()
             rows = ((r.json() or {}).get("data") or {}).get("diff") or []
         except Exception:

@@ -569,6 +569,7 @@ def fetch_concept_members(name: str) -> pd.DataFrame:
     from sectors.live import fetch_concept_member_rows
 
     df = pd.DataFrame()
+    used_rotation_cache = False
     try:
         payload = fetch_concept_member_rows(name, limit=250)
         df = pd.DataFrame(payload.get("members") or [])
@@ -578,8 +579,10 @@ def fetch_concept_members(name: str) -> pd.DataFrame:
         cached = _members_from_rotation_cache(name)
         if not cached.empty:
             df = cached
+            used_rotation_cache = True
     if (
-        _members_have_price(df)
+        not used_rotation_cache
+        and _members_have_price(df)
         and "涨跌幅" in df.columns
         and (pd.to_numeric(df["涨跌幅"], errors="coerce").abs() > 1e-9).any()
     ):
