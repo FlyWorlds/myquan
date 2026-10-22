@@ -12,6 +12,8 @@ OPEN BUY 盯市挂在该代码「最近一笔仍开仓的 BUY」上，remaining=
 """
 
 from __future__ import annotations
+from paper_costs import FIELDS as COST_FIELDS, MODEL as COST_MODEL
+from strategy.costs import fee_rules_text
 
 import json
 import threading
@@ -134,6 +136,7 @@ def build_ledger_entry(
     ts = str(record.get("time") or _now())
     return {
         "id": str(record.get("id") or uuid.uuid4().hex[:12]),
+        **{k: record[k] for k in COST_FIELDS if k in record},
         "time": ts,
         "session": str(record.get("session") or ts[:10]),
         "side": side,
@@ -227,7 +230,8 @@ def _positions_open(holdings: dict[str, Any] | None) -> dict[str, dict[str, floa
             continue
         cost = _as_float(pos.get("cost"))
         ck = _code_key(str(code))
-        out[ck] = {"qty": float(qty), "cost": float(cost or 0)}
+        out[ck] = {"qty": float(qty), "cost": float(cost or 0),
+                   "buy_fees_remaining": float(pos.get('buy_fees_remaining') or 0)}
     return out
 
 
@@ -332,6 +336,10 @@ def enrich_open_buy_marks(
         )
         if pnl is None:
             continue
+        remaining_fee = float(pos.get('buy_fees_remaining') or 0)
+        pnl = round(pnl-remaining_fee, 2)
+        base = basis*rem+remaining_fee
+        pct = round(pnl/base*100, 2) if base else None
         if str(out[i].get("side") or "").lower() != "buy":
             continue
         out[i]["pnl"] = pnl
@@ -420,6 +428,8 @@ def list_ledger_entries(
     total_pnl = realized + unrealized
     return {
         "updated_at": data.get("updated_at"),
+        "fee_model": COST_MODEL,
+        "fee_rules": fee_rules_text(),
         "paperRevision": revision,
         "reconciliationIssues": reconciliation_issues,
         "total": total,

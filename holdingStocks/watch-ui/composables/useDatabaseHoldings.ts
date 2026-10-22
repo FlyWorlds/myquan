@@ -6,6 +6,7 @@ interface DatabasePosition {
   market?: string
   buy_time?: string | null
   peak_high?: number | null
+  buy_fees_remaining?: number
 }
 
 export interface DatabasePaperState {
@@ -15,7 +16,9 @@ export interface DatabasePaperState {
     account_cash?: number | null
     account_total?: number | null
     updated_at?: string | null
+    realized_today?: Record<string, { session?: string; signal_time?: string; first_hit_ts?: string }>
   }
+  trades?: Array<{ code?: string; side?: string; session?: string; time?: string; reset_archived?: boolean }>
 }
 
 export function useDatabaseHoldings() {

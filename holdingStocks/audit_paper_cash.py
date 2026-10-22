@@ -78,6 +78,8 @@ def replay(
         if px <= 0 or qty <= 0:
             continue
         delta = _delta(side, px, qty)
+        if rec.get('fee_model') and rec.get('cash_delta') is not None:
+            delta = float(rec['cash_delta'])
         before = cash
         applied = True
         if skip_nonpositive and before <= 0:

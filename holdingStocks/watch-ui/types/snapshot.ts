@@ -158,6 +158,12 @@ export interface SlotMeta {
   free?: number
   candidates?: string[]
   bought?: string[]
+  buysToday?: number
+  buysLeft?: number
+  maxNewSymbolsPerSession?: number
+  newSymbolsToday?: string[]
+  newSymbolsLeft?: number
+  session?: string
 }
 
 export interface StrategyFactor {

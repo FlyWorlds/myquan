@@ -10,6 +10,13 @@ export type TradeLedgerEntry = {
   qty?: number
   after_qty?: number
   amount?: number
+  fee_model?: string
+  commission?: number
+  misc_fee?: number
+  stamp_tax?: number
+  slippage_cost?: number
+  total_fees?: number
+  net_amount?: number
   cost?: number | null
   pnl?: number | null
   pnl_pct?: number | null
@@ -29,6 +36,8 @@ export type TradeLedgerEntry = {
 }
 
 export type TradeLedgerResponse = {
+  fee_model?: string
+  fee_rules?: string
   updated_at?: string | null
   total?: number
   offset?: number

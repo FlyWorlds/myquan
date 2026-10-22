@@ -3,10 +3,30 @@ from __future__ import annotations
 import copy
 import unittest
 
-from account_reconciliation import account_summary, effective_deliveries, cycle_return
+from account_reconciliation import account_summary, effective_deliveries, cycle_return, enrich_snapshot_trade_metadata
 
 
 class ReconciliationTests(unittest.TestCase):
+    def test_snapshot_daily_quota_counts_buys_even_after_sales_and_uses_current_sell_signal(self):
+        state = self.state()
+        state['trades'] = [dict(code='001282', side='buy', session='2026-10-22'),
+            dict(code='002866', side='buy', session='2026-10-22'),
+            dict(code='001282', side='sell', session='2026-10-22'),
+            dict(code='000070', side='buy', session='2026-10-21')]
+        state['holdings']['realized_today'] = {'600330': dict(session='2026-10-22', signal_time='2026-10-22 09:30:10')}
+        snap = dict(paperRevision=7, clock='2026-10-22 09:40:00', slotMeta=dict(maxNewSymbolsPerSession=2),
+            holdings=[{'代码':'600330', '持仓':0, '已实现':True, '信号时间':'2026-10-21 10:18:27'}])
+        original = copy.deepcopy(state)
+        enrich_snapshot_trade_metadata(snap, state)
+        self.assertEqual(snap['slotMeta']['buysToday'], 2)
+        self.assertEqual(snap['slotMeta']['buysLeft'], 0)
+        self.assertEqual(snap['holdings'][0]['信号时间'], '2026-10-22 09:30:10')
+        self.assertEqual(state, original)
+        snap['paperRevision'] = 6
+        snap['slotMeta']['buysToday'] = 99
+        enrich_snapshot_trade_metadata(snap, state)
+        self.assertEqual(snap['slotMeta']['buysToday'], 99)
+
     def state(self):
         return dict(revision=7, holdings=dict(account_cash=800, paper_equity_base=1000,
                     account_total_open=1000, account_total_open_session="2026-10-14",

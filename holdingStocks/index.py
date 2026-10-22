@@ -413,6 +413,7 @@ _STRATEGY16B_QUOTE_CACHE: dict[str, Any] = {
 _HOLDINGS_CACHE: dict[str, Any] = {"data": None, "mtime": 0.0}
 # 账本唯一持有者：进程内同一对象、串行写、写前版本检查、原子落盘（见 holdings_store.py）
 from database_holdings import DatabaseHoldingsStore, database_enabled, paper_mutation
+from paper_costs import buy_cash_price
 
 _HOLDINGS_STORE = (DatabaseHoldingsStore if database_enabled() else HoldingsStore)(
     _HOLDINGS_CACHE,
@@ -2242,6 +2243,9 @@ def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any]) -> bool:
     model = _HOLDINGS_STORE.read_model() if database_enabled() else None
     if model is not None and snap.get("paperRevision") is not None and snap["paperRevision"] != model.state["revision"]:
         return False  # A newer ledger must not mix into an older published account frame.
+    if model is not None:
+        from account_reconciliation import enrich_snapshot_trade_metadata
+        changed = enrich_snapshot_trade_metadata(snap, model.state) or changed
     for r in _iter_snapshot_price_rows(snap):
         if r.get("收益账本") == "strategy16_database":
             continue
@@ -5439,10 +5443,12 @@ def apply_paper_slot_buy(
         return pos
     cash = _account_cash(data)
     notional = round(price * qty, 2)
+    from paper_costs import trade_costs
+    debit = trade_costs(code, 'buy', price, qty)['net_amount']
     if cash is not None and not ALLOW_NEGATIVE_CASH_FOR_BUY:
         if cash < 0:
             raise ValueError("NEGATIVE_CASH")
-        if cash + 1e-9 < notional:
+        if cash + 1e-9 < debit:
             raise ValueError("INSUFFICIENT_CASH")
     pos["qty"] = qty
     pos["cost"] = round(price, 4)
@@ -5591,7 +5597,7 @@ def _paper_slot_qty(
     if equity <= 0:
         equity = float(DEFAULT_ACCOUNT_TOTAL)
     qty, _reason = capital_buy_qty(
-        price=px,
+        price=buy_cash_price(px),
         equity=equity,
         cash=cash,
         weight=float(SLOT_WEIGHT),
@@ -6023,7 +6029,7 @@ def _apply_portfolio_slots(
                 continue
             cash_now = _account_cash(data)
             qty, skip_reason = capital_buy_qty(
-                price=price,
+                price=buy_cash_price(price),
                 equity=equity,
                 cash=cash_now,
                 weight=float(MAX_POSITION_WEIGHT),
@@ -7942,6 +7948,8 @@ def settle_due_paper_stops(
 
 
 def _commit_trade(record: dict[str, Any], *, holdings: dict[str, Any]) -> None:
+    from paper_costs import settle_trade
+    settle_trade(record, holdings)
     if database_enabled():
         append_trades([record], holdings=holdings)
         return
@@ -8488,6 +8496,7 @@ def freeze_overnight_peak_for_session(
 def _collect_quote_runtime_rows(get_quote=None):
     """Read-only live view: DB inventory + cached quotes/references, no replay IO."""
     from boot_holdings import build_boot_holdings
+    from holding_status import held_position_status
     from database_strategy_books import apply_database_book_to_row
     from watch_config import slot_meta
     model = _HOLDINGS_STORE.read_model()
@@ -8511,7 +8520,7 @@ def _collect_quote_runtime_rows(get_quote=None):
             "持仓最高时间": pos.get("peak_high_at"), "pool_src": w.get("pool_src"),
             "池来源": w.get("池来源") or ("自选" if w.get("self_watch") else "因子27"),
             "_slot_meta": slot_meta(data), "_paper_read_model": model, "报价驱动": True,
-            "持仓状态": "已经买入" if int(pos.get("qty") or 0) > 0 else "空仓",
+            "持仓状态": held_position_status(pos.get("buy_time"), day) if int(pos.get("qty") or 0) > 0 else "空仓",
             "已触买": "否", "已触止损": "否", "阈值就绪": False,
             "价位小数": _px_digits(_watch_tick(w)), "阈值%": f"±{_watch_pct(w)*100:.1f}"})
         if q:
@@ -10970,7 +10979,10 @@ def _paper_trade_cycle_return(
         open_pnl = (float(mark) - float(open_cost)) * open_qty
 
     base = realized_cost + open_base
-    total_pnl = realized_pnl + open_pnl
+    buy_fees = _as_money(buy.get('total_fees')) or 0
+    remaining_fees = float((book.get('positions', {}).get(code) or {}).get('buy_fees_remaining') or 0) if open_qty > 0 else 0
+    base += buy_fees
+    total_pnl = realized_pnl + open_pnl - remaining_fees
     if base <= 0:
         return None
     total_qty = sold_qty + max(0, open_qty)
@@ -10988,6 +11000,9 @@ def _paper_trade_cycle_return(
 
 
 def _enrich_comprehensive_trade_return(row: dict[str, Any], *, read_model=None) -> None:
+    if read_model is not None:
+        pos = read_model.state['holdings'].get('positions', {}).get(str(row.get('代码') or ''), {})
+        row['买入剩余费用'] = float(pos.get('buy_fees_remaining') or 0)
     rec = read_model.cycle_return(row) if read_model is not None else _paper_trade_cycle_return(row)
     if not rec:
         # 只有策略回测成交的股票也可展示整笔收益，明确标记为虚拟账本。
@@ -11336,7 +11351,8 @@ def _enrich_closed_day_pnl(
 
 
 def _finalize_position_row(row: dict[str, Any]) -> None:
-    """收敛持仓状态：已经买入 / 待卖出 / 已平仓；信号「已触止损」另见预警/角标。"""
+    """收敛持仓状态：当日已经买入 / 隔夜持有 / 待卖出 / 已平仓。"""
+    from holding_status import held_position_status
     if row.get("error"):
         row["可执行"] = False
         return
@@ -11461,7 +11477,7 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
                 row["bg_class"] = "status-hold"
             return
         # 实仓：仅连续竞价可执行止损 →「待卖出」；
-        # 竞价/开盘前即使已触也保持「已经买入」（预警字段另标竞价观察）。
+        # 竞价/开盘前即使已触也保持普通持仓态（预警字段另标竞价观察）。
         # 午休/收盘保留盘中已形成的待卖出展示。
         _ph = market_phase()
         _exec_ok = is_exit_executable() or _ph in ("lunch", "closed")
@@ -11469,8 +11485,8 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
             row["持仓状态"] = "待卖出"
             pos = "待卖出"
         else:
-            row["持仓状态"] = "已经买入"
-            pos = "已经买入"
+            pos = held_position_status(buy_time, session)
+            row["持仓状态"] = pos
         row["可执行"] = (
             pos == "待卖出"
             and is_exit_executable()
@@ -11492,11 +11508,11 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
             ) or alert.startswith("已触买"):
                 row["预警"] = "已触止损·暂不可卖"
         elif (
-            alert in ("", "-", "空仓", "待买入", ALERT_HIT_BUY, ALERT_FILLED)
+            alert in ("", "-", "空仓", "待买入", "已经买入", "持有", ALERT_HIT_BUY, ALERT_FILLED)
             or alert.startswith("已触买")
-        ) and pos == "已经买入":
-            row["预警"] = "已经买入"
-        row["因子侧"] = "持有" if pos == "已经买入" else row.get("因子侧") or "卖出"
+        ) and pos in ("已经买入", "持有"):
+            row["预警"] = pos
+        row["因子侧"] = "持有" if pos in ("已经买入", "持有") else row.get("因子侧") or "卖出"
         return
 
     # 真·空仓：保留 annotate 后的触买信号，勿冲回空仓（未过门不算触买）
@@ -12997,7 +13013,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
                         break
                     equity += qty * float(mark["last"])
         if not reason:
-            qty, reason = capital_buy_qty(price=candidate["price"], equity=equity, cash=cash,
+            qty, reason = capital_buy_qty(price=buy_cash_price(candidate["price"]), equity=equity, cash=cash,
                                           weight=MAX_POSITION_WEIGHT, allow_negative_cash=False, lot=LOT_SIZE)
         if reason:
             if candidate.get("reason") != reason:

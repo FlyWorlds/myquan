@@ -28,7 +28,7 @@ const steps = [
 ]
 
 const legend = [
-  { id: 'hold-real', cls: 'signal-badge signal-badge-hold-real', label: '已经买入' },
+  { id: 'hold-real', cls: 'signal-badge signal-badge-hold-real', label: '实际持仓' },
   { id: 'hold-paper', cls: 'signal-badge signal-badge-hold-paper', label: '策略持有' },
   { id: 'ban-buy', cls: 'signal-badge signal-badge-ban-buy', label: '今日平仓' },
   { id: 'warn-buy', cls: 'signal-badge signal-badge-warn-buy', label: '买入预警' },

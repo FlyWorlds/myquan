@@ -52,9 +52,11 @@ const boughtToday = computed(() => {
 })
 
 function vsCost(last: number, cost: number, qty: number) {
+  const fee = Number(props.row.买入剩余费用 || 0)
+  const amount = Math.round(((last - cost) * qty-fee) * 100) / 100
   return {
-    amount: Math.round((last - cost) * qty * 100) / 100,
-    pct: Math.round((last / cost - 1) * 10000) / 100,
+    amount,
+    pct: Math.round(amount/(cost*qty+fee) * 10000) / 100,
   }
 }
 
