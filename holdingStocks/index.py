@@ -13618,6 +13618,19 @@ def cmd_watch(args: argparse.Namespace) -> None:
             print(f"[{_now()}] 个股画像板块反查后台预热完成（{n_rev} 只）")
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 个股画像后台预热失败（继续）: {e}")
+        try:
+            from stock_profile import daily_sync_stock_profiles
+            from watch_config import portfolio_pool_codes, self_watchlist_codes
+
+            try:
+                holdings_meta = load_holdings()
+            except Exception:
+                holdings_meta = {}
+            pool_codes = list(set(portfolio_pool_codes(holdings_meta) + self_watchlist_codes()))
+            n_sync = daily_sync_stock_profiles(pool_codes)
+            print(f"[{_now()}] 个股画像每日数据库同步完成（{n_sync} 只）")
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 个股画像每日数据库同步失败（继续）: {e}")
 
     def _watch_cold_boot() -> None:
         threading.Thread(

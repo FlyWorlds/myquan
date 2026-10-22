@@ -175,15 +175,21 @@ def build_watch_request_handler(
                 qs = parse_qs(urlparse(self.path).query)
                 raw = (qs.get("code") or [""])[0]
                 try:
-                    from stock_profile import get_stock_profile, normalize_stock_code
+                    from stock_profile import _has_valuation, get_stock_profile, normalize_stock_code
 
                     code = normalize_stock_code(raw)
                     if not code:
                         self._send_json({"error": "invalid code"}, status=400)
                         return
+                    profile_data = get_stock_profile(code)
+                    cc = (
+                        "private, max-age=60"
+                        if _has_valuation(profile_data)
+                        else "no-cache, no-store, must-revalidate"
+                    )
                     self._send_json(
-                        get_stock_profile(code),
-                        cache_control="private, max-age=60",
+                        profile_data,
+                        cache_control=cc,
                     )
                 except Exception as exc:  # noqa: BLE001
                     self._send_json(

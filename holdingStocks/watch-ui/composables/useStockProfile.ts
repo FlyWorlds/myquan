@@ -83,5 +83,5 @@ export function useStockProfile() {
     return req
   }
 
-  return { load, peek, digitsOf }
+  return { load, peek, digitsOf, hasValuation }
 }

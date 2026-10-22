@@ -8,7 +8,7 @@ const props = defineProps<{
   delayMs?: number
 }>()
 
-const { load, peek, digitsOf } = useStockProfile()
+const { load, peek, digitsOf, hasValuation } = useStockProfile()
 const { show, onEnter, onLeave, onPanelEnter, onPanelLeave } = useHoverDelay(
   () => {
     if (props.delayMs != null) return props.delayMs
@@ -91,7 +91,8 @@ async function hydrate() {
     profile.value = cached
     return
   }
-  if (profile.value || loading.value) return
+  if (profile.value && hasValuation(profile.value)) return
+  if (loading.value) return
   loading.value = true
   profile.value = await load(codeDigits.value)
   loading.value = false

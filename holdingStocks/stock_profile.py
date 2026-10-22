@@ -120,27 +120,194 @@ def _has_valuation(payload: dict[str, Any]) -> bool:
     )
 
 
-def clear_profile_cache() -> None:
+_DOC_KEY = "stock_profiles"
+_DB_PROFILES: dict[str, dict[str, Any]] | None = None
+_DB_PROFILES_LOADED_AT: float = 0.0
+
+
+def _db_enabled() -> bool:
+    try:
+        from database_holdings import database_enabled
+
+        return database_enabled()
+    except Exception:
+        return False
+
+
+def _today_str() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _load_db_profiles(*, force: bool = False) -> dict[str, dict[str, Any]]:
+    global _DB_PROFILES, _DB_PROFILES_LOADED_AT
+    now = time.time()
+    if not force and _DB_PROFILES is not None and (now - _DB_PROFILES_LOADED_AT) < 60:
+        return _DB_PROFILES
+
+    loaded: dict[str, dict[str, Any]] = {}
+    if _db_enabled():
+        try:
+            from runtime_documents import read_document
+
+            _rev, payload = read_document(_DOC_KEY)
+            if isinstance(payload, dict) and isinstance(payload.get("profiles"), dict):
+                loaded = payload["profiles"]
+        except Exception:
+            pass
+    if not loaded:
+        local_cache = _ROOT / "holdingStocks/cache/stock_profiles.json"
+        if local_cache.is_file():
+            try:
+                import json
+
+                payload = json.loads(local_cache.read_text(encoding="utf-8"))
+                if isinstance(payload, dict) and isinstance(payload.get("profiles"), dict):
+                    loaded = payload["profiles"]
+            except Exception:
+                pass
     with _LOCK:
-        _CACHE.clear()
+        _DB_PROFILES = loaded
+        _DB_PROFILES_LOADED_AT = now
+    return loaded
+
+
+def _save_db_profile(code: str, payload: dict[str, Any]) -> None:
+    """持久化单只股票画像到数据库。"""
+    c = normalize_stock_code(code)
+    if not c or not isinstance(payload, dict):
+        return
+    rec = dict(payload)
+    rec["_cached_date"] = _today_str()
+
+    current = dict(_load_db_profiles())
+    current[c] = rec
+
+    doc = {
+        "updated_date": _today_str(),
+        "profiles": current,
+    }
+    with _LOCK:
+        global _DB_PROFILES, _DB_PROFILES_LOADED_AT
+        _DB_PROFILES = current
+        _DB_PROFILES_LOADED_AT = time.time()
+
+    if _db_enabled():
+        try:
+            from runtime_documents import write_merging
+
+            write_merging(_DOC_KEY, doc)
+            return
+        except Exception:
+            pass
+    try:
+        local_cache = _ROOT / "holdingStocks/cache/stock_profiles.json"
+        local_cache.parent.mkdir(parents=True, exist_ok=True)
+        import json
+
+        local_cache.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _cache_get(code: str) -> dict[str, Any] | None:
     with _LOCK:
         hit = _CACHE.get(code)
-        if not hit:
-            return None
-        ts, payload = hit
-        ttl = _CACHE_TTL_SEC if _has_valuation(payload) else 5.0
-        if time.time() - ts > ttl:
+        if hit:
+            ts, payload = hit
+            ttl = _CACHE_TTL_SEC if _has_valuation(payload) else 5.0
+            if time.time() - ts <= ttl:
+                return payload
             _CACHE.pop(code, None)
-            return None
-        return payload
+
+    # 查数据库中的当日记录（若今天已有有效估值，直接命中）
+    db_profiles = _load_db_profiles()
+    p = db_profiles.get(code)
+    if p and p.get("_cached_date") == _today_str() and _has_valuation(p):
+        with _LOCK:
+            _CACHE[code] = (time.time(), p)
+        return p
+    return None
 
 
 def _cache_put(code: str, payload: dict[str, Any]) -> None:
     with _LOCK:
         _CACHE[code] = (time.time(), payload)
+    if _has_valuation(payload):
+        threading.Thread(target=_save_db_profile, args=(code, payload), daemon=True).start()
+
+
+def daily_sync_stock_profiles(codes: list[str] | None = None) -> int:
+    """每天启动后在后台异步执行一次：将监控池股票画像及行情记录入库。
+
+    完全不阻塞系统启动；今天已同步过的数据直接跳过，零重复网络消耗。
+    """
+    target_codes: list[str] = []
+    seen: set[str] = set()
+    for raw in (codes or []):
+        c = normalize_stock_code(raw)
+        if c and c not in seen:
+            seen.add(c)
+            target_codes.append(c)
+
+    if not target_codes:
+        return 0
+
+    today = _today_str()
+    db_profiles = _load_db_profiles(force=True)
+
+    pending = [
+        c
+        for c in target_codes
+        if not (
+            db_profiles.get(c)
+            and db_profiles[c].get("_cached_date") == today
+            and _has_valuation(db_profiles[c])
+        )
+    ]
+
+    if not pending:
+        return len(target_codes)
+
+    updated = 0
+    batch_map = dict(db_profiles)
+    for c in pending:
+        try:
+            p = get_stock_profile(c, use_cache=False)
+            if p and not p.get("error"):
+                rec = dict(p)
+                rec["_cached_date"] = today
+                batch_map[c] = rec
+                updated += 1
+            time.sleep(0.15)
+        except Exception:
+            continue
+
+    if updated > 0:
+        doc = {
+            "updated_date": today,
+            "profiles": batch_map,
+        }
+        with _LOCK:
+            global _DB_PROFILES, _DB_PROFILES_LOADED_AT
+            _DB_PROFILES = batch_map
+            _DB_PROFILES_LOADED_AT = time.time()
+        if _db_enabled():
+            try:
+                from runtime_documents import write_merging
+
+                write_merging(_DOC_KEY, doc)
+            except Exception:
+                pass
+        try:
+            local_cache = _ROOT / "holdingStocks/cache/stock_profiles.json"
+            local_cache.parent.mkdir(parents=True, exist_ok=True)
+            import json
+
+            local_cache.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    return updated
 
 
 def warm_profile_index() -> int:
@@ -368,21 +535,28 @@ def _fetch_survey(code: str) -> dict[str, Any]:
 
 
 def _fetch_quote_tencent(code: str) -> dict[str, Any]:
-    """腾讯行情接口（https://qt.gtimg.cn）：单次请求返回总市值/流通市值/PE(动)/PE(TTM)/PB/涨跌幅。"""
+    """腾讯行情接口（http://qt.gtimg.cn）：单次请求返回总市值/流通市值/PE(动)/PE(TTM)/PB/涨跌幅。"""
     sina = _sina_of(code).lower()
-    url = f"https://qt.gtimg.cn/q={sina}"
+    # 优先 http 避免代理及特定 macOS 环境下 TLS 握手的 SSLEOFError
+    urls = [f"http://qt.gtimg.cn/q={sina}", f"https://qt.gtimg.cn/q={sina}"]
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        "Referer": "https://gu.qq.com/",
+        "Referer": "http://gu.qq.com/",
     }
-    r = requests.get(url, headers=headers, timeout=2.5)
-    r.raise_for_status()
-    text = r.content.decode("gbk", errors="ignore").strip()
-    if '="' not in text:
+    text = ""
+    for url in urls:
+        try:
+            r = requests.get(url, headers=headers, timeout=2.2)
+            if r.status_code == 200 and '="' in r.text:
+                text = r.content.decode("gbk", errors="ignore").strip()
+                break
+        except Exception:
+            continue
+    if not text or '="' not in text:
         return {}
     payload = text.split('="', 1)[1].rstrip('";')
     parts = payload.split("~")
-    if len(parts) < 47:
+    if len(parts) < 33:
         return {}
     price = _num(parts[3])
     prev = _num(parts[4])
@@ -390,13 +564,13 @@ def _fetch_quote_tencent(code: str) -> dict[str, Any]:
     if chg is None and price is not None and prev is not None and prev > 0:
         chg = round((price / prev - 1.0) * 100.0, 2)
     pe_ttm = _num(parts[39]) if len(parts) > 39 else None
-    pe_dyn = _num(parts[52]) if len(parts) > 52 else None
-    pe_stat = _num(parts[53]) if len(parts) > 53 else None
     float_cap = _num(parts[44]) if len(parts) > 44 else None
     market_cap = _num(parts[45]) if len(parts) > 45 else None
     pb = _num(parts[46]) if len(parts) > 46 else None
+    pe_dyn = _num(parts[52]) if len(parts) > 52 else None
+    pe_stat = _num(parts[53]) if len(parts) > 53 else None
     return {
-        "name": _blank(parts[1]),
+        "name": _blank(parts[1]) if len(parts) > 1 else None,
         "price": price,
         "chg_pct": chg,
         "market_cap_yi": round(market_cap, 2) if market_cap and market_cap > 0 else None,
@@ -409,25 +583,94 @@ def _fetch_quote_tencent(code: str) -> dict[str, Any]:
 
 def _fetch_quote_em(code: str) -> dict[str, Any]:
     secid = sina_to_secid(_sina_of(code))
+    urls = [
+        f"http://push2delay.eastmoney.com/api/qt/stock/get?secid={secid}&fltt=2&invt=2&fields=f57,f58,f43,f44,f45,f46,f168,f169,f170,f116,f117,f84,f85,f162,f167,f9,f23,f115,f20,f21",
+        f"http://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f12,f14,f2,f3,f9,f20,f21,f23,f115&secids={secid}",
+        f"https://2.push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f12,f14,f2,f3,f9,f20,f21,f23,f115&secids={secid}",
+    ]
+    for url in urls:
+        try:
+            r = requests.get(url, headers=_QUOTE_HEADERS, timeout=2.2)
+            if r.status_code != 200:
+                continue
+            data = r.json()
+            d = data.get("data")
+            if not d:
+                continue
+            if isinstance(d, dict) and "diff" in d:
+                rows = d.get("diff") or []
+                row = rows[0] if rows else {}
+                name = _blank(row.get("f14"))
+                price = _num(row.get("f2"))
+                chg = _num(row.get("f3"))
+                mcap = _yi(row.get("f20"))
+                fcap = _yi(row.get("f21"))
+                pe = _num(row.get("f9"))
+                pe_ttm = _num(row.get("f115"))
+                pb = _num(row.get("f23"))
+            elif isinstance(d, dict):
+                name = _blank(d.get("f58"))
+                price = _num(d.get("f43"))
+                chg = _num(d.get("f170"))
+                mcap = _yi(d.get("f20")) or _yi(d.get("f116"))
+                fcap = _yi(d.get("f21")) or _yi(d.get("f117"))
+                pe = _num(d.get("f9")) or _num(d.get("f162"))
+                pe_ttm = _num(d.get("f115")) or _num(d.get("f167"))
+                pb = _num(d.get("f23")) or _num(d.get("f168"))
+            else:
+                continue
+            return {
+                "name": name,
+                "price": price,
+                "chg_pct": chg,
+                "market_cap_yi": mcap,
+                "float_cap_yi": fcap,
+                "pe": pe,
+                "pe_ttm": pe_ttm,
+                "pb": pb,
+            }
+        except Exception:
+            continue
+    return {}
+
+
+def _fetch_quote_sina_node(code: str) -> dict[str, Any]:
+    """新浪行情中心接口：包含 mktcap(总市值万元), nmc(流通市值万元), per(PE), pb(PB)。"""
+    sina = _sina_of(code).lower()
     url = (
-        "https://2.push2.eastmoney.com/api/qt/ulist.np/get"
-        f"?fltt=2&invt=2&fields=f12,f14,f2,f3,f9,f20,f21,f23,f115&secids={secid}"
+        "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+        f"Market_Center.getHQNodeData?page=1&num=1&sort=symbol&asc=1&node=hs_a&symbol={sina}"
     )
-    r = requests.get(url, headers=_QUOTE_HEADERS, timeout=2.2)
-    r.raise_for_status()
-    data = r.json()
-    rows = ((data or {}).get("data") or {}).get("diff") or []
-    row = rows[0] if rows else {}
-    return {
-        "name": _blank(row.get("f14")),
-        "price": _num(row.get("f2")),
-        "chg_pct": _num(row.get("f3")),
-        "market_cap_yi": _yi(row.get("f20")),
-        "float_cap_yi": _yi(row.get("f21")),
-        "pe": _num(row.get("f9")),
-        "pe_ttm": _num(row.get("f115")),
-        "pb": _num(row.get("f23")),
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Referer": "http://vip.stock.finance.sina.com.cn/",
     }
+    try:
+        r = requests.get(url, headers=headers, timeout=2.5)
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list) and data:
+            row = data[0]
+            mktcap_yi = _num(row.get("mktcap"))
+            if mktcap_yi is not None and mktcap_yi > 0:
+                mktcap_yi = round(mktcap_yi / 10000.0, 2)
+            nmc_yi = _num(row.get("nmc"))
+            if nmc_yi is not None and nmc_yi > 0:
+                nmc_yi = round(nmc_yi / 10000.0, 2)
+            pe_val = _num(row.get("per"))
+            return {
+                "name": _blank(row.get("name")),
+                "price": _num(row.get("trade")),
+                "chg_pct": _num(row.get("changepercent")),
+                "market_cap_yi": mktcap_yi,
+                "float_cap_yi": nmc_yi,
+                "pe": pe_val,
+                "pe_ttm": pe_val,
+                "pb": _num(row.get("pb")),
+            }
+    except Exception:
+        pass
+    return {}
 
 
 def _fetch_quote_sina_fallback(code: str) -> dict[str, Any]:
@@ -456,6 +699,14 @@ def _fetch_quote(code: str) -> dict[str, Any]:
         try:
             em_q = _fetch_quote_em(c)
             for k, v in em_q.items():
+                if v is not None and out.get(k) is None:
+                    out[k] = v
+        except Exception:
+            pass
+    if not any(out.get(k) is not None for k in ("market_cap_yi", "pe", "pb")):
+        try:
+            sina_node = _fetch_quote_sina_node(c)
+            for k, v in sina_node.items():
                 if v is not None and out.get(k) is None:
                     out[k] = v
         except Exception:
@@ -750,6 +1001,23 @@ def get_stock_profile(
         "as_of": datetime.now().isoformat(timespec="seconds"),
         "errors": errors,
     }
+    # 算法兜底：若外网所有行情接口均未能返回总市值，但拿到了现价与注册资本(总股本)
+    val = payload["valuation"]
+    if val.get("market_cap_yi") is None and val.get("price") is not None:
+        cap_str = str((survey or {}).get("registered_capital") or "")
+        import re
+        m = re.search(r"([\d\.]+)\s*(万|亿)?", cap_str)
+        if m:
+            try:
+                num = float(m.group(1))
+                unit = m.group(2)
+                shares_yi = (num / 10000.0) if unit == "万" else num if unit == "亿" else (num / 1e8 if num > 1e7 else num)
+                if shares_yi > 0:
+                    est_mcap = round(val["price"] * shares_yi, 2)
+                    if est_mcap > 0:
+                        val["market_cap_yi"] = est_mcap
+            except Exception:
+                pass
     if use_cache and fetch_survey is None and members_index is None:
         _cache_put(c, payload)
     return payload
