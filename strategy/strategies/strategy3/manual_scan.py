@@ -9,6 +9,7 @@ import requests
 from .reversal import ROOT,load_daily
 from .market_scan import completed_day,mainboard,local_names,config_hash,_one
 from .combo_config import config_from_bindings
+from .intraday_scan import scan_context, fetch_scan_quotes, live_daily, QuoteUnavailable
 
 OUT=ROOT/'backtest/strategy3_abalone/manual_scan'
 URL='https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/cons/000852cons.xls'
@@ -87,18 +88,32 @@ def classify(rec):
     return warning,bool(warning and rec.get('candidate'))
 
 
-def _scan_stock(item,as_of,cfg):
+def _scan_stock(item,as_of,cfg,context=None,quote=None):
     from strategy.data import fetch_daily
     # 完整日线已经齐备时不再重复联网；已有结构特征由输入哈希缓存复用。
     refresh_error=None
     cached,_=load_daily(item['symbol'])
-    cutoff=pd.Timestamp(as_of)
+    context=context or dict(mode='daily',history_as_of=as_of)
+    cutoff=pd.Timestamp(context['history_as_of'])
     usable=cached[cached.date<=cutoff] if not cached.empty else cached
     cache_ready=bool(len(usable)>=120 and usable.date.max()==cutoff)
     if not cache_ready:
         try:fetch_daily(item['symbol'],'20200101',cutoff.strftime('%Y%m%d'))
         except Exception as exc:refresh_error=type(exc).__name__
-    rec,_=_one(item['symbol'],item['name'],as_of,cfg,feature_dir=OUT/'features')
+    if context['mode']=='intraday':
+        history,meta=load_daily(item['symbol'])
+        try:daily,quote_meta=live_daily(history,quote,context)
+        except QuoteUnavailable as exc:
+            return dict(**item,status=exc.status,warning=False,candidate=False,used_daily_cache=cache_ready)
+        rec,g=_one(item['symbol'],item['name'],as_of,cfg,feature_dir=OUT/'intraday_features',
+                   daily=daily,metadata=meta,auction=quote_meta['price_basis']=='auction_open')
+        rec.update(quote_meta)
+        if g is not None:
+            # 盘中恐慌度按当次价格是否仍在前低之下判定，收复后退出盘中预警。
+            r=g.iloc[-1]
+            rec['broken']=bool(r.broken and float(r.close)<float(r.anchor))
+    else:
+        rec,_=_one(item['symbol'],item['name'],as_of,cfg,feature_dir=OUT/'features')
     rec['used_daily_cache']=cache_ready
     if refresh_error:rec['refresh_error']=refresh_error
     warn,badge=classify(rec);rec.update(warning=warn,candidate=badge)
@@ -116,11 +131,15 @@ def run():
     job=dict(state='running',pid=os.getpid(),started_ts=time.time(),done=0,total=0,workers=WORKERS,executor='process',message=f'正在获取中证1000最新成分股（{WORKERS}路并发）')
     write_json(OUT/'job.json',job)
     try:
-        items,meta=universe();cfg=config_from_bindings(FACTOR_BINDINGS);as_of=str(completed_day().date())
+        items,meta=universe();cfg=config_from_bindings(FACTOR_BINDINGS);context=scan_context();as_of=context['as_of']
+        quotes={}
+        if context['mode']=='intraday':
+            job.update(message='正在读取本次扫描的盘中报价（9:25起支持正式开盘价）');write_json(OUT/'job.json',job)
+            quotes=fetch_scan_quotes([it['symbol'] for it in items])
         job.update(total=len(items),message=f'{WORKERS}路并发更新完整日线并识别结构前低');write_json(OUT/'job.json',job)
         rows=[]
         with _pool(WORKERS) as pool:
-            pending={pool.submit(_scan_stock,it,as_of,cfg):it for it in items}
+            pending={pool.submit(_scan_stock,it,as_of,cfg,context,quotes.get(it['symbol'])):it for it in items}
             for f in as_completed(pending):
                 it=pending[f]
                 try:rec=f.result()
@@ -129,12 +148,19 @@ def run():
                 write_json(OUT/'job.json',job)
         rows.sort(key=lambda r:r['symbol']);watch=[r for r in rows if r.get('warning') or r.get('candidate')]
         picks=[dict(code=r['code'],symbol=r['symbol'],name=r['name'],warning=True,abalone=bool(r['candidate'])) for r in watch]
-        snap=dict(scope=SCOPE,as_of=as_of,generated_at=str(pd.Timestamp.now(tz='Asia/Shanghai')),config=cfg,config_hash=config_hash(cfg),
+        snap=dict(scope=SCOPE,as_of=as_of,scan_mode=context['mode'],history_as_of=context['history_as_of'],scan_started_at=context['started_at'],generated_at=str(pd.Timestamp.now(tz='Asia/Shanghai')),config=cfg,config_hash=config_hash(cfg),
                   universe_count=len(items),scanned_count=sum(r['status']=='ready' for r in rows),warning_count=len(watch),
                   candidate_count=sum(bool(r.get('candidate')) for r in rows),rows=rows,picks=picks,
                   counts=pd.Series([r['status'] for r in rows]).value_counts().to_dict(),constituents=meta,research_only=True,auto_trade=False)
         write_json(OUT/'snapshot.json',snap)
-        job.update(state='done',message=f'扫描完成：监控 {len(watch)} 只，鲍鱼捞饭 {snap["candidate_count"]} 只',as_of=as_of)
+        job.update(message='扫描完成，正在更新恐慌度历史分组');write_json(OUT/'job.json',job)
+        try:
+            if context['mode']=='daily':
+                from .panic_study import run as study_panic
+                study_panic(scan=snap,output=OUT)
+        except Exception as exc:
+            job['panic_study_error']=f'{type(exc).__name__}: {exc}'
+        job.update(state='done',message=('盘中' if context['mode']=='intraday' else '')+f'扫描完成：监控 {len(watch)} 只，鲍鱼捞饭 {snap["candidate_count"]} 只',as_of=as_of)
     except Exception as exc:
         job.update(state='error',message=f'扫描失败：{type(exc).__name__}: {exc}')
     job.update(finished_ts=time.time(),elapsed_seconds=round(time.time()-job['started_ts'],1))

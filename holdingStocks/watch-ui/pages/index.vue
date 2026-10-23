@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HoldingRow, StrategyPicks } from '~/types/snapshot'
 import { selectionRows } from '~/utils/selectionRows'
-import { createAlertPriceOrder, createHoldingPriceOrder, orderTouchBuys, stickAlertRows } from '~/utils/alertBoard'
+import { createAlertPriceOrder, createHoldingPriceOrder, orderAlertCards, stickAlertRows } from '~/utils/alertBoard'
 
 const store = useWatchStore()
 const { error: databaseError } = useDatabaseHoldings()
@@ -300,7 +300,7 @@ function armAlertTimer(now: number) {
   alertSortTimer = setTimeout(() => {
     alertSortTimer = undefined
     const t = performance.now()
-    alertCards.value = orderTouchBuys(alertPriceOrder.update(alertCards.value, t))
+    alertCards.value = orderAlertCards(alertPriceOrder.update(alertCards.value, t))
     armAlertTimer(t)
   }, wait)
 }
@@ -316,16 +316,18 @@ watch(
     armPaperTimer(now)
 
     const taken = new Set(
-      [...rawSlotHoldings.value, ...closedHoldings.value, ...rawPaperHoldings.value].map((row) => String(row.代码 || '')),
+      [...closedHoldings.value, ...rawPaperHoldings.value].map((row) => String(row.代码 || '')),
     )
-    const incoming = (snap?.holdings || []).filter((row) => !taken.has(String(row.代码 || '')))
+    const incoming = (snap?.holdings || [])
+      .filter((row) => !taken.has(String(row.代码 || '')))
+      .map((row) => Number(row.持仓 || 0) > 0 ? { ...row, 置顶: true } : row)
     const quotes = new Map<string, HoldingRow>()
     for (const row of [...(snap?.strategy1 || []), ...(snap?.strategy16 || [])]) {
       const code = String(row.代码 || '')
       if (code && !quotes.has(code)) quotes.set(code, row)
     }
     const latest = stickAlertRows(alertCards.value, incoming, taken, quotes)
-    alertCards.value = orderTouchBuys(alertPriceOrder.update(latest, now))
+    alertCards.value = orderAlertCards(alertPriceOrder.update(latest, now))
     // Never debounce the snapshot or restart this timer on each quote.
     armAlertTimer(now)
   },
@@ -448,7 +450,7 @@ const closedCount = computed(() => closedHoldings.value.length)
                 {{ slotHoldings.length || closedHoldings.length || paperHoldings.length ? '预警' : '持仓列表' }}
                 <span class="ml-1 font-normal text-ui-text-3">{{ alertCards.length }}</span>
               </h2>
-              <p class="text-xs text-ui-text-3">触买当天固定 · 其余红色线内、灰色线外</p>
+              <p class="text-xs text-ui-text-3">已买入置顶 · 触买当天固定 · 其余红色线内、灰色线外</p>
             </div>
             <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <HoldingCard

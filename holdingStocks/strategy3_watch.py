@@ -14,6 +14,8 @@ from strategy.factors.factor32 import levels as risk_levels
 from strategy.costs import SLIPPAGE_VALUE
 from strategy.strategies.strategy3.market_scan import completed_day, config_hash
 from strategy.strategies.strategy3.manual_scan import OUT as SCAN_OUT, SCOPE
+from strategy.strategies.strategy3.panic_study import current_panic
+from strategy.strategies.strategy3.intraday_scan import snapshot_valid, scan_context
 
 RULES=('前低A=最新向上一笔起点的底分型；终点为顶分型B。B后的相邻下行笔（允许正在发展）跌破A，'
        '才进入本轮观察。破位后10日内比较放量、长阴缩短、下影线、低点抬高、收复前低；'
@@ -36,15 +38,18 @@ def build_strategy3_payload(rows=None, *, session=None, get_quote=None, batch_qu
     selected=config_from_bindings(FACTOR_BINDINGS)
     rule=selected['rule']
     policy=Policy(**selected['policy'])
-    completed=completed_day()
+    completed=pd.Timestamp(scan_context()['history_as_of'])
     if session:completed=min(completed,pd.Timestamp(session).normalize())
-    scan_valid=(scan.get('as_of')==str(completed.date()) and scan.get('config_hash')==config_hash(selected))
+    intraday=scan.get('scan_mode')=='intraday'
+    cutoff=pd.Timestamp(scan.get('as_of')) if intraday and scan.get('as_of') else completed
+    if session:cutoff=min(cutoff,pd.Timestamp(session).normalize())
+    scan_valid=snapshot_valid(scan,config_hash(selected)) and str(cutoff.date())==scan.get('as_of')
     result=[]
     for item in pool['picks']:
         code=item['code'];symbol=('sh' if code.startswith('6') else 'sz')+code
-        cached=SCAN_OUT/'features'/f'{symbol}.parquet'
+        cached=SCAN_OUT/('intraday_features' if intraday else 'features')/f'{symbol}.parquet'
         f=pd.read_parquet(cached) if cached.exists() else pd.DataFrame()
-        if len(f):f=f[f.date<=completed]
+        if len(f):f=f[f.date<=cutoff]
         meta=item.get('meta',{})
         row={'代码':code,'名称':item['name'],'状态':'历史不足','可操作':False,'数据截至':meta.get('end')}
         if len(f):
@@ -60,10 +65,12 @@ def build_strategy3_payload(rows=None, *, session=None, get_quote=None, batch_qu
                         '前底':None if pd.isna(r.anchor) else float(r.anchor),
                         '破位深度':float(r.depth),'三日动量':float(r.mom3),
                         '加速下跌':bool(r.accelerated),'止跌确认':bool(r.higher_low),
-                        '候选信号':bool(scan_valid and passed and plan['allowed']),'现价':float(r.close),
+                        '候选信号':bool(scan_valid and item.get('candidate') and passed and plan['allowed']),'现价':float(r.close),
                         '量比':float(r.vol_ratio),'破位最大量比':float(r.break_volume),
                         '下影占比':float(r.lower_shadow),'阴线实体ATR':float(r.body_atr),
-                        '数据截至':str(r.date.date()),'挂单说明':'参考价位按完整日线收盘估算；次开重算，入场后冻结C，不自动成交',
+                        '数据截至':item.get('quote_at') if intraday else str(r.date.date()),
+                        '行情基准':item.get('price_basis','daily_close'),'盘中观察':intraday,
+                        '挂单说明':('参考价位按本次盘中报价估算，未完成日线仅供观察，不自动成交' if intraday else '参考价位按完整日线收盘估算；次开重算，入场后冻结C，不自动成交'),
                         '前高':None if pd.isna(r.peak) else float(r.peak),
                         '止跌低点':None if pd.isna(r.trough) else float(r.trough),
                         '参考止损':plan.get('stop_px'),'第一目标':plan.get('target_px'),
@@ -73,9 +80,15 @@ def build_strategy3_payload(rows=None, *, session=None, get_quote=None, batch_qu
         result.append(row)
     result.sort(key=lambda r:(not r.get('候选信号',False),not r.get('破位预警',False),r['代码']))
     comparisons=[];failed=None
+    panic_study=_load(SCAN_OUT/'panic_study.json',{})
+    study_date=scan.get('history_as_of') if intraday else scan.get('as_of')
+    if panic_study.get('configHash')!=config_hash(selected) or panic_study.get('asOf')!=study_date:panic_study={}
     summary=[]  # 手动监控面板不混用旧固定池/80股回测。
     return dict(name='鲍鱼捞饭',rules=RULES,rows=result,backtest=summary,policy=policy.dict(),
-                poolDate=pool.get('as_of'),poolCount=len(result),effectiveTradeDate=str(completed.date()),
+                panic=current_panic(scan,scan_valid),panicStudy=panic_study or None,
+                scanMode=scan.get('scan_mode','daily'),scanStartedAt=scan.get('scan_started_at'),scanFinishedAt=scan.get('generated_at'),
+                historyDate=scan.get('history_as_of',scan.get('as_of')),
+                poolDate=pool.get('as_of'),poolCount=len(result),effectiveTradeDate=str(cutoff.date()),
                 scanCoverage=dict(universeCount=scan.get('universe_count',0),scannedCount=scan.get('scanned_count',0),
                                   candidateCount=sum(bool(r.get('候选信号')) for r in result),
                                   warningCount=sum(bool(r.get('破位预警')) for r in result),
@@ -83,7 +96,8 @@ def build_strategy3_payload(rows=None, *, session=None, get_quote=None, batch_qu
                 researchOnly=True,boundFactors=[b.factor_id for b in FACTOR_BINDINGS],factorResearch=dict(rule=rule,failed=failed,comparisons=comparisons),
                 cacheNote=('仅手动点击扫描。范围为中证1000成分股，剔除ST、科创、创业及新三板；不混入中证500或原策略池。'
                            +('尚未扫描或结果已过期，请点击扫描。' if not scan_valid else '')
-                           +'相邻下笔破前低A列入预警；满足因子30/31/32再标记鲍鱼捞饭，不自动买入。'))
+                           +('盘中恐慌度按本次价格低于结构前低A判定；9:25–9:30取正式开盘价，9:30后取最新价。盘中形态未确认，仅供观察；历史胜率为完整日线研究，不能直接套用。' if intraday else '相邻下笔破前低A列入预警；满足因子30/31/32再标记鲍鱼捞饭。')
+                           +'不自动买入。'))
 
 
 @lru_cache(maxsize=128)

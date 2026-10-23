@@ -1,13 +1,12 @@
 {
-  "state": "done",
-  "pid": 62050,
-  "started_ts": 1792689267.0091789,
-  "done": 645,
-  "total": 645,
+  "state": "error",
+  "pid": 86469,
+  "started_ts": 1792722063.128833,
+  "done": 0,
+  "total": 0,
   "workers": 6,
   "executor": "process",
-  "message": "扫描完成：监控 360 只，鲍鱼捞饭 1 只",
-  "as_of": "2026-10-22",
-  "finished_ts": 1792689342.8689563,
-  "elapsed_seconds": 75.9
+  "message": "扫描失败：ReadTimeout: HTTPSConnectionPool(host='oss-ch.csindex.com.cn', port=443): Read timed out. (read timeout=30)",
+  "finished_ts": 1792722093.572031,
+  "elapsed_seconds": 30.4
 }

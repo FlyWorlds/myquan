@@ -244,6 +244,8 @@ export interface Strategy3Sentiment {
 }
 
 export interface Strategy3Row {
+  行情基准?: string
+  盘中观察?: boolean
   破位预警?: boolean
   代码: string
   名称: string
@@ -295,6 +297,13 @@ export interface Strategy3Policy {
 }
 
 export interface Strategy3Payload {
+  scanMode?: 'daily' | 'intraday'
+  scanStartedAt?: string | null
+  scanFinishedAt?: string | null
+  historyDate?: string | null
+  panic?: { rate: number | null; warningCount: number; monitoredCount: number; coverage: number | null }
+  panicStudy?: { asOf: string; period: string[]; note: string; recentBuckets: { label: string; horizon: number; n: number; days: number; winRate: number | null; meanReturnPct: number | null; interval: number[] | null }[]; earlierBuckets: { label: string; horizon: number; n: number; days: number; winRate: number | null; meanReturnPct: number | null; interval: number[] | null }[]; buckets: { label: string; horizon: number; n: number; days: number; winRate: number | null; meanReturnPct: number | null; interval: number[] | null }[] }
+
   name?: string
   rules?: string
   backtest?: (StrategyBacktestRow & { label?: string; mean_hold_days?: number })[]

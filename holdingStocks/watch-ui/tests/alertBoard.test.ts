@@ -127,3 +127,29 @@ test('status debouncer suppresses transient <3s status flickers while passing im
 })
 
 
+
+import { orderAlertCards } from '../utils/alertBoard.ts'
+
+test('filled holdings stay on the alert board and pin above unfilled touch buys immediately', () => {
+  const before = [{ 代码: '002253', 持仓: 0, 已触买: '是', 买点: 8.28 }]
+  const latest = stickAlertRows(before, [
+    { 代码: 'OTHER', 持仓: 0, 已触买: '是', 买入时间: '', 买点: 10 },
+    { 代码: '002253', 持仓: 6800, 已触买: '是', 买入时间: '2026-10-23 09:41:17', 买点: 8.28 },
+  ], [])
+  const ordered = orderAlertCards(latest)
+  assert.deepEqual(ordered.map(row => row.代码), ['002253', 'OTHER'])
+  assert.equal(ordered[0].持仓, 6800)
+  assert.equal(ordered[0].预警线内, true)
+  assert.equal(ordered.filter(row => row.代码 === '002253').length, 1)
+})
+
+test('held alerts sort newest buy first and a closed holding leaves the board', () => {
+  const rows = [
+    { 代码: 'OLD', 持仓: 100, 买入时间: '2026-10-22 10:00:00' },
+    { 代码: 'ALERT', 持仓: 0 },
+    { 代码: 'NEW', 持仓: 200, 买入时间: '2026-10-23 10:00:00' },
+  ]
+  assert.deepEqual(orderAlertCards(rows).map(row => row.代码), ['NEW', 'OLD', 'ALERT'])
+  const next = stickAlertRows(rows, rows.slice(0, 2), ['NEW'])
+  assert.deepEqual(orderAlertCards(next).map(row => row.代码), ['OLD', 'ALERT'])
+})

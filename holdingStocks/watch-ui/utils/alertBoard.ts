@@ -307,3 +307,11 @@ export function createHoldingPriceOrder(intervalMs = 10_000, statusDebounceMs = 
 }
 
 
+
+/** 预警列表保留实际持仓并立即置顶；其余沿用触买优先顺序。 */
+export function orderAlertCards<T extends AlertRow & { 持仓?: number; 买入时间?: string | null }>(rows: T[]): T[] {
+  const held = rows.filter(row => Number(row.持仓 || 0) > 0)
+  const alerts = rows.filter(row => Number(row.持仓 || 0) <= 0)
+  held.sort((a, b) => compareByBuyTimeDesc(a, b))
+  return [...held, ...orderTouchBuys(alerts)]
+}

@@ -71,11 +71,12 @@ def cache_dates(path):
     return ds.dt.normalize()
 
 
-def _one(symbol,name,as_of,config,feature_dir=None):
+def _one(symbol,name,as_of,config,feature_dir=None,*,daily=None,metadata=None,auction=False):
     date=pd.Timestamp(as_of)
-    d,meta=load_daily(symbol)
+    d,meta=load_daily(symbol) if daily is None else (daily,metadata or {})
     if not d.empty:d=d[d.date<=date].reset_index(drop=True)
     status=eligibility(d,date)
+    if auction and status=='no_volume':status='ready'
     rec=dict(symbol=symbol,code=symbol[2:],name=name,status=status,
              data_end=str(d.date.max().date()) if len(d) else None,rows=len(d),meta=meta)
     if status!='ready':return rec,None
@@ -91,7 +92,7 @@ def _one(symbol,name,as_of,config,feature_dir=None):
         f.to_parquet(cache,index=False);signature.write_text(key)
     g=compose_entry({symbol:f},config['rule'])[symbol];r=g.iloc[-1]
     plan=entry_plan(r,float(r.close)*(1+SLIPPAGE_VALUE),config['policy'])
-    rec.update(candidate=bool(r.stabilize and plan['allowed']),broken=bool(r.broken),
+    rec.update(candidate=bool(not auction and r.stabilize and plan['allowed']),broken=bool(r.broken),
                event_id=r.event_id,anchor=float(r.anchor) if pd.notna(r.anchor) else None,
                prior_high=float(r.peak) if pd.notna(r.peak) else None,
                event_low=float(r.trough) if pd.notna(r.trough) else None,

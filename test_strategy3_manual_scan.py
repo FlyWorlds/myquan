@@ -38,6 +38,7 @@ def test_manual_job_publishes_warning_and_badge_without_old_pool(tmp_path,monkey
     from concurrent.futures import ThreadPoolExecutor
     monkeypatch.setattr(m,'OUT',tmp_path)
     monkeypatch.setattr(m,'_pool',lambda workers:ThreadPoolExecutor(max_workers=workers))
+    monkeypatch.setattr(m,'scan_context',lambda:dict(mode='daily',as_of='2026-10-22',history_as_of='2026-10-22',started_at='2026-10-22T16:00:00+08:00'))
     items=[dict(symbol='sh600000',code='600000',name='甲'),dict(symbol='sz000001',code='000001',name='乙')]
     monkeypatch.setattr(m,'universe',lambda:(items,{'index':'000852'}))
     monkeypatch.setattr(m,'_scan_stock',lambda it,*args:dict(**it,status='ready',broken=True,warning=True,candidate=it['code']=='000001'))
