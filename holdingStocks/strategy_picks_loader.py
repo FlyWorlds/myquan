@@ -31,11 +31,8 @@ _PICK_SOURCES: dict[str, dict[str, Any]] = {
         ],
     },
     "strategy3": {
-        "kind": "signals",
-        "paths": [
-            _MYQUAN / "backtest/strategy3_first_board/signals_0p0250_lag1_lb2_h2_5.parquet",
-            _MYQUAN / "backtest/strategy3_first_board/signals_0p0300_lag1_lb2_h2_5.parquet",
-        ],
+        "kind": "pool",
+        "paths": [_MYQUAN / "backtest/strategy3_abalone/manual_scan/snapshot.json"],
     },
     "strategy8": {
         "kind": "signals",
@@ -100,7 +97,7 @@ def _empty_picks(kind: str = "none", *, note: str = "") -> dict[str, Any]:
 _POOL_CATEGORY: dict[str, str] = {
     "strategy1": "策略池",
     "strategy2": "策略池",
-    "strategy3": "涨停池",
+    "strategy3": "鲍鱼捞饭池",
     "strategy4": "策略池",
     "strategy5": "策略池",
     "strategy8": "题材池",
@@ -555,7 +552,7 @@ def _load_s17_ziyang(path: Path) -> dict[str, Any]:
 
 
 @lru_cache(maxsize=16)
-def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
+def _load_strategy_picks_cached(strategy_id: str) -> dict[str, Any]:
     """返回策略最新选股/信号快照（始终并入公共自选并标分类）。"""
     sid = str(strategy_id)
     if sid == "strategy6":
@@ -574,6 +571,7 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
 
     path = _first_existing(list(spec["paths"]))
     if path is None:
+        if sid=='strategy3':return _empty_picks('signals',note='监控名单为空，请点击手动扫描')
         return merge_public_self_picks(
             _empty_picks(str(spec["kind"]), note="产物文件不存在，需先跑回测"),
             sid,
@@ -592,7 +590,17 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
         elif sid == "strategy2":
             raw = _load_strategy2_daily(path)
         elif sid == "strategy3":
-            raw = _load_strategy3_signals(path)
+            from strategy.strategies.strategy3.market_scan import completed_day,config_hash
+            from strategy.strategies.strategy3.combo_config import config_from_bindings
+            from strategy.strategies.strategy3.bindings import FACTOR_BINDINGS
+            scan=json.loads(path.read_text())
+            from strategy.strategies.strategy3.manual_scan import SCOPE
+            valid=(scan.get('scope')==SCOPE and scan.get('as_of')==str(completed_day().date()) and scan.get('config_hash')==config_hash(config_from_bindings(FACTOR_BINDINGS)))
+            raw=dict(kind='signals',asOf=scan.get('as_of'),source=str(path.relative_to(_MYQUAN)),
+                     items=[dict(r,rank=i+1,category='鲍鱼捞饭信号' if r.get('abalone') else '破前低预警',
+                                 分类='鲍鱼捞饭信号' if r.get('abalone') else '破前低预警')
+                            for i,r in enumerate(sorted(scan.get('picks',[]),key=lambda r:(not r.get('abalone',False),r['code'])))] if valid else [],
+                     note=f"鲍鱼捞饭 · 手动中证1000监控扫描 · 完成{scan.get('scanned_count',0)}/{scan.get('universe_count',0)}只"+(' · 尚未扫描或结果过期，信号停用' if not valid else ''))
         elif sid == "strategy8":
             raw = _load_strategy8_signals(path)
             note = str(raw.get("note") or "")
@@ -612,9 +620,14 @@ def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         raw = _empty_picks(str(spec.get("kind", "none")), note=f"读取失败: {e}")
 
-    return merge_public_self_picks(raw, sid)
+    return raw if sid == "strategy3" else merge_public_self_picks(raw, sid)
+
+
+def load_strategy_picks(strategy_id: str) -> dict[str, Any]:
+    if str(strategy_id)=='strategy3':return _load_strategy_picks_cached.__wrapped__(strategy_id)
+    return _load_strategy_picks_cached(strategy_id)
 
 
 def invalidate_picks_cache() -> None:
-    load_strategy_picks.cache_clear()
+    _load_strategy_picks_cached.cache_clear()
     invalidate_name_cache()

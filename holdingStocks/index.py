@@ -811,7 +811,7 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
             from strategy3_watch import load_backtest_summary
 
             tabs[-1]["backtest"] = load_backtest_summary()
-            tabs[-1]["reportPath"] = "backtest/strategy3_first_board/REPORT.md"
+            tabs[-1]["reportPath"] = "backtest/strategy3_abalone/stop_study/REPORT.md"
         if spec.id == "strategy8":
             from strategy8_watch import load_backtest_summary as load_s8_summary
 
@@ -10444,7 +10444,7 @@ def collect_rows(
                 limit_down_pct=limit_down_pct,
             )
             try:
-                from strategy3_watch import enrich_first_board_row
+                from market_sentiment_watch import enrich_first_board_row
 
                 row["_s3_fb"] = enrich_first_board_row(
                     code=code,

@@ -1,0 +1,827 @@
+{
+  "horizon": "rolling_3m",
+  "window_start": "2026-06-30",
+  "window_end": "2026-09-30",
+  "valid_until": "2026-12-30",
+  "label": "2026-06-30~2026-09-30",
+  "quarter": "2026-06-30~2026-09-30",
+  "as_of": "2026-09-30",
+  "built_at": "2026-09-30T11:05:31",
+  "source": "rotation_cache_last_session",
+  "max_concepts": 40,
+  "per_concept": 2,
+  "target_pool": 30,
+  "price_max": 100.0,
+  "concepts": [
+    {
+      "rank": 1,
+      "name": "CPO概念",
+      "code": "",
+      "activity": 95631475924.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 2,
+      "name": "含H股",
+      "code": "",
+      "activity": 93027955252.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 3,
+      "name": "液冷服务器",
+      "code": "",
+      "activity": 71806063800.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 4,
+      "name": "光通信",
+      "code": "",
+      "activity": 70931872136.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 5,
+      "name": "PCB概念",
+      "code": "",
+      "activity": 69592529560.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 6,
+      "name": "存储芯片",
+      "code": "",
+      "activity": 63023391852.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 7,
+      "name": "苹果概念",
+      "code": "",
+      "activity": 58526123018.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 8,
+      "name": "玻璃基板",
+      "code": "",
+      "activity": 56946876865.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 0
+    },
+    {
+      "rank": 9,
+      "name": "铜缆高速连接",
+      "code": "",
+      "activity": 54071576674.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 10,
+      "name": "先进封装",
+      "code": "",
+      "activity": 51933473107.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 11,
+      "name": "AIGC概念",
+      "code": "",
+      "activity": 51354960344.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 12,
+      "name": "数据中心",
+      "code": "",
+      "activity": 50929760952.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 13,
+      "name": "芯片",
+      "code": "",
+      "activity": 47776915724.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 14,
+      "name": "中特估",
+      "code": "",
+      "activity": 45449057604.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 15,
+      "name": "小米概念",
+      "code": "",
+      "activity": 44758318682.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 0
+    },
+    {
+      "rank": 16,
+      "name": "复合铜箔",
+      "code": "",
+      "activity": 41715467866.5,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 17,
+      "name": "元宇宙概念",
+      "code": "",
+      "activity": 41046892698.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 18,
+      "name": "物联网",
+      "code": "",
+      "activity": 41036696310.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 19,
+      "name": "汽车电子",
+      "code": "",
+      "activity": 39331751140.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 20,
+      "name": "5G概念",
+      "code": "",
+      "activity": 38072605270.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 0
+    },
+    {
+      "rank": 21,
+      "name": "MLCC概念",
+      "code": "",
+      "activity": 35642401600.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 22,
+      "name": "AI营销",
+      "code": "",
+      "activity": 33056011806.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 23,
+      "name": "信创",
+      "code": "",
+      "activity": 32093965536.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 24,
+      "name": "消费电子概念",
+      "code": "",
+      "activity": 31661409458.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 25,
+      "name": "AI智能体",
+      "code": "",
+      "activity": 30539201126.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 26,
+      "name": "机器人概念",
+      "code": "",
+      "activity": 29081325218.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 27,
+      "name": "Web3概念",
+      "code": "",
+      "activity": 28402968696.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 28,
+      "name": "NFT概念",
+      "code": "",
+      "activity": 28327854398.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 29,
+      "name": "储能",
+      "code": "",
+      "activity": 27758466130.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 30,
+      "name": "跨境支付CIPS",
+      "code": "",
+      "activity": 27331614377.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 31,
+      "name": "小红书概念",
+      "code": "",
+      "activity": 27277592268.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 32,
+      "name": "数据要素",
+      "code": "",
+      "activity": 26244571624.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 33,
+      "name": "国产软件",
+      "code": "",
+      "activity": 26013465572.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 34,
+      "name": "黄金概念",
+      "code": "",
+      "activity": 25820155464.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 35,
+      "name": "人工智能",
+      "code": "",
+      "activity": 25201394980.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 36,
+      "name": "光刻机",
+      "code": "",
+      "activity": 25193261658.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 37,
+      "name": "减速器",
+      "code": "",
+      "activity": 24806427000.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 38,
+      "name": "钴金属",
+      "code": "",
+      "activity": 23566581088.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    },
+    {
+      "rank": 39,
+      "name": "区块链",
+      "code": "",
+      "activity": 23405801011.0,
+      "chg_pct": null,
+      "median": 23405801011.0
+    }
+  ],
+  "used_concepts": [
+    {
+      "rank": 1,
+      "name": "CPO概念",
+      "code": "",
+      "activity": 95631475924.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 2,
+      "name": "含H股",
+      "code": "",
+      "activity": 93027955252.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 3,
+      "name": "液冷服务器",
+      "code": "",
+      "activity": 71806063800.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 4,
+      "name": "光通信",
+      "code": "",
+      "activity": 70931872136.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 5,
+      "name": "PCB概念",
+      "code": "",
+      "activity": 69592529560.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 6,
+      "name": "存储芯片",
+      "code": "",
+      "activity": 63023391852.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 7,
+      "name": "苹果概念",
+      "code": "",
+      "activity": 58526123018.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 9,
+      "name": "铜缆高速连接",
+      "code": "",
+      "activity": 54071576674.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 10,
+      "name": "先进封装",
+      "code": "",
+      "activity": 51933473107.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 11,
+      "name": "AIGC概念",
+      "code": "",
+      "activity": 51354960344.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 12,
+      "name": "数据中心",
+      "code": "",
+      "activity": 50929760952.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 13,
+      "name": "芯片",
+      "code": "",
+      "activity": 47776915724.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 14,
+      "name": "中特估",
+      "code": "",
+      "activity": 45449057604.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 16,
+      "name": "复合铜箔",
+      "code": "",
+      "activity": 41715467866.5,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    },
+    {
+      "rank": 17,
+      "name": "元宇宙概念",
+      "code": "",
+      "activity": 41046892698.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 18,
+      "name": "物联网",
+      "code": "",
+      "activity": 41036696310.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 19,
+      "name": "汽车电子",
+      "code": "",
+      "activity": 39331751140.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 1
+    },
+    {
+      "rank": 21,
+      "name": "MLCC概念",
+      "code": "",
+      "activity": 35642401600.0,
+      "chg_pct": null,
+      "median": 23405801011.0,
+      "picked": 2
+    }
+  ],
+  "picks": [
+    {
+      "code": "002273",
+      "name": "水晶光电",
+      "concept": "CPO概念",
+      "price": 24.72,
+      "chg_pct": 5.146746065504029,
+      "amount": 1613329024.41,
+      "rank_in_concept": 1,
+      "concepts": "CPO概念 / 苹果概念 / 玻璃基板 / 小米概念 / 元宇宙概念",
+      "rank": 1
+    },
+    {
+      "code": "000070",
+      "name": "特发信息",
+      "concept": "CPO概念",
+      "price": 16.55,
+      "chg_pct": 2.2235948116121023,
+      "amount": 555901601.2,
+      "rank_in_concept": 2,
+      "concepts": "CPO概念 / 光通信 / 5G概念",
+      "rank": 2
+    },
+    {
+      "code": "000756",
+      "name": "新华制药",
+      "concept": "含H股",
+      "price": 14.6,
+      "chg_pct": 4.4349070100143,
+      "amount": 618968731.79,
+      "rank_in_concept": 1,
+      "rank": 3
+    },
+    {
+      "code": "002703",
+      "name": "浙江世宝",
+      "concept": "含H股",
+      "price": 15.7,
+      "chg_pct": 3.493737640079099,
+      "amount": 394794261.1,
+      "rank_in_concept": 2,
+      "rank": 4
+    },
+    {
+      "code": "001282",
+      "name": "三联锻造",
+      "concept": "液冷服务器",
+      "price": 17.19,
+      "chg_pct": 5.137614678899081,
+      "amount": 93794010.62,
+      "rank_in_concept": 1,
+      "rank": 5
+    },
+    {
+      "code": "002580",
+      "name": "圣阳股份",
+      "concept": "液冷服务器",
+      "price": 19.43,
+      "chg_pct": 3.9037433155080237,
+      "amount": 897053101.69,
+      "rank_in_concept": 2,
+      "rank": 6
+    },
+    {
+      "code": "002962",
+      "name": "五方光电",
+      "concept": "光通信",
+      "price": 16.17,
+      "chg_pct": 10.000000000000018,
+      "amount": 513054292.31,
+      "rank_in_concept": 1,
+      "concepts": "光通信 / 玻璃基板",
+      "rank": 7
+    },
+    {
+      "code": "002866",
+      "name": "传艺科技",
+      "concept": "PCB概念",
+      "price": 16.9,
+      "chg_pct": 10.02604166666666,
+      "amount": 535750220.8,
+      "rank_in_concept": 1,
+      "concepts": "PCB概念 / 小米概念",
+      "rank": 8
+    },
+    {
+      "code": "001266",
+      "name": "宏英智能",
+      "concept": "PCB概念",
+      "price": 38.65,
+      "chg_pct": 6.385906963941647,
+      "amount": 191570718.41,
+      "rank_in_concept": 2,
+      "concepts": "PCB概念 / 数据中心 / 物联网 / 汽车电子",
+      "rank": 9
+    },
+    {
+      "code": "002430",
+      "name": "杭氧股份",
+      "concept": "存储芯片",
+      "price": 24.57,
+      "chg_pct": 2.289758534554541,
+      "amount": 156531713.3,
+      "rank_in_concept": 1,
+      "rank": 10
+    },
+    {
+      "code": "002415",
+      "name": "海康威视",
+      "concept": "存储芯片",
+      "price": 32.45,
+      "chg_pct": 1.0588601681719196,
+      "amount": 475495288.18,
+      "rank_in_concept": 2,
+      "rank": 11
+    },
+    {
+      "code": "002453",
+      "name": "华软科技",
+      "concept": "苹果概念",
+      "price": 4.83,
+      "chg_pct": 2.3305084745762783,
+      "amount": 181218306.02,
+      "rank_in_concept": 2,
+      "rank": 12
+    },
+    {
+      "code": "601609",
+      "name": "金田股份",
+      "concept": "铜缆高速连接",
+      "price": 11.71,
+      "chg_pct": 3.4452296819788035,
+      "amount": 296792972.0,
+      "rank_in_concept": 1,
+      "rank": 13
+    },
+    {
+      "code": "603042",
+      "name": "华脉科技",
+      "concept": "铜缆高速连接",
+      "price": 16.91,
+      "chg_pct": 2.1752265861027156,
+      "amount": 491305047.0,
+      "rank_in_concept": 2,
+      "rank": 14
+    },
+    {
+      "code": "000049",
+      "name": "德赛电池",
+      "concept": "先进封装",
+      "price": 22.39,
+      "chg_pct": 1.8190086402910512,
+      "amount": 72636079.02,
+      "rank_in_concept": 1,
+      "concepts": "先进封装 / 5G概念",
+      "rank": 15
+    },
+    {
+      "code": "000725",
+      "name": "京东方Ａ",
+      "concept": "先进封装",
+      "price": 5.78,
+      "chg_pct": 1.2259194395796897,
+      "amount": 3252446711.96,
+      "rank_in_concept": 2,
+      "rank": 16
+    },
+    {
+      "code": "002841",
+      "name": "视源股份",
+      "concept": "AIGC概念",
+      "price": 45.53,
+      "chg_pct": 2.3606115107913763,
+      "amount": 102281702.57,
+      "rank_in_concept": 1,
+      "rank": 17
+    },
+    {
+      "code": "002558",
+      "name": "巨人网络",
+      "concept": "AIGC概念",
+      "price": 22.54,
+      "chg_pct": 1.8987341772151816,
+      "amount": 885440126.39,
+      "rank_in_concept": 2,
+      "rank": 18
+    },
+    {
+      "code": "000682",
+      "name": "东方电子",
+      "concept": "数据中心",
+      "price": 10.63,
+      "chg_pct": 3.8085937500000053,
+      "amount": 104467526.17,
+      "rank_in_concept": 2,
+      "rank": 19
+    },
+    {
+      "code": "002169",
+      "name": "智光电气",
+      "concept": "芯片",
+      "price": 12.46,
+      "chg_pct": 2.7205276174773294,
+      "amount": 213880506.04,
+      "rank_in_concept": 1,
+      "rank": 20
+    },
+    {
+      "code": "000920",
+      "name": "沃顿科技",
+      "concept": "芯片",
+      "price": 12.48,
+      "chg_pct": 2.6315789473684235,
+      "amount": 154384820.0,
+      "rank_in_concept": 2,
+      "rank": 21
+    },
+    {
+      "code": "600072",
+      "name": "中船科技",
+      "concept": "中特估",
+      "price": 9.7,
+      "chg_pct": 9.977324263038536,
+      "amount": 314263442.0,
+      "rank_in_concept": 1,
+      "rank": 22
+    },
+    {
+      "code": "600760",
+      "name": "中航沈飞",
+      "concept": "中特估",
+      "price": 43.79,
+      "chg_pct": 2.672919109026965,
+      "amount": 356897226.0,
+      "rank_in_concept": 2,
+      "rank": 23
+    },
+    {
+      "code": "600346",
+      "name": "恒力石化",
+      "concept": "复合铜箔",
+      "price": 16.09,
+      "chg_pct": 1.1313639220615945,
+      "amount": 265103241.0,
+      "rank_in_concept": 1,
+      "rank": 24
+    },
+    {
+      "code": "603659",
+      "name": "璞泰来",
+      "concept": "复合铜箔",
+      "price": 21.5,
+      "chg_pct": 1.081335213916316,
+      "amount": 219511029.0,
+      "rank_in_concept": 2,
+      "rank": 25
+    },
+    {
+      "code": "002253",
+      "name": "川大智胜",
+      "concept": "元宇宙概念",
+      "price": 8.83,
+      "chg_pct": 3.1542056074766305,
+      "amount": 53641051.0,
+      "rank_in_concept": 2,
+      "rank": 26
+    },
+    {
+      "code": "000803",
+      "name": "山高环能",
+      "concept": "物联网",
+      "price": 7.22,
+      "chg_pct": 5.247813411078709,
+      "amount": 63432508.0,
+      "rank_in_concept": 2,
+      "rank": 27
+    },
+    {
+      "code": "002454",
+      "name": "松芝股份",
+      "concept": "汽车电子",
+      "price": 5.61,
+      "chg_pct": 10.000000000000014,
+      "amount": 105161694.46,
+      "rank_in_concept": 1,
+      "rank": 28
+    },
+    {
+      "code": "600549",
+      "name": "厦门钨业",
+      "concept": "MLCC概念",
+      "price": 44.23,
+      "chg_pct": 1.09714285714285,
+      "amount": 519727844.0,
+      "rank_in_concept": 1,
+      "rank": 29
+    },
+    {
+      "code": "600063",
+      "name": "皖维高新",
+      "concept": "MLCC概念",
+      "price": 5.36,
+      "chg_pct": 0.1869158878504799,
+      "amount": 45989150.0,
+      "rank_in_concept": 2,
+      "rank": 30
+    }
+  ],
+  "n_concepts": 39,
+  "n_used_concepts": 18,
+  "n_picks": 30,
+  "note": "近3个月 2026-06-30~2026-09-30 冻结至 2026-12-30：活跃概念偏高（成交额≥中位数，最多扫 Top40），每概念≤2，池约 30 只；实际 30 只 / 18 个概念入池；主板非ST非科创创业、现价<100。买卖同策略一（因子26/2/22）。研究用途，非投资建议。",
+  "errors": []
+}

@@ -1,0 +1,17 @@
+{
+  "total_return_pct": -1.094983819350881,
+  "max_drawdown_pct": -5.8966324042562075,
+  "sharpe_ratio": -0.19134877169613942,
+  "n_trades": 35,
+  "win_rate": 0.2857142857142857,
+  "mean_hold_days": 5.4,
+  "open_positions": 1,
+  "final_nav": 989050.1618064912,
+  "start": "2026-01-05",
+  "end": "2026-10-22",
+  "period": "2026",
+  "universe_count": 80,
+  "net_profit": -10949.838193508796,
+  "realized_pnl": -7946.921943812762,
+  "floating_pnl": -3002.9162496959907
+}

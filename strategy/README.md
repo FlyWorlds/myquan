@@ -118,7 +118,7 @@ for f in list_factors():
 |----|------|----------|------|------|
 | **strategy1** | 援军战法 | factor26 + factor2 + factor13a + factor16 + factor22 | ✅ | 开盘阈值买、多层止盈 + 回撤预警；四槽（盘中/隔夜均可持4、日最多买4、每槽约25%、当日卖出禁再买；先平再买，腾槽第一梯队现价≤买点+1%按现价）；定盘池 13A→16 Top20；别名 `open_break3` / `s1` / `策略一` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
-| **strategy3** | 策略三·首板晋级 | factor1 | ✅ | 盯盘：昨日涨停池+T-1连板梯度+冰点/正常/高潮展示+±阈值；回测：首板+gap/量比 · 别名 `s3` |
+| **strategy3** | 策略三·鲍鱼捞饭 | factor30 + factor31 + factor32 | ✅ 研究绑定 | 手动中证1000扫描（剔ST/科创/创业等）；破前低预警，符合鲍鱼条件再标记 |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧 run 别名 `run_strategy9` / `s9` / `策略九` |
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
@@ -150,8 +150,11 @@ from strategy import run_strategy3, run_strategy5, run_strategy7, run_strategy8,
 # 策略五：因子11 近高 Top5 等权持有（研究回测，不构成投资建议）
 run_strategy5(start="20200102")
 
-# 策略三：5 个槽位，单主题1只、固定持有5日
-run_strategy3(start="20200101", entry_pcts=(0.025, 0.03))
+# 策略三：页面手动扫描中证1000，剔ST/科创/创业等，按因子30/31/32标记
+run_strategy3(research="scan")  # 等同页面手动按钮，后台扫描中证1000并生成监控预警
+run_strategy3()  # 手动扫描完成后才可重放该子集；不回退旧80股池
+# run_strategy3(research="stops")  # A/B/C与再破新低止损比较
+# run_strategy3(research="mining")  # 原因子挖掘
 
 # 策略七：天通默认，日线笔 vs 因子1 费用后盈亏比（研究）
 run_strategy7()  # 或 get_strategy("缠论笔算盈亏比").run()；旧名 run_strategy11
@@ -174,7 +177,7 @@ cd backtest && python strategy2.py all --limit 80
 因子5候选池刷新（处理上一 A 股交易日收盘后至当前时点的全部 Serenity 公开帖）：
 
 ```bash
-python backtest/strategy3_first_board/run.py
+python -m strategy.strategies.strategy3.factor_mining
 python backtest/strategy8_theme_linkage/run.py --start 20250101
 python -c "from strategy import run_strategy3; run_strategy3()"
 python -c "from strategy import run_strategy8; run_strategy8(start='20250101')"
@@ -185,7 +188,7 @@ python backtest/strategy9_limit_down_emotion/run.py --start 20200101
 python -c "from strategy import run_strategy9_emotion; run_strategy9_emotion()"
 ```
 
-策略三：昨日涨停池 + T-1 连板梯度门槛 + 涨停家数冰点/正常/高潮展示 + 因子1 ±阈值。策略八：题材联动（**当日涨停定题材**，盯盘随涨停实时重算 + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。策略十二：因子18 恐慌空仓 × 因子21 涨停次日低开（v6：昨开板 + 上证昨收≤−2% 空仓，开盘买 T+1 清），调参窗强、**盲测回撤未过关**，报告见 `backtest/strategy12_emotion_gate/REPORT.md`。
+策略三：主板动态扫描，结构前低破位 + 放量止跌 + 冻结止损/A-B目标；过期/缺失行情不发当日信号，当前覆盖见 `backtest/strategy3_abalone/market_scan/REPORT.md`。策略八：题材联动（**当日涨停定题材**，盯盘随涨停实时重算 + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。策略十二：因子18 恐慌空仓 × 因子21 涨停次日低开（v6：昨开板 + 上证昨收≤−2% 空仓，开盘买 T+1 清），调参窗强、**盲测回撤未过关**，报告见 `backtest/strategy12_emotion_gate/REPORT.md`。
 
 ### 因子13 · 熊市盾牌 thr\* Top3（🔒 锁定，研究）
 
@@ -288,8 +291,9 @@ python -m strategy.etf_combo_momentum
 cd backtest && python compare_f3_select_f1_stop.py
 # 策略一拟合池：三种≥2×阈值不过门（2023→今，分年）
 cd backtest && python s1_gate_three.py
-# 策略三：五槽位、单主题一只、固定持有5日
-python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 --max-per-theme 1 --hold-days 5
+# 策略三：平时在页面点击“扫描中证1000监控票”；显式命令也可手动启动
+python -m strategy.strategies.strategy3.manual_scan
+# market_scan/annual_report保留为旧扩展范围研究工具，不是当前监控池
 # 因子7（Python API；离线测试不拉行情）
 python -c "from strategy.industry_residual_momentum import run_industry_residual_momentum; print(run_industry_residual_momentum(start='20240206', end='20260630').stats)"
 # 策略二：缠论合成数据流水线 / 真实面板挖掘
@@ -328,7 +332,7 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `get_strategy("open_break3")` | → strategy1 |
 | `run_open_break` | **仅因子1交易**（不含因子2） |
 | `run_strategy1` | 因子1 + 因子2预警（默认不注资） |
-| `run_strategy3` | 首板晋级组合回测；`entry_pcts` / `mkt_lianban_min` / `mkt_max_height_*` / `mkt_lu_*` / `sentiment_lag` |
+| `run_strategy3` | 鲍鱼捞饭手动中证1000监控扫描（`research="scan"`）及已绑定组合重放（`start/end/initial_cash`）；`research="stops"`比较止损；报告 `backtest/strategy3_abalone/stop_study/REPORT.md` |
 | `run_strategy4` | 因子1+4+10 开盘突破组合；默认观察池；旧名 `run_strategy9` |
 | `run_strategy5` | 因子11 近高 Top5 等权持有；`start` / `end` / `stage1_k` / `stage2_k`；旧名 `run_strategy10` |
 | `run_strategy6` | 因子12 反转池近高 Top5 等权持有；研究候选，不替换策略五 |

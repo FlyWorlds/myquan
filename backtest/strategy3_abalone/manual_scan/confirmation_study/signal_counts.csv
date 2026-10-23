@@ -1,0 +1,10 @@
+variant,period,signal_days,closed_trades,stop_cycles
+baseline,2025,496,98,37
+baseline,2026,394,109,67
+baseline,continuous,890,210,104
+bullish,2025,238,75,34
+bullish,2026,193,88,64
+bullish,continuous,431,166,96
+bullish_no_new_low,2025,226,75,34
+bullish_no_new_low,2026,188,88,65
+bullish_no_new_low,continuous,414,166,97

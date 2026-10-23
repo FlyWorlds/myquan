@@ -1,0 +1,461 @@
+[
+  {
+    "symbol": "sz002273",
+    "rows": 2134,
+    "start": "2018-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002273_daily_qfq.parquet",
+      "data_cache/ai_concept/sz002273_daily_qfq.parquet",
+      "backtest/universe_zz500_1000/daily_cache/sz002273_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "9363485f80366e4ec8d4a2180aecfb2fd9d1d95650493b9270d43370b6f8be1b"
+  },
+  {
+    "symbol": "sz000070",
+    "rows": 1889,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz000070_daily_qfq.parquet",
+      "data_cache/ai_concept/sz000070_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz000070_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "d8689780530cf0f4888b606b60d9d2df0aa62d89bf05950b00b1b16a7909f180"
+  },
+  {
+    "symbol": "sz000756",
+    "rows": 1891,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz000756_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz000756_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "ebfaefbbf8e7a6564079a47412b9d08469b8ac475cb186e03a9eda6a1274794f"
+  },
+  {
+    "symbol": "sz002703",
+    "rows": 1886,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002703_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz002703_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "08b6a5983b5e239bb0f88bd73d6771020affe88085c76609af4d31903a40721a"
+  },
+  {
+    "symbol": "sz001282",
+    "rows": 827,
+    "start": "2023-05-24",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz001282_daily_qfq.parquet",
+      "data_cache/ai_concept/sz001282_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "2da8507728124d9174e15294fe71739356ecccfa3993fa0cdeb88862aba62a30"
+  },
+  {
+    "symbol": "sz002580",
+    "rows": 1889,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002580_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz002580_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "04acc10282133431255f1c29ae2c31c5df3e0509c94b294ad0c2e0ab7b687296"
+  },
+  {
+    "symbol": "sz002962",
+    "rows": 1718,
+    "start": "2019-09-17",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002962_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz002962_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "48b1f6918245168f095f7bb64bebf850b49ff4b5fd40c071d4e832657fddf55d"
+  },
+  {
+    "symbol": "sz002866",
+    "rows": 1891,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002866_daily_qfq.parquet",
+      "data_cache/ai_concept/sz002866_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz002866_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "e6e8f0cc01e81de98c90f4c2c08ce4514c92b20ceab0d0bf58520e6eb99181dc"
+  },
+  {
+    "symbol": "sz001266",
+    "rows": 1127,
+    "start": "2022-02-28",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz001266_daily_qfq.parquet",
+      "data_cache/ai_concept/sz001266_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "82f3b8334169f5c7f272b0ae659cbcfb7c8061301d62f647716207df184431e4"
+  },
+  {
+    "symbol": "sz002430",
+    "rows": 2134,
+    "start": "2018-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002430_daily_qfq.parquet",
+      "backtest/universe_zz500_1000/daily_cache/sz002430_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "7bd27ad2835fdd721be14af785368a683154e69a4f64f42d79c9dae3b81bf8ce"
+  },
+  {
+    "symbol": "sz002415",
+    "rows": 1889,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002415_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz002415_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "a05d90f7498e96da1078335eae56a3ea505bb659bbba2b50c682a7238c5beb25"
+  },
+  {
+    "symbol": "sz002453",
+    "rows": 1646,
+    "start": "2020-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002453_daily_qfq.parquet",
+      "backtest/strategy3_abalone/daily/sz002453_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "635c2a8a22032dedffeb780fb1428577d071915eea46e5574f57487391a66d9e"
+  },
+  {
+    "symbol": "sh601609",
+    "rows": 1575,
+    "start": "2020-04-22",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sh601609_daily_qfq.parquet",
+      "backtest/universe_zz500_1000/daily_cache/sh601609_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "7b1615a27e00c8c6cf829095381a0b3c02ffe05ea37bb80ae79036adacc34ef6"
+  },
+  {
+    "symbol": "sh603042",
+    "rows": 1640,
+    "start": "2020-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sh603042_daily_qfq.parquet",
+      "backtest/strategy3_abalone/daily/sh603042_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "2a8eefcd2284bd34b6727e0a3a40cc75218bfc41d6f1a620106814cc958d7f4e"
+  },
+  {
+    "symbol": "sz000049",
+    "rows": 2128,
+    "start": "2018-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/ai_concept/sz000049_daily_qfq.parquet",
+      "backtest/universe_zz500_1000/daily_cache/sz000049_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "fef90123b5bbd2db0aa83b052b281c3c4cf009e97e3e1dff5007e1349c735392"
+  },
+  {
+    "symbol": "sz000725",
+    "rows": 1891,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz000725_daily_qfq.parquet",
+      "data_cache/ai_concept/sz000725_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz000725_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "5047f74bd3432aac96e35b311289f8c4b99681d81caa3d0596758daefc8f6c8a"
+  },
+  {
+    "symbol": "sz002841",
+    "rows": 2134,
+    "start": "2018-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002841_daily_qfq.parquet",
+      "backtest/universe_zz500_1000/daily_cache/sz002841_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "636c0626db353b8f3baf27a713c6e78abd3857489e36d974fbfcbdf164004e37"
+  },
+  {
+    "symbol": "sz002558",
+    "rows": 1891,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002558_daily_qfq.parquet",
+      "data_cache/ai_concept/sz002558_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz002558_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "bea1320f57a82ddfc7b8e2ecb07ffe0b26285ec5e505dc1c75c52c58591948d0"
+  },
+  {
+    "symbol": "sz000682",
+    "rows": 2128,
+    "start": "2018-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz000682_daily_qfq.parquet",
+      "data_cache/ai_concept/sz000682_daily_qfq.parquet",
+      "backtest/universe_zz500_1000/daily_cache/sz000682_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "00126ee5e6c62c763abd926c6dfadb3944900dad8f6738212506d99f38dcb13d"
+  },
+  {
+    "symbol": "sz002169",
+    "rows": 1883,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002169_daily_qfq.parquet",
+      "backtest/strategy3_abalone/daily/sz002169_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz002169_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 1,
+    "input_hash": "bc735b4a1a81356ca37b4046a59ad83a2e4688268c56bfdb4c8f0659567a11d4"
+  },
+  {
+    "symbol": "sz000920",
+    "rows": 1891,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz000920_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz000920_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "dee81bdf1207331317f08dd7d0750e140140df1adb0145b4485a163ba093cb32"
+  },
+  {
+    "symbol": "sh600072",
+    "rows": 2113,
+    "start": "2018-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sh600072_daily_qfq.parquet",
+      "backtest/universe_zz500_1000/daily_cache/sh600072_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "fbe937b87e2fddc8ae684931f9b4101d4cf552929f099ef6e1c038dd165394ed"
+  },
+  {
+    "symbol": "sh600760",
+    "rows": 1891,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sh600760_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sh600760_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "063122264f4dea8c47f656ad7ce9e538cf5e10a9a1a37db00cb8cac19fba7ace"
+  },
+  {
+    "symbol": "sh600346",
+    "rows": 1891,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sh600346_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sh600346_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "0aeb4cff82662a5f4152ba71c695bc1d2e8a90ad3176f2eafd3e8bbfdc364dbb"
+  },
+  {
+    "symbol": "sh603659",
+    "rows": 1647,
+    "start": "2020-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sh603659_daily_qfq.parquet",
+      "backtest/universe_zz500_1000/daily_cache/sh603659_daily_qfq.parquet",
+      "backtest/universe_abc/daily_cache/sh603659_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "51f3443d1811d568367400f581f7c86395b80b11fd8125f3b3666a4c06d05591"
+  },
+  {
+    "symbol": "sz002253",
+    "rows": 1645,
+    "start": "2020-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002253_daily_qfq.parquet",
+      "data_cache/ai_concept/sz002253_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "04ee4a902b7f0846a464cc85bae88366fe4f98fafd38b6c514f6d1e58e3961fc"
+  },
+  {
+    "symbol": "sz000803",
+    "rows": 1866,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz000803_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz000803_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "2bcf3b6cc1f281636440f663d78a61169beb088c7d25c97fc5beb3db24b1d8c8"
+  },
+  {
+    "symbol": "sz002454",
+    "rows": 1891,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sz002454_daily_qfq.parquet",
+      "data_cache/ai_concept/sz002454_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sz002454_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "3307ff1191afe118165c55201e49be89897c23fb9c3c6492f8d2d6f36c7f0132"
+  },
+  {
+    "symbol": "sh600549",
+    "rows": 1891,
+    "start": "2019-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sh600549_daily_qfq.parquet",
+      "backtest/universe_wide/daily_cache/sh600549_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "0e6f9c813b99d881719a2442423522845bbca5796f217714594d0dfe918f799f"
+  },
+  {
+    "symbol": "sh600063",
+    "rows": 2133,
+    "start": "2018-01-02",
+    "end": "2026-10-22",
+    "sources": [
+      "data_cache/sh600063_daily_qfq.parquet",
+      "backtest/universe_zz500_1000/daily_cache/sh600063_daily_qfq.parquet"
+    ],
+    "rejected": [],
+    "zero_volume": 0,
+    "duplicate_dates": 0,
+    "gap_over20days": 0,
+    "input_hash": "432bfc2034953d42b18617723b3314d6e1a112384a935c7da02d2c0a32517257"
+  }
+]

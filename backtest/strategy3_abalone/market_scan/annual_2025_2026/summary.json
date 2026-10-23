@@ -1,0 +1,53 @@
+[
+  {
+    "total_return_pct": 15.894121498586555,
+    "max_drawdown_pct": -2.111229203699938,
+    "sharpe_ratio": 2.501681986231219,
+    "n_trades": 21,
+    "win_rate": 0.7142857142857143,
+    "mean_hold_days": 12.571428571428571,
+    "open_positions": 2,
+    "final_nav": 1158941.2149858656,
+    "start": "2025-01-02",
+    "end": "2025-12-31",
+    "period": "2025",
+    "universe_count": 80,
+    "net_profit": 158941.21498586563,
+    "realized_pnl": 142681.43715156207,
+    "floating_pnl": 16259.777834303997
+  },
+  {
+    "total_return_pct": -1.094983819350881,
+    "max_drawdown_pct": -5.8966324042562075,
+    "sharpe_ratio": -0.19134877169613942,
+    "n_trades": 35,
+    "win_rate": 0.2857142857142857,
+    "mean_hold_days": 5.4,
+    "open_positions": 1,
+    "final_nav": 989050.1618064912,
+    "start": "2026-01-05",
+    "end": "2026-10-22",
+    "period": "2026",
+    "universe_count": 80,
+    "net_profit": -10949.838193508796,
+    "realized_pnl": -7946.921943812762,
+    "floating_pnl": -3002.9162496959907
+  },
+  {
+    "total_return_pct": 15.160729312199406,
+    "max_drawdown_pct": -6.1719222922684835,
+    "sharpe_ratio": 1.306922519374549,
+    "n_trades": 58,
+    "win_rate": 0.46551724137931033,
+    "mean_hold_days": 8.5,
+    "open_positions": 1,
+    "final_nav": 1151607.293121994,
+    "start": "2025-01-02",
+    "end": "2026-10-22",
+    "period": "continuous",
+    "universe_count": 80,
+    "net_profit": 151607.293121994,
+    "realized_pnl": 155065.1966822513,
+    "floating_pnl": -3457.9035602560034
+  }
+]

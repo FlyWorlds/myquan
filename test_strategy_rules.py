@@ -206,16 +206,10 @@ class StrategyRuleTests(unittest.TestCase):
         self.assertFalse(all16["factor22"].enabled)
         self.assertTrue(get_strategy_spec("strategy16").meta.get("default"))
 
-    def test_strategy3_binds_factor1_first_board(self) -> None:
+    def test_strategy3_is_independent_daily_reversal(self) -> None:
         from strategy import get_strategy, get_strategy_bindings
-
-        self.assertEqual(get_strategy("strategy3").id, "strategy3")
-        self.assertIn("首板", get_strategy("strategy3").name)
-        bindings = {binding.factor_id: binding for binding in get_strategy_bindings("strategy3")}
-        self.assertEqual(set(bindings), {"factor1"})
-        f1 = bindings["factor1"]
-        self.assertEqual(f1.role, "both")
-        self.assertEqual(f1.params.get("prev_entry_mode"), "limit_up_ok")
+        self.assertEqual(get_strategy("strategy3").name, "策略三·鲍鱼捞饭")
+        self.assertEqual({b.factor_id for b in get_strategy_bindings("strategy3")}, {"factor30", "factor31", "factor32"})
 
 
 class DailyCacheTests(unittest.TestCase):
@@ -567,15 +561,9 @@ class Factor6HybridTests(unittest.TestCase):
 
 
 class Strategy3SlotBindingTests(unittest.TestCase):
-    def test_strategy3_binds_first_board_factor1(self) -> None:
-        from strategy import get_strategy, get_strategy_bindings
-
-        strategy = get_strategy("strategy3")
-        bindings = get_strategy_bindings("strategy3")
-        self.assertEqual(strategy.id, "strategy3")
-        self.assertEqual(strategy.factor_ids, ("factor1",))
-        by_id = {binding.factor_id: binding for binding in bindings}
-        self.assertEqual(by_id["factor1"].role, "both")
+    def test_strategy3_clears_old_first_board_binding(self) -> None:
+        from strategy import get_strategy
+        self.assertEqual(get_strategy("strategy3").factor_ids, ("factor30", "factor31", "factor32"))
 
 
 if __name__ == "__main__":

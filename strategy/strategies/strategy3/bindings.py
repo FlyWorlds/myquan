@@ -1,27 +1,17 @@
-"""策略三 · 首板晋级 + 因子1。"""
-
-from __future__ import annotations
-
+"""策略三·鲍鱼捞饭：组合因子30（结构）+31（止跌）+32（失效/退出）。"""
 from strategy.core.protocols import bind_factor
-from strategy.open_break import DEFAULT_PCT
-
-STRATEGY_ID = "strategy3"
-STRATEGY_NAME = "策略三·首板晋级"
-
-FACTOR_BINDINGS = (
-    bind_factor(
-        "factor1",
-        label="开盘突破（晋级日执行）",
-        role="both",
-        entry_pct=DEFAULT_PCT,
-        stop_pct=DEFAULT_PCT,
-        prev_entry_mode="limit_up_ok",
-        filter_desc=(
-            "盯盘：宇宙=中证1000昨日收盘涨停全池；"
-            "T-1 连板梯度（lb≥2、h2～5）决定今日可否做；"
-            "T-1 涨停家数展示冰点≤6/正常7～14/高潮≥15（与门槛独立）；"
-            "晋级日因子1 ±阈值突破买；回测另含首板/gap/量比（见 strategy3_first_board）"
-        ),
-        enabled=True,
-    ),
+from .combo_config import load_config
+STRATEGY_ID='strategy3'
+STRATEGY_NAME='策略三·鲍鱼捞饭'
+_cfg=load_config()
+_rule=_cfg['rule']
+FACTOR_BINDINGS=(
+    bind_factor('factor30',role='filter',label='结构前低破位',
+                params={k:v for k,v in _rule.items() if k in ('support','window')},
+                filter_desc='A底分型→上笔→B顶分型→相邻下笔破A；按当日可知状态识别'),
+    bind_factor('factor31',role='entry',label='放量释放后止跌',
+                params={k:v for k,v in _rule.items() if k in ('trigger','volume')},
+                filter_desc='须同时通过因子30；下影/收复信号收盘形成，次开复核'),
+    bind_factor('factor32',role='exit',label='冻结失效位与前低前高退出',params=_cfg['policy'],
+                filter_desc='A/B/C在入场时冻结，C不下移；风险仓位、再破低止损及分批反弹退出'),
 )

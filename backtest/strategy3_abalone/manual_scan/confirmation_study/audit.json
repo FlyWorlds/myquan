@@ -1,0 +1,65 @@
+[
+  {
+    "variant": "baseline",
+    "period": "2025",
+    "passed": true,
+    "realized": 207546.53016362537,
+    "floating": 3203.3215574720234
+  },
+  {
+    "variant": "baseline",
+    "period": "2026",
+    "passed": true,
+    "realized": -79879.99463960795,
+    "floating": -4958.629641471969
+  },
+  {
+    "variant": "baseline",
+    "period": "continuous",
+    "passed": true,
+    "realized": 132279.22096853095,
+    "floating": -6171.026076127964
+  },
+  {
+    "variant": "bullish",
+    "period": "2025",
+    "passed": true,
+    "realized": 131795.10803977738,
+    "floating": 95.93922649606247
+  },
+  {
+    "variant": "bullish",
+    "period": "2026",
+    "passed": true,
+    "realized": -142222.44070295148,
+    "floating": 1627.2635946560185
+  },
+  {
+    "variant": "bullish",
+    "period": "continuous",
+    "passed": true,
+    "realized": 8597.494460144648,
+    "floating": 1966.4473847359914
+  },
+  {
+    "variant": "bullish_no_new_low",
+    "period": "2025",
+    "passed": true,
+    "realized": 139076.78539125773,
+    "floating": 96.07951203201083
+  },
+  {
+    "variant": "bullish_no_new_low",
+    "period": "2026",
+    "passed": true,
+    "realized": -145438.04241297877,
+    "floating": 1627.2635946560113
+  },
+  {
+    "variant": "bullish_no_new_low",
+    "period": "continuous",
+    "passed": true,
+    "realized": 11027.688579911883,
+    "floating": 1966.0505979839872
+  }
+]

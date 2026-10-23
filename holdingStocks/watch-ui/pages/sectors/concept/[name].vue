@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ConceptDetailPayload, ConceptLeaderScoresPayload } from '~/types/sectors'
+import { baiduStockUrl } from '~/utils/stockLink'
 
 const route = useRoute()
 const { fetchConceptDetail, fetchConceptLeaderScores } = useSectorsApi()
@@ -211,7 +212,14 @@ watch(conceptName, async () => {
                 <td class="py-2">{{ l.rank }}</td>
                 <td class="py-2">
                   <StockNameHover :code="l.code" :name="l.name">
-                    {{ l.name }} <span class="text-ui-text-3">{{ l.code }}</span>
+                    <a
+                      :href="baiduStockUrl(l.code, l.name)"
+                      target="_blank"
+                      rel="noopener"
+                      class="font-medium hover:text-accent hover:underline"
+                    >
+                      {{ l.name }} <span class="font-mono font-normal text-ui-text-3">{{ l.code }}</span>
+                    </a>
                   </StockNameHover>
                 </td>
                 <td class="py-2 text-right font-semibold text-watch-up">+{{ l.return_pct.toFixed(2) }}%</td>
@@ -237,7 +245,14 @@ watch(conceptName, async () => {
             class="rounded-md border border-ui-hairline px-2 py-1"
           >
             <StockNameHover :code="m.code" :name="m.name">
-              {{ m.name }} {{ m.code }}
+              <a
+                :href="baiduStockUrl(m.code, m.name)"
+                target="_blank"
+                rel="noopener"
+                class="hover:text-accent hover:underline"
+              >
+                {{ m.name }} <span class="font-mono text-ui-text-3">{{ m.code }}</span>
+              </a>
             </StockNameHover>
             <template v-if="sectors?.quotes?.[m.code]">
               · {{ sectors.quotes[m.code].price?.toFixed(2) }}
@@ -294,8 +309,15 @@ watch(conceptName, async () => {
                 <td class="py-2 pr-2">{{ l.rank }}</td>
                 <td class="py-2 pr-2">
                   <StockNameHover :code="l.code" :name="l.name">
-                    {{ l.name }}
-                    <span class="text-ui-text-3">{{ l.code }}</span>
+                    <a
+                      :href="baiduStockUrl(l.code, l.name)"
+                      target="_blank"
+                      rel="noopener"
+                      class="font-medium hover:text-accent hover:underline"
+                    >
+                      {{ l.name }}
+                      <span class="font-mono font-normal text-ui-text-3">{{ l.code }}</span>
+                    </a>
                   </StockNameHover>
                 </td>
                 <td class="py-2 pr-2 text-right font-mono">

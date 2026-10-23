@@ -244,31 +244,80 @@ export interface Strategy3Sentiment {
 }
 
 export interface Strategy3Row {
-  代码?: string
-  名称?: string
-  昨日首板?: boolean
-  连板?: number
-  涨停日?: string | null
-  首板日?: string | null
-  晋级低开%?: number | null
-  量比?: number | null
+  破位预警?: boolean
+  代码: string
+  名称: string
+  状态?: string
+  前底日期?: string
+  顶分型日期?: string
+  量比?: number
+  破位最大量比?: number
+  下影占比?: number
+  阴线实体ATR?: number
+  前高?: number | null
+  止跌低点?: number | null
+  参考止损?: number | null
+  第一目标?: number | null
+  第二目标?: number | null
+  止损距离?: number | null
+  空间风险比?: number | null
+  入场位置?: string
+  价位可用?: boolean
+  前底?: number | null
+  破位深度?: number
+  三日动量?: number
+  加速下跌?: boolean
+  止跌确认?: boolean
+  候选信号?: boolean
   可操作?: boolean
-  买点?: number | null
-  止损?: number | null
-  '阈值%'?: string
-  因子侧?: string
+  现价?: number
+  数据截至?: string
   挂单说明?: string
-  现价?: number | null
-  开盘?: number | null
+}
+
+export interface Strategy3Policy {
+  depth: number
+  hold: number
+  stop: number
+  take: number
+  mode: string
+  acceleration: boolean
+  initial: number
+  add_drop: number
+  reduce: number
+  slot: number
+  stop_mode?: string
+  take_mode?: string
+  risk_budget?: number
+  stop_buffer_atr?: number
+  stop_buffer_pct?: number
+  stop_trigger?: string
 }
 
 export interface Strategy3Payload {
-  sentiment?: Strategy3Sentiment
-  backtest?: StrategyBacktestRow[]
+  name?: string
+  rules?: string
+  backtest?: (StrategyBacktestRow & { label?: string; mean_hold_days?: number })[]
   rows?: Strategy3Row[]
+  policy?: Strategy3Policy
   poolDate?: string | null
   poolCount?: number
   effectiveTradeDate?: string
+  scanCoverage?: {
+    universeCount: number
+    scannedCount: number
+    candidateCount: number
+    warningCount?: number
+    counts: Record<string, number>
+    valid: boolean
+  }
+  researchOnly?: boolean
+  boundFactors?: string[]
+  factorResearch?: {
+    rule: { support?: string; trigger?: string; volume?: number; acceleration?: boolean }
+    failed?: boolean | null
+    comparisons: { name: string; n: number; mean_pct: number; win_rate: number; mae_pct: number }[]
+  }
   cacheNote?: string
 }
 
