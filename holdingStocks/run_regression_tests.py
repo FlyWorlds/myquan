@@ -26,6 +26,8 @@ REGRESSION_MODULES = (
     "test_temporal_integrity",
     "test_high_watermark_sell_side",
     "test_watch_boot_perf",
+    "test_strategy1_default_pool",
+    "test_watch_meta",
     "test_watch_process",
     "test_boot_holdings",
     "tests.test_project_launcher",

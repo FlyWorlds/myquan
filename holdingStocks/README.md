@@ -190,7 +190,7 @@ npm run dev
 **并行 / 分层冷启动**（2026-09-28）：
 - **OpenClaw / 微信自检并行**：根目录一键启动默认 `--wechat-optional`，Gateway→通道→测试发送放到后台线程 `wechat-prepare`，拿到盯盘锁后与行情、API同时进行。严格模式仍同步，失败即中止；可用 `--no-wechat` 关闭通知，不改变模拟交易逻辑。
 - **行情分层首屏**：首屏只扫描**热池**（默认策略 + 公共自选 + 持仓）——新浪批量 → 东财 SSE → 热池日线并行预热 → 首屏快照；**策略一池**在首屏后后台补齐（日线预热 → 新浪 seed），完成后并入信号扫描并推「全量快照」。紫阳叠加池、板块仍各自后台加载。启动强制清日线缓存只在最前做一次（原先首屏后再清，热池日线拉两遍）。
-- **账本加载递归修复**：`load_holdings` 为宇宙补空仓位时必须把 `holdings` 显式传给 `effective_watchlist`；此前不传会回调 `load_holdings`，一路递归到 `RecursionError`（被 `primary_watchlist` 吞掉），单次名单构建 60–90s，是「启动很慢」的主因。`load_strategy16_thr_map` 按 mtime 缓存。回归：`test_watch_boot_perf`。
+- **账本加载递归修复**：`load_holdings` 为宇宙补空仓位时必须把 `holdings` 显式传给 `effective_watchlist`；此前不传会回调 `load_holdings`，一路递归到 `RecursionError`（被 `primary_watchlist` 吞掉），单次名单构建 60–90s，是「启动很慢」的主因。`load_strategy16_thr_map` 按 mtime 缓存。叠加池（紫阳/因子28）名称用 picks 本地字段，`_name_for_code` 冷路径只读本地表，不逐票打东财补名（本环境无 parquet 名称表时原先可再拖 60–90s）。回归：`test_watch_boot_perf`。
 - **跨日粘滞不得继承**：`alert_sticky` 写入只继承同一 `session` 的旧记录（`_sticky_same_session`）。此前 9:15 清空前加载的扫描会把昨日 `buy_touched`/`buy_hit_ts` 连同新 session 写回，伪造「今日已触买」→ 腾槽现价买入且 `buy_time` 记成昨日、绕过 T+1（2026-09-29 金安国纪）。入槽另有两道闸：触发时刻非当日 → `STALE_BUY_TRIGGER` 不买；`apply_paper_slot_buy(session=)` 拒收跨日 `buy_time`。回归：`test_stale_sticky_crossday`。
 - **开盘附近不是买点**：买点只认今日核定开盘 `ceil(今开×(1+entry))`。盘前/竞价用昨收或开盘附近错戳 `buy_touched` 后，若最高仍未印到该价，粘滞不得恢复已触买，第一梯队也不得按现价低于买点成交（2026-10-12 五方光电：开 14.83 / 高 14.87 / 买点 15.21，却按 14.33 入账；**当日纸面仓已作废**，`repair_void_unprinted_buy.py` 视同未买）。回归：`test_wufang_open_print_is_not_buy_hit`。
 - **账本存储层（旧数据不得覆盖新数据）**：`holdings.json` 统一由 `holdings_store.HoldingsStore` 读写（`index.load_holdings` / `save_holdings` 已接入）。

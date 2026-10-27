@@ -40,16 +40,29 @@ class TestLoadHoldingsNoRecursion(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_cold_load_calls_itself_once(self) -> None:
+        import stock_names
+
         real = index.load_holdings
         with mock.patch.object(index, "HOLDINGS_FILE", self.path), mock.patch.object(
             index, "load_holdings", wraps=real
-        ) as spy:
+        ) as spy, mock.patch.object(
+            stock_names,
+            "_lookup_name_online",
+            side_effect=AssertionError("cold load 禁止外网补名"),
+        ):
             t0 = time.perf_counter()
             data = index.load_holdings()
             elapsed = time.perf_counter() - t0
         self.assertEqual(spy.call_count, 1, "load_holdings 被 watchlist 回调（递归）")
         self.assertLess(elapsed, 5.0)
         self.assertTrue(data["positions"], "应为盯盘宇宙补齐空仓位")
+        overlay = [
+            w
+            for w in index.effective_watchlist(data)
+            if w.get("quote_tier") == "overlay"
+        ]
+        named = [w for w in overlay if str(w.get("name") or "") not in {"", w.get("code")}]
+        self.assertTrue(named, "叠加池应带 picks 本地名称")
 
 
 class TestThrMapCache(unittest.TestCase):

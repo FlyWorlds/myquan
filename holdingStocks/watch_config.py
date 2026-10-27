@@ -46,7 +46,6 @@ from strategy.watch_universe import (
     ZIYANG_PICKS_PATH,
     core_leader_codes,
     factor27_codes,
-    factor28_codes,
     load_core_leader_payload,
     load_strategy16_thr_map,
     load_ziyang_payload,
@@ -804,7 +803,11 @@ def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
 
 
 def _name_for_code(code: str, holdings: dict[str, Any] | None = None) -> tuple[str, str]:
-    """(名称, 市场)；名称优先 holdings，其次置顶名单。"""
+    """(名称, 市场)；名称优先 holdings，其次置顶名单 / 本地名称表。
+
+    冷启动与 ``effective_watchlist`` 会扫叠加池近百只代码，这里禁止逐票打外网
+    （``resolve_stock_name`` → 东财），缺名时退回代码本身。
+    """
     c = code_key(code)
     pos: dict[str, Any] = {}
     if holdings:
@@ -817,11 +820,13 @@ def _name_for_code(code: str, holdings: dict[str, Any] | None = None) -> tuple[s
                 break
     if not name:
         try:
-            from stock_names import resolve_stock_name
+            from stock_names import name_by_code
 
-            name = resolve_stock_name(code=c) or c
+            name = str(name_by_code().get(c) or "").strip()
         except Exception:  # noqa: BLE001
-            name = c
+            name = ""
+    if not name:
+        name = c
     market = str(
         pos.get("market")
         or ("上证" if c.startswith(("5", "6", "9")) else "深证")
@@ -886,13 +891,24 @@ def primary_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, 
 
 
 def overlay_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """叠加观察池（如紫阳真君）：仅新浪批量行情，不占东财 SSE。"""
+    """叠加观察池（如紫阳真君）：仅新浪批量行情，不占东财 SSE。
+
+    名称用因子28 picks 本地字段，不在冷启动逐票打外网补名。
+    """
     primary_codes = {code_key(w["code"]) for w in primary_watchlist(holdings)}
     out: list[dict[str, Any]] = []
-    for code in factor28_codes():
-        if code in primary_codes:
+    seen: set[str] = set()
+    for it in load_ziyang_payload().get("picks") or []:
+        if not isinstance(it, dict):
             continue
+        code = code_key(str(it.get("code") or it.get("symbol") or ""))
+        if not code or code == "000000" or code in primary_codes or code in seen:
+            continue
+        seen.add(code)
         item = meta_for_code(code, holdings)
+        pick_name = str(it.get("name") or "").strip()
+        if pick_name:
+            item["name"] = pick_name
         item["universe"] = "strategy17"
         item["pool_src"] = POOL_SRC_FACTOR28
         item["池来源"] = POOL_SRC_LABEL[POOL_SRC_FACTOR28]
