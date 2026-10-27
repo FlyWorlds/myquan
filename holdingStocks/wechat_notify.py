@@ -673,7 +673,7 @@ def map_fill_reason_code(
 
 
 def in_default_strategy_alert_scope(code: str) -> bool:
-    """扫描预警只覆盖默认策略池（strategy16），不含 strategy1 overlay。"""
+    """扫描预警只覆盖默认策略池（strategy1），不含策略十六遗留空仓。"""
     try:
         from watch_config import is_default_strategy_pool_code
 

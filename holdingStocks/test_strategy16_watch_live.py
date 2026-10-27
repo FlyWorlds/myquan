@@ -165,8 +165,8 @@ def _day_bars(quote: dict) -> pd.DataFrame:
 
 
 class TestStrategy16DefaultWiring(unittest.TestCase):
-    def test_watch_defaults_are_strategy16_factor26(self) -> None:
-        self.assertEqual(STRATEGY_ID, "strategy16")
+    def test_watch_defaults_are_strategy1_factor26(self) -> None:
+        self.assertEqual(STRATEGY_ID, "strategy1")
         self.assertEqual(FACTOR_ID, "factor26")
         self.assertEqual(FACTOR22_ID, "factor22")
         self.assertFalse(USE_FACTOR4)

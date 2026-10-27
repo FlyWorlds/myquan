@@ -187,7 +187,7 @@ def ziyang_codes() -> set[str]:
 
 
 def research_watchlist() -> list[dict[str, Any]]:
-    """默认研究宇宙 = 策略十六交易池（因子27 ∪ 公共自选），与盯盘默认 WATCHLIST 对齐。
+    """研究宇宙 = 策略十六因子27池 ∪ 公共自选；盯盘默认交易池已改回策略一。
 
     供 strategy 包内回测/优化脚本使用，禁止再从 holdingStocks 取池。
     """

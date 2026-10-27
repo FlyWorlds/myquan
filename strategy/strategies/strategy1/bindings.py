@@ -72,7 +72,7 @@ FACTOR_BINDINGS = (
         "factor16",
         label="龙头排序",
         role="entry",
-        filter_desc="f13_pass → OOS 闭环盈亏比/利润因子排序 → Top10 定盘池",
+        filter_desc="f13_pass → OOS 闭环盈亏比/利润因子排序 → Top20 定盘池",
         enabled=True,
     ),
     bind_factor(

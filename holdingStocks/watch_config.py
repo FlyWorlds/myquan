@@ -1,8 +1,9 @@
 """盯盘标的池与代码工具（唯一真源；index 从此处导入）。
 
-当前锁定：**默认策略 = 策略十六（核心龙头） = 因子27 + 因子26 + 因子29 + 因子2 + 因子22**。
-默认交易池：因子27 核心龙头近 3 个月冻结池 ∪ **公共自选池**（天通/凯盛/东材/金安，
-`SELF_WATCHLIST_PICKS`；策略一/十五/十六与 effective 并集均并入，非仅策略十六）。
+当前锁定：**默认策略 = 策略一（援军战法） = 因子13A + 因子16 定盘池 + 因子26 + 因子2 + 因子22**。
+默认交易池：策略一定盘池（13A→16 Top20）∪ **公共自选池**（天通/凯盛/东材/金安，
+`SELF_WATCHLIST_PICKS`；策略一/十五/十六与 effective 并集均并入）。
+策略十六遗留实仓继续按策略一卖出规则盯到平仓，卖出后清空、不回买。
 策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
 """
 
@@ -53,15 +54,15 @@ from strategy.watch_universe import (
     ziyang_codes,
 )
 
-# 默认定盘：策略十六 + 因子27/因子26/因子29/因子2（因子22 默认关）
-STRATEGY_ID = "strategy16"
+# 默认定盘：策略一 + 因子13A/16 定盘池 + 因子26/因子2/因子22
+STRATEGY_ID = "strategy1"
 FACTOR_ID = "factor26"
 FACTOR2_ID = "factor2"
 FACTOR22_ID = "factor22"
 FACTOR29_ID = "factor29"
 FACTOR4_ID = "factor4"
-STRATEGY_NAME = "策略十六·核心龙头"
-# 策略三（旧号策略七）才叠因子4；默认核心龙头关闭
+STRATEGY_NAME = "援军战法"
+# 策略三（旧号策略七）才叠因子4；默认策略一关闭
 USE_FACTOR4 = False
 
 # 早盘节点（A 股集合竞价 + 连续竞价）
@@ -696,17 +697,27 @@ def _position_user_designated(
 
 
 def portfolio_pool_codes(holdings: dict[str, Any]) -> list[str]:
-    """持仓池代码：portfolio_pool 显式列表 + 用户登记仓位 + 当日已实现。"""
+    """持仓池代码：默认策略池 + 遗留实仓 + 当日已实现/已平仓留痕。
+
+    策略十六等旧池空壳卖出后不再因残留 cost/buy_time 留在持仓宇宙。
+    """
     explicit_raw = holdings.get("portfolio_pool")
     explicit = (
         {code_key(str(c)) for c in explicit_raw}
         if isinstance(explicit_raw, list)
         else set()
     )
-    codes = set(explicit)
+    sw = strategy_watchlist_codes(holdings)
+    codes = set(explicit) | set(sw)
     for code, pos in (holdings.get("positions") or {}).items():
-        if isinstance(pos, dict) and _position_user_designated(pos, explicit, str(code)):
-            codes.add(code_key(str(code)))
+        if not isinstance(pos, dict):
+            continue
+        c = code_key(str(code))
+        if int(pos.get("qty") or 0) > 0:
+            codes.add(c)
+            continue
+        if c in sw and _position_user_designated(pos, explicit, str(code)):
+            codes.add(c)
     for code, rec in (holdings.get("realized_today") or {}).items():
         if rec:
             codes.add(code_key(str(code)))
@@ -717,19 +728,37 @@ def portfolio_pool_codes(holdings: dict[str, Any]) -> list[str]:
 
 
 def is_default_strategy_pool_code(code: str) -> bool:
-    """是否属于当前默认策略交易池（strategy16 时=核心龙头 watchlist）。"""
+    """是否属于当前默认策略交易池（strategy1 时=定盘池 ∪ 公共自选）。"""
     return code_key(code) in strategy_watchlist_codes()
 
 
-def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
-    """对齐默认策略池：剔除旧策略遗留空壳；保留实仓 / 当日已实现 / 用户有成本登记。
+def leftover_open_position_codes(holdings: dict[str, Any] | None = None) -> set[str]:
+    """不在默认策略池、但仍有实仓的遗留票（如策略十六旧仓）。"""
+    data = holdings or {}
+    sw = strategy_watchlist_codes(data)
+    out: set[str] = set()
+    for code, pos in (data.get("positions") or {}).items():
+        if not isinstance(pos, dict):
+            continue
+        c = code_key(str(code))
+        if not c or c in sw:
+            continue
+        if int(pos.get("qty") or 0) > 0:
+            out.add(c)
+    return out
 
-    换因子27 名单时：**qty>0 的持仓即使已不在新池也保留**，不得因换票砍仓。
+
+def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
+    """对齐默认策略池：剔除旧策略遗留空壳；保留实仓 / 当日已实现。
+
+    换默认池后：**qty>0 即使已不在新池也保留**，继续按策略一卖出规则盯到平仓。
+    策略十六等遗留票 **卖出后清空**，即使还留着成本/买入时间也不回买、不进预警。
     返回新的 portfolio_pool 列表（已写回 holdings）。
     """
     sw = strategy_watchlist_codes()
     positions = holdings.get("positions") or {}
     realized = holdings.get("realized_today") or {}
+    closed = holdings.get("closed_today") or {}
     keep: set[str] = set()
     for raw in holdings.get("portfolio_pool") or []:
         c = code_key(str(raw))
@@ -742,13 +771,15 @@ def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
             keep.add(c)
         elif c in realized and realized.get(c):
             keep.add(c)
-        elif (pos or {}).get("cost") is not None or (pos or {}).get("buy_time"):
+        elif c in closed and closed.get(c):
             keep.add(c)
-    # 实仓 / 当日已实现即使未写进列表也保留
     for code, pos in positions.items():
         if isinstance(pos, dict) and int(pos.get("qty") or 0) > 0:
             keep.add(code_key(str(code)))
     for code, rec in realized.items():
+        if rec:
+            keep.add(code_key(str(code)))
+    for code, rec in closed.items():
         if rec:
             keep.add(code_key(str(code)))
     pruned = sorted(keep)
@@ -785,8 +816,8 @@ def _name_for_code(code: str, holdings: dict[str, Any] | None = None) -> tuple[s
 def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str, Any]:
     """任意 A 股代码 → watch_item。
 
-    默认策略十六：开盘阈值只认 ``thr_2026.json``，否则 ``DEFAULT_PCT``。
-    不走策略一遗留池 ``WATCHLIST_STRATEGY1`` / ``_WATCH_PCT`` / 置顶名单里的 pct。
+    默认策略一：阈值优先 ``WATCHLIST_STRATEGY1`` / ``_WATCH_PCT`` / 置顶名单。
+    策略十六遗留实仓若无策略一阈值，再回退 ``thr_2026.json`` 或 ``DEFAULT_PCT``。
     """
     c = code_key(code)
     if STRATEGY_ID == "strategy16":
@@ -799,6 +830,10 @@ def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str
             return w
     name, _market = _name_for_code(c, holdings)
     pct = _WATCH_PCT.get(c, DEFAULT_PCT)
+    if c in leftover_open_position_codes(holdings) and c not in _WATCH_PCT:
+        thrs = load_strategy16_thr_map()
+        if c in thrs:
+            pct = float(thrs[c])
     return watch_item(c, name, pct=pct, limit_down_pct=limit_down_pct_of(c))
 
 
@@ -806,7 +841,10 @@ WATCHLIST = strategy_watchlist()
 
 
 def primary_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """热池：默认策略 + 公共自选 + 用户持仓。行情 SSE / 首屏优先。"""
+    """热池：默认策略一 + 公共自选 + 遗留实仓。行情 SSE / 首屏优先。
+
+    不再把整份因子27核心龙头池灌进热池。策略十六旧仓只在 qty>0 时继续盯卖。
+    """
     if holdings is None:
         try:
             from index import load_holdings
@@ -814,26 +852,20 @@ def primary_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, 
             holdings = load_holdings()
         except Exception:  # noqa: BLE001
             holdings = {}
-    base = strategy16_watchlist(holdings) if STRATEGY_ID == "strategy16" else strategy_watchlist()
+    base = strategy_watchlist(holdings)
     seen = {code_key(w["code"]) for w in base}
     out = list(base)
-    for code in core_leader_codes():
+    leftover_src = "legacy_strategy16" if STRATEGY_ID == "strategy1" else "legacy_holding"
+    leftover_label = "策略16遗留" if STRATEGY_ID == "strategy1" else "遗留持仓"
+    for code in leftover_open_position_codes(holdings):
         if code in seen:
             continue
         seen.add(code)
         item = meta_for_code(code, holdings)
-        item["universe"] = "strategy16"
-        thr = load_strategy16_thr_map().get(code)
-        if thr is not None:
-            item["pct"] = float(thr)
-            item["entry_pct"] = float(thr)
-            item["stop_pct"] = float(DEFAULT_PCT)
+        item["universe"] = leftover_src
+        item["pool_src"] = leftover_src
+        item["池来源"] = leftover_label
         out.append(item)
-    for code in portfolio_pool_codes(holdings):
-        if code in seen:
-            continue
-        seen.add(code)
-        out.append(meta_for_code(code, holdings))
     return merge_self_watchlist(out, holdings)
 
 

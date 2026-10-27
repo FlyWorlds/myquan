@@ -1,4 +1,4 @@
-"""策略隔离：各策略绑定独立，默认策略16，基础算法不含策略编号。"""
+"""策略隔离：各策略绑定独立，默认策略1，基础算法不含策略编号。"""
 
 from __future__ import annotations
 
@@ -21,11 +21,11 @@ from strategy.strategies.strategy16.decision import Strategy16Decision
 from watch_config import FACTOR_ID, STRATEGY_ID
 
 
-def test_default_watch_strategy_is_16():
-    assert STRATEGY_ID == "strategy16"
+def test_default_watch_strategy_is_1():
+    assert STRATEGY_ID == "strategy1"
     assert FACTOR_ID == "factor26"
-    assert get_strategy_spec("strategy16").meta.get("default") is True
-    assert get_strategy_spec("strategy1").meta.get("default") is False
+    assert get_strategy_spec("strategy1").meta.get("default") is True
+    assert get_strategy_spec("strategy16").meta.get("default") is False
 
 
 def test_strategy16_does_not_share_binding_params_with_strategy1():

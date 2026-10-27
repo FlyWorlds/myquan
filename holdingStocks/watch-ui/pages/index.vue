@@ -322,7 +322,7 @@ watch(
       .filter((row) => !taken.has(String(row.代码 || '')))
       .map((row) => Number(row.持仓 || 0) > 0 ? { ...row, 置顶: true } : row)
     const quotes = new Map<string, HoldingRow>()
-    for (const row of [...(snap?.strategy1 || []), ...(snap?.strategy16 || [])]) {
+    for (const row of [...(snap?.holdings || []), ...(snap?.strategy1 || [])]) {
       const code = String(row.代码 || '')
       if (code && !quotes.has(code)) quotes.set(code, row)
     }

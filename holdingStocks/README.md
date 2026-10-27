@@ -1,10 +1,10 @@
 # 持仓盯盘
 # 浏览器打开：http://127.0.0.1:3000/
 
-本地持仓记录 + 盘中盯盘：**与默认策略十六（因子27 + 因子26 + 因子2 + 因子22）同步**。
+本地持仓记录 + 盘中盯盘：**与默认策略一（因子13A + 因子16 + 因子26 + 因子2 + 因子22）同步**。策略十六遗留实仓卖出后清空、不回买。
 
 **行情分层（可扩至数百只观察池）**：
-- **热池**（持仓 + 默认策略十六 + 自选，硬帽 ≤48）：东财 SSE + 新浪（约 1s）；走完整 `collect_rows` 信号/四槽。
+- **热池**（持仓 + 默认策略一 + 自选，硬帽 ≤48）：东财 SSE + 新浪（约 1s）；走完整 `collect_rows` 信号/四槽。策略十六遗留实仓仍进热池直到卖出。
 - **叠加观察池**（如紫阳真君，可 100～500+）：**独立后台**新浪分块轮询（约 3s/轮）；**不占 SSE、不进信号扫描、不挡启动**；Tab 只展示现价/涨幅等轻量行。
 - **现价快刷**：独立线程约 **0.4s** 把最新 tick 写进快照（现价/涨跌幅/持仓市值盈亏）并 WS 推送，**不重跑** `collect_rows`；买卖信号/入槽仍按原扫描节奏。预警卡片进过预警线后留在原位，宽屏一行四张；红色表示当前仍在线内，灰色表示暂时离开；卡片写明买入预警价。触买只显示「触买」和触发时间，按时间从早到晚排，当天颜色固定，不写槽满或当日额度。策略表按首次出现的顺序固定，每行固定高度，状态不再把行撑开。条件单说明只用中文状态，不再把英文 `FILLED` 写进卡片。
 - 同花顺/通达信是专有推送；免费 HTTP 源不能「一只票一条长连接」，否则 500 只根本起不来。
@@ -15,28 +15,28 @@
 
 **架构（Realtime First，2026-09-24）**：生产卖出以 **实时 quote/trade** 驱动 HWM / trailing / Factor26（不等 1m close）；正式验证回测用 **1m OHLC**（`PRIORITY_ENVELOPE`，不伪造 tick 序）。共享策略语义、不共享市场分辨率。合同 [`docs/TRADING_ENGINE_CONTRACT.md`](../docs/TRADING_ENGINE_CONTRACT.md)；回归 `python holdingStocks/run_regression_tests.py`。
 
-## 策略锁定 · 策略十六（因子27 + 因子26 + 因子2 + 因子22）
+## 策略锁定 · 策略一（因子13A + 因子16 + 因子26 + 因子2 + 因子22）
 
 - **买（因子26）**：开盘阈值 `high ≥ ceil(open×(1+entry))`；前日阴线或小阳；禁双阳跨日≥5%；T+1。**触达按 1 分钟顺序**
 - **卖（因子26）**：亏损≥2.5%硬保护（低开已破按开盘卖）；买入日收盘<3%记到次日按隔夜高点回落2.5%（不得低于买点硬保护；**昨收/昨高只经 `overnight_peak_px`，仅昨日策略持有或策略买入才并入**）；中赚（>3%且<10%）回落一半与动态高点回落 0.5×近20日日频σ 谁先碰到走谁；大赚阶梯 **10% 半仓** / 15% 全清，其后峰值回落2%清。**盯盘 10% 记减半**（`tp_stage` + `last_tp_ts`，信号「半仓止盈」；不接券商，人工按信号下单）。买入日盈利≥3%不记、其余都记；**触达按 1 分钟 K 顺序**（`first_session_exit_fill`，无个股特例）；策略回放近 **7** 交易日 1m；定盘池短窗回测见 `backtest/strategy1_pool_1m/`
 - **选股/过滤**：日线（阴小阳、双阳）；**因子2 回撤**日线权益预警（不注资）
 - **因子2**：账户回撤加减仓**预警**（**不自动改现金**）
 - **因子22**：研究路径保留；**三槽执行下，当日止损/已记卖出的标的当日通常禁再买**（不再用因子22 同日回补该票）。**策略十六例外**：前一日止损已记、次日竞价低开走开盘保护全清后，当天过门触买允许回补（仍占当日新增额度）
-- **纸面持仓（Capital V2）**：同时最多 **5** 只；每个交易日最多新开 **2** 个 symbol；单票入场目标 ≤ 权益 **20%**；BUY 受可用现金约束（不得买成负现金）；禁止加仓。**仅当前默认策略池入槽**（换池后空槽只买新因子27∪自选）；**已有实仓不因掉出因子27 强平**，卖出仍走因子26 / T+1。**先平再买**。平仓腾总槽但不恢复当日新增额度。成交价：平仓前已触买且现价≤买点+1%→现价，否则新触发→买点（买点须 ≥ 当日最低；开盘低于今低则未核定、不成交）。
-- 交易池：**因子27 选股池** ∪ **公共自选池**（天通/凯盛/东材/金安 · `SELF_WATCHLIST_PICKS`；策略一/十五/十六与盯盘并集均并入）
-- 参数与 `strategy16` / `pullback_wave_stop` 同源；`USE_FACTOR4=False`（不叠牛市止损）
+- **纸面持仓（Capital V2）**：同时最多 **5** 只；每个交易日最多新开 **2** 个 symbol；单票入场目标 ≤ 权益 **20%**；BUY 受可用现金约束（不得买成负现金）；禁止加仓。**仅当前默认策略池入槽**（换池后空槽只买策略一定盘池∪自选）；**已有策略十六实仓不因掉池强平**，卖出仍走因子26 / T+1，卖出后清空、不回买。**先平再买**。平仓腾总槽但不恢复当日新增额度。成交价：平仓前已触买且现价≤买点+1%→现价，否则新触发→买点（买点须 ≥ 当日最低；开盘低于今低则未核定、不成交）。
+- 交易池：**策略一定盘池（13A→16 Top20）** ∪ **公共自选池**（天通/凯盛/东材/金安 · `SELF_WATCHLIST_PICKS`）
+- 参数与 `strategy1` / `pullback_wave_stop` 同源；`USE_FACTOR4=False`（不叠牛市止损）
 
-完整规则：`from strategy import get_strategy; print(get_strategy("strategy16").print_rules())`
+完整规则：`from strategy import get_strategy; print(get_strategy("strategy1").print_rules())`
 
-## 默认定盘宇宙（因子27 ∪ 公共自选池）
+## 默认定盘宇宙（策略一定盘池 ∪ 公共自选池）
 
 编辑 **`watch_config.py`**：
-- **因子池**：刷新 `picks_quarter.json`（`python strategy/run_core_leader_pool.py`）
-- **公共自选池**：改 `SELF_WATCHLIST_PICKS`（旧名 `STRATEGY16_EXTRA_PICKS` 仍兼容；**全策略共用**，非仅策略十六）。「选股/池名单」在策略 Tab **底部折叠面板**（默认收起，展开后按分类 Tab 查看）；上方实时信号表整表展示。
+- **因子池**：策略一定盘池见 `backtest/s1_f13_refit_2025/summary.json`（13A→16 Top20）
+- **公共自选池**：改 `SELF_WATCHLIST_PICKS`（旧名 `STRATEGY16_EXTRA_PICKS` 仍兼容；**全策略共用**）。「选股/池名单」在策略 Tab **底部折叠面板**（默认收起，展开后按分类 Tab 查看）；上方实时信号表整表展示。
 
-**当前**：因子27 as_of **2026-09-30**（30只 / 18概念，有效至 2026-12-30，见 [`docs/FACTOR27.md`](../docs/FACTOR27.md)）+ 自选四票；剔ST/百元股/科创/创业。换池后空槽只买新名单，**实仓不因掉池强平**。改池后在根目录 `bash start.sh --restart`；分开启动时在原终端重启 Python。
+**当前**：策略一定盘池 as_of **2026-09-02**（20只）+ 自选四票；主板剔ST/百元股。策略十六旧仓卖出后清空。改池后在根目录 `bash start.sh --restart`；分开启动时在原终端重启 Python。
 
-回测产物：`backtest/strategy16_core_leader/`。**策略十六开盘阈值**只认 `thr_2026.json`（缺省 `DEFAULT_PCT=2.5%`），不走策略一遗留 `_WATCH_PCT` / 置顶名单里的 pct。
+回测产物：`backtest/s1_f13_refit_2025/`。**策略一开盘阈值**优先 `_WATCH_PCT` / 置顶名单；策略十六遗留实仓若无策略一阈值再回退 `thr_2026.json`。
 
 **持仓补盯盘**（`PORTFOLIO_PINNED_WATCHLIST`，即使不在默认池也继续展示；策略十六下 **pct 不覆盖** `thr_2026`）：
 
@@ -60,7 +60,7 @@ WATCHLIST = list(S7_WATCHLIST)
 
 ## 信号触发规则（盘中对齐回测）
 
-**盯盘 Tab**：仅 **策略1 / 策略3 / 策略8 / 策略15 / 策略16**（有实时面板）。**策略16** 开盘买入阈值来自 `backtest/strategy16_core_leader/thr_2026.json`（2026 至今日线 {2/2.5/3}% 夏普择优；卖仍因子26 硬保护 2.5%）。**策略说明**按盯盘 / 完整 / 因子组合 / 研究分区；缠论笔盈亏比在 **`/factors` → 缠论**。
+**盯盘 Tab**：仅 **策略1 / 策略3 / 策略8 / 策略15 / 策略16**（有实时面板）。**默认交易池是策略1**；策略16 仅观察。**策略说明**按盯盘 / 完整 / 因子组合 / 研究分区；缠论笔盈亏比在 **`/factors` → 缠论**。
 
 | 时刻 | 行为 |
 |------|------|
@@ -117,7 +117,7 @@ cd holdingStocks && python run_regression_tests.py
 
 **Paper 卖出**：`paper_exit_decision` 当前 **Unified Primary**（`USE_UNIFIED_EXIT_ENGINE=True`），Legacy 只做 Shadow / fallback（`SHADOW_UNIFIED_EXIT_ENGINE=True`）。Shadow 比较不成交、不发微信。
 
-**微信推送（N1）**：预警与成交分模板。扫描只发 **【策略预警】**（将买入 / 已触买未成交 / 槽满 / 将止损 / T+1 暂不可卖 / 跌停不可卖）；**真实 paper 成交**在 `apply_paper_slot_buy` / `apply_exit_fill` 写入仓位与 ledger 之后发 **【模拟买入】** / **【模拟卖出】**（含 reason_code：WORKING_STOP / OPEN_PROTECT / PATH / HALF / EOD_RESERVE）。已成交事件不再被扫描重复推。预警扫描仅默认策略池（strategy16）；实仓 SELL 即使已离开默认池仍推成交通知。Shadow 不发微信。**非交易日**（周末/交易所休市）`is_signal_window` 为假，扫描预警不推、不自动成交；启动「盯盘启动完成」仍可能发一条。根目录 `bash start.sh --no-wechat` / `watch --no-wechat`：**预警与买卖成交都不推**，不影响 paper execution。
+**微信推送（N1）**：预警与成交分模板。扫描只发 **【策略预警】**（将买入 / 已触买未成交 / 槽满 / 将止损 / T+1 暂不可卖 / 跌停不可卖）；**真实 paper 成交**在 `apply_paper_slot_buy` / `apply_exit_fill` 写入仓位与 ledger 之后发 **【模拟买入】** / **【模拟卖出】**（含 reason_code：WORKING_STOP / OPEN_PROTECT / PATH / HALF / EOD_RESERVE）。已成交事件不再被扫描重复推。预警扫描仅默认策略池（strategy1）；实仓 SELL 即使已离开默认池仍推成交通知。Shadow 不发微信。**非交易日**（周末/交易所休市）`is_signal_window` 为假，扫描预警不推、不自动成交；启动「盯盘启动完成」仍可能发一条。根目录 `bash start.sh --no-wechat` / `watch --no-wechat`：**预警与买卖成交都不推**，不影响 paper execution。
 
 **会话失效自动恢复**：`prepare failed` / `ret=-2` 识别为 `SESSION_INVALID`（不空转重试）。盘中改为异步入队（daemon worker），暂停出站并将通知写入有限 pending（同票同预警类型去重）；轮询 `~/.openclaw/openclaw-weixin/accounts/*.context-tokens.json` 的 mtime，检测到 inbound 刷新后再探测发送并 flush。持续失效超过约 5 分钟只打一次 `[WECHAT][ACTION REQUIRED]`。OpenClaw 发送与恢复不阻塞行情/策略/paper。
 

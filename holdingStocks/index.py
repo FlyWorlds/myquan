@@ -1,15 +1,15 @@
-"""持仓记录与盯盘：与默认核心策略（strategy16）同步。
+"""持仓记录与盯盘：与默认核心策略（strategy1）同步。
 
-策略锁定 · 策略十六：
+策略锁定 · 策略一：
   · 买（因子26）：开盘阈值 ceil(open×(1+entry))；前日阴/小阳；禁双阳；T+1
   · 卖（因子26）：硬保护2.5%；中赚3–10%回落一半与0.5×20日日频σ谁先到走谁；阶梯10%/15%；未到3%次日峰值回落2.5%；实时按报价，独立回测按分钟
   · 因子2：账户回撤加减仓预警（不自动改现金）
-  · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
-    （例外：前一日止损已记 + 次日竞价低开开盘保护卖出后，过门触买允许当日回补）
-  · **仓位**：沿用 watch_config 数量与资金配置；策略16按报价接收的触发顺序竞争空槽，不由全量扫描选先后
+  · 因子22：收盘动量路径保留；**三槽执行：当日止损/已记卖出的标的当日禁再买**
+  · **仓位**：沿用 watch_config 数量与资金配置；默认池按策略一扫描顺序竞争空槽
   · 9:15 清空非实仓盯盘状态；**9:15–9:30 竞价不算买卖/动态止盈、不回写峰值**；9:25 起算阈值并可挂单；9:30 起触发结算
-  · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票通常不可再待买入（隔夜已记+竞价低开除外）
-  · 默认交易宇宙：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用，见 watch_config.SELF_WATCHLIST_PICKS）
+  · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票通常不可再待买入
+  · 默认交易宇宙：策略一定盘池（因子13A→因子16 Top20）∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）
+  · 策略十六遗留实仓继续按策略一卖出规则盯到平仓，卖出后清空、不回买
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
   · 运行时分叉：本文件 collect_rows() **不**调用 get_decision_engine()；
     registry/bindings 供回测。改 bindings 后须同步本文件 FACTOR_ID 分支
@@ -276,19 +276,19 @@ from watch_buy_signal import (
     is_buy_signal_active as _buy_signal_active,
 )
 
-# 盯盘与回测共用：默认策略十六 = 因子27 + 因子26 + 因子2 + 因子22
+# 盯盘与回测共用：默认策略一 = 因子13A + 因子16 + 因子26 + 因子2 + 因子22
 # 默认交易池唯一真源：watch_config.WATCHLIST
 FACTOR2_ID = "factor2"
 
 _STRATEGY_FACTORS_LABEL = (
     "因子1买卖 + 因子4牛市持股"
     if USE_FACTOR4
-    else "因子27核心龙头池 + 因子26多层止盈 + 因子2回撤预警 + 因子22收盘动量"
+    else "因子13A质量带 + 因子16龙头排序 + 因子26多层止盈 + 因子2回撤预警 + 因子22收盘动量"
 )
 _STRATEGY_SYNC_NOTE = (
     "与 strategy3/strategy4 bindings / bull_regime 同源"
     if USE_FACTOR4
-    else "与 strategy16 bindings / pullback_wave_stop 同源"
+    else "与 strategy1 bindings / pullback_wave_stop 同源"
 )
 
 
@@ -474,7 +474,7 @@ def _holding_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str,
 def _scan_watchlist(
     holdings: dict[str, Any] | None = None, *, full: bool = False
 ) -> list[dict[str, Any]]:
-    """信号扫描：热池（默认交易）∪ 策略一盯盘池。
+    """信号扫描：热池（默认策略一 + 遗留实仓）。
 
     紫阳等大观察池不进此名单（独立轻量行情）。
     冷启动阶段（``_WATCH_BOOT_PRIMARY_ONLY``）只返回热池，``full=True`` 强制全量。
@@ -5765,7 +5765,7 @@ def _apply_portfolio_slots(
             continue
         if bool(r.get("当日禁买")) and not r.get("隔夜竞价回买"):
             continue
-        # 只从当前默认策略池入场（strategy16=核心龙头）；旧 portfolio_pool 遗留票不买
+        # 只从当前默认策略池入场（strategy1=定盘池）；策略十六遗留票卖出后不回买
         if code not in strategy_codes:
             if _row_hit_buy(r):
                 note = str(r.get("挂单说明") or "")
@@ -8844,16 +8844,26 @@ def collect_rows(
             f26_buy = official_buy_trigger(
                 official_open, entry_pct=entry_pct, tick=tick
             )
-            f29 = _apply_factor29_auction(
-                quote=q,
-                sticky=sticky,
-                code=code,
-                session=str(q["session"]),
-                official_open=official_open,
-                entry_pct=float(entry_pct),
-                tick=tick,
-                qty=qty_early,
-            )
+            if STRATEGY_ID == "strategy16":
+                f29 = _apply_factor29_auction(
+                    quote=q,
+                    sticky=sticky,
+                    code=code,
+                    session=str(q["session"]),
+                    official_open=official_open,
+                    entry_pct=float(entry_pct),
+                    tick=tick,
+                    qty=qty_early,
+                )
+            else:
+                f29 = {
+                    "path": {},
+                    "sig": {},
+                    "fill": None,
+                    "hit_buy": False,
+                    "hit_sell": False,
+                    "label": "",
+                }
             official_buy = f26_buy
             if official_buy:
                 open_buy = float(official_buy)
