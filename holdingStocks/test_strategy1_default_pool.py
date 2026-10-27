@@ -130,13 +130,16 @@ def test_holdings_tab_alerts_only_strategy1() -> None:
     assert int(held[0].get("持仓") or 0) == 400
 
 
-def test_quote_driven_is_shared_factor29_stays_strategy16() -> None:
+def test_quote_driven_and_factor29_on_strategy1() -> None:
     assert STRATEGY_ID == "strategy1"
     assert QUOTE_DRIVEN_ENABLED is True
     assert quote_driven_enabled() is True
-    assert factor29_auction_enabled() is False
+    assert factor29_auction_enabled() is True
     from condition_buy import make_order
+    from strategy.registry import get_strategy_bindings
 
+    ids = {b.factor_id for b in get_strategy_bindings("strategy1") if b.enabled}
+    assert "factor29" in ids
     rec = make_order(
         code="002104",
         session="2026-10-28",
@@ -174,6 +177,6 @@ if __name__ == "__main__":
     test_leftover_strategy16_held_until_sold()
     test_leftover_strategy16_cleared_after_sell()
     test_holdings_tab_alerts_only_strategy1()
-    test_quote_driven_is_shared_factor29_stays_strategy16()
+    test_quote_driven_and_factor29_on_strategy1()
     test_watch_tabs_strategy1_then_strategy16()
     print("ok")

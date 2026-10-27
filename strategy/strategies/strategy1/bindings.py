@@ -76,6 +76,17 @@ FACTOR_BINDINGS = (
         enabled=True,
     ),
     bind_factor(
+        "factor29",
+        label="竞价末段强度",
+        role="both",
+        threshold_source="watch_item_entry_pct",
+        window_start="09:20:00",
+        window_end="09:25:00",
+        execution="official_open_after_single_stock_audit",
+        filter_desc="9:20后首个有效指示价为基准，撮合前按个股阈值对称武装买卖；9:25单股复核后按正式开盘撮合，卖出遵守T+1",
+        enabled=True,
+    ),
+    bind_factor(
         "factor22",
         label="收盘动量",
         role="entry",

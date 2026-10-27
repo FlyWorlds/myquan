@@ -16,7 +16,7 @@
 | 决策 | `decision.py` | `MarketContext` → buy/sell/hold |
 | 执行 | `runner.py` / `backtest.py` / 盯盘 | 回测、下单模拟、预警 |
 
-**实盘盯盘默认**：**策略一选股 = 因子13A→因子16 定盘池**；买卖执行 = **因子26 多层止盈 + 报价驱动（公共）+ 因子2 预警 + 因子22**（因子2 回测不注资）。因子29 仍只挂策略十六。策略十六遗留实仓卖出后清空、不回买。算法审核见 [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md)。
+**实盘盯盘默认**：**策略一选股 = 因子13A→因子16 定盘池**；买卖执行 = **因子26 多层止盈 + 因子29 竞价末段 + 报价驱动（公共）+ 因子2 预警 + 因子22**（因子2 回测不注资）。策略十六遗留实仓卖出后清空、不回买。算法审核见 [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md)。
 
 **动态选股（研究，已锁定）**：**因子13 · 熊市盾牌 thr\* Top3**，见 [`FACTOR13.md`](FACTOR13.md)。
 
@@ -34,6 +34,10 @@
 - 真源：`strategy/pullback_wave_stop.py`（`eval_multi_tp_bar`）、`strategy/factors/factor26.py`。
 - 池回测研究对照：`--buy-mode open_or_attack` 可加回攻击波（默认只买开盘涨到 `ceil(开盘×(1+entry_pct))`）。
 - 因子1（`open_break.py`）仍供策略三/四/八等复用，已非策略一主因子。
+
+### 因子29 · 竞价末段
+
+- 与策略十六同一套规则：仅 9:20–9:25 指示路径达个股阈值则武装，成交价=正式开盘。未武装仍走因子26。阈值用策略一 `_WATCH_PCT` / 默认 2.5%。见 [`FACTOR29.md`](FACTOR29.md)。
 
 ### 因子2 · 回撤预警
 

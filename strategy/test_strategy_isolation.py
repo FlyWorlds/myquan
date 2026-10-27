@@ -45,7 +45,9 @@ def test_strategy16_universe_independent_of_strategy1():
     ids1 = {b.factor_id for b in get_strategy_bindings("strategy1")}
     ids16 = {b.factor_id for b in get_strategy_bindings("strategy16")}
     assert "factor13a" in ids1 and "factor16" in ids1
+    assert "factor29" in ids1
     assert "factor27" in ids16
+    assert "factor29" in ids16
     assert "factor13a" not in ids16
     assert "factor27" not in ids1
 

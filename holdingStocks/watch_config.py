@@ -1,10 +1,10 @@
 """盯盘标的池与代码工具（唯一真源；index 从此处导入）。
 
-当前锁定：**默认策略 = 策略一（援军战法） = 因子13A + 因子16 定盘池 + 因子26 + 因子2 + 因子22**。
+当前锁定：**默认策略 = 策略一（援军战法） = 因子13A + 因子16 定盘池 + 因子26 + 因子29 + 因子2 + 因子22**。
 默认交易池：策略一定盘池（13A→16 Top20）∪ **公共自选池**（天通/凯盛/东材/金安，
 `SELF_WATCHLIST_PICKS`；策略一/十五/十六与 effective 并集均并入）。
 策略十六遗留实仓继续按策略一卖出规则盯到平仓，卖出后清空、不回买。
-报价驱动是盯盘公共执行（`QUOTE_DRIVEN_ENABLED`），不随选股策略绑定；因子29 仍只挂策略十六。
+报价驱动是盯盘公共执行（`QUOTE_DRIVEN_ENABLED`），不随选股策略绑定；因子29 已挂策略一与策略十六。
 策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
 """
 
@@ -55,7 +55,7 @@ from strategy.watch_universe import (
     ziyang_codes,
 )
 
-# 默认定盘：策略一 + 因子13A/16 定盘池 + 因子26/因子2/因子22
+# 默认定盘：策略一 + 因子13A/16 定盘池 + 因子26/因子29/因子2/因子22
 STRATEGY_ID = "strategy1"
 FACTOR_ID = "factor26"
 FACTOR2_ID = "factor2"
@@ -74,9 +74,12 @@ def quote_driven_enabled() -> bool:
     return bool(QUOTE_DRIVEN_ENABLED)
 
 
+FACTOR29_STRATEGY_IDS = frozenset({"strategy1", "strategy16"})
+
+
 def factor29_auction_enabled() -> bool:
-    """因子29 竞价末段开盘撮合仍只挂策略十六，不是报价驱动公共项。"""
-    return str(STRATEGY_ID) == "strategy16"
+    """当前默认策略是否挂了因子29 竞价末段开盘撮合（策略一 / 十六）。"""
+    return str(STRATEGY_ID) in FACTOR29_STRATEGY_IDS
 
 # 早盘节点（A 股集合竞价 + 连续竞价）
 AUCTION_START_HOUR = 9

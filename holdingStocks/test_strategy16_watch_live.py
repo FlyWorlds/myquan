@@ -176,7 +176,7 @@ class TestStrategy16DefaultWiring(unittest.TestCase):
         from watch_config import factor29_auction_enabled, quote_driven_enabled
 
         self.assertTrue(quote_driven_enabled())
-        self.assertFalse(factor29_auction_enabled())
+        self.assertTrue(factor29_auction_enabled())
 
     def test_bindings_factor22_off_factor26_on(self) -> None:
         from strategy import get_strategy
