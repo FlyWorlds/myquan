@@ -2,7 +2,8 @@
 
 策略锁定 · 策略一：
   · 买（因子26）：开盘阈值 ceil(open×(1+entry))；前日阴/小阳；禁双阳；T+1
-  · 卖（因子26）：硬保护2.5%；中赚3–10%回落一半与0.5×20日日频σ谁先到走谁；阶梯10%/15%；未到3%次日峰值回落2.5%；实时按报价，独立回测按分钟
+  · 卖（因子26）：硬保护2.5%；中赚3–10%回落一半与0.5×20日日频σ谁先到走谁；阶梯10%/15%；未到3%次日峰值回落2.5%
+  · **报价驱动**（盯盘公共，与选股解耦）：实时用已确认报价买卖，不拉 1m；独立回测仍按分钟。因子29 竞价开盘撮合仍只挂策略十六
   · 因子2：账户回撤加减仓预警（不自动改现金）
   · 因子22：收盘动量路径保留；**三槽执行：当日止损/已记卖出的标的当日禁再买**
   · **仓位**：沿用 watch_config 数量与资金配置；默认池按策略一扫描顺序竞争空槽
@@ -182,6 +183,8 @@ from watch_config import (
     OPEN_PRICE_REFRESH_MINUTE,
     STRATEGY_ID,
     STRATEGY_NAME,
+    factor29_auction_enabled,
+    quote_driven_enabled,
     STRATEGY_PNL_START,
     PAPER_PNL_START,
     USE_FACTOR4,
@@ -338,7 +341,7 @@ _REPLAY_1M_DAYS = 7
 def _m1_lookback_bars(sina: str, *, session: str) -> pd.DataFrame:
     """近若干日 1 分钟（东财一次返回约 5～8 日），供 7 日回放。"""
     if _CONDITION_BUY_ACTIVE:
-        raise RuntimeError("策略16实时进程禁止分钟回放；请在独立回测进程运行")
+        raise RuntimeError("报价驱动实时进程禁止分钟回放；请在独立回测进程运行")
     key = f"lookback:{str(sina).lower()}"
     now = time.monotonic()
     hit = _M1_CACHE.get(key)
@@ -3179,7 +3182,7 @@ def _ensure_signal_day_caches(*, force: bool = False) -> str:
 def _today_1m_bars(sina: str, session: str, *, force: bool = False) -> pd.DataFrame:
     """拉取并缓存当日 1 分钟 K（未复权），供因子26 多层止盈 path-dependent 判定。"""
     if _CONDITION_BUY_ACTIVE:
-        raise RuntimeError("策略16实时进程禁止拉取分钟K线；请在独立回测进程运行")
+        raise RuntimeError("报价驱动实时进程禁止拉取分钟K线；请在独立回测进程运行")
     key = str(sina).lower()
     now = time.monotonic()
     hit = _M1_CACHE.get(key)
@@ -8120,7 +8123,7 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     session / 涨跌幅一律相对 ``trading_session_date``，禁止沿用上一交易日 day change。
     """
     if _CONDITION_BUY_ACTIVE:
-        raise RuntimeError("策略16实时进程禁止分钟行情拼接；请使用报价缓存")
+        raise RuntimeError("报价驱动实时进程禁止分钟行情拼接；请使用报价缓存")
     today = str(trading_session_date())
     spot = fetch_sina_spot(sina)
 
@@ -8517,7 +8520,7 @@ def _collect_quote_runtime_rows(get_quote=None):
         row.update({"持仓": int(pos.get("qty") or 0), "成本": pos.get("cost"),
             "买入时间": pos.get("buy_time"), "持仓最高": pos.get("peak_high"),
             "持仓最高时间": pos.get("peak_high_at"), "pool_src": w.get("pool_src"),
-            "池来源": w.get("池来源") or ("自选" if w.get("self_watch") else "因子27"),
+            "池来源": w.get("池来源") or ("自选" if w.get("self_watch") else "策略池"),
             "_slot_meta": slot_meta(data), "_paper_read_model": model, "报价驱动": True,
             "持仓状态": held_position_status(pos.get("buy_time"), day) if int(pos.get("qty") or 0) > 0 else "空仓",
             "已触买": "否", "已触止损": "否", "阈值就绪": False,
@@ -8843,7 +8846,7 @@ def collect_rows(
             f26_buy = official_buy_trigger(
                 official_open, entry_pct=entry_pct, tick=tick
             )
-            if STRATEGY_ID == "strategy16":
+            if factor29_auction_enabled():
                 f29 = _apply_factor29_auction(
                     quote=q,
                     sticky=sticky,
@@ -12619,7 +12622,6 @@ def _pull_remote_holdings_for_watch() -> None:
 def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dict[str, Any] | None:
     """Prepare from completed daily cache and audited open; never run minute replay."""
     from condition_buy import make_order
-    from strategy.factors.factor29 import merge_auction_path, signal as auction_signal
 
     day = str(trading_session_date())
     if not calendar_is_trading_day() or not is_threshold_ready(now) or q.get("session") != day:
@@ -12641,20 +12643,26 @@ def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dic
     audit = audit_single_stock_open(code=w["code"], expected_open=official, session=day, tick=tick)
     if not audit.get("ok"):
         return None
-    saved_book = (_HOLDINGS_CACHE.get("data") or {}).get("condition_buy_orders") or {}
-    saved_order = (saved_book.get("orders") or {}).get(w["code"], {}) if saved_book.get("session") == day else {}
-    path = merge_auction_path(quote=q, sticky={"f29_path": saved_order.get("auction_path") or {}}, session=day)
-    f29 = auction_signal(baseline_px=path.get("baseline"), auction_high=path.get("high"),
-                         auction_low=path.get("low"), threshold_pct=entry, tick=tick)
     prepared_now = datetime.now()
-    auction = prepared_now.strftime("%H:%M:%S") < "09:30:00" and bool(f29.get("hit_buy"))
+    path: dict[str, Any] = {}
+    auction = False
+    if factor29_auction_enabled():
+        from strategy.factors.factor29 import merge_auction_path, signal as auction_signal
+
+        saved_book = (_HOLDINGS_CACHE.get("data") or {}).get("condition_buy_orders") or {}
+        saved_order = (saved_book.get("orders") or {}).get(w["code"], {}) if saved_book.get("session") == day else {}
+        path = merge_auction_path(quote=q, sticky={"f29_path": saved_order.get("auction_path") or {}}, session=day)
+        f29 = auction_signal(baseline_px=path.get("baseline"), auction_high=path.get("high"),
+                             auction_low=path.get("low"), threshold_pct=entry, tick=tick)
+        auction = prepared_now.strftime("%H:%M:%S") < "09:30:00" and bool(f29.get("hit_buy"))
     price = official if auction else official_buy_trigger(official, entry_pct=entry, tick=tick)
     if not price:
         return None
     armed = prepared_now.isoformat(sep=" ", timespec="microseconds")
     order = make_order(code=w["code"], session=day, open_px=official, price=float(price),
                        entry_pct=entry, tick=tick, armed_at=armed, quote_at=str(q.get("last_ts") or ""),
-                       name=w["name"], market=w["market"], kind="auction_open" if auction else "breakout")
+                       name=w["name"], market=w["market"], kind="auction_open" if auction else "breakout",
+                       strategy=str(STRATEGY_ID))
     order.update(gate=gate, previous_shape=shape, previous_close=q.get("prev_close"), open_audit_at=audit.get("quote_ts"),
                  limit_up_pct=_watch_limit_down_pct(w), auction_path=path if auction else None,
                  daily_sig=_daily_frame_sig(cached[1]))
@@ -13179,7 +13187,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         sina_interval=1.0,
     )
     _watch_feed = feed
-    _CONDITION_BUY_ACTIVE = str(STRATEGY_ID) == "strategy16"
+    _CONDITION_BUY_ACTIVE = quote_driven_enabled()
     _CONDITION_VERIFIED_IDS.clear()
     _QUOTE_EXIT_OBSERVED.clear()
     _QUOTE_RUNTIME_PANELS.clear()

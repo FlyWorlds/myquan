@@ -12,11 +12,14 @@ for p in (str(ROOT), str(HS)):
         sys.path.insert(0, p)
 
 from watch_config import (  # noqa: E402
+    QUOTE_DRIVEN_ENABLED,
     STRATEGY_ID,
+    factor29_auction_enabled,
     leftover_open_position_codes,
     portfolio_pool_codes,
     primary_watchlist,
     prune_portfolio_pool,
+    quote_driven_enabled,
     strategy1_codes,
     strategy_watchlist_codes,
 )
@@ -127,6 +130,29 @@ def test_holdings_tab_alerts_only_strategy1() -> None:
     assert int(held[0].get("持仓") or 0) == 400
 
 
+def test_quote_driven_is_shared_factor29_stays_strategy16() -> None:
+    assert STRATEGY_ID == "strategy1"
+    assert QUOTE_DRIVEN_ENABLED is True
+    assert quote_driven_enabled() is True
+    assert factor29_auction_enabled() is False
+    from condition_buy import make_order
+
+    rec = make_order(
+        code="002104",
+        session="2026-10-28",
+        open_px=10.0,
+        price=10.25,
+        entry_pct=0.025,
+        tick=0.01,
+        armed_at="2026-10-28 09:25:01",
+        quote_at="2026-10-28 09:25:00",
+        name="恒宝",
+        market="SZ",
+    )
+    assert rec["strategy"] == "strategy1"
+    assert rec["kind"] == "breakout"
+
+
 def test_watch_tabs_strategy1_then_strategy16() -> None:
     from index import _load_watch_strategy_tabs
 
@@ -148,5 +174,6 @@ if __name__ == "__main__":
     test_leftover_strategy16_held_until_sold()
     test_leftover_strategy16_cleared_after_sell()
     test_holdings_tab_alerts_only_strategy1()
+    test_quote_driven_is_shared_factor29_stays_strategy16()
     test_watch_tabs_strategy1_then_strategy16()
     print("ok")

@@ -4,6 +4,7 @@
 默认交易池：策略一定盘池（13A→16 Top20）∪ **公共自选池**（天通/凯盛/东材/金安，
 `SELF_WATCHLIST_PICKS`；策略一/十五/十六与 effective 并集均并入）。
 策略十六遗留实仓继续按策略一卖出规则盯到平仓，卖出后清空、不回买。
+报价驱动是盯盘公共执行（`QUOTE_DRIVEN_ENABLED`），不随选股策略绑定；因子29 仍只挂策略十六。
 策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
 """
 
@@ -64,6 +65,18 @@ FACTOR4_ID = "factor4"
 STRATEGY_NAME = "援军战法"
 # 策略三（旧号策略七）才叠因子4；默认策略一关闭
 USE_FACTOR4 = False
+# 报价驱动：盯盘公共执行，与选股策略解耦。实时进程用已确认报价买卖，不拉 1m。
+QUOTE_DRIVEN_ENABLED = True
+
+
+def quote_driven_enabled() -> bool:
+    """默认盯盘是否走报价驱动成交（策略一/十六共用）。"""
+    return bool(QUOTE_DRIVEN_ENABLED)
+
+
+def factor29_auction_enabled() -> bool:
+    """因子29 竞价末段开盘撮合仍只挂策略十六，不是报价驱动公共项。"""
+    return str(STRATEGY_ID) == "strategy16"
 
 # 早盘节点（A 股集合竞价 + 连续竞价）
 AUCTION_START_HOUR = 9
