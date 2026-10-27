@@ -127,9 +127,26 @@ def test_holdings_tab_alerts_only_strategy1() -> None:
     assert int(held[0].get("持仓") or 0) == 400
 
 
+def test_watch_tabs_strategy1_then_strategy16() -> None:
+    from index import _load_watch_strategy_tabs
+
+    ids = [str(t["id"]) for t in _load_watch_strategy_tabs() if t.get("watch_tab")]
+    assert ids[:3] == ["strategy1", "strategy16", "strategy16b"]
+    assert ids == [
+        "strategy1",
+        "strategy16",
+        "strategy16b",
+        "strategy3",
+        "strategy8",
+        "strategy15",
+        "strategy17",
+    ]
+
+
 if __name__ == "__main__":
     test_default_strategy_is_strategy1()
     test_leftover_strategy16_held_until_sold()
     test_leftover_strategy16_cleared_after_sell()
     test_holdings_tab_alerts_only_strategy1()
+    test_watch_tabs_strategy1_then_strategy16()
     print("ok")

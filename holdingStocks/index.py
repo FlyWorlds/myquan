@@ -724,8 +724,6 @@ def _strategy_tab_sort_value(strategy_id: str, meta: Mapping[str, Any] | None) -
 def _strategy_tab_primary_order(strategy_id: str, is_default: bool) -> float:
     if is_default:
         return 0.0
-    if str(strategy_id) == "strategy16b":
-        return 0.1
     return 1.0
 
 
@@ -802,6 +800,7 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
                 "implemented": bool(spec.implemented),
                 "is_watch_default": spec.id == STRATEGY_ID,
                 "watch_tab": spec.id in WATCH_LIVE_TAB_IDS,
+                "meta": _json_safe_meta(spec.meta),
                 "registry_kind": kind,
                 "registry_kind_label": _REGISTRY_KIND_ZH.get(kind, "策略"),
                 "factors": factors,

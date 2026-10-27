@@ -153,7 +153,7 @@ python -c "from strategy import run_strategy12; run_strategy12()"
 
 - **静态合格池**：中证500∪1000 主板，夏普等筛选 → `backtest/universe_zz500_1000/`。
 - **动态池（锁定）**：因子13 WF 每年 `T←≤T−1` 重算 Top3，见 `LOCKED.json`。
-- **盯盘**：`holdingStocks/`，规则与因子26 同源；首页 Tab：策略1 / 3 / 8 / 15 / 16；**默认交易池 = 策略一**。
+- **盯盘**：`holdingStocks/`，规则与因子26 同源；首页 Tab：策略1 / 16 / 16B / 3 / 8 / 15 / 17；**默认交易池 = 策略一**。
 
 ---
 

@@ -49,6 +49,7 @@ register_strategy(
         implemented=True,
         meta={
             "default": False,
+            "tab_order": 1.2,
             "mode": "watch_overlay",
             "watch_tab": True,
             "universe": "factor27",

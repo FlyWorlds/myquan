@@ -76,6 +76,7 @@ def _bind() -> StrategySpec:
         implemented=True,
         meta={
             "default": True,
+            "tab_order": 1,
             "legacy_id": "open_break3",
             "factors": ("factor26", "factor2", "factor13a", "factor16", "factor22"),
             "pool_chain": "factor13a_quality_band → factor16_pl_ratio_rank",
