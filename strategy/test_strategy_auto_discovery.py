@@ -36,10 +36,10 @@ class TestStrategyAutoDiscovery(unittest.TestCase):
         self.assertIn("strategy13", plugins._SKIP_AUTO_IMPORT)
         self.assertNotIn("strategy13", ids)
 
-    def test_default_strategy16_still_marked(self) -> None:
+    def test_default_strategy1_is_marked(self) -> None:
         from strategy.core.strategy_registry import get_strategy_spec
 
-        spec = get_strategy_spec("strategy16")
+        spec = get_strategy_spec("strategy1")
         self.assertTrue(spec.meta.get("default") is True)
 
     def test_strategy16b_registered_next_to_strategy16(self) -> None:

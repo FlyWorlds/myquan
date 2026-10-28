@@ -165,7 +165,8 @@ def _status_thresholds(status: dict[str, Any] | None) -> dict[str, float]:
     raw = (status or {}).get("thresholds")
     if isinstance(raw, dict) and raw:
         return {k: float(v) for k, v in raw.items() if v is not None}
-    return _thresholds().as_dict()
+    from watch_config import STRATEGY_ID
+    return _thresholds(STRATEGY_ID).as_dict()
 
 
 def format_factor2_summary(status: dict[str, Any] | None) -> str:

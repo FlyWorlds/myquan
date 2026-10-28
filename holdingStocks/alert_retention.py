@@ -26,7 +26,9 @@ def retention_session(now=None):
 
 
 class AlertRetention:
-    def __init__(self, read=None, write=None):
+    def __init__(self, read=None, write=None, strategy_id=None):
+        from watch_config import STRATEGY_ID
+        self.strategy_id = strategy_id or STRATEGY_ID
         self.read = read
         self.write = write
         self.loaded = False
@@ -43,7 +45,9 @@ class AlertRetention:
                 self.loaded = True
             before = deepcopy(self.records)
             self.records = {c: r for c, r in self.records.items()
-                            if r.get('session') == session}
+                            if r.get('session') == session
+                            and r.get('strategy_id', 'strategy16') == self.strategy_id
+                            and (strategy_codes is None or c in strategy_codes)}
             for row in rows:
                 code = str(row.get('代码') or '')
                 saved = self.records.get(code)
@@ -53,7 +57,10 @@ class AlertRetention:
                     entry_session == session and row.get('策略状态') == '策略持有'
                 )
                 active = is_holdings_tab_signal_row(row) or hit or bool(row.get('近止损'))
-                if strategy_codes is not None and code not in strategy_codes:
+                if (strategy_codes is not None and code not in strategy_codes
+                        or row.get('信号策略ID', self.strategy_id) != self.strategy_id):
+                    for key in ('预警保留', '预警交易日', '策略展示状态', '首次触买时间'):
+                        row.pop(key, None)
                     continue
                 if str(row.get('交易日') or '')[:10] == session and active:
                     if not saved or hit or not saved.get('hit'):
@@ -61,7 +68,7 @@ class AlertRetention:
                         if hit and not first_buy_at:
                             first_buy_at = (row.get('买信号时间') or row.get('策略入场时间')
                                             or row.get('信号时刻') or row.get('信号时间'))
-                        saved = dict(session=session, hit=hit, first_buy_at=first_buy_at,
+                        saved = dict(session=session, strategy_id=self.strategy_id, hit=hit, first_buy_at=first_buy_at,
                                      fields={k: deepcopy(row[k]) for k in FIELDS if k in row},
                                      row={k: deepcopy(row[k]) for k in
                                           ('代码', '名称', '市场', '交易日', '现价', '持仓状态',
@@ -93,7 +100,7 @@ class AlertRetention:
             for code, saved in self.records.items():
                 if code not in seen:
                     restored = deepcopy(saved.get('row') or dict(saved['fields'], 代码=code))
-                    restored.update(持仓=0, 当日预警=True, 预警保留=True, 预警交易日=session)
+                    restored.update(持仓=0, 当日预警=True, 预警保留=True, 预警交易日=session, 信号策略ID=self.strategy_id)
                     if saved['hit']:
                         restored['策略展示状态'] = '已触买'
                         restored['首次触买时间'] = saved.get('first_buy_at')
@@ -105,18 +112,23 @@ class AlertRetention:
         return rows
 
 
+def _retention_document_key():
+    from watch_config import STRATEGY_ID
+    return KEY if STRATEGY_ID == 'strategy16' else f'{KEY}_{STRATEGY_ID}'
+
+
 def _read():
     if os.environ.get('HOLDINGS_STORAGE') == 'local_json':
         return {}
     from runtime_documents import read_document
-    return read_document(KEY)[1] or {}
+    return read_document(_retention_document_key())[1] or {}
 
 
 def _write(records):
     if os.environ.get('HOLDINGS_STORAGE') == 'local_json':
         return
     from runtime_documents import write_merging
-    write_merging(KEY, records)
+    write_merging(_retention_document_key(), records)
 
 
 LIVE_ALERT_RETENTION = AlertRetention(_read, _write)

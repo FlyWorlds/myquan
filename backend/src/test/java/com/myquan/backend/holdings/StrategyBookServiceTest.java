@@ -34,6 +34,24 @@ class StrategyBookServiceTest {
         return new StrategyBookService.Command(revision,id,side,BigDecimal.valueOf(price),qty,BigDecimal.valueOf(mark),ts,ts,null,"test");
     }
     private double amount(String key) { return service.books().get("000070").path(key).asDouble(); }
+    @Test void strategiesHaveIndependentBooksAndEvents() {
+        var s1=service.forStrategy("strategy1");
+        s1.command("000070",fill(0,"strategy1-buy-0001","BUY",10,100,10,"2026-10-12"));
+        assertTrue(service.books().isEmpty());
+        assertEquals("strategy1",s1.books().get("000070").path("strategy_id").asText());
+        service.command("000070",fill(0,"strategy16-buy-0001","BUY",11,200,11,"2026-10-12"));
+        assertEquals(100,s1.books().get("000070").path("virtual_shares").asLong());
+        assertEquals(200,service.books().get("000070").path("virtual_shares").asLong());
+        assertEquals(1,s1.events("000070").size());
+        assertEquals(1,service.events("000070").size());
+    }
+    @Test void requestIdCannotSilentlyReplayAcrossStrategies() {
+        var buy=fill(0,"same-request-0001","BUY",10,100,10,"2026-10-12");
+        service.command("000070",buy);
+        var s1=service.forStrategy("strategy1");
+        assertThrows(ResponseStatusException.class,()->s1.command("000070",buy));
+        assertTrue(s1.books().isEmpty());
+    }
     @Test void staleArrivalIsRejectedButCommittedRetryStillResolves() {
         var buy=fill(0,"fresh-live-buy","BUY",10,1000,10,"2026-10-12");
         clock.set(clock.get().plusSeconds(6));

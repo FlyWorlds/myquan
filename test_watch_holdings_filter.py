@@ -297,19 +297,28 @@ class TestIndexAndAccount(unittest.TestCase):
     def test_account_summary_uses_float_pnl_not_cash_open(self) -> None:
         from index import _build_watch_account_summary
 
-        acc = _build_watch_account_summary(
-            [
-                {
-                    "代码": "000070",
-                    "持仓": 5500,
-                    "浮盈": 1155.0,
-                    "当日盈亏": -3630.0,
-                    "当日基数": 94500.0,
-                    "市值": 90750.0,
-                    "成本额": 89595.0,
-                }
-            ]
-        )
+        from unittest.mock import patch
+        data = dict(account_cash=210405., account_total=301155., paper_equity_base=300000.,
+            paper_pnl_start="2026-09-09", account_total_open=304785.,
+            account_total_open_session="2026-10-28", positions={
+                "000070":dict(qty=5500,available=5500,cost=16.29,buy_time="2026-10-27 10:00:00")})
+        with patch("index.database_enabled", return_value=False), \
+             patch("index.load_holdings", return_value=data), \
+             patch("index.save_holdings", side_effect=AssertionError("read-only fixture")), \
+             patch("trade_ledger.load_ledger", return_value={"entries":[]}):
+            acc = _build_watch_account_summary(
+                [
+                    {
+                        "代码": "000070",
+                        "持仓": 5500,
+                        "浮盈": 1155.0,
+                        "当日盈亏": -3630.0,
+                        "当日基数": 94500.0,
+                        "市值": 90750.0,
+                        "成本额": 89595.0,
+                    }
+                ], session="2026-10-28"
+            )
         self.assertAlmostEqual(acc["totalPnl"], 1155.0)
         self.assertLess(abs(float(acc["totalPnlPct"])), 20.0)
         self.assertAlmostEqual(acc["dayPnl"], -3630.0)

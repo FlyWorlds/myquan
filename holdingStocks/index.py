@@ -283,12 +283,13 @@ FACTOR2_ID = "factor2"
 _STRATEGY_FACTORS_LABEL = (
     "因子1买卖 + 因子4牛市持股"
     if USE_FACTOR4
-    else "因子27核心龙头池 + 因子26多层止盈 + 因子2回撤预警 + 因子22收盘动量"
+    else ("援军选股池 + 因子29竞价强度 + 因子26多层止盈 + 因子2回撤预警" if STRATEGY_ID == "strategy1"
+          else "因子27核心龙头池 + 因子26多层止盈 + 因子2回撤预警 + 因子22收盘动量")
 )
 _STRATEGY_SYNC_NOTE = (
     "与 strategy3/strategy4 bindings / bull_regime 同源"
     if USE_FACTOR4
-    else "与 strategy16 bindings / pullback_wave_stop 同源"
+    else f"与 {STRATEGY_ID} bindings / pullback_wave_stop 同源"
 )
 
 
@@ -459,7 +460,12 @@ def _holding_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str,
     holdings = holdings or {}
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for code in portfolio_pool_codes(holdings):
+    if STRATEGY_ID == "strategy1":
+        from signal_scope import retained_inventory_codes
+        codes = retained_inventory_codes(holdings, str(trading_session_date()))
+    else:
+        codes = portfolio_pool_codes(holdings)
+    for code in sorted(codes):
         c = _code_key(str(code))
         if not c or c in seen:
             continue
@@ -484,7 +490,7 @@ def _scan_watchlist(
     base = primary_watchlist(holdings)
     if not full and _WATCH_BOOT_STAGE == "holdings":
         return _holding_watchlist(holdings)
-    if not full and _WATCH_BOOT_STAGE == "primary":
+    if (not full and _WATCH_BOOT_STAGE == "primary") or STRATEGY_ID == "strategy1":
         return list(base)
     seen = {_code_key(w["code"]) for w in base}
     out = list(base)
@@ -2027,7 +2033,7 @@ def _stamp_snapshot_liveness(snap: dict[str, Any], *, clock: str | None = None) 
     condition_orders = condition_book.get("orders") or {}
     snap["conditionBuy"] = {
         "enabled": _CONDITION_BUY_ACTIVE, "session": condition_book.get("session"),
-        "orders": [dict(o) for o in condition_orders.values()],
+        "orders": [dict(o) for o in condition_orders.values() if o.get("strategy") == STRATEGY_ID],
         "fillAssumption": "paper_stop_at_order_price",
     }
     for section in ("holdings", "strategy1", "strategy16", "strategy16b"):
@@ -2044,7 +2050,8 @@ def _stamp_snapshot_liveness(snap: dict[str, Any], *, clock: str | None = None) 
                 out["预警"] = "盘中·信号待刷新"
             out["market_phase"] = label
             condition = condition_orders.get(str(out.get("代码") or ""))
-            if condition and condition.get("session") == str(trading_session_date()):
+            if (condition and condition.get("strategy") == STRATEGY_ID
+                    and condition.get("session") == str(trading_session_date())):
                 out["条件买入价"] = condition.get("price")
                 out["条件单状态"] = condition.get("status")
                 out["条件单原因"] = condition.get("reason")
@@ -2272,7 +2279,7 @@ def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any]) -> bool:
         from account_reconciliation import enrich_snapshot_trade_metadata
         changed = enrich_snapshot_trade_metadata(snap, model.state) or changed
     for r in _iter_snapshot_price_rows(snap):
-        if r.get("收益账本") == "strategy16_database":
+        if str(r.get("收益账本") or "") in {"strategy1_database", "strategy16_database"}:
             continue
         before = (
             r.get("综合单笔收入%"),
@@ -5540,7 +5547,7 @@ def apply_paper_slot_buy(
                 "order_id", "signal_time", "signal_received_at", "decision_time",
                 "fill_model", "quote_source", "order_armed_at", "order_price",
                 "execution_quote_time", "execution_received_at", "observed_price", "quote_age_ms", "queue_age_ms",
-                "quote_db_revision", "quote_db_at",
+                "quote_db_revision", "quote_db_at", "signal_factor",
             ) if k in execution_meta} if execution_meta else {}),
         }, holdings=data
     )
@@ -5554,6 +5561,7 @@ def apply_paper_slot_buy(
             price=float(price),
             qty=int(qty),
             reason=note or "买入入槽",
+            signal_factor=(execution_meta or {}).get("signal_factor", ""),
             before_qty=0,
             after_qty=int(qty),
             strategy_id=str(STRATEGY_ID),
@@ -6567,6 +6575,7 @@ def apply_exit_fill(
             price=float(rec["price"]),
             qty=int(sell_qty),
             reason=trade_note or reason,
+            signal_factor=(execution_meta or {}).get("signal_factor", ""),
             pnl=rec.get("pnl"),
             pnl_pct=rec.get("pnl_pct"),
             before_qty=int(old_qty),
@@ -8566,7 +8575,8 @@ def _collect_quote_runtime_rows(get_quote=None):
         pos = (data.get("positions") or {}).get(code, {})
         q = quote_fn(w["sina"]) or {}
         row = dict(by_code.get(code) or {}, 代码=code, 名称=w.get("name") or code,
-                   市场=w.get("market"), 交易日=day)
+                   市场=w.get("market"), 交易日=day,
+                   信号策略ID=STRATEGY_ID, 信号策略名称=STRATEGY_NAME)
         row.update({"持仓": int(pos.get("qty") or 0), "成本": pos.get("cost"),
             "买入时间": pos.get("buy_time"), "持仓最高": pos.get("peak_high"),
             "持仓最高时间": pos.get("peak_high_at"), "pool_src": w.get("pool_src"),
@@ -8590,6 +8600,8 @@ def _collect_quote_runtime_rows(get_quote=None):
         daily = _DAILY_CACHE.get(w["sina"])
         book = data.get("condition_buy_orders") or {}
         order = (book.get("orders") or {}).get(code) if calculation_ready and book.get("session") == day else None
+        if order and order.get("strategy") != STRATEGY_ID:
+            order = None
         if calculation_ready and daily and daily[0] == day:
             allow, gate, shape = _quote_runtime_gate(w, day, daily)
             row.update({"过门OK": allow, "过门": gate, "前日形态": shape})
@@ -8613,6 +8625,8 @@ def _collect_quote_runtime_rows(get_quote=None):
             entry_pct=_watch_pct(w), tick=_watch_tick(w), official_open=official_open,
             blocked=auction_entry_blocked(official_open, q.get("prev_close"), limit_up_pct=_watch_limit_down_pct(w))
                 or bool(order and order.get("status") in ("BLOCKED", "CANCELLED")))
+        if order and order.get("kind") == "auction_open" and not row["持仓"] and order.get("status") not in ("CANCELLED", "BLOCKED"):
+            row.update({"信号因子": "factor29", "信号来源": "因子29·竞价末段强度", "因子29买OK": True})
         if order:
             row["开盘记录时间"] = order.get("open_audit_at") or order.get("armed_quote_at")
         if books.get(code):
@@ -12688,7 +12702,9 @@ def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dic
     f29 = auction_signal(baseline_px=path.get("baseline"), auction_high=path.get("high"),
                          auction_low=path.get("low"), threshold_pct=entry, tick=tick)
     prepared_now = datetime.now()
-    auction = prepared_now.strftime("%H:%M:%S") < "09:30:00" and bool(f29.get("hit_buy"))
+    from strategy import get_strategy_bindings
+    auction_enabled = any(b.factor_id == "factor29" and b.enabled for b in get_strategy_bindings(STRATEGY_ID))
+    auction = auction_enabled and prepared_now.strftime("%H:%M:%S") < "09:30:00" and bool(f29.get("hit_buy"))
     price = official if auction else official_buy_trigger(official, entry_pct=entry, tick=tick)
     if not price:
         return None
@@ -12706,6 +12722,16 @@ def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dic
 
 
 @paper_mutation
+def _align_active_signal_scope():
+    from signal_scope import align_signal_scope
+    from watch_config import strategy_watchlist_codes
+    data = load_holdings()
+    if align_signal_scope(data, strategy_id=STRATEGY_ID,
+            strategy_codes=strategy_watchlist_codes(data), session=str(trading_session_date())):
+        save_holdings(data)
+
+
+@paper_mutation
 def _store_condition_drafts(drafts: list[dict[str, Any]], active_codes: set[str]) -> None:
     data = load_holdings()
     day = str(trading_session_date())
@@ -12715,8 +12741,8 @@ def _store_condition_drafts(drafts: list[dict[str, Any]], active_codes: set[str]
     changed = data.get("condition_buy_orders") != book
     orders = book.setdefault("orders", {})
     for code, order in orders.items():
-        if code not in active_codes and order.get("status") in ("ARMED", "TRIGGERED"):
-            order.update(status="CANCELLED", reason="NOT_AUTO_BUY_POOL")
+        if (code not in active_codes or order.get("strategy") != STRATEGY_ID) and order.get("status") in ("ARMED", "TRIGGERED"):
+            order.update(status="CANCELLED", reason="STRATEGY_CHANGED" if order.get("strategy") != STRATEGY_ID else "NOT_AUTO_BUY_POOL")
             changed = True
     for draft in drafts:
         code = draft["code"]
@@ -13075,7 +13101,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
             continue
         decision = now.strftime("%Y-%m-%d %H:%M:%S")
         candidate.update(status="FILLED", decision_time=decision, filled_qty=qty, reason=None)
-        metadata = dict(order_id=candidate["id"], signal_time=candidate["signal_time"],
+        metadata = dict(signal_factor=candidate.get("signal_factor") or ("factor29" if candidate.get("kind") == "auction_open" else "factor26"), order_id=candidate["id"], signal_time=candidate["signal_time"],
                         signal_received_at=candidate["signal_received_at"], decision_time=decision,
                         fill_model=candidate["fill_assumption"], quote_source=q.get("_quote_source"),
                         order_armed_at=candidate["armed_at"], order_price=candidate["price"],
@@ -13084,7 +13110,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
                         observed_price=float(q["last"]), quote_age_ms=round((now-timestamp(q["last_ts"])).total_seconds()*1000),
                         queue_age_ms=round((now-receipt).total_seconds()*1000))
         apply_paper_slot_buy(code=ck, meta=candidate, price=candidate["price"], qty=qty,
-                             note="条件单触买(模拟·挂单价)", buy_time=decision, session=day,
+                             note=("因子29·竞价末段强度·开盘买入" if metadata["signal_factor"] == "factor29" else "条件单触买(模拟·挂单价)"), buy_time=decision, session=day,
                              session_low=q["low"], official_buy=candidate["price"], session_high=q["high"],
                              execution_meta=metadata)
         print(f"[{decision}] [CONDITION_BUY] {ck} 条件单成交 {qty}股@{candidate['price']:.2f}，源信号 {metadata['signal_time']}")
@@ -13199,6 +13225,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
     from watch_config import MAX_SSE_QUOTES, primary_watchlist, strategy1_watchlist, strategy_watchlist
 
+    _align_active_signal_scope()
     primary = primary_watchlist()
     live_positions = (_HOLDINGS_CACHE.get("data") or {}).get("positions") or {}
     held_codes = {str(code) for code, pos in live_positions.items() if int(pos.get("qty") or 0) > 0}
@@ -13221,7 +13248,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         sina_interval=1.0,
     )
     _watch_feed = feed
-    _CONDITION_BUY_ACTIVE = str(STRATEGY_ID) == "strategy16"
+    _CONDITION_BUY_ACTIVE = str(STRATEGY_ID) in {"strategy1", "strategy16"}
     _CONDITION_VERIFIED_IDS.clear()
     _QUOTE_EXIT_OBSERVED.clear()
     _QUOTE_RUNTIME_PANELS.clear()

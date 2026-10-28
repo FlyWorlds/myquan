@@ -33,10 +33,10 @@ function storedBool(key: string, fallback: boolean): boolean {
   return fallback
 }
 
-/** 盯盘首页 Tab：后端 snapshot 仅含 watch_tab=true 的策略。 */
+/** 策略一固定紧随持仓；其它策略保留服务端顺序。 */
 const strategyTabs = computed(() => {
-  if (strategies.value.length) return strategies.value
-  return snapshot.value?.strategies || []
+  const tabs = strategies.value.length ? strategies.value : snapshot.value?.strategies || []
+  return [...tabs.filter((tab) => tab.id === 'strategy1'), ...tabs.filter((tab) => tab.id !== 'strategy1')]
 })
 
 const validTabIds = computed(() => new Set(['holdings', ...strategyTabs.value.map((t) => t.id)]))

@@ -31,7 +31,7 @@ def test_restart_missing_rows_and_expiry():
     rows = restarted.merge([], datetime(2026, 10, 19, 8, 59))
     assert rows[0]['信号时间'] == '10:03'
     with patch('stock_names.resolve_stock_name', return_value='测试'):
-        assert filter_portfolio_holdings(rows, portfolio_codes=set(), strategy_codes=set(), phase='preopen')
+        assert filter_portfolio_holdings(rows, portfolio_codes=set(), strategy_codes={"600000"}, phase='preopen')
     assert restarted.merge([], datetime(2026, 10, 19, 9)) == []
     assert database == {}
 
@@ -99,6 +99,37 @@ def test_first_buy_time_survives_refresh_and_restart():
     assert later['首次触买时间'] == '09:35:01'
     restored = AlertRetention(lambda: deepcopy(stored), write).merge([], datetime(2026, 10, 17, 12))
     assert restored[0]['首次触买时间'] == '09:35:01'
+
+
+def test_switch_strategy_drops_old_signals_even_for_overlapping_symbols():
+    database = {}
+    def write(records):
+        database.clear(); database.update(deepcopy(records))
+    AlertRetention(lambda: deepcopy(database), write, strategy_id='strategy16').merge(
+        [signal()], datetime(2026,10,16,10), strategy_codes={'600000'})
+    fresh = AlertRetention(lambda: deepcopy(database), write, strategy_id='strategy1')
+    assert fresh.merge([], datetime(2026,10,16,11), strategy_codes={'600000'}) == []
+    assert database == {}
+
+
+def test_retained_signal_outside_current_pool_cannot_be_restored():
+    cache = AlertRetention(strategy_id='strategy1')
+    cache.merge([signal()], datetime(2026,10,16,10), strategy_codes={'600000'})
+    assert cache.merge([], datetime(2026,10,16,11), strategy_codes=set()) == []
+
+
+def test_legacy_unlabelled_strategy16_cache_cannot_feed_strategy1():
+    saved = dict(session='2026-10-16', hit=True, fields={'已触买':'是'}, row=signal())
+    cache = AlertRetention(lambda: {'600000':saved}, strategy_id='strategy1')
+    assert cache.merge([], datetime(2026,10,16,11), strategy_codes={'600000'}) == []
+
+
+def test_persisted_strategy_caches_have_separate_keys():
+    from alert_retention import _retention_document_key
+    with patch('watch_config.STRATEGY_ID', 'strategy1'):
+        assert _retention_document_key() == 'watch_alert_retention_strategy1'
+    with patch('watch_config.STRATEGY_ID', 'strategy16'):
+        assert _retention_document_key() == 'watch_alert_retention'
 
 
 if __name__ == '__main__':

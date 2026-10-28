@@ -16,6 +16,24 @@ class Clock(datetime):
 
 
 class TestStrategyBooksClient(unittest.TestCase):
+    def test_default_book_namespace_is_strategy1(self):
+        self.assertEqual(StrategyBooksClient().strategy_id, "strategy1")
+
+    def test_requests_to_two_strategies_have_distinct_idempotency_keys(self):
+        with patch("database_strategy_books.request_books", return_value=dict(symbol="000070", revision=1)) as request:
+            for sid in ("strategy1", "strategy16"):
+                StrategyBooksClient(strategy_id=sid).command("000070", {}, quote=quote(last_ts=str(NOW)), now=NOW)
+        calls = request.call_args_list
+        self.assertNotEqual(calls[0].args[1]["requestId"], calls[1].args[1]["requestId"])
+        self.assertEqual(calls[0].kwargs["strategy_id"], "strategy1")
+        self.assertEqual(calls[1].kwargs["strategy_id"], "strategy16")
+
+    def test_strategy1_row_is_not_labelled_as_strategy16_book(self):
+        from watch_snapshot import _strip_holdings_pnl
+        row = {}
+        apply_database_book_to_row(row, dict(strategy_id="strategy1",revision=1))
+        self.assertEqual(_strip_holdings_pnl(row)["收益账本"], "strategy1_database")
+
     def test_cache_is_updated_only_after_database_acknowledges(self):
         client = StrategyBooksClient()
         committed = dict(symbol="000070", revision=1, virtual_cash=100000, virtual_shares=0)

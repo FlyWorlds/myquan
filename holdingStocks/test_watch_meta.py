@@ -20,8 +20,8 @@ from watch_config import (  # noqa: E402
 )
 
 
-def test_strategy16_meta_ignores_legacy_watch_pct() -> None:
-    assert STRATEGY_ID == "strategy16"
+def test_strategy16_meta_ignores_legacy_watch_pct(monkeypatch) -> None:
+    monkeypatch.setattr("watch_config.STRATEGY_ID", "strategy16")
     leftover = "600301"
     assert leftover in _WATCH_PCT
     assert leftover not in load_strategy16_thr_map()
@@ -30,15 +30,22 @@ def test_strategy16_meta_ignores_legacy_watch_pct() -> None:
     assert abs(float(item["pct"]) - 0.03) > 1e-9
 
 
-def test_strategy16_meta_uses_thr_2026() -> None:
-    thrs = load_strategy16_thr_map()
+def test_strategy16_meta_uses_thr_2026(monkeypatch) -> None:
+    monkeypatch.setattr("watch_config.STRATEGY_ID", "strategy16")
+    thrs = {"600330": .03}
+    monkeypatch.setattr("watch_config.load_strategy16_thr_map", lambda: thrs)
     code = "600330"
-    assert code in thrs
     item = meta_for_code(code, {"positions": []})
     assert abs(float(item["pct"]) - float(thrs[code])) < 1e-12
 
 
-if __name__ == "__main__":
-    test_strategy16_meta_ignores_legacy_watch_pct()
-    test_strategy16_meta_uses_thr_2026()
-    print("ok")
+def test_default_strategy1_uses_its_own_thresholds(monkeypatch):
+    import watch_config as cfg
+    assert cfg.STRATEGY_ID == "strategy1"
+    monkeypatch.setattr(cfg, "load_strategy1_thr_map", lambda: {"600330": .03})
+    monkeypatch.setattr(cfg, "load_strategy16_thr_map", lambda: {"600330": .025})
+    assert cfg.meta_for_code("600330", {"positions": {}})["pct"] == .03
+    s1 = {item["code"]: item for item in cfg.self_watch_items({"positions": {}}, strategy_id="strategy1")}
+    s16 = {item["code"]: item for item in cfg.self_watch_items({"positions": {}}, strategy_id="strategy16")}
+    assert s1["600330"]["pct"] == .03
+    assert s16["600330"]["pct"] == .025

@@ -14,10 +14,14 @@ class StrategyDatabaseError(RuntimeError):
     pass
 
 
-def request_books(method="GET", payload=None, *, suffix=""):
+def request_books(method="GET", payload=None, *, suffix="", strategy_id=None):
+    from watch_config import STRATEGY_ID
+    strategy_id = strategy_id or STRATEGY_ID
+    if strategy_id not in ("strategy1", "strategy16"):
+        raise StrategyDatabaseError("Unsupported strategy book")
     base = os.environ.get("PAPER_BACKEND_URL", "http://127.0.0.1:8080").rstrip("/")
     body = None if payload is None else json.dumps(payload, ensure_ascii=False, allow_nan=False).encode()
-    req = Request(base+"/api/strategy-books/strategy16"+suffix, data=body, method=method,
+    req = Request(base+f"/api/strategy-books/{strategy_id}"+suffix, data=body, method=method,
                   headers={"Content-Type": "application/json"})
     for attempt in range(2):
         try:
@@ -31,7 +35,9 @@ def request_books(method="GET", payload=None, *, suffix=""):
 
 
 class StrategyBooksClient:
-    def __init__(self):
+    def __init__(self, strategy_id=None):
+        from watch_config import STRATEGY_ID
+        self.strategy_id = strategy_id or STRATEGY_ID
         self.lock = threading.RLock()
         self._books = {}
         self.ready = False
@@ -39,8 +45,9 @@ class StrategyBooksClient:
 
     def refresh(self):
         try:
-            result = request_books()
-            if not isinstance(result, dict) or any(not isinstance(v, dict) for v in result.values()):
+            result = request_books(strategy_id=self.strategy_id)
+            if not isinstance(result, dict) or any(not isinstance(v, dict)
+                    or v.get("strategy_id", self.strategy_id) != self.strategy_id for v in result.values()):
                 raise StrategyDatabaseError("Invalid strategy books response")
             with self.lock:
                 for code, book in result.items():
@@ -63,11 +70,12 @@ class StrategyBooksClient:
         payload = dict(expectedRevision=int(book.get("revision") or 0), side=side, price=price, qty=qty,
             mark=float(quote["last"]), quoteAt=str(quote["last_ts"]),
             decisionAt=now.strftime("%Y-%m-%d %H:%M:%S"), state=state or {}, reason=reason)
-        token = json.dumps(dict(code=code, **payload), sort_keys=True, allow_nan=False)
+        token = json.dumps(dict(strategy_id=self.strategy_id, code=code, **payload), sort_keys=True, allow_nan=False)
         payload["requestId"] = hashlib.sha256(token.encode()).hexdigest()
         try:
-            committed = request_books("POST", payload, suffix="/"+code)
-            if not isinstance(committed, dict) or committed.get("symbol") != code or "revision" not in committed:
+            committed = request_books("POST", payload, suffix="/"+code, strategy_id=self.strategy_id)
+            if (not isinstance(committed, dict) or committed.get("symbol") != code or "revision" not in committed
+                    or committed.get("strategy_id", self.strategy_id) != self.strategy_id):
                 raise StrategyDatabaseError("Invalid strategy write response")
         except Exception as exc:
             self.error = str(exc)
@@ -86,7 +94,7 @@ class StrategyBooksClient:
 def apply_database_book_to_row(row, book):
     from strategy_simulator import apply_book_to_row
     apply_book_to_row(row, book)
-    row.update({"策略收益来源": "database_strategy_book", "策略账本版本": book["revision"],
+    row.update({"策略收益来源": "database_strategy_book", "策略账本ID": book.get("strategy_id") or "strategy16", "策略账本版本": book["revision"],
         "策略历史状态": book.get("history_status"), "策略收益待回测更新": False,
         "策略收益语义": "database_cash_plus_market_value", "策略收益": book.get("total_pnl"),
         "综合策略收益": book.get("total_pnl"), "策略收益%": book.get("cumulative_return_pct"),

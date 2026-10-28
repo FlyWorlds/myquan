@@ -1377,6 +1377,7 @@ def format_alert_message(row: dict[str, Any], *, occurred_at=None) -> str:
         "【策略预警】",
         f"股票：{code} {name}",
         f"状态：{status}{extra}",
+        *([f"信号来源：{row['信号来源']}"] if row.get("信号来源") else []),
         f"当前价：{_n(row.get('现价'))}",
         f"策略价：{_n(strat_px)}",
         f"买入目标：{_n(buy_tgt)}",
@@ -1710,6 +1711,7 @@ def notify_trade_fill(
     target_px: float | None = None,
     last_px: float | None = None,
     config: dict[str, Any] | None = None,
+    signal_factor: str = "",
 ) -> bool:
     """买卖成交即时推送。只应在 paper mutation + ledger 成功后调用。
 
@@ -1776,6 +1778,8 @@ def notify_trade_fill(
             last_px=last,
         )
         typ = "模拟卖出"
+    if signal_factor == "factor29":
+        msg += "\n信号来源：因子29·竞价末段强度"
     # 成交唯一键：含时刻分钟，避免同秒重复；不同成交不互相覆盖
     key = (
         f"fill|{code_s}|{side_l}|{typ}|{mapped}|"

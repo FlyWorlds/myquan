@@ -23,7 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class StrategyBookService {
     public record Command(Long expectedRevision, String requestId, String side, BigDecimal price,
             Long qty, BigDecimal mark, String quoteAt, String decisionAt, JsonNode state, String reason) {}
-    private static final String SID="strategy16";
+    private final String SID;
     private static final BigDecimal CAPITAL=new BigDecimal("100000");
     private static final DateTimeFormatter CLOCK=DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private final JdbcTemplate jdbc;
@@ -36,9 +36,18 @@ public class StrategyBookService {
     }
     StrategyBookService(JdbcTemplate jdbc, TransactionTemplate transactions, ObjectMapper mapper,
             java.util.function.Supplier<LocalDateTime> clock) {
+        this(jdbc,transactions,mapper,clock,"strategy16");
+    }
+    private StrategyBookService(JdbcTemplate jdbc, TransactionTemplate transactions, ObjectMapper mapper,
+            java.util.function.Supplier<LocalDateTime> clock, String strategyId) {
         this.jdbc=jdbc; this.transactions=transactions;
-        this.clock=clock;
+        this.clock=clock; this.SID=strategyId;
         this.mapper=mapper.copy().enable(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+    }
+    public StrategyBookService forStrategy(String strategyId) {
+        if (!List.of("strategy1","strategy16").contains(strategyId))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Unknown strategy");
+        return SID.equals(strategyId) ? this : new StrategyBookService(jdbc,transactions,mapper,clock,strategyId);
     }
     private void require(boolean valid, String message) {
         if (!valid) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,message);
@@ -170,9 +179,10 @@ public class StrategyBookService {
         final String digest=hash(Map.of("symbol",symbol,"command",input));
         return transactions.execute(tx -> {
             var book=lockOrCreate(symbol);
-            var prior=jdbc.queryForList("SELECT payload_hash FROM strategy_symbol_events WHERE request_id=?",input.requestId());
+            var prior=jdbc.queryForList("SELECT payload_hash,strategy_id FROM strategy_symbol_events WHERE request_id=?",input.requestId());
             if (!prior.isEmpty()) {
-                conflict(prior.getFirst().get("PAYLOAD_HASH").equals(digest),"Request ID payload changed");
+                conflict(SID.equals(prior.getFirst().get("strategy_id"))
+                    && prior.getFirst().get("PAYLOAD_HASH").equals(digest),"Request ID payload or strategy changed");
                 return book;
             }
             if (input.side().equals("MARK") && input.requestId().equals(book.path("last_mark_request").asText())) {

@@ -232,6 +232,16 @@ class TestConditionDatabase(unittest.TestCase):
             self.trigger("001266")
         self.assertEqual(self.state["trades"], [])
 
+    def test_switching_strategy_replaces_old_auction_order_before_opening_grace_ends(self):
+        old = order("001266", kind="auction_open", price=10., strategy="strategy16", id="old-strategy16-order")
+        self.state["holdings"]["condition_buy_orders"]["orders"]["001266"] = old
+        draft = order("001266")
+        index._store_condition_drafts([draft], {"001266", "000070", "002962"})
+        saved = self.state["holdings"]["condition_buy_orders"]["orders"]["001266"]
+        self.assertEqual(saved["strategy"], "strategy1")
+        self.assertEqual(saved["id"], draft["id"])
+        self.assertEqual(saved["kind"], "breakout")
+
     def test_restart_revalidation_requires_a_quote_after_rearming(self):
         index._CONDITION_VERIFIED_IDS.clear()
         draft = order("001266", armed_at=str(NOW), armed_quote_at=str(NOW))

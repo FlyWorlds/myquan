@@ -62,7 +62,7 @@ class QuoteAlertTests(unittest.TestCase):
         from unittest.mock import Mock
         item=dict(code='000070',sina='sz000070',name='测试',market='SZ',pct=.025)
         book=dict(positions={},condition_buy_orders=dict(session='2026-10-16',orders={
-            '000070':dict(id='audited',open=10.,price=10.25,status='ARMED',open_audit_at='2026-10-16 09:25:00')}))
+            '000070':dict(id='audited',strategy='strategy1',open=10.,price=10.25,status='ARMED',open_audit_at='2026-10-16 09:25:00')}))
         model=Mock();model.state=dict(holdings=book,trades=[])
         store=Mock();store.read_model.return_value=model
         with patch.object(index,'_HOLDINGS_STORE',store), \
@@ -74,6 +74,7 @@ class QuoteAlertTests(unittest.TestCase):
              patch.object(index,'_prev_bars_from_daily',return_value=(10,10,10,10)), \
              patch.object(index,'_entry_gate_detail',return_value=(True,'前日阴线·过门','阴')), \
              patch.object(index,'_calendar_signal_session',return_value='2026-10-16'), \
+             patch.object(index,'is_threshold_ready',return_value=True), \
              patch.object(index,'_enrich_comprehensive_trade_return'), \
              patch.object(index,'_today_1m_bars',side_effect=AssertionError('minute IO')), \
              patch.object(index,'_watch_daily',side_effect=AssertionError('daily IO')), \

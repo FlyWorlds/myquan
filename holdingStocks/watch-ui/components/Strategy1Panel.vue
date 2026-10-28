@@ -584,7 +584,8 @@ function tradeIncomeTitle(r: HoldingRow): string {
               </td>
               <td class="whitespace-nowrap px-3 py-1.5 align-middle">
                 <div class="leading-snug">
-                  <StockNameHover :code="r.代码" :name="r.名称">
+                  <span v-if="r.信号因子 === 'factor29'" class="text-xs font-semibold text-accent">因子29·竞价</span>
+          <StockNameHover :code="r.代码" :name="r.名称">
                     <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
                   </StockNameHover>
                 </div>

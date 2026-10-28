@@ -1,6 +1,6 @@
 """盯盘标的池与代码工具（唯一真源；index 从此处导入）。
 
-当前锁定：**默认策略 = 策略十六（核心龙头） = 因子27 + 因子26 + 因子29 + 因子2 + 因子22**。
+当前默认：**策略一（援军战法）**，使用策略一独立选股池和阈值；因子26执行、因子2预警。
 默认交易池：因子27 核心龙头近 3 个月冻结池 ∪ **公共自选池**（天通/凯盛/东材/金安，
 `SELF_WATCHLIST_PICKS`；策略一/十五/十六与 effective 并集均并入，非仅策略十六）。
 策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
@@ -55,14 +55,14 @@ from strategy.watch_universe import (
     ziyang_codes,
 )
 
-# 默认定盘：策略十六 + 因子27/因子26/因子29/因子2（因子22 默认关）
-STRATEGY_ID = "strategy16"
+# 默认定盘：策略一·援军战法（因子26执行；因子22研究项默认关闭）
+STRATEGY_ID = "strategy1"
 FACTOR_ID = "factor26"
 FACTOR2_ID = "factor2"
 FACTOR22_ID = "factor22"
 FACTOR29_ID = "factor29"
 FACTOR4_ID = "factor4"
-STRATEGY_NAME = "策略十六·核心龙头"
+STRATEGY_NAME = "策略一·援军战法"
 # 策略三（旧号策略七）才叠因子4；默认核心龙头关闭
 USE_FACTOR4 = False
 
@@ -564,11 +564,11 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
 
 
 def self_watch_items(
-    holdings: dict[str, Any] | None = None,
+    holdings: dict[str, Any] | None = None, *, strategy_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """公共自选池 → watch_item 列表（带池来源标签）。"""
     out: list[dict[str, Any]] = []
-    thrs = load_strategy16_thr_map()
+    thrs = load_strategy1_thr_map() if (strategy_id or STRATEGY_ID) == "strategy1" else load_strategy16_thr_map()
     for code, name in SELF_WATCHLIST_PICKS:
         c = code_key(code)
         if not c or c == "000000":
@@ -591,12 +591,12 @@ def self_watch_items(
 
 def merge_self_watchlist(
     items: list[dict[str, Any]],
-    holdings: dict[str, Any] | None = None,
+    holdings: dict[str, Any] | None = None, *, strategy_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """任意策略池 ∪ 公共自选池：自选置前；同码以自选标签为准。"""
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
-    for w in self_watch_items(holdings):
+    for w in self_watch_items(holdings, strategy_id=strategy_id):
         c = code_key(w["code"])
         if c in seen:
             continue
@@ -638,7 +638,7 @@ def strategy16_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[st
             item["entry_pct"] = float(thr)
             item["stop_pct"] = float(DEFAULT_PCT)
         factor_rows.append(item)
-    return merge_self_watchlist(factor_rows, holdings)
+    return merge_self_watchlist(factor_rows, holdings, strategy_id="strategy16")
 
 
 WATCHLIST: list[dict[str, Any]] = []
@@ -688,7 +688,7 @@ def strategy1_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
                 item["entry_pct"] = float(thr)
                 item["stop_pct"] = float(DEFAULT_PCT)
             factor_rows.append(item)
-    return merge_self_watchlist(factor_rows, holdings)
+    return merge_self_watchlist(factor_rows, holdings, strategy_id="strategy1")
 
 
 def strategy1_codes(holdings: dict[str, Any] | None = None) -> set[str]:
@@ -759,6 +759,11 @@ def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
     换因子27 名单时：**qty>0 的持仓即使已不在新池也保留**，不得因换票砍仓。
     返回新的 portfolio_pool 列表（已写回 holdings）。
     """
+    if STRATEGY_ID == "strategy1":
+        from signal_scope import retained_inventory_codes
+        pruned = sorted(strategy_watchlist_codes(holdings) | retained_inventory_codes(holdings, str(trading_session_date())))
+        holdings["portfolio_pool"] = pruned
+        return pruned
     sw = strategy_watchlist_codes()
     positions = holdings.get("positions") or {}
     realized = holdings.get("realized_today") or {}
@@ -851,26 +856,32 @@ def primary_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, 
             holdings = load_holdings()
         except Exception:  # noqa: BLE001
             holdings = {}
-    base = strategy16_watchlist(holdings) if STRATEGY_ID == "strategy16" else strategy_watchlist()
+    base = strategy16_watchlist(holdings) if STRATEGY_ID == "strategy16" else strategy_watchlist(holdings)
     seen = {code_key(w["code"]) for w in base}
     out = list(base)
-    for code in core_leader_codes():
+    if STRATEGY_ID == "strategy16":
+        for code in core_leader_codes():
+            if code in seen:
+                continue
+            seen.add(code)
+            item = meta_for_code(code, holdings)
+            item["universe"] = "strategy16"
+            thr = load_strategy16_thr_map().get(code)
+            if thr is not None:
+                item.update(pct=float(thr), entry_pct=float(thr), stop_pct=float(DEFAULT_PCT))
+            out.append(item)
+    if STRATEGY_ID == "strategy1":
+        from signal_scope import retained_inventory_codes
+        extra_codes = retained_inventory_codes(holdings, str(trading_session_date()))
+    else:
+        extra_codes = portfolio_pool_codes(holdings)
+    for code in sorted(extra_codes):
         if code in seen:
             continue
         seen.add(code)
         item = meta_for_code(code, holdings)
-        item["universe"] = "strategy16"
-        thr = load_strategy16_thr_map().get(code)
-        if thr is not None:
-            item["pct"] = float(thr)
-            item["entry_pct"] = float(thr)
-            item["stop_pct"] = float(DEFAULT_PCT)
+        item.update(universe=STRATEGY_ID, signal_strategy_id=STRATEGY_ID)
         out.append(item)
-    for code in portfolio_pool_codes(holdings):
-        if code in seen:
-            continue
-        seen.add(code)
-        out.append(meta_for_code(code, holdings))
     return merge_self_watchlist(out, holdings)
 
 
