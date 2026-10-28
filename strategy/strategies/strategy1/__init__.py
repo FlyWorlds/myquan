@@ -1,6 +1,6 @@
-"""援军战法（strategy1）：因子26 多层止盈 + 因子2 回撤预警 + 因子22 收盘动量再买。
+"""援军战法（strategy1）：因子26 多层止盈 + 因子29 竞价末段 + 因子2 回撤预警 + 因子22 收盘动量再买。
 
-生产默认策略是 strategy16。本模块是援军战法绑定，不作为盯盘默认。
+生产默认策略：盯盘默认交易池与持仓后续都跟本策略。
 """
 
 from __future__ import annotations
@@ -62,9 +62,10 @@ def _bind() -> StrategySpec:
         name=STRATEGY_NAME,
         description=(
             "援军战法：因子26 开盘阈值买/多层止盈"
+            " + 因子29 竞价末段按开盘撮合"
             " + 因子2 回撤加减仓预警（回测不注资）"
             " + 因子22 收盘动量再买"
-            " + 因子13A 质量带合格池 + 因子16 龙头排序（定盘池，研究）"
+            " + 因子13A 质量带合格池 + 因子16 龙头排序（定盘池，默认交易宇宙）"
         ),
         factor_bindings=FACTOR_BINDINGS,
         run=run_strategy1,
@@ -75,11 +76,12 @@ def _bind() -> StrategySpec:
         aliases=("open_break3", "s1", "策略一", "援军战法"),
         implemented=True,
         meta={
-            "default": False,
+            "default": True,
+            "tab_order": 1,
             "legacy_id": "open_break3",
-            "factors": ("factor26", "factor2", "factor13a", "factor16", "factor22"),
+            "factors": ("factor26", "factor29", "factor2", "factor13a", "factor16", "factor22"),
             "pool_chain": "factor13a_quality_band → factor16_pl_ratio_rank",
-            "pool_size": 10,
+            "pool_size": 20,
             "stop_anchor": "day_high",
             "factor2_overlay": False,
             "factor2_alert_only": True,

@@ -68,7 +68,6 @@ const strategy8Tab = computed(() => strategyTabs.value.find((t) => t.id === 'str
 const strategy15Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy15'))
 const strategy16Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16'))
 const strategy16bTab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16b'))
-const strategy17Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy17'))
 
 type Strategy16BPriceMax = '50' | '100' | '200' | 'none'
 
@@ -322,7 +321,7 @@ watch(
       .filter((row) => !taken.has(String(row.代码 || '')))
       .map((row) => Number(row.持仓 || 0) > 0 ? { ...row, 置顶: true } : row)
     const quotes = new Map<string, HoldingRow>()
-    for (const row of [...(snap?.strategy1 || []), ...(snap?.strategy16 || [])]) {
+    for (const row of [...(snap?.holdings || []), ...(snap?.strategy1 || [])]) {
       const code = String(row.代码 || '')
       if (code && !quotes.has(code)) quotes.set(code, row)
     }
@@ -491,36 +490,6 @@ const closedCount = computed(() => closedHoldings.value.length)
         <StrategyPicksPanel :picks="strategy1Tab?.picks" />
       </section>
 
-      <section v-show="activeTab === 'strategy3'">
-        <StrategyInfoPanel v-if="strategy3Tab" :tab="strategy3Tab" class="mb-4" />
-        <Strategy3Panel
-          v-if="snapshot"
-          :tab="strategy3Tab"
-          :payload="snapshot.strategy3"
-          :phase="snapshot.phase"
-        />
-        <StrategyPicksPanel :picks="strategy3Tab?.picks" />
-      </section>
-
-      <section v-show="activeTab === 'strategy8'">
-        <StrategyInfoPanel v-if="strategy8Tab" :tab="strategy8Tab" class="mb-4" />
-        <Strategy8Panel
-          v-if="snapshot"
-          :tab="strategy8Tab"
-          :payload="snapshot.strategy8"
-          :phase="snapshot.phase"
-        />
-        <StrategyPicksPanel :picks="strategy8Tab?.picks" />
-      </section>
-      <section v-show="activeTab === 'strategy15'">
-        <StrategyInfoPanel v-if="strategy15Tab" :tab="strategy15Tab" class="mb-4" />
-        <Strategy15Panel
-          v-if="snapshot"
-          :payload="snapshot.strategy15"
-          :phase="snapshot.phase"
-        />
-        <StrategyPicksPanel :picks="strategy15Tab?.picks" />
-      </section>
       <section v-show="activeTab === 'strategy16'">
         <StrategyInfoPanel v-if="strategy16Tab" :tab="strategy16Tab" class="mb-4" />
         <Strategy1Panel
@@ -641,22 +610,41 @@ const closedCount = computed(() => closedHoldings.value.length)
         />
         <StrategyPicksPanel :picks="strategy16bDynamicPicks" />
       </section>
-      <section v-show="activeTab === 'strategy17'">
-        <StrategyInfoPanel v-if="strategy17Tab" :tab="strategy17Tab" class="mb-4" />
-        <Strategy1Panel
+
+      <section v-show="activeTab === 'strategy3'">
+        <StrategyInfoPanel v-if="strategy3Tab" :tab="strategy3Tab" class="mb-4" />
+        <Strategy3Panel
           v-if="snapshot"
-          :rows="snapshot.strategy17 || []"
+          :tab="strategy3Tab"
+          :payload="snapshot.strategy3"
           :phase="snapshot.phase"
-          :slot-meta="snapshot.slotMeta"
-          pool-category="紫阳真君"
-          status-mode="strategy"
         />
-        <StrategyPicksPanel :picks="strategy17Tab?.picks" />
+        <StrategyPicksPanel :picks="strategy3Tab?.picks" />
+      </section>
+
+      <section v-show="activeTab === 'strategy8'">
+        <StrategyInfoPanel v-if="strategy8Tab" :tab="strategy8Tab" class="mb-4" />
+        <Strategy8Panel
+          v-if="snapshot"
+          :tab="strategy8Tab"
+          :payload="snapshot.strategy8"
+          :phase="snapshot.phase"
+        />
+        <StrategyPicksPanel :picks="strategy8Tab?.picks" />
+      </section>
+      <section v-show="activeTab === 'strategy15'">
+        <StrategyInfoPanel v-if="strategy15Tab" :tab="strategy15Tab" class="mb-4" />
+        <Strategy15Panel
+          v-if="snapshot"
+          :payload="snapshot.strategy15"
+          :phase="snapshot.phase"
+        />
+        <StrategyPicksPanel :picks="strategy15Tab?.picks" />
       </section>
     </template>
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘 Tab 仅展示有实时面板的策略（策略1 / 3 / 8 / 15 / 16 / 16B / 17）。因子持有模板、研究型条目见
+      盯盘 Tab 仅展示有实时面板的策略（策略1 / 16 / 16B / 3 / 8 / 15）。因子持有模板、研究型条目见
       <NuxtLink to="/strategies" class="text-accent hover:underline">策略说明</NuxtLink>
       、
       <NuxtLink to="/factors" class="text-accent hover:underline">因子说明</NuxtLink>

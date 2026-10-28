@@ -1,22 +1,24 @@
-"""持仓记录与盯盘：与默认核心策略（strategy16）同步。
+"""持仓记录与盯盘：与默认核心策略（strategy1）同步。
 
-策略锁定 · 策略十六：
+策略锁定 · 策略一：
   · 买（因子26）：开盘阈值 ceil(open×(1+entry))；前日阴/小阳；禁双阳；T+1
-  · 卖（因子26）：硬保护2.5%；中赚3–10%回落一半与0.5×20日日频σ谁先到走谁；阶梯10%/15%；未到3%次日峰值回落2.5%；实时按报价，独立回测按分钟
+  · 卖（因子26）：硬保护2.5%；中赚3–10%回落一半与0.5×20日日频σ谁先到走谁；阶梯10%/15%；未到3%次日峰值回落2.5%
+  · **报价驱动**（盯盘公共，与选股解耦）：实时用已确认报价买卖，不拉 1m；独立回测仍按分钟
+  · **因子29**：策略一/十六 9:20–9:25 路径武装后按正式开盘撮合；未武装仍走因子26
   · 因子2：账户回撤加减仓预警（不自动改现金）
-  · 因子22：收盘动量路径保留研究；**三槽执行：当日止损/已记卖出的标的当日禁再买**
-    （例外：前一日止损已记 + 次日竞价低开开盘保护卖出后，过门触买允许当日回补）
-  · **仓位**：沿用 watch_config 数量与资金配置；策略16按报价接收的触发顺序竞争空槽，不由全量扫描选先后
+  · 因子22：收盘动量路径保留；**三槽执行：当日止损/已记卖出的标的当日禁再买**
+  · **仓位**：沿用 watch_config 数量与资金配置；默认池按策略一扫描顺序竞争空槽
   · 9:15 清空非实仓盯盘状态；**9:15–9:30 竞价不算买卖/动态止盈、不回写峰值**；9:25 起算阈值并可挂单；9:30 起触发结算
-  · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票通常不可再待买入（隔夜已记+竞价低开除外）
-  · 默认交易宇宙：因子27 选股池 ∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用，见 watch_config.SELF_WATCHLIST_PICKS）
+  · 策略回放触止损 → 信号「已触止损」；有纸面持有则收敛为空仓/已平仓侧（不再「策略持有」）；当日已卖出该票通常不可再待买入
+  · 默认交易宇宙：策略一定盘池（因子13A→因子16 Top20）∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）
+  · 策略十六遗留实仓继续按策略一卖出规则盯到平仓，卖出后清空、不回买
   · 可选切策略七：watch_config.USE_FACTOR4=True + S7_WATCHLIST
   · 运行时分叉：本文件 collect_rows() **不**调用 get_decision_engine()；
     registry/bindings 供回测。改 bindings 后须同步本文件 FACTOR_ID 分支
     （levels / signal / replay / first_session_exit_fill）。
 
 功能：
-  · 拉取当日实时行情（SSE 热池=持仓+默认策略；新浪批量=全池含叠加观察；叠加池延后）
+  · 拉取当日实时行情（SSE 热池=持仓+默认策略；新浪批量=热池其余）
   · 因子26 实仓：按成本+观测持仓峰值算动态止盈价；报价顺序判触达
   · 阈值与信号：因子26 多层止盈（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
@@ -182,12 +184,13 @@ from watch_config import (
     OPEN_PRICE_REFRESH_MINUTE,
     STRATEGY_ID,
     STRATEGY_NAME,
+    factor29_auction_enabled,
+    quote_driven_enabled,
     STRATEGY_PNL_START,
     PAPER_PNL_START,
     USE_FACTOR4,
     WATCHLIST,
     effective_watchlist,
-    overlay_watchlist,
     primary_watchlist,
     normalize_signal_session,
     trading_session_date,
@@ -276,19 +279,19 @@ from watch_buy_signal import (
     is_buy_signal_active as _buy_signal_active,
 )
 
-# 盯盘与回测共用：默认策略十六 = 因子27 + 因子26 + 因子2 + 因子22
+# 盯盘与回测共用：默认策略一 = 因子13A + 因子16 + 因子26 + 因子2 + 因子22
 # 默认交易池唯一真源：watch_config.WATCHLIST
 FACTOR2_ID = "factor2"
 
 _STRATEGY_FACTORS_LABEL = (
     "因子1买卖 + 因子4牛市持股"
     if USE_FACTOR4
-    else "因子27核心龙头池 + 因子26多层止盈 + 因子2回撤预警 + 因子22收盘动量"
+    else "因子13A质量带 + 因子16龙头排序 + 因子26多层止盈 + 因子2回撤预警 + 因子22收盘动量"
 )
 _STRATEGY_SYNC_NOTE = (
     "与 strategy3/strategy4 bindings / bull_regime 同源"
     if USE_FACTOR4
-    else "与 strategy16 bindings / pullback_wave_stop 同源"
+    else "与 strategy1 bindings / pullback_wave_stop 同源"
 )
 
 
@@ -338,7 +341,7 @@ _REPLAY_1M_DAYS = 7
 def _m1_lookback_bars(sina: str, *, session: str) -> pd.DataFrame:
     """近若干日 1 分钟（东财一次返回约 5～8 日），供 7 日回放。"""
     if _CONDITION_BUY_ACTIVE:
-        raise RuntimeError("策略16实时进程禁止分钟回放；请在独立回测进程运行")
+        raise RuntimeError("报价驱动实时进程禁止分钟回放；请在独立回测进程运行")
     key = f"lookback:{str(sina).lower()}"
     now = time.monotonic()
     hit = _M1_CACHE.get(key)
@@ -395,7 +398,7 @@ _ws_hub: LocalWsHub | None = None
 _watch_feed: Any = None
 _WATCH_SNAP_LOCK = threading.RLock()
 _WATCH_FRONT_READY = threading.Event()
-# 首屏只用热池；冷启动后再扫紫阳等叠加池，避免拖慢持仓/默认策略
+# 首屏只用热池；冷启动后再补齐策略一其余名单，避免拖慢持仓/默认策略
 _WATCH_OVERLAY_READY = threading.Event()
 _last_watch_snapshot: dict[str, Any] | None = None
 _last_snapshot_digest: str | None = None
@@ -474,9 +477,8 @@ def _holding_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str,
 def _scan_watchlist(
     holdings: dict[str, Any] | None = None, *, full: bool = False
 ) -> list[dict[str, Any]]:
-    """信号扫描：热池（默认交易）∪ 策略一盯盘池。
+    """信号扫描：热池（默认策略一 + 遗留实仓）。
 
-    紫阳等大观察池不进此名单（独立轻量行情）。
     冷启动阶段（``_WATCH_BOOT_PRIMARY_ONLY``）只返回热池，``full=True`` 强制全量。
     """
     from watch_config import strategy1_watchlist
@@ -688,7 +690,7 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
 
 # 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
 WATCH_LIVE_TAB_IDS = frozenset(
-    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy16b", "strategy17"}
+    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy16b"}
 )
 
 _REGISTRY_KIND_ZH = {
@@ -724,8 +726,6 @@ def _strategy_tab_sort_value(strategy_id: str, meta: Mapping[str, Any] | None) -
 def _strategy_tab_primary_order(strategy_id: str, is_default: bool) -> float:
     if is_default:
         return 0.0
-    if str(strategy_id) == "strategy16b":
-        return 0.1
     return 1.0
 
 
@@ -802,6 +802,7 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
                 "implemented": bool(spec.implemented),
                 "is_watch_default": spec.id == STRATEGY_ID,
                 "watch_tab": spec.id in WATCH_LIVE_TAB_IDS,
+                "meta": _json_safe_meta(spec.meta),
                 "registry_kind": kind,
                 "registry_kind_label": _REGISTRY_KIND_ZH.get(kind, "策略"),
                 "factors": factors,
@@ -834,8 +835,6 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
             tabs[-1]["reportPath"] = "docs/FACTOR27.md"
         if spec.id == "strategy16b":
             tabs[-1]["reportPath"] = "docs/FACTOR27.md"
-        if spec.id == "strategy17":
-            tabs[-1]["reportPath"] = "docs/FACTOR28.md"
         from strategy_picks_loader import load_strategy_picks
 
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
@@ -1497,7 +1496,6 @@ def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
         "strategy15": snapshot.get("strategy15"),
         "strategy16": snapshot.get("strategy16"),
         "strategy16b": snapshot.get("strategy16b"),
-        "strategy17": snapshot.get("strategy17"),
         "phaseKey": snapshot.get("phaseKey"),
         "strategy": snapshot.get("strategy"),
         "strategyTabs": [
@@ -2221,7 +2219,7 @@ def _attach_hwm_row_fields(
 
 
 def _iter_snapshot_price_rows(snap: dict[str, Any]):
-    for key in ("holdings", "strategy1", "strategy16", "strategy16b", "strategy17"):
+    for key in ("holdings", "strategy1", "strategy16", "strategy16b"):
         for r in snap.get(key) or []:
             if isinstance(r, dict):
                 yield r
@@ -2460,15 +2458,6 @@ def publish_live_quote_patch() -> bool:
         return False
     if not changed:
         return False
-    # 叠加池独立缓存：有新行情则替换 strategy17 行
-    try:
-        from strategy17_watch import cached_strategy17_rows
-
-        s17 = cached_strategy17_rows()
-        if s17:
-            snap["strategy17"] = s17
-    except Exception:  # noqa: BLE001
-        pass
     if _enrich_snapshot_comprehensive_trade_returns(snap):
         changed = True
     _stamp_snapshot_liveness(snap)
@@ -2615,14 +2604,12 @@ def publish_watch_snapshot(
     strategy3: dict[str, Any] = {}
     strategy8: dict[str, Any] = {}
     strategy15: dict[str, Any] = {}
-    strategy17_rows: list[dict[str, Any]] = []
     if _CONDITION_BUY_ACTIVE:
         include_strategy_panels = False
         previous = _QUOTE_RUNTIME_PANELS or _last_watch_snapshot or {}
         strategy3 = previous.get("strategy3") or {}
         strategy8 = previous.get("strategy8") or {}
         strategy15 = previous.get("strategy15") or {}
-        strategy17_rows = previous.get("strategy17") or (_last_watch_snapshot or {}).get("strategy17") or []
     if include_strategy_panels:
         from strategy3_watch import build_strategy3_payload
         from strategy8_watch import build_strategy8_payload
@@ -2661,12 +2648,6 @@ def publish_watch_snapshot(
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 策略十五快照失败（继续盯盘）: {e}")
             strategy15 = {"error": str(e), "rows": []}
-        try:
-            from strategy17_watch import cached_strategy17_rows
-
-            strategy17_rows = cached_strategy17_rows()
-        except Exception:  # noqa: BLE001
-            strategy17_rows = []
     # Retained signals are display data; never feed them back into execution.
     from alert_retention import LIVE_ALERT_RETENTION
     rows = [dict(row) for row in rows]
@@ -2688,7 +2669,6 @@ def publish_watch_snapshot(
         strategy8=strategy8,
         strategy15=strategy15,
         strategy16b=_strategy16b_rows_from_rows(rows),
-        strategy17=strategy17_rows,
         sectors=sectors,
         refresh_sec=refresh_sec,
         portfolio_codes=portfolio_codes,
@@ -2852,7 +2832,6 @@ def _seed_boot_watch_snapshot() -> None:
         "strategy8": {},
         "strategy15": {},
         "strategy16": [],
-        "strategy17": [],
         "sectors": {},
         "strategies": _watch_tabs_with_live_s8({}),
     }
@@ -3180,7 +3159,7 @@ def _ensure_signal_day_caches(*, force: bool = False) -> str:
 def _today_1m_bars(sina: str, session: str, *, force: bool = False) -> pd.DataFrame:
     """拉取并缓存当日 1 分钟 K（未复权），供因子26 多层止盈 path-dependent 判定。"""
     if _CONDITION_BUY_ACTIVE:
-        raise RuntimeError("策略16实时进程禁止拉取分钟K线；请在独立回测进程运行")
+        raise RuntimeError("报价驱动实时进程禁止拉取分钟K线；请在独立回测进程运行")
     key = str(sina).lower()
     now = time.monotonic()
     hit = _M1_CACHE.get(key)
@@ -5765,7 +5744,7 @@ def _apply_portfolio_slots(
             continue
         if bool(r.get("当日禁买")) and not r.get("隔夜竞价回买"):
             continue
-        # 只从当前默认策略池入场（strategy16=核心龙头）；旧 portfolio_pool 遗留票不买
+        # 只从当前默认策略池入场（strategy1=定盘池）；策略十六遗留票卖出后不回买
         if code not in strategy_codes:
             if _row_hit_buy(r):
                 note = str(r.get("挂单说明") or "")
@@ -8121,7 +8100,7 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
     session / 涨跌幅一律相对 ``trading_session_date``，禁止沿用上一交易日 day change。
     """
     if _CONDITION_BUY_ACTIVE:
-        raise RuntimeError("策略16实时进程禁止分钟行情拼接；请使用报价缓存")
+        raise RuntimeError("报价驱动实时进程禁止分钟行情拼接；请使用报价缓存")
     today = str(trading_session_date())
     spot = fetch_sina_spot(sina)
 
@@ -8518,7 +8497,7 @@ def _collect_quote_runtime_rows(get_quote=None):
         row.update({"持仓": int(pos.get("qty") or 0), "成本": pos.get("cost"),
             "买入时间": pos.get("buy_time"), "持仓最高": pos.get("peak_high"),
             "持仓最高时间": pos.get("peak_high_at"), "pool_src": w.get("pool_src"),
-            "池来源": w.get("池来源") or ("自选" if w.get("self_watch") else "因子27"),
+            "池来源": w.get("池来源") or ("自选" if w.get("self_watch") else "策略池"),
             "_slot_meta": slot_meta(data), "_paper_read_model": model, "报价驱动": True,
             "持仓状态": held_position_status(pos.get("buy_time"), day) if int(pos.get("qty") or 0) > 0 else "空仓",
             "已触买": "否", "已触止损": "否", "阈值就绪": False,
@@ -8629,8 +8608,6 @@ def collect_rows(
                 pool_src = "factor27"
             elif str(w.get("universe") or "") == "strategy1":
                 pool_src = "strategy1_pool"
-            elif str(w.get("universe") or "") == "strategy17":
-                pool_src = "factor28"
         pool_label = str(
             w.get("池来源")
             or (
@@ -8639,11 +8616,7 @@ def collect_rows(
                 else (
                     "因子27"
                     if pool_src == "factor27"
-                    else (
-                        "策略池"
-                        if pool_src == "strategy1_pool"
-                        else ("紫阳真君" if pool_src == "factor28" else "")
-                    )
+                    else ("策略池" if pool_src == "strategy1_pool" else "")
                 )
             )
         )
@@ -8844,16 +8817,26 @@ def collect_rows(
             f26_buy = official_buy_trigger(
                 official_open, entry_pct=entry_pct, tick=tick
             )
-            f29 = _apply_factor29_auction(
-                quote=q,
-                sticky=sticky,
-                code=code,
-                session=str(q["session"]),
-                official_open=official_open,
-                entry_pct=float(entry_pct),
-                tick=tick,
-                qty=qty_early,
-            )
+            if factor29_auction_enabled():
+                f29 = _apply_factor29_auction(
+                    quote=q,
+                    sticky=sticky,
+                    code=code,
+                    session=str(q["session"]),
+                    official_open=official_open,
+                    entry_pct=float(entry_pct),
+                    tick=tick,
+                    qty=qty_early,
+                )
+            else:
+                f29 = {
+                    "path": {},
+                    "sig": {},
+                    "fill": None,
+                    "hit_buy": False,
+                    "hit_sell": False,
+                    "label": "",
+                }
             official_buy = f26_buy
             if official_buy:
                 open_buy = float(official_buy)
@@ -12610,7 +12593,6 @@ def _pull_remote_holdings_for_watch() -> None:
 def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dict[str, Any] | None:
     """Prepare from completed daily cache and audited open; never run minute replay."""
     from condition_buy import make_order
-    from strategy.factors.factor29 import merge_auction_path, signal as auction_signal
 
     day = str(trading_session_date())
     if not calendar_is_trading_day() or not is_threshold_ready(now) or q.get("session") != day:
@@ -12632,20 +12614,26 @@ def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dic
     audit = audit_single_stock_open(code=w["code"], expected_open=official, session=day, tick=tick)
     if not audit.get("ok"):
         return None
-    saved_book = (_HOLDINGS_CACHE.get("data") or {}).get("condition_buy_orders") or {}
-    saved_order = (saved_book.get("orders") or {}).get(w["code"], {}) if saved_book.get("session") == day else {}
-    path = merge_auction_path(quote=q, sticky={"f29_path": saved_order.get("auction_path") or {}}, session=day)
-    f29 = auction_signal(baseline_px=path.get("baseline"), auction_high=path.get("high"),
-                         auction_low=path.get("low"), threshold_pct=entry, tick=tick)
     prepared_now = datetime.now()
-    auction = prepared_now.strftime("%H:%M:%S") < "09:30:00" and bool(f29.get("hit_buy"))
+    path: dict[str, Any] = {}
+    auction = False
+    if factor29_auction_enabled():
+        from strategy.factors.factor29 import merge_auction_path, signal as auction_signal
+
+        saved_book = (_HOLDINGS_CACHE.get("data") or {}).get("condition_buy_orders") or {}
+        saved_order = (saved_book.get("orders") or {}).get(w["code"], {}) if saved_book.get("session") == day else {}
+        path = merge_auction_path(quote=q, sticky={"f29_path": saved_order.get("auction_path") or {}}, session=day)
+        f29 = auction_signal(baseline_px=path.get("baseline"), auction_high=path.get("high"),
+                             auction_low=path.get("low"), threshold_pct=entry, tick=tick)
+        auction = prepared_now.strftime("%H:%M:%S") < "09:30:00" and bool(f29.get("hit_buy"))
     price = official if auction else official_buy_trigger(official, entry_pct=entry, tick=tick)
     if not price:
         return None
     armed = prepared_now.isoformat(sep=" ", timespec="microseconds")
     order = make_order(code=w["code"], session=day, open_px=official, price=float(price),
                        entry_pct=entry, tick=tick, armed_at=armed, quote_at=str(q.get("last_ts") or ""),
-                       name=w["name"], market=w["market"], kind="auction_open" if auction else "breakout")
+                       name=w["name"], market=w["market"], kind="auction_open" if auction else "breakout",
+                       strategy=str(STRATEGY_ID))
     order.update(gate=gate, previous_shape=shape, previous_close=q.get("prev_close"), open_audit_at=audit.get("quote_ts"),
                  limit_up_pct=_watch_limit_down_pct(w), auction_path=path if auction else None,
                  daily_sig=_daily_frame_sig(cached[1]))
@@ -13170,7 +13158,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         sina_interval=1.0,
     )
     _watch_feed = feed
-    _CONDITION_BUY_ACTIVE = str(STRATEGY_ID) == "strategy16"
+    _CONDITION_BUY_ACTIVE = quote_driven_enabled()
     _CONDITION_VERIFIED_IDS.clear()
     _QUOTE_EXIT_OBSERVED.clear()
     _QUOTE_RUNTIME_PANELS.clear()
@@ -13291,7 +13279,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     print(
         f"[{_now()}] 行情分层: SSE热池 {len(sinas_sse)} 只"
         f"（帽 {MAX_SSE_QUOTES}）· 新浪批量 {len(sinas_batch)} 只"
-        f"（含策略一）· 紫阳等大池独立轮询"
+        f"（含策略一）"
     )
 
     def get_quote(sina: str) -> dict[str, Any]:
@@ -13701,18 +13689,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 f"默认策略快照已推送: {report1}（新增 {n_primary}/{len(primary_rest)} 只 · {time.perf_counter() - t_primary:.1f}s）",
                 force=True,
             )
-            # 叠加池：后台独立轮询，不挡首屏、不进 collect_rows
-            try:
-                from strategy17_watch import start_overlay_poller
-
-                start_overlay_poller(
-                    stop=stop,
-                    on_log=lambda m: print(f"[{_now()}] {m}"),
-                )
-                _WATCH_OVERLAY_READY.set()
-            except Exception as e:  # noqa: BLE001
-                print(f"[{_now()}] 叠加池轮询未启动（继续）: {e}")
-                _WATCH_OVERLAY_READY.set()
+            _WATCH_OVERLAY_READY.set()
             try:
                 t1 = time.perf_counter()
                 primary_codes = {_code_key(w["code"]) for w in primary}
@@ -13779,7 +13756,6 @@ def cmd_watch(args: argparse.Namespace) -> None:
     )
     print(
         "行情: 热池（持仓+默认策略，≤48）SSE+新浪；"
-        "叠加观察池（紫阳等，可至数百只）独立新浪分块轮询、不进信号扫描/不挡启动；"
         + ("因子26 报价驱动买卖（分钟仅研究回测） · " if _CONDITION_BUY_ACTIVE else "因子26 实仓 1m path-dependent 止损 · ")
         + f"现价快刷≥{_QUOTE_PATCH_MIN_SEC:.1f}s · "
         f"信号扫描节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · "

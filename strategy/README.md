@@ -3,13 +3,13 @@
 > 项目总览：[`READ.md`](../READ.md) · 策略专题：[`docs/STRATEGY.md`](../docs/STRATEGY.md) · 因子13：[`docs/FACTOR13.md`](../docs/FACTOR13.md) · 因子14：[`docs/FACTOR14.md`](../docs/FACTOR14.md) · 任务：[`TODO.MD`](../TODO.MD)  
 > **文档同步规则**见本文 [§ 文档维护规则](#文档维护规则)；Cursor 规则：`.cursor/rules/docs-sync.mdc`
 
-默认生效：**策略十六·核心龙头（strategy16）= 因子27（核心龙头池）+ 因子26（多层止盈）+ 因子29（竞价末段按开盘撮合）+ 因子2（回撤加减仓预警）**。因子22 默认关闭，仅研究对照。
+默认生效：**策略一·援军战法（strategy1）= 因子13A 质量带 + 因子16 龙头排序 Top20 + 因子26（多层止盈）+ 因子29（竞价末段）+ 因子2（回撤加减仓预警）+ 因子22（收盘动量再买）**。盯盘买卖走**报价驱动公共执行**（与选股解耦）。策略十六核心龙头池改为观察/研究 Tab；遗留实仓卖出后清空、不回买。
 
 动态选股（研究）：**因子13A 质量带 → 因子16 龙头排序 Top20**（[`backtest/s1_f13_refit_2025/`](../backtest/s1_f13_refit_2025/) · 主板剔ST/百元股 · 无置顶）
 
 因子13B 熊盾 Top3（🔒锁定对照）：东材 / 珠峰 / 雷赛（[`LOCKED.json`](../backtest/factor13_bear_shield/LOCKED.json)）
 
-- 默认交易池看因子27（核心龙头近3个月冻结池）∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖看因子26（**开盘阈值买**；卖=硬保护/中赚回落一半与波动回落谁先到走谁/大赚档位/未到3%次日峰值回落）；因子2 默认只挂预警阈值（**回测不注资**）。
+- 默认交易池看策略一定盘池（因子13A→因子16 Top20）∪ **公共自选池**（天通/凯盛/东材/金安，全策略共用）；买卖看因子26（**开盘阈值买**；卖=硬保护/中赚回落一半与波动回落谁先到走谁/大赚档位/未到3%次日峰值回落）；**盯盘实时报价驱动**（`QUOTE_DRIVEN_ENABLED`，公共项）；因子2 默认只挂预警阈值（**回测不注资**）。策略十六旧仓继续按策略一卖出规则盯到平仓，卖出后清空。
 - 算法审核（2026-09-13）：[`docs/PROJECT_AUDIT.md`](../docs/PROJECT_AUDIT.md)。对账用 `backtest/strategy1_pool_1m/run.py --pool strategy16`（权益已扣 `strategy.costs`），不要用 `run_strategy16()` 的日线简化内核。
 - 仅开盘突破交易（旧因子1）：`run_open_break` 或切 bindings。
 - 旧版权益注资叠加：`run_strategy1(..., apply_factor2_overlay=True)`（`dd_topup`）。
@@ -99,8 +99,7 @@ strategy/
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡叠加 | 30m 确认止损 + 动态半仓 + 卖飞回补；见 [`docs/FACTOR25.md`](../docs/FACTOR25.md) |
 | **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买=开盘阈值 1m；卖=硬保护2.5% + 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + 阶梯10%/15% + 大赚后回落2%清 + 买入日未到3%则次日峰值回落2.5%（昨收/昨高只经 `overnight_peak_px`，仅昨日策略持有/买入才并入）；买入日盈利≥3%不记、其余都记（盯盘唯一落库口：硬保护/T1 哨兵，已记价≤成本；涨停/中段卖价不得记）；**盯盘与 1m 回测 10% 均减半**（`tp_stage`）；已平仓留痕价同 1m 触达；池回测近 7 日；见 [`docs/FACTOR26.md`](../docs/FACTOR26.md) |
 | **factor27** | 因子27-核心龙头 | 情绪题材 | 策略十六宇宙 | 通达信概念成交额≥中位数（最多扫 Top40）；每概念≤2；池约30只；主板非ST非科创创业、现价<100；滚动近3个月冻结；HQ/东财失败则轮动缓存活跃度+新浪现价；**0票不覆盖**旧池；交易宇宙另并**公共自选池**（全策略共用）；当前 as_of **2026-09-30** 见 [`docs/FACTOR27.md`](../docs/FACTOR27.md) |
-| **factor28** | 因子28-紫阳真君 | 情绪题材 | 策略十七宇宙 | 国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交并集；按上榜日数/买入额排序；见 [`docs/FACTOR28.md`](../docs/FACTOR28.md) |
-| **factor29** | 因子29-竞价末段强度 | 开盘执行 | 策略十六买卖 | 仅 9:20–9:25 指示路径；基准=窗口首个有效价；达个股阈值则武装。成交价=单股复核后的正式开盘（如圣阳/金安买点=18.53/60.00），禁止用最终开盘反造信号；见 [`docs/FACTOR29.md`](../docs/FACTOR29.md) |
+| **factor29** | 因子29-竞价末段强度 | 开盘执行 | 策略一/十六买卖 | 仅 9:20–9:25 指示路径；基准=窗口首个有效价；达个股阈值则武装。成交价=单股复核后的正式开盘（如圣阳/金安买点=18.53/60.00），禁止用最终开盘反造信号；见 [`docs/FACTOR29.md`](../docs/FACTOR29.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
 ```python
@@ -116,7 +115,7 @@ for f in list_factors():
 
 | ID | 名称 | 绑定因子 | 状态 | 说明 |
 |----|------|----------|------|------|
-| **strategy1** | 援军战法 | factor26 + factor2 + factor13a + factor16 + factor22 | ✅ | 开盘阈值买、多层止盈 + 回撤预警；四槽（盘中/隔夜均可持4、日最多买4、每槽约25%、当日卖出禁再买；先平再买，腾槽第一梯队现价≤买点+1%按现价）；定盘池 13A→16 Top20；别名 `open_break3` / `s1` / `策略一` |
+| **strategy1** | 援军战法 | factor26 + factor29 + factor2 + factor13a + factor16 + factor22 | ✅ 默认 | 开盘阈值买、多层止盈 + 竞价末段开盘撮合 + 回撤预警；盯盘报价驱动（公共）；定盘池 13A→16 Top20；别名 `open_break3` / `s1` / `策略一` |
 | **strategy2** | 策略二·缠论 | factor8 | ✅ | 日线交易；30分钟小转大一买候选、二买确认；日线三买增强；日线二卖或三卖退出；中证500+1000；别名 `s2` / `chan` |
 | **strategy3** | 策略三·鲍鱼捞饭 | factor30 + factor31 + factor32 | ✅ 研究绑定 | 手动中证1000扫描（剔ST/科创/创业等）；破前低预警，符合鲍鱼条件再标记 |
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧 run 别名 `run_strategy9` / `s9` / `策略九` |
@@ -125,9 +124,8 @@ for f in list_factors():
 | **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**（盯盘实时重算）→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2% 空仓；调参 2020–2024 +645%/夏普 1.23，盲测 2025→ +3.6%/回撤 55%；`backtest/strategy12_emotion_gate/` |
 | **strategy15** | 策略十五·连板减磨损 | factor1 + factor22 + factor23 + factor24 + factor25 | ✅ 盯盘 | 因子1 建仓；震荡 F25(30m) 确认止损/动态半仓/回补；高潮关接回；盯盘 Tab |
-| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor29 + factor2（factor22 默认关） | ✅ 默认 | 因子27池 ∪ 公共自选；阈值只认 `thr_2026.json`。9:15–9:19 竞价 OHLC 不参与买卖；**因子29** 只用 9:20–9:25 路径决定是否按**正式开盘**买卖。9:25 重置正式 OHLC，9:30 须有新报价；候选触买后单独拉该股票行情，正式开盘与聚合开盘一致才过门，Paper 落账前再强制复核。未武装因子29时仍走因子26开盘突破。隔夜保护卖出后可盘中过门回买 |
+| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor29 + factor2（factor22 默认关） | ✅ 盯盘观察 | 因子27池 ∪ 公共自选；阈值只认 `thr_2026.json`。不再作为默认交易池；遗留实仓卖出后清空。9:15–9:19 竞价 OHLC 不参与买卖；**因子29** 只用 9:20–9:25 路径决定是否按**正式开盘**买卖（仅本策略 Tab）。未武装因子29时仍走因子26开盘突破 |
 | **strategy16b** | 策略十六B·条件选股 | factor27 + factor26 + factor29 + factor2（factor22 默认关） | ✅ 盯盘 | 买卖内核同策略16；选股条件可在页面配置后从全A重筛，进入策略16B Tab / 动态观察池，**不覆盖**策略16正式池、**不入默认四槽** |
-| **strategy17** | 策略十七·紫阳真君 | factor28 + factor26 + factor2（factor22 默认关） | ✅ 盯盘 | 国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交池；买卖同因子26内核；**非默认交易池**（不入四槽）；盯盘 Tab |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
 策略九 CLI（`run_strategy9_emotion`）已归入 **因子18**，Web 策略栏不展示。
@@ -339,7 +337,6 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy12` | 因子18 恐慌空仓 + 因子21 涨停次日低开（v6 昨开板+指数昨收门）；`backtest/strategy12_emotion_gate/run.py`（盲测未过关） |
 | `run_strategy15` | 连板减磨损（F23/F24 + 震荡 F25 30m；回测 `backtest/strategy15_m30_chop/run.py`）；盯盘 `strategy15` Tab |
 | `run_core_leader_pool` | 策略十六近3个月选股：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json` |
-| `run_ziyang_pool` | 策略十七紫阳真君池：`python strategy/run_ziyang_pool.py` → `backtest/strategy17_ziyang/picks_3m.json` |
 | `compare_f22`（策略十六） | 三槽有/无 F22 同日再买对照：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7` → `COMPARE_F22.md` |
 | `compare_open_rebuy` | 卖出后开盘阈值同日再买：`…/compare_open_rebuy.py --days 7`；全池等权加 `--all-pool` → `COMPARE_OPEN_REBUY_ALL.md` |
 | `compare_hard_gap` | 低开破硬保护立刻卖 vs 开盘再下杀1%：`PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7` → `COMPARE_HARD_GAP.md` |

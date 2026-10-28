@@ -165,14 +165,18 @@ def _day_bars(quote: dict) -> pd.DataFrame:
 
 
 class TestStrategy16DefaultWiring(unittest.TestCase):
-    def test_watch_defaults_are_strategy16_factor26(self) -> None:
-        self.assertEqual(STRATEGY_ID, "strategy16")
+    def test_watch_defaults_are_strategy1_factor26(self) -> None:
+        self.assertEqual(STRATEGY_ID, "strategy1")
         self.assertEqual(FACTOR_ID, "factor26")
         self.assertEqual(FACTOR22_ID, "factor22")
         self.assertFalse(USE_FACTOR4)
         self.assertEqual(MAX_PORTFOLIO_SLOTS, 5)
         self.assertEqual(MAX_BUYS_PER_DAY, 2)
         self.assertIn(("600330", "天通股份"), SELF_WATCHLIST_PICKS)
+        from watch_config import factor29_auction_enabled, quote_driven_enabled
+
+        self.assertTrue(quote_driven_enabled())
+        self.assertTrue(factor29_auction_enabled())
 
     def test_bindings_factor22_off_factor26_on(self) -> None:
         from strategy import get_strategy
