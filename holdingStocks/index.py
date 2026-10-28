@@ -191,7 +191,6 @@ from watch_config import (
     USE_FACTOR4,
     WATCHLIST,
     effective_watchlist,
-    overlay_watchlist,
     primary_watchlist,
     normalize_signal_session,
     trading_session_date,
@@ -399,7 +398,7 @@ _ws_hub: LocalWsHub | None = None
 _watch_feed: Any = None
 _WATCH_SNAP_LOCK = threading.RLock()
 _WATCH_FRONT_READY = threading.Event()
-# 首屏只用热池；冷启动后再扫紫阳等叠加池，避免拖慢持仓/默认策略
+# 首屏只用热池；冷启动后再补齐策略一其余名单，避免拖慢持仓/默认策略
 _WATCH_OVERLAY_READY = threading.Event()
 _last_watch_snapshot: dict[str, Any] | None = None
 _last_snapshot_digest: str | None = None
@@ -480,7 +479,6 @@ def _scan_watchlist(
 ) -> list[dict[str, Any]]:
     """信号扫描：热池（默认策略一 + 遗留实仓）。
 
-    紫阳等大观察池不进此名单（独立轻量行情）。
     冷启动阶段（``_WATCH_BOOT_PRIMARY_ONLY``）只返回热池，``full=True`` 强制全量。
     """
     from watch_config import strategy1_watchlist
@@ -692,7 +690,7 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
 
 # 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
 WATCH_LIVE_TAB_IDS = frozenset(
-    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy16b", "strategy17"}
+    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy16b"}
 )
 
 _REGISTRY_KIND_ZH = {
@@ -837,8 +835,6 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
             tabs[-1]["reportPath"] = "docs/FACTOR27.md"
         if spec.id == "strategy16b":
             tabs[-1]["reportPath"] = "docs/FACTOR27.md"
-        if spec.id == "strategy17":
-            tabs[-1]["reportPath"] = "docs/FACTOR28.md"
         from strategy_picks_loader import load_strategy_picks
 
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
@@ -1500,7 +1496,6 @@ def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
         "strategy15": snapshot.get("strategy15"),
         "strategy16": snapshot.get("strategy16"),
         "strategy16b": snapshot.get("strategy16b"),
-        "strategy17": snapshot.get("strategy17"),
         "phaseKey": snapshot.get("phaseKey"),
         "strategy": snapshot.get("strategy"),
         "strategyTabs": [
@@ -2224,7 +2219,7 @@ def _attach_hwm_row_fields(
 
 
 def _iter_snapshot_price_rows(snap: dict[str, Any]):
-    for key in ("holdings", "strategy1", "strategy16", "strategy16b", "strategy17"):
+    for key in ("holdings", "strategy1", "strategy16", "strategy16b"):
         for r in snap.get(key) or []:
             if isinstance(r, dict):
                 yield r
@@ -2463,15 +2458,6 @@ def publish_live_quote_patch() -> bool:
         return False
     if not changed:
         return False
-    # 叠加池独立缓存：有新行情则替换 strategy17 行
-    try:
-        from strategy17_watch import cached_strategy17_rows
-
-        s17 = cached_strategy17_rows()
-        if s17:
-            snap["strategy17"] = s17
-    except Exception:  # noqa: BLE001
-        pass
     if _enrich_snapshot_comprehensive_trade_returns(snap):
         changed = True
     _stamp_snapshot_liveness(snap)
@@ -2618,14 +2604,12 @@ def publish_watch_snapshot(
     strategy3: dict[str, Any] = {}
     strategy8: dict[str, Any] = {}
     strategy15: dict[str, Any] = {}
-    strategy17_rows: list[dict[str, Any]] = []
     if _CONDITION_BUY_ACTIVE:
         include_strategy_panels = False
         previous = _QUOTE_RUNTIME_PANELS or _last_watch_snapshot or {}
         strategy3 = previous.get("strategy3") or {}
         strategy8 = previous.get("strategy8") or {}
         strategy15 = previous.get("strategy15") or {}
-        strategy17_rows = previous.get("strategy17") or (_last_watch_snapshot or {}).get("strategy17") or []
     if include_strategy_panels:
         from strategy3_watch import build_strategy3_payload
         from strategy8_watch import build_strategy8_payload
@@ -2664,12 +2648,6 @@ def publish_watch_snapshot(
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 策略十五快照失败（继续盯盘）: {e}")
             strategy15 = {"error": str(e), "rows": []}
-        try:
-            from strategy17_watch import cached_strategy17_rows
-
-            strategy17_rows = cached_strategy17_rows()
-        except Exception:  # noqa: BLE001
-            strategy17_rows = []
     # Retained signals are display data; never feed them back into execution.
     from alert_retention import LIVE_ALERT_RETENTION
     rows = [dict(row) for row in rows]
@@ -2691,7 +2669,6 @@ def publish_watch_snapshot(
         strategy8=strategy8,
         strategy15=strategy15,
         strategy16b=_strategy16b_rows_from_rows(rows),
-        strategy17=strategy17_rows,
         sectors=sectors,
         refresh_sec=refresh_sec,
         portfolio_codes=portfolio_codes,
@@ -2855,7 +2832,6 @@ def _seed_boot_watch_snapshot() -> None:
         "strategy8": {},
         "strategy15": {},
         "strategy16": [],
-        "strategy17": [],
         "sectors": {},
         "strategies": _watch_tabs_with_live_s8({}),
     }
@@ -8632,8 +8608,6 @@ def collect_rows(
                 pool_src = "factor27"
             elif str(w.get("universe") or "") == "strategy1":
                 pool_src = "strategy1_pool"
-            elif str(w.get("universe") or "") == "strategy17":
-                pool_src = "factor28"
         pool_label = str(
             w.get("池来源")
             or (
@@ -8642,11 +8616,7 @@ def collect_rows(
                 else (
                     "因子27"
                     if pool_src == "factor27"
-                    else (
-                        "策略池"
-                        if pool_src == "strategy1_pool"
-                        else ("紫阳真君" if pool_src == "factor28" else "")
-                    )
+                    else ("策略池" if pool_src == "strategy1_pool" else "")
                 )
             )
         )
@@ -13309,7 +13279,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     print(
         f"[{_now()}] 行情分层: SSE热池 {len(sinas_sse)} 只"
         f"（帽 {MAX_SSE_QUOTES}）· 新浪批量 {len(sinas_batch)} 只"
-        f"（含策略一）· 紫阳等大池独立轮询"
+        f"（含策略一）"
     )
 
     def get_quote(sina: str) -> dict[str, Any]:
@@ -13719,18 +13689,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 f"默认策略快照已推送: {report1}（新增 {n_primary}/{len(primary_rest)} 只 · {time.perf_counter() - t_primary:.1f}s）",
                 force=True,
             )
-            # 叠加池：后台独立轮询，不挡首屏、不进 collect_rows
-            try:
-                from strategy17_watch import start_overlay_poller
-
-                start_overlay_poller(
-                    stop=stop,
-                    on_log=lambda m: print(f"[{_now()}] {m}"),
-                )
-                _WATCH_OVERLAY_READY.set()
-            except Exception as e:  # noqa: BLE001
-                print(f"[{_now()}] 叠加池轮询未启动（继续）: {e}")
-                _WATCH_OVERLAY_READY.set()
+            _WATCH_OVERLAY_READY.set()
             try:
                 t1 = time.perf_counter()
                 primary_codes = {_code_key(w["code"]) for w in primary}
@@ -13797,7 +13756,6 @@ def cmd_watch(args: argparse.Namespace) -> None:
     )
     print(
         "行情: 热池（持仓+默认策略，≤48）SSE+新浪；"
-        "叠加观察池（紫阳等，可至数百只）独立新浪分块轮询、不进信号扫描/不挡启动；"
         + ("因子26 报价驱动买卖（分钟仅研究回测） · " if _CONDITION_BUY_ACTIVE else "因子26 实仓 1m path-dependent 止损 · ")
         + f"现价快刷≥{_QUOTE_PATCH_MIN_SEC:.1f}s · "
         f"信号扫描节流≥{_MIN_WATCH_REFRESH_SEC:.0f}s · 无推送保底 {interval}s · "

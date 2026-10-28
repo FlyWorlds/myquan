@@ -22,7 +22,7 @@ def apply_day_pnl_window(snapshot, now=None):
                 'dayPnlVsEquity', 'settledDayPnl'):
         changed = changed or account.get(key) is not None
         account[key] = None
-    for section in ('holdings', 'strategy1', 'strategy16', 'strategy16b', 'strategy17'):
+    for section in ('holdings', 'strategy1', 'strategy16', 'strategy16b'):
         for row in snapshot.get(section) or []:
             changed = changed or row.get('当日盈亏') is not None or row.get('当日盈亏%') is not None
             row['当日盈亏'] = None

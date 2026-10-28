@@ -56,13 +56,6 @@ class TestLoadHoldingsNoRecursion(unittest.TestCase):
         self.assertEqual(spy.call_count, 1, "load_holdings 被 watchlist 回调（递归）")
         self.assertLess(elapsed, 5.0)
         self.assertTrue(data["positions"], "应为盯盘宇宙补齐空仓位")
-        overlay = [
-            w
-            for w in index.effective_watchlist(data)
-            if w.get("quote_tier") == "overlay"
-        ]
-        named = [w for w in overlay if str(w.get("name") or "") not in {"", w.get("code")}]
-        self.assertTrue(named, "叠加池应带 picks 本地名称")
 
 
 class TestThrMapCache(unittest.TestCase):

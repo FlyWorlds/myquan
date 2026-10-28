@@ -99,7 +99,6 @@ strategy/
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡叠加 | 30m 确认止损 + 动态半仓 + 卖飞回补；见 [`docs/FACTOR25.md`](../docs/FACTOR25.md) |
 | **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买=开盘阈值 1m；卖=硬保护2.5% + 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + 阶梯10%/15% + 大赚后回落2%清 + 买入日未到3%则次日峰值回落2.5%（昨收/昨高只经 `overnight_peak_px`，仅昨日策略持有/买入才并入）；买入日盈利≥3%不记、其余都记（盯盘唯一落库口：硬保护/T1 哨兵，已记价≤成本；涨停/中段卖价不得记）；**盯盘与 1m 回测 10% 均减半**（`tp_stage`）；已平仓留痕价同 1m 触达；池回测近 7 日；见 [`docs/FACTOR26.md`](../docs/FACTOR26.md) |
 | **factor27** | 因子27-核心龙头 | 情绪题材 | 策略十六宇宙 | 通达信概念成交额≥中位数（最多扫 Top40）；每概念≤2；池约30只；主板非ST非科创创业、现价<100；滚动近3个月冻结；HQ/东财失败则轮动缓存活跃度+新浪现价；**0票不覆盖**旧池；交易宇宙另并**公共自选池**（全策略共用）；当前 as_of **2026-09-30** 见 [`docs/FACTOR27.md`](../docs/FACTOR27.md) |
-| **factor28** | 因子28-紫阳真君 | 情绪题材 | 策略十七宇宙 | 国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交并集；按上榜日数/买入额排序；见 [`docs/FACTOR28.md`](../docs/FACTOR28.md) |
 | **factor29** | 因子29-竞价末段强度 | 开盘执行 | 策略一/十六买卖 | 仅 9:20–9:25 指示路径；基准=窗口首个有效价；达个股阈值则武装。成交价=单股复核后的正式开盘（如圣阳/金安买点=18.53/60.00），禁止用最终开盘反造信号；见 [`docs/FACTOR29.md`](../docs/FACTOR29.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
@@ -127,7 +126,6 @@ for f in list_factors():
 | **strategy15** | 策略十五·连板减磨损 | factor1 + factor22 + factor23 + factor24 + factor25 | ✅ 盯盘 | 因子1 建仓；震荡 F25(30m) 确认止损/动态半仓/回补；高潮关接回；盯盘 Tab |
 | **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor29 + factor2（factor22 默认关） | ✅ 盯盘观察 | 因子27池 ∪ 公共自选；阈值只认 `thr_2026.json`。不再作为默认交易池；遗留实仓卖出后清空。9:15–9:19 竞价 OHLC 不参与买卖；**因子29** 只用 9:20–9:25 路径决定是否按**正式开盘**买卖（仅本策略 Tab）。未武装因子29时仍走因子26开盘突破 |
 | **strategy16b** | 策略十六B·条件选股 | factor27 + factor26 + factor29 + factor2（factor22 默认关） | ✅ 盯盘 | 买卖内核同策略16；选股条件可在页面配置后从全A重筛，进入策略16B Tab / 动态观察池，**不覆盖**策略16正式池、**不入默认四槽** |
-| **strategy17** | 策略十七·紫阳真君 | factor28 + factor26 + factor2（factor22 默认关） | ✅ 盯盘 | 国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交池；买卖同因子26内核；**非默认交易池**（不入四槽）；盯盘 Tab |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
 策略九 CLI（`run_strategy9_emotion`）已归入 **因子18**，Web 策略栏不展示。
@@ -339,7 +337,6 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy12` | 因子18 恐慌空仓 + 因子21 涨停次日低开（v6 昨开板+指数昨收门）；`backtest/strategy12_emotion_gate/run.py`（盲测未过关） |
 | `run_strategy15` | 连板减磨损（F23/F24 + 震荡 F25 30m；回测 `backtest/strategy15_m30_chop/run.py`）；盯盘 `strategy15` Tab |
 | `run_core_leader_pool` | 策略十六近3个月选股：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json` |
-| `run_ziyang_pool` | 策略十七紫阳真君池：`python strategy/run_ziyang_pool.py` → `backtest/strategy17_ziyang/picks_3m.json` |
 | `compare_f22`（策略十六） | 三槽有/无 F22 同日再买对照：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7` → `COMPARE_F22.md` |
 | `compare_open_rebuy` | 卖出后开盘阈值同日再买：`…/compare_open_rebuy.py --days 7`；全池等权加 `--all-pool` → `COMPARE_OPEN_REBUY_ALL.md` |
 | `compare_hard_gap` | 低开破硬保护立刻卖 vs 开盘再下杀1%：`PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7` → `COMPARE_HARD_GAP.md` |

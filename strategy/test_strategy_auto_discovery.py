@@ -20,7 +20,6 @@ _EXPECTED_IDS = frozenset(
         "strategy15",
         "strategy16",
         "strategy16b",
-        "strategy17",
     }
 )
 

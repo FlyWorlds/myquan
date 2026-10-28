@@ -166,7 +166,6 @@ class TestStrategy1DefaultPool(unittest.TestCase):
                 "strategy3",
                 "strategy8",
                 "strategy15",
-                "strategy17",
             ],
         )
 

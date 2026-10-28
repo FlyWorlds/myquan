@@ -900,7 +900,6 @@ def clone_snapshot_for_quote_patch(snap: dict[str, Any]) -> dict[str, Any]:
         "strategy15",
         "strategy16",
         "strategy16b",
-        "strategy17",
     ):
         val = snap.get(key)
         if isinstance(val, list):
@@ -955,7 +954,7 @@ def patch_snapshot_live_quotes(
             changed = True
     snap["holdings"] = holdings
 
-    for key in ("strategy1", "strategy16", "strategy16b", "strategy17"):
+    for key in ("strategy1", "strategy16", "strategy16b"):
         rows = list(snap.get(key) or [])
         if not rows:
             continue
@@ -1170,7 +1169,6 @@ def build_watch_snapshot(
     strategy8: dict[str, Any] | None = None,
     strategy15: dict[str, Any] | None = None,
     strategy16b: list[dict[str, Any]] | None = None,
-    strategy17: list[dict[str, Any]] | None = None,
     sectors: dict[str, Any] | None = None,
     refresh_sec: int = 5,
     portfolio_codes: set[str] | None = None,
@@ -1188,8 +1186,6 @@ def build_watch_snapshot(
         if src == "self" or label == "自选":
             return 0
         if src == "factor27" or label == "因子27":
-            return 1
-        if src == "factor28" or label == "紫阳真君":
             return 1
         return 2
 
@@ -1243,22 +1239,6 @@ def build_watch_snapshot(
         strategy16b_rows = _fill_stock_names([_row_json(r) for r in strategy16b])
     else:
         strategy16b_rows = _fill_stock_names([dict(r) for r in strategy16_rows])
-    try:
-        from watch_config import ziyang_codes
-
-        s17_codes = ziyang_codes()
-    except Exception:  # noqa: BLE001
-        s17_codes = set()
-    if strategy17 is not None:
-        strategy17_rows = _fill_stock_names([_row_json(r) for r in strategy17])
-    else:
-        strategy17_rows = _fill_stock_names(_sort_pool_rows(
-            [
-                _strip_holdings_pnl(r)
-                for r in rows
-                if code_key(str(r.get("代码") or "")) in s17_codes
-            ]
-        ))
     slot_meta = None
     for r in rows:
         if isinstance(r.get("_slot_meta"), dict):
@@ -1308,7 +1288,6 @@ def build_watch_snapshot(
         "strategy15": _public_panel_json(strategy15 or {}),
         "strategy16": strategy16_rows,
         "strategy16b": strategy16b_rows,
-        "strategy17": strategy17_rows,
         "sectors": sectors or {},
         "strategies": strategies or [],
     }

@@ -68,7 +68,6 @@ const strategy8Tab = computed(() => strategyTabs.value.find((t) => t.id === 'str
 const strategy15Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy15'))
 const strategy16Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16'))
 const strategy16bTab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16b'))
-const strategy17Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy17'))
 
 type Strategy16BPriceMax = '50' | '100' | '200' | 'none'
 
@@ -642,22 +641,10 @@ const closedCount = computed(() => closedHoldings.value.length)
         />
         <StrategyPicksPanel :picks="strategy15Tab?.picks" />
       </section>
-      <section v-show="activeTab === 'strategy17'">
-        <StrategyInfoPanel v-if="strategy17Tab" :tab="strategy17Tab" class="mb-4" />
-        <Strategy1Panel
-          v-if="snapshot"
-          :rows="snapshot.strategy17 || []"
-          :phase="snapshot.phase"
-          :slot-meta="snapshot.slotMeta"
-          pool-category="紫阳真君"
-          status-mode="strategy"
-        />
-        <StrategyPicksPanel :picks="strategy17Tab?.picks" />
-      </section>
     </template>
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘 Tab 仅展示有实时面板的策略（策略1 / 16 / 16B / 3 / 8 / 15 / 17）。因子持有模板、研究型条目见
+      盯盘 Tab 仅展示有实时面板的策略（策略1 / 16 / 16B / 3 / 8 / 15）。因子持有模板、研究型条目见
       <NuxtLink to="/strategies" class="text-accent hover:underline">策略说明</NuxtLink>
       、
       <NuxtLink to="/factors" class="text-accent hover:underline">因子说明</NuxtLink>

@@ -247,14 +247,13 @@ bash backend/run.sh
 
 1. **持仓首屏**：只加载实仓、今日已实现和用户登记持仓池。
 2. **默认策略**：加载策略一定盘池和公共自选池。
-3. **全量补齐**：后台补策略16观察池、策略16B动态池、策略17叠加观察池、策略3/8/15面板、板块轮动和画像缓存。
+3. **全量补齐**：后台补策略16观察池、策略16B动态池、策略3/8/15面板、板块轮动和画像缓存。
 
 这些任务不再阻塞首屏：
 
-- 股票名称缓存预热（账本补空仓位只读本地名称表 / 紫阳 picks 名，不逐票打外网）
+- 股票名称缓存预热（账本补空仓位只读本地名称表，不逐票打外网）
 - 个股画像/板块反查
 - 策略3/8/15快照面板
-- 策略17叠加观察池
 - 板块轮动
 
 行情 seed 与日线缓存预热并行执行；新浪批量失败时仍会按票兜底拉日线。
@@ -328,7 +327,6 @@ GET /api/strategy16b/select
 | 策略3 | T-1连板梯度情绪 + 首板晋级跟踪 |
 | 策略8 | 当日涨停实时定题材 |
 | 策略15 | 连板减磨损与震荡处理 |
-| 策略17 | 紫阳真君叠加观察池，非默认交易池 |
 
 重要口径：
 
@@ -374,9 +372,6 @@ PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strate
 ```bash
 # 策略16核心龙头池
 python strategy/run_core_leader_pool.py
-
-# 策略17紫阳真君池
-python strategy/run_ziyang_pool.py
 ```
 
 ### 持仓同步
@@ -437,7 +432,6 @@ myquan/
 - [策略注册表](strategy/README.md)
 - [因子26](docs/FACTOR26.md)
 - [因子27](docs/FACTOR27.md)
-- [因子28](docs/FACTOR28.md)
 - [因子29](docs/FACTOR29.md)
 - [盯盘说明](holdingStocks/README.md)
 - [时间完整性](docs/TEMPORAL_INTEGRITY.md)

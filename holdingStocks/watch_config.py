@@ -37,21 +37,17 @@ from strategy.open_break import (
 from strategy.watch_universe import (
     CORE_LEADER_PICKS_PATH,
     POOL_SRC_FACTOR27,
-    POOL_SRC_FACTOR28,
     POOL_SRC_LABEL,
     POOL_SRC_SELF,
     SELF_WATCHLIST_PICKS,
     STRATEGY16_EXTRA_PICKS,
     STRATEGY16_THR_PATH,
-    ZIYANG_PICKS_PATH,
     core_leader_codes,
     factor27_codes,
     load_core_leader_payload,
     load_strategy16_thr_map,
-    load_ziyang_payload,
     self_watchlist_codes,
     self_watchlist_pick_rows,
-    ziyang_codes,
 )
 
 # 默认定盘：策略一 + 因子13A/16 定盘池 + 因子26/因子29/因子2/因子22
@@ -805,7 +801,7 @@ def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
 def _name_for_code(code: str, holdings: dict[str, Any] | None = None) -> tuple[str, str]:
     """(名称, 市场)；名称优先 holdings，其次置顶名单 / 本地名称表。
 
-    冷启动与 ``effective_watchlist`` 会扫叠加池近百只代码，这里禁止逐票打外网
+    冷启动与 ``effective_watchlist`` 会扫热池全部代码，这里禁止逐票打外网
     （``resolve_stock_name`` → 东财），缺名时退回代码本身。
     """
     c = code_key(code)
@@ -891,34 +887,12 @@ def primary_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, 
 
 
 def overlay_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """叠加观察池（如紫阳真君）：仅新浪批量行情，不占东财 SSE。
-
-    名称用因子28 picks 本地字段，不在冷启动逐票打外网补名。
-    """
-    primary_codes = {code_key(w["code"]) for w in primary_watchlist(holdings)}
-    out: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for it in load_ziyang_payload().get("picks") or []:
-        if not isinstance(it, dict):
-            continue
-        code = code_key(str(it.get("code") or it.get("symbol") or ""))
-        if not code or code == "000000" or code in primary_codes or code in seen:
-            continue
-        seen.add(code)
-        item = meta_for_code(code, holdings)
-        pick_name = str(it.get("name") or "").strip()
-        if pick_name:
-            item["name"] = pick_name
-        item["universe"] = "strategy17"
-        item["pool_src"] = POOL_SRC_FACTOR28
-        item["池来源"] = POOL_SRC_LABEL[POOL_SRC_FACTOR28]
-        item["quote_tier"] = "overlay"
-        out.append(item)
-    return out
+    """叠加观察池已移除（原策略十七/紫阳）。保留空实现，全量宇宙=热池。"""
+    return []
 
 
 def effective_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """全量盯盘宇宙 = 热池 ∪ 叠加池（信号扫描）；SSE 只用 primary_watchlist。"""
+    """全量盯盘宇宙 = 热池（信号扫描）；SSE 只用 primary_watchlist。"""
     base = primary_watchlist(holdings)
     seen = {code_key(w["code"]) for w in base}
     out = list(base)
