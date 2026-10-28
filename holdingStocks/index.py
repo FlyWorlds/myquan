@@ -8406,6 +8406,7 @@ def _collect_quote_runtime_rows(get_quote=None):
             "买入时间": pos.get("buy_time"), "持仓最高": pos.get("peak_high"),
             "持仓最高时间": pos.get("peak_high_at"), "pool_src": w.get("pool_src"),
             "池来源": w.get("池来源") or ("自选" if w.get("self_watch") else "因子27"),
+            "self_scope": w.get("self_scope"),
             "_slot_meta": slot_meta(data), "_paper_read_model": model, "报价驱动": True,
             "持仓状态": "已经买入" if int(pos.get("qty") or 0) > 0 else "空仓",
             "已触买": "否", "已触止损": "否", "阈值就绪": False,
@@ -8528,6 +8529,7 @@ def collect_rows(
                 )
             )
         )
+        self_scope = w.get("self_scope")
         entry_pct = _watch_pct(w)
         base_stop_pct = _watch_stop_pct(w)
         tick = _watch_tick(w)
@@ -9710,6 +9712,7 @@ def collect_rows(
                         "_open_finalized": bool(q.get("_open_finalized", True)),
                         "池来源": pool_label or None,
                         "pool_src": pool_src or None,
+                        "self_scope": self_scope,
                         "买点": buy_show,
                         "止损": round(fill_px, px_digits) if not rebuy_hit else lv["stop"],
                         "基础止损": (
@@ -10201,6 +10204,7 @@ def collect_rows(
                     "_open_finalized": bool(q.get("_open_finalized", True)),
                     "池来源": pool_label or None,
                     "pool_src": pool_src or None,
+                    "self_scope": self_scope,
                     "买点": float(lv.get("open_buy") or lv["buy_trigger"]),
                     "止损": lv["stop"],
                     "基础止损": lv_base["stop"],
@@ -10354,6 +10358,7 @@ def collect_rows(
                     "阈值%": pct_pct,
                     "池来源": pool_label or None,
                     "pool_src": pool_src or None,
+                    "self_scope": self_scope,
                     "买点": None,
                     "止损": None,
                     "基础止损": None,

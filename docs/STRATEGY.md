@@ -34,6 +34,7 @@
 - 真源：`strategy/pullback_wave_stop.py`（`eval_multi_tp_bar`）、`strategy/factors/factor26.py`。
 - 池回测研究对照：`--buy-mode open_or_attack` 可加回攻击波（默认只买开盘涨到 `ceil(开盘×(1+entry_pct))`）。
 - 因子1（`open_break.py`）仍供策略三/四/八等复用，已非策略一主因子。
+- **策略一自选**：`STRATEGY1_SELF_WATCHLIST_PICKS`（当前：海量数据 603138）。只进策略一 Tab / 信号扫描，与公共自选分开，不入策略十六默认交易池。
 
 ### 因子2 · 回撤预警
 

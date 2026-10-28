@@ -148,7 +148,8 @@ const activeItems = computed(() => {
                 <span v-else>{{ stockLabel(it.symbol, it.name) }}</span>
               </td>
               <td class="px-2 py-1 text-xs text-ui-text-3">
-                <template v-if="activeCat === '自选'">公共自选 · 全策略共用</template>
+                <template v-if="activeCat === '自选' && it.self_scope === 'strategy1'">策略一自选</template>
+                <template v-else-if="activeCat === '自选'">公共自选 · 全策略共用</template>
                 <template v-else-if="it.thr != null && it.oos_pl_ratio != null">
                   阈值 ±{{ (Number(it.thr) * 100).toFixed(1) }}% · 盈亏比 {{ Number(it.oos_pl_ratio).toFixed(2) }}
                   <span v-if="it.oos_win_rate_pct != null"> · 胜率 {{ Number(it.oos_win_rate_pct).toFixed(1) }}%</span>

@@ -112,17 +112,27 @@ _POOL_CATEGORY: dict[str, str] = {
 }
 
 
-def _self_pick_items() -> list[dict[str, Any]]:
-    """公共自选 → picks 条目（带分类）。"""
+def _self_pick_items(strategy_id: str = "") -> list[dict[str, Any]]:
+    """自选 → picks 条目（带分类）。策略一额外并入专属自选。"""
     try:
-        from watch_config import SELF_WATCHLIST_PICKS, code_key
+        from watch_config import (
+            SELF_WATCHLIST_PICKS,
+            STRATEGY1_SELF_WATCHLIST_PICKS,
+            code_key,
+        )
     except Exception:  # noqa: BLE001
         return []
+    pairs: list[tuple[str, str, str]] = []
+    if str(strategy_id) == "strategy1":
+        pairs.extend((code, name, "strategy1") for code, name in STRATEGY1_SELF_WATCHLIST_PICKS)
+    pairs.extend((code, name, "public") for code, name in SELF_WATCHLIST_PICKS)
+    seen: set[str] = set()
     out: list[dict[str, Any]] = []
-    for i, (code, name) in enumerate(SELF_WATCHLIST_PICKS, 1):
+    for i, (code, name, scope) in enumerate(pairs, 1):
         c = code_key(str(code))
-        if not c or c == "000000":
+        if not c or c == "000000" or c in seen:
             continue
+        seen.add(c)
         out.append(
             {
                 "rank": i,
@@ -132,6 +142,7 @@ def _self_pick_items() -> list[dict[str, Any]]:
                 "category": "自选",
                 "分类": "自选",
                 "pool_src": "self",
+                "self_scope": scope,
             }
         )
     return out
@@ -146,7 +157,7 @@ def merge_public_self_picks(
     pool_cat = _POOL_CATEGORY.get(str(strategy_id), "策略池")
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
-    for it in _self_pick_items():
+    for it in _self_pick_items(strategy_id):
         c = str(it.get("code") or "").zfill(6)[-6:]
         if not c or c in seen:
             continue
@@ -170,10 +181,24 @@ def merge_public_self_picks(
     for i, row in enumerate(merged, 1):
         row["rank"] = i
     base["items"] = merged
-    n_self = sum(1 for x in merged if x.get("pool_src") == "self" or x.get("分类") == "自选")
+    n_s1 = sum(1 for x in merged if x.get("self_scope") == "strategy1")
+    n_public = sum(
+        1
+        for x in merged
+        if x.get("self_scope") == "public"
+        or (
+            (x.get("pool_src") == "self" or x.get("分类") == "自选")
+            and x.get("self_scope") != "strategy1"
+        )
+    )
     note = str(base.get("note") or "")
-    if n_self and "公共自选" not in note:
-        base["note"] = (f"含公共自选 {n_self} 只 · " + note).strip(" ·")
+    prefix = ""
+    if n_s1 and "策略一自选" not in note:
+        prefix += f"含策略一自选 {n_s1} 只 · "
+    if n_public and "公共自选" not in note:
+        prefix += f"含公共自选 {n_public} 只 · "
+    if prefix:
+        base["note"] = (prefix + note).strip(" ·")
     return base
 
 
