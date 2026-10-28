@@ -119,9 +119,9 @@ cd holdingStocks && python run_regression_tests.py
 
 **微信推送（N1）**：预警与成交分模板。扫描只发 **【策略预警】**（将买入 / 已触买未成交 / 槽满 / 将止损 / T+1 暂不可卖 / 跌停不可卖）；**真实 paper 成交**在 `apply_paper_slot_buy` / `apply_exit_fill` 写入仓位与 ledger 之后发 **【模拟买入】** / **【模拟卖出】**（含 reason_code：WORKING_STOP / OPEN_PROTECT / PATH / HALF / EOD_RESERVE）。已成交事件不再被扫描重复推。预警扫描仅默认策略池（strategy16）；实仓 SELL 即使已离开默认池仍推成交通知。Shadow 不发微信。**非交易日**（周末/交易所休市）`is_signal_window` 为假，扫描预警不推、不自动成交；启动「盯盘启动完成」仍可能发一条。根目录 `bash start.sh --no-wechat` / `watch --no-wechat`：**预警与买卖成交都不推**，不影响 paper execution。
 
-**会话失效自动恢复**：`prepare failed` / `ret=-2` 识别为 `SESSION_INVALID`（不空转重试）。盘中改为异步入队（daemon worker），暂停出站并将通知写入有限 pending（同票同预警类型去重）；轮询 `~/.openclaw/openclaw-weixin/accounts/*.context-tokens.json` 的 mtime，检测到 inbound 刷新后再探测发送并 flush。持续失效超过约 5 分钟只打一次 `[WECHAT][ACTION REQUIRED]`。OpenClaw 发送与恢复不阻塞行情/策略/paper。
+**会话失效自动恢复**：`prepare failed` / `ret=-2` 识别为 `SESSION_INVALID`（不空转重试）。盘中改为异步入队（daemon worker），暂停出站并将通知写入有限 pending（同票同预警类型去重，**落盘** `wechat_alert_state.json`）；轮询 `~/.openclaw/openclaw-weixin/accounts/*.context-tokens.json` 的 mtime，检测到 inbound 刷新后再探测发送并 flush。`sent` 只在真正发出后写入，启动时未送达的触发信号会补发，不会被冷却误吞。持续失效超过约 5 分钟只打一次 `[WECHAT][ACTION REQUIRED]`。OpenClaw 发送与恢复不阻塞行情/策略/paper。
 
-**channels login**：`openclaw channels login --channel openclaw-weixin` 解决的是**通道账号登录**（常需扫码），不等于刷新出站 `context_token`。默认 **不会每次启动都跑**（会阻塞扫码）。行为由 `wechat_notify.json` 控制：`login_on_channel_fail=true`（默认）仅在通道未就绪/自检 prepare failed 时引导 login；若要每次启动都 login，设 `"login_on_start": true`，或启动加 `--wechat-login`。自然 BUY/SELL 微信覆盖仍在积累（**PENDING**），不能当成已完成。
+**channels login**：`openclaw channels login --channel openclaw-weixin` 解决的是**通道账号登录**（常需扫码），不等于刷新出站 `context_token`。微信号不变时 **默认不自动扫码**。仅 `--wechat-login` / `"login_on_start": true`，或本机还没有账号且 `"login_on_channel_fail": true` 才会跑 login。`prepare failed` 请给机器人发一条消息，不要天天扫码。页面「微信连接」仍可手动换号。
 
 ## 依赖
 

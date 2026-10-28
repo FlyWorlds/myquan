@@ -11,5 +11,7 @@
   "send_retries": 3,
   "send_retry_backoff_sec": 2.0,
   "wait_inbound_sec": 180,
-  "wait_inbound_poll_sec": 8
+  "wait_inbound_poll_sec": 8,
+  "login_on_start": false,
+  "login_on_channel_fail": false
 }

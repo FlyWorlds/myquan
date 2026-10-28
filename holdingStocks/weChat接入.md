@@ -107,7 +107,9 @@ copy wechat_notify.json.example wechat_notify.json
 | `channel` | 固定 `openclaw-weixin` |
 | `account` | 微信 bot 账号 id（如 `xxxx-im-bot`） |
 | `target` | 接收方，形如 `…@im.wechat`（扫码登录账号的 userId） |
-| `cooldown_sec` | 同一标的同一信号冷却秒数（默认 1800） |
+| `cooldown_sec` | 同一标的同一信号冷却秒数（默认 1800；只在**真正发出**后起算） |
+| `login_on_start` | 每次启动都扫码（默认 false；微信号不变时不要开） |
+| `login_on_channel_fail` | 仅本机还没有账号且通道未就绪时才扫码（默认 false） |
 | `openclaw_bin` | CLI 路径；Windows 建议写 `…\nvm\v24.15.0\openclaw.cmd` |
 | `node_bin_dir` | Node 目录，发送前拼进 PATH |
 | `timeout_sec` | 发送超时 |
@@ -119,7 +121,7 @@ copy wechat_notify.json.example wechat_notify.json
 # target：对应账户 json 里的 userId 字段
 ```
 
-运行时防抖状态：`wechat_alert_state.json`（已 gitignore）。
+运行时防抖状态：`wechat_alert_state.json`（已 gitignore）。含 `sent`（已送达）与 `pending`（未发出，重启后补发）。
 
 ---
 
@@ -213,9 +215,10 @@ bash ../start.sh
 | 范围 | **仅默认策略池（strategy16）** 的扫描预警；strategy1 overlay 不作为默认策略预警。实仓 SELL 成交微信不要求仍在默认池 |
 | 内容 | **【策略预警】**：将买入 / 已触买未成交 / 槽满 / 将止损 / T+1暂不可卖 / 跌停不可卖；**【模拟买入】** / **【模拟卖出】** 仅 paper mutation+ledger 成功后（`notify_trade_fill`）；已成交不再扫描重复推 |
 | 窗口 | 预警扫描：**9:30–15:00** 连续竞价；**成交推送不限窗口**（纸面买卖一成交就推） |
-| 冷却 | `wechat_notify.json` 的 `cooldown_sec`（测试日可设 120）；成交键另有 30s 去重 |
+| 冷却 | `wechat_notify.json` 的 `cooldown_sec`（测试日可设 120）；只在真正发出后起算。未发出的启动触发信号重启/会话恢复后补发 |
 | `--no-wechat` | 预警与 BUY/SELL/PARTIAL 成交微信全部关闭；**不改变**仓位/ledger |
-| 阻塞 | `prepare failed` → 微信给机器人发「1」刷新会话。根目录一键启动默认带 `--wechat-optional`，自检失败**仍保留推送**，勿当已关闭。通知送达应单独核验 |
+| 阻塞 | `prepare failed` → 微信给机器人发「1」刷新会话，**不要重新扫码**（微信号不变）。根目录一键启动默认带 `--wechat-optional`，自检失败**仍保留推送**，勿当已关闭。通知送达应单独核验 |
+| 扫码 | 仅首次/换号：页面「微信连接」或 `bash start.sh --wechat-login`。日常启动不自动弹码 |
 
 手工推送：
 

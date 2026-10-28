@@ -12172,6 +12172,38 @@ def _refresh_once(
     return path, published
 
 
+def _replay_startup_watch_alerts() -> None:
+    """自检完成后补扫一次：未真正发出的启动触发信号再入队。"""
+    try:
+        from wechat_notify import (
+            notify_watch_rows,
+            filter_default_strategy_alert_rows,
+            start_wechat_delivery_worker,
+            restore_persisted_pending,
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 微信启动补发准备失败: {e}")
+        return
+    try:
+        restore_persisted_pending()
+        start_wechat_delivery_worker()
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 微信投递 worker 启动失败（继续）: {e}")
+    if not is_signal_window():
+        return
+    with _WATCH_SNAP_LOCK:
+        snap = dict(_last_watch_snapshot) if isinstance(_last_watch_snapshot, dict) else {}
+    rows = [r for r in _iter_snapshot_price_rows(snap)]
+    if not rows:
+        return
+    try:
+        pushed = notify_watch_rows(filter_default_strategy_alert_rows(rows))
+        if pushed:
+            print(f"[{_now()}] 微信补发启动触发信号 {len(pushed)} 条")
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 微信启动补发异常: {e}")
+
+
 def _parse_hhmm(text: str) -> tuple[int, int]:
     parts = str(text).strip().replace("：", ":").split(":")
     if len(parts) != 2:
@@ -12913,9 +12945,16 @@ def cmd_watch(args: argparse.Namespace) -> None:
     skip_wechat_check = bool(getattr(args, "skip_wechat_check", False))
     wechat_optional = bool(getattr(args, "wechat_optional", False))
     try:
-        from wechat_notify import set_watch_wechat_enabled
+        from wechat_notify import (
+            set_watch_wechat_enabled,
+            start_wechat_delivery_worker,
+            restore_persisted_pending,
+        )
 
         set_watch_wechat_enabled(wechat)
+        if wechat:
+            restore_persisted_pending()
+            start_wechat_delivery_worker()
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 微信运行时开关设置失败（继续）: {e}")
 
@@ -12931,6 +12970,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             ok, detail = False, str(e)
         if ok:
             print(f"[{_now()}] 微信套件就绪")
+            _replay_startup_watch_alerts()
             return True
         print(f"[{_now()}] 微信套件失败:\n{detail[:600]}")
         if wechat_optional:
@@ -12940,6 +12980,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             print(
                 f"[{_now()}] --wechat-optional：继续盯盘并保留微信推送。"
                 "请用微信给机器人发一条消息刷新会话；之后买卖/预警会自动推。"
+                "本地已有微信号时不会自动弹出扫码。"
             )
         return False
 
@@ -13641,6 +13682,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                     print(f"[{_now()}] 微信启动通知失败: {detail[:200]}")
             except Exception as e:  # noqa: BLE001
                 print(f"[{_now()}] 微信启动通知异常: {e}")
+            _replay_startup_watch_alerts()
 
         threading.Thread(
             target=_send_wechat_startup, name="wechat-startup-msg", daemon=True
