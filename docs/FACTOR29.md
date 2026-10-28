@@ -1,9 +1,9 @@
 # 因子29 · 竞价末段强度
 
 > 研究/纸面用途，不构成投资建议。  
-> 注册表见 [`strategy/README.md`](../strategy/README.md)；挂载 **策略十六 / 策略十六B**。
+> 注册表见 [`strategy/README.md`](../strategy/README.md)；挂载 **策略一 / 策略十六 / 策略十六B**。
 
-**最后更新**：2026-10-13
+**最后更新**：2026-10-28
 
 ---
 
@@ -34,5 +34,5 @@
 
 - `strategy/factors/factor29.py`
 - 盯盘：`holdingStocks/quote_feed.py` 独立 `_auction_*` 字段；`index.py` `_apply_factor29_auction`
-- 绑定：`strategy/strategies/strategy16/bindings.py`
+- 绑定：`strategy/strategies/strategy1/bindings.py`、`strategy/strategies/strategy16/bindings.py`
 - 单测：`strategy/test_factor29.py`

@@ -1,0 +1,12 @@
+{
+  "closed_cycles": 10,
+  "winning_cycles": 3,
+  "losing_cycles": 7,
+  "stop_cycles": 7,
+  "stops_without_new_event_low": 6,
+  "closed_profit": 22037.45683645129,
+  "closed_loss": -37018.51752354189,
+  "realized_pnl": -14981.0606870906,
+  "mean_loss_hold_days": 4.714285714285714,
+  "first_target_less_than_1R": 3
+}

@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from account_reconciliation import account_summary, number
+from holding_status import held_position_status
 
 
 def build_boot_holdings(model, *, session, clock, get_quote=None):
@@ -17,10 +18,12 @@ def build_boot_holdings(model, *, session, clock, get_quote=None):
         row = {"代码": code, "名称": pos.get("name") or code, "市场": pos.get("market"),
                "持仓": qty, "可用": pos.get("available"), "成本": pos.get("cost"),
                "买入时间": pos.get("buy_time"), "置顶": True, "已实现": False,
-               "持仓状态": "已经买入", "交易日": session, "现价": None,
+               "持仓状态": held_position_status(pos.get("buy_time"), session), "交易日": session, "现价": None,
                "当日盈亏": None, "浮盈": None, "市值": None,
                "买点": None, "止损": None, "已触买": "否", "已触止损": "否",
                "持仓最高": pos.get("peak_high"), "预警": "", "bgClass": "status-hold"}
+        fee = float(pos.get('buy_fees_remaining') or 0)
+        row['买入剩余费用'] = fee
         try:
             q = get_quote(sina_of(code)) if get_quote else None
         except Exception:
@@ -34,7 +37,7 @@ def build_boot_holdings(model, *, session, clock, get_quote=None):
             mark, cost = number(q.get("last")), number(pos.get("cost"))
             if valid and mark is not None and mark > 0:
                 row.update({"现价": mark, "昨收": number(q.get("prev_close")),
-                            "开盘": number(q.get("open")), "今日最高": number(q.get("high")),
+                            "开盘": number(q.get("open")), "今日最高": number(q.get("high")), "今日最低": number(q.get("low")),
                             "当日涨幅": number(q.get("day_chg_pct")), "更新": q.get("last_ts"),
                             "报价数据库版本": q.get("_database_quote_revision"),
                             "报价用途": "历史参考" if q.get("_reference_only") else "已确认报价",
@@ -43,7 +46,12 @@ def build_boot_holdings(model, *, session, clock, get_quote=None):
                     day, pct, _ = session_day_pnl(mark=mark, qty=qty, cost=cost,
                             prev_close=row.get("昨收"), bought_today=str(pos.get("buy_time") or "")[:10] == session,
                             fallback=None)
-                    row.update({"浮盈": round((mark-cost)*qty, 2), "浮盈%": round((mark/cost-1)*100, 2),
+                    base = cost*qty+fee
+                    floating = round((mark-cost)*qty-fee, 2)
+                    if str(pos.get('buy_time') or '')[:10] == session and day is not None:
+                        day = round(day-fee, 2)
+                        pct = round(day/base*100, 2)
+                    row.update({"浮盈": floating, "浮盈%": round(floating/base*100, 2),
                                 "当日盈亏": day, "当日盈亏%": pct})
         rows.append(row)
     return rows, account_summary(model.state, rows, session, read_model=model)

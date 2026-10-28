@@ -134,6 +134,11 @@ def build_watch_request_handler(
 
         def do_GET(self) -> None:  # noqa: N802
             path = self.path.split("?", 1)[0]
+            if path == '/api/strategy3/scan':
+                from strategy.strategies.strategy3.manual_scan import status
+                from strategy3_watch import build_strategy3_payload
+                self._send_json(dict(job=status(),payload=build_strategy3_payload()))
+                return
             if path == "/api/wechat/login":
                 self._wechat_login()
                 return
@@ -175,15 +180,21 @@ def build_watch_request_handler(
                 qs = parse_qs(urlparse(self.path).query)
                 raw = (qs.get("code") or [""])[0]
                 try:
-                    from stock_profile import get_stock_profile, normalize_stock_code
+                    from stock_profile import _has_valuation, get_stock_profile, normalize_stock_code
 
                     code = normalize_stock_code(raw)
                     if not code:
                         self._send_json({"error": "invalid code"}, status=400)
                         return
+                    profile_data = get_stock_profile(code)
+                    cc = (
+                        "private, max-age=60"
+                        if _has_valuation(profile_data)
+                        else "no-cache, no-store, must-revalidate"
+                    )
                     self._send_json(
-                        get_stock_profile(code),
-                        cache_control="private, max-age=60",
+                        profile_data,
+                        cache_control=cc,
                     )
                 except Exception as exc:  # noqa: BLE001
                     self._send_json(
@@ -225,6 +236,10 @@ def build_watch_request_handler(
                     self._send_json(payload, status=status)
                 except Exception:
                     self._send_json({"error": "database trade ledger unavailable"}, status=503)
+                return
+            if path == "/api/market-radar":
+                from market_radar import SERVICE
+                self._send_json(SERVICE.get(force=(parse_qs(urlparse(self.path).query).get('refresh') == ['1'])))
                 return
             if path == "/api/holdings/state":
                 try:
@@ -275,6 +290,16 @@ def build_watch_request_handler(
             self.send_error(404, "Not Found")
 
         def do_POST(self) -> None:  # noqa: N802
+            if self.path.split('?',1)[0]=='/api/strategy3/scan':
+                host=urlparse('http://'+self.headers.get('Host','')).hostname
+                origin=self.headers.get('Origin')
+                allowed={f'http://{h}:{self.server.server_port}' for h in ('localhost','127.0.0.1')}
+                allowed.update({'http://localhost:3000','http://127.0.0.1:3000'})
+                if self.client_address[0] not in ('127.0.0.1','::1') or host not in ('localhost','127.0.0.1','::1') or (origin and origin not in allowed) or self.headers.get('Sec-Fetch-Site')=='cross-site':
+                    self._send_json({'error':'local origin required'},status=403);return
+                from strategy.strategies.strategy3.manual_scan import start
+                self._send_json(dict(job=start()),status=202)
+                return
             if self.path.split("?", 1)[0] == "/api/wechat/test":
                 self._wechat_login(test=True)
                 return
@@ -301,7 +326,9 @@ def build_watch_request_handler(
                         data = json.loads(backend("selection-groups/" + group_id)["payload"])
                         if on_selection_load is None:
                             raise ValueError("选股载入不可用")
-                        on_selection_load(data)
+                        loaded = on_selection_load(data)
+                        if isinstance(loaded, dict):
+                            data = loaded
                     else:
                         data = backend("selection-groups", body) if path.endswith("groups") else start_replay(str(__import__('uuid').UUID(body["groupId"])))
                     self._send_json(data)

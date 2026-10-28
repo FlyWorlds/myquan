@@ -30,8 +30,10 @@
   · factor25 — 30m 震荡减磨损（确认止损 + 动态半仓止盈 + 卖飞回补）
   · factor26 — 浮盈回落一半止盈（买同开盘突破；卖=持仓最高浮盈回落一半；策略一主因子）
   · factor27 — 核心龙头（通达信活跃概念偏高 → 概念内龙头；滚动近3个月冻结；策略十六宇宙）
-  · factor28 — 紫阳真君（国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交池；策略十七宇宙）
   · factor29 — 竞价末段强度（9:20–9:25 对称触发；正式开盘复核后按开盘撮合）
+  · factor30 — 结构前低破位（底分型A→上笔→顶分型B→相邻下行破A）
+  · factor31 — 放量破位后下影线/收复前低止跌
+  · factor32 — 冻结结构失效、前低前高分批退出与风险仓位
   · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
   分类见 strategy.factors.categories
 """
@@ -65,8 +67,10 @@ from strategy.factors import factor24 as _factor24  # noqa: F401
 from strategy.factors import factor25 as _factor25  # noqa: F401
 from strategy.factors import factor26 as _factor26  # noqa: F401
 from strategy.factors import factor27 as _factor27  # noqa: F401
-from strategy.factors import factor28 as _factor28  # noqa: F401
 from strategy.factors import factor29 as _factor29  # noqa: F401
+from strategy.factors import factor30 as _factor30  # noqa: F401
+from strategy.factors import factor31 as _factor31  # noqa: F401
+from strategy.factors import factor32 as _factor32  # noqa: F401
 from strategy.factors import factor_cf1 as _factor_cf1  # noqa: F401
 from strategy.core.factor_registry import FACTOR_REGISTRY, get_factor, list_factors
 from strategy.factors.categories import list_category_catalog

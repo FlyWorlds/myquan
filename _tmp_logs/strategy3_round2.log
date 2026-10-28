@@ -1,0 +1,174 @@
+train complete 128 shortlist 16
+locked candidate {"rule": {"support": "chan", "window": 10, "trigger": "dry_reversal", "volume": 1.2, "quality_filter": "none", "allow_rebound": false}, "policy": {"depth": 0.0, "hold": 20, "stop": 0.04, "take": 0.1, "mode": "stabilize", "acceleration": false, "initial": 1.0, "add_drop": 0.03, "reduce": 0.5, "slot": 0.2, "stop_mode": "cost", "take_mode": "structure", "risk_budget": 0.005, "min_rr": 0.0, "max_entry_risk": 0.08, "stop_buffer_atr": 0.3, "stop_buffer_pct": 0.0, "stop_trigger": "intraday"}, "accepted_by_validation": true, "status": "research_only", "trial": 80, "selection_basis": "2020-2022训练>=18，按触发族取前2；2023/2024双年各>=6笔且盈利，2024不低于基准且回撤<=基准1.25倍；2026不参与选择", "auto_trade": false}
+{
+  "candidate": {
+    "rule": {
+      "support": "chan",
+      "window": 10,
+      "trigger": "dry_reversal",
+      "volume": 1.2,
+      "quality_filter": "none",
+      "allow_rebound": false
+    },
+    "policy": {
+      "depth": 0.0,
+      "hold": 20,
+      "stop": 0.04,
+      "take": 0.1,
+      "mode": "stabilize",
+      "acceleration": false,
+      "initial": 1.0,
+      "add_drop": 0.03,
+      "reduce": 0.5,
+      "slot": 0.2,
+      "stop_mode": "cost",
+      "take_mode": "structure",
+      "risk_budget": 0.005,
+      "min_rr": 0.0,
+      "max_entry_risk": 0.08,
+      "stop_buffer_atr": 0.3,
+      "stop_buffer_pct": 0.0,
+      "stop_trigger": "intraday"
+    },
+    "accepted_by_validation": true,
+    "status": "research_only",
+    "trial": 80,
+    "selection_basis": "2020-2022训练>=18，按触发族取前2；2023/2024双年各>=6笔且盈利，2024不低于基准且回撤<=基准1.25倍；2026不参与选择",
+    "auto_trade": false
+  },
+  "baseline": [
+    {
+      "period": "训练",
+      "total_return_pct": 13.487354610963266,
+      "max_drawdown_pct": -1.9342444286225335,
+      "sharpe_ratio": 1.4470465688604035,
+      "n_trades": 42,
+      "win_rate": 0.5476190476190477,
+      "mean_hold_days": 7.714285714285714,
+      "open_positions": 1,
+      "final_nav": 1134873.5461096326,
+      "start": "2020-01-02",
+      "end": "2022-12-30"
+    },
+    {
+      "period": "验证2023",
+      "total_return_pct": 2.8670600044183425,
+      "max_drawdown_pct": -3.2235708749156933,
+      "sharpe_ratio": 0.8072407108027504,
+      "n_trades": 22,
+      "win_rate": 0.45454545454545453,
+      "mean_hold_days": 8.772727272727273,
+      "open_positions": 2,
+      "final_nav": 1028670.6000441834,
+      "start": "2023-01-03",
+      "end": "2023-12-29"
+    },
+    {
+      "period": "验证2024",
+      "total_return_pct": 4.2334966798924345,
+      "max_drawdown_pct": -4.208663549164415,
+      "sharpe_ratio": 0.8655314444009743,
+      "n_trades": 27,
+      "win_rate": 0.4074074074074074,
+      "mean_hold_days": 6.814814814814815,
+      "open_positions": 0,
+      "final_nav": 1042334.9667989243,
+      "start": "2024-01-02",
+      "end": "2024-12-31"
+    },
+    {
+      "period": "复核2025",
+      "total_return_pct": 9.689325279716222,
+      "max_drawdown_pct": -1.1113595594079761,
+      "sharpe_ratio": 2.56864581471712,
+      "n_trades": 13,
+      "win_rate": 0.7692307692307693,
+      "mean_hold_days": 14.461538461538462,
+      "open_positions": 1,
+      "final_nav": 1096893.2527971622,
+      "start": "2025-01-02",
+      "end": "2025-12-31"
+    },
+    {
+      "period": "复核2026",
+      "total_return_pct": -0.009495845225182542,
+      "max_drawdown_pct": -3.058426717693863,
+      "sharpe_ratio": 0.01580840776832495,
+      "n_trades": 11,
+      "win_rate": 0.18181818181818182,
+      "mean_hold_days": 5.2727272727272725,
+      "open_positions": 1,
+      "final_nav": 999905.0415477481,
+      "start": "2026-01-05",
+      "end": "2026-10-22"
+    }
+  ],
+  "results": [
+    {
+      "period": "训练",
+      "total_return_pct": 14.99072104532464,
+      "max_drawdown_pct": -3.984617476516028,
+      "sharpe_ratio": 1.1094824418132339,
+      "n_trades": 69,
+      "win_rate": 0.4782608695652174,
+      "mean_hold_days": 7.869565217391305,
+      "open_positions": 4,
+      "final_nav": 1149907.2104532465,
+      "start": "2020-01-02",
+      "end": "2022-12-30"
+    },
+    {
+      "period": "验证2023",
+      "total_return_pct": 1.0144740995157164,
+      "max_drawdown_pct": -2.0907581295264377,
+      "sharpe_ratio": 0.3629480922757482,
+      "n_trades": 14,
+      "win_rate": 0.35714285714285715,
+      "mean_hold_days": 10.0,
+      "open_positions": 2,
+      "final_nav": 1010144.7409951572,
+      "start": "2023-01-03",
+      "end": "2023-12-29"
+    },
+    {
+      "period": "验证2024",
+      "total_return_pct": 10.00311859151022,
+      "max_drawdown_pct": -2.774490441055022,
+      "sharpe_ratio": 1.6670675955021426,
+      "n_trades": 20,
+      "win_rate": 0.5,
+      "mean_hold_days": 8.95,
+      "open_positions": 1,
+      "final_nav": 1100031.1859151023,
+      "start": "2024-01-02",
+      "end": "2024-12-31"
+    },
+    {
+      "period": "复核2025",
+      "total_return_pct": 12.175118214253722,
+      "max_drawdown_pct": -1.89667753018542,
+      "sharpe_ratio": 2.6574686701026073,
+      "n_trades": 17,
+      "win_rate": 0.8823529411764706,
+      "mean_hold_days": 15.0,
+      "open_positions": 0,
+      "final_nav": 1121751.1821425373,
+      "start": "2025-01-02",
+      "end": "2025-12-31"
+    },
+    {
+      "period": "复核2026",
+      "total_return_pct": -1.4981060687090597,
+      "max_drawdown_pct": -2.8227730086875846,
+      "sharpe_ratio": -0.4911979897698807,
+      "n_trades": 10,
+      "win_rate": 0.3,
+      "mean_hold_days": 6.9,
+      "open_positions": 0,
+      "final_nav": 985018.9393129094,
+      "start": "2026-01-05",
+      "end": "2026-10-22"
+    }
+  ],
+  "output": "/Users/wangxiangyu/Documents/myquan/backtest/strategy3_abalone/round2"
+}

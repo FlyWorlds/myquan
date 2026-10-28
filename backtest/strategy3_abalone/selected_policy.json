@@ -1,0 +1,17 @@
+{
+  "policy": {
+    "depth": 0.0,
+    "hold": 10,
+    "stop": 0.1,
+    "take": 0.1,
+    "mode": "stabilize",
+    "acceleration": true,
+    "initial": 1.0,
+    "add_drop": 0.03,
+    "reduce": 1.0,
+    "slot": 0.2
+  },
+  "status": "research_only",
+  "selected_on": "train<=2023, validation=2024; test>=2025 untouched",
+  "universe_bias": true
+}

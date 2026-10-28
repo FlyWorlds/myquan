@@ -48,7 +48,8 @@ register_strategy(
         aliases=("s16", "核心龙头", "core_leader"),
         implemented=True,
         meta={
-            "default": True,
+            "default": False,
+            "tab_order": 1.2,
             "mode": "watch_overlay",
             "watch_tab": True,
             "universe": "factor27",

@@ -282,7 +282,7 @@ class TestFinalizeStatusAuction(unittest.TestCase):
         with patch("index.market_phase", return_value="auction_locked"):
             with patch("index.is_exit_executable", return_value=False):
                 idx._finalize_position_row(row)
-        self.assertEqual(row["持仓状态"], "已经买入")
+        self.assertEqual(row["持仓状态"], "持有")
         self.assertFalse(row.get("可执行"))
 
     def test_hit_stop_continuous_pending_sell(self) -> None:

@@ -37,6 +37,32 @@ class BootHoldingsTests(unittest.TestCase):
         self.assertIsNone(rows[0]["买点"])
         self.assertIsNone(rows[0]["止损"])
 
+    def test_purchase_day_label_rolls_to_holding_without_a_new_quote(self):
+        model = AccountReadModel(self.state())
+        for session, expected in [("2026-10-14", "已经买入"), ("2026-10-15", "持有")]:
+            rows, _ = build_boot_holdings(model, session=session, clock=session+" 09:20:00")
+            self.assertEqual(rows[0]["持仓状态"], expected)
+
+    def test_final_position_status_keeps_sell_priority_and_t1(self):
+        import index
+        for buy, available, hit, expected in [
+            ("2026-10-21 09:47:45", 2500, False, "持有"),
+            ("2026-10-22 09:47:45", 0, True, "已经买入"),
+            ("2026-10-21 09:47:45", 2500, True, "待卖出"),
+        ]:
+            row = {"持仓": 2500, "可用": available, "买入时间": buy,
+                   "交易日": "2026-10-22", "持仓状态": "已经买入", "预警": "已经买入",
+                   "已触止损": "是" if hit else "否"}
+            with patch.object(index, "market_phase", return_value="continuous"), \
+                 patch.object(index, "is_exit_executable", return_value=True):
+                index._finalize_position_row(row)
+            self.assertEqual(row["持仓状态"], expected)
+            if expected == "持有":
+                self.assertEqual(row["预警"], "持有")
+                self.assertEqual(row["因子侧"], "持有")
+            if not available:
+                self.assertFalse(row["可执行"])
+
     def test_stale_future_daily_or_unavailable_quote_never_invents_valuation(self):
         for quote in [dict(session="2026-10-13",last_ts="2026-10-13 15:00:00",last=11),
                       dict(session="2026-10-14",last_ts="2026-10-14 16:00:00",last=11),

@@ -138,7 +138,7 @@ def filter_portfolio_holdings(
 
     排序：实仓置顶（最多 MAX_PORTFOLIO_SLOTS）→ 当日已平仓（不占槽）→ 预警/候选。
     平仓 = 纸面实仓止损/止盈卖出清仓；当日留痕（槽位留痕=True）不占槽，下一交易日清空。
-    买点预警仅默认策略池（strategy16=核心龙头）；旧 portfolio_pool 空壳不进持仓 Tab。
+    买点预警仅默认策略池（strategy1=定盘池）；策略十六遗留空仓不进持仓 Tab。
     竞价：仍展示实仓 + 当日已平仓；其它空仓预警不进持仓 Tab。
     连续竞价与午休：当日买点预警进持仓 Tab。
     收盘：当日已触买仍留在预警栏（当天不摘），将买入等接近信号不留。
@@ -279,6 +279,25 @@ def filter_portfolio_holdings(
             return s
         return "9999-99-99 99:99:99"
 
+    has_buy_time = any(
+        (int(r.get("持仓") or 0) > 0 or bool(r.get("槽位占用")))
+        and bool(str(r.get("买入时间") or r.get("buy_time") or "").strip())
+        for r in picked
+    )
+
+    def _buy_time_desc_key(r: dict[str, Any]) -> tuple[int, float, str]:
+        """纸面持仓：按买入时间降序（最近买入排最前）；无买入时间排后。"""
+        raw = str(r.get("买入时间") or r.get("buy_time") or "").strip().replace("T", " ")
+        if raw:
+            for fmt, ln in (("%Y-%m-%d %H:%M:%S", 19), ("%Y-%m-%d %H:%M", 16), ("%Y-%m-%d", 10)):
+                try:
+                    dt = datetime.strptime(raw[:ln], fmt)
+                    return (0, -dt.timestamp(), "")
+                except ValueError:
+                    continue
+            return (0, 0.0, "".join(chr(max(0, 0xFFFF - ord(ch))) for ch in raw[:19]))
+        return (1, 0.0, "")
+
     def _sort_key(r: dict[str, Any]) -> tuple:
         qty = int(r.get("持仓") or 0)
         pos = str(r.get("持仓状态") or "")
@@ -290,6 +309,8 @@ def filter_portfolio_holdings(
             tier = 2
         else:
             tier = 3
+        if tier == 0 and has_buy_time:
+            return (tier, _buy_time_desc_key(r), str(r.get("代码") or ""))
         try:
             dist = float(r.get("距买点%") if r.get("距买点%") is not None else 9_999.0)
         except (TypeError, ValueError):
@@ -718,6 +739,7 @@ def patch_row_live_quote(
             row["今日最高"] = day_high
     if low is not None and low > 0:
         row["最低"] = round(min(low, last), digits)
+        row["今日最低"] = row["最低"]
 
     buy = _as_pos_float(row.get("买点"))
     if buy is not None and buy > 0:
@@ -877,7 +899,7 @@ def clone_snapshot_for_quote_patch(snap: dict[str, Any]) -> dict[str, Any]:
         "strategy3",
         "strategy15",
         "strategy16",
-        "strategy17",
+        "strategy16b",
     ):
         val = snap.get(key)
         if isinstance(val, list):
@@ -932,7 +954,7 @@ def patch_snapshot_live_quotes(
             changed = True
     snap["holdings"] = holdings
 
-    for key in ("strategy1", "strategy16", "strategy17"):
+    for key in ("strategy1", "strategy16", "strategy16b"):
         rows = list(snap.get(key) or [])
         if not rows:
             continue
@@ -1147,7 +1169,6 @@ def build_watch_snapshot(
     strategy8: dict[str, Any] | None = None,
     strategy15: dict[str, Any] | None = None,
     strategy16b: list[dict[str, Any]] | None = None,
-    strategy17: list[dict[str, Any]] | None = None,
     sectors: dict[str, Any] | None = None,
     refresh_sec: int = 5,
     portfolio_codes: set[str] | None = None,
@@ -1165,8 +1186,6 @@ def build_watch_snapshot(
         if src == "self" or label == "自选":
             return 0
         if src == "factor27" or label == "因子27":
-            return 1
-        if src == "factor28" or label == "紫阳真君":
             return 1
         return 2
 
@@ -1220,22 +1239,6 @@ def build_watch_snapshot(
         strategy16b_rows = _fill_stock_names([_row_json(r) for r in strategy16b])
     else:
         strategy16b_rows = _fill_stock_names([dict(r) for r in strategy16_rows])
-    try:
-        from watch_config import ziyang_codes
-
-        s17_codes = ziyang_codes()
-    except Exception:  # noqa: BLE001
-        s17_codes = set()
-    if strategy17 is not None:
-        strategy17_rows = _fill_stock_names([_row_json(r) for r in strategy17])
-    else:
-        strategy17_rows = _fill_stock_names(_sort_pool_rows(
-            [
-                _strip_holdings_pnl(r)
-                for r in rows
-                if code_key(str(r.get("代码") or "")) in s17_codes
-            ]
-        ))
     slot_meta = None
     for r in rows:
         if isinstance(r.get("_slot_meta"), dict):
@@ -1285,7 +1288,6 @@ def build_watch_snapshot(
         "strategy15": _public_panel_json(strategy15 or {}),
         "strategy16": strategy16_rows,
         "strategy16b": strategy16b_rows,
-        "strategy17": strategy17_rows,
         "sectors": sectors or {},
         "strategies": strategies or [],
     }

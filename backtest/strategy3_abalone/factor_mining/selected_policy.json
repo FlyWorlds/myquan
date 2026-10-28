@@ -1,0 +1,25 @@
+{
+  "factor": {
+    "support": "chan",
+    "trigger": "small_bear",
+    "volume": 2.0,
+    "acceleration": false,
+    "depth": 0.0,
+    "window": 10,
+    "shrink_volume": false,
+    "room": 0.0
+  },
+  "policy": {
+    "depth": 0.0,
+    "hold": 10,
+    "stop": 0.08,
+    "take": 0.1,
+    "mode": "stabilize",
+    "acceleration": false,
+    "initial": 1.0,
+    "add_drop": 0.03,
+    "reduce": 0.5,
+    "slot": 0.2
+  },
+  "research_only": true
+}

@@ -1,0 +1,8 @@
+{
+  "active_binding_changed": false,
+  "action": "keep_baseline",
+  "reason": "历史双年验证通过，但2026收益弱于基准，跨年优势不一致；保留研究候选，不按2026家族对照重新挑选赢家。",
+  "candidate": "candidate.json",
+  "research_only": true,
+  "auto_trade": false
+}

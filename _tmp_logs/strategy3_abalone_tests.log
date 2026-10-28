@@ -1,0 +1,276 @@
+..F...F..........................                                        [100%]
+=================================== FAILURES ===================================
+______________ test_limit_open_defer_exit_without_future_high_low ______________
+
+self = NumpyBlock: 8 dtype: int64, indexer = (3,), value = 7.2
+
+    def setitem(self, indexer, value) -> Block:
+        """
+        Attempt self.values[indexer] = value, possibly creating a new array.
+    
+        Parameters
+        ----------
+        indexer : tuple, list-like, array-like, slice, int
+            The subset of self.values to set
+        value : object
+            The value being set
+    
+        Returns
+        -------
+        Block
+    
+        Notes
+        -----
+        `indexer` is a direct slice/positional indexer. `value` must
+        be a compatible shape.
+        """
+    
+        value = self._standardize_fill_value(value)
+    
+        values = cast(np.ndarray, self.values)
+        if self.ndim == 2:
+            values = values.T
+    
+        # length checking
+        check_setitem_lengths(indexer, value, values)
+    
+        if self.dtype != _dtype_obj:
+            # GH48933: extract_array would convert a pd.Series value to np.ndarray
+            value = extract_array(value, extract_numpy=True)
+        try:
+>           casted = np_can_hold_element(values.dtype, value)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.venv/lib/python3.12/site-packages/pandas/core/internals/blocks.py:1115: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+dtype = dtype('int64'), element = 7.2
+
+    def np_can_hold_element(dtype: np.dtype, element: Any) -> Any:
+        """
+        Raise if we cannot losslessly set this element into an ndarray with this dtype.
+    
+        Specifically about places where we disagree with numpy.  i.e. there are
+        cases where numpy will raise in doing the setitem that we do not check
+        for here, e.g. setting str "X" into a numeric ndarray.
+    
+        Returns
+        -------
+        Any
+            The element, potentially cast to the dtype.
+    
+        Raises
+        ------
+        ValueError : If we cannot losslessly store this element with this dtype.
+        """
+        if dtype == _dtype_obj:
+            return element
+    
+        tipo = _maybe_infer_dtype_type(element)
+    
+        if dtype.kind in "iu":
+            if isinstance(element, range):
+                if _dtype_can_hold_range(element, dtype):
+                    return element
+                raise LossySetitemError
+    
+            if is_integer(element) or (is_float(element) and element.is_integer()):
+                # e.g. test_setitem_series_int8 if we have a python int 1
+                #  tipo may be np.int32, despite the fact that it will fit
+                #  in smaller int dtypes.
+                info = np.iinfo(dtype)
+                if info.min <= element <= info.max:
+                    return dtype.type(element)
+                raise LossySetitemError
+    
+            if tipo is not None:
+                if tipo.kind not in "iu":
+                    if isinstance(element, np.ndarray) and element.dtype.kind == "f":
+                        # If all can be losslessly cast to integers, then we can hold them
+                        with np.errstate(invalid="ignore"):
+                            # We check afterwards if cast was losslessly, so no need to show
+                            # the warning
+                            casted = element.astype(dtype)
+                        comp = casted == element
+                        if comp.all():
+                            # Return the casted values bc they can be passed to
+                            #  np.putmask, whereas the raw values cannot.
+                            #  see TestSetitemFloatNDarrayIntoIntegerSeries
+                            return casted
+                        raise LossySetitemError
+    
+                    elif isinstance(element, ABCExtensionArray) and isinstance(
+                        element.dtype, CategoricalDtype
+                    ):
+                        # GH#52927 setting Categorical value into non-EA frame
+                        # TODO: general-case for EAs?
+                        try:
+                            casted = element.astype(dtype)
+                        except (ValueError, TypeError) as err:
+                            raise LossySetitemError from err
+                        # Check for cases of either
+                        #  a) lossy overflow/rounding or
+                        #  b) semantic changes like dt64->int64
+                        comp = casted == element
+                        if not comp.all():
+                            raise LossySetitemError
+                        return casted
+    
+                    # Anything other than integer we cannot hold
+                    raise LossySetitemError
+                if (
+                    dtype.kind == "u"
+                    and isinstance(element, np.ndarray)
+                    and element.dtype.kind == "i"
+                ):
+                    # see test_where_uint64
+                    casted = element.astype(dtype)
+                    if (casted == element).all():
+                        # TODO: faster to check (element >=0).all()?  potential
+                        #  itemsize issues there?
+                        return casted
+                    raise LossySetitemError
+                if dtype.itemsize < tipo.itemsize:
+                    raise LossySetitemError
+                if not isinstance(tipo, np.dtype):
+                    # i.e. nullable IntegerDtype; we can put this into an ndarray
+                    #  losslessly iff it has no NAs
+                    arr = element._values if isinstance(element, ABCSeries) else element
+                    if arr._hasna:
+                        raise LossySetitemError
+                    return element
+    
+                return element
+    
+>           raise LossySetitemError
+E           pandas.errors.LossySetitemError
+
+.venv/lib/python3.12/site-packages/pandas/core/dtypes/cast.py:1750: LossySetitemError
+
+During handling of the above exception, another exception occurred:
+
+    def test_limit_open_defer_exit_without_future_high_low():
+        f = fixture()
+>       f.loc[3, 'open'] = 7.2  # 昨收8，跌停开盘，虽盘中打开仍保守不卖
+        ^^^^^^^^^^^^^^^^
+
+test_strategy3_abalone.py:41: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/pandas/core/indexing.py:938: in __setitem__
+    iloc._setitem_with_indexer(indexer, value, self.name)
+.venv/lib/python3.12/site-packages/pandas/core/indexing.py:1953: in _setitem_with_indexer
+    self._setitem_with_indexer_split_path(indexer, value, name)
+.venv/lib/python3.12/site-packages/pandas/core/indexing.py:2044: in _setitem_with_indexer_split_path
+    self._setitem_single_column(loc, value, pi)
+.venv/lib/python3.12/site-packages/pandas/core/indexing.py:2181: in _setitem_single_column
+    self.obj._mgr.column_setitem(loc, plane_indexer, value)
+.venv/lib/python3.12/site-packages/pandas/core/internals/managers.py:1541: in column_setitem
+    new_mgr = col_mgr.setitem((idx,), value)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pandas/core/internals/managers.py:620: in setitem
+    return self.apply("setitem", indexer=indexer, value=value)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pandas/core/internals/managers.py:445: in apply
+    applied = getattr(b, f)(**kwargs)
+              ^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pandas/core/internals/blocks.py:1118: in setitem
+    nb = self.coerce_to_target_dtype(value, raise_on_upcast=True)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = NumpyBlock: 8 dtype: int64, other = 7.2, raise_on_upcast = True
+
+    @final
+    def coerce_to_target_dtype(self, other, raise_on_upcast: bool) -> Block:
+        """
+        coerce the current block to a dtype compat for other
+        we will return a block, possibly object, and not raise
+    
+        we can also safely try to coerce to the same dtype
+        and will receive the same block
+        """
+        new_dtype = find_result_type(self.values.dtype, other)
+        if new_dtype == self.dtype:
+            # GH#52927 avoid RecursionError
+            raise AssertionError(
+                "Something has gone wrong, please report a bug at "
+                "https://github.com/pandas-dev/pandas/issues"
+            )
+    
+        # In a future version of pandas, the default will be that
+        # setting `nan` into an integer series won't raise.
+        if (
+            is_scalar(other)
+            and is_integer_dtype(self.values.dtype)
+            and isna(other)
+            and other is not NaT
+            and not (
+                isinstance(other, (np.datetime64, np.timedelta64)) and np.isnat(other)
+            )
+        ):
+            raise_on_upcast = False
+        elif (
+            isinstance(other, np.ndarray)
+            and other.ndim == 1
+            and is_integer_dtype(self.values.dtype)
+            and is_float_dtype(other.dtype)
+            and lib.has_only_ints_or_nan(other)
+        ):
+            raise_on_upcast = False
+    
+        if raise_on_upcast:
+>           raise TypeError(f"Invalid value '{other}' for dtype '{self.values.dtype}'")
+E           TypeError: Invalid value '7.2' for dtype 'int64'
+
+.venv/lib/python3.12/site-packages/pandas/core/internals/blocks.py:468: TypeError
+___________________ StrategyRuleTests.test_factor2_dd_alert ____________________
+
+self = <test_strategy_rules.StrategyRuleTests testMethod=test_factor2_dd_alert>
+
+    def test_factor2_dd_alert(self) -> None:
+        from strategy import get_factor, get_strategy, get_strategy_bindings
+        from strategy.core.strategy_registry import get_strategy_spec
+        from strategy.dd_alert import derive_thresholds, evaluate_alert
+    
+        f2 = get_factor("factor2")
+        self.assertTrue(f2.implemented)
+        self.assertEqual(f2.meta.get("kind"), "dd_alert")
+        self.assertFalse(f2.meta.get("overlay"))
+    
+        # 历史最大 26% → 加仓线 20%；年均值 19% → 减仓线 10%
+        th = derive_thresholds(hist_max_dd=0.26, avg_yearly_max_dd=0.19)
+        self.assertAlmostEqual(th.add_alert_dd, 0.20, places=4)
+        self.assertAlmostEqual(th.reduce_alert_dd, 0.10, places=4)
+    
+        peak = 100_000.0
+        # 浅回撤观望
+        sig = evaluate_alert(equity=95_000, peak=peak, thresholds=th)
+        self.assertEqual(sig["action"], "hold")
+        # 触及加仓线
+        sig = evaluate_alert(equity=80_000, peak=peak, thresholds=th)
+        self.assertEqual(sig["action"], "add_alert")
+        # 曾在加仓区，收窄到减仓线 → 减仓预警
+        sig = evaluate_alert(
+            equity=92_000, peak=peak, thresholds=th, in_add_zone=True
+        )
+        self.assertEqual(sig["action"], "reduce_alert")
+        # 接近历史最大
+        sig = evaluate_alert(equity=74_000, peak=peak, thresholds=th)
+        self.assertEqual(sig["action"], "near_max")
+    
+        ids = {b.factor_id for b in get_strategy_bindings("strategy1")}
+        self.assertEqual(ids, {"factor26", "factor2", "factor13a", "factor16", "factor22"})
+        b2 = next(b for b in get_strategy_bindings("strategy1") if b.factor_id == "factor2")
+        self.assertFalse(b2.params.get("overlay"))
+        self.assertEqual(get_strategy("strategy1").name, "援军战法")
+        self.assertEqual(get_strategy("援军战法").id, "strategy1")
+        ids16 = {b.factor_id for b in get_strategy_bindings("strategy16")}
+>       self.assertEqual(ids16, {"factor26", "factor2", "factor27"})
+E       AssertionError: Items in the first set but not the second:
+E       'factor29'
+
+test_strategy_rules.py:198: AssertionError
+=========================== short test summary info ============================
+FAILED test_strategy3_abalone.py::test_limit_open_defer_exit_without_future_high_low
+FAILED test_strategy_rules.py::StrategyRuleTests::test_factor2_dd_alert - Ass...
+2 failed, 31 passed in 5.12s

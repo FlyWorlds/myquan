@@ -19,7 +19,7 @@ from strategy.strategies.strategy8.concept_index import (
     members_index_mtime,
     theme_lu_stats,
 )
-from strategy3_watch import (
+from market_sentiment_watch import (
     _factor1_params as _s3_factor1_params,
     _gate_rules_text,
     _load_sentiment_df,

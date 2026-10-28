@@ -59,7 +59,7 @@ register_strategy(
             "horizon": "rolling_3m",
             "factors": ("factor26", "factor29", "factor2", "factor27", "factor22"),
             "custom_select_ui": True,
-            "tab_order": 16.1,
+            "tab_order": 1.3,
         },
     ),
     replace=True,

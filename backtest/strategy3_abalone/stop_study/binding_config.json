@@ -1,0 +1,38 @@
+{
+  "rule": {
+    "support": "chan",
+    "window": 10,
+    "trigger": "shadow",
+    "volume": 1.5
+  },
+  "policy": {
+    "depth": 0.0,
+    "hold": 20,
+    "stop": 0.04,
+    "take": 0.1,
+    "mode": "stabilize",
+    "acceleration": false,
+    "initial": 1.0,
+    "add_drop": 0.03,
+    "reduce": 0.5,
+    "slot": 0.2,
+    "stop_mode": "cost",
+    "take_mode": "structure",
+    "risk_budget": 0.005,
+    "min_rr": 0.0,
+    "max_entry_risk": 0.08,
+    "stop_buffer_atr": 0.3,
+    "stop_buffer_pct": 0.0,
+    "stop_trigger": "intraday"
+  },
+  "status": "research_only",
+  "selected_trial": 7,
+  "stop_name": "成本4%",
+  "selection_note": "固定216组情景；主策略限定A/B结构止盈；2020-2023训练>=20笔筛前12；2024验证>=8笔按收益+1.5回撤选择。2025后曾查看，只作历史复核。",
+  "auto_trade": false,
+  "factors": [
+    "factor30",
+    "factor31",
+    "factor32"
+  ]
+}

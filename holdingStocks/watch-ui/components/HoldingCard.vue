@@ -59,6 +59,13 @@ const hwmTitle = computed(() => {
     : '买入后最高价'
 })
 
+const triggerTimeClass = computed(() => {
+  if (!fmtSignalClock(props.row.信号时间)) return 'text-ui-text-3'
+  const sell = slotTrace.value || String(props.row.已触止损 || '') === '是'
+    || props.row.已触发因子侧 === '卖出' || visual.value.tier === 'trigger-sell'
+  return sell ? 'text-down' : 'text-up'
+})
+
 const touchClock = computed(() => fmtSignalClock(props.row.买信号时间 || props.row.信号时间))
 
 const buyAlertPx = computed(() => {
@@ -132,15 +139,16 @@ const cardClass = computed(() => {
       </div>
       <p v-if="row.error" class="mt-3 text-sm text-up">{{ row.error }}</p>
       <template v-else>
-        <dl v-if="!dense" class="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+        <dl v-if="!dense" class="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
           <div><dt class="text-ui-text-3">{{ slotTrace ? '卖出数量' : '持仓数量' }}</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ slotTrace ? (row.卖出数量 ?? cyclePnl?.soldQty ?? '—') : (row.持仓 ?? 0) }} 股</dd></div>
           <div><dt class="text-ui-text-3">{{ slotTrace ? '平仓价' : '买入成本' }}</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(slotTrace ? row.成交价 : row.成本, pdg) }}</dd></div>
+          <div title="当日行情开盘价"><dt class="text-ui-text-3">今开</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.开盘, pdg) }}</dd></div>
           <div :title="hwmTitle"><dt class="text-ui-text-3">峰值</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.持仓最高 ?? row.峰值, pdg) }}</dd></div>
-          <div><dt class="text-ui-text-3">触发时间</dt><dd class="mt-1 font-mono font-semibold tabular-nums">{{ fmtSignalClock(row.信号时间) || '—' }}</dd></div>
         </dl>
         <dl v-if="!dense && row.阈值就绪" class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-ui-hairline p-3 text-xs sm:grid-cols-4">
           <div><dt class="text-ui-text-3">买入侧</dt><dd class="sensitive mt-1 font-semibold tabular-nums text-up">{{ fmtNum(row.买入侧价 ?? row.买点, pdg) }}</dd></div>
           <div><dt class="text-ui-text-3">卖出侧</dt><dd class="sensitive mt-1 font-semibold tabular-nums text-down">{{ fmtNum(row.卖出侧价 ?? row.止损, pdg) }}</dd></div>
+          <div title="当日行情最低价"><dt class="text-ui-text-3">今日最低</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.今日最低 ?? row.最低, pdg) }}</dd></div>
           <div title="当日行情最高价"><dt class="text-ui-text-3">今日最高</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.今日最高 ?? row.最高, pdg) }}</dd></div>
         </dl>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" :class="dense ? 'mt-1.5' : 'mt-3'">
@@ -155,7 +163,10 @@ const cardClass = computed(() => {
         </div>
         <p v-if="noteText" class="text-ui-text-3" :class="dense ? 'mt-1 truncate text-[11px]' : 'mt-2 break-words text-xs leading-relaxed text-ui-text-2'">{{ noteText }}</p>
         <footer v-if="!dense" class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-ui-hairline pt-2 text-[10px] text-ui-text-3">
-          <span>更新 {{ row.更新 || '—' }}</span>
+          <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <span class="inline-flex items-baseline gap-1.5">触发时间 <time class="font-mono font-semibold tabular-nums" :class="triggerTimeClass">{{ fmtSignalClock(row.信号时间) || '—' }}</time></span>
+            <span>更新 {{ row.更新 || '—' }}</span>
+          </div>
           <div class="flex items-center gap-3">
             <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="hover:text-accent">行情 ↗</a>
             <NuxtLink :to="`/trades?code=${row.代码}`" class="hover:text-accent">交割 ↗</NuxtLink>

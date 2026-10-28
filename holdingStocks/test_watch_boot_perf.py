@@ -40,10 +40,16 @@ class TestLoadHoldingsNoRecursion(unittest.TestCase):
         self._tmp.cleanup()
 
     def test_cold_load_calls_itself_once(self) -> None:
+        import stock_names
+
         real = index.load_holdings
         with mock.patch.object(index, "HOLDINGS_FILE", self.path), mock.patch.object(
             index, "load_holdings", wraps=real
-        ) as spy:
+        ) as spy, mock.patch.object(
+            stock_names,
+            "_lookup_name_online",
+            side_effect=AssertionError("cold load 禁止外网补名"),
+        ):
             t0 = time.perf_counter()
             data = index.load_holdings()
             elapsed = time.perf_counter() - t0

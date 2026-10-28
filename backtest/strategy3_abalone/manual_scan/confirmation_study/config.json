@@ -1,0 +1,42 @@
+{
+  "binding": {
+    "rule": {
+      "support": "chan",
+      "window": 10,
+      "trigger": "shadow",
+      "volume": 1.5
+    },
+    "policy": {
+      "depth": 0.0,
+      "hold": 20,
+      "stop": 0.04,
+      "take": 0.1,
+      "mode": "stabilize",
+      "acceleration": false,
+      "initial": 1.0,
+      "add_drop": 0.03,
+      "reduce": 0.5,
+      "slot": 0.2,
+      "stop_mode": "cost",
+      "take_mode": "structure",
+      "risk_budget": 0.005,
+      "min_rr": 0.0,
+      "max_entry_risk": 0.08,
+      "stop_buffer_atr": 0.3,
+      "stop_buffer_pct": 0.0,
+      "stop_trigger": "intraday"
+    },
+    "status": "research_only"
+  },
+  "variants": {
+    "baseline": "原组合：信号次开买入",
+    "bullish": "次日收阳确认，再次开买入",
+    "bullish_no_new_low": "次日收阳且不破信号日低点，再次开买入"
+  },
+  "universe_count": 644,
+  "as_of": "2026-10-22",
+  "scan_generated_at": "2026-10-23 01:15:42.835107+08:00",
+  "initial_cash": 1000000.0,
+  "primary_comparison": "bullish_vs_baseline",
+  "active_binding_changed": false
+}

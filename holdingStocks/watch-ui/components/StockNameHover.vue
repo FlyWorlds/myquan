@@ -8,7 +8,7 @@ const props = defineProps<{
   delayMs?: number
 }>()
 
-const { load, peek, digitsOf } = useStockProfile()
+const { load, peek, digitsOf, hasValuation } = useStockProfile()
 const { show, onEnter, onLeave, onPanelEnter, onPanelLeave } = useHoverDelay(
   () => {
     if (props.delayMs != null) return props.delayMs
@@ -91,7 +91,8 @@ async function hydrate() {
     profile.value = cached
     return
   }
-  if (profile.value || loading.value) return
+  if (profile.value && hasValuation(profile.value)) return
+  if (loading.value) return
   loading.value = true
   profile.value = await load(codeDigits.value)
   loading.value = false
@@ -222,9 +223,25 @@ function relatedLabel(r: StockRelated) {
           <div class="registry-detail-panel-body space-y-3 text-sm">
             <header>
               <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <b class="text-base">{{ profile?.name || name || codeDigits }}</b>
-                <span class="text-xs text-ui-text-2">{{ profile?.code || codeDigits }}</span>
+                <a
+                  :href="baiduStockUrl(profile?.code || codeDigits, profile?.name || name)"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-base font-bold hover:text-accent hover:underline"
+                >{{ profile?.name || name || codeDigits }}</a>
+                <a
+                  :href="baiduStockUrl(profile?.code || codeDigits, profile?.name || name)"
+                  target="_blank"
+                  rel="noopener"
+                  class="font-mono text-xs text-ui-text-2 hover:text-accent hover:underline"
+                >{{ profile?.code || codeDigits }}</a>
                 <span v-if="profile?.market" class="text-xs text-ui-text-3">{{ profile.market }}</span>
+                <a
+                  :href="baiduStockUrl(profile?.code || codeDigits, profile?.name || name)"
+                  target="_blank"
+                  rel="noopener"
+                  class="ml-auto text-xs text-accent hover:underline"
+                >行情 ↗</a>
               </div>
               <p v-if="profile?.full_name" class="mt-0.5 text-xs text-ui-text-3">{{ profile.full_name }}</p>
             </header>

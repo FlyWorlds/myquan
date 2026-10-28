@@ -1,0 +1,15 @@
+{
+  "total_return_pct": -1.094983819350881,
+  "max_drawdown_pct": -5.8966324042562075,
+  "sharpe_ratio": -0.19134877169613942,
+  "n_trades": 35,
+  "win_rate": 0.2857142857142857,
+  "mean_hold_days": 5.4,
+  "open_positions": 1,
+  "final_nav": 989050.1618064912,
+  "start": "2026-01-05",
+  "end": "2026-10-22",
+  "universe_count": 80,
+  "universe": "market",
+  "universe_note": "当前行情齐备子集，有覆盖/名单偏差；不代表全A历史回测"
+}

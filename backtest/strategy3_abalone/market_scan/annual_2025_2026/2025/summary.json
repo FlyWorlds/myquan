@@ -1,0 +1,17 @@
+{
+  "total_return_pct": 15.894121498586555,
+  "max_drawdown_pct": -2.111229203699938,
+  "sharpe_ratio": 2.501681986231219,
+  "n_trades": 21,
+  "win_rate": 0.7142857142857143,
+  "mean_hold_days": 12.571428571428571,
+  "open_positions": 2,
+  "final_nav": 1158941.2149858656,
+  "start": "2025-01-02",
+  "end": "2025-12-31",
+  "period": "2025",
+  "universe_count": 80,
+  "net_profit": 158941.21498586563,
+  "realized_pnl": 142681.43715156207,
+  "floating_pnl": 16259.777834303997
+}

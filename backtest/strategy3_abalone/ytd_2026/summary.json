@@ -1,0 +1,22 @@
+{
+  "total_return_pct": -0.009495845225182542,
+  "max_drawdown_pct": -3.058426717693863,
+  "sharpe_ratio": 0.01580840776832495,
+  "n_trades": 11,
+  "win_rate": 0.18181818181818182,
+  "mean_hold_days": 5.2727272727272725,
+  "open_positions": 1,
+  "final_nav": 999905.0415477481,
+  "start": "2026-01-05",
+  "end": "2026-10-22",
+  "initial_cash": 1000000.0,
+  "net_profit": -94.95845225185622,
+  "realized_pnl": 2998.955259556198,
+  "floating_pnl": -3093.913711807996,
+  "cash": 878865.0415477481,
+  "holding_weight": 0.12105149486259492,
+  "requested_start": "2026-01-01",
+  "data_end": "2026-10-22",
+  "universe_count": 30,
+  "start_flat": true
+}

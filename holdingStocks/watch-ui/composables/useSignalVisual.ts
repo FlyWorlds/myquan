@@ -1,4 +1,5 @@
 import type { HoldingRow } from '~/types/snapshot'
+import { holdingStatus, holdingT1Locked } from '../utils/holdingStatus.ts'
 
 export type SignalTier =
   | 'trigger-buy'
@@ -40,7 +41,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
       alert === '持有' ||
       alert === '已经买入' ||
       alert.includes('T+1'))
-  const t1Locked = qty > 0 && (alert.includes('T+1') || pos === '已经买入') && Number(row.可用 || 0) <= 0
+  const t1Locked = holdingT1Locked(row)
   const paperHold = pos === '策略持有'
   const empty =
     pos === '空仓' ||
@@ -109,14 +110,15 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
         ? alert || '已触止损'
         : alert && alert !== '-'
           ? alert
-          : '已经买入'
+          : holdingStatus(row)
+    const neutral = ['', '-', '已经买入', '持有', '空仓', '待买入']
     return {
       tier: 'hold',
       rowClass: 'signal-row signal-hold-real',
       badgeClass: sellHit
         ? 'signal-badge signal-badge-trigger-sell'
         : 'signal-badge signal-badge-hold-real',
-      badgeText,
+      badgeText: !t1Locked && !sellHit && neutral.includes(alert) ? holdingStatus(row) : badgeText,
     }
   }
 
@@ -176,8 +178,7 @@ export function collectLegendIds(row: HoldingRow): SignalLegendId[] {
   const qty = qtyOf(row)
   const pos = String(row.持仓状态 || '')
   const alert = String(row.预警 || '').trim()
-  const t1Locked =
-    qty > 0 && (alert.includes('T+1') || pos === '已经买入') && Number(row.可用 || 0) <= 0
+  const t1Locked = holdingT1Locked(row)
   const buyHit =
     String(row.已触买 || '') === '是' ||
     alert.includes('已触买') ||

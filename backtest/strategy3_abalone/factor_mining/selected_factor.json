@@ -1,0 +1,16 @@
+{
+  "rule_id": 35,
+  "rule": {
+    "support": "chan",
+    "trigger": "small_bear",
+    "volume": 2.0,
+    "acceleration": false,
+    "depth": 0.0,
+    "window": 10,
+    "shrink_volume": false,
+    "room": 0.0
+  },
+  "status": "research_only",
+  "selection": "2020-2023 train>=40 -> top12; 2024 validation>=12",
+  "warning": "2025以后曾在上一轮研究中查看，非全新盲测；当前股票池存在选股偏差"
+}

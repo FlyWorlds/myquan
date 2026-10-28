@@ -679,6 +679,12 @@ def fetch_sina_batch(sinas: list[str], *, timeout=8) -> dict[str, dict[str, Any]
                 "last": last_px,
                 "prev_close": prev_close,
                 "amount": _f(9),
+                "volume": _f(8),
+                "source_time_verified": bool(parts[30] and parts[31]),
+                "raw_open": _f(1),
+                "raw_last": _f(3),
+                "raw_high": _f(4),
+                "raw_low": _f(5),
                 "day_chg_pct": price_chg_pct(last_px, prev_close),
                 "last_ts": stamp,
                 "name": stock_name,
@@ -773,7 +779,7 @@ class SinaBatchPoller:
 
 
 class QuoteFeedManager:
-    """管理 SSE（热池）+ 新浪批量（全池，含叠加观察池）。
+    """管理 SSE（热池）+ 新浪批量（热池其余）。
 
     同花顺/通达信用专有推送；免费源不能对上百只各开一条 SSE，否则连接风暴。
     默认：SSE 只挂 ``sse_sinas``（持仓+默认策略）；``sinas`` 全量走新浪批量。

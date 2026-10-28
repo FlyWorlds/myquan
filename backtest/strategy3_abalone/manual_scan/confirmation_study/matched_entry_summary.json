@@ -1,0 +1,16 @@
+[
+  {
+    "period": "2025",
+    "matched_events": 49,
+    "higher_entry_fraction": 0.8775510204081632,
+    "median_entry_change_pct": 0.952380952380949,
+    "mean_entry_change_pct": 1.4793643899930726
+  },
+  {
+    "period": "2026",
+    "matched_events": 50,
+    "higher_entry_fraction": 0.94,
+    "median_entry_change_pct": 1.6506221051675651,
+    "mean_entry_change_pct": 2.21412753986574
+  }
+]

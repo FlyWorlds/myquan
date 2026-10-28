@@ -83,6 +83,82 @@ class ProjectLauncherTests(unittest.TestCase):
         for filename in ("start_watch.py", "start_watch.sh", "start_watch.ps1"):
             self.assertFalse((launcher.ROOT / "holdingStocks" / filename).exists())
 
+    def test_normal_launch_cleans_all_recorded_services_before_start(self):
+        records = {name: dict(name=name, pid=100+i, birth="old", port=port)
+                   for i, (name, port) in enumerate((("java",8080),("python",8765),("frontend",3000)))}
+        records["python"]["command"] = ["python", "--no-wechat"]
+        launcher.write_state(records)
+        events = []
+        opts = self.opts(port=8766, no_wechat=None)
+        with patch.object(launcher, "port_open", return_value=False), \
+             patch.object(launcher, "python_command"), \
+             patch.object(launcher, "prepare_frontend"), \
+             patch.object(launcher, "java_command"), \
+             patch.object(launcher, "stop_owned", side_effect=lambda r: events.append(r["name"])), \
+             patch.object(launcher, "start", side_effect=lambda o: events.append("start") or 0):
+            self.assertEqual(launcher.start_fresh(opts), 0)
+        self.assertEqual(events, ["frontend", "python", "java", "start"])
+        self.assertTrue(opts.no_wechat)
+        self.assertEqual(launcher.read_state(), {})
+
+    def test_unknown_listener_aborts_before_any_cleanup(self):
+        with patch.object(launcher, "port_open", return_value=True), \
+             patch.object(launcher, "discover_project_service", side_effect=launcher.LaunchError("unknown")), \
+             patch.object(launcher, "stop") as stop:
+            with self.assertRaises(launcher.LaunchError):
+                launcher.start_fresh(self.opts())
+        stop.assert_not_called()
+
+    def test_failed_preflight_preserves_old_service(self):
+        old = dict(name="python", pid=100, birth="old", port=8765)
+        launcher.write_state({"python":old})
+        with patch.object(launcher, "port_open", return_value=False), \
+             patch.object(launcher, "python_command"), \
+             patch.object(launcher, "prepare_frontend", side_effect=launcher.LaunchError("build failed")), \
+             patch.object(launcher, "stop_owned") as stop:
+            with self.assertRaises(launcher.LaunchError):
+                launcher.start_fresh(self.opts())
+        stop.assert_not_called()
+        self.assertEqual(launcher.read_state(), {"python":old})
+
+    def test_discovery_rejects_unrelated_command_in_project_directory(self):
+        replies = [Mock(stdout="100\n"), Mock(stdout="python -m http.server 8765"),
+                   Mock(stdout="n" + str(launcher.ROOT))]
+        with patch.object(launcher.shutil, "which", return_value="lsof"), \
+             patch.object(launcher.subprocess, "run", side_effect=replies), \
+             patch.object(launcher, "process_birth", return_value="old"), \
+             patch.object(launcher.os, "kill") as kill:
+            with self.assertRaises(launcher.LaunchError):
+                launcher.discover_project_service("python", 8765)
+        kill.assert_not_called()
+
+    def test_discovery_records_verified_legacy_watch(self):
+        script = str(launcher.ROOT / "holdingStocks/index.py")
+        replies = [Mock(stdout="100\n"), Mock(stdout=f"python -u {script} watch --port 8765"),
+                   Mock(stdout="n" + str(launcher.ROOT))]
+        with patch.object(launcher.shutil, "which", return_value="lsof"), \
+             patch.object(launcher.subprocess, "run", side_effect=replies), \
+             patch.object(launcher, "process_birth", return_value="old"), \
+             patch.object(launcher.os, "getpgid", return_value=100):
+            result = launcher.discover_project_service("python", 8765)
+        self.assertEqual((result["pid"], result["port"], result["birth"]), (100,8765,"old"))
+        self.assertEqual(result["stopScope"], "group")
+
+    def test_default_cli_replaces_services(self):
+        with patch.object(launcher.sys, "argv", ["start_project.py", "--no-open"]), \
+             patch.object(launcher, "start_fresh", return_value=0) as fresh:
+            self.assertEqual(launcher.main(), 0)
+        fresh.assert_called_once()
+
+    def test_imported_nonleader_stops_only_its_pid(self):
+        old = dict(name="python", pid=100, birth="old", stopScope="pid")
+        with patch.object(launcher, "same_process", side_effect=[True, False, False]), \
+             patch.object(launcher.os, "kill") as kill, \
+             patch.object(launcher.os, "killpg") as group:
+            launcher.stop_owned(old)
+        kill.assert_called_once_with(100, launcher.signal.SIGINT)
+        group.assert_not_called()
+
     def test_healthy_existing_service_is_reused_not_adopted(self):
         state, created = {}, []
         with patch.object(launcher,"port_open",return_value=True), \

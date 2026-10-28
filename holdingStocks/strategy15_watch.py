@@ -7,7 +7,7 @@ from typing import Any
 from strategy.ladder_tp import resolve_ladder_tp_policy
 from strategy.m30_chop import M30ChopParams, advisory_levels
 from strategy.open_break import TICK_SIZE, ceil_to_tick
-from strategy3_watch import get_market_sentiment
+from market_sentiment_watch import get_market_sentiment
 from watch_config import code_key, strategy_watchlist_codes
 
 _F25 = M30ChopParams()

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ROTATION_METRICS } from '~/composables/useSectorsLive'
 import type { HotPeriodCard, SectorMember, SectorRotationPayload } from '~/types/sectors'
+import { baiduStockUrl } from '~/utils/stockLink'
 
 const { fetchRotation, fetchConceptMembers } = useSectorsApi()
 const { mergedKind, liveAt, memberStatsAt, refreshSec, setFocus } = useSectorsLive()
@@ -487,10 +488,26 @@ onBeforeUnmount(() => {
                 :key="m.代码"
                 class="border-t border-ui-hairline"
               >
-                <td class="py-1.5 pr-2 font-mono text-xs">{{ m.代码 }}</td>
+                <td class="py-1.5 pr-2 font-mono text-xs">
+                  <a
+                    :href="baiduStockUrl(m.代码, m.名称)"
+                    target="_blank"
+                    rel="noopener"
+                    class="hover:text-accent hover:underline"
+                  >
+                    {{ m.代码 }}
+                  </a>
+                </td>
                 <td class="py-1.5 pr-2">
                   <StockNameHover :code="m.代码" :name="m.名称">
-                    {{ m.名称 || m.代码 }}
+                    <a
+                      :href="baiduStockUrl(m.代码, m.名称)"
+                      target="_blank"
+                      rel="noopener"
+                      class="font-medium hover:text-accent hover:underline"
+                    >
+                      {{ m.名称 || m.代码 }}
+                    </a>
                   </StockNameHover>
                 </td>
                 <td class="py-1.5 pr-2 text-right font-mono">

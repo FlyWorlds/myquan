@@ -136,6 +136,41 @@ class TestRelatedAndProfile(unittest.TestCase):
         self.assertEqual(payload["chain"]["note"], "电子元器件制造")
         self.assertTrue(payload["chain"]["upstream"] or payload["chain"]["downstream"])
 
+    def test_market_cap_fallback_from_capital_and_price(self) -> None:
+        survey = {
+            "name": "三联锻造",
+            "registered_capital": "22218.6万元(CNY)",
+        }
+        quote = {
+            "name": "三联锻造",
+            "price": 16.56,
+            "chg_pct": 3.05,
+            "market_cap_yi": None,
+        }
+        payload = get_stock_profile(
+            "001282",
+            fetch_survey=lambda _c: survey,
+            fetch_quote=lambda _c: quote,
+            members_index=FAKE_INDEX,
+            use_cache=False,
+        )
+        self.assertIsNotNone(payload["valuation"]["market_cap_yi"])
+        self.assertAlmostEqual(payload["valuation"]["market_cap_yi"], 36.79, places=1)
+
+    def test_daily_sync_and_db_cache(self) -> None:
+        from stock_profile import _today_str, _cache_get
+        fake_profile = {
+            "code": "001282",
+            "name": "三联锻造",
+            "valuation": {"market_cap_yi": 36.80, "pe": 28.5},
+            "_cached_date": _today_str(),
+        }
+        with patch("stock_profile._load_db_profiles", return_value={"001282": fake_profile}):
+            hit = _cache_get("001282")
+            self.assertIsNotNone(hit)
+            self.assertEqual(hit["name"], "三联锻造")
+            self.assertEqual(hit["valuation"]["market_cap_yi"], 36.80)
+
 
 class _Hub:
     def serve_client(self, _conn) -> None:

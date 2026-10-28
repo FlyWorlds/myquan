@@ -9,6 +9,7 @@ import math
 import os
 import re
 import shutil
+import shlex
 import signal
 import socket
 import subprocess
@@ -58,17 +59,88 @@ def stop_owned(record):
         return
     pid = record["pid"]
     try:
-        if os.getpgid(pid) != pid:
+        single_pid = record.get("stopScope") == "pid"
+        if not single_pid and os.getpgid(pid) != pid:
             raise LaunchError(f"拒绝停止非独立进程组 pid={pid}")
+        send = os.kill if single_pid else os.killpg
         # Python handles SIGINT to close its feed, PID lock and child resources gracefully.
-        os.killpg(pid, signal.SIGINT if record["name"] == "python" else signal.SIGTERM)
+        send(pid, signal.SIGINT if record["name"] == "python" else signal.SIGTERM)
         deadline = time.monotonic() + 15
         while same_process(record) and time.monotonic() < deadline:
             time.sleep(.2)
         if same_process(record):
-            os.killpg(pid, signal.SIGKILL)
+            send(pid, signal.SIGKILL)
+            deadline = time.monotonic() + 3
+            while same_process(record) and time.monotonic() < deadline:
+                time.sleep(.1)
+            if same_process(record):
+                raise LaunchError(f"旧进程 pid={pid} 未停止，不启动替代服务。")
     except ProcessLookupError:
         pass
+
+
+def discover_project_service(name, port):
+    """Recover an old listener only when its command and cwd identify this checkout."""
+    lsof = shutil.which("lsof")
+    if not lsof:
+        raise LaunchError("需要 lsof 识别上次启动的项目服务。")
+    found = subprocess.run([lsof, "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
+                           capture_output=True, text=True, check=False)
+    pids = {int(value) for value in found.stdout.split() if value.isdigit()}
+    if len(pids) != 1:
+        raise LaunchError(f":{port} 的监听进程无法唯一识别，不清理该端口。")
+    pid = pids.pop()
+    birth = process_birth(pid)
+    command_text = subprocess.run(["ps", "-p", str(pid), "-o", "args="],
+                                  capture_output=True, text=True, check=False).stdout.strip()
+    command = shlex.split(command_text)
+    cwd = subprocess.run([lsof, "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
+                         capture_output=True, text=True, check=False).stdout.splitlines()
+    expected = ROOT / ("backend" if name == "java" else "holdingStocks/watch-ui" if name == "frontend" else "")
+    recognized = False
+    if name == "python":
+        script = str(ROOT / "holdingStocks/index.py")
+        recognized = script in command and command[command.index(script)+1:command.index(script)+2] == ["watch"]
+    elif name == "java":
+        recognized = (str(ROOT / "backend/target/myquan-backend-0.1.0-SNAPSHOT.jar") in command
+                      or "com.myquan.backend.MyquanBackendApplication" in command)
+    elif name == "frontend":
+        recognized = any(any(tool in Path(arg).name for tool in ("nuxt", "nuxi")) and ("node_modules" in arg or arg in ("nuxt", "nuxi")) for arg in command)
+    if not birth or "n" + str(expected) not in cwd or not recognized:
+        raise LaunchError(f":{port} 不属于本项目的 {name}，停止启动以避免误杀。")
+    if process_birth(pid) != birth:
+        raise LaunchError(f":{port} 进程已变化，请重试。")
+    return dict(name=name, pid=pid, birth=birth, port=port, command=command,
+                stopScope="group" if os.getpgid(pid) == pid else "pid")
+
+
+def start_fresh(opts):
+    """Normal launch replaces previous project services instead of reusing stale code."""
+    state = read_state()
+    ports = dict(java=opts.backend_port, python=opts.port)
+    if opts.ui_dev:
+        ports["frontend"] = opts.ui_port
+    # Resolve all port ownership before stopping any service, including changed old ports.
+    for name, port in ports.items():
+        prior = state.get(name, {})
+        if port_open(HOST, port) and not (same_process(prior) and prior.get("port") == port):
+            if same_process(prior):
+                raise LaunchError(f"{name} 的旧端口与新端口同时运行，请先停止旧服务。")
+            state[name] = discover_project_service(name, port)
+    # Validate/build replacements while the old services are still available.
+    python_command(opts, state.get("python"))
+    prepare_frontend(opts.ui_dev)
+    java_command()
+    if opts.no_wechat is None:
+        opts.no_wechat = "--no-wechat" in state.get("python", {}).get("command", [])
+    write_state(state)
+    print("[启动] 清理上次登记的项目服务后重新启动（MySQL保持运行）")
+    stop()
+    for name, record in state.items():
+        port = record.get("port")
+        if port and port_open(HOST, port):
+            raise LaunchError(f"{name} 旧端口 :{port} 尚未释放，未启动新进程。")
+    return start(opts)
 
 
 def resolve_python():
@@ -539,7 +611,7 @@ def main():
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--stop", action="store_true")
     action.add_argument("--status", action="store_true")
-    action.add_argument("--restart", action="store_true", help="重启启动器管理的服务，不停止 MySQL 或手工启动的服务")
+    action.add_argument("--restart", action="store_true", help="重新启动项目服务；普通启动也清理旧服务，MySQL保持运行")
     parser.add_argument("--service", choices=("java", "python", "frontend"), help="只启动/替换选中的服务，其余保持运行")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--ui-dev", action="store_true", help="使用 Nuxt 热更新，默认静态前端")
@@ -562,14 +634,11 @@ def main():
         parser.error("三个服务端口不能重复")
     try:
         with operation_lock():
-            if opts.restart:
-                if not opts.service:
-                    stop()
             if opts.stop:
                 return stop(opts.service)
             if opts.status:
                 return status(opts)
-            return replace_service(opts) if opts.service else start(opts)
+            return replace_service(opts) if opts.service else start_fresh(opts)
     except (LaunchError, OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"[失败] {exc}", file=sys.stderr)
         return 1

@@ -131,6 +131,12 @@ class DatabaseHoldingsTests(unittest.TestCase):
 
     def test_production_buy_and_partial_sell_use_database_transaction(self):
         import index
+        from paper_costs import money, trade_costs
+        buy_fee = trade_costs("002841", "buy", 43.65, 100)
+        sell_fee = trade_costs("002841", "sell", 44, 50)
+        want_cash = money(10000 - 4365 - buy_fee["total_fees"] + 2200 - sell_fee["total_fees"])
+        allocated = money(buy_fee["total_fees"] * 50 / 100)
+        want_pnl = money(17.5 - sell_fee["total_fees"] - allocated)
         self.state["holdings"].update(realized_today={},closed_today={},slot_queue={})
         with patch("database_holdings.request_state",side_effect=self.request), \
              patch.object(index,"database_enabled",return_value=True), \
@@ -143,17 +149,17 @@ class DatabaseHoldingsTests(unittest.TestCase):
                                   buy_time="2026-10-14 10:31:00",prev_close=43.65,open_px=44,
                                   px_digits=2,reason="test",trade_note="test",action_kind="half")
             self.assertEqual(self.state["holdings"]["positions"]["002841"]["qty"],50)
-            self.assertEqual(self.state["holdings"]["account_cash"],7835)
+            self.assertEqual(self.state["holdings"]["account_cash"],want_cash)
             self.assertEqual(len(self.state["trades"]),2)
             self.assertEqual(len(self.state["ledger"]["entries"]),2)
-            self.assertAlmostEqual(self.state["ledger"]["entries"][1]["pnl"],17.5)
+            self.assertAlmostEqual(self.state["ledger"]["entries"][1]["pnl"],want_pnl)
             index.apply_exit_fill(code="002841",meta={"name":"Test","market":"SZ"},
                                   fill_px=44,qty=50,cost=43.65,session="2026-10-15",
                                   buy_time="2026-10-14 10:31:00",prev_close=43.65,open_px=44,
                                   px_digits=2,reason="test",trade_note="test",action_kind="half")
             self.assertEqual(self.state["holdings"]["positions"]["002841"]["qty"],50)
             self.assertEqual(len(self.state["trades"]),2)
-            self.assertEqual(self.state["holdings"]["account_cash"],7835)
+            self.assertEqual(self.state["holdings"]["account_cash"],want_cash)
             self.assertFalse(self.path.exists())
 
 

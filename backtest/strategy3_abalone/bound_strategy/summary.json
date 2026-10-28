@@ -1,0 +1,12 @@
+{
+  "total_return_pct": 11.127548364991235,
+  "max_drawdown_pct": -3.2003329917372203,
+  "sharpe_ratio": 1.5856726040687128,
+  "n_trades": 25,
+  "win_rate": 0.52,
+  "mean_hold_days": 10.64,
+  "open_positions": 1,
+  "final_nav": 1111275.4836499123,
+  "start": "2025-01-02",
+  "end": "2026-10-21"
+}

@@ -19,7 +19,8 @@ export function holdingCyclePnl(row: HoldingRow) {
   const mark = finite(row.现价)
   const cost = finite(row.成本)
   if (qty > 0 && (mark == null || mark <= 0 || cost == null || cost <= 0)) return null
-  const unrealized = qty > 0 ? Math.round((mark! - cost!) * qty * 100) / 100 : 0
+  const fee = Number(row.买入剩余费用 || 0)
+  const unrealized = qty > 0 ? Math.round(((mark! - cost!) * qty-fee) * 100) / 100 : 0
   return { amount, pct: Math.round(amount / base * 10000) / 100, unrealized,
     realized: Math.round((amount - unrealized) * 100) / 100, soldQty }
 }
