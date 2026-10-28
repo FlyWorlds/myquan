@@ -51,6 +51,7 @@ from holdingStocks.watch_config import (  # noqa: E402
     meta_for_code,
     slot_fill_decision,
     strategy1_watchlist,
+    strategy16_watchlist,
     strategy_watchlist,
 )
 from strategy.data import fetch_daily  # noqa: E402
@@ -130,7 +131,7 @@ def _load_pool(pool: str = POOL_STRATEGY1) -> list[dict]:
     if name in ("s16", "core_leader"):
         name = POOL_STRATEGY16
     if name == POOL_STRATEGY16:
-        picks = strategy_watchlist()
+        picks = strategy16_watchlist()
         if not picks:
             raise SystemExit(
                 "策略十六池为空。请先: python strategy/run_core_leader_pool.py"
