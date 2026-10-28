@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import types
 import unittest
 from pathlib import Path
 
@@ -12,17 +13,66 @@ for p in (str(ROOT), str(HS)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from strategy.watch_universe import (  # noqa: E402
+
+def _load_watch_modules() -> tuple:
+    try:
+        from strategy.watch_universe import (  # type: ignore
+            SELF_WATCHLIST_PICKS,
+            STRATEGY1_SELF_WATCHLIST_PICKS,
+            self_watchlist_codes,
+            strategy1_self_watchlist_codes,
+        )
+        from watch_config import strategy16_watchlist, strategy1_watchlist
+        from strategy_picks_loader import load_strategy_picks
+
+        return (
+            SELF_WATCHLIST_PICKS,
+            STRATEGY1_SELF_WATCHLIST_PICKS,
+            self_watchlist_codes,
+            strategy1_self_watchlist_codes,
+            strategy16_watchlist,
+            strategy1_watchlist,
+            load_strategy_picks,
+        )
+    except ModuleNotFoundError:
+        sys.modules.pop("strategy", None)
+        sys.modules.pop("strategy.akq_math", None)
+        pkg = types.ModuleType("strategy")
+        pkg.__path__ = [str(ROOT / "strategy")]
+        pkg.__package__ = "strategy"
+        sys.modules["strategy"] = pkg
+        akq = types.ModuleType("strategy.akq_math")
+        akq.session_day_pnl = lambda *args, **kwargs: 0.0  # noqa: ARG005
+        sys.modules["strategy.akq_math"] = akq
+        from strategy.watch_universe import (  # type: ignore
+            SELF_WATCHLIST_PICKS,
+            STRATEGY1_SELF_WATCHLIST_PICKS,
+            self_watchlist_codes,
+            strategy1_self_watchlist_codes,
+        )
+        from watch_config import strategy16_watchlist, strategy1_watchlist
+        from strategy_picks_loader import load_strategy_picks
+
+        return (
+            SELF_WATCHLIST_PICKS,
+            STRATEGY1_SELF_WATCHLIST_PICKS,
+            self_watchlist_codes,
+            strategy1_self_watchlist_codes,
+            strategy16_watchlist,
+            strategy1_watchlist,
+            load_strategy_picks,
+        )
+
+
+(
     SELF_WATCHLIST_PICKS,
     STRATEGY1_SELF_WATCHLIST_PICKS,
     self_watchlist_codes,
     strategy1_self_watchlist_codes,
-)
-from watch_config import (  # noqa: E402
     strategy16_watchlist,
     strategy1_watchlist,
-)
-from strategy_picks_loader import load_strategy_picks  # noqa: E402
+    load_strategy_picks,
+) = _load_watch_modules()
 
 
 HAILIANG = ("603138", "海量数据")
