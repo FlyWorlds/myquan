@@ -52,7 +52,7 @@ DEFAULT_NOTED_DUMP_PCT = 0.01  # 研究对照：开盘下杀（生产已不用�
 DEFAULT_T1_NOTE_PROFIT_LT_PCT = 0.03  # 买入日收盘盈利 ≥3% 不记；其余走次日峰值回落
 DEFAULT_ALLOW_ATTACK = False  # 生产默认：只买开盘阈值；攻击波仅研究对照
 DEFAULT_GIVEBACK_ARM_PCT = 0.03  # 浮盈 >3% 才启用波动回落止盈
-DEFAULT_T1_PEAK_TRAIL_PCT = 0.025  # 未到 3%：次日动态峰值回落 2.5%
+DEFAULT_T1_PEAK_TRAIL_PCT = 0.030  # 未到 3%：次日动态峰值回落放宽至 3.0%（避免过敏误割）
 DEFAULT_VOL_GIVEBACK_RATIO = 0.5  # 中段：回落距离 = 近 20 日日频波动 × 该比例
 DEFAULT_VOL20_WINDOW = 20
 DEFAULT_VOL_GIVEBACK_CAP = 0.15  # 回落距离上限，避免极端波动把卖价打到 0

@@ -1145,8 +1145,10 @@ RESERVE_SLOT_HOUR = 14
 RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓
 SLOT_WEIGHT = MAX_POSITION_WEIGHT  # 入场目标权重
 DEFAULT_ACCOUNT_TOTAL = 300_000.0  # 纸面默认总资产；clear-all / 无登记时按此估槽金额
-# 平仓腾槽后：第一梯队（平仓前已触买）用现价成交，现价不得超过买点 +1%；其后新触发仍按买点
 SLOT_FIRST_TIER_MAX_OVERSHOOT = 0.01
+ALLOW_STOP_REBUY = True  # 止损后基于止损点位上涨阈值买回
+DEFAULT_STOP_REBUY_BOUNCE_PCT = 0.015  # 止损点位反弹买回阈值（默认 +1.5%）
+STOP_REBUY_EXEMPT_DAILY_CAP = True  # 买回不占用/不限制每日2槽限制
 
 
 def target_position_notional(

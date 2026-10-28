@@ -18,6 +18,7 @@ backtest/_*.txt
 backtest/*_out.txt
 
 # 持仓盯盘运行时数据（勿进 main）
+holdingStocks/cache/
 # holdings.json / trades.jsonl are legacy migration inputs; production uses MySQL.
 # holdings_watch.json 是本机展示缓存，不是账本，禁止当跨机真源
 holdingStocks/holdings.json

@@ -1,0 +1,24 @@
+{
+  "baseline": {
+    "name": "优化前基准 (回落2.5%/低开秒卖/无买回/限2槽)",
+    "return_pct": -4.05,
+    "max_dd_pct": -4.05,
+    "win_rate_pct": 22.22,
+    "pl_ratio": 1.07,
+    "avg_hold_days": 1.0,
+    "hold_1d_pct": 100.0,
+    "hold_2d_plus_pct": 0.0,
+    "rebuys": 0
+  },
+  "optimized": {
+    "name": "优化后方案 (回落3.0%/反弹1.5%买回豁免槽限/低开缓冲)",
+    "return_pct": -4.89,
+    "max_dd_pct": -8.38,
+    "win_rate_pct": 26.67,
+    "pl_ratio": 2.01,
+    "avg_hold_days": 1.07,
+    "hold_1d_pct": 93.3,
+    "hold_2d_plus_pct": 6.7,
+    "rebuys": 12
+  }
+}

@@ -247,5 +247,24 @@ class TestApplyTriggerGapRebuy(unittest.TestCase):
         self.assertTrue(row.get("隔夜竞价回买"))
 
 
+class TestStopRebuyAndExemptQuota(unittest.TestCase):
+    def test_stop_rebuy_allowed_stamped(self) -> None:
+        rec = {
+            "session": "2026-10-08",
+            "full_exit": True,
+            "allow_stop_rebuy": True,
+            "stop_exit_px": 9.80,
+        }
+        self.assertTrue(idx.stop_rebuy_allowed(rec, session="2026-10-08"))
+
+    def test_stop_rebuy_allowed_session_mismatch(self) -> None:
+        rec = {
+            "session": "2026-10-07",
+            "full_exit": True,
+            "allow_stop_rebuy": True,
+        }
+        self.assertFalse(idx.stop_rebuy_allowed(rec, session="2026-10-08"))
+
+
 if __name__ == "__main__":
     unittest.main()

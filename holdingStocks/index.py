@@ -6365,6 +6365,23 @@ def overnight_gap_rebuy_allowed(
     return bool(buy_day and buy_day < sess)
 
 
+def stop_rebuy_allowed(
+    rec: dict[str, Any] | None,
+    *,
+    session: str,
+) -> bool:
+    """止损后买回判定：包含隔夜低开回买与通用止损反弹买回。"""
+    if not isinstance(rec, dict):
+        return False
+    if str(rec.get("session") or "")[:10] != str(session)[:10]:
+        return False
+    if rec.get("full_exit") is False:
+        return False
+    if overnight_gap_rebuy_allowed(rec, session=session):
+        return True
+    return bool(rec.get("allow_stop_rebuy"))
+
+
 @paper_mutation
 def apply_exit_fill(
     *,
@@ -6487,6 +6504,17 @@ def apply_exit_fill(
         and str(exit_kind or "") == "open_protect"
         and new_qty <= 0
     )
+    from watch_config import ALLOW_STOP_REBUY
+    is_stop_loss = (
+        new_qty <= 0
+        and (pnl_pct is None or float(pnl_pct) <= 0.01)
+        and (
+            str(exit_kind or "") in ("open_protect", "path", "last", "hard_open_dump")
+            or any(k in str(reason or "") for k in ("止损", "回落", "保护", "hard", "trail", "gap"))
+        )
+    )
+    rec["allow_stop_rebuy"] = bool(rec["allow_intraday_rebuy"] or (ALLOW_STOP_REBUY and is_stop_loss))
+    rec["stop_exit_px"] = float(fill_px)
     pos["qty"] = new_qty
     pos["name"] = meta["name"]
     pos["market"] = meta["market"]
@@ -12774,7 +12802,7 @@ def _store_condition_drafts(drafts: list[dict[str, Any]], active_codes: set[str]
         if int((data.get("positions") or {}).get(code, {}).get("qty") or 0) > 0:
             continue
         rec = (data.get("realized_today") or {}).get(code)
-        if rec and str(rec.get("session") or "") == day and not overnight_gap_rebuy_allowed(rec, session=day):
+        if rec and str(rec.get("session") or "") == day and not stop_rebuy_allowed(rec, session=day):
             continue
         old = orders.get(code, {})
         if old.get("id") == draft["id"] and old.get("status") != "FILLED":
@@ -13109,9 +13137,11 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
             changed = True
             continue
         rec = (data.get("realized_today") or {}).get(ck)
-        if rec and str(rec.get("session") or "") == day and not overnight_gap_rebuy_allowed(rec, session=day):
+        if rec and str(rec.get("session") or "") == day and not stop_rebuy_allowed(rec, session=day):
             reason = "SOLD_TODAY"
-        if not reason and len(today_new_symbol_codes(day)) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
+        is_rebuy = bool(rec and str(rec.get("session") or "") == day and stop_rebuy_allowed(rec, session=day))
+        from watch_config import STOP_REBUY_EXEMPT_DAILY_CAP
+        if not reason and not (is_rebuy and STOP_REBUY_EXEMPT_DAILY_CAP) and len(today_new_symbol_codes(day)) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
             reason = "MAX_NEW_SYMBOLS_PER_SESSION"
         if not reason and free_buy_slot_count(data) <= 0:
             reason = "MAX_POSITION_SYMBOLS"
