@@ -28,6 +28,11 @@ SELF_WATCHLIST_PICKS: tuple[tuple[str, str], ...] = (
 )
 STRATEGY16_EXTRA_PICKS = SELF_WATCHLIST_PICKS
 
+# 策略一自选：仅策略一 Tab / 信号扫描；不入公共自选，不入策略十六默认交易池。
+STRATEGY1_SELF_WATCHLIST_PICKS: tuple[tuple[str, str], ...] = (
+    ("603138", "海量数据"),
+)
+
 POOL_SRC_FACTOR27 = "factor27"
 POOL_SRC_FACTOR28 = "factor28"
 POOL_SRC_SELF = "self"
@@ -152,6 +157,14 @@ def self_watchlist_codes() -> set[str]:
     return {
         code_key(c)
         for c, _ in SELF_WATCHLIST_PICKS
+        if code_key(c) and code_key(c) != "000000"
+    }
+
+
+def strategy1_self_watchlist_codes() -> set[str]:
+    return {
+        code_key(c)
+        for c, _ in STRATEGY1_SELF_WATCHLIST_PICKS
         if code_key(c) and code_key(c) != "000000"
     }
 

@@ -33,8 +33,9 @@
 编辑 **`watch_config.py`**：
 - **因子池**：刷新 `picks_quarter.json`（`python strategy/run_core_leader_pool.py`）
 - **公共自选池**：改 `SELF_WATCHLIST_PICKS`（旧名 `STRATEGY16_EXTRA_PICKS` 仍兼容；**全策略共用**，非仅策略十六）。「选股/池名单」在策略 Tab **底部折叠面板**（默认收起，展开后按分类 Tab 查看）；上方实时信号表整表展示。
+- **策略一自选**：改 `STRATEGY1_SELF_WATCHLIST_PICKS`（当前：海量数据 603138）。只进策略一 Tab / 信号扫描，**不入**公共自选、**不入**策略十六默认交易池。
 
-**当前**：因子27 as_of **2026-09-30**（30只 / 18概念，有效至 2026-12-30，见 [`docs/FACTOR27.md`](../docs/FACTOR27.md)）+ 自选四票；剔ST/百元股/科创/创业。换池后空槽只买新名单，**实仓不因掉池强平**。改池后在根目录 `bash start.sh --restart`；分开启动时在原终端重启 Python。
+**当前**：因子27 as_of **2026-09-30**（30只 / 18概念，有效至 2026-12-30，见 [`docs/FACTOR27.md`](../docs/FACTOR27.md)）+ 公共自选四票；策略一另加海量数据。剔ST/百元股/科创/创业。换池后空槽只买新名单，**实仓不因掉池强平**。改池后在根目录 `bash start.sh --restart`；分开启动时在原终端重启 Python。
 
 回测产物：`backtest/strategy16_core_leader/`。**策略十六开盘阈值**只认 `thr_2026.json`（缺省 `DEFAULT_PCT=2.5%`），不走策略一遗留 `_WATCH_PCT` / 置顶名单里的 pct。
 
@@ -49,6 +50,8 @@
 | 002636 | 金安国纪 | 公共自选 / 展示补集 |
 
 **公共自选池**（入三槽与各策略默认交易宇宙，与因子27并列）：天通、凯盛、东材、金安。
+
+**策略一自选**（仅策略一 Tab，不入默认四槽）：海量数据 603138。
 
 策略三默认三票保留为 `S7_WATCHLIST`（含因子4，历史命名 S7）。切换时改：
 
@@ -254,7 +257,7 @@ python index.py holdings-pull   # 默认生产模式重新读取数据库；不�
 
 ## 如何扩展
 
-1. **改定盘池/阈值**：策略十六改 `picks_quarter.json` + 重跑 `python backtest/strategy16_core_leader/fit_thr.py`；策略一遗留池才改 `_FIT_WATCH` / `_WATCH_PCT`
+1. **改定盘池/阈值**：策略十六改 `picks_quarter.json` + 重跑 `python backtest/strategy16_core_leader/fit_thr.py`；策略一遗留池才改 `_FIT_WATCH` / `_WATCH_PCT`；策略一自选改 `STRATEGY1_SELF_WATCHLIST_PICKS`
 2. **策略三 Tab**：股池=中证1000 **昨日收盘涨停全池**；**T-1 情绪**（涨停家数→冰点/正常/高潮 + 连板梯度）决定今日可否做；因子1 ±阈值、**不过阴/小阳过门**。回测另含首板/gap 等见 `backtest/strategy3_first_board/`
 3. **策略八 Tab**：**当日涨停**定热题材（≥3），盘中随涨停变化重算（不读回测末日名单）→ 题材内联动候选；T-1 情绪 + **当日**因子1 ±阈值（不要求昨日涨停）。回测见 `backtest/strategy8_theme_linkage/`
 4. **策略十五 Tab**：同策略一池叠加；T-1 连板梯度定 F22/F25；震荡启用因子25（30m 确认止损/动态半仓/卖飞回补提示）；回测 `backtest/strategy15_m30_chop/`

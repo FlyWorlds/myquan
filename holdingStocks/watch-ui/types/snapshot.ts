@@ -38,6 +38,8 @@ export interface HoldingRow {
   名称?: string
   池来源?: string | null
   pool_src?: string | null
+  /** public=公共自选；strategy1=策略一专属自选 */
+  self_scope?: string
   开盘?: number | null
   昨收?: number | null
   现价?: number | null
@@ -187,6 +189,8 @@ export interface StrategyPickItem {
   category?: string
   分类?: string
   pool_src?: string | null
+  /** public=公共自选；strategy1=策略一专属自选 */
+  self_scope?: string
   weight?: number
   oos_pl_ratio?: number
   oos_win_rate_pct?: number

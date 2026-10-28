@@ -3,6 +3,7 @@
 当前锁定：**默认策略 = 策略十六（核心龙头） = 因子27 + 因子26 + 因子29 + 因子2 + 因子22**。
 默认交易池：因子27 核心龙头近 3 个月冻结池 ∪ **公共自选池**（天通/凯盛/东材/金安，
 `SELF_WATCHLIST_PICKS`；策略一/十五/十六与 effective 并集均并入，非仅策略十六）。
+策略一另有专属自选 `STRATEGY1_SELF_WATCHLIST_PICKS`（当前：海量数据），只进策略一 Tab / 信号扫描。
 策略三（旧号策略七）三票完整配置保留为 S7_WATCHLIST（含因子4）；改 STRATEGY_ID / USE_FACTOR4 / WATCHLIST 可切换。
 """
 
@@ -39,6 +40,7 @@ from strategy.watch_universe import (
     POOL_SRC_LABEL,
     POOL_SRC_SELF,
     SELF_WATCHLIST_PICKS,
+    STRATEGY1_SELF_WATCHLIST_PICKS,
     STRATEGY16_EXTRA_PICKS,
     STRATEGY16_THR_PATH,
     ZIYANG_PICKS_PATH,
@@ -563,11 +565,18 @@ PORTFOLIO_PINNED_WATCHLIST: list[dict[str, Any]] = [
 
 def self_watch_items(
     holdings: dict[str, Any] | None = None,
+    picks: tuple[tuple[str, str], ...] | None = None,
+    *,
+    self_scope: str = "public",
 ) -> list[dict[str, Any]]:
-    """公共自选池 → watch_item 列表（带池来源标签）。"""
+    """自选池 → watch_item 列表（带池来源标签）。
+
+    默认公共自选；策略一专属自选传入 ``STRATEGY1_SELF_WATCHLIST_PICKS``。
+    """
     out: list[dict[str, Any]] = []
     thrs = load_strategy16_thr_map()
-    for code, name in SELF_WATCHLIST_PICKS:
+    source = SELF_WATCHLIST_PICKS if picks is None else picks
+    for code, name in source:
         c = code_key(code)
         if not c or c == "000000":
             continue
@@ -577,6 +586,7 @@ def self_watch_items(
         item["池来源"] = POOL_SRC_LABEL[POOL_SRC_SELF]
         item["self_watch"] = True
         item["manual_add"] = True
+        item["self_scope"] = self_scope
         item["concept"] = "self_watch"
         thr = thrs.get(c)
         if thr is not None:
@@ -643,9 +653,22 @@ WATCHLIST: list[dict[str, Any]] = []
 
 
 def strategy1_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """策略一定盘池（置顶 + 13A→16 Top20）∪ 公共自选池。"""
+    """策略一专属自选 ∪ 公共自选 ∪ 定盘池（置顶 + 13A→16 Top20）。"""
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
+    extra_self = self_watch_items(
+        holdings,
+        STRATEGY1_SELF_WATCHLIST_PICKS,
+        self_scope="strategy1",
+    )
+    for w in extra_self:
+        c = code_key(w["code"])
+        if not c or c in seen:
+            continue
+        seen.add(c)
+        item = dict(w)
+        item["universe"] = "strategy1"
+        out.append(item)
     for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST_STRATEGY1):
         c = code_key(w["code"])
         if c in seen:
@@ -660,7 +683,7 @@ def strategy1_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
 
 
 def strategy1_codes(holdings: dict[str, Any] | None = None) -> set[str]:
-    """策略一 Tab 宇宙（定盘池 ∪ 公共自选）。"""
+    """策略一 Tab 宇宙（专属自选 ∪ 公共自选 ∪ 定盘池）。"""
     return {code_key(w["code"]) for w in strategy1_watchlist(holdings)}
 
 
