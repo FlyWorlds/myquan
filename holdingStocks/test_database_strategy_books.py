@@ -79,7 +79,7 @@ class TestStrategyRuntime(unittest.TestCase):
 
     def test_pool_strategy_buys_independently_of_two_paper_slots(self):
         codes = {"000070", "001266", "002962", "600330"}
-        self.runtime.prepare([order(code) for code in codes], codes)
+        self.runtime.prepare([order(code, kind="day_low_rebound", signal_factor="factor33") for code in codes], codes)
         for code in codes:
             self.runtime.on_quote(("sh" if code.startswith("6") else "sz")+code, quote(last_ts=str(NOW)), NOW)
         self.assertEqual(self.client.command.call_count, 4)

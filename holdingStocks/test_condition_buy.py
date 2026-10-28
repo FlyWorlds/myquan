@@ -279,11 +279,34 @@ class TestConditionDatabase(unittest.TestCase):
         self.assertEqual(self.state["trades"][0]["price"], 10.25)
         self.assertEqual(self.state["trades"][0]["observed_price"], 10.26)
 
-    def test_duplicate_tick_and_daily_two_symbol_limit(self):
+    def test_duplicate_tick_and_open_break_phase_one_symbol_limit(self):
         for code in ("001266", "001266", "000070", "002962"):
             self.trigger(code)
-        self.assertEqual([t["code"] for t in self.state["trades"]], ["001266", "000070"])
-        self.assertEqual(self.state["holdings"]["condition_buy_orders"]["orders"]["002962"]["reason"], "MAX_NEW_SYMBOLS_PER_SESSION")
+        self.assertEqual([t["code"] for t in self.state["trades"]], ["001266"])
+        self.assertEqual(self.state["holdings"]["condition_buy_orders"]["orders"]["002962"]["reason"], "ENTRY_PHASE_QUOTA")
+        self.assertGreaterEqual(self.state["holdings"]["account_cash"], 0)
+
+    def test_post_ten_rebound_can_fill_remaining_slots_but_never_overfill(self):
+        late = NOW.replace(hour=10, minute=1)
+        class LateClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return late
+        codes = ["000070", "001266", "002962", "600330", "603138", "600000"]
+        orders = {c: order(c, kind="day_low_rebound", signal_factor="factor33") for c in codes}
+        self.state["holdings"]["condition_buy_orders"]["orders"] = orders
+        q = quote(last_ts=str(late), low=9., last=9.24)
+        self.feed.get_quote.return_value = q
+        with patch.object(index, "datetime", LateClock), patch.object(index, "_now", return_value=str(late)), \
+             patch.object(index, "MAX_NEW_SYMBOLS_PER_SESSION", 5), \
+             patch.object(index, "_CONDITION_VERIFIED_IDS", {o["id"] for o in orders.values()}), \
+             patch("watch_config.strategy_watchlist_codes", return_value=codes):
+            for code in codes:
+                index._execute_condition_quote(code, q, late)
+        self.assertEqual(len(self.state["trades"]), 5)
+        self.assertEqual(len([p for p in self.state["holdings"]["positions"].values() if p["qty"]]), 5)
+        self.assertTrue(all(t["signal_factor"] == "factor33" for t in self.state["trades"]))
+        self.assertTrue(all(t["price"] == 9.24 for t in self.state["trades"]))
         self.assertGreaterEqual(self.state["holdings"]["account_cash"], 0)
 
     def test_missing_position_mark_blocks_new_buy_without_fake_equity(self):

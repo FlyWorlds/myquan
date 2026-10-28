@@ -29,7 +29,7 @@ class QuoteAlerts:
             if abs(float(quote['open']) - target['open']) > target['tick'] / 10:
                 return
             if float(quote['last']) >= target['price']:
-                self._hits.setdefault((session, code, target['price']), quote['last_ts'])
+                self._hits.setdefault((session, code, target['price'], target.get('factor')), quote['last_ts'])
 
     def enrich(self, row, quote, *, now, signal, entry_pct, tick, official_open=None,
                blocked=False):
@@ -48,7 +48,7 @@ class QuoteAlerts:
             if self._session != session:
                 self._targets.clear(); self._hits.clear(); self._session = session
             if allowed and qty == 0:
-                self._targets[code] = dict(session=session, open=opening, price=buy, tick=tick)
+                self._targets[code] = dict(session=session, open=opening, price=buy, tick=tick, factor=row.get('信号因子'))
             else:
                 self._targets.pop(code, None)
         self.observe(code, quote, now)
@@ -63,7 +63,7 @@ class QuoteAlerts:
             row['预警状态'] = '开盘价不一致，等待复核'
             return
         with self._lock:
-            first_hit = self._hits.get((session, code, buy)) if allowed else None
+            first_hit = self._hits.get((session, code, buy, row.get('信号因子'))) if allowed else None
         last = float(quote['last'])
         stop = row.get('卖出侧价')
         sig = signal(open_px=opening, high_px=float(quote['high']), low_px=float(quote['low']),

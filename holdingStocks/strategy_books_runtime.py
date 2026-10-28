@@ -99,7 +99,9 @@ class StrategyBooksRuntime:
             if updates.get("peak_high", 0) > float(book.get("peak_high") or 0):
                 updates["peak_high_at"] = quote["last_ts"]
         elif active and order and self.order_valid(order) and self.signal_window(now) and is_trigger(order, quote, received_at, now):
-            price = float(order["price"])
+            from strategy1_entry import effective_order
+            order = effective_order(order, quote)
+            price = max(float(quote["last"]), float(order["price"])) if order.get("kind") == "day_low_rebound" else float(order["price"])
             sold_today = str(book.get("exit_time") or "").startswith(day)
             if sold_today and book.get("gap_rebuy_allowed") and order.get("kind") == "breakout":
                 sold_today = False
@@ -108,7 +110,7 @@ class StrategyBooksRuntime:
                     limit_up_pct=order.get("limit_up_pct") or .10, tick=order["tick"]):
                 shares = math.floor(float(book.get("virtual_cash", 100000.))* .95 / price / 100)*100
                 if shares >= 100:
-                    action = dict(kind="buy", shares=shares, fill_px=price, reason="prepared_quote_order")
+                    action = dict(kind="buy", shares=shares, fill_px=price, reason="prepared_quote_order:" + str(order.get("signal_factor") or "factor26"))
         if action and not self.signal_window(now):
             action = None
         decision_now = datetime.now()

@@ -141,6 +141,8 @@ export interface HoldingRow {
   过门?: string
   过门OK?: boolean
   前日形态?: string
+  信号因子?: string
+  信号来源?: string
   阈值就绪?: boolean
   竞价参考?: number | null
   bgClass?: string

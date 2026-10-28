@@ -440,6 +440,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
 
 <template>
   <div>
+    <p class="mb-3 text-xs leading-relaxed text-ui-text-2">分时买入：竞价因子29最多1只（9:25–9:30准备，开盘确认） · 9:30–10:00开盘突破最多1只 · 10:00后仅因子33日内低点反弹，剩余空槽可补满。各阶段共用持仓槽位上限。</p>
     <div
       class="card mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2"
       title="状态与纸面仓独立。策略收益=历次已实现盈亏＋当前浮盈。点表头可按该列排序，未点时行序保持。"
@@ -584,7 +585,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
               </td>
               <td class="whitespace-nowrap px-3 py-1.5 align-middle">
                 <div class="leading-snug">
-                  <span v-if="r.信号因子 === 'factor29'" class="text-xs font-semibold text-accent">因子29·竞价</span>
+                  <span v-if="r.信号因子 === 'factor29' || r.信号因子 === 'factor33'" class="text-xs font-semibold text-accent">{{ r.信号来源 }}</span>
           <StockNameHover :code="r.代码" :name="r.名称">
                     <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
                   </StockNameHover>

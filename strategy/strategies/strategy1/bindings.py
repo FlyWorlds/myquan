@@ -76,6 +76,11 @@ FACTOR_BINDINGS = (
         enabled=True,
     ),
     bind_factor(
+        "factor33", label="日内低点反弹", role="entry", enabled=True,
+        window_start="10:00:00", threshold_source="strategy1_symbol_entry_pct",
+        filter_desc="10点后仅按当日最低价反弹个股阈值买入，可补满剩余槽；竞价/开盘突破各限1只",
+    ),
+    bind_factor(
         "factor29",
         label="竞价末段强度",
         role="both",

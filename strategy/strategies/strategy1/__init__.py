@@ -63,7 +63,7 @@ def _bind() -> StrategySpec:
         description=(
             "援军战法：因子26 开盘阈值买/多层止盈"
             " + 因子2 回撤加减仓预警（回测不注资）"
-            " + 因子29 竞价末段强度（买卖信号标记来源）"
+            " + 因子29 竞价末段强度 + 因子33 10点后日内低点反弹（分时段买入）"
             " + 因子13A 质量带合格池 + 因子16 龙头排序（定盘池，研究）"
         ),
         factor_bindings=FACTOR_BINDINGS,
@@ -77,7 +77,7 @@ def _bind() -> StrategySpec:
         meta={
             "default": True,
             "legacy_id": "open_break3",
-            "factors": ("factor26", "factor2", "factor13a", "factor16", "factor22", "factor29"),
+            "factors": ("factor26", "factor2", "factor13a", "factor16", "factor22", "factor29", "factor33"),
             "pool_chain": "factor13a_quality_band → factor16_pl_ratio_rank",
             "pool_size": 10,
             "stop_anchor": "day_high",

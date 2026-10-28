@@ -43,7 +43,7 @@ def make_order(*, code: str, session: str, open_px: float, price: float, entry_p
                 code=code, name=name, market=market, session=session, open=open_px,
                 price=price, entry_pct=entry_pct, tick=tick, armed_at=armed_at,
                 armed_quote_at=quote_at, status="ARMED", kind=kind,
-                signal_factor="factor29" if kind == "auction_open" else "factor26",
+                signal_factor={"auction_open": "factor29", "day_low_rebound": "factor33"}.get(kind, "factor26"),
                 fill_assumption="paper_stop_at_order_price")
 
 
@@ -58,6 +58,10 @@ def auction_entry_blocked(open_px, prev_close, *, limit_up_pct=.10) -> bool:
 
 
 def is_trigger(order: dict, quote: dict, received_at: datetime, now: datetime) -> bool:
+    from strategy1_entry import effective_order, phase_allowed
+    if not phase_allowed(order, now):
+        return False
+    order = effective_order(order, quote)
     if order.get("status") not in ("ARMED", "TRIGGERED"):
         return False
     if not 0 <= (now - received_at).total_seconds() <= 5:

@@ -688,6 +688,12 @@ def strategy1_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
                 item["entry_pct"] = float(thr)
                 item["stop_pct"] = float(DEFAULT_PCT)
             factor_rows.append(item)
+    if "603138" not in seen:
+        item = meta_for_code("603138", holdings)
+        item.update(name="海量数据", universe="strategy1", pool_src="strategy1_pool", 池来源="策略池")
+        threshold = float(thrs.get("603138", DEFAULT_PCT))
+        item.update(pct=threshold, entry_pct=threshold, stop_pct=float(DEFAULT_PCT))
+        factor_rows.append(item)
     return merge_self_watchlist(factor_rows, holdings, strategy_id="strategy1")
 
 
@@ -1122,7 +1128,7 @@ def watchlist_codes_label(watchlist: list[dict[str, Any]] | None = None) -> str:
 # ── Paper Portfolio Capital Allocation V2（单一真源）──────────────
 # 这是 Portfolio / Risk Allocation，不是 Factor26 信号规则。
 CAPITAL_ALLOCATION_VERSION = 2
-MAX_NEW_SYMBOLS_PER_SESSION = 2  # 每个交易日最多新增 symbol 数
+MAX_NEW_SYMBOLS_PER_SESSION = (5 if STRATEGY_ID == "strategy1" else 2)  # 每个交易日最多新增 symbol 数
 MAX_POSITION_WEIGHT = 0.20  # 单票入场目标 ≤ 账户权益 20%
 MAX_POSITION_SYMBOLS = 5  # 同时持仓 symbol 上限
 ALLOW_NEGATIVE_CASH_FOR_BUY = False  # 新 BUY 不得把现金打成负

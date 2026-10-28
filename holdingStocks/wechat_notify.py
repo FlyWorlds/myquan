@@ -828,6 +828,9 @@ def filter_default_strategy_alert_rows(
     out: list[dict[str, Any]] = []
     for row in rows:
         code = str(row.get("代码") or "")
+        from watch_config import STRATEGY_ID
+        if row.get("信号策略ID") and row["信号策略ID"] != STRATEGY_ID:
+            continue
         if code and (int(row.get("持仓") or 0) > 0 or in_default_strategy_alert_scope(code)):
             out.append(row)
     return out
@@ -1778,8 +1781,9 @@ def notify_trade_fill(
             last_px=last,
         )
         typ = "模拟卖出"
-    if signal_factor == "factor29":
-        msg += "\n信号来源：因子29·竞价末段强度"
+    if signal_factor in ("factor29", "factor33"):
+        from strategy1_entry import LABELS
+        msg += "\n信号来源：" + LABELS["auction_open" if signal_factor == "factor29" else "day_low_rebound"]
     # 成交唯一键：含时刻分钟，避免同秒重复；不同成交不互相覆盖
     key = (
         f"fill|{code_s}|{side_l}|{typ}|{mapped}|"
