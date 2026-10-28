@@ -47,6 +47,16 @@ _SINA_HEADERS = {
 QUOTE_STALE_AFTER_SEC = 40.0
 
 
+_QUOTE_HTTP = threading.local()
+
+
+def _quote_http_get(url, **kwargs):
+    session = getattr(_QUOTE_HTTP, "session", None)
+    if session is None:
+        session = _QUOTE_HTTP.session = requests.Session()
+    return session.get(url, **kwargs)
+
+
 def sina_to_secid(sina: str) -> str:
     s = str(sina or "").strip().lower()
     if s.startswith("sh"):
@@ -170,6 +180,8 @@ class QuoteHub:
         self.quote_last_ok_ts = 0.0
         self.quote_last_ok_clock = ""
         self.source_last_ok: dict[str, tuple[float, str]] = {}
+        self.expected_symbols = []
+        self.source_diagnostics = {}
 
     def mark_quote_ok(self, source: str = "") -> None:
         """任意外网行情成功（SSE tick 或新浪批量）都刷新，供顶栏判断断网。"""
@@ -178,7 +190,8 @@ class QuoteHub:
         self.quote_last_ok_ts = now
         self.quote_last_ok_clock = clock
         src = str(source or "unknown").strip() or "unknown"
-        self.source_last_ok[src] = (now, clock)
+        with self._lock:
+            self.source_last_ok[src] = (now, clock)
         if source in ("em_sse", "sse", ""):
             self.sse_ok = True
             self.sse_last_ok_ts = now
@@ -195,7 +208,9 @@ class QuoteHub:
         return (time.time() - self.sse_last_ok_ts) <= max_age_sec
 
     def quote_health(self, *, max_age_sec: float = QUOTE_STALE_AFTER_SEC) -> dict[str, Any]:
-        last = float(self.quote_last_ok_ts or 0.0)
+        with self._lock:
+            source_observations = dict(self.source_last_ok)
+            last = float(self.quote_last_ok_ts or 0.0)
         had = last > 0
         age = (time.time() - last) if had else None
         ok = bool(had and age is not None and age <= float(max_age_sec))
@@ -205,14 +220,27 @@ class QuoteHub:
                 "ageSec": round(time.time() - ts, 1),
                 "ok": (time.time() - ts) <= float(max_age_sec),
             }
-            for src, (ts, clock) in sorted(self.source_last_ok.items())
+            for src, (ts, clock) in sorted(source_observations.items())
         }
+        from watch_config import market_phase
+        from quote_resilience import usable_quote
+        now = datetime.now()
+        continuous = bool(self.expected_symbols) and market_phase(now) == "continuous"
+        with self._lock:
+            missing = [code for code in self.expected_symbols
+                       if code not in self._quotes or (continuous and not usable_quote(
+                           self.get_execution_quote(code) or {}, now=now, continuous=True))]
+            diagnostics = dict(self.source_diagnostics)
         return {
+            "quotePartial": bool(missing),
+            "staleSymbols": missing,
+            "expectedSymbolCount": len(self.expected_symbols),
+            "sourceDiagnostics": diagnostics,
             "feedOk": ok,
             "quoteStale": bool(had and not ok),
             "quoteAt": self.quote_last_ok_clock or None,
             "quoteAgeSec": None if age is None else round(age, 1),
-            "dataSources": sorted(self.source_last_ok.keys()),
+            "dataSources": sorted(source_observations.keys()),
             "sourceAges": source_ages,
         }
 
@@ -629,7 +657,7 @@ def fetch_sina_batch(sinas: list[str], *, timeout=8) -> dict[str, dict[str, Any]
     for i in range(0, len(codes), 50):
         batch = codes[i : i + 50]
         try:
-            resp = requests.get(
+            resp = _quote_http_get(
                 f"https://hq.sinajs.cn/list={','.join(batch)}",
                 headers=_SINA_HEADERS,
                 timeout=timeout,
@@ -695,6 +723,83 @@ def fetch_sina_batch(sinas: list[str], *, timeout=8) -> dict[str, dict[str, Any]
     return out
 
 
+def fetch_tencent_batch(sinas: list[str], *, timeout=(2, 3)) -> dict[str, dict[str, Any]]:
+    """Independent fallback with exchange timestamps and original OHLC fields."""
+    out = {}
+    if not sinas:
+        return out
+    # Use a separate HTTPS host when the primary financial quote hosts are unavailable.
+    for endpoint in ("https://web.sqt.gtimg.cn", "https://qt.gtimg.cn"):
+        try:
+            proxies = {}
+            if sys.platform == "darwin":
+                # Unrelated *_PROXY variables can hide macOS proxy settings in urllib.
+                from urllib.request import getproxies_macosx_sysconf
+                proxies = {k: v for k, v in getproxies_macosx_sysconf().items() if k in ("http", "https")}
+            response = _quote_http_get(f"{endpoint}/q={','.join(sinas)}", timeout=timeout,
+                                    proxies=proxies)
+            response.raise_for_status()
+            for line in response.content.decode("gbk", "ignore").splitlines():
+                if '="' not in line:
+                    continue
+                left, raw = line.split('="', 1)
+                code = left.split("_")[-1].lower()
+                fields = raw.rstrip('";').split("~")
+                if code not in sinas or len(fields) < 35:
+                    continue
+                stamp = fields[30]
+                if len(stamp) != 14 or not stamp.isdigit():
+                    continue
+                try:
+                    timestamp = datetime.strptime(stamp, "%Y%m%d%H%M%S")
+                    last, prev, opening, high, low = [float(fields[i]) for i in (3, 4, 5, 33, 34)]
+                except (ValueError, TypeError):
+                    continue
+                if not all(math.isfinite(x) and x > 0 for x in (last, prev, opening, high, low)):
+                    continue
+                if low > min(opening, last) or high < max(opening, last):
+                    continue
+                out[code] = dict(last=last, prev_close=prev, open=opening, high=high, low=low,
+                    session=timestamp.strftime("%Y-%m-%d"), last_ts=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    _trade_quality_ok=True, _quote_source="tencent_batch")
+            if out:
+                break
+        except requests.RequestException:
+            continue
+    return out
+
+
+_OPEN_QUOTE_POOL = None
+_OPEN_QUOTE_POOL_LOCK = threading.Lock()
+
+
+def fetch_open_audit_quote(sina):
+    """Fresh single-symbol network audit; the slower source cannot hold up the first valid reply."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+    from quote_resilience import usable_quote
+    global _OPEN_QUOTE_POOL
+    with _OPEN_QUOTE_POOL_LOCK:
+        if _OPEN_QUOTE_POOL is None:
+            _OPEN_QUOTE_POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="open-quote-network")
+        pool = _OPEN_QUOTE_POOL
+    futures = {pool.submit(fetch, [sina], timeout=(.5, .75)): source for source, fetch in (
+        ("sina_batch", fetch_sina_batch), ("tencent_batch", fetch_tencent_batch))}
+    try:
+        for future in as_completed(futures, timeout=1.5):
+            try:
+                spot = future.result().get(sina)
+                if spot and usable_quote(spot):
+                    return dict(spot, _quote_source=futures[future])
+            except Exception:
+                continue
+    except TimeoutError:
+        pass
+    finally:
+        for future in futures:
+            future.cancel()
+    return None
+
+
 class SinaBatchPoller:
     """新浪批量轮询。
 
@@ -738,8 +843,56 @@ class SinaBatchPoller:
             for thread in threads:
                 thread.join(timeout=2)
 
-    def _run_group(self, sinas) -> None:
+    def _publish_batch(self, batch):
+        if self.stop.is_set():
+            return
+        for source in {spot.get("_quote_source", "sina_batch") for spot in batch.values()}:
+            self.hub.mark_quote_ok(source)
+        for sina, spot in batch.items():
+            self.hub.apply_tick(sina, last=float(spot["last"]), high=float(spot["high"]),
+                low=float(spot["low"]), open_px=float(spot["open"]),
+                prev_close=float(spot["prev_close"]), last_ts=str(spot["last_ts"]),
+                source=spot.get("_quote_source", "sina_batch"),
+                source_time_verified=spot.get("_trade_quality_ok", True))
+
+    def _opening_backup(self, sinas):
+        from quote_resilience import SourceRouter
+        from opening_speed import opening_fast, quote_poll_interval
+        from watch_config import market_phase
+        router = SourceRouter([("tencent_batch", fetch_tencent_batch)], log=self.on_log)
+        key = (sinas[0] if sinas else "empty") + ":opening-backup"
         while not self.stop.is_set():
+            if not opening_fast():
+                self.stop.wait(.2)
+                continue
+            started = time.monotonic()
+            for i in range(0, len(sinas), 50):
+                now = datetime.now()
+                batch = router.fetch(sinas[i:i+50], continuous=market_phase(now) == "continuous")
+                self._publish_batch(batch)
+                with self.hub._lock:
+                    self.hub.source_diagnostics[key] = router.status()
+                if self.stop.is_set():
+                    return
+            self.stop.wait(max(.02, quote_poll_interval(self.interval)-(time.monotonic()-started)))
+
+    def _run_group(self, sinas) -> None:
+        backup = threading.Thread(target=self._opening_backup, args=(sinas,), daemon=True,
+                                  name="opening-backup-"+(sinas[0] if sinas else "empty"))
+        backup.start()
+        try:
+            self._run_primary_group(sinas)
+        finally:
+            backup.join(timeout=2)
+
+    def _run_primary_group(self, sinas) -> None:
+        from quote_resilience import SourceRouter
+        from watch_config import market_phase
+        from opening_speed import opening_fast, quote_poll_interval
+        router = SourceRouter([("sina_batch", fetch_sina_batch), ("tencent_batch", fetch_tencent_batch)], log=self.on_log)
+        group_key = sinas[0] if sinas else "empty"
+        while not self.stop.is_set():
+            started = time.monotonic()
             healthy = self.hub.sse_healthy()
             if not self.always and healthy:
                 if self._fallback_active:
@@ -755,26 +908,17 @@ class SinaBatchPoller:
                 for i in range(0, len(sinas), 50):
                     if self.stop.is_set():
                         break
-                    batch = fetch_sina_batch(sinas[i:i+50], timeout=(2, 3))
+                    now = datetime.now()
+                    batch = router.fetch(sinas[i:i+50], continuous=market_phase(now) == "continuous",
+                        source_names=("sina_batch",) if opening_fast(now) else None)
+                    with self.hub._lock:
+                        self.hub.source_diagnostics[group_key] = router.status()
                     if self.stop.is_set():
                         break
-                    if batch:
-                        self.hub.mark_quote_ok("sina_batch")
-                    for sina, spot in batch.items():
-                        self.hub.apply_tick(
-                            sina,
-                            last=float(spot["last"]),
-                            high=float(spot["high"]),
-                            low=float(spot["low"]),
-                            open_px=float(spot["open"]),
-                            prev_close=float(spot["prev_close"]),
-                            last_ts=str(spot["last_ts"]),
-                            source="sina_batch",
-                            source_time_verified=spot.get("_trade_quality_ok", True),
-                        )
+                    self._publish_batch(batch)
             except Exception as e:  # noqa: BLE001
                 self.on_log(f"新浪批量失败: {e}")
-            if self.stop.wait(self.interval):
+            if self.stop.wait(max(.02, quote_poll_interval(self.interval)-(time.monotonic()-started))):
                 break
 
 
@@ -809,6 +953,7 @@ class QuoteFeedManager:
             self.on_log(f"SSE 名单 {len(self.sse_sinas)}→{cap}（MAX_SSE_QUOTES）")
             self.sse_sinas = self.sse_sinas[:cap]
         self.hub = QuoteHub()
+        self.hub.expected_symbols = list(dict.fromkeys(self.sinas))
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self.sina_interval = max(1.0, float(sina_interval))

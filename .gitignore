@@ -43,3 +43,7 @@ holdingStocks/_wechat_*.txt
 
 # QuantSkills 安装缓存
 _quantskills_cache/
+
+# Offline notification outbox (production is stored in MySQL)
+holdingStocks/wechat_alert_state_outbox.json
+holdingStocks/wechat_alert_state_outbox.tmp

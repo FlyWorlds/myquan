@@ -44,7 +44,7 @@ public class MarketQuoteService {
             && input.quote()!=null && input.quote().isObject());
         var q=input.quote();
         require(q.path("_source_time_verified").asBoolean(false)
-            && "sina_batch".equals(q.path("_quote_source").asText()));
+            && List.of("sina_batch", "tencent_batch").contains(q.path("_quote_source").asText()));
         for (String key:List.of("open","high","low","last","prev_close"))
             require(q.path(key).isNumber() && q.path(key).decimalValue().signum()>0);
         var high=q.path("high").decimalValue(); var low=q.path("low").decimalValue();

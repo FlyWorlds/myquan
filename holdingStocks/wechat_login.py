@@ -7,7 +7,7 @@ import threading
 import time
 from urllib.parse import urlparse
 
-ACTIVE = {"starting", "waiting", "scanned"}
+ACTIVE = {"starting", "waiting", "scanned", "reconnecting"}
 
 
 class WechatLogin:
@@ -19,10 +19,18 @@ class WechatLogin:
         self.probing = False
         self.checked_at = 0.0
         self.channel_ready = None
+        self.session_state = "unknown"
+        self.last_test_at = None
         self.test_push = dict(status="idle", message="")
 
     def _view(self):
-        return dict(self.state, channelReady=self.channel_ready, testPush=dict(self.test_push))
+        from wechat_notify import get_wechat_channel_state
+        delivery = get_wechat_channel_state()
+        return dict(self.state, channelReady=self.channel_ready, sessionState=self.session_state,
+                    lastTestAt=self.last_test_at, testPush=dict(self.test_push),
+                    delivery={key: delivery.get(key) for key in (
+                        "pending_notification_count", "last_success_at", "last_failure_at",
+                        "consecutive_failures", "expired_notification_count", "outbox_error")})
 
     def status(self):
         with self.lock:
@@ -59,13 +67,32 @@ class WechatLogin:
             ok, message = False, "测试消息发送失败，请稍后重试。"
         with self.lock:
             self.test_push = dict(status="sent" if ok else "error", message=message)
+            self.last_test_at = time.time()
+            if ok:
+                self.session_state = "available"
+            elif "会话已失效" in message:
+                self.session_state = "invalid"
 
     def _probe(self):
-        from wechat_notify import weixin_channel_ready
+        from wechat_notify import (weixin_channel_ready, context_token_status,
+                                   get_wechat_channel_state, context_token_refreshed_since, _channel_state)
         try:
             ready, _ = weixin_channel_ready()
+            session_ready, _ = context_token_status()
+            invalid = get_wechat_channel_state()["session_invalid"]
+            if invalid and context_token_refreshed_since(_channel_state.token_mtime_at_invalid):
+                invalid = False
             with self.lock:
+                self.session_state = "invalid" if invalid else "available" if session_ready else "missing"
+                session_ready = session_ready and not invalid
                 self.channel_ready = ready
+                if not ready and self.state["status"] not in ACTIVE:
+                    self.state.update(status="error", loginUrl=None,
+                        message="微信通道未运行，请重新扫码连接；消息会在有效期内等待重试。")
+                if ready and self.state["status"] not in ACTIVE:
+                    self.state.update(status="connected", loginUrl=None,
+                        message="微信通道已就绪，可点击测试微信推送。" if session_ready else
+                        "微信已连接。请先给机器人发一条消息，再点击测试微信推送。")
         except Exception:
             pass
         finally:
@@ -79,6 +106,9 @@ class WechatLogin:
                 return dict(status="error", message="服务正在关闭，请稍后重试。", loginUrl=None)
             if self.state["status"] not in ACTIVE and self.process is None:
                 self.state = dict(status="starting", message="正在生成微信二维码…", loginUrl=None)
+                self.test_push = dict(status="idle", message="")
+                self.last_test_at = None
+                self.session_state = "unknown"
                 threading.Thread(target=self._run, daemon=True).start()
             return self._view()
 
@@ -98,8 +128,8 @@ class WechatLogin:
             elif "二维码已过期" in line:
                 self.state.update(status="starting", message="二维码已过期，正在刷新…", loginUrl=None)
             elif "与微信连接成功" in line:
-                self.state.update(status="connected", message="微信已连接。请给机器人发一条消息，以便接收预警。", loginUrl=None)
-                self.channel_ready = True
+                self.state.update(status="reconnecting", message="扫码成功，正在重新加载微信通道…", loginUrl=None)
+                self.channel_ready = False
 
     def _run(self):
         from wechat_notify import load_config, _env_with_node, _resolve_openclaw_node
@@ -130,11 +160,22 @@ class WechatLogin:
                 self._line(line)
             proc.wait()
             with self.lock:
-                if self.state["status"] != "connected":
+                if self.state["status"] not in ("connected", "reconnecting"):
                     print(f"[WECHAT LOGIN] 登录未完成 exit={proc.returncode} timeout={timed_out.is_set()}", flush=True)
                     self.state.update(status="error", loginUrl=None,
                         message="扫码已超时，请重新生成二维码。" if timed_out.is_set()
                         else "微信连接未完成，请重试；详细原因见服务日志。")
+            if self.state["status"] == "reconnecting":
+                from wechat_notify import ensure_openclaw_gateway, wait_weixin_channel_ready
+                ready, _ = ensure_openclaw_gateway(config=load_config(), restart=True)
+                if ready:
+                    ready, _ = wait_weixin_channel_ready(config=load_config(), timeout_sec=45)
+                with self.lock:
+                    self.channel_ready = ready
+                    self.checked_at = time.monotonic()
+                    self.state.update(status="connected" if ready else "error", loginUrl=None,
+                        message="微信已连接。请先给机器人发一条消息，再点击测试微信推送。" if ready
+                        else "扫码成功，但微信通道未启动，请重新连接。")
         except Exception as exc:
             # Avoid exposing subprocess output or authentication material.
             print(f"[WECHAT LOGIN] {type(exc).__name__}", flush=True)

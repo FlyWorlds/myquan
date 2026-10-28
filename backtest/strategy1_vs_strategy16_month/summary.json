@@ -1,0 +1,3428 @@
+{
+  "period": "2026-09-27 ~ 2026-10-26",
+  "sh_index_return_pct": -3.3,
+  "strategy1": {
+    "name": "援军战法",
+    "universe_count": 24,
+    "avg_stock_pnl_pct": -1.97,
+    "total_trades": 90,
+    "win_rate_pct": 35.6,
+    "portfolio_return_pct": -18.37,
+    "portfolio_final_equity": 244875.32,
+    "stocks_detail": [
+      {
+        "code": "600330",
+        "name": "天通股份",
+        "trades": [
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-09-29",
+            "buy_px": 28.118089999999995,
+            "sell_date": "2026-09-30",
+            "sell_px": 27.74,
+            "pnl_pct": -1.4,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-08",
+            "buy_px": 27.617589999999996,
+            "sell_date": "2026-10-09",
+            "sell_px": 23.83,
+            "pnl_pct": -13.78,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 21.881859999999996,
+            "sell_date": "2026-10-14",
+            "sell_px": 23.18,
+            "pnl_pct": 5.85,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-15",
+            "buy_px": 21.901879999999995,
+            "sell_date": "2026-10-16",
+            "sell_px": 23.33,
+            "pnl_pct": 6.44,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-19",
+            "buy_px": 22.57255,
+            "sell_date": "2026-10-20",
+            "sell_px": 21.58,
+            "pnl_pct": -4.46,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-20",
+            "buy_px": 22.162139999999997,
+            "sell_date": "2026-10-21",
+            "sell_px": 22.4,
+            "pnl_pct": 1.0,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-21",
+            "buy_px": 23.012989999999995,
+            "sell_date": "2026-10-22",
+            "sell_px": 23.06,
+            "pnl_pct": 0.13,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-23",
+            "buy_px": 21.73171,
+            "sell_date": "2026-10-26",
+            "sell_px": 21.82,
+            "pnl_pct": 0.34,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -5.88,
+        "win_rate": 62.5,
+        "n_trades": 8
+      },
+      {
+        "code": "600552",
+        "name": "凯盛科技",
+        "trades": [
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-09-28",
+            "buy_px": 19.169149999999995,
+            "sell_date": "2026-09-29",
+            "sell_px": 17.54,
+            "pnl_pct": -8.54,
+            "hold_days": 1
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-09-30",
+            "buy_px": 17.757739999999995,
+            "sell_date": "2026-10-08",
+            "sell_px": 16.98,
+            "pnl_pct": -4.42,
+            "hold_days": 1
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-10-13",
+            "buy_px": 14.264249999999999,
+            "sell_date": "2026-10-14",
+            "sell_px": 14.24,
+            "pnl_pct": -0.26,
+            "hold_days": 1
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-10-15",
+            "buy_px": 13.803789999999998,
+            "sell_date": "2026-10-16",
+            "sell_px": 13.67,
+            "pnl_pct": -1.05,
+            "hold_days": 1
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-10-20",
+            "buy_px": 13.773759999999998,
+            "sell_date": "2026-10-22",
+            "sell_px": 13.55,
+            "pnl_pct": -1.71,
+            "hold_days": 2
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-10-23",
+            "buy_px": 13.363349999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 13.21,
+            "pnl_pct": -1.23,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -17.21,
+        "win_rate": 0.0,
+        "n_trades": 6
+      },
+      {
+        "code": "601208",
+        "name": "东材科技",
+        "trades": [
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-09-29",
+            "buy_px": 50.270219999999995,
+            "sell_date": "2026-09-30",
+            "sell_px": 49.98,
+            "pnl_pct": -0.64,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-08",
+            "buy_px": 52.39234,
+            "sell_date": "2026-10-09",
+            "sell_px": 49.13,
+            "pnl_pct": -6.28,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-09",
+            "buy_px": 50.46040999999999,
+            "sell_date": "2026-10-12",
+            "sell_px": 47.73,
+            "pnl_pct": -5.46,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-13",
+            "buy_px": 44.27422999999999,
+            "sell_date": "2026-10-14",
+            "sell_px": 45.72,
+            "pnl_pct": 3.21,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-15",
+            "buy_px": 44.60456,
+            "sell_date": "2026-10-16",
+            "sell_px": 43.83,
+            "pnl_pct": -1.8,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-20",
+            "buy_px": 41.861819999999994,
+            "sell_date": "2026-10-21",
+            "sell_px": 41.54,
+            "pnl_pct": -0.83,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-23",
+            "buy_px": 38.41838,
+            "sell_date": "2026-10-26",
+            "sell_px": 38.19,
+            "pnl_pct": -0.65,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -12.45,
+        "win_rate": 14.3,
+        "n_trades": 7
+      },
+      {
+        "code": "002636",
+        "name": "金安国纪",
+        "trades": [
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-09-28",
+            "buy_px": 80.34026,
+            "sell_date": "2026-09-29",
+            "sell_px": 77.73,
+            "pnl_pct": -3.3,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-09-29",
+            "buy_px": 79.83976,
+            "sell_date": "2026-09-30",
+            "sell_px": 81.7,
+            "pnl_pct": 2.27,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-08",
+            "buy_px": 82.082,
+            "sell_date": "2026-10-09",
+            "sell_px": 76.84,
+            "pnl_pct": -6.44,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-13",
+            "buy_px": 61.561499999999995,
+            "sell_date": "2026-10-14",
+            "sell_px": 67.03,
+            "pnl_pct": 8.82,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-19",
+            "buy_px": 65.64558,
+            "sell_date": "2026-10-20",
+            "sell_px": 63.57,
+            "pnl_pct": -3.23,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-20",
+            "buy_px": 65.29523,
+            "sell_date": "2026-10-21",
+            "sell_px": 65.01,
+            "pnl_pct": -0.49,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-21",
+            "buy_px": 66.77670999999998,
+            "sell_date": "2026-10-22",
+            "sell_px": 64.54,
+            "pnl_pct": -3.41,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-23",
+            "buy_px": 60.18011999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 58.57,
+            "pnl_pct": -2.73,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -8.51,
+        "win_rate": 25.0,
+        "n_trades": 8
+      },
+      {
+        "code": "600338",
+        "name": "西藏珠峰",
+        "trades": [
+          {
+            "code": "600338",
+            "name": "西藏珠峰",
+            "buy_date": "2026-10-23",
+            "buy_px": 10.98097,
+            "sell_date": "2026-10-26",
+            "sell_px": 10.89,
+            "pnl_pct": -0.9,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -0.9,
+        "win_rate": 0.0,
+        "n_trades": 1
+      },
+      {
+        "code": "002104",
+        "name": "恒宝股份",
+        "trades": [
+          {
+            "code": "002104",
+            "name": "恒宝股份",
+            "buy_date": "2026-10-09",
+            "buy_px": 10.190179999999998,
+            "sell_date": "2026-10-12",
+            "sell_px": 10.11,
+            "pnl_pct": -0.85,
+            "hold_days": 1
+          },
+          {
+            "code": "002104",
+            "name": "恒宝股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 10.25024,
+            "sell_date": "2026-10-14",
+            "sell_px": 10.2,
+            "pnl_pct": -0.55,
+            "hold_days": 1
+          },
+          {
+            "code": "002104",
+            "name": "恒宝股份",
+            "buy_date": "2026-10-15",
+            "buy_px": 10.16015,
+            "sell_date": "2026-10-16",
+            "sell_px": 10.07,
+            "pnl_pct": -0.95,
+            "hold_days": 1
+          },
+          {
+            "code": "002104",
+            "name": "恒宝股份",
+            "buy_date": "2026-10-21",
+            "buy_px": 10.14013,
+            "sell_date": "2026-10-22",
+            "sell_px": 9.99,
+            "pnl_pct": -1.54,
+            "hold_days": 1
+          },
+          {
+            "code": "002104",
+            "name": "恒宝股份",
+            "buy_date": "2026-10-23",
+            "buy_px": 9.72972,
+            "sell_date": "2026-10-26",
+            "sell_px": 9.79,
+            "pnl_pct": 0.56,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -3.33,
+        "win_rate": 20.0,
+        "n_trades": 5
+      },
+      {
+        "code": "603301",
+        "name": "振德医疗",
+        "trades": [
+          {
+            "code": "603301",
+            "name": "振德医疗",
+            "buy_date": "2026-10-08",
+            "buy_px": 77.72765,
+            "sell_date": "2026-10-09",
+            "sell_px": 78.72,
+            "pnl_pct": 1.22,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 1.22,
+        "win_rate": 100.0,
+        "n_trades": 1
+      },
+      {
+        "code": "600301",
+        "name": "华锡有色",
+        "trades": [
+          {
+            "code": "600301",
+            "name": "华锡有色",
+            "buy_date": "2026-09-29",
+            "buy_px": 49.489439999999995,
+            "sell_date": "2026-09-30",
+            "sell_px": 48.93,
+            "pnl_pct": -1.19,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -1.19,
+        "win_rate": 0.0,
+        "n_trades": 1
+      },
+      {
+        "code": "002093",
+        "name": "国脉科技",
+        "trades": [
+          {
+            "code": "002093",
+            "name": "国脉科技",
+            "buy_date": "2026-10-13",
+            "buy_px": 6.786779999999999,
+            "sell_date": "2026-10-14",
+            "sell_px": 6.66,
+            "pnl_pct": -1.88,
+            "hold_days": 1
+          },
+          {
+            "code": "002093",
+            "name": "国脉科技",
+            "buy_date": "2026-10-23",
+            "buy_px": 6.486479999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 6.49,
+            "pnl_pct": 0.05,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -1.83,
+        "win_rate": 50.0,
+        "n_trades": 2
+      },
+      {
+        "code": "601020",
+        "name": "华钰矿业",
+        "trades": [
+          {
+            "code": "601020",
+            "name": "华钰矿业",
+            "buy_date": "2026-09-29",
+            "buy_px": 19.879859999999997,
+            "sell_date": "2026-09-30",
+            "sell_px": 19.7,
+            "pnl_pct": -0.96,
+            "hold_days": 1
+          },
+          {
+            "code": "601020",
+            "name": "华钰矿业",
+            "buy_date": "2026-10-23",
+            "buy_px": 15.985969999999998,
+            "sell_date": "2026-10-26",
+            "sell_px": 15.67,
+            "pnl_pct": -2.01,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -2.97,
+        "win_rate": 0.0,
+        "n_trades": 2
+      },
+      {
+        "code": "601609",
+        "name": "金田股份",
+        "trades": [
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-09-29",
+            "buy_px": 11.34133,
+            "sell_date": "2026-09-30",
+            "sell_px": 11.54,
+            "pnl_pct": 1.68,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-09-30",
+            "buy_px": 11.801789999999999,
+            "sell_date": "2026-10-08",
+            "sell_px": 11.56,
+            "pnl_pct": -2.12,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-10-12",
+            "buy_px": 10.930919999999999,
+            "sell_date": "2026-10-13",
+            "sell_px": 10.41,
+            "pnl_pct": -4.83,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 10.64063,
+            "sell_date": "2026-10-14",
+            "sell_px": 10.52,
+            "pnl_pct": -1.2,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-10-19",
+            "buy_px": 10.3103,
+            "sell_date": "2026-10-20",
+            "sell_px": 10.11,
+            "pnl_pct": -2.0,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-10-23",
+            "buy_px": 9.82982,
+            "sell_date": "2026-10-26",
+            "sell_px": 9.78,
+            "pnl_pct": -0.56,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -9.03,
+        "win_rate": 16.7,
+        "n_trades": 6
+      },
+      {
+        "code": "600353",
+        "name": "旭光电子",
+        "trades": [
+          {
+            "code": "600353",
+            "name": "旭光电子",
+            "buy_date": "2026-10-13",
+            "buy_px": 24.994969999999995,
+            "sell_date": "2026-10-14",
+            "sell_px": 25.18,
+            "pnl_pct": 0.7,
+            "hold_days": 1
+          },
+          {
+            "code": "600353",
+            "name": "旭光电子",
+            "buy_date": "2026-10-20",
+            "buy_px": 23.743719999999996,
+            "sell_date": "2026-10-21",
+            "sell_px": 24.34,
+            "pnl_pct": 2.43,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 3.13,
+        "win_rate": 100.0,
+        "n_trades": 2
+      },
+      {
+        "code": "002779",
+        "name": "中坚科技",
+        "trades": [
+          {
+            "code": "002779",
+            "name": "中坚科技",
+            "buy_date": "2026-10-09",
+            "buy_px": 75.60552999999999,
+            "sell_date": "2026-10-12",
+            "sell_px": 72.65,
+            "pnl_pct": -3.97,
+            "hold_days": 1
+          },
+          {
+            "code": "002779",
+            "name": "中坚科技",
+            "buy_date": "2026-10-13",
+            "buy_px": 73.22315,
+            "sell_date": "2026-10-14",
+            "sell_px": 73.64,
+            "pnl_pct": 0.5,
+            "hold_days": 1
+          },
+          {
+            "code": "002779",
+            "name": "中坚科技",
+            "buy_date": "2026-10-15",
+            "buy_px": 72.16208999999999,
+            "sell_date": "2026-10-16",
+            "sell_px": 72.8,
+            "pnl_pct": 0.82,
+            "hold_days": 1
+          },
+          {
+            "code": "002779",
+            "name": "中坚科技",
+            "buy_date": "2026-10-23",
+            "buy_px": 75.16508999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 78.88,
+            "pnl_pct": 4.88,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 2.23,
+        "win_rate": 75.0,
+        "n_trades": 4
+      },
+      {
+        "code": "601068",
+        "name": "中铝国际",
+        "trades": [
+          {
+            "code": "601068",
+            "name": "中铝国际",
+            "buy_date": "2026-09-29",
+            "buy_px": 4.344339999999999,
+            "sell_date": "2026-10-08",
+            "sell_px": 4.34,
+            "pnl_pct": -0.26,
+            "hold_days": 2
+          },
+          {
+            "code": "601068",
+            "name": "中铝国际",
+            "buy_date": "2026-10-09",
+            "buy_px": 4.594589999999999,
+            "sell_date": "2026-10-12",
+            "sell_px": 4.53,
+            "pnl_pct": -1.56,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -1.82,
+        "win_rate": 0.0,
+        "n_trades": 2
+      },
+      {
+        "code": "600967",
+        "name": "内蒙一机",
+        "trades": [
+          {
+            "code": "600967",
+            "name": "内蒙一机",
+            "buy_date": "2026-10-12",
+            "buy_px": 12.792779999999999,
+            "sell_date": "2026-10-13",
+            "sell_px": 12.21,
+            "pnl_pct": -4.63,
+            "hold_days": 1
+          },
+          {
+            "code": "600967",
+            "name": "内蒙一机",
+            "buy_date": "2026-10-13",
+            "buy_px": 12.542529999999998,
+            "sell_date": "2026-10-14",
+            "sell_px": 13.17,
+            "pnl_pct": 4.91,
+            "hold_days": 1
+          },
+          {
+            "code": "600967",
+            "name": "内蒙一机",
+            "buy_date": "2026-10-15",
+            "buy_px": 13.193179999999998,
+            "sell_date": "2026-10-16",
+            "sell_px": 12.95,
+            "pnl_pct": -1.92,
+            "hold_days": 1
+          },
+          {
+            "code": "600967",
+            "name": "内蒙一机",
+            "buy_date": "2026-10-16",
+            "buy_px": 13.303289999999997,
+            "sell_date": "2026-10-19",
+            "sell_px": 13.84,
+            "pnl_pct": 3.94,
+            "hold_days": 1
+          },
+          {
+            "code": "600967",
+            "name": "内蒙一机",
+            "buy_date": "2026-10-21",
+            "buy_px": 14.06405,
+            "sell_date": "2026-10-22",
+            "sell_px": 13.39,
+            "pnl_pct": -4.87,
+            "hold_days": 1
+          },
+          {
+            "code": "600967",
+            "name": "内蒙一机",
+            "buy_date": "2026-10-22",
+            "buy_px": 13.753739999999999,
+            "sell_date": "2026-10-23",
+            "sell_px": 13.51,
+            "pnl_pct": -1.86,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -4.43,
+        "win_rate": 33.3,
+        "n_trades": 6
+      },
+      {
+        "code": "002273",
+        "name": "水晶光电",
+        "trades": [
+          {
+            "code": "002273",
+            "name": "水晶光电",
+            "buy_date": "2026-09-30",
+            "buy_px": 24.444419999999997,
+            "sell_date": "2026-10-08",
+            "sell_px": 24.37,
+            "pnl_pct": -0.38,
+            "hold_days": 1
+          },
+          {
+            "code": "002273",
+            "name": "水晶光电",
+            "buy_date": "2026-10-19",
+            "buy_px": 19.639619999999997,
+            "sell_date": "2026-10-20",
+            "sell_px": 20.01,
+            "pnl_pct": 1.83,
+            "hold_days": 1
+          },
+          {
+            "code": "002273",
+            "name": "水晶光电",
+            "buy_date": "2026-10-23",
+            "buy_px": 21.57155,
+            "sell_date": "2026-10-26",
+            "sell_px": 22.58,
+            "pnl_pct": 4.6,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 6.05,
+        "win_rate": 66.7,
+        "n_trades": 3
+      },
+      {
+        "code": "002015",
+        "name": "协鑫能科",
+        "trades": [
+          {
+            "code": "002015",
+            "name": "协鑫能科",
+            "buy_date": "2026-10-14",
+            "buy_px": 14.114099999999999,
+            "sell_date": "2026-10-15",
+            "sell_px": 13.31,
+            "pnl_pct": -5.78,
+            "hold_days": 1
+          },
+          {
+            "code": "002015",
+            "name": "协鑫能科",
+            "buy_date": "2026-10-19",
+            "buy_px": 13.703689999999998,
+            "sell_date": "2026-10-20",
+            "sell_px": 13.5,
+            "pnl_pct": -1.57,
+            "hold_days": 1
+          },
+          {
+            "code": "002015",
+            "name": "协鑫能科",
+            "buy_date": "2026-10-21",
+            "buy_px": 13.853839999999998,
+            "sell_date": "2026-10-22",
+            "sell_px": 13.79,
+            "pnl_pct": -0.55,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -7.9,
+        "win_rate": 0.0,
+        "n_trades": 3
+      },
+      {
+        "code": "002929",
+        "name": "润建股份",
+        "trades": [
+          {
+            "code": "002929",
+            "name": "润建股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 42.652609999999996,
+            "sell_date": "2026-10-14",
+            "sell_px": 42.65,
+            "pnl_pct": -0.07,
+            "hold_days": 1
+          },
+          {
+            "code": "002929",
+            "name": "润建股份",
+            "buy_date": "2026-10-16",
+            "buy_px": 42.51246999999999,
+            "sell_date": "2026-10-19",
+            "sell_px": 45.18,
+            "pnl_pct": 6.22,
+            "hold_days": 1
+          },
+          {
+            "code": "002929",
+            "name": "润建股份",
+            "buy_date": "2026-10-20",
+            "buy_px": 47.59754999999999,
+            "sell_date": "2026-10-21",
+            "sell_px": 53.05,
+            "pnl_pct": 11.38,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 17.53,
+        "win_rate": 66.7,
+        "n_trades": 3
+      },
+      {
+        "code": "000581",
+        "name": "威孚高科",
+        "trades": [
+          {
+            "code": "000581",
+            "name": "威孚高科",
+            "buy_date": "2026-10-16",
+            "buy_px": 17.96795,
+            "sell_date": "2026-10-19",
+            "sell_px": 17.75,
+            "pnl_pct": -1.26,
+            "hold_days": 1
+          },
+          {
+            "code": "000581",
+            "name": "威孚高科",
+            "buy_date": "2026-10-19",
+            "buy_px": 18.14813,
+            "sell_date": "2026-10-20",
+            "sell_px": 17.82,
+            "pnl_pct": -1.85,
+            "hold_days": 1
+          },
+          {
+            "code": "000581",
+            "name": "威孚高科",
+            "buy_date": "2026-10-23",
+            "buy_px": 17.69768,
+            "sell_date": "2026-10-26(持仓浮盈)",
+            "sell_px": 17.46,
+            "pnl_pct": -1.39,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -4.5,
+        "win_rate": 0.0,
+        "n_trades": 3
+      },
+      {
+        "code": "601519",
+        "name": "大智慧",
+        "trades": [
+          {
+            "code": "601519",
+            "name": "大智慧",
+            "buy_date": "2026-09-29",
+            "buy_px": 8.438429999999999,
+            "sell_date": "2026-09-30",
+            "sell_px": 8.91,
+            "pnl_pct": 5.54,
+            "hold_days": 1
+          },
+          {
+            "code": "601519",
+            "name": "大智慧",
+            "buy_date": "2026-10-09",
+            "buy_px": 8.65865,
+            "sell_date": "2026-10-12",
+            "sell_px": 8.89,
+            "pnl_pct": 2.62,
+            "hold_days": 1
+          },
+          {
+            "code": "601519",
+            "name": "大智慧",
+            "buy_date": "2026-10-15",
+            "buy_px": 9.609599999999999,
+            "sell_date": "2026-10-16",
+            "sell_px": 9.44,
+            "pnl_pct": -1.82,
+            "hold_days": 1
+          },
+          {
+            "code": "601519",
+            "name": "大智慧",
+            "buy_date": "2026-10-23",
+            "buy_px": 8.55855,
+            "sell_date": "2026-10-26",
+            "sell_px": 9.09,
+            "pnl_pct": 6.16,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 12.5,
+        "win_rate": 75.0,
+        "n_trades": 4
+      },
+      {
+        "code": "002922",
+        "name": "伊戈尔",
+        "trades": [
+          {
+            "code": "002922",
+            "name": "伊戈尔",
+            "buy_date": "2026-10-12",
+            "buy_px": 20.8208,
+            "sell_date": "2026-10-13",
+            "sell_px": 19.96,
+            "pnl_pct": -4.19,
+            "hold_days": 1
+          },
+          {
+            "code": "002922",
+            "name": "伊戈尔",
+            "buy_date": "2026-10-13",
+            "buy_px": 20.40038,
+            "sell_date": "2026-10-14",
+            "sell_px": 19.98,
+            "pnl_pct": -2.12,
+            "hold_days": 1
+          },
+          {
+            "code": "002922",
+            "name": "伊戈尔",
+            "buy_date": "2026-10-16",
+            "buy_px": 19.399379999999997,
+            "sell_date": "2026-10-19",
+            "sell_px": 18.85,
+            "pnl_pct": -2.88,
+            "hold_days": 1
+          },
+          {
+            "code": "002922",
+            "name": "伊戈尔",
+            "buy_date": "2026-10-19",
+            "buy_px": 19.26925,
+            "sell_date": "2026-10-20",
+            "sell_px": 19.01,
+            "pnl_pct": -1.4,
+            "hold_days": 1
+          },
+          {
+            "code": "002922",
+            "name": "伊戈尔",
+            "buy_date": "2026-10-21",
+            "buy_px": 19.909889999999997,
+            "sell_date": "2026-10-22",
+            "sell_px": 19.79,
+            "pnl_pct": -0.66,
+            "hold_days": 1
+          },
+          {
+            "code": "002922",
+            "name": "伊戈尔",
+            "buy_date": "2026-10-23",
+            "buy_px": 19.27926,
+            "sell_date": "2026-10-26",
+            "sell_px": 19.44,
+            "pnl_pct": 0.78,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -10.47,
+        "win_rate": 16.7,
+        "n_trades": 6
+      },
+      {
+        "code": "002152",
+        "name": "广电运通",
+        "trades": [
+          {
+            "code": "002152",
+            "name": "广电运通",
+            "buy_date": "2026-10-09",
+            "buy_px": 9.02902,
+            "sell_date": "2026-10-15",
+            "sell_px": 8.87,
+            "pnl_pct": -1.81,
+            "hold_days": 4
+          },
+          {
+            "code": "002152",
+            "name": "广电运通",
+            "buy_date": "2026-10-23",
+            "buy_px": 9.06906,
+            "sell_date": "2026-10-26(持仓浮盈)",
+            "sell_px": 9.16,
+            "pnl_pct": 0.95,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -0.86,
+        "win_rate": 50.0,
+        "n_trades": 2
+      },
+      {
+        "code": "603920",
+        "name": "世运电路",
+        "trades": [
+          {
+            "code": "603920",
+            "name": "世运电路",
+            "buy_date": "2026-09-29",
+            "buy_px": 44.394349999999996,
+            "sell_date": "2026-09-30",
+            "sell_px": 45.56,
+            "pnl_pct": 2.57,
+            "hold_days": 1
+          },
+          {
+            "code": "603920",
+            "name": "世运电路",
+            "buy_date": "2026-10-08",
+            "buy_px": 45.68563999999999,
+            "sell_date": "2026-10-09",
+            "sell_px": 42.07,
+            "pnl_pct": -7.97,
+            "hold_days": 1
+          },
+          {
+            "code": "603920",
+            "name": "世运电路",
+            "buy_date": "2026-10-13",
+            "buy_px": 39.399359999999994,
+            "sell_date": "2026-10-14",
+            "sell_px": 41.46,
+            "pnl_pct": 5.16,
+            "hold_days": 1
+          },
+          {
+            "code": "603920",
+            "name": "世运电路",
+            "buy_date": "2026-10-20",
+            "buy_px": 41.83179,
+            "sell_date": "2026-10-21",
+            "sell_px": 42.65,
+            "pnl_pct": 1.89,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 1.65,
+        "win_rate": 75.0,
+        "n_trades": 4
+      },
+      {
+        "code": "002065",
+        "name": "东华软件",
+        "trades": [
+          {
+            "code": "002065",
+            "name": "东华软件",
+            "buy_date": "2026-10-23",
+            "buy_px": 6.486479999999999,
+            "sell_date": "2026-10-26(持仓浮盈)",
+            "sell_px": 6.6,
+            "pnl_pct": 1.74,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 1.74,
+        "win_rate": 100.0,
+        "n_trades": 1
+      }
+    ],
+    "portfolio_equity_curve": [
+      {
+        "date": "2026-09-28",
+        "cash": 152919.96,
+        "stock_val": 141297.0,
+        "total_equity": 294216.96,
+        "return_pct": -1.93,
+        "positions_count": 2
+      },
+      {
+        "date": "2026-09-29",
+        "cash": 1897.21,
+        "stock_val": 287906.0,
+        "total_equity": 289803.21,
+        "return_pct": -3.4,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-09-30",
+        "cash": 569.49,
+        "stock_val": 281892.0,
+        "total_equity": 282461.49,
+        "return_pct": -5.85,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-08",
+        "cash": 2799.59,
+        "stock_val": 263265.0,
+        "total_equity": 266064.59,
+        "return_pct": -11.31,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-09",
+        "cash": 246.13,
+        "stock_val": 260528.0,
+        "total_equity": 260774.13,
+        "return_pct": -13.08,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-12",
+        "cash": 992.21,
+        "stock_val": 249764.0,
+        "total_equity": 250756.21,
+        "return_pct": -16.41,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-13",
+        "cash": 3166.52,
+        "stock_val": 255316.0,
+        "total_equity": 258482.52,
+        "return_pct": -13.84,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-14",
+        "cash": 179732.92,
+        "stock_val": 72716.0,
+        "total_equity": 252448.92,
+        "return_pct": -15.85,
+        "positions_count": 1
+      },
+      {
+        "date": "2026-10-15",
+        "cash": 353.72,
+        "stock_val": 249440.0,
+        "total_equity": 249793.72,
+        "return_pct": -16.74,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-16",
+        "cash": 527.3,
+        "stock_val": 253270.0,
+        "total_equity": 253797.3,
+        "return_pct": -15.4,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-19",
+        "cash": 1306.85,
+        "stock_val": 253035.0,
+        "total_equity": 254341.85,
+        "return_pct": -15.22,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-20",
+        "cash": 3151.8,
+        "stock_val": 248579.0,
+        "total_equity": 251730.8,
+        "return_pct": -16.09,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-21",
+        "cash": 354.01,
+        "stock_val": 252559.0,
+        "total_equity": 252913.01,
+        "return_pct": -15.7,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-22",
+        "cash": 175690.81,
+        "stock_val": 76410.0,
+        "total_equity": 252100.81,
+        "return_pct": -15.97,
+        "positions_count": 1
+      },
+      {
+        "date": "2026-10-23",
+        "cash": 2769.19,
+        "stock_val": 249606.0,
+        "total_equity": 252375.19,
+        "return_pct": -15.87,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-26",
+        "cash": 244875.32,
+        "stock_val": 0.0,
+        "total_equity": 244875.32,
+        "return_pct": -18.37,
+        "positions_count": 0
+      }
+    ]
+  },
+  "strategy16": {
+    "name": "核心龙头",
+    "universe_count": 34,
+    "avg_stock_pnl_pct": -3.95,
+    "total_trades": 172,
+    "win_rate_pct": 29.7,
+    "portfolio_return_pct": -29.44,
+    "portfolio_final_equity": 211693.23,
+    "stocks_detail": [
+      {
+        "code": "600330",
+        "name": "天通股份",
+        "trades": [
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-09-29",
+            "buy_px": 28.118089999999995,
+            "sell_date": "2026-09-30",
+            "sell_px": 27.74,
+            "pnl_pct": -1.4,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-08",
+            "buy_px": 27.617589999999996,
+            "sell_date": "2026-10-09",
+            "sell_px": 23.83,
+            "pnl_pct": -13.78,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 21.881859999999996,
+            "sell_date": "2026-10-14",
+            "sell_px": 23.18,
+            "pnl_pct": 5.85,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-15",
+            "buy_px": 21.901879999999995,
+            "sell_date": "2026-10-16",
+            "sell_px": 23.33,
+            "pnl_pct": 6.44,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-19",
+            "buy_px": 22.57255,
+            "sell_date": "2026-10-20",
+            "sell_px": 21.58,
+            "pnl_pct": -4.46,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-20",
+            "buy_px": 22.162139999999997,
+            "sell_date": "2026-10-21",
+            "sell_px": 22.4,
+            "pnl_pct": 1.0,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-21",
+            "buy_px": 23.012989999999995,
+            "sell_date": "2026-10-22",
+            "sell_px": 23.06,
+            "pnl_pct": 0.13,
+            "hold_days": 1
+          },
+          {
+            "code": "600330",
+            "name": "天通股份",
+            "buy_date": "2026-10-23",
+            "buy_px": 21.73171,
+            "sell_date": "2026-10-26",
+            "sell_px": 21.82,
+            "pnl_pct": 0.34,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -5.88,
+        "win_rate": 62.5,
+        "n_trades": 8
+      },
+      {
+        "code": "600552",
+        "name": "凯盛科技",
+        "trades": [
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-09-28",
+            "buy_px": 19.169149999999995,
+            "sell_date": "2026-09-29",
+            "sell_px": 17.54,
+            "pnl_pct": -8.54,
+            "hold_days": 1
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-09-30",
+            "buy_px": 17.757739999999995,
+            "sell_date": "2026-10-08",
+            "sell_px": 16.98,
+            "pnl_pct": -4.42,
+            "hold_days": 1
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-10-13",
+            "buy_px": 14.264249999999999,
+            "sell_date": "2026-10-14",
+            "sell_px": 14.24,
+            "pnl_pct": -0.26,
+            "hold_days": 1
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-10-15",
+            "buy_px": 13.803789999999998,
+            "sell_date": "2026-10-16",
+            "sell_px": 13.67,
+            "pnl_pct": -1.05,
+            "hold_days": 1
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-10-20",
+            "buy_px": 13.773759999999998,
+            "sell_date": "2026-10-22",
+            "sell_px": 13.55,
+            "pnl_pct": -1.71,
+            "hold_days": 2
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "buy_date": "2026-10-23",
+            "buy_px": 13.363349999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 13.21,
+            "pnl_pct": -1.23,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -17.21,
+        "win_rate": 0.0,
+        "n_trades": 6
+      },
+      {
+        "code": "601208",
+        "name": "东材科技",
+        "trades": [
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-09-29",
+            "buy_px": 50.270219999999995,
+            "sell_date": "2026-09-30",
+            "sell_px": 49.98,
+            "pnl_pct": -0.64,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-08",
+            "buy_px": 52.39234,
+            "sell_date": "2026-10-09",
+            "sell_px": 49.13,
+            "pnl_pct": -6.28,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-09",
+            "buy_px": 50.46040999999999,
+            "sell_date": "2026-10-12",
+            "sell_px": 47.73,
+            "pnl_pct": -5.46,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-13",
+            "buy_px": 44.27422999999999,
+            "sell_date": "2026-10-14",
+            "sell_px": 45.72,
+            "pnl_pct": 3.21,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-15",
+            "buy_px": 44.60456,
+            "sell_date": "2026-10-16",
+            "sell_px": 43.83,
+            "pnl_pct": -1.8,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-20",
+            "buy_px": 41.861819999999994,
+            "sell_date": "2026-10-21",
+            "sell_px": 41.54,
+            "pnl_pct": -0.83,
+            "hold_days": 1
+          },
+          {
+            "code": "601208",
+            "name": "东材科技",
+            "buy_date": "2026-10-23",
+            "buy_px": 38.41838,
+            "sell_date": "2026-10-26",
+            "sell_px": 38.19,
+            "pnl_pct": -0.65,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -12.45,
+        "win_rate": 14.3,
+        "n_trades": 7
+      },
+      {
+        "code": "002636",
+        "name": "金安国纪",
+        "trades": [
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-09-28",
+            "buy_px": 80.34026,
+            "sell_date": "2026-09-29",
+            "sell_px": 77.73,
+            "pnl_pct": -3.3,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-09-29",
+            "buy_px": 79.83976,
+            "sell_date": "2026-09-30",
+            "sell_px": 81.7,
+            "pnl_pct": 2.27,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-08",
+            "buy_px": 82.082,
+            "sell_date": "2026-10-09",
+            "sell_px": 76.84,
+            "pnl_pct": -6.44,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-13",
+            "buy_px": 61.561499999999995,
+            "sell_date": "2026-10-14",
+            "sell_px": 67.03,
+            "pnl_pct": 8.82,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-19",
+            "buy_px": 65.64558,
+            "sell_date": "2026-10-20",
+            "sell_px": 63.57,
+            "pnl_pct": -3.23,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-20",
+            "buy_px": 65.29523,
+            "sell_date": "2026-10-21",
+            "sell_px": 65.01,
+            "pnl_pct": -0.49,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-21",
+            "buy_px": 66.77670999999998,
+            "sell_date": "2026-10-22",
+            "sell_px": 64.54,
+            "pnl_pct": -3.41,
+            "hold_days": 1
+          },
+          {
+            "code": "002636",
+            "name": "金安国纪",
+            "buy_date": "2026-10-23",
+            "buy_px": 60.18011999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 58.57,
+            "pnl_pct": -2.73,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -8.51,
+        "win_rate": 25.0,
+        "n_trades": 8
+      },
+      {
+        "code": "002273",
+        "name": "水晶光电",
+        "trades": [
+          {
+            "code": "002273",
+            "name": "水晶光电",
+            "buy_date": "2026-09-30",
+            "buy_px": 24.564539999999997,
+            "sell_date": "2026-10-08",
+            "sell_px": 24.37,
+            "pnl_pct": -0.87,
+            "hold_days": 1
+          },
+          {
+            "code": "002273",
+            "name": "水晶光电",
+            "buy_date": "2026-10-19",
+            "buy_px": 19.73972,
+            "sell_date": "2026-10-20",
+            "sell_px": 20.01,
+            "pnl_pct": 1.31,
+            "hold_days": 1
+          },
+          {
+            "code": "002273",
+            "name": "水晶光电",
+            "buy_date": "2026-10-23",
+            "buy_px": 21.671649999999996,
+            "sell_date": "2026-10-26",
+            "sell_px": 22.58,
+            "pnl_pct": 4.12,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 4.56,
+        "win_rate": 66.7,
+        "n_trades": 3
+      },
+      {
+        "code": "000070",
+        "name": "特发信息",
+        "trades": [
+          {
+            "code": "000070",
+            "name": "特发信息",
+            "buy_date": "2026-09-29",
+            "buy_px": 16.036019999999997,
+            "sell_date": "2026-09-30",
+            "sell_px": 16.43,
+            "pnl_pct": 2.42,
+            "hold_days": 1
+          },
+          {
+            "code": "000070",
+            "name": "特发信息",
+            "buy_date": "2026-10-13",
+            "buy_px": 14.554539999999998,
+            "sell_date": "2026-10-14",
+            "sell_px": 14.9,
+            "pnl_pct": 2.28,
+            "hold_days": 1
+          },
+          {
+            "code": "000070",
+            "name": "特发信息",
+            "buy_date": "2026-10-15",
+            "buy_px": 14.374359999999998,
+            "sell_date": "2026-10-16",
+            "sell_px": 14.1,
+            "pnl_pct": -2.0,
+            "hold_days": 1
+          },
+          {
+            "code": "000070",
+            "name": "特发信息",
+            "buy_date": "2026-10-19",
+            "buy_px": 14.06405,
+            "sell_date": "2026-10-20",
+            "sell_px": 13.89,
+            "pnl_pct": -1.32,
+            "hold_days": 1
+          },
+          {
+            "code": "000070",
+            "name": "特发信息",
+            "buy_date": "2026-10-20",
+            "buy_px": 14.194179999999998,
+            "sell_date": "2026-10-21",
+            "sell_px": 14.06,
+            "pnl_pct": -1.03,
+            "hold_days": 1
+          },
+          {
+            "code": "000070",
+            "name": "特发信息",
+            "buy_date": "2026-10-21",
+            "buy_px": 14.444429999999999,
+            "sell_date": "2026-10-22",
+            "sell_px": 14.07,
+            "pnl_pct": -2.66,
+            "hold_days": 1
+          },
+          {
+            "code": "000070",
+            "name": "特发信息",
+            "buy_date": "2026-10-23",
+            "buy_px": 13.26325,
+            "sell_date": "2026-10-26",
+            "sell_px": 13.2,
+            "pnl_pct": -0.56,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -2.87,
+        "win_rate": 28.6,
+        "n_trades": 7
+      },
+      {
+        "code": "000756",
+        "name": "新华制药",
+        "trades": [
+          {
+            "code": "000756",
+            "name": "新华制药",
+            "buy_date": "2026-09-28",
+            "buy_px": 14.39438,
+            "sell_date": "2026-09-29",
+            "sell_px": 13.86,
+            "pnl_pct": -3.8,
+            "hold_days": 1
+          },
+          {
+            "code": "000756",
+            "name": "新华制药",
+            "buy_date": "2026-09-29",
+            "buy_px": 14.16415,
+            "sell_date": "2026-09-30",
+            "sell_px": 13.99,
+            "pnl_pct": -1.32,
+            "hold_days": 1
+          },
+          {
+            "code": "000756",
+            "name": "新华制药",
+            "buy_date": "2026-09-30",
+            "buy_px": 14.294279999999997,
+            "sell_date": "2026-10-08",
+            "sell_px": 14.61,
+            "pnl_pct": 2.12,
+            "hold_days": 1
+          },
+          {
+            "code": "000756",
+            "name": "新华制药",
+            "buy_date": "2026-10-09",
+            "buy_px": 14.49448,
+            "sell_date": "2026-10-12",
+            "sell_px": 14.45,
+            "pnl_pct": -0.4,
+            "hold_days": 1
+          },
+          {
+            "code": "000756",
+            "name": "新华制药",
+            "buy_date": "2026-10-15",
+            "buy_px": 13.59358,
+            "sell_date": "2026-10-16",
+            "sell_px": 13.48,
+            "pnl_pct": -0.92,
+            "hold_days": 1
+          },
+          {
+            "code": "000756",
+            "name": "新华制药",
+            "buy_date": "2026-10-16",
+            "buy_px": 13.773759999999998,
+            "sell_date": "2026-10-19",
+            "sell_px": 13.41,
+            "pnl_pct": -2.72,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -7.04,
+        "win_rate": 16.7,
+        "n_trades": 6
+      },
+      {
+        "code": "002703",
+        "name": "浙江世宝",
+        "trades": [
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-09-28",
+            "buy_px": 15.285269999999997,
+            "sell_date": "2026-09-29",
+            "sell_px": 14.94,
+            "pnl_pct": -2.35,
+            "hold_days": 1
+          },
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-09-29",
+            "buy_px": 15.265249999999998,
+            "sell_date": "2026-09-30",
+            "sell_px": 15.22,
+            "pnl_pct": -0.32,
+            "hold_days": 1
+          },
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-09-30",
+            "buy_px": 15.565549999999998,
+            "sell_date": "2026-10-08",
+            "sell_px": 15.44,
+            "pnl_pct": -0.84,
+            "hold_days": 1
+          },
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-10-12",
+            "buy_px": 15.33532,
+            "sell_date": "2026-10-13",
+            "sell_px": 14.49,
+            "pnl_pct": -5.6,
+            "hold_days": 1
+          },
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-10-13",
+            "buy_px": 14.804789999999997,
+            "sell_date": "2026-10-14",
+            "sell_px": 14.42,
+            "pnl_pct": -2.66,
+            "hold_days": 1
+          },
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-10-15",
+            "buy_px": 14.594579999999999,
+            "sell_date": "2026-10-16",
+            "sell_px": 14.35,
+            "pnl_pct": -1.76,
+            "hold_days": 1
+          },
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-10-16",
+            "buy_px": 14.664649999999998,
+            "sell_date": "2026-10-19",
+            "sell_px": 14.42,
+            "pnl_pct": -1.76,
+            "hold_days": 1
+          },
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-10-19",
+            "buy_px": 14.73472,
+            "sell_date": "2026-10-20",
+            "sell_px": 14.6,
+            "pnl_pct": -1.0,
+            "hold_days": 1
+          },
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-10-20",
+            "buy_px": 14.924909999999999,
+            "sell_date": "2026-10-21",
+            "sell_px": 14.95,
+            "pnl_pct": 0.08,
+            "hold_days": 1
+          },
+          {
+            "code": "002703",
+            "name": "浙江世宝",
+            "buy_date": "2026-10-23",
+            "buy_px": 14.174159999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 14.58,
+            "pnl_pct": 2.77,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -13.44,
+        "win_rate": 20.0,
+        "n_trades": 10
+      },
+      {
+        "code": "001282",
+        "name": "三联锻造",
+        "trades": [
+          {
+            "code": "001282",
+            "name": "三联锻造",
+            "buy_date": "2026-09-30",
+            "buy_px": 16.756739999999997,
+            "sell_date": "2026-10-08",
+            "sell_px": 16.68,
+            "pnl_pct": -0.5,
+            "hold_days": 1
+          },
+          {
+            "code": "001282",
+            "name": "三联锻造",
+            "buy_date": "2026-10-16",
+            "buy_px": 15.115099999999998,
+            "sell_date": "2026-10-19",
+            "sell_px": 15.03,
+            "pnl_pct": -0.59,
+            "hold_days": 1
+          },
+          {
+            "code": "001282",
+            "name": "三联锻造",
+            "buy_date": "2026-10-22",
+            "buy_px": 16.396379999999997,
+            "sell_date": "2026-10-23",
+            "sell_px": 15.86,
+            "pnl_pct": -3.3,
+            "hold_days": 1
+          },
+          {
+            "code": "001282",
+            "name": "三联锻造",
+            "buy_date": "2026-10-23",
+            "buy_px": 16.216199999999997,
+            "sell_date": "2026-10-26",
+            "sell_px": 16.68,
+            "pnl_pct": 2.82,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -1.57,
+        "win_rate": 25.0,
+        "n_trades": 4
+      },
+      {
+        "code": "002580",
+        "name": "圣阳股份",
+        "trades": [
+          {
+            "code": "002580",
+            "name": "圣阳股份",
+            "buy_date": "2026-09-29",
+            "buy_px": 19.059039999999996,
+            "sell_date": "2026-09-30",
+            "sell_px": 18.38,
+            "pnl_pct": -3.61,
+            "hold_days": 1
+          },
+          {
+            "code": "002580",
+            "name": "圣阳股份",
+            "buy_date": "2026-09-30",
+            "buy_px": 18.978959999999997,
+            "sell_date": "2026-10-08",
+            "sell_px": 19.31,
+            "pnl_pct": 1.69,
+            "hold_days": 1
+          },
+          {
+            "code": "002580",
+            "name": "圣阳股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 19.10909,
+            "sell_date": "2026-10-14",
+            "sell_px": 19.48,
+            "pnl_pct": 1.88,
+            "hold_days": 1
+          },
+          {
+            "code": "002580",
+            "name": "圣阳股份",
+            "buy_date": "2026-10-15",
+            "buy_px": 18.15814,
+            "sell_date": "2026-10-16",
+            "sell_px": 18.05,
+            "pnl_pct": -0.64,
+            "hold_days": 1
+          },
+          {
+            "code": "002580",
+            "name": "圣阳股份",
+            "buy_date": "2026-10-23",
+            "buy_px": 15.875859999999998,
+            "sell_date": "2026-10-26",
+            "sell_px": 16.04,
+            "pnl_pct": 1.0,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 0.32,
+        "win_rate": 60.0,
+        "n_trades": 5
+      },
+      {
+        "code": "002962",
+        "name": "五方光电",
+        "trades": [
+          {
+            "code": "002962",
+            "name": "五方光电",
+            "buy_date": "2026-09-28",
+            "buy_px": 14.044029999999998,
+            "sell_date": "2026-09-29",
+            "sell_px": 14.22,
+            "pnl_pct": 1.16,
+            "hold_days": 1
+          },
+          {
+            "code": "002962",
+            "name": "五方光电",
+            "buy_date": "2026-10-13",
+            "buy_px": 13.543529999999999,
+            "sell_date": "2026-10-14",
+            "sell_px": 14.1,
+            "pnl_pct": 4.02,
+            "hold_days": 1
+          },
+          {
+            "code": "002962",
+            "name": "五方光电",
+            "buy_date": "2026-10-15",
+            "buy_px": 13.443429999999998,
+            "sell_date": "2026-10-16",
+            "sell_px": 13.3,
+            "pnl_pct": -1.15,
+            "hold_days": 1
+          },
+          {
+            "code": "002962",
+            "name": "五方光电",
+            "buy_date": "2026-10-20",
+            "buy_px": 12.942929999999999,
+            "sell_date": "2026-10-21",
+            "sell_px": 12.76,
+            "pnl_pct": -1.49,
+            "hold_days": 1
+          },
+          {
+            "code": "002962",
+            "name": "五方光电",
+            "buy_date": "2026-10-23",
+            "buy_px": 12.222209999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 12.19,
+            "pnl_pct": -0.34,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 2.2,
+        "win_rate": 40.0,
+        "n_trades": 5
+      },
+      {
+        "code": "002866",
+        "name": "传艺科技",
+        "trades": [
+          {
+            "code": "002866",
+            "name": "传艺科技",
+            "buy_date": "2026-09-29",
+            "buy_px": 14.704689999999998,
+            "sell_date": "2026-09-30",
+            "sell_px": 16.45,
+            "pnl_pct": 11.83,
+            "hold_days": 1
+          },
+          {
+            "code": "002866",
+            "name": "传艺科技",
+            "buy_date": "2026-10-12",
+            "buy_px": 18.378359999999997,
+            "sell_date": "2026-10-13",
+            "sell_px": 17.22,
+            "pnl_pct": -6.34,
+            "hold_days": 1
+          },
+          {
+            "code": "002866",
+            "name": "传艺科技",
+            "buy_date": "2026-10-14",
+            "buy_px": 16.92691,
+            "sell_date": "2026-10-15",
+            "sell_px": 15.55,
+            "pnl_pct": -8.16,
+            "hold_days": 1
+          },
+          {
+            "code": "002866",
+            "name": "传艺科技",
+            "buy_date": "2026-10-15",
+            "buy_px": 16.056039999999996,
+            "sell_date": "2026-10-16",
+            "sell_px": 15.58,
+            "pnl_pct": -3.0,
+            "hold_days": 1
+          },
+          {
+            "code": "002866",
+            "name": "传艺科技",
+            "buy_date": "2026-10-19",
+            "buy_px": 15.345329999999999,
+            "sell_date": "2026-10-20",
+            "sell_px": 14.85,
+            "pnl_pct": -3.32,
+            "hold_days": 1
+          },
+          {
+            "code": "002866",
+            "name": "传艺科技",
+            "buy_date": "2026-10-20",
+            "buy_px": 15.325309999999998,
+            "sell_date": "2026-10-21",
+            "sell_px": 14.94,
+            "pnl_pct": -2.6,
+            "hold_days": 1
+          },
+          {
+            "code": "002866",
+            "name": "传艺科技",
+            "buy_date": "2026-10-22",
+            "buy_px": 14.834819999999999,
+            "sell_date": "2026-10-23",
+            "sell_px": 13.7,
+            "pnl_pct": -7.73,
+            "hold_days": 1
+          },
+          {
+            "code": "002866",
+            "name": "传艺科技",
+            "buy_date": "2026-10-23",
+            "buy_px": 14.144129999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 13.8,
+            "pnl_pct": -2.52,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -21.84,
+        "win_rate": 12.5,
+        "n_trades": 8
+      },
+      {
+        "code": "001266",
+        "name": "宏英智能",
+        "trades": [
+          {
+            "code": "001266",
+            "name": "宏英智能",
+            "buy_date": "2026-09-28",
+            "buy_px": 36.406369999999995,
+            "sell_date": "2026-09-29",
+            "sell_px": 35.77,
+            "pnl_pct": -1.8,
+            "hold_days": 1
+          },
+          {
+            "code": "001266",
+            "name": "宏英智能",
+            "buy_date": "2026-09-29",
+            "buy_px": 36.56653,
+            "sell_date": "2026-09-30",
+            "sell_px": 36.31,
+            "pnl_pct": -0.75,
+            "hold_days": 1
+          },
+          {
+            "code": "001266",
+            "name": "宏英智能",
+            "buy_date": "2026-09-30",
+            "buy_px": 37.117079999999994,
+            "sell_date": "2026-10-08",
+            "sell_px": 40.46,
+            "pnl_pct": 8.94,
+            "hold_days": 1
+          },
+          {
+            "code": "001266",
+            "name": "宏英智能",
+            "buy_date": "2026-10-13",
+            "buy_px": 36.396359999999994,
+            "sell_date": "2026-10-14",
+            "sell_px": 37.62,
+            "pnl_pct": 3.31,
+            "hold_days": 1
+          },
+          {
+            "code": "001266",
+            "name": "宏英智能",
+            "buy_date": "2026-10-15",
+            "buy_px": 36.60657,
+            "sell_date": "2026-10-16",
+            "sell_px": 38.39,
+            "pnl_pct": 4.81,
+            "hold_days": 1
+          },
+          {
+            "code": "001266",
+            "name": "宏英智能",
+            "buy_date": "2026-10-19",
+            "buy_px": 36.526489999999995,
+            "sell_date": "2026-10-20",
+            "sell_px": 37.63,
+            "pnl_pct": 2.97,
+            "hold_days": 1
+          },
+          {
+            "code": "001266",
+            "name": "宏英智能",
+            "buy_date": "2026-10-23",
+            "buy_px": 40.130089999999996,
+            "sell_date": "2026-10-26",
+            "sell_px": 39.16,
+            "pnl_pct": -2.47,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 15.01,
+        "win_rate": 57.1,
+        "n_trades": 7
+      },
+      {
+        "code": "002430",
+        "name": "杭氧股份",
+        "trades": [
+          {
+            "code": "002430",
+            "name": "杭氧股份",
+            "buy_date": "2026-09-30",
+            "buy_px": 24.714689999999997,
+            "sell_date": "2026-10-08",
+            "sell_px": 24.79,
+            "pnl_pct": 0.23,
+            "hold_days": 1
+          },
+          {
+            "code": "002430",
+            "name": "杭氧股份",
+            "buy_date": "2026-10-12",
+            "buy_px": 25.855829999999994,
+            "sell_date": "2026-10-13",
+            "sell_px": 24.78,
+            "pnl_pct": -4.24,
+            "hold_days": 1
+          },
+          {
+            "code": "002430",
+            "name": "杭氧股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 25.44542,
+            "sell_date": "2026-10-14",
+            "sell_px": 26.8,
+            "pnl_pct": 5.27,
+            "hold_days": 1
+          },
+          {
+            "code": "002430",
+            "name": "杭氧股份",
+            "buy_date": "2026-10-15",
+            "buy_px": 25.385359999999995,
+            "sell_date": "2026-10-16",
+            "sell_px": 24.59,
+            "pnl_pct": -3.21,
+            "hold_days": 1
+          },
+          {
+            "code": "002430",
+            "name": "杭氧股份",
+            "buy_date": "2026-10-16",
+            "buy_px": 25.255229999999997,
+            "sell_date": "2026-10-19",
+            "sell_px": 24.9,
+            "pnl_pct": -1.48,
+            "hold_days": 1
+          },
+          {
+            "code": "002430",
+            "name": "杭氧股份",
+            "buy_date": "2026-10-20",
+            "buy_px": 25.345319999999997,
+            "sell_date": "2026-10-21",
+            "sell_px": 25.57,
+            "pnl_pct": 0.84,
+            "hold_days": 1
+          },
+          {
+            "code": "002430",
+            "name": "杭氧股份",
+            "buy_date": "2026-10-23",
+            "buy_px": 23.88386,
+            "sell_date": "2026-10-26",
+            "sell_px": 23.8,
+            "pnl_pct": -0.43,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -3.02,
+        "win_rate": 42.9,
+        "n_trades": 7
+      },
+      {
+        "code": "002415",
+        "name": "海康威视",
+        "trades": [
+          {
+            "code": "002415",
+            "name": "海康威视",
+            "buy_date": "2026-10-13",
+            "buy_px": 33.91388,
+            "sell_date": "2026-10-19",
+            "sell_px": 33.23,
+            "pnl_pct": -2.08,
+            "hold_days": 4
+          },
+          {
+            "code": "002415",
+            "name": "海康威视",
+            "buy_date": "2026-10-23",
+            "buy_px": 32.94290999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 33.75,
+            "pnl_pct": 2.38,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 0.3,
+        "win_rate": 50.0,
+        "n_trades": 2
+      },
+      {
+        "code": "002453",
+        "name": "华软科技",
+        "trades": [
+          {
+            "code": "002453",
+            "name": "华软科技",
+            "buy_date": "2026-09-29",
+            "buy_px": 4.764759999999999,
+            "sell_date": "2026-09-30",
+            "sell_px": 4.8,
+            "pnl_pct": 0.58,
+            "hold_days": 1
+          },
+          {
+            "code": "002453",
+            "name": "华软科技",
+            "buy_date": "2026-09-30",
+            "buy_px": 4.924919999999999,
+            "sell_date": "2026-10-08",
+            "sell_px": 4.75,
+            "pnl_pct": -3.71,
+            "hold_days": 1
+          },
+          {
+            "code": "002453",
+            "name": "华软科技",
+            "buy_date": "2026-10-08",
+            "buy_px": 4.87487,
+            "sell_date": "2026-10-09",
+            "sell_px": 4.69,
+            "pnl_pct": -3.95,
+            "hold_days": 1
+          },
+          {
+            "code": "002453",
+            "name": "华软科技",
+            "buy_date": "2026-10-09",
+            "buy_px": 4.814809999999999,
+            "sell_date": "2026-10-12",
+            "sell_px": 4.8,
+            "pnl_pct": -0.47,
+            "hold_days": 1
+          },
+          {
+            "code": "002453",
+            "name": "华软科技",
+            "buy_date": "2026-10-13",
+            "buy_px": 4.79479,
+            "sell_date": "2026-10-14",
+            "sell_px": 4.73,
+            "pnl_pct": -1.51,
+            "hold_days": 1
+          },
+          {
+            "code": "002453",
+            "name": "华软科技",
+            "buy_date": "2026-10-15",
+            "buy_px": 4.58458,
+            "sell_date": "2026-10-16",
+            "sell_px": 4.5,
+            "pnl_pct": -2.0,
+            "hold_days": 1
+          },
+          {
+            "code": "002453",
+            "name": "华软科技",
+            "buy_date": "2026-10-23",
+            "buy_px": 4.19419,
+            "sell_date": "2026-10-26",
+            "sell_px": 4.18,
+            "pnl_pct": -0.5,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -11.56,
+        "win_rate": 14.3,
+        "n_trades": 7
+      },
+      {
+        "code": "601609",
+        "name": "金田股份",
+        "trades": [
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-09-29",
+            "buy_px": 11.39138,
+            "sell_date": "2026-09-30",
+            "sell_px": 11.54,
+            "pnl_pct": 1.23,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-09-30",
+            "buy_px": 11.85184,
+            "sell_date": "2026-10-08",
+            "sell_px": 11.56,
+            "pnl_pct": -2.53,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-10-12",
+            "buy_px": 10.98097,
+            "sell_date": "2026-10-13",
+            "sell_px": 10.41,
+            "pnl_pct": -5.26,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 10.700689999999998,
+            "sell_date": "2026-10-14",
+            "sell_px": 10.52,
+            "pnl_pct": -1.75,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-10-19",
+            "buy_px": 10.360349999999999,
+            "sell_date": "2026-10-20",
+            "sell_px": 10.11,
+            "pnl_pct": -2.48,
+            "hold_days": 1
+          },
+          {
+            "code": "601609",
+            "name": "金田股份",
+            "buy_date": "2026-10-23",
+            "buy_px": 9.879869999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 9.78,
+            "pnl_pct": -1.07,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -11.86,
+        "win_rate": 16.7,
+        "n_trades": 6
+      },
+      {
+        "code": "603042",
+        "name": "华脉科技",
+        "trades": [
+          {
+            "code": "603042",
+            "name": "华脉科技",
+            "buy_date": "2026-09-29",
+            "buy_px": 15.925909999999998,
+            "sell_date": "2026-09-30",
+            "sell_px": 16.93,
+            "pnl_pct": 6.26,
+            "hold_days": 1
+          },
+          {
+            "code": "603042",
+            "name": "华脉科技",
+            "buy_date": "2026-10-13",
+            "buy_px": 14.654639999999999,
+            "sell_date": "2026-10-14",
+            "sell_px": 15.77,
+            "pnl_pct": 7.58,
+            "hold_days": 1
+          },
+          {
+            "code": "603042",
+            "name": "华脉科技",
+            "buy_date": "2026-10-15",
+            "buy_px": 15.014999999999999,
+            "sell_date": "2026-10-16",
+            "sell_px": 15.09,
+            "pnl_pct": 0.47,
+            "hold_days": 1
+          },
+          {
+            "code": "603042",
+            "name": "华脉科技",
+            "buy_date": "2026-10-19",
+            "buy_px": 14.964949999999998,
+            "sell_date": "2026-10-20",
+            "sell_px": 14.84,
+            "pnl_pct": -0.93,
+            "hold_days": 1
+          },
+          {
+            "code": "603042",
+            "name": "华脉科技",
+            "buy_date": "2026-10-20",
+            "buy_px": 15.165149999999999,
+            "sell_date": "2026-10-21",
+            "sell_px": 14.9,
+            "pnl_pct": -1.84,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 11.54,
+        "win_rate": 60.0,
+        "n_trades": 5
+      },
+      {
+        "code": "000049",
+        "name": "德赛电池",
+        "trades": [
+          {
+            "code": "000049",
+            "name": "德赛电池",
+            "buy_date": "2026-10-09",
+            "buy_px": 22.912889999999997,
+            "sell_date": "2026-10-12",
+            "sell_px": 22.39,
+            "pnl_pct": -2.35,
+            "hold_days": 1
+          },
+          {
+            "code": "000049",
+            "name": "德赛电池",
+            "buy_date": "2026-10-23",
+            "buy_px": 20.630609999999997,
+            "sell_date": "2026-10-26",
+            "sell_px": 20.66,
+            "pnl_pct": 0.08,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -2.27,
+        "win_rate": 50.0,
+        "n_trades": 2
+      },
+      {
+        "code": "000725",
+        "name": "京东方Ａ",
+        "trades": [
+          {
+            "code": "000725",
+            "name": "京东方Ａ",
+            "buy_date": "2026-09-30",
+            "buy_px": 5.855849999999999,
+            "sell_date": "2026-10-08",
+            "sell_px": 5.69,
+            "pnl_pct": -2.82,
+            "hold_days": 1
+          },
+          {
+            "code": "000725",
+            "name": "京东方Ａ",
+            "buy_date": "2026-10-13",
+            "buy_px": 5.36536,
+            "sell_date": "2026-10-14",
+            "sell_px": 5.24,
+            "pnl_pct": -2.31,
+            "hold_days": 1
+          },
+          {
+            "code": "000725",
+            "name": "京东方Ａ",
+            "buy_date": "2026-10-23",
+            "buy_px": 4.86486,
+            "sell_date": "2026-10-26",
+            "sell_px": 4.81,
+            "pnl_pct": -1.29,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -6.42,
+        "win_rate": 0.0,
+        "n_trades": 3
+      },
+      {
+        "code": "002841",
+        "name": "视源股份",
+        "trades": [
+          {
+            "code": "002841",
+            "name": "视源股份",
+            "buy_date": "2026-09-28",
+            "buy_px": 46.33628999999999,
+            "sell_date": "2026-09-29",
+            "sell_px": 44.02,
+            "pnl_pct": -5.06,
+            "hold_days": 1
+          },
+          {
+            "code": "002841",
+            "name": "视源股份",
+            "buy_date": "2026-10-09",
+            "buy_px": 45.79575,
+            "sell_date": "2026-10-12",
+            "sell_px": 45.11,
+            "pnl_pct": -1.55,
+            "hold_days": 1
+          },
+          {
+            "code": "002841",
+            "name": "视源股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 43.133089999999996,
+            "sell_date": "2026-10-14",
+            "sell_px": 42.33,
+            "pnl_pct": -1.93,
+            "hold_days": 1
+          },
+          {
+            "code": "002841",
+            "name": "视源股份",
+            "buy_date": "2026-10-14",
+            "buy_px": 43.69364999999999,
+            "sell_date": "2026-10-15",
+            "sell_px": 41.96,
+            "pnl_pct": -4.03,
+            "hold_days": 1
+          },
+          {
+            "code": "002841",
+            "name": "视源股份",
+            "buy_date": "2026-10-19",
+            "buy_px": 41.97192999999999,
+            "sell_date": "2026-10-20",
+            "sell_px": 41.76,
+            "pnl_pct": -0.57,
+            "hold_days": 1
+          },
+          {
+            "code": "002841",
+            "name": "视源股份",
+            "buy_date": "2026-10-20",
+            "buy_px": 43.10306,
+            "sell_date": "2026-10-21",
+            "sell_px": 44.02,
+            "pnl_pct": 2.06,
+            "hold_days": 1
+          },
+          {
+            "code": "002841",
+            "name": "视源股份",
+            "buy_date": "2026-10-23",
+            "buy_px": 44.88484,
+            "sell_date": "2026-10-26",
+            "sell_px": 44.51,
+            "pnl_pct": -0.9,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -11.98,
+        "win_rate": 14.3,
+        "n_trades": 7
+      },
+      {
+        "code": "002558",
+        "name": "巨人网络",
+        "trades": [
+          {
+            "code": "002558",
+            "name": "巨人网络",
+            "buy_date": "2026-10-09",
+            "buy_px": 22.562539999999995,
+            "sell_date": "2026-10-13",
+            "sell_px": 22.34,
+            "pnl_pct": -1.06,
+            "hold_days": 2
+          },
+          {
+            "code": "002558",
+            "name": "巨人网络",
+            "buy_date": "2026-10-15",
+            "buy_px": 22.05203,
+            "sell_date": "2026-10-16",
+            "sell_px": 21.97,
+            "pnl_pct": -0.44,
+            "hold_days": 1
+          },
+          {
+            "code": "002558",
+            "name": "巨人网络",
+            "buy_date": "2026-10-19",
+            "buy_px": 21.381359999999997,
+            "sell_date": "2026-10-21",
+            "sell_px": 20.93,
+            "pnl_pct": -2.17,
+            "hold_days": 2
+          },
+          {
+            "code": "002558",
+            "name": "巨人网络",
+            "buy_date": "2026-10-23",
+            "buy_px": 19.999979999999997,
+            "sell_date": "2026-10-26",
+            "sell_px": 20.24,
+            "pnl_pct": 1.14,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -2.53,
+        "win_rate": 25.0,
+        "n_trades": 4
+      },
+      {
+        "code": "000682",
+        "name": "东方电子",
+        "trades": [
+          {
+            "code": "000682",
+            "name": "东方电子",
+            "buy_date": "2026-09-30",
+            "buy_px": 10.570559999999999,
+            "sell_date": "2026-10-09",
+            "sell_px": 10.5,
+            "pnl_pct": -0.73,
+            "hold_days": 2
+          },
+          {
+            "code": "000682",
+            "name": "东方电子",
+            "buy_date": "2026-10-19",
+            "buy_px": 10.460449999999998,
+            "sell_date": "2026-10-23",
+            "sell_px": 10.46,
+            "pnl_pct": -0.07,
+            "hold_days": 4
+          }
+        ],
+        "total_pnl_pct": -0.8,
+        "win_rate": 0.0,
+        "n_trades": 2
+      },
+      {
+        "code": "002169",
+        "name": "智光电气",
+        "trades": [
+          {
+            "code": "002169",
+            "name": "智光电气",
+            "buy_date": "2026-09-30",
+            "buy_px": 12.622609999999998,
+            "sell_date": "2026-10-08",
+            "sell_px": 12.64,
+            "pnl_pct": 0.06,
+            "hold_days": 1
+          },
+          {
+            "code": "002169",
+            "name": "智光电气",
+            "buy_date": "2026-10-08",
+            "buy_px": 12.98297,
+            "sell_date": "2026-10-09",
+            "sell_px": 12.29,
+            "pnl_pct": -5.41,
+            "hold_days": 1
+          },
+          {
+            "code": "002169",
+            "name": "智光电气",
+            "buy_date": "2026-10-15",
+            "buy_px": 10.460449999999998,
+            "sell_date": "2026-10-16",
+            "sell_px": 10.19,
+            "pnl_pct": -2.66,
+            "hold_days": 1
+          },
+          {
+            "code": "002169",
+            "name": "智光电气",
+            "buy_date": "2026-10-23",
+            "buy_px": 9.429419999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 9.31,
+            "pnl_pct": -1.32,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -9.33,
+        "win_rate": 25.0,
+        "n_trades": 4
+      },
+      {
+        "code": "000920",
+        "name": "沃顿科技",
+        "trades": [
+          {
+            "code": "000920",
+            "name": "沃顿科技",
+            "buy_date": "2026-09-30",
+            "buy_px": 12.612599999999999,
+            "sell_date": "2026-10-08",
+            "sell_px": 12.61,
+            "pnl_pct": -0.1,
+            "hold_days": 1
+          },
+          {
+            "code": "000920",
+            "name": "沃顿科技",
+            "buy_date": "2026-10-23",
+            "buy_px": 10.780769999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 11.01,
+            "pnl_pct": 2.06,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 1.96,
+        "win_rate": 50.0,
+        "n_trades": 2
+      },
+      {
+        "code": "600072",
+        "name": "中船科技",
+        "trades": [
+          {
+            "code": "600072",
+            "name": "中船科技",
+            "buy_date": "2026-09-30",
+            "buy_px": 9.129119999999999,
+            "sell_date": "2026-10-08",
+            "sell_px": 9.44,
+            "pnl_pct": 3.35,
+            "hold_days": 1
+          },
+          {
+            "code": "600072",
+            "name": "中船科技",
+            "buy_date": "2026-10-12",
+            "buy_px": 9.59959,
+            "sell_date": "2026-10-13",
+            "sell_px": 9.3,
+            "pnl_pct": -3.17,
+            "hold_days": 1
+          },
+          {
+            "code": "600072",
+            "name": "中船科技",
+            "buy_date": "2026-10-13",
+            "buy_px": 9.59959,
+            "sell_date": "2026-10-14",
+            "sell_px": 9.46,
+            "pnl_pct": -1.51,
+            "hold_days": 1
+          },
+          {
+            "code": "600072",
+            "name": "中船科技",
+            "buy_date": "2026-10-14",
+            "buy_px": 9.769759999999998,
+            "sell_date": "2026-10-15",
+            "sell_px": 9.3,
+            "pnl_pct": -4.86,
+            "hold_days": 1
+          },
+          {
+            "code": "600072",
+            "name": "中船科技",
+            "buy_date": "2026-10-15",
+            "buy_px": 9.59959,
+            "sell_date": "2026-10-16",
+            "sell_px": 9.59,
+            "pnl_pct": -0.16,
+            "hold_days": 1
+          },
+          {
+            "code": "600072",
+            "name": "中船科技",
+            "buy_date": "2026-10-16",
+            "buy_px": 9.89989,
+            "sell_date": "2026-10-19",
+            "sell_px": 9.75,
+            "pnl_pct": -1.57,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -7.92,
+        "win_rate": 16.7,
+        "n_trades": 6
+      },
+      {
+        "code": "600760",
+        "name": "中航沈飞",
+        "trades": [
+          {
+            "code": "600760",
+            "name": "中航沈飞",
+            "buy_date": "2026-09-30",
+            "buy_px": 43.553509999999996,
+            "sell_date": "2026-10-09",
+            "sell_px": 43.13,
+            "pnl_pct": -1.04,
+            "hold_days": 2
+          },
+          {
+            "code": "600760",
+            "name": "中航沈飞",
+            "buy_date": "2026-10-13",
+            "buy_px": 43.613569999999996,
+            "sell_date": "2026-10-15",
+            "sell_px": 44.36,
+            "pnl_pct": 1.64,
+            "hold_days": 2
+          },
+          {
+            "code": "600760",
+            "name": "中航沈飞",
+            "buy_date": "2026-10-16",
+            "buy_px": 45.405359999999995,
+            "sell_date": "2026-10-19",
+            "sell_px": 45.55,
+            "pnl_pct": 0.27,
+            "hold_days": 1
+          },
+          {
+            "code": "600760",
+            "name": "中航沈飞",
+            "buy_date": "2026-10-26",
+            "buy_px": 48.27822999999999,
+            "sell_date": "2026-10-26(持仓浮盈)",
+            "sell_px": 48.67,
+            "pnl_pct": 0.75,
+            "hold_days": 0
+          }
+        ],
+        "total_pnl_pct": 1.62,
+        "win_rate": 75.0,
+        "n_trades": 4
+      },
+      {
+        "code": "600346",
+        "name": "恒力石化",
+        "trades": [
+          {
+            "code": "600346",
+            "name": "恒力石化",
+            "buy_date": "2026-10-08",
+            "buy_px": 16.696679999999997,
+            "sell_date": "2026-10-09",
+            "sell_px": 16.3,
+            "pnl_pct": -2.41,
+            "hold_days": 1
+          },
+          {
+            "code": "600346",
+            "name": "恒力石化",
+            "buy_date": "2026-10-19",
+            "buy_px": 15.865849999999998,
+            "sell_date": "2026-10-20",
+            "sell_px": 15.5,
+            "pnl_pct": -2.34,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -4.75,
+        "win_rate": 0.0,
+        "n_trades": 2
+      },
+      {
+        "code": "603659",
+        "name": "璞泰来",
+        "trades": [
+          {
+            "code": "603659",
+            "name": "璞泰来",
+            "buy_date": "2026-09-29",
+            "buy_px": 21.471449999999997,
+            "sell_date": "2026-10-08",
+            "sell_px": 21.38,
+            "pnl_pct": -0.49,
+            "hold_days": 2
+          },
+          {
+            "code": "603659",
+            "name": "璞泰来",
+            "buy_date": "2026-10-08",
+            "buy_px": 22.072049999999997,
+            "sell_date": "2026-10-09",
+            "sell_px": 21.84,
+            "pnl_pct": -1.12,
+            "hold_days": 1
+          },
+          {
+            "code": "603659",
+            "name": "璞泰来",
+            "buy_date": "2026-10-09",
+            "buy_px": 22.542519999999996,
+            "sell_date": "2026-10-12",
+            "sell_px": 22.24,
+            "pnl_pct": -1.41,
+            "hold_days": 1
+          },
+          {
+            "code": "603659",
+            "name": "璞泰来",
+            "buy_date": "2026-10-23",
+            "buy_px": 19.43942,
+            "sell_date": "2026-10-26",
+            "sell_px": 19.64,
+            "pnl_pct": 0.97,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -2.05,
+        "win_rate": 25.0,
+        "n_trades": 4
+      },
+      {
+        "code": "002253",
+        "name": "川大智胜",
+        "trades": [
+          {
+            "code": "002253",
+            "name": "川大智胜",
+            "buy_date": "2026-09-28",
+            "buy_px": 8.858849999999999,
+            "sell_date": "2026-09-29",
+            "sell_px": 8.54,
+            "pnl_pct": -3.64,
+            "hold_days": 1
+          },
+          {
+            "code": "002253",
+            "name": "川大智胜",
+            "buy_date": "2026-09-29",
+            "buy_px": 8.73873,
+            "sell_date": "2026-09-30",
+            "sell_px": 8.72,
+            "pnl_pct": -0.26,
+            "hold_days": 1
+          },
+          {
+            "code": "002253",
+            "name": "川大智胜",
+            "buy_date": "2026-09-30",
+            "buy_px": 8.918909999999999,
+            "sell_date": "2026-10-08",
+            "sell_px": 8.77,
+            "pnl_pct": -1.71,
+            "hold_days": 1
+          },
+          {
+            "code": "002253",
+            "name": "川大智胜",
+            "buy_date": "2026-10-13",
+            "buy_px": 8.6086,
+            "sell_date": "2026-10-14",
+            "sell_px": 8.57,
+            "pnl_pct": -0.49,
+            "hold_days": 1
+          },
+          {
+            "code": "002253",
+            "name": "川大智胜",
+            "buy_date": "2026-10-16",
+            "buy_px": 8.498489999999999,
+            "sell_date": "2026-10-19",
+            "sell_px": 8.31,
+            "pnl_pct": -2.26,
+            "hold_days": 1
+          },
+          {
+            "code": "002253",
+            "name": "川大智胜",
+            "buy_date": "2026-10-23",
+            "buy_px": 8.288279999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 8.52,
+            "pnl_pct": 2.75,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -5.61,
+        "win_rate": 16.7,
+        "n_trades": 6
+      },
+      {
+        "code": "000803",
+        "name": "山高环能",
+        "trades": [
+          {
+            "code": "000803",
+            "name": "山高环能",
+            "buy_date": "2026-09-30",
+            "buy_px": 7.1471399999999985,
+            "sell_date": "2026-10-08",
+            "sell_px": 7.23,
+            "pnl_pct": 1.14,
+            "hold_days": 1
+          },
+          {
+            "code": "000803",
+            "name": "山高环能",
+            "buy_date": "2026-10-15",
+            "buy_px": 6.856849999999999,
+            "sell_date": "2026-10-16",
+            "sell_px": 6.92,
+            "pnl_pct": 0.91,
+            "hold_days": 1
+          },
+          {
+            "code": "000803",
+            "name": "山高环能",
+            "buy_date": "2026-10-16",
+            "buy_px": 7.1471399999999985,
+            "sell_date": "2026-10-19",
+            "sell_px": 6.96,
+            "pnl_pct": -2.66,
+            "hold_days": 1
+          },
+          {
+            "code": "000803",
+            "name": "山高环能",
+            "buy_date": "2026-10-23",
+            "buy_px": 6.666659999999999,
+            "sell_date": "2026-10-26",
+            "sell_px": 6.67,
+            "pnl_pct": 0.04,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -0.57,
+        "win_rate": 75.0,
+        "n_trades": 4
+      },
+      {
+        "code": "002454",
+        "name": "松芝股份",
+        "trades": [
+          {
+            "code": "002454",
+            "name": "松芝股份",
+            "buy_date": "2026-09-30",
+            "buy_px": 5.215209999999999,
+            "sell_date": "2026-10-08",
+            "sell_px": 5.85,
+            "pnl_pct": 12.18,
+            "hold_days": 1
+          },
+          {
+            "code": "002454",
+            "name": "松芝股份",
+            "buy_date": "2026-10-09",
+            "buy_px": 5.555549999999999,
+            "sell_date": "2026-10-12",
+            "sell_px": 5.47,
+            "pnl_pct": -1.52,
+            "hold_days": 1
+          },
+          {
+            "code": "002454",
+            "name": "松芝股份",
+            "buy_date": "2026-10-13",
+            "buy_px": 5.315309999999999,
+            "sell_date": "2026-10-14",
+            "sell_px": 5.2,
+            "pnl_pct": -2.14,
+            "hold_days": 1
+          },
+          {
+            "code": "002454",
+            "name": "松芝股份",
+            "buy_date": "2026-10-15",
+            "buy_px": 5.03503,
+            "sell_date": "2026-10-16",
+            "sell_px": 4.93,
+            "pnl_pct": -2.24,
+            "hold_days": 1
+          },
+          {
+            "code": "002454",
+            "name": "松芝股份",
+            "buy_date": "2026-10-16",
+            "buy_px": 5.03503,
+            "sell_date": "2026-10-19",
+            "sell_px": 5.07,
+            "pnl_pct": 0.73,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": 7.01,
+        "win_rate": 40.0,
+        "n_trades": 5
+      },
+      {
+        "code": "600549",
+        "name": "厦门钨业",
+        "trades": [
+          {
+            "code": "600549",
+            "name": "厦门钨业",
+            "buy_date": "2026-10-13",
+            "buy_px": 41.041,
+            "sell_date": "2026-10-14",
+            "sell_px": 40.04,
+            "pnl_pct": -2.5,
+            "hold_days": 1
+          },
+          {
+            "code": "600549",
+            "name": "厦门钨业",
+            "buy_date": "2026-10-20",
+            "buy_px": 37.427389999999995,
+            "sell_date": "2026-10-22",
+            "sell_px": 36.67,
+            "pnl_pct": -2.07,
+            "hold_days": 2
+          },
+          {
+            "code": "600549",
+            "name": "厦门钨业",
+            "buy_date": "2026-10-23",
+            "buy_px": 35.505469999999995,
+            "sell_date": "2026-10-26",
+            "sell_px": 35.52,
+            "pnl_pct": -0.01,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -4.58,
+        "win_rate": 0.0,
+        "n_trades": 3
+      },
+      {
+        "code": "600063",
+        "name": "皖维高新",
+        "trades": [
+          {
+            "code": "600063",
+            "name": "皖维高新",
+            "buy_date": "2026-10-08",
+            "buy_px": 5.45545,
+            "sell_date": "2026-10-09",
+            "sell_px": 5.35,
+            "pnl_pct": -1.91,
+            "hold_days": 1
+          },
+          {
+            "code": "600063",
+            "name": "皖维高新",
+            "buy_date": "2026-10-09",
+            "buy_px": 5.475469999999999,
+            "sell_date": "2026-10-12",
+            "sell_px": 5.45,
+            "pnl_pct": -0.44,
+            "hold_days": 1
+          },
+          {
+            "code": "600063",
+            "name": "皖维高新",
+            "buy_date": "2026-10-23",
+            "buy_px": 5.12512,
+            "sell_date": "2026-10-26(持仓浮盈)",
+            "sell_px": 5.1,
+            "pnl_pct": -0.45,
+            "hold_days": 1
+          }
+        ],
+        "total_pnl_pct": -2.8,
+        "win_rate": 0.0,
+        "n_trades": 3
+      }
+    ],
+    "portfolio_equity_curve": [
+      {
+        "date": "2026-09-28",
+        "cash": 3156.99,
+        "stock_val": 290587.0,
+        "total_equity": 293743.99,
+        "return_pct": -2.09,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-09-29",
+        "cash": 705.04,
+        "stock_val": 284920.0,
+        "total_equity": 285625.04,
+        "return_pct": -4.79,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-09-30",
+        "cash": 879.97,
+        "stock_val": 279990.0,
+        "total_equity": 280869.97,
+        "return_pct": -6.38,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-08",
+        "cash": 452.05,
+        "stock_val": 263422.0,
+        "total_equity": 263874.05,
+        "return_pct": -12.04,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-09",
+        "cash": 280.23,
+        "stock_val": 257867.0,
+        "total_equity": 258147.23,
+        "return_pct": -13.95,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-12",
+        "cash": 69.34,
+        "stock_val": 250394.0,
+        "total_equity": 250463.34,
+        "return_pct": -16.51,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-13",
+        "cash": 3077.9,
+        "stock_val": 248598.0,
+        "total_equity": 251675.9,
+        "return_pct": -16.11,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-14",
+        "cash": 24727.72,
+        "stock_val": 215336.0,
+        "total_equity": 240063.72,
+        "return_pct": -19.98,
+        "positions_count": 3
+      },
+      {
+        "date": "2026-10-15",
+        "cash": 284.58,
+        "stock_val": 234320.0,
+        "total_equity": 234604.58,
+        "return_pct": -21.8,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-16",
+        "cash": 884.54,
+        "stock_val": 235499.0,
+        "total_equity": 236383.54,
+        "return_pct": -21.21,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-19",
+        "cash": 1367.62,
+        "stock_val": 228253.0,
+        "total_equity": 229620.62,
+        "return_pct": -23.46,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-20",
+        "cash": 849.08,
+        "stock_val": 225439.0,
+        "total_equity": 226288.08,
+        "return_pct": -24.57,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-21",
+        "cash": 958.77,
+        "stock_val": 223501.0,
+        "total_equity": 224459.77,
+        "return_pct": -25.18,
+        "positions_count": 4
+      },
+      {
+        "date": "2026-10-22",
+        "cash": 74102.42,
+        "stock_val": 142970.0,
+        "total_equity": 217072.42,
+        "return_pct": -27.64,
+        "positions_count": 2
+      },
+      {
+        "date": "2026-10-23",
+        "cash": 3676.88,
+        "stock_val": 213712.0,
+        "total_equity": 217388.88,
+        "return_pct": -27.54,
+        "positions_count": 3
+      },
+      {
+        "date": "2026-10-26",
+        "cash": 138613.23,
+        "stock_val": 73080.0,
+        "total_equity": 211693.23,
+        "return_pct": -29.44,
+        "positions_count": 1
+      }
+    ]
+  }
+}

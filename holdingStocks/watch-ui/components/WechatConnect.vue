@@ -2,10 +2,13 @@
 import QRCode from 'qrcode'
 
 type LoginState = {
-  status: 'idle' | 'starting' | 'waiting' | 'scanned' | 'connected' | 'error'
+  status: 'idle' | 'starting' | 'waiting' | 'scanned' | 'reconnecting' | 'connected' | 'error'
   message: string
   loginUrl: string | null
   channelReady?: boolean | null
+  sessionState?: 'unknown' | 'available' | 'missing' | 'invalid'
+  lastTestAt?: number | null
+  delivery?: { outbox_error?: string | null; pending_notification_count?: number; consecutive_failures?: number; expired_notification_count?: number; last_success_at?: number | null }
   testPush?: { status: 'idle' | 'sending' | 'sent' | 'error'; message: string }
 }
 const opened = ref(false)
@@ -14,7 +17,7 @@ const testing = ref(false)
 const error = ref('')
 const qrImage = ref('')
 const state = ref<LoginState>({ status: 'idle', message: '', loginUrl: null })
-const active = computed(() => ['starting', 'waiting', 'scanned'].includes(state.value.status))
+const active = computed(() => ['starting', 'waiting', 'scanned', 'reconnecting'].includes(state.value.status))
 let timer: ReturnType<typeof setInterval> | undefined
 let generation = 0
 const trigger = ref<HTMLButtonElement>()
@@ -120,13 +123,20 @@ onBeforeUnmount(() => {
           <h2 id="wechat-connect-title" class="text-lg font-semibold">微信连接</h2>
           <button ref="closeButton" type="button" class="btn btn-ghost" aria-label="关闭微信连接" @click="close">关闭</button>
         </div>
-        <p v-if="state.channelReady && !active" class="mt-3 text-sm text-accent">微信通道已连接</p>
+        <dl class="mt-3 space-y-1 text-sm text-ui-text-2" aria-live="polite">
+          <div class="flex justify-between"><dt>通道</dt><dd>{{ state.channelReady == null ? '检查中' : state.channelReady ? '运行中' : '未就绪' }}</dd></div>
+          <div class="flex justify-between"><dt>消息会话</dt><dd>{{ state.sessionState === 'available' ? '已建立，发送时验证' : state.sessionState === 'invalid' ? '已失效，请给机器人发消息' : state.sessionState === 'missing' ? '待建立，请给机器人发消息' : '检查中' }}</dd></div>
+          <div class="flex justify-between"><dt>最近测试</dt><dd>{{ state.testPush?.status === 'sent' ? '发送成功' : state.testPush?.status === 'error' ? '发送失败' : state.testPush?.status === 'sending' ? '发送中' : '尚未测试' }}</dd></div>
+          <div class="flex justify-between"><dt>待发消息 / 连续失败</dt><dd>{{ state.delivery?.pending_notification_count || 0 }} / {{ state.delivery?.consecutive_failures || 0 }}</dd></div>
+          <div v-if="state.delivery?.expired_notification_count" class="flex justify-between"><dt>已过期或达到重试上限</dt><dd>{{ state.delivery.expired_notification_count }}</dd></div>
+        </dl>
+        <p v-if="state.delivery?.outbox_error" class="mt-3 text-sm text-ui-danger" role="alert">{{ state.delivery.outbox_error }}</p>
         <p class="mt-3 text-sm text-ui-text-2" aria-live="polite">{{ state.message || '正在检查微信连接…' }}</p>
         <img v-if="qrImage && state.loginUrl" :src="qrImage" width="280" height="280" alt="使用微信扫一扫连接机器人" class="mx-auto mt-4 rounded-lg bg-white">
         <a v-if="state.loginUrl" :href="state.loginUrl" target="_blank" rel="noopener noreferrer" class="mt-3 block text-center text-sm font-semibold text-accent underline">打开扫码链接 ↗</a>
         <p v-if="error" role="alert" class="mt-3 text-sm text-ui-danger">{{ error }}</p>
         <button type="button" class="btn btn-primary mt-5 w-full" :disabled="busy || active" @click="sync(true)">
-          {{ active ? (state.status === 'scanned' ? '等待手机确认…' : '等待微信扫码…') : state.channelReady || state.status === 'connected' ? '重新扫码连接' : '生成二维码 / 扫码链接' }}
+          {{ active ? (state.status === 'reconnecting' ? '正在启动微信通道…' : state.status === 'scanned' ? '等待手机确认…' : '等待微信扫码…') : state.channelReady || state.status === 'connected' ? '重新扫码连接' : '生成二维码 / 扫码链接' }}
         </button>
         <button type="button" class="btn btn-ghost mt-3 w-full border border-ui-hairline" :disabled="testing || state.testPush?.status === 'sending' || active" @click="testPush">
           {{ testing || state.testPush?.status === 'sending' ? '正在发送测试消息…' : '测试微信推送' }}

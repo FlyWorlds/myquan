@@ -15,12 +15,24 @@ import sys
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
 from typing import Any, Callable
 
 from watch_buy_signal import ALERT_PRICE_NO_GATE, is_buy_hit, is_weak_price_buy_alert
+
+
+_NOTIFY_STATE_LOCK = threading.RLock()
+
+
+def _serialize_notify(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        with _NOTIFY_STATE_LOCK:
+            return fn(*args, **kwargs)
+    return wrapped
 
 
 _SEND_LOCK = threading.Lock()
@@ -68,6 +80,7 @@ class PendingNotification:
     is_fill: bool = False
     enqueued_at: float = field(default_factory=time.time)
     summary: str = ""
+    attempts: int = 0
 
 
 _channel_state = WechatChannelState()
@@ -76,6 +89,7 @@ _pending_lock = threading.RLock()
 _worker_thread: threading.Thread | None = None
 _worker_stop = threading.Event()
 _worker_wake = threading.Event()
+_expired_notifications = 0
 _storm_last: dict[str, float] = {}  # (code|alert_type) -> last enqueue/send attempt
 
 
@@ -84,6 +98,8 @@ def get_wechat_channel_state() -> dict[str, Any]:
     with _pending_lock:
         st = _channel_state
         return {
+            "outbox_error": _outbox_error,
+            "expired_notification_count": _expired_notifications,
             "healthy": st.healthy,
             "session_invalid": st.session_invalid,
             "last_success_at": st.last_success_at,
@@ -91,10 +107,75 @@ def get_wechat_channel_state() -> dict[str, Any]:
             "consecutive_failures": st.consecutive_failures,
             "session_invalid_since": st.session_invalid_since,
             "pending_notification_count": len(_pending),
+            "oldest_pending_age_sec": round(max((time.time()-item.enqueued_at for item in _pending.values()), default=0), 1),
             "last_wechat_success_at": st.last_success_at,
             "last_wechat_failure_at": st.last_failure_at,
             "wechat_session_invalid_since": st.session_invalid_since,
         }
+
+
+_outbox_persisted = None
+_outbox_restored = False
+_outbox_error = None
+
+
+def _outbox_payload():
+    with _pending_lock:
+        return {"pending": [asdict(item) for item in _pending.values()]}
+
+
+def _persist_outbox():
+    """Worker-only persistence. A send is attempted only after its queue is durable."""
+    global _outbox_persisted, _outbox_error
+    payload = _outbox_payload()
+    if payload == _outbox_persisted:
+        return
+    try:
+        if _database_documents():
+            from runtime_documents import write_merging
+            write_merging("wechat_outbox", payload)
+        else:
+            path = STATE_FILE.with_name(STATE_FILE.stem + "_outbox.json")
+            temp = path.with_suffix(".tmp")
+            temp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            temp.replace(path)
+        _outbox_persisted, _outbox_error = payload, None
+    except Exception:
+        _outbox_error = "待发消息保存失败，暂停投递并等待数据库恢复。"
+        raise
+
+
+def _restore_outbox():
+    global _outbox_restored, _outbox_error
+    if _outbox_restored:
+        return
+    if _database_documents():
+        from runtime_documents import read_document
+        try:
+            _, payload = read_document("wechat_outbox")
+        except Exception:
+            _outbox_error = "待发消息读取失败，暂停投递并等待数据库恢复。"
+            raise
+    else:
+        path = STATE_FILE.with_name(STATE_FILE.stem + "_outbox.json")
+        payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    if payload:
+        with _pending_lock:
+            for raw in payload.get("pending", []):
+                item = PendingNotification(**raw)
+                if not item.is_fill and ("|alert|" in item.dedupe_key or item.dedupe_key.startswith("signal|")):
+                    session = datetime.fromtimestamp(item.enqueued_at).strftime("%Y-%m-%d")
+                    item.dedupe_key = _signal_key(session, item.code, _signal_kind(item.alert_type))
+                    existing = _pending.get(item.dedupe_key)
+                    if existing is None or item.enqueued_at < existing.enqueued_at:
+                        _pending[item.dedupe_key] = item
+                    continue
+                # A new observation queued during startup takes priority over an old copy.
+                if item.dedupe_key not in _pending and not any(
+                    not item.is_fill and not p.is_fill and p.code == item.code and p.alert_type == item.alert_type
+                    for p in _pending.values()):
+                    _pending[item.dedupe_key] = item
+    _outbox_restored = True
 
 
 def _wechat_log(msg: str) -> None:
@@ -138,6 +219,7 @@ def _mark_session_invalid(*, detail: str = "") -> None:
 
 def _mark_transient_failure() -> None:
     st = _channel_state
+    st.healthy = False
     st.last_failure_at = time.time()
     st.consecutive_failures = int(st.consecutive_failures or 0) + 1
 
@@ -260,6 +342,8 @@ def enqueue_notification(
     summary: str = "",
     config: dict[str, Any] | None = None,
     bypass_storm: bool = False,
+    enqueued_at: float | None = None,
+    attempts: int = 0,
 ) -> bool:
     """主线程只入队；同 (code, alert_type) 预警覆盖旧条；成交不因预警冷却被吞。
 
@@ -292,8 +376,16 @@ def enqueue_notification(
         alert_type=typ,
         is_fill=bool(is_fill),
         summary=summary or f"{code_s} {typ}".strip(),
+        enqueued_at=now if enqueued_at is None else enqueued_at,
+        attempts=attempts,
     )
     with _pending_lock:
+        if key.startswith("signal|") and key in _pending and not bypass_storm:
+            return True
+        if bypass_storm and not is_fill and any(
+            not existing.is_fill and existing.code == code_s and existing.alert_type == typ
+            and existing.enqueued_at > item.enqueued_at for existing in _pending.values()):
+            return True
         if key in _pending:
             _pending.pop(key, None)
         # 预警：同 code+type 只留最新（即使 dedupe_key 略不同）
@@ -321,18 +413,34 @@ def enqueue_notification(
     return True
 
 
-def _pop_next_pending() -> PendingNotification | None:
+def _prune_pending(config=None):
+    global _expired_notifications
+    cfg = config or load_config()
+    with _pending_lock:
+        now = time.time()
+        for key, item in list(_pending.items()):
+            ttl = float(cfg.get("fill_ttl_sec", 86400) if item.is_fill else cfg.get("alert_ttl_sec", 180))
+            if now - item.enqueued_at > max(1, ttl) or item.attempts >= int(cfg.get("max_delivery_attempts", 12)):
+                del _pending[key]
+                _expired_notifications += 1
+
+
+def _pop_next_pending(*, config=None) -> PendingNotification | None:
+    _prune_pending(config)
     with _pending_lock:
         if not _pending:
             return None
-        # 成交优先
-        for k, p in list(_pending.items()):
-            if p.is_fill:
-                _pending.pop(k)
-                return p
-        k, p = next(iter(_pending.items()))
-        _pending.pop(k)
-        return p
+        # Preserve FIFO within a class: fills, observed triggers, risk warnings, proximity alerts.
+        def priority(item):
+            if item.is_fill:
+                return 0
+            if "已触" in item.alert_type or "半仓" in item.alert_type:
+                return 1
+            if "止损" in item.alert_type or "不可卖" in item.alert_type:
+                return 2
+            return 3
+        key = min(_pending, key=lambda key: priority(_pending[key]))
+        return _pending.pop(key)
 
 
 def _peek_pending_count() -> int:
@@ -431,14 +539,20 @@ def _flush_pending_queue(
     _wechat_log(f"flushing {n} pending notifications")
     sent_n = 0
     while True:
-        item = _pop_next_pending()
+        _persist_outbox()
+        item = _pop_next_pending(config=cfg)
         if item is None:
             break
-        ok, detail = sender(item.message, config=cfg, retries=1)
+        item.attempts += 1
+        try:
+            ok, detail = sender(item.message, config=cfg, retries=1)
+        except Exception:
+            ok, detail = False, "network timeout"
         if ok:
             sent_n += 1
             _mark_send_success()
             _wechat_log(f"send success ({item.summary})")
+            _persist_outbox()
             time.sleep(max(0.5, gap))
             continue
         kind = classify_send_error(detail)
@@ -453,15 +567,21 @@ def _flush_pending_queue(
                 summary=item.summary,
                 config=cfg,
                 bypass_storm=True,
+                enqueued_at=item.enqueued_at,
+                attempts=item.attempts,
             )
             _mark_session_invalid(detail=detail)
             _wechat_log("prepare failed during flush -> session invalid")
             break
         if kind == ERR_TRANSIENT:
-            ok2, detail2 = sender(item.message, config=cfg, retries=2)
+            try:
+                ok2, detail2 = sender(item.message, config=cfg, retries=2)
+            except Exception:
+                ok2, detail2 = False, "network timeout"
             if ok2:
                 sent_n += 1
                 _mark_send_success()
+                _persist_outbox()
                 time.sleep(max(0.5, gap))
                 continue
             enqueue_notification(
@@ -473,10 +593,13 @@ def _flush_pending_queue(
                 summary=item.summary,
                 config=cfg,
                 bypass_storm=True,
+                enqueued_at=item.enqueued_at,
+                attempts=item.attempts,
             )
             _wechat_log(f"flush deferred ({item.summary}): {(detail2 or '')[:120]}")
             break
         _wechat_log(f"flush drop other error ({item.summary}): {(detail or '')[:120]}")
+    _persist_outbox()
     return sent_n
 
 
@@ -518,6 +641,9 @@ def _delivery_worker_main() -> None:
     while not _worker_stop.is_set():
         try:
             cfg = load_config()
+            _restore_outbox()
+            _prune_pending(cfg)
+            _persist_outbox()
             if not watch_wechat_enabled(config=cfg):
                 _worker_wake.wait(2.0)
                 _worker_wake.clear()
@@ -534,15 +660,20 @@ def _delivery_worker_main() -> None:
                     _worker_wake.clear()
                 continue
 
-            item = _pop_next_pending()
+            item = _pop_next_pending(config=cfg)
             if item is None:
                 _worker_wake.wait(1.0)
                 _worker_wake.clear()
                 continue
 
-            ok, detail = _send_text_direct(item.message, config=cfg)
+            item.attempts += 1
+            try:
+                ok, detail = _send_text_direct(item.message, config=cfg)
+            except Exception:
+                ok, detail = False, "network timeout"
             if ok:
                 _wechat_log(f"send success ({item.summary})")
+                _persist_outbox()
                 gap = float(cfg.get("flush_interval_sec") or 1.2)
                 time.sleep(max(0.3, min(gap, 2.0)))
                 continue
@@ -558,6 +689,8 @@ def _delivery_worker_main() -> None:
                 summary=item.summary,
                 config=cfg,
                 bypass_storm=True,
+                enqueued_at=item.enqueued_at,
+                attempts=item.attempts,
             )
             if kind == ERR_SESSION_INVALID:
                 continue  # 下一轮进 recover
@@ -566,6 +699,10 @@ def _delivery_worker_main() -> None:
         except Exception as e:  # noqa: BLE001
             _wechat_log(f"worker error (ignored): {e}")
             time.sleep(2.0)
+    try:
+        _persist_outbox()
+    except Exception:
+        _wechat_log("outbox persistence unavailable during shutdown")
     _wechat_log("delivery worker stopped")
 
 
@@ -601,8 +738,10 @@ def reset_wechat_delivery_state_for_tests() -> None:
     with _pending_lock:
         _pending.clear()
     _storm_last.clear()
-    global _channel_state
+    global _channel_state, _expired_notifications, _outbox_persisted, _outbox_restored, _outbox_error
+    _outbox_persisted, _outbox_restored, _outbox_error = None, False, None
     _channel_state = WechatChannelState()
+    _expired_notifications = 0
     _worker_stop.clear()
     _worker_wake.clear()
 
@@ -712,6 +851,9 @@ _DEFAULT_CONFIG: dict[str, Any] = {
     "wait_inbound_poll_sec": 8,
     # 盘中会话恢复 / 队列
     "pending_queue_max": 80,
+    "alert_ttl_sec": 180,
+    "fill_ttl_sec": 86400,
+    "max_delivery_attempts": 12,
     "alert_storm_cooldown_sec": 45,  # 同 (code, alert_type) 短冷却；成交不受此限
     "session_action_log_sec": 300,  # session invalid 持续超过此秒只打一次 ACTION REQUIRED
     "flush_interval_sec": 1.2,
@@ -865,15 +1007,16 @@ def _save_state(state: dict[str, Any]) -> None:
     )
 
 
+@_serialize_notify
 def clear_alert_state() -> None:
+    state = _load_state()
+    today = _now()[:10]
+    retained = {"sent": {}}
+    if state.get("first_alert_session") == today:
+        retained.update(first_alert_session=today, first_alerts=state.get("first_alerts") or {})
+    _save_state(retained)
     if _database_documents():
-        from runtime_documents import write_merging
-
-        write_merging("wechat_alert_state", {"sent": {}})
         STATE_FILE.unlink(missing_ok=True)
-        return
-    if STATE_FILE.exists():
-        STATE_FILE.unlink()
 
 
 def _has_holding(row: dict[str, Any]) -> bool:
@@ -1146,17 +1289,59 @@ def is_alert_row(row: dict[str, Any]) -> bool:
     return classify_stock_alert(row) is not None
 
 
+def _signal_kind(alert_type):
+    typ = str(alert_type or "")
+    if typ.startswith("已触买"):
+        return "buy_hit"
+    return {"将买入": "buy_near", "将止损": "sell_near", "已触止损": "sell_hit",
+            "T1_BLOCK": "sell_hit", "跌停不可卖": "sell_hit",
+            "将半仓": "sell_half_near", "半仓止盈": "sell_half_hit"}.get(typ, typ)
+
+
+def _signal_key(session, code, kind):
+    return f"signal|{session}|{code}|{kind}"
+
+
 def _alert_key(row: dict[str, Any]) -> str:
-    code = str(row.get("代码") or "")
     info = classify_stock_alert(row) or {}
-    return (
-        f"{code}|alert|{info.get('type')}|{info.get('status')}|"
-        f"{row.get('已触买')}|{row.get('已触止损')}|"
-        f"{int(bool(row.get('近买点')))}|{int(bool(row.get('近止损')))}"
-    )
+    return _signal_key(_now()[:10], str(row.get("代码") or ""), _signal_kind(info.get("type")))
 
 
-def format_alert_message(row: dict[str, Any]) -> str:
+def _first_alert_records(state, session):
+    """Retain the current day's first event even when the row is no longer alerting."""
+    if state.get("first_alert_session") != session:
+        state.update(first_alert_session=session, first_alerts={})
+    records = state.setdefault("first_alerts", {})
+    # Upgrade retained cooldown keys so deployment does not re-notify today's known events.
+    for key, at in state.get("sent", {}).items():
+        parts = key.split("|")
+        if len(parts) < 3 or parts[1] != "alert":
+            continue
+        try:
+            stamp = float(at)
+            first_at = datetime.fromtimestamp(stamp).strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError, OverflowError, OSError):
+            continue
+        if first_at[:10] != session:
+            continue
+        kind = _signal_kind(parts[2])
+        stable = _signal_key(session, parts[0], kind)
+        if stable not in records or stamp < float(records[stable]["first_ts"]):
+            records[stable] = dict(code=parts[0], signal=kind, first_ts=stamp,
+                                   first_at=first_at, accepted=True, migrated=True)
+    with _pending_lock:
+        for item in _pending.values():
+            if item.is_fill or not item.dedupe_key.startswith(f"signal|{session}|"):
+                continue
+            old = records.get(item.dedupe_key)
+            if old is None or item.enqueued_at < float(old["first_ts"]):
+                records[item.dedupe_key] = dict(code=item.code, signal=_signal_kind(item.alert_type),
+                    first_ts=item.enqueued_at, first_at=datetime.fromtimestamp(item.enqueued_at).strftime("%Y-%m-%d %H:%M:%S"),
+                    accepted=True, message=item.message, alert_type=item.alert_type, migrated=True)
+    return records
+
+
+def format_alert_message(row: dict[str, Any], *, occurred_at=None) -> str:
     info = classify_stock_alert(row)
     code = row.get("代码") or "-"
     name = row.get("名称") or "-"
@@ -1197,7 +1382,7 @@ def format_alert_message(row: dict[str, Any]) -> str:
         f"买入目标：{_n(buy_tgt)}",
         f"卖出目标：{_n(sell_tgt)}",
         f"策略：{_strategy_label()}",
-        f"时间：{_now()}",
+        f"时间：{occurred_at or _now()}",
     ]
     return "\n".join(lines)
 
@@ -1504,6 +1689,7 @@ def format_sell_fill_message(
     return "\n".join(lines)
 
 
+@_serialize_notify
 def notify_trade_fill(
     *,
     side: str,
@@ -1644,25 +1830,29 @@ def notify_trade_fill(
     return False
 
 
+@_serialize_notify
 def notify_watch_rows(
     rows: list[dict[str, Any]],
     *,
     force: bool = False,
     config: dict[str, Any] | None = None,
 ) -> list[str]:
-    """扫描盯盘行，对新增/变更预警做防抖推送。返回已受理摘要（异步=已入队）。"""
+    """One first-observed event per day/symbol/signal. Retries retain that original event."""
     cfg = config or load_config()
     if not force and not watch_wechat_enabled(config=cfg):
         return []
 
     cooldown = max(60, int(cfg.get("cooldown_sec") or 1800))
     state = _load_state()
+    before = json.dumps(state, sort_keys=True, ensure_ascii=False)
     sent: dict[str, Any] = state.setdefault("sent", {})
     now_ts = time.time()
     active_keys: set[str] = set()
     pushed: list[str] = []
+    session = _now()[:10]
+    first_records = _first_alert_records(state, session)
 
-    def _dispatch(msg: str, *, key: str, code: str, name: str, alert_type: str) -> bool:
+    def _dispatch(msg: str, *, key: str, code: str, name: str, alert_type: str, created_at=None) -> bool:
         summary = f"{name}({code}) {alert_type}"
         if _ASYNC_DELIVERY:
             ok_q = enqueue_notification(
@@ -1673,10 +1863,10 @@ def notify_watch_rows(
                 is_fill=False,
                 summary=summary,
                 config=cfg,
+                enqueued_at=created_at,
             )
             if ok_q:
-                # 成功入队即记防抖，避免 session invalid 时每轮狂入队
-                # （队列内同 key 仍会覆盖为最新文案）
+                # Admission is recorded once; recovery retries the immutable first message.
                 sent[key] = now_ts
                 pushed.append(f"{name}({code})")
                 start_wechat_delivery_worker()
@@ -1690,20 +1880,14 @@ def notify_watch_rows(
             )
             return True
         if classify_send_error(detail) == ERR_SESSION_INVALID:
-            enqueue_notification(
-                message=msg,
-                dedupe_key=key,
-                code=code,
-                alert_type=alert_type,
-                is_fill=False,
-                summary=summary,
-                config=cfg,
-            )
-            start_wechat_delivery_worker()
-            # session invalid：也记短防抖，避免主循环同步风暴
-            sent[key] = now_ts
-            pushed.append(f"{name}({code})")
-            return False
+            accepted = enqueue_notification(
+                message=msg, dedupe_key=key, code=code, alert_type=alert_type,
+                is_fill=False, summary=summary, config=cfg, enqueued_at=created_at)
+            if accepted:
+                start_wechat_delivery_worker()
+                sent[key] = now_ts
+                pushed.append(f"{name}({code})")
+            return accepted
         print(f"[{_now()}] 微信推送失败 {name}({code}): {(detail or '')[:200]}")
         return False
 
@@ -1713,25 +1897,28 @@ def notify_watch_rows(
         info = classify_stock_alert(row)
         if info is None:
             continue
-        key = _alert_key(row)
-        active_keys.add(key)
-        prev_ts = float(sent.get(key) or 0)
-        if not force and (now_ts - prev_ts) < cooldown:
-            # 冷却期内：若已在 pending，仍允许覆盖为最新文案；否则跳过
-            with _pending_lock:
-                in_q = key in _pending or any(
-                    (not p.is_fill)
-                    and p.code == str(row.get("代码") or "")
-                    and p.alert_type == str(info.get("type") or "")
-                    for p in _pending.values()
-                )
-            if not in_q:
-                continue
-        msg = format_alert_message(row)
         code = str(row.get("代码") or "")
         name = str(row.get("名称") or "")
         typ = str(info.get("type") or "策略预警")
-        _dispatch(msg, key=key, code=code, name=name, alert_type=typ)
+        kind = _signal_kind(typ)
+        key = _signal_key(session, code, kind)
+        active_keys.add(key)
+        record = first_records.get(key)
+        if record and record.get("accepted"):
+            continue
+        if record is None:
+            first_at = _now()
+            record = dict(code=code, signal=kind, first_ts=now_ts, first_at=first_at,
+                source_quote_at=row.get("更新"), signal_at=row.get("信号时间"),
+                price=row.get("现价"), target=info.get("factor_px"), accepted=False,
+                message=format_alert_message(row, occurred_at=first_at), alert_type=typ)
+            first_records[key] = record
+            # Save the first observation before any send attempt; a failed attempt must not
+            # replace its price/time/message with a later re-entry into the warning band.
+            _save_state(state)
+        if _dispatch(record["message"], key=key, code=code, name=name,
+                     alert_type=record["alert_type"], created_at=record["first_ts"]):
+            record["accepted"] = True
 
     f2_row = next(
         (
@@ -1795,11 +1982,13 @@ def notify_watch_rows(
     for k in list(sent.keys()):
         if k.startswith("fill|"):
             continue
-        if k not in active_keys:
+        # Leaving/re-entering the near-price band must not reset the cooldown and flood the queue.
+        if k not in active_keys and now_ts - float(sent[k] or 0) >= cooldown:
             del sent[k]
     state["sent"] = sent
-    state["updated_at"] = _now()
-    _save_state(state)
+    if json.dumps(state, sort_keys=True, ensure_ascii=False) != before:
+        state["updated_at"] = _now()
+        _save_state(state)
     return pushed
 
 

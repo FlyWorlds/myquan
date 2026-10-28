@@ -1145,6 +1145,9 @@ def apply_feed_health(
         snap["quoteAgeSec"] = health.get("quoteAgeSec")
     if health.get("dataSources") is not None:
         snap["dataSources"] = list(health.get("dataSources") or [])
+    for key in ("quotePartial", "staleSymbols", "expectedSymbolCount", "sourceDiagnostics"):
+        if key in health:
+            snap[key] = health[key]
     if health.get("sourceAges") is not None:
         snap["sourceAges"] = dict(health.get("sourceAges") or {})
     try:

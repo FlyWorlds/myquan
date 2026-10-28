@@ -17,6 +17,7 @@ _PICK_SOURCES: dict[str, dict[str, Any]] = {
     "strategy1": {
         "kind": "pool",
         "paths": [
+            _MYQUAN / "backtest/strategy1_pool/picks_pool.json",
             _MYQUAN / "backtest/s1_f13_refit_2025/summary.json",
             _MYQUAN / "backtest/s1_f13_refit_2025/pool_detail.csv",
             _MYQUAN / "backtest/s1_f13_refit_2025/picks_2025_for_2026.csv",
@@ -202,6 +203,37 @@ def _load_factor13_locked(path: Path) -> dict[str, Any]:
         "asOf": str(data.get("locked_at") or year.replace("picks_", "")),
         "source": str(path.relative_to(_MYQUAN)),
         "note": "因子13 熊盾 Top3（strategy1 动态合格池研究，🔒锁定）",
+        "items": items,
+    }
+
+
+def _load_s1_picks_pool(path: Path) -> dict[str, Any]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        return _empty_picks("pool", note="策略一定盘池格式错误")
+    items: list[dict[str, Any]] = []
+    for i, it in enumerate(raw.get("picks") or [], 1):
+        code = _code_from_symbol(str(it.get("code") or it.get("symbol") or ""))
+        items.append(
+            {
+                "rank": int(it.get("rank") or i),
+                "symbol": code,
+                "code": code,
+                "name": _resolve_name(code=code, name=str(it.get("name") or "")),
+                "theme": it.get("concept") or it.get("theme"),
+                "concept": it.get("concept") or it.get("theme"),
+                "thr": it.get("thr"),
+                "score": it.get("chg_pct"),
+                "sharpe": it.get("sharpe"),
+                "category": it.get("category") or "策略池",
+                "pool_src": it.get("pool_src") or "strategy1_pool",
+            }
+        )
+    return {
+        "kind": "pool",
+        "asOf": raw.get("as_of") or str(raw.get("label") or ""),
+        "source": str(path.relative_to(_MYQUAN)),
+        "note": str(raw.get("note") or f"援军战法 2026 定盘池（{len(items)} 只）· 算法与元素对齐策略十六"),
         "items": items,
     }
 
@@ -579,7 +611,9 @@ def _load_strategy_picks_cached(strategy_id: str) -> dict[str, Any]:
 
     try:
         if sid == "strategy1":
-            if path.name == "summary.json":
+            if path.name == "picks_pool.json":
+                raw = _load_s1_picks_pool(path)
+            elif path.name == "summary.json":
                 raw = _load_s1_f13_refit_summary(path)
             elif path.name in ("pool_detail.csv", "picks_2025_for_2026.csv"):
                 raw = _load_s1_f13_refit_pool_csv(path)

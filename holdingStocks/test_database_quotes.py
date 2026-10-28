@@ -24,6 +24,49 @@ class TestDatabaseQuotes(unittest.TestCase):
         value = quote(_source_time_verified=True, _received_at="2026-10-15 09:30:01.123456", **changes)
         self.client.observe("sz000070", value)
 
+    def test_repeated_tick_is_deduplicated_but_same_second_peak_is_preserved(self):
+        self.observe()
+        self.observe()
+        self.observe(last=10.8, high=10.8)
+        self.assertEqual(self.client.events.qsize(), 2)
+        self.assertEqual(self.client.duplicates, 1)
+
+    def test_failed_database_write_allows_same_tick_to_retry(self):
+        self.observe()
+        with patch("database_quotes.write_quotes", side_effect=OSError("offline")):
+            self.client.flush()
+        self.observe()
+        self.assertEqual(self.client.events.qsize(), 1)
+
+    def test_writer_wakes_on_observation_instead_of_polling(self):
+        waiting, committed_event = threading.Event(), threading.Event()
+        event = threading.Event()
+        class TrackedWake:
+            def wait(self, timeout=None):
+                waiting.set()
+                return event.wait(timeout)
+            def set(self): event.set()
+            def clear(self): event.clear()
+        self.client._wake = TrackedWake()
+        self.client.on_committed = lambda *_: committed_event.set()
+        with patch("database_quotes.write_quotes", side_effect=committed):
+            worker = threading.Thread(target=self.client.run, daemon=True)
+            worker.start()
+            try:
+                self.assertTrue(waiting.wait(1))
+                self.observe()
+                self.assertTrue(committed_event.wait(.5))
+            finally:
+                self.client.stop.set(); event.set(); worker.join(1)
+        self.assertFalse(worker.is_alive())
+
+    def test_tencent_fallback_requires_the_same_database_ack(self):
+        self.observe(_quote_source="tencent_batch")
+        self.consume.assert_not_called()
+        with patch("database_quotes.write_quotes", side_effect=committed):
+            self.client.flush()
+        self.consume.assert_called_once()
+
     def test_no_execution_before_database_ack_and_no_fallback_when_offline(self):
         self.observe()
         self.consume.assert_not_called()

@@ -69,6 +69,71 @@ class TestWechatSessionRecovery(unittest.TestCase):
             return self._send_results.pop(0)
         return True, "ok"
 
+    def test_expired_alert_is_dropped_while_fill_keeps_its_longer_lifetime(self):
+        now = time.time()
+        wn.enqueue_notification(message="old", dedupe_key="old", config=self._cfg, enqueued_at=now-181)
+        wn.enqueue_notification(message="fill", dedupe_key="fill", config=self._cfg, enqueued_at=now-181, is_fill=True)
+        item = wn._pop_next_pending(config=self._cfg)
+        self.assertEqual(item.dedupe_key, "fill")
+        self.assertIsNone(wn._pop_next_pending(config=self._cfg))
+        self.assertEqual(wn.get_wechat_channel_state()["expired_notification_count"], 1)
+
+    def test_retry_keeps_original_age_and_attempt_count(self):
+        old = time.time()-170
+        wn.enqueue_notification(message="alert", dedupe_key="retry", config=self._cfg, enqueued_at=old)
+        with patch.object(wn, "_send_text_direct", return_value=(False, PREPARE_FAIL)):
+            wn._flush_pending_queue(config=self._cfg)
+        item = wn._pop_next_pending(config=self._cfg)
+        self.assertEqual(item.enqueued_at, old)
+        self.assertEqual(item.attempts, 1)
+
+    def test_outbox_restores_pending_after_restart_and_removes_acknowledged_message(self):
+        wn.enqueue_notification(message="alert", dedupe_key="durable", config=self._cfg)
+        wn._persist_outbox()
+        with wn._pending_lock:
+            wn._pending.clear()
+        wn._outbox_restored = False
+        wn._restore_outbox()
+        self.assertEqual(wn._peek_pending_count(), 1)
+        with patch.object(wn, "_send_text_direct", return_value=(True, "ok")), patch.object(wn.time, "sleep"):
+            self.assertEqual(wn._flush_pending_queue(config=self._cfg), 1)
+        wn._outbox_restored = False
+        wn._restore_outbox()
+        self.assertEqual(wn._peek_pending_count(), 0)
+
+    def test_outbox_database_failure_keeps_messages_and_prevents_send(self):
+        wn.enqueue_notification(message="alert", dedupe_key="durable", config=self._cfg)
+        with patch.object(wn, "_database_documents", return_value=True), \
+             patch("runtime_documents.write_merging", side_effect=RuntimeError("offline")), \
+             patch.object(wn, "_send_text_direct") as sender:
+            with self.assertRaises(RuntimeError):
+                wn._flush_pending_queue(config=self._cfg)
+        sender.assert_not_called()
+        self.assertEqual(wn._peek_pending_count(), 1)
+
+    def test_observed_buy_trigger_overtakes_old_near_buy_alerts(self):
+        wn.enqueue_notification(message="near", dedupe_key="near", code="1", alert_type="将买入", config=self._cfg)
+        wn.enqueue_notification(message="trigger", dedupe_key="trigger", code="2", alert_type="已触买", config=self._cfg)
+        wn.enqueue_notification(message="fill", dedupe_key="fill", code="3", is_fill=True, config=self._cfg)
+        self.assertEqual(wn._pop_next_pending(config=self._cfg).message, "fill")
+        self.assertEqual(wn._pop_next_pending(config=self._cfg).message, "trigger")
+        self.assertEqual(wn._pop_next_pending(config=self._cfg).message, "near")
+
+    def test_upgrade_collapses_old_pending_status_variants_to_the_first_event(self):
+        now = time.time()
+        with wn._pending_lock:
+            wn._pending['legacy1'] = wn.PendingNotification('600330|alert|已触买|a', 'first', '600330', '已触买', enqueued_at=now-10)
+            wn._pending['legacy2'] = wn.PendingNotification('600330|alert|已触买·槽满|b', 'later', '600330', '已触买·槽满', enqueued_at=now-1)
+        wn._persist_outbox()
+        with wn._pending_lock:
+            wn._pending.clear()
+        wn._outbox_restored = False
+        wn._restore_outbox()
+        self.assertEqual(len(wn._pending), 1)
+        item = next(iter(wn._pending.values()))
+        self.assertEqual(item.message, 'first')
+        self.assertEqual(item.enqueued_at, now-10)
+
     # A
     def test_a_normal_send_success(self) -> None:
         with patch.object(wn, "_send_text_once", side_effect=self._fake_once):

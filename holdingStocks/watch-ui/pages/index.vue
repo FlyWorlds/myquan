@@ -348,6 +348,7 @@ const closedCount = computed(() => closedHoldings.value.length)
         <p class="text-sm text-ui-text-2">
           <span class="sensitive">{{ snapshot?.strategy?.name || '策略一' }}</span>
           · {{ snapshot?.strategy?.factorsLabel }}
+          <span v-if="snapshot?.latencyProfile?.mode === 'opening_fast'" class="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent" title="9:25–9:40 优先更新行情和触发信号">开盘加速</span>
           · <span :class="wsDisconnected ? 'font-semibold text-ui-danger' : ''">{{ snapshot?.clock || '—' }}</span>
           <span class="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">{{ snapshot?.phase }}</span>
           ·
@@ -482,11 +483,16 @@ const closedCount = computed(() => closedHoldings.value.length)
         <StrategyInfoPanel v-if="strategy1Tab" :tab="strategy1Tab" class="mb-4" />
         <Strategy1Panel
           v-if="snapshot"
-          :rows="snapshot.strategy1"
+          :rows="snapshot.strategy1 || []"
+          signal-priority
           :phase="snapshot.phase"
           :slot-meta="snapshot.slotMeta"
           pool-category="策略池"
-          status-mode="paper"
+          status-mode="strategy"
+          hide-position-high
+          hide-buy-distance
+          day-change-after-name
+          trade-sides-after-day-high
         />
         <StrategyPicksPanel :picks="strategy1Tab?.picks" />
       </section>

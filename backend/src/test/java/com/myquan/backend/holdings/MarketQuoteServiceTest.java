@@ -47,6 +47,12 @@ class MarketQuoteServiceTest {
         assertEquals(2,result.get(1).path("_database_quote_revision").asLong());
         assertEquals("sz000070",result.get(1).path("_database_quote_symbol").asText());
     }
+    @Test void timestampedTencentFallbackCanBeCommitted() {
+        var q=quote("10:00:01",10.5).put("_quote_source","tencent_batch");
+        var result=service.write(List.of(new MarketQuoteService.Quote("sz000070",q))).getFirst();
+        assertEquals("tencent_batch",result.path("_quote_source").asText());
+        assertEquals(1,result.path("_database_quote_revision").asLong());
+    }
     @Test void badQuoteCannotPartiallyWriteABatch() {
         var good=quote("10:00:01",10.5);
         var bad=quote("10:00:01",10.5).put("_source_time_verified",false);

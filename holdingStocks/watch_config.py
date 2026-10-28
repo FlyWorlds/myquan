@@ -47,6 +47,8 @@ from strategy.watch_universe import (
     factor28_codes,
     load_core_leader_payload,
     load_strategy16_thr_map,
+    load_strategy1_payload,
+    load_strategy1_thr_map,
     load_ziyang_payload,
     self_watchlist_codes,
     self_watchlist_pick_rows,
@@ -643,20 +645,50 @@ WATCHLIST: list[dict[str, Any]] = []
 
 
 def strategy1_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """策略一定盘池（置顶 + 13A→16 Top20）∪ 公共自选池。"""
+    """策略一定盘池：夏普自适应最优阈值 ∪ 公共自选池，算法与表格元素与策略十六完全对齐。"""
+    thrs = load_strategy1_thr_map()
+    payload = load_strategy1_payload()
     seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST_STRATEGY1):
-        c = code_key(w["code"])
-        if c in seen:
-            continue
-        seen.add(c)
-        item = dict(w)
-        item["universe"] = "strategy1"
-        item.setdefault("pool_src", "strategy1_pool")
-        item.setdefault("池来源", "策略池")
-        out.append(item)
-    return merge_self_watchlist(out, holdings)
+    factor_rows: list[dict[str, Any]] = []
+    picks = payload.get("picks") or []
+    if picks:
+        for it in picks:
+            if not isinstance(it, dict):
+                continue
+            code = code_key(str(it.get("code") or it.get("symbol") or ""))
+            if not code or code in seen or code == "000000":
+                continue
+            seen.add(code)
+            item = meta_for_code(code, holdings)
+            if it.get("name"):
+                item["name"] = str(it.get("name"))
+            item["universe"] = "strategy1"
+            item["pool_src"] = "strategy1_pool"
+            item["池来源"] = "策略池"
+            item["concept"] = it.get("concept") or it.get("theme")
+            thr = thrs.get(code)
+            if thr is not None:
+                item["pct"] = float(thr)
+                item["entry_pct"] = float(thr)
+                item["stop_pct"] = float(DEFAULT_PCT)
+            factor_rows.append(item)
+    else:
+        for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST_STRATEGY1):
+            c = code_key(w["code"])
+            if c in seen:
+                continue
+            seen.add(c)
+            item = dict(w)
+            item["universe"] = "strategy1"
+            item.setdefault("pool_src", "strategy1_pool")
+            item.setdefault("池来源", "策略池")
+            thr = thrs.get(c)
+            if thr is not None:
+                item["pct"] = float(thr)
+                item["entry_pct"] = float(thr)
+                item["stop_pct"] = float(DEFAULT_PCT)
+            factor_rows.append(item)
+    return merge_self_watchlist(factor_rows, holdings)
 
 
 def strategy1_codes(holdings: dict[str, Any] | None = None) -> set[str]:
@@ -792,6 +824,11 @@ def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str
     if STRATEGY_ID == "strategy16":
         name, _market = _name_for_code(c, holdings)
         thrs = load_strategy16_thr_map()
+        pct = float(thrs[c]) if c in thrs else float(DEFAULT_PCT)
+        return watch_item(c, name, pct=pct, limit_down_pct=limit_down_pct_of(c))
+    if STRATEGY_ID == "strategy1":
+        name, _market = _name_for_code(c, holdings)
+        thrs = load_strategy1_thr_map()
         pct = float(thrs[c]) if c in thrs else float(DEFAULT_PCT)
         return watch_item(c, name, pct=pct, limit_down_pct=limit_down_pct_of(c))
     for w in (*PORTFOLIO_PINNED_WATCHLIST, *WATCHLIST_STRATEGY1):

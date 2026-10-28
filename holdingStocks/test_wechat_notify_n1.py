@@ -67,6 +67,90 @@ class TestWechatNotifyN1(unittest.TestCase):
         self._send_patch = patch.object(wn, "send_text", side_effect=_fake_send)
         self._send_patch.start()
 
+    def test_leaving_near_buy_band_cannot_reset_notification_cooldown(self):
+        row = _row(预警="将买入", 近买点=True, 持仓状态="待买入")
+        wn.notify_watch_rows([row], config=self._cfg)
+        self.assertEqual(len(self._sent), 1)
+        wn.notify_watch_rows([], config=self._cfg)
+        wn.notify_watch_rows([row], config=self._cfg)
+        self.assertEqual(len(self._sent), 1)
+
+    def test_daily_first_warning_survives_band_flapping_and_hours_elapsed(self):
+        import datetime
+        first = datetime.datetime(2026,10,27,9,31).timestamp()
+        row = _row(预警="将买入", 近买点=True, 持仓状态="待买入")
+        with patch.object(wn, '_now', return_value='2026-10-27 09:31:00'), patch.object(wn.time, 'time', return_value=first):
+            wn.notify_watch_rows([row], config=self._cfg)
+        with patch.object(wn, '_now', return_value='2026-10-27 13:31:00'), patch.object(wn.time, 'time', return_value=first+14400):
+            wn.notify_watch_rows([], config=self._cfg)
+            wn.notify_watch_rows([dict(row, 现价=12.49, 近止损=True)], config=self._cfg)
+            wn.notify_watch_rows([row], config=self._cfg, force=True)
+        self.assertEqual(len(self._sent), 1)
+        record = next(iter(wn._load_state()['first_alerts'].values()))
+        self.assertEqual(record['first_at'], '2026-10-27 09:31:00')
+        self.assertEqual(record['price'], 12.34)
+
+    def test_near_buy_and_buy_hit_are_two_signals_but_hit_reasons_are_one(self):
+        wn.notify_watch_rows([_row(预警="将买入", 近买点=True)], config=self._cfg)
+        for text in ['已触买', '已触买·未入槽', '已触买·槽满', '已触买']:
+            wn.notify_watch_rows([_row(预警=text, 已触买="是", 因子触发="已触发", 持仓状态="待买入")], config=self._cfg)
+        self.assertEqual(len(self._sent), 2)
+        self.assertEqual(len(wn._load_state()['first_alerts']), 2)
+
+    def test_near_sell_and_sell_hit_are_two_signals_regardless_of_sellability(self):
+        row = _row(持仓=1000, 持仓状态="待卖出", 预警="将止损", 近止损=True)
+        wn.notify_watch_rows([row], config=self._cfg)
+        wn.notify_watch_rows([], config=self._cfg)
+        wn.notify_watch_rows([row], config=self._cfg)
+        hit = dict(row, 预警="已触止损", 已触止损="是", 因子触发="策略止损")
+        wn.notify_watch_rows([hit], config=self._cfg)
+        wn.notify_watch_rows([dict(hit, 预警="跌停不可卖")], config=self._cfg)
+        self.assertEqual(len(self._sent), 2)
+
+    def test_next_day_allows_new_first_warning(self):
+        row = _row(预警="将买入", 近买点=True)
+        for day in ['2026-10-27','2026-10-27','2026-10-28','2026-10-28']:
+            with patch.object(wn, '_now', return_value=day+' 09:31:00'):
+                wn.notify_watch_rows([row], config=self._cfg)
+        self.assertEqual(len(self._sent), 2)
+
+    def test_same_day_restart_and_housekeeping_do_not_resend(self):
+        row = _row(预警="将买入", 近买点=True)
+        wn.notify_watch_rows([row], config=self._cfg)
+        wn.reset_wechat_delivery_state_for_tests()
+        wn.clear_alert_state()
+        wn.notify_watch_rows([row], config=self._cfg)
+        self.assertEqual(len(self._sent), 1)
+
+    def test_pending_warning_preserves_the_first_text_and_time(self):
+        wn.set_async_delivery(True)
+        row = _row(预警="将买入", 近买点=True)
+        with patch.object(wn, 'start_wechat_delivery_worker'):
+            wn.notify_watch_rows([row], config=self._cfg)
+            item = next(iter(wn._pending.values()))
+            first_time, first_text = item.enqueued_at, item.message
+            wn.notify_watch_rows([dict(row, 现价=12.49)], config=self._cfg)
+        pending = next(iter(wn._pending.values()))
+        self.assertEqual(len(wn._pending), 1)
+        self.assertEqual(pending.message, first_text)
+        self.assertEqual(pending.enqueued_at, first_time)
+
+    def test_failed_send_retries_the_first_warning_not_later_price(self):
+        row = _row(预警="将买入", 近买点=True)
+        with patch.object(wn, 'send_text', side_effect=[(False,'network timeout'),(True,'ok')]) as send:
+            wn.notify_watch_rows([row], config=self._cfg)
+            wn.notify_watch_rows([dict(row, 现价=12.49)], config=self._cfg)
+        self.assertEqual(send.call_args_list[0].args[0], send.call_args_list[1].args[0])
+        self.assertIn('12.34', send.call_args_list[1].args[0])
+
+    def test_existing_daily_cooldown_record_is_migrated_without_resending(self):
+        import time
+        row = _row(预警="已触买·槽满", 已触买="是", 持仓状态="待买入")
+        wn._save_state({'sent':{'600330|alert|已触买·未入槽|old-status|是|否|1|0':time.time()}})
+        wn.notify_watch_rows([row], config=self._cfg)
+        self.assertEqual(len(self._sent), 0)
+        self.assertEqual(len(wn._load_state()['first_alerts']), 1)
+
     def tearDown(self) -> None:
         self._send_patch.stop()
         wn.set_async_delivery(True)

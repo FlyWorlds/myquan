@@ -11,6 +11,21 @@ from watch_buy_signal import annotate_unfilled_buy_signals
 
 
 class TestSignalLatency(unittest.TestCase):
+    def test_live_display_gate_is_reused_and_daily_refresh_invalidates_it(self):
+        item = dict(code='000070', sina='sz000070', pct=.025, tick=.01)
+        first, refreshed = ('2026-10-27', object()), ('2026-10-27', object())
+        with patch.dict(index._QUOTE_GATE_CACHE, {}, clear=True), \
+             patch.object(index, '_prev_bars_from_daily', return_value=(10,9,10,9)) as prev, \
+             patch.object(index, '_entry_gate_detail', return_value=(True,'gate','yin')):
+            index._quote_runtime_gate(item, '2026-10-27', first)
+            index._quote_runtime_gate(item, '2026-10-27', first)
+            self.assertEqual(prev.call_count, 1)
+            index._quote_runtime_gate(item, '2026-10-27', refreshed)
+            self.assertEqual(prev.call_count, 2)
+            item['pct'] = .03
+            index._quote_runtime_gate(item, '2026-10-27', refreshed)
+            self.assertEqual(prev.call_count, 3)
+
     def test_readonly_refresh_preserves_the_execution_clock_in_quote_mode(self):
         from unittest.mock import Mock
         executor = Mock(last_evaluated_at="2026-10-15 09:30:01")

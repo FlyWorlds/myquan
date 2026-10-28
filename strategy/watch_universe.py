@@ -17,6 +17,8 @@ _MYQUAN_ROOT = Path(__file__).resolve().parents[1]
 
 CORE_LEADER_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "picks_quarter.json"
 STRATEGY16_THR_PATH = _MYQUAN_ROOT / "backtest" / "strategy16_core_leader" / "thr_2026.json"
+STRATEGY1_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy1_pool" / "picks_pool.json"
+STRATEGY1_THR_PATH = _MYQUAN_ROOT / "backtest" / "strategy1_pool" / "thr_2026.json"
 ZIYANG_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy17_ziyang" / "picks_3m.json"
 
 # 公共自选池（非因子选股）：所有策略交易/盯盘宇宙均并入。
@@ -121,6 +123,46 @@ def _read_strategy16_thr_map() -> dict[str, float]:
         except (TypeError, ValueError):
             continue
     return out
+
+
+_S1_THR_MAP_CACHE: dict[str, Any] = {"mtime": None, "data": {}}
+
+
+def load_strategy1_thr_map() -> dict[str, float]:
+    """策略一夏普自适应最优阈值映射，算法对齐策略十六。"""
+    try:
+        mtime = STRATEGY1_THR_PATH.stat().st_mtime
+    except OSError:
+        return {}
+    if _S1_THR_MAP_CACHE["mtime"] == mtime:
+        return dict(_S1_THR_MAP_CACHE["data"])
+    try:
+        raw = json.loads(STRATEGY1_THR_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict[str, float] = {}
+    for code, rec in (raw.get("thrs") or {}).items():
+        c = code_key(str(code))
+        if not c:
+            continue
+        thr = rec.get("thr") if isinstance(rec, dict) else rec
+        try:
+            out[c] = float(thr)
+        except (TypeError, ValueError):
+            continue
+    _S1_THR_MAP_CACHE["mtime"] = mtime
+    _S1_THR_MAP_CACHE["data"] = out
+    return dict(out)
+
+
+def load_strategy1_payload() -> dict[str, Any]:
+    if not STRATEGY1_PICKS_PATH.is_file():
+        return {}
+    try:
+        raw = json.loads(STRATEGY1_PICKS_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    return dict(raw) if isinstance(raw, dict) else {}
 
 
 def load_ziyang_payload() -> dict[str, Any]:

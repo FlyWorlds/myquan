@@ -48,6 +48,24 @@ class TestQuoteHealth(unittest.TestCase):
         hub.mark_quote_ok("sina_batch")
         self.assertFalse(hub.sse_healthy())
 
+    def test_one_fresh_symbol_cannot_hide_another_stale_symbol(self):
+        from unittest.mock import patch
+        from datetime import datetime
+        now = datetime(2026, 10, 26, 10, 0)
+        hub = QuoteHub()
+        hub.expected_symbols = ['sz000001', 'sz000002']
+        hub.apply_tick('sz000001', last=10.2, open_px=10., high=10.3, low=10.,
+                       prev_close=10., last_ts='2026-10-26 10:00:00', source='sina_batch')
+        hub.apply_tick('sz000002', last=10.2, open_px=10., high=10.3, low=10.,
+                       prev_close=10., last_ts='2026-10-26 09:58:00', source='sina_batch')
+        hub.mark_quote_ok('sina_batch')
+        with patch('watch_config.market_phase', return_value='continuous'), patch('quote_feed.datetime') as clock:
+            clock.now.return_value = now
+            health = hub.quote_health()
+        self.assertTrue(health['feedOk'])
+        self.assertTrue(health['quotePartial'])
+        self.assertEqual(health['staleSymbols'], ['sz000002'])
+
     def test_apply_feed_health_keep_stale(self) -> None:
         snap = {"clock": "2026-09-14 12:01:00"}
         apply_feed_health(
@@ -175,7 +193,7 @@ class TestExecutableQuoteIsolation(unittest.TestCase):
         fields[0], fields[2], fields[3], fields[4], fields[5] = "Test", "10", "10.26", "10.3", "10"
         fields[30], fields[31] = "2026-10-15", "09:30:01"
         payload = ('var hq_str_sz000070="'+','.join(fields)+'";').encode("gbk")
-        with patch("quote_feed.requests.get", return_value=Mock(content=payload)):
+        with patch("quote_feed._quote_http_get", return_value=Mock(content=payload)):
             spot = fetch_sina_batch(["sz000070"])["sz000070"]
         self.assertFalse(spot["_trade_quality_ok"])
         hub = QuoteHub()
@@ -207,7 +225,7 @@ class TestExecutableQuoteIsolation(unittest.TestCase):
             return {}
         poller = SinaBatchPoller(QuoteHub(), hot+cold, stop=stop, interval=1.)
         worker = threading.Thread(target=poller.run, daemon=True)
-        with patch("quote_feed.fetch_sina_batch", side_effect=fetch):
+        with patch("quote_feed.fetch_sina_batch", side_effect=fetch), patch("quote_feed.fetch_tencent_batch", return_value={}), patch("watch_config.market_phase", return_value="closed"):
             worker.start()
             try:
                 self.assertTrue(cold_started.wait(1))
@@ -251,3 +269,22 @@ class TestExecutableQuoteIsolation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTencentFallback(unittest.TestCase):
+    def test_fallback_preserves_source_timestamp_and_ohlc(self):
+        from unittest.mock import Mock, patch
+        from quote_feed import fetch_tencent_batch
+        fields = ["0"] * 35
+        for i, value in {3:"12.96",4:"13.50",5:"13.30",30:"20261026143951",33:"13.46",34:"12.85"}.items():
+            fields[i] = value
+        response = Mock(content=('v_sz000070="'+'~'.join(fields)+'";').encode('gbk'))
+        with patch('quote_feed._quote_http_get', return_value=response):
+            spot = fetch_tencent_batch(['sz000070'])['sz000070']
+        self.assertEqual(spot['last_ts'], '2026-10-26 14:39:51')
+        self.assertEqual((spot['open'],spot['high'],spot['low']), (13.3,13.46,12.85))
+        self.assertEqual(spot['_quote_source'], 'tencent_batch')
+        fields[30] = ''
+        response.content = ('v_sz000070="'+'~'.join(fields)+'";').encode('gbk')
+        with patch('quote_feed._quote_http_get', return_value=response):
+            self.assertEqual(fetch_tencent_batch(['sz000070']), {})

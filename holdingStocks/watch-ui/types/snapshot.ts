@@ -463,7 +463,12 @@ export interface WatchSnapshot {
   phase?: string
   phaseKey?: string
   refreshSec?: number
+  latencyProfile?: { mode: 'opening_fast' | 'normal'; pollTargetMs: number; viewTargetMs: number; viewBuildMs?: number | null }
   quoteStale?: boolean
+  quotePartial?: boolean
+  staleSymbols?: string[]
+  expectedSymbolCount?: number
+  sourceDiagnostics?: Record<string, Record<string, { circuit: string; retryInSec: number; lastError?: string | null }>>
   feedOk?: boolean
   /** 最近一次外网行情成功时刻；中断后时钟仍走，此字段停住 */
   quoteAt?: string | null

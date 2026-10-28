@@ -47,6 +47,10 @@ class DatabaseQuotes:
     def __init__(self, *, stop, on_committed, log=print):
         self.stop, self.on_committed, self.log = stop, on_committed, log
         self.events = queue.Queue(maxsize=2048)
+        self._wake = threading.Event()
+        self._last_admitted = {}
+        self.duplicates = 0
+        self.last_queue_ms = None
         self.lock = threading.RLock()
         self._quotes = {}
         self.ready, self.error = False, None
@@ -92,6 +96,7 @@ class DatabaseQuotes:
         age = (datetime.now()-at).total_seconds() if at else None
         return dict(source="mysql", ready=self.ready, error=self.error,
                     pending=self.events.qsize(), dropped=self.dropped, rejected=self.rejected, expired=self.expired,
+                    duplicates=self.duplicates, queueMs=self.last_queue_ms,
                     writeMs=self.last_write_ms, readError=self.read_error, referenceReady=self.reference_ready,
                     latestQuoteAt=self.latest_quote_at, quoteAgeSec=age,
                     fresh=age is not None and 0 <= age <= 5)
@@ -100,7 +105,7 @@ class DatabaseQuotes:
         if self.stop.is_set() or quote.get("_source_time_verified") is not True:
             return
         try:
-            if (quote.get("_quote_source") != "sina_batch"
+            if (quote.get("_quote_source") not in ("sina_batch", "tencent_batch")
                     or not all(math.isfinite(float(quote[k])) and float(quote[k]) > 0
                                for k in ("open", "high", "low", "last", "prev_close"))
                     or float(quote["low"]) > min(float(quote["open"]), float(quote["last"]))
@@ -113,8 +118,15 @@ class DatabaseQuotes:
         clean = {key: quote[key] for key in FIELDS if key in quote}
         if not clean.get("_received_at"):
             clean["_received_at"] = datetime.now().isoformat(sep=" ", timespec="microseconds")
+        identity = tuple(clean.get(key) for key in ("session", "last_ts", "_quote_source", "open", "high", "low", "last", "prev_close"))
         try:
-            self.events.put_nowait((dict(symbol=sina, quote=clean), time.monotonic()+5))
+            with self.lock:
+                if self._last_admitted.get(sina) == identity:
+                    self.duplicates += 1
+                    return
+                self.events.put_nowait((dict(symbol=sina, quote=clean), time.monotonic()+5))
+                self._last_admitted[sina] = identity
+            self._wake.set()
         except queue.Full:
             self.dropped += 1
             if self.dropped == 1 or self.dropped % 100 == 0:
@@ -128,6 +140,7 @@ class DatabaseQuotes:
                 if time.monotonic() > deadline:
                     self.expired += 1
                     continue
+                self.last_queue_ms = round(max(0, time.monotonic()-(deadline-5))*1000, 1)
                 batch.append(item)
             except queue.Empty:
                 break
@@ -165,10 +178,18 @@ class DatabaseQuotes:
                 except Exception as exc:
                     self.log(f"[QUOTE_DB] Consumer failed {sina}: {type(exc).__name__}; no invented replay")
         except Exception as exc:
+            with self.lock:
+                for item in batch:
+                    self._last_admitted.pop(item["symbol"], None)
             self.error = f"{type(exc).__name__}: {exc}"
             self.log(f"[QUOTE_DB] Write/dispatch failed; no local execution fallback: {self.error}")
 
     def run(self):
         while not self.stop.is_set():
-            self.flush()
-            self.stop.wait(.1 if not self.error else 1.)
+            self._wake.wait(.2)
+            self._wake.clear()
+            while not self.stop.is_set() and not self.events.empty():
+                self.flush()
+                if self.error:
+                    self.stop.wait(1.)
+                    break

@@ -1511,6 +1511,17 @@ def _snapshot_business_digest(snapshot: dict[str, Any]) -> str:
 
 
 _WATCH_TABS_CACHE: dict[str, Any] = {"t": 0.0, "tabs": []}
+_WATCH_TABS_REFRESH_LOCK = threading.Lock()
+
+
+def _refresh_watch_tabs_background():
+    try:
+        tabs = [dict(t) for t in _get_strategies_api_cache() if t.get("watch_tab")]
+        _WATCH_TABS_CACHE.update(t=time.monotonic(), tabs=tabs)
+    except Exception as exc:
+        print(f"[{_now()}] 策略说明后台刷新失败: {type(exc).__name__}")
+    finally:
+        _WATCH_TABS_REFRESH_LOCK.release()
 
 
 def _watch_tabs_with_live_s8(strategy8: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1520,9 +1531,14 @@ def _watch_tabs_with_live_s8(strategy8: dict[str, Any]) -> list[dict[str, Any]]:
     now_m = time.monotonic()
     cached = _WATCH_TABS_CACHE.get("tabs") or []
     if (not cached) or (now_m - float(_WATCH_TABS_CACHE.get("t") or 0)) > 60.0:
-        cached = [dict(t) for t in _get_strategies_api_cache() if t.get("watch_tab")]
-        _WATCH_TABS_CACHE["t"] = now_m
-        _WATCH_TABS_CACHE["tabs"] = cached
+        from opening_speed import opening_fast
+        if cached and opening_fast():
+            if _WATCH_TABS_REFRESH_LOCK.acquire(blocking=False):
+                threading.Thread(target=_refresh_watch_tabs_background, name="opening-strategy-metadata", daemon=True).start()
+        else:
+            cached = [dict(t) for t in _get_strategies_api_cache() if t.get("watch_tab")]
+            _WATCH_TABS_CACHE["t"] = now_m
+            _WATCH_TABS_CACHE["tabs"] = cached
     tabs = [dict(t) for t in cached]
     for t in tabs:
         if t.get("id") == "strategy8":
@@ -1976,6 +1992,10 @@ def _stamp_snapshot_liveness(snap: dict[str, Any], *, clock: str | None = None) 
     """刷新进程时钟，并按行情源是否还在收外网数据打 quoteStale。"""
     clock_now = clock or _now()
     snap["clock"] = clock_now
+    from opening_speed import opening_fast, quote_poll_interval, view_interval
+    snap["latencyProfile"] = dict(mode="opening_fast" if opening_fast() else "normal",
+        pollTargetMs=round(quote_poll_interval()*1000), viewTargetMs=round(view_interval()*1000),
+        viewBuildMs=_QUOTE_RUNTIME_PANELS.get("viewBuildMs"))
     if _STRATEGY_BOOKS_CLIENT is not None:
         snap["strategyBookStorage"] = dict(source="mysql", ready=_STRATEGY_BOOKS_CLIENT.ready,
                                            error=_STRATEGY_BOOKS_CLIENT.error)
@@ -1983,6 +2003,11 @@ def _stamp_snapshot_liveness(snap: dict[str, Any], *, clock: str | None = None) 
         snap["quoteStorage"] = _DATABASE_QUOTES_CLIENT.status()
     if _CONDITION_EXECUTOR is not None:
         snap["executionStatus"] = _CONDITION_EXECUTOR.status()
+    from wechat_notify import get_wechat_channel_state
+    wechat_health = get_wechat_channel_state()
+    snap["wechatDelivery"] = wechat_health
+    snap["wechatError"] = bool(wechat_health["consecutive_failures"] or wechat_health.get("outbox_error"))
+    snap["wechatSessionInvalid"] = wechat_health["session_invalid"]
     snap["updatedAt"] = clock_now
     snap["ts"] = int(datetime.now().timestamp() * 1000)
     phase = market_phase()
@@ -2436,10 +2461,12 @@ def publish_live_quote_patch() -> bool:
     if feed is None:
         return False
     if _CONDITION_BUY_ACTIVE:
+        started = time.perf_counter()
         _, published = publish_watch_snapshot(_collect_quote_runtime_rows(get_quote=feed.get_quote),
             indices=_QUOTE_RUNTIME_PANELS.get("indices") or (_last_watch_snapshot or {}).get("indices") or [], get_quote=feed.get_quote,
             fetch_sectors=False, include_strategy_panels=False,
             signal_updated_at=getattr(_CONDITION_EXECUTOR, "last_evaluated_at", None))
+        _QUOTE_RUNTIME_PANELS["viewBuildMs"] = round((time.perf_counter()-started)*1000, 1)
         return published
     base = _last_watch_snapshot
     if not isinstance(base, dict) or base.get("type") != "snapshot":
@@ -2700,7 +2727,7 @@ def publish_watch_snapshot(
         snapshot["signalUpdatedAt"] = signal_updated_at
         snapshot["signalScanSec"] = signal_scan_sec
     _enrich_snapshot_comprehensive_trade_returns(snapshot)
-    apply_feed_health(snapshot, _current_feed_health())
+    _stamp_snapshot_liveness(snapshot, clock=clock_now)
     keep_last = False
     published = False
     to_send: dict[str, Any]
@@ -3160,6 +3187,7 @@ def _invalidate_date_signal_caches(*, reason: str = "") -> None:
     _STRATEGY_PNL_CACHE.clear()
     _M1_CACHE.clear()
     _OPEN_AUDIT_CACHE.clear()
+    _QUOTE_GATE_CACHE.clear()
     _SIGNAL_CACHE_DAY = None
     note = f" · {reason}" if reason else ""
     print(f"[{_now()}] 已清空日期相关信号缓存（日线/回放/1m）{note}")
@@ -8078,9 +8106,16 @@ def audit_single_stock_open(
         if matches:
             cached["cached"] = True
             return cached
+    from opening_speed import opening_fast
+    fast_audit = fetcher is None and opening_fast()
     pull = fetcher or fetch_sina_spot
     try:
-        quote = pull(_sina_of(ck))
+        if fast_audit:
+            from quote_feed import fetch_open_audit_quote
+            spot = fetch_open_audit_quote(_sina_of(ck))
+            quote = _quote_from_sina_spot(spot) if spot else None
+        else:
+            quote = pull(_sina_of(ck))
     except Exception as e:  # noqa: BLE001
         return {
             "ok": False,
@@ -8101,7 +8136,7 @@ def audit_single_stock_open(
         "reason": reason,
         "audited_open": audited_open,
         "quote_ts": str((quote or {}).get("last_ts") or ""),
-        "source": "single_stock_sina",
+        "source": "single_stock_parallel" if fast_audit else "single_stock_sina",
         "cached": False,
     }
     if reason is None:
@@ -8493,6 +8528,22 @@ def freeze_overnight_peak_for_session(
     return float(seed) if seed > 0 else 0.0
 
 
+_QUOTE_GATE_CACHE = {}
+
+
+def _quote_runtime_gate(w, day, daily):
+    """Display-only cache, invalidated whenever the immutable daily-cache tuple is replaced."""
+    sina = w["sina"]
+    params = (_watch_pct(w), _watch_tick(w), str(w.get("prev_entry_mode") or "yin_or_small_yang"))
+    old = _QUOTE_GATE_CACHE.get(sina)
+    if old and old[0] is daily and old[1] == (day, params):
+        return old[2]
+    result = _entry_gate_detail(*_prev_bars_from_daily(daily[1], day),
+        entry_pct=params[0], tick=params[1], prev_entry_mode=params[2])
+    _QUOTE_GATE_CACHE[sina] = (daily, (day, params), result)
+    return result
+
+
 def _collect_quote_runtime_rows(get_quote=None):
     """Read-only live view: DB inventory + cached quotes/references, no replay IO."""
     from boot_holdings import build_boot_holdings
@@ -8501,6 +8552,7 @@ def _collect_quote_runtime_rows(get_quote=None):
     from watch_config import slot_meta
     model = _HOLDINGS_STORE.read_model()
     data = model.state["holdings"]
+    slots_for_rows = slot_meta(data)
     day = _calendar_signal_session()
     calculation_ready = is_threshold_ready()
     quote_fn = (_DATABASE_QUOTES_CLIENT.get if _CONDITION_BUY_ACTIVE and _DATABASE_QUOTES_CLIENT is not None
@@ -8519,7 +8571,7 @@ def _collect_quote_runtime_rows(get_quote=None):
             "买入时间": pos.get("buy_time"), "持仓最高": pos.get("peak_high"),
             "持仓最高时间": pos.get("peak_high_at"), "pool_src": w.get("pool_src"),
             "池来源": w.get("池来源") or ("自选" if w.get("self_watch") else "因子27"),
-            "_slot_meta": slot_meta(data), "_paper_read_model": model, "报价驱动": True,
+            "_slot_meta": dict(slots_for_rows), "_paper_read_model": model, "报价驱动": True,
             "持仓状态": held_position_status(pos.get("buy_time"), day) if int(pos.get("qty") or 0) > 0 else "空仓",
             "已触买": "否", "已触止损": "否", "阈值就绪": False,
             "价位小数": _px_digits(_watch_tick(w)), "阈值%": f"±{_watch_pct(w)*100:.1f}"})
@@ -8536,13 +8588,11 @@ def _collect_quote_runtime_rows(get_quote=None):
                 vol20_daily=_quote_daily_vol(w["sina"], day), tick=_watch_tick(w))
             row.update({"止损": stop, "卖出侧价": stop})
         daily = _DAILY_CACHE.get(w["sina"])
-        if calculation_ready and daily and daily[0] == day:
-            allow, gate, shape = _entry_gate_detail(*_prev_bars_from_daily(daily[1], day),
-                entry_pct=_watch_pct(w), tick=_watch_tick(w),
-                prev_entry_mode=str(w.get("prev_entry_mode") or "yin_or_small_yang"))
-            row.update({"过门OK": allow, "过门": gate, "前日形态": shape})
         book = data.get("condition_buy_orders") or {}
         order = (book.get("orders") or {}).get(code) if calculation_ready and book.get("session") == day else None
+        if calculation_ready and daily and daily[0] == day:
+            allow, gate, shape = _quote_runtime_gate(w, day, daily)
+            row.update({"过门OK": allow, "过门": gate, "前日形态": shape})
         if order:
             price = order["price"]
             row.update({"买点": price, "买入侧价": price, "阈值就绪": True,
@@ -8576,7 +8626,7 @@ def _collect_quote_runtime_rows(get_quote=None):
         _enrich_comprehensive_trade_return(row, read_model=model)
         rows.append(row)
     # Publish unfilled signals even when execution is blocked by slots/daily quota.
-    signal_slots = slot_meta(data)
+    signal_slots = dict(slots_for_rows)
     opened = {t.get("code") for t in model.state.get("trades", [])
               if str(t.get("side") or "").lower() == "buy"
               and str(t.get("session") or t.get("time") or "")[:10] == day
@@ -13142,6 +13192,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         )
         wechat_prepare_thread.start()
     stop = threading.Event()
+    quote_patch_wake = threading.Event()
     refresh_lock = threading.Lock()
     ws_hub = LocalWsHub()
     _ws_hub = ws_hub
@@ -13196,6 +13247,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             condition_worker.observe(sina, quote)
             strategy_worker.observe(sina, quote)
             feed.hub.updated.set()
+            quote_patch_wake.set()
         _DATABASE_QUOTES_CLIENT = DatabaseQuotes(stop=stop, on_committed=observe_quote,
             log=lambda msg: print(f"[{_now()}] {msg}"))
         feed.hub.on_quote = _DATABASE_QUOTES_CLIENT.observe
@@ -13392,10 +13444,15 @@ def cmd_watch(args: argparse.Namespace) -> None:
         """现价/涨跌幅快刷：不跑 collect_rows，跟 SSE/新浪 tick 走。"""
         last = 0.0
         while not stop.is_set():
-            feed.wait_update(timeout=1.0)
+            if _CONDITION_BUY_ACTIVE:
+                quote_patch_wake.wait(timeout=1.0)
+                quote_patch_wake.clear()
+            else:
+                feed.wait_update(timeout=1.0)
             if stop.is_set():
                 break
-            wait_more = _QUOTE_PATCH_MIN_SEC - (time.monotonic() - last)
+            from opening_speed import view_interval
+            wait_more = view_interval() - (time.monotonic() - last)
             if wait_more > 0 and stop.wait(wait_more):
                 break
             last = time.monotonic()

@@ -36,6 +36,26 @@ class LoginTests(unittest.TestCase):
             (state/'accounts/old-im-bot.json').write_text('{}')
             self.assertEqual(_current_weixin_account(cfg), cfg)
 
+    def test_probe_distinguishes_running_channel_and_invalid_session(self):
+        login = WechatLogin()
+        with patch('wechat_notify.weixin_channel_ready', return_value=(True, 'ok')), \
+             patch('wechat_notify.context_token_status', return_value=(True, 'exists')), \
+             patch('wechat_notify.get_wechat_channel_state', return_value={'session_invalid': True}), \
+             patch('wechat_notify.context_token_refreshed_since', return_value=False):
+            login._probe()
+        self.assertTrue(login.channel_ready)
+        self.assertEqual(login.session_state, 'invalid')
+        self.assertIn('先给机器人发一条消息', login.state['message'])
+
+    def test_probe_failure_cannot_leave_channel_marked_connected(self):
+        login = WechatLogin()
+        login.state['status'] = 'connected'
+        with patch('wechat_notify.weixin_channel_ready', return_value=(False, 'offline')), \
+             patch('wechat_notify.context_token_status', return_value=(False, 'missing')):
+            login._probe()
+        self.assertFalse(login.channel_ready)
+        self.assertEqual(login.state['status'], 'error')
+
     def test_global_npm_cli_uses_its_sibling_node(self):
         from wechat_notify import _resolve_openclaw_node
         with TemporaryDirectory() as temp:
@@ -92,7 +112,7 @@ class LoginTests(unittest.TestCase):
         login._line('https://liteapp.weixin.qq.com/q/new-code')
         self.assertTrue(login.state['loginUrl'].endswith('new-code'))
         login._line('✅ 与微信连接成功！')
-        self.assertEqual(login.state['status'], 'connected')
+        self.assertEqual(login.state['status'], 'reconnecting')
         self.assertIsNone(login.state['loginUrl'])
 
     def test_unrelated_output_and_tokens_are_never_returned(self):
@@ -125,6 +145,22 @@ class LoginTests(unittest.TestCase):
         self.assertEqual(login.state['status'], 'error')
         self.assertIsNone(login.state['loginUrl'])
         self.assertEqual(spawn.call_args.args[0], ['node', 'cli.mjs', 'channels', 'login', '--channel', 'openclaw-weixin'])
+
+    def test_confirmed_login_reloads_gateway_before_reporting_ready(self):
+        login = WechatLogin()
+        proc = Mock(stdout=io.StringIO('✅ 与微信连接成功！\n'))
+        proc.poll.return_value = 0
+        with patch('wechat_notify.load_config', return_value={}), \
+             patch('wechat_notify._env_with_node', return_value={}), \
+             patch('wechat_notify._resolve_openclaw_node', return_value=('node', ['cli.mjs'])), \
+             patch('wechat_login.subprocess.Popen', return_value=proc), \
+             patch('wechat_notify.ensure_openclaw_gateway', return_value=(True, 'ok')) as restart, \
+             patch('wechat_notify.wait_weixin_channel_ready', return_value=(True, 'ok')) as ready:
+            login._run()
+        restart.assert_called_once_with(config={}, restart=True)
+        ready.assert_called_once()
+        self.assertEqual(login.state['status'], 'connected')
+        self.assertTrue(login.channel_ready)
 
     def test_close_kills_a_pending_login_process(self):
         login = WechatLogin()

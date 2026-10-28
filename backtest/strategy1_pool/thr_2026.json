@@ -1,0 +1,1005 @@
+{
+  "as_of": "2026-10-27",
+  "fit_start": "20260101",
+  "fit_end": "2026-10-27",
+  "rule": "日线开盘突破；买/止损同 thr；{2%,2.5%,3%} 夏普最高，并列看收益，再靠近 2.5%",
+  "candidates": [
+    0.02,
+    0.025,
+    0.03
+  ],
+  "default_thr": 0.025,
+  "n_pool": 24,
+  "thr_dist": {
+    "3.0": 9,
+    "2.5": 7,
+    "2.0": 8
+  },
+  "disclaimer": "研究用途，与策略十六算法保持100%同源对齐。",
+  "thrs": {
+    "600330": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 50,
+      "sharpe": 2.1577,
+      "ret_pct": 146.81,
+      "mdd_pct": 33.11,
+      "excess_pct": 83.43,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 59,
+          "sharpe": 1.5351,
+          "ret_pct": 76.21,
+          "mdd_pct": 26.67,
+          "excess_pct": 12.84
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 54,
+          "sharpe": 1.635,
+          "ret_pct": 83.5,
+          "mdd_pct": 30.83,
+          "excess_pct": 20.12
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 50,
+          "sharpe": 2.1577,
+          "ret_pct": 146.81,
+          "mdd_pct": 33.11,
+          "excess_pct": 83.43
+        }
+      ],
+      "n_bars": 194,
+      "name": "天通股份"
+    },
+    "600552": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 44,
+      "sharpe": 1.2041,
+      "ret_pct": 41.21,
+      "mdd_pct": 33.36,
+      "excess_pct": 34.04,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 50,
+          "sharpe": 1.0437,
+          "ret_pct": 34.23,
+          "mdd_pct": 26.52,
+          "excess_pct": 27.05
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 44,
+          "sharpe": 1.2041,
+          "ret_pct": 41.21,
+          "mdd_pct": 33.36,
+          "excess_pct": 34.04
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 34,
+          "sharpe": 1.018,
+          "ret_pct": 32.47,
+          "mdd_pct": 31.83,
+          "excess_pct": 25.29
+        }
+      ],
+      "n_bars": 194,
+      "name": "凯盛科技"
+    },
+    "601208": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 51,
+      "sharpe": 1.9917,
+      "ret_pct": 100.23,
+      "mdd_pct": 24.03,
+      "excess_pct": 68.8,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 61,
+          "sharpe": 1.0387,
+          "ret_pct": 34.74,
+          "mdd_pct": 23.75,
+          "excess_pct": 3.31
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 51,
+          "sharpe": 1.9917,
+          "ret_pct": 100.23,
+          "mdd_pct": 24.03,
+          "excess_pct": 68.8
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 46,
+          "sharpe": 1.2885,
+          "ret_pct": 52.27,
+          "mdd_pct": 29.3,
+          "excess_pct": 20.84
+        }
+      ],
+      "n_bars": 194,
+      "name": "东材科技"
+    },
+    "002636": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 50,
+      "sharpe": 2.809,
+      "ret_pct": 214.75,
+      "mdd_pct": 29.88,
+      "excess_pct": -5.82,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 53,
+          "sharpe": 2.2347,
+          "ret_pct": 132.51,
+          "mdd_pct": 30.38,
+          "excess_pct": -88.05
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 50,
+          "sharpe": 2.809,
+          "ret_pct": 214.75,
+          "mdd_pct": 29.88,
+          "excess_pct": -5.82
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 46,
+          "sharpe": 2.7167,
+          "ret_pct": 214.19,
+          "mdd_pct": 35.97,
+          "excess_pct": -6.37
+        }
+      ],
+      "n_bars": 194,
+      "name": "金安国纪"
+    },
+    "600338": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.3802,
+      "ret_pct": 47.65,
+      "mdd_pct": 31.72,
+      "excess_pct": 75.53,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 48,
+          "sharpe": 0.8543,
+          "ret_pct": 23.74,
+          "mdd_pct": 40.23,
+          "excess_pct": 51.61
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 38,
+          "sharpe": 1.0027,
+          "ret_pct": 30.24,
+          "mdd_pct": 33.65,
+          "excess_pct": 58.11
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.3802,
+          "ret_pct": 47.65,
+          "mdd_pct": 31.72,
+          "excess_pct": 75.53
+        }
+      ],
+      "n_bars": 194,
+      "name": "西藏珠峰"
+    },
+    "002104": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 40,
+      "sharpe": -1.4393,
+      "ret_pct": -34.13,
+      "mdd_pct": 42.13,
+      "excess_pct": 17.17,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 40,
+          "sharpe": -1.4393,
+          "ret_pct": -34.13,
+          "mdd_pct": 42.13,
+          "excess_pct": 17.17
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 34,
+          "sharpe": -2.5282,
+          "ret_pct": -50.67,
+          "mdd_pct": 52.28,
+          "excess_pct": 0.64
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 28,
+          "sharpe": -3.1232,
+          "ret_pct": -57.25,
+          "mdd_pct": 57.78,
+          "excess_pct": -5.95
+        }
+      ],
+      "n_bars": 194,
+      "name": "恒宝股份"
+    },
+    "603301": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 2,
+      "sharpe": -0.3248,
+      "ret_pct": -1.02,
+      "mdd_pct": 3.23,
+      "excess_pct": 5.01,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 10,
+          "sharpe": -1.2629,
+          "ret_pct": -5.84,
+          "mdd_pct": 12.51,
+          "excess_pct": 0.19
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 6,
+          "sharpe": -0.5303,
+          "ret_pct": -2.43,
+          "mdd_pct": 8.07,
+          "excess_pct": 3.59
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 2,
+          "sharpe": -0.3248,
+          "ret_pct": -1.02,
+          "mdd_pct": 3.23,
+          "excess_pct": 5.01
+        }
+      ],
+      "n_bars": 61,
+      "name": "振德医疗"
+    },
+    "600301": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 31,
+      "sharpe": 0.607,
+      "ret_pct": 13.95,
+      "mdd_pct": 35.88,
+      "excess_pct": -9.71,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 42,
+          "sharpe": 0.2305,
+          "ret_pct": 0.95,
+          "mdd_pct": 28.06,
+          "excess_pct": -22.7
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 38,
+          "sharpe": 0.3267,
+          "ret_pct": 3.79,
+          "mdd_pct": 34.92,
+          "excess_pct": -19.87
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 31,
+          "sharpe": 0.607,
+          "ret_pct": 13.95,
+          "mdd_pct": 35.88,
+          "excess_pct": -9.71
+        }
+      ],
+      "n_bars": 189,
+      "name": "华锡有色"
+    },
+    "002093": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 23,
+      "sharpe": -0.0968,
+      "ret_pct": -4.64,
+      "mdd_pct": 25.91,
+      "excess_pct": 34.67,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 23,
+          "sharpe": -0.0968,
+          "ret_pct": -4.64,
+          "mdd_pct": 25.91,
+          "excess_pct": 34.67
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 22,
+          "sharpe": -1.3766,
+          "ret_pct": -27.29,
+          "mdd_pct": 36.49,
+          "excess_pct": 12.02
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 16,
+          "sharpe": -0.9657,
+          "ret_pct": -18.65,
+          "mdd_pct": 30.1,
+          "excess_pct": 20.65
+        }
+      ],
+      "n_bars": 194,
+      "name": "国脉科技"
+    },
+    "601020": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 9,
+      "sharpe": 1.1077,
+      "ret_pct": 8.34,
+      "mdd_pct": 16.19,
+      "excess_pct": 21.28,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 13,
+          "sharpe": 0.0778,
+          "ret_pct": -0.96,
+          "mdd_pct": 22.01,
+          "excess_pct": 11.98
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 10,
+          "sharpe": 0.2546,
+          "ret_pct": 0.47,
+          "mdd_pct": 23.73,
+          "excess_pct": 13.41
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 9,
+          "sharpe": 1.1077,
+          "ret_pct": 8.34,
+          "mdd_pct": 16.19,
+          "excess_pct": 21.28
+        }
+      ],
+      "n_bars": 61,
+      "name": "华钰矿业"
+    },
+    "601609": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 29,
+      "sharpe": 0.6136,
+      "ret_pct": 12.82,
+      "mdd_pct": 19.24,
+      "excess_pct": 21.06,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 34,
+          "sharpe": 0.6087,
+          "ret_pct": 11.35,
+          "mdd_pct": 21.38,
+          "excess_pct": 19.59
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 29,
+          "sharpe": 0.6136,
+          "ret_pct": 12.82,
+          "mdd_pct": 19.24,
+          "excess_pct": 21.06
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 24,
+          "sharpe": -0.0111,
+          "ret_pct": -4.95,
+          "mdd_pct": 19.38,
+          "excess_pct": 3.29
+        }
+      ],
+      "n_bars": 194,
+      "name": "金田股份"
+    },
+    "600353": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 39,
+      "sharpe": 1.0452,
+      "ret_pct": 39.35,
+      "mdd_pct": 40.69,
+      "excess_pct": 6.26,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 51,
+          "sharpe": 0.0346,
+          "ret_pct": -7.96,
+          "mdd_pct": 32.6,
+          "excess_pct": -41.05
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 45,
+          "sharpe": 0.8905,
+          "ret_pct": 30.55,
+          "mdd_pct": 36.23,
+          "excess_pct": -2.54
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 39,
+          "sharpe": 1.0452,
+          "ret_pct": 39.35,
+          "mdd_pct": 40.69,
+          "excess_pct": 6.26
+        }
+      ],
+      "n_bars": 194,
+      "name": "旭光电子"
+    },
+    "002779": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 32,
+      "sharpe": -1.9912,
+      "ret_pct": -49.77,
+      "mdd_pct": 59.72,
+      "excess_pct": -23.22,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 45,
+          "sharpe": -2.2616,
+          "ret_pct": -51.65,
+          "mdd_pct": 57.99,
+          "excess_pct": -25.1
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 40,
+          "sharpe": -2.136,
+          "ret_pct": -50.32,
+          "mdd_pct": 61.0,
+          "excess_pct": -23.76
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 32,
+          "sharpe": -1.9912,
+          "ret_pct": -49.77,
+          "mdd_pct": 59.72,
+          "excess_pct": -23.22
+        }
+      ],
+      "n_bars": 194,
+      "name": "中坚科技"
+    },
+    "601068": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 5,
+      "sharpe": 0.3741,
+      "ret_pct": 1.29,
+      "mdd_pct": 7.71,
+      "excess_pct": 4.58,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 5,
+          "sharpe": 0.3741,
+          "ret_pct": 1.29,
+          "mdd_pct": 7.71,
+          "excess_pct": 4.58
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 4,
+          "sharpe": -0.4504,
+          "ret_pct": -2.61,
+          "mdd_pct": 9.74,
+          "excess_pct": 0.67
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 4,
+          "sharpe": -1.8792,
+          "ret_pct": -9.88,
+          "mdd_pct": 14.76,
+          "excess_pct": -6.6
+        }
+      ],
+      "n_bars": 61,
+      "name": "中铝国际"
+    },
+    "600967": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 11,
+      "sharpe": 2.199,
+      "ret_pct": 25.78,
+      "mdd_pct": 11.94,
+      "excess_pct": 10.99,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 11,
+          "sharpe": 2.199,
+          "ret_pct": 25.78,
+          "mdd_pct": 11.94,
+          "excess_pct": 10.99
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 10,
+          "sharpe": 1.1049,
+          "ret_pct": 10.89,
+          "mdd_pct": 14.72,
+          "excess_pct": -3.91
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 8,
+          "sharpe": 1.5996,
+          "ret_pct": 17.95,
+          "mdd_pct": 10.39,
+          "excess_pct": 3.16
+        }
+      ],
+      "n_bars": 61,
+      "name": "内蒙一机"
+    },
+    "002273": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 43,
+      "sharpe": 0.1846,
+      "ret_pct": -0.96,
+      "mdd_pct": 29.3,
+      "excess_pct": 11.43,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 49,
+          "sharpe": 0.0911,
+          "ret_pct": -3.43,
+          "mdd_pct": 21.43,
+          "excess_pct": 8.97
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 43,
+          "sharpe": 0.1846,
+          "ret_pct": -0.96,
+          "mdd_pct": 29.3,
+          "excess_pct": 11.43
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 36,
+          "sharpe": -0.1719,
+          "ret_pct": -12.37,
+          "mdd_pct": 33.92,
+          "excess_pct": 0.03
+        }
+      ],
+      "n_bars": 194,
+      "name": "水晶光电"
+    },
+    "002015": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 31,
+      "sharpe": 0.5645,
+      "ret_pct": 12.54,
+      "mdd_pct": 41.4,
+      "excess_pct": -14.09,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 46,
+          "sharpe": 0.5561,
+          "ret_pct": 12.41,
+          "mdd_pct": 36.57,
+          "excess_pct": -14.22
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 39,
+          "sharpe": -0.0106,
+          "ret_pct": -7.5,
+          "mdd_pct": 46.86,
+          "excess_pct": -34.13
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 31,
+          "sharpe": 0.5645,
+          "ret_pct": 12.54,
+          "mdd_pct": 41.4,
+          "excess_pct": -14.09
+        }
+      ],
+      "n_bars": 194,
+      "name": "协鑫能科"
+    },
+    "002929": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 33,
+      "sharpe": 1.371,
+      "ret_pct": 52.63,
+      "mdd_pct": 41.95,
+      "excess_pct": 24.81,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 49,
+          "sharpe": 0.6779,
+          "ret_pct": 17.24,
+          "mdd_pct": 53.83,
+          "excess_pct": -10.58
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 40,
+          "sharpe": 1.332,
+          "ret_pct": 50.95,
+          "mdd_pct": 35.0,
+          "excess_pct": 23.13
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 33,
+          "sharpe": 1.371,
+          "ret_pct": 52.63,
+          "mdd_pct": 41.95,
+          "excess_pct": 24.81
+        }
+      ],
+      "n_bars": 194,
+      "name": "润建股份"
+    },
+    "000581": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 16,
+      "sharpe": -0.5646,
+      "ret_pct": -10.33,
+      "mdd_pct": 21.55,
+      "excess_pct": -0.34,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 16,
+          "sharpe": -0.5646,
+          "ret_pct": -10.33,
+          "mdd_pct": 21.55,
+          "excess_pct": -0.34
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 12,
+          "sharpe": -1.1957,
+          "ret_pct": -19.83,
+          "mdd_pct": 29.64,
+          "excess_pct": -9.84
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 7,
+          "sharpe": -1.2839,
+          "ret_pct": -20.3,
+          "mdd_pct": 31.66,
+          "excess_pct": -10.31
+        }
+      ],
+      "n_bars": 194,
+      "name": "威孚高科"
+    },
+    "601519": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 8,
+      "sharpe": 3.2672,
+      "ret_pct": 33.58,
+      "mdd_pct": 9.18,
+      "excess_pct": 11.22,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 10,
+          "sharpe": 2.5635,
+          "ret_pct": 27.68,
+          "mdd_pct": 10.6,
+          "excess_pct": 5.31
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 8,
+          "sharpe": 3.2672,
+          "ret_pct": 33.58,
+          "mdd_pct": 9.18,
+          "excess_pct": 11.22
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 6,
+          "sharpe": 3.1955,
+          "ret_pct": 31.69,
+          "mdd_pct": 7.48,
+          "excess_pct": 9.32
+        }
+      ],
+      "n_bars": 61,
+      "name": "大智慧"
+    },
+    "002922": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 56,
+      "sharpe": -0.3167,
+      "ret_pct": -15.26,
+      "mdd_pct": 40.89,
+      "excess_pct": 22.27,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 56,
+          "sharpe": -0.3167,
+          "ret_pct": -15.26,
+          "mdd_pct": 40.89,
+          "excess_pct": 22.27
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 46,
+          "sharpe": -0.3955,
+          "ret_pct": -17.58,
+          "mdd_pct": 39.62,
+          "excess_pct": 19.95
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 40,
+          "sharpe": -1.2326,
+          "ret_pct": -35.94,
+          "mdd_pct": 48.03,
+          "excess_pct": 1.58
+        }
+      ],
+      "n_bars": 194,
+      "name": "伊戈尔"
+    },
+    "002152": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 4,
+      "sharpe": 0.5859,
+      "ret_pct": 1.86,
+      "mdd_pct": 6.29,
+      "excess_pct": 5.94,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 4,
+          "sharpe": 0.5859,
+          "ret_pct": 1.86,
+          "mdd_pct": 6.29,
+          "excess_pct": 5.94
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 3,
+          "sharpe": -2.0599,
+          "ret_pct": -8.02,
+          "mdd_pct": 12.69,
+          "excess_pct": -3.94
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 1,
+          "sharpe": -2.3809,
+          "ret_pct": -10.57,
+          "mdd_pct": 14.59,
+          "excess_pct": -6.49
+        }
+      ],
+      "n_bars": 61,
+      "name": "广电运通"
+    },
+    "603920": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 18,
+      "sharpe": 0.3331,
+      "ret_pct": 1.3,
+      "mdd_pct": 13.88,
+      "excess_pct": -5.95,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 18,
+          "sharpe": 0.3331,
+          "ret_pct": 1.3,
+          "mdd_pct": 13.88,
+          "excess_pct": -5.95
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 15,
+          "sharpe": 0.0812,
+          "ret_pct": -1.21,
+          "mdd_pct": 16.56,
+          "excess_pct": -8.46
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 13,
+          "sharpe": -0.8514,
+          "ret_pct": -9.71,
+          "mdd_pct": 16.76,
+          "excess_pct": -16.96
+        }
+      ],
+      "n_bars": 61,
+      "name": "世运电路"
+    },
+    "002065": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 3,
+      "sharpe": -0.3761,
+      "ret_pct": -2.71,
+      "mdd_pct": 16.62,
+      "excess_pct": -2.4,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 6,
+          "sharpe": -1.4562,
+          "ret_pct": -8.08,
+          "mdd_pct": 20.75,
+          "excess_pct": -7.78
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 3,
+          "sharpe": -0.3761,
+          "ret_pct": -2.71,
+          "mdd_pct": 16.62,
+          "excess_pct": -2.4
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 3,
+          "sharpe": -1.5281,
+          "ret_pct": -9.02,
+          "mdd_pct": 21.68,
+          "excess_pct": -8.72
+        }
+      ],
+      "n_bars": 61,
+      "name": "东华软件"
+    }
+  }
+}

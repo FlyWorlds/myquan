@@ -39,6 +39,8 @@ export function wsStatusFromSnapshot(
   data: {
     boot?: boolean
     quoteStale?: boolean
+    quotePartial?: boolean
+    staleSymbols?: string[]
     feedOk?: boolean
     quoteAt?: string | null
     clock?: string
@@ -50,6 +52,9 @@ export function wsStatusFromSnapshot(
   const stoppedAt = data.quoteAt || data.clock || data.updatedAt || ''
   if (data.quoteStale || (data.feedOk === false && data.quoteAt)) {
     return '行情中断，数据停在 ' + stoppedAt
+  }
+  if (data.quotePartial) {
+    return `部分行情缺失或过期（${data.staleSymbols?.length || 0}只），正在自动补拉`
   }
   return null
 }

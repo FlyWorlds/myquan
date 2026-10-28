@@ -82,6 +82,8 @@ def classify_snapshot_health(snapshot: dict[str, Any]) -> dict[str, Any]:
                 quoteAgeSec=snapshot.get("quoteAgeSec"),
             )
         )
+    if bool(snapshot.get("quotePartial")):
+        issues.append(classify_health_issue("quote_partial"))
     if bool(snapshot.get("dailyMissing")) or bool(snapshot.get("dailyGap")):
         issues.append(classify_health_issue("daily_missing"))
     if bool(snapshot.get("wechatError")) or bool(snapshot.get("wechatSessionInvalid")):
