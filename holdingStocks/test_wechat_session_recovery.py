@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import importlib
+import json
+import os
 import sys
 import tempfile
 import threading
@@ -299,6 +301,97 @@ class TestWechatSessionRecovery(unittest.TestCase):
         self.assertTrue(st["healthy"], st)
         self.assertEqual(st["pending_notification_count"], 0)
         self.assertGreaterEqual(len(self._calls), 1)
+
+    def test_async_alert_not_marked_sent_until_delivery(self) -> None:
+        """入队不算已送达：重启冷却不得吞掉启动触发信号。"""
+        row = {
+            "代码": "600330",
+            "名称": "天通股份",
+            "现价": 12.34,
+            "买点": 12.50,
+            "止损": 11.80,
+            "价位小数": 2,
+            "持仓": 0,
+            "预警": "将买入",
+            "持仓状态": "待买入",
+            "已触买": "否",
+            "已触止损": "否",
+            "近买点": True,
+            "过门OK": True,
+        }
+        with patch.object(wn, "start_wechat_delivery_worker"):
+            pushed = wn.notify_watch_rows([row], config=self._cfg)
+            self.assertEqual(len(pushed), 1)
+            raw = json.loads(self._state.read_text(encoding="utf-8"))
+            self.assertEqual(raw.get("sent") or {}, {})
+            self.assertGreaterEqual(len(raw.get("pending") or []), 1)
+            # 模拟进程重启：内存清空，磁盘 pending 装回
+            with wn._pending_lock:
+                wn._pending.clear()
+            wn._pending_restored = False
+            n = wn.restore_persisted_pending()
+            self.assertGreaterEqual(n, 1)
+            # 冷却不得挡住未发出的同一信号
+            pushed2 = wn.notify_watch_rows([row], config=self._cfg)
+        self.assertEqual(len(pushed2), 1)
+        self.assertEqual(wn.get_wechat_channel_state()["pending_notification_count"], 1)
+
+    def test_pending_flush_writes_sent(self) -> None:
+        wn.enqueue_notification(
+            message="alert-1",
+            dedupe_key="k-sent",
+            code="600330",
+            alert_type="将买入",
+            config=self._cfg,
+            bypass_storm=True,
+        )
+
+        def _direct(message, *, config=None, retries=None):
+            return True, "ok"
+
+        n = wn._flush_pending_queue(config=self._cfg, send_fn=_direct)
+        self.assertEqual(n, 1)
+        raw = json.loads(self._state.read_text(encoding="utf-8"))
+        self.assertIn("k-sent", raw.get("sent") or {})
+        self.assertEqual(raw.get("pending") or [], [])
+
+    def test_no_auto_qr_when_local_account_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {"OPENCLAW_STATE_DIR": temp}):
+            state = Path(temp) / "openclaw-weixin"
+            (state / "accounts").mkdir(parents=True)
+            (state / "accounts.json").write_text(json.dumps(["my-im-bot"]), encoding="utf-8")
+            (state / "accounts" / "my-im-bot.json").write_text(
+                json.dumps({"userId": "same-user@im.wechat", "token": "SECRET"}),
+                encoding="utf-8",
+            )
+            cfg = {
+                "channel": "openclaw-weixin",
+                "account": "my-im-bot",
+                "target": "same-user@im.wechat",
+                "login_on_start": False,
+                "login_on_channel_fail": True,
+            }
+            self.assertTrue(wn.weixin_account_credentials_exist(config=cfg))
+            self.assertFalse(wn.should_auto_channels_login(config=cfg, channel_fail=True))
+            self.assertTrue(wn.should_auto_channels_login(config=cfg, force=True))
+
+    def test_first_time_login_only_when_flag_on(self) -> None:
+        with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {"OPENCLAW_STATE_DIR": temp}):
+            cfg = {
+                "channel": "openclaw-weixin",
+                "account": "missing-bot",
+                "target": "u@im.wechat",
+                "login_on_start": False,
+                "login_on_channel_fail": False,
+            }
+            self.assertFalse(wn.weixin_account_credentials_exist(config=cfg))
+            self.assertFalse(wn.should_auto_channels_login(config=cfg, channel_fail=True))
+            cfg["login_on_channel_fail"] = True
+            self.assertTrue(wn.should_auto_channels_login(config=cfg, channel_fail=True))
+
+    def test_default_skips_qr_on_channel_fail(self) -> None:
+        self.assertFalse(wn._DEFAULT_CONFIG["login_on_start"])
+        self.assertFalse(wn._DEFAULT_CONFIG["login_on_channel_fail"])
 
 
 if __name__ == "__main__":
