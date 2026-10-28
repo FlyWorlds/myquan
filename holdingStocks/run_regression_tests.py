@@ -57,6 +57,7 @@ REGRESSION_MODULES = (
     "test_strategy_simulator_lifecycle",
     "test_gap_rebuy",
     "test_strategy_cumulative_regression",
+    "strategy.test_strategy_auto_discovery",
     "strategy.test_factor26_exit_priority",
     "strategy.test_factor26_characterization",
     "strategy.test_factor29",

@@ -168,6 +168,7 @@ class TestStrategy1DefaultPool(unittest.TestCase):
                 "strategy15",
             ],
         )
+        self.assertNotIn("strategy17", ids)
 
 
 if __name__ == "__main__":

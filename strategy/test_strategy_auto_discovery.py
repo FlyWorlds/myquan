@@ -34,6 +34,14 @@ class TestStrategyAutoDiscovery(unittest.TestCase):
         self.assertEqual(set(plugins._DISCOVERED), _EXPECTED_IDS)
         self.assertIn("strategy13", plugins._SKIP_AUTO_IMPORT)
         self.assertNotIn("strategy13", ids)
+        self.assertNotIn("strategy17", ids)
+
+    def test_factor28_and_strategy17_removed(self) -> None:
+        from strategy.core.factor_registry import list_factors
+        from strategy.core.strategy_registry import list_strategy_specs
+
+        self.assertNotIn("strategy17", {s.id for s in list_strategy_specs()})
+        self.assertNotIn("factor28", {f.id for f in list_factors()})
 
     def test_default_strategy1_still_marked(self) -> None:
         from strategy.core.strategy_registry import get_strategy_spec

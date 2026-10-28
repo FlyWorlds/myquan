@@ -779,7 +779,7 @@ class SinaBatchPoller:
 
 
 class QuoteFeedManager:
-    """管理 SSE（热池）+ 新浪批量（全池，含叠加观察池）。
+    """管理 SSE（热池）+ 新浪批量（热池其余）。
 
     同花顺/通达信用专有推送；免费源不能对上百只各开一条 SSE，否则连接风暴。
     默认：SSE 只挂 ``sse_sinas``（持仓+默认策略）；``sinas`` 全量走新浪批量。

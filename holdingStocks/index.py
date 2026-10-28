@@ -18,7 +18,7 @@
     （levels / signal / replay / first_session_exit_fill）。
 
 功能：
-  · 拉取当日实时行情（SSE 热池=持仓+默认策略；新浪批量=全池含叠加观察；叠加池延后）
+  · 拉取当日实时行情（SSE 热池=持仓+默认策略；新浪批量=热池其余）
   · 因子26 实仓：按成本+观测持仓峰值算动态止盈价；报价顺序判触达
   · 阈值与信号：因子26 多层止盈（与 pullback_wave_stop 同源）
   · 因子2 与 strategy/dd_alert 同源
