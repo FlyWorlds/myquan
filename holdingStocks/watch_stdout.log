@@ -1,103 +1,1703 @@
-����������ȡ����/�����߲� seed��
-[2026-08-06 09:28:16] SSE ������������������������
-[2026-08-06 09:28:16] ����Դ������: SSE��11 + ������������ (sz001389, sh600552, sh603083, sh601208, sh603306, sz002335, sz001339, sz002636, sh600105, sz000880, sh600330)
-[2026-08-06 09:28:16] SSE sh603306 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603306&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:16] SSE sz002335 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002335&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:16] SSE sh600330 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600330&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:16] SSE sh600105 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600105&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:16] SSE sz000880 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.000880&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:16] SSE sz002636 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002636&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:16] SSE sz001339 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.001339&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:16] SSE sh600552 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600552&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:16] SSE sz001389 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.001389&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:17] SSE sh603083 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603083&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:17] SSE sh601208 �Ͽ�: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:18] SSE sh600552 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600552&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:18] SSE sh600330 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600330&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:18] SSE sh600105 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600105&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:18] SSE sz000880 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.000880&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:18] SSE sz001389 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.001389&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:18] SSE sz001339 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.001339&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:18] SSE sh603306 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603306&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:18] SSE sz002335 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002335&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:18] SSE sh601208 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))[2026-08-06 09:28:18] SSE sz002636 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002636&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+[2026-10-29 10:45:28] 数据库持仓就绪，revision=25918
+[runtime-documents] 历史 JSON 入库: {'paper_ledger_files': 'deleted'}
+[2026-10-29 10:45:28] 盯盘启动套件：OpenClaw → 微信自检 后台并行（行情/API 不等待）
+[2026-10-29 10:45:28] [0/3] 检查 openclaw-weixin context_token 磁盘回落补丁…
+[2026-10-29 10:45:28] 行情分层: SSE热池 26 只（帽 48）· 新浪批量 26 只（含策略一）· 紫阳等大池独立轮询
+[2026-10-29 10:45:28] 补丁: patch-fail:ERROR: 未找到 openclaw-weixin inbound.js
+[2026-10-29 10:45:28] [1/3] 检查/启动 OpenClaw Gateway…
+[2026-10-29 10:45:28] OpenClaw Gateway start…
+条件买单已启用：9:25后过门空仓武装；9:30起新鲜报价≥挂单价，按首次接收触发顺序模拟成交；旧全量扫描不再自动买入
+盯盘 API 已启动: http://127.0.0.1:8765/
+冷启动放到后台：新浪批量 + 预热日线 + 东财 SSE（页面可先连上）
+前端静态: http://127.0.0.1:8765/ （watch-ui/dist）
+本地 WebSocket: ws://127.0.0.1:8765/ws
+策略同步: 策略一·援军战法 · 援军选股池 + 因子29竞价强度 + 因子33低点反弹 + 因子26多层止盈 + 因子2回撤预警
+行情: 热池（持仓+默认策略，≤48）SSE+新浪；叠加观察池（紫阳等，可至数百只）独立新浪分块轮询、不进信号扫描/不挡启动；因子26 报价驱动买卖（分钟仅研究回测） · 现价快刷≥0.4s · 信号扫描节流≥1s · 无推送保底 5s · 时钟心跳 2s · 板块在盯盘首屏之后后台加载 · 快照日志每 12 次 · Ctrl+C 停止
+开盘价定时: 每日 9:25 锁定开盘并算阈值；里程碑 09:15, 09:20, 09:25, 09:30
+信号窗口: 9:15 拉竞价 · 9:25 算阈值/过门 · 9:30 起触发买卖/止损/微信；9:15–9:30 不结算止损；周末/休市日不推预警、不自动成交
+当前阶段: 连续竞价·信号触发（9:30–11:30 / 13:00–15:00）
+个股阈值: 默认±2.5% · 焦点 600330±3.0% / 600552±2.5% / 600338±3.0% / 002104±2.0% / 603301±3.0% / 600301±3.0% / 002093±2.0% / 601020±3.0% / 600353±3.0% / 002779±3.0% / 601068±2.0% / 600967±2.0% / 002015±3.0% / 002929±3.0% / 000581±2.0% / 002922±2.0% / 002152±2.0% / 603920±2.0%
+微信预警: 开 · 复盘可另跑: python index.py review
+展示: 当日涨幅=现价/昨收；盈亏金额=持仓当日盈亏（勿与涨幅%混淆）
+冷启动：先上持仓首屏，再加载默认策略，最后异步补齐其它策略[2026-10-29 10:45:28] 下次早盘节点 [竞价开始·状态重置·今日盈亏按昨收] @ 2026-10-30 09:15:00（约 80972s）
 
-[2026-08-06 09:28:18] SSE sh603083 �Ͽ�: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603083&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
-[2026-08-06 09:28:20] SSE ������ sh600552 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sh600330 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sz001389 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sz000880 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sh600105 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sz001339 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sh601208 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sz002335 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sz002636 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sh603083 via push2delay.eastmoney.com
-[2026-08-06 09:28:20] SSE ������ sh603306 via push2delay.eastmoney.com
-����������: D:\Akquan\myquan\holdingStocks\holdings_report.html
-[2026-08-06 09:28:20] �´ο��̼�ˢ�� 001389 / 600552 / 603083 / 601208 / 603306 / 002335 / 001339 / 002636 / 600105 / 000880 / 600330 @ 2026-08-07 09:26:00��Լ 86260s��
-���̷���������: http://127.0.0.1:8765/holdings_report.html
-���� WebSocket: ws://127.0.0.1:8765/ws
-����ͬ��: ����1 ��2.5% �� ��ֹ��ȫ��
-����: ���� SSE + ������������ �� ˢ�½�����1s �� �����鱣�� 5s �� Ctrl+C ֹͣ
-���̼۶�ʱ: ÿ�� 09:26 ˢ�¶��̱�� (001389 / 600552 / 603083 / 601208 / 603306 / 002335 / 001339 / 002636 / 600105 / 000880 / 600330)
-չʾ: �����Ƿ�=�ּ�/���գ�ӯ�����=�ֲֵ���ӯ���������Ƿ�%������
-[2026-08-06 09:28:21] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:28:21] SSE �ָ�����ͣ������������
-[2026-08-06 09:28:27] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:28:33] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:28:37] SSE ������������������������
-[2026-08-06 09:28:40] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:28:46] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:28:51] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:28:57] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:03] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:09] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:17] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:22] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:27] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:33] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:39] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:44] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:51] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:56] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:29:59] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:00] SSE �ָ�����ͣ������������
-[2026-08-06 09:30:00] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:01] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:02] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:09] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:09] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:10] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:12] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:13] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:14] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:15] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:16] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:17] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:20] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:21] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:24] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:24] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:26] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:27] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:28] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:29] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:30] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:31] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:32] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:34] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:35] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:36] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:39] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:39] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:41] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:42] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:43] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:44] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:45] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:47] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:48] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:49] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:50] �����Ѹ��� �� holdings_report.html
-[2026-08-06 09:30:51] �����Ѹ��� �� holdings_report.html
+[2026-10-29 10:45:28] 已清空日期相关信号缓存（日线/回放/1m） · 启动强制
+[2026-10-29 10:45:28] 行情源已启动: SSE×26 热池 + 新浪批量×26 （叠加池不占 SSE）
+[2026-10-29 10:45:28] 股票名称缓存后台预热完成（5557 条）
+[2026-10-29 10:45:29] 个股画像板块反查后台预热完成（5581 只）
+[2026-10-29 10:45:29] 个股画像每日数据库同步失败（继续）: can only concatenate list (not "set") to list
+[2026-10-29 10:45:29] 盯盘/策略首屏已推送，后台开始拉板块轮动
+[2026-10-29 10:45:29] 板块轮动：盯盘已就绪，开始后台加载
+持仓首屏已推送: /Users/wangxiangyu/Documents/myquan/holdingStocks/holdings_watch.json（持仓 5/5 只 · 1.0s）
+[2026-10-29 10:45:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:29] 买入信号标注: 未入槽触买 2
+默认策略快照已推送: /Users/wangxiangyu/Documents/myquan/holdingStocks/holdings_watch.json（新增 21/21 只 · 0.5s）
+[2026-10-29 10:45:29] 后台补齐策略一池 0 只（session=2026-10-29 · 已收盘日线截至 2026-10-28）…
+[2026-10-29 10:45:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:29] 叠加池行情轮询启动：98 只 · 新浪分块50 · 3s/轮（不占 SSE）
+全量快照已推送: /Users/wangxiangyu/Documents/myquan/holdingStocks/holdings_watch.json（补齐 0.0s）
+[2026-10-29 10:45:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:30] 叠加池行情已更新 96 只
+[2026-10-29 10:45:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:34] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:34] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:34] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:34] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:34] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:45:34] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:34] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:34] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:34] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:45:34] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:34] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:34] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:34] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:34] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:34] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:34] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:45:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:40] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:40] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:40] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:40] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:40] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:40] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:40] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:40] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:40] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:46] 买入信号标注: 未入槽触买 2
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/entry.CFd7LUfs.css HTTP/1.1" 200 -
+[2026-10-29 10:45:46] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:46] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:46] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:46] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:46] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/BX7jMM04.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/DzQ6lzmM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/BGb5mcxM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/Do9--hjI.js HTTP/1.1" 200 -
+[2026-10-29 10:45:46] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:46] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:45:46] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:46] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:46] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:46] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:46] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:46] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:46] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:45:46] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:46] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:46] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/nz3QCZh6.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/error-404.DL_4WIao.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/CtdGnTF8.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/IInw_soH.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/error-500.I1Dtv2V5.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/C_e3qvna.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/B9r4aQbK.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/Evi8qh3U.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/uPeJZhvI.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/Du7g4LP9.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/index.BVxY47me.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/CeWsZ74j.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/CNIUgsVc.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/CrJI_3B2.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/DzQ6lzmM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:46] "GET /_nuxt/ClnnwaJ7.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/BGb5mcxM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /favicon.ico HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/Do9--hjI.js HTTP/1.1" 200 -
+[2026-10-29 10:45:47] 买入信号标注: 未入槽触买 2
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/CSRI_IMR.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/BDhRt6Jg.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/BHqS2E5V.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/Cltz7l1L.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/index.BzDABIlx.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/uLuPcL5o.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/jUj_7yHm.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/Brp6zyF-.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/nz3QCZh6.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/Crhpzow7.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/D8ZQL2jY.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:45:47] "GET /_nuxt/h1JneNW1.js HTTP/1.1" 200 -
+[2026-10-29 10:45:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:50] 快照已推送 → holdings_watch.json（累计第 12 次 · 每 12 次输出）
+[2026-10-29 10:45:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:55] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:55] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:55] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:45:55] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:55] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:55] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:55] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:55] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:45:55] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:55] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:55] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:55] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:55] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:55] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:55] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:45:55] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:45:55] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:45:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:45:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:06] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:06] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:06] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:06] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:06] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:06] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:06] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:06] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:06] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:06] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:06] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:06] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+
+[2026-10-29 10:46:06] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:06] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:06] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:06] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:06] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:12] 快照已推送 → holdings_watch.json（累计第 24 次 · 每 12 次输出）
+[2026-10-29 10:46:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:14] Gateway 未就绪，尝试 restart…
+[2026-10-29 10:46:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:17] 买入信号标注: 未入槽触买 2
+[ACCOUNT_SNAPSHOT] recording unavailable (HTTPError); trading ledger unchanged
+[2026-10-29 10:46:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:18] 微信套件失败:
+OpenClaw Gateway 不可用: 找不到 openclaw/node
+[2026-10-29 10:46:18] --wechat-optional：继续盯盘并保留微信推送。请用微信给机器人发一条消息刷新会话；之后买卖/预警会自动推。
+[2026-10-29 10:46:18] 微信启动通知失败: 找不到 openclaw/node 命令，请确认已安装并在 PATH 中
+[2026-10-29 10:46:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:21] SSE sz002093 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002093&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:46:21] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:21] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:21] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:32] 叠加池行情已更新 96 只
+[2026-10-29 10:46:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:34] 快照已推送 → holdings_watch.json（累计第 36 次 · 每 12 次输出）
+[2026-10-29 10:46:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:45] 买入信号标注: 未入槽触买 2[2026-10-29 10:46:45] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:45] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:46:45] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:45] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:45] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:45] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:45] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:45] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:45] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:46:45] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:46:45] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:46:45] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:46:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:46:59] 快照已推送 → holdings_watch.json（累计第 48 次 · 每 12 次输出）
+[2026-10-29 10:46:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:13] 快照已推送 → holdings_watch.json（累计第 60 次 · 每 12 次输出）
+[2026-10-29 10:47:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:20] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:20] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:20] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:20] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:47:20] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:20] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:20] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+
+[2026-10-29 10:47:20] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:20] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:20] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:47:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:26] 买入信号标注: 未入槽触买 2
+[ACCOUNT_SNAPSHOT] recording unavailable (HTTPError); trading ledger unchanged
+[2026-10-29 10:47:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:32] 快照已推送 → holdings_watch.json（累计第 72 次 · 每 12 次输出）
+[2026-10-29 10:47:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:35] 叠加池行情已更新 96 只
+[2026-10-29 10:47:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:55] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:55] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:47:55] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:55] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:47:55] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:55] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:55] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:55] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+
+[2026-10-29 10:47:55] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:55] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:47:55] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:47:55] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:47:55] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:47:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:56] 快照已推送 → holdings_watch.json（累计第 84 次 · 每 12 次输出）
+[2026-10-29 10:47:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:47:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:14] 快照已推送 → holdings_watch.json（累计第 96 次 · 每 12 次输出）
+[2026-10-29 10:48:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:26] 买入信号标注: 未入槽触买 2
+[ACCOUNT_SNAPSHOT] recording unavailable (HTTPError); trading ledger unchanged
+[2026-10-29 10:48:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:30] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sh601208 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:48:30] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:48:30] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:48:30] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:48:30] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:48:30] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:48:30] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:48:30] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:48:30] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:48:30] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:48:30] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:48:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:36] 快照已推送 → holdings_watch.json（累计第 108 次 · 每 12 次输出）
+[2026-10-29 10:48:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:37] 叠加池行情已更新 96 只
+[2026-10-29 10:48:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:50] 快照已推送 → holdings_watch.json（累计第 120 次 · 每 12 次输出）
+[2026-10-29 10:48:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:48:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:05] SSE sh601208 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:49:05] SSE sh603301 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:49:05] SSE sz002152 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002152&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:49:05] SSE sh601519 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601519&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:49:05] SSE sh600967 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600967&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:49:05] SSE sh600301 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:49:05] SSE sh603920 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603920&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:49:05] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:05] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:05] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:05] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:05] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:05] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:49:05] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:05] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:05] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:49:05] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:05] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:05] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:05] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:05] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:49:05] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:05] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+
+[2026-10-29 10:49:05] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:05] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:49:05] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:09] 快照已推送 → holdings_watch.json（累计第 132 次 · 每 12 次输出）
+[2026-10-29 10:49:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:32] 快照已推送 → holdings_watch.json（累计第 144 次 · 每 12 次输出）
+[2026-10-29 10:49:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:39] 叠加池行情已更新 96 只
+[2026-10-29 10:49:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:40] SSE sh601208 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:49:40] SSE sh603301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh601519 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sz002152 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh600967 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh600301 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh603920 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh600338 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:40] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:40] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:49:40] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:49:40] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:49:40] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:49:40] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:49:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:50] 买入信号标注: 未入槽触买 2
+[ACCOUNT_SNAPSHOT] recording unavailable (HTTPError); trading ledger unchanged
+[2026-10-29 10:49:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:55] 快照已推送 → holdings_watch.json（累计第 156 次 · 每 12 次输出）
+[2026-10-29 10:49:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:49:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:15] SSE sh603301 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:15] SSE sh601208 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:15] SSE sz002152 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002152&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:15] SSE sh601519 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601519&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:15] SSE sh600967 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600967&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:15] SSE sh600301 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:15] SSE sh600338 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600338&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:15] SSE sh603920 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603920&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:15] SSE sh600552 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:50:15] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:50:15] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:16] 快照已推送 → holdings_watch.json（累计第 168 次 · 每 12 次输出）
+[2026-10-29 10:50:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:41] 快照已推送 → holdings_watch.json（累计第 180 次 · 每 12 次输出）
+[2026-10-29 10:50:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:41] 叠加池行情已更新 96 只
+[2026-10-29 10:50:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:50] SSE sh601519 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601519&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))[2026-10-29 10:50:50] SSE sh603301 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))[2026-10-29 10:50:50] SSE sz002152 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002152&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))[2026-10-29 10:50:50] SSE sh600301 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+
+
+
+[2026-10-29 10:50:50] SSE sh600967 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600967&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))[2026-10-29 10:50:50] SSE sh601208 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+
+[2026-10-29 10:50:50] SSE sh600338 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600338&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:50] SSE sh603920 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603920&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:50] SSE sh600552 断开: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600552&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:50:50] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sz002015 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:50:50] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:50:50] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:50:50] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:50:50] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:50] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:50:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:53] 买入信号标注: 未入槽触买 2
+[ACCOUNT_SNAPSHOT] recording unavailable (HTTPError); trading ledger unchanged
+[2026-10-29 10:50:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:50:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:01] 快照已推送 → holdings_watch.json（累计第 192 次 · 每 12 次输出）
+[2026-10-29 10:51:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:15] 买入信号标注: 未入槽触买 2
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/BX7jMM04.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/entry.CFd7LUfs.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/Do9--hjI.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/DzQ6lzmM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/error-404.DL_4WIao.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/BGb5mcxM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/CtdGnTF8.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/nz3QCZh6.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/IInw_soH.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/error-500.I1Dtv2V5.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/Evi8qh3U.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/C_e3qvna.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/B9r4aQbK.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/uPeJZhvI.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/Du7g4LP9.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/CeWsZ74j.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/CNIUgsVc.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/CrJI_3B2.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/index.BVxY47me.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/ClnnwaJ7.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/BGb5mcxM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/DzQ6lzmM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /_nuxt/Do9--hjI.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:15] "GET /favicon.ico HTTP/1.1" 200 -
+[2026-10-29 10:51:16] 买入信号标注: 未入槽触买 2
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/Cltz7l1L.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/BDhRt6Jg.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/BHqS2E5V.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/CSRI_IMR.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/index.BzDABIlx.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/uLuPcL5o.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/jUj_7yHm.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/Brp6zyF-.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/nz3QCZh6.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/D8ZQL2jY.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/Crhpzow7.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:16] "GET /_nuxt/h1JneNW1.js HTTP/1.1" 200 -
+[2026-10-29 10:51:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:25] SSE sz002152 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002152&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:51:25] SSE sh600301 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:51:25] SSE sh603301 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:51:25] SSE sh601519 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601519&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:51:25] SSE sh600967 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600967&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))[2026-10-29 10:51:25] SSE sh601208 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+
+[2026-10-29 10:51:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:25] SSE sh600338 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600338&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:51:25] SSE sh603920 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603920&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:51:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:25] SSE sz002929 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:51:25] SSE sz002015 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002015&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:51:25] SSE sh600552 断开: HTTPSConnectionPool(host='push2delay.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600552&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))[2026-10-29 10:51:25] SSE sz002065 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:51:25] SSE sz002273 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:51:25] SSE sh601609 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:51:25] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:51:25] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:51:25] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:51:25] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:51:25] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:51:25] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:51:25] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:51:25] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:51:25] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:51:25] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:51:25] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+
+[2026-10-29 10:51:25] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:51:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:26] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:27] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:28] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:29] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:30] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:31] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:32] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:33] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:34] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:35] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:35] 快照已推送 → holdings_watch.json（累计第 204 次 · 每 12 次输出）
+[2026-10-29 10:51:36] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:36] 买入信号标注: 未入槽触买 2
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET / HTTP/1.1" 200 -
+[2026-10-29 10:51:36] 买入信号标注: 未入槽触买 2
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/entry.CFd7LUfs.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/error-404.DL_4WIao.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/DzQ6lzmM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/BGb5mcxM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/Do9--hjI.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/BX7jMM04.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/CtdGnTF8.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/IInw_soH.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/nz3QCZh6.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/error-500.I1Dtv2V5.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/B9r4aQbK.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/Evi8qh3U.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/C_e3qvna.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/uPeJZhvI.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/index.BVxY47me.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/Du7g4LP9.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/CeWsZ74j.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/CNIUgsVc.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/CrJI_3B2.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/DzQ6lzmM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/BGb5mcxM.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/ClnnwaJ7.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /favicon.ico HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:36] "GET /_nuxt/Do9--hjI.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/BDhRt6Jg.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/CSRI_IMR.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/index.BzDABIlx.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/BHqS2E5V.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/Cltz7l1L.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/nz3QCZh6.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/Brp6zyF-.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/uLuPcL5o.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/jUj_7yHm.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/Crhpzow7.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/D8ZQL2jY.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 10:51:37] "GET /_nuxt/h1JneNW1.js HTTP/1.1" 200 -
+[2026-10-29 10:51:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:37] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:38] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:39] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:40] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:41] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:42] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:43] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:44] 叠加池行情已更新 96 只
+[2026-10-29 10:51:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:44] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:45] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:46] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:47] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:48] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:49] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:50] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:51] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:52] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:52] 快照已推送 → holdings_watch.json（累计第 216 次 · 每 12 次输出）
+[2026-10-29 10:51:53] 买入信号标注: 未入槽触买 2
+[ACCOUNT_SNAPSHOT] recording unavailable (HTTPError); trading ledger unchanged
+[2026-10-29 10:51:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:53] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:54] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:55] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:56] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:57] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:58] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:51:59] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:00] SSE sh600301 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sh601208 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601208&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sh601519 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601519&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))[2026-10-29 10:52:00] SSE sh600967 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600967&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sh603301 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603301&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+
+[2026-10-29 10:52:00] SSE sz002152 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002152&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sh600338 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600338&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sh603920 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.603920&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sz002015 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002015&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sz002929 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002929&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sh600552 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.600552&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sz002273 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002273&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sz002065 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=0.002065&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sh601609 断开: HTTPSConnectionPool(host='2.push2.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/sse?fields=f43%2Cf44%2Cf45%2Cf46%2Cf60%2Cf57%2Cf58%2Cf170%2Cf168&mpi=1000&invt=2&fltt=2&secid=1.601609&ut=fa5fd1943c7b386f172d6893dbfba10b&dect=1 (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)')))
+[2026-10-29 10:52:00] SSE sz002922 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:52:00] SSE sh601020 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:52:00] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:00] SSE sz002104 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:52:00] SSE sz002454 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:52:00] SSE sh600353 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:52:00] SSE sz000581 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:52:00] SSE sh600330 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:52:00] SSE sz002636 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))[2026-10-29 10:52:00] SSE sh601068 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+
+[2026-10-29 10:52:00] SSE sz002093 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:52:00] SSE sh603138 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:52:00] SSE sz002779 断开: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))
+[2026-10-29 10:52:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:01] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:02] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:03] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:04] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:05] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:06] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:07] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:08] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:09] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:10] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:11] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:12] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:13] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:14] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:15] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:16] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:17] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:18] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:19] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:20] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:21] 快照已推送 → holdings_watch.json（累计第 228 次 · 每 12 次输出）
+[2026-10-29 10:52:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:21] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:22] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:23] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:24] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:25] 买入信号标注: 未入槽触买 2
+[2026-10-29 10:52:25] 买入信号标注: 未入槽触买 2

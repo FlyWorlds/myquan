@@ -99,8 +99,8 @@ def discover_project_service(name, port):
     expected = ROOT / ("backend" if name == "java" else "holdingStocks/watch-ui" if name == "frontend" else "")
     recognized = False
     if name == "python":
-        script = str(ROOT / "holdingStocks/index.py")
-        recognized = script in command and command[command.index(script)+1:command.index(script)+2] == ["watch"]
+        idx_arg = next((arg for arg in command if arg == str(ROOT / "holdingStocks/index.py") or arg == "holdingStocks/index.py" or arg.endswith("/holdingStocks/index.py")), None)
+        recognized = idx_arg is not None and command[command.index(idx_arg)+1:command.index(idx_arg)+2] == ["watch"]
     elif name == "java":
         recognized = (str(ROOT / "backend/target/myquan-backend-0.1.0-SNAPSHOT.jar") in command
                       or "com.myquan.backend.MyquanBackendApplication" in command)

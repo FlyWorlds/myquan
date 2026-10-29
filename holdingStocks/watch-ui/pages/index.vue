@@ -233,13 +233,29 @@ const rawSlotHoldings = computed(() =>
   ),
 )
 
-const closedHoldings = computed(() =>
-  (snapshot.value?.holdings || []).filter((r) => {
+function closedTimeKey(r: Record<string, any>): string {
+  for (const k of ['平仓时间', '卖出时间', '卖信号时间', '策略出场时间', '信号时刻', '信号时间']) {
+    const v = r[k]
+    if (v != null && String(v).trim()) {
+      return String(v).trim()
+    }
+  }
+  return '9999-99-99 99:99:99'
+}
+
+const closedHoldings = computed(() => {
+  const list = (snapshot.value?.holdings || []).filter((r) => {
     if (Number(r.持仓) > 0) return false
     // 今日平仓：纸面卖出（已实现）或三槽留痕；策略回放止损不进
     return Boolean(r.已实现) || Boolean(r.三槽平仓)
-  }),
-)
+  })
+  return list.slice().sort((a, b) => {
+    const ta = closedTimeKey(a)
+    const tb = closedTimeKey(b)
+    if (ta !== tb) return ta.localeCompare(tb)
+    return String(a.代码 || '').localeCompare(String(b.代码 || ''))
+  })
+})
 
 function isPaperHoldRow(r: (typeof rawSlotHoldings.value)[number]) {
   return Number(r.持仓) <= 0 && String(r.持仓状态 || '') === '策略持有'

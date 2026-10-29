@@ -229,6 +229,14 @@ def build_watch_request_handler(
             if path == "/api/factors":
                 self._send_json(get_factors_api())
                 return
+            if path == "/api/strategy1/backtest":
+                try:
+                    from strategy1_backtest_service import Strategy1BacktestManager
+
+                    self._send_json(Strategy1BacktestManager.get_status())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "backtest status unavailable", "detail": str(exc)}, status=500)
+                return
             if path == "/api/trades":
                 from trade_ledger import api_trades_payload
                 try:
@@ -336,6 +344,14 @@ def build_watch_request_handler(
                     self._send_json({"error": str(exc)}, status=400)
                 except Exception:
                     self._send_json({"error": "数据库保存或回测启动失败"}, status=503)
+                return
+            if path == "/api/strategy1/backtest":
+                try:
+                    from strategy1_backtest_service import Strategy1BacktestManager
+
+                    self._send_json(Strategy1BacktestManager.trigger_backtest())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "backtest trigger failed", "detail": str(exc)}, status=500)
                 return
             if path == "/api/holdings/reset":
                 if on_paper_reset is None:

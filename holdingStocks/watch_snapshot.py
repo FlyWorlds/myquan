@@ -300,6 +300,23 @@ def filter_portfolio_holdings(
             return (0, 0.0, "".join(chr(max(0, 0xFFFF - ord(ch))) for ch in raw[:19]))
         return (1, 0.0, "")
 
+    def _closed_time_sort_ts(r: dict[str, Any]) -> str:
+        """今日平仓：按平仓时间升序（早→晚）；无平仓时间排最后。"""
+        sess = str(r.get("交易日") or "")[:10]
+        for k in ("平仓时间", "卖出时间", "卖信号时间", "策略出场时间", "信号时刻", "信号时间"):
+            v = r.get(k)
+            if v is None or v == "":
+                continue
+            s = str(v).strip()
+            if not s:
+                continue
+            if " " not in s and sess and len(s) >= 8 and s[2:3] == ":":
+                return f"{sess} {s[:8]}"
+            if len(s) >= 19 and s[4:5] == "-" and " " in s:
+                return s[:19]
+            return s
+        return "9999-99-99 99:99:99"
+
     def _sort_key(r: dict[str, Any]) -> tuple:
         qty = int(r.get("持仓") or 0)
         pos = str(r.get("持仓状态") or "")
@@ -313,6 +330,8 @@ def filter_portfolio_holdings(
             tier = 3
         if tier == 0 and has_buy_time:
             return (tier, _buy_time_desc_key(r), str(r.get("代码") or ""))
+        if tier == 1:
+            return (tier, _closed_time_sort_ts(r), str(r.get("代码") or ""))
         try:
             dist = float(r.get("距买点%") if r.get("距买点%") is not None else 9_999.0)
         except (TypeError, ValueError):

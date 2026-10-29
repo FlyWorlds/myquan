@@ -29,6 +29,8 @@ const kindBadgeClass = computed(() => {
   }
   return map[String(props.tab.registry_kind || '')] || 'bg-ui-fill-active text-ui-text-3'
 })
+
+const showBacktestChart = ref(true)
 </script>
 
 <template>
@@ -73,6 +75,16 @@ const kindBadgeClass = computed(() => {
         <div><span class="text-ui-text-2">挂载因子</span> <b class="text-accent">{{ factorSummary || '—' }}</b></div>
         <div v-if="tab.picks?.items?.length">
           <span class="text-ui-text-2">选股/信号</span> <b>{{ tab.picks.items.length }} 条</b>
+        </div>
+        <div v-if="tab.id === 'strategy1'" class="mt-2 flex items-center justify-between border-t border-ui-hairline/60 pt-2 text-xs">
+          <span class="text-ui-text-2">7日高频回测 vs 上证指数×2</span>
+          <button
+            type="button"
+            class="text-accent hover:underline font-semibold"
+            @click.stop="showBacktestChart = !showBacktestChart"
+          >
+            {{ showBacktestChart ? '收起回测图表 ▲' : '展开回测图表 ▼' }}
+          </button>
         </div>
       </div>
     </template>
@@ -133,5 +145,9 @@ const kindBadgeClass = computed(() => {
       </div>
     </template>
   </RegistryHoverCard>
+
+  <div v-if="tab.id === 'strategy1' && showBacktestChart" class="mt-2">
+    <Strategy1BacktestChart />
+  </div>
   </article>
 </template>

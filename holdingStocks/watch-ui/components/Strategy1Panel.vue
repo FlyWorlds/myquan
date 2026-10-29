@@ -584,12 +584,15 @@ function tradeIncomeTitle(r: HoldingRow): string {
                 >{{ categoryOf(r) }}</span>
               </td>
               <td class="whitespace-nowrap px-3 py-1.5 align-middle">
-                <div class="leading-snug">
-                  <span v-if="r.信号因子 === 'factor29' || r.信号因子 === 'factor33'" class="text-xs font-semibold text-accent">{{ r.信号来源 }}</span>
-          <StockNameHover :code="r.代码" :name="r.名称">
-                    <a :href="baiduStockUrl(r.代码, r.名称)" target="_blank" rel="noopener" class="sensitive font-semibold text-accent hover:underline">{{ stockLabel(r.代码, r.名称) }}</a>
-                  </StockNameHover>
-                </div>
+                <StockNameHover :code="r.代码" :name="r.名称">
+                  <a
+                    :href="baiduStockUrl(r.代码, r.名称)"
+                    target="_blank"
+                    rel="noopener"
+                    class="sensitive font-semibold text-accent hover:underline"
+                    :title="r.信号来源 ? `${stockLabel(r.代码, r.名称)} · ${r.信号来源}` : stockLabel(r.代码, r.名称)"
+                  >{{ stockLabel(r.代码, r.名称) }}</a>
+                </StockNameHover>
               </td>
               <td v-if="dayChangeAfterName" class="sensitive whitespace-nowrap px-3 py-1.5 align-middle">
                 <ChgText :chg="r.当日涨幅">{{ fmtSignedPct(r.当日涨幅) }}</ChgText>

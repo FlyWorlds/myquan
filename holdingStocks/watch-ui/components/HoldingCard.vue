@@ -152,7 +152,6 @@ const cardClass = computed(() => {
           <div title="当日行情最高价"><dt class="text-ui-text-3">今日最高</dt><dd class="sensitive mt-1 font-semibold tabular-nums">{{ fmtNum(row.今日最高 ?? row.最高, pdg) }}</dd></div>
         </dl>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" :class="dense ? 'mt-1.5' : 'mt-3'">
-          <span v-if="row.信号因子 === 'factor29' || row.信号因子 === 'factor33'" class="text-xs font-semibold text-accent">{{ row.信号来源 }}</span>
           <span v-if="dense" class="text-ui-text-2">买入预警价 <b class="tabular-nums" :class="band === 'outside' ? 'text-ui-text-3' : 'text-up'">{{ buyAlertPx == null ? '—' : fmtNum(buyAlertPx, pdg) }}</b></span>
           <span v-if="row['距买点%'] != null && Number(row['距买点%']) < 9000" class="text-ui-text-2">距买点 <b class="tabular-nums">{{ Number(row['距买点%']).toFixed(2) }}%</b></span>
           <template v-if="!dense">

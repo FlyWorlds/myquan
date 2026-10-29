@@ -515,7 +515,7 @@ _REPLAY_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _STRATEGY_PNL_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 _MIN_WATCH_REFRESH_SEC = 1.0
 _INDEX_CACHE: dict[str, Any] = {"t": 0.0, "data": []}
-_INDEX_CACHE_TTL_SEC = 15.0
+_INDEX_CACHE_TTL_SEC = 1.0
 _DAILY_WARM_WORKERS = max(4, int(os.environ.get("WATCH_DAILY_WARM_WORKERS", "12")))
 # 盯盘 loop 快照推送日志：每 N 次打印一条（冷启动始终打印）；1=每次；环境变量 WATCH_SNAPSHOT_LOG_EVERY
 _WATCH_SNAPSHOT_LOG_EVERY = max(1, int(os.environ.get("WATCH_SNAPSHOT_LOG_EVERY", "12")))
@@ -2493,6 +2493,10 @@ def publish_live_quote_patch() -> bool:
         )
         if _sync_snapshot_hwm_from_quotes(snap, get_quote=feed.get_quote):
             changed = True
+        curr_indices = _QUOTE_RUNTIME_PANELS.get("indices") or fetch_indices_cached()
+        if curr_indices and curr_indices != snap.get("indices"):
+            snap["indices"] = curr_indices
+            changed = True
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 行情快刷失败: {e}")
         return False
@@ -2766,6 +2770,9 @@ def publish_watch_snapshot(
                     snap["signalUpdatedAt"] = signal_updated_at
                     snap["signalScanSec"] = signal_scan_sec
                 snap["sectors"] = sectors
+                snap["indices"] = (
+                    snapshot.get("indices") or snap.get("indices") or []
+                )
                 snap["strategies"] = (
                     snapshot.get("strategies") or snap.get("strategies") or []
                 )
@@ -13628,6 +13635,26 @@ def cmd_watch(args: argparse.Namespace) -> None:
         target=sectors_live_loop, name="holdings-sectors-live", daemon=True
     )
 
+    def indices_live_loop() -> None:
+        """大盘指数专享极速通道：每 1.5 秒更新一次上证/深证指数，毫秒级响应盘面变化。"""
+        last_idx_data = None
+        while not stop.is_set():
+            try:
+                idx = fetch_indices()
+                if idx and any(x.get("price") for x in idx):
+                    _QUOTE_RUNTIME_PANELS["indices"] = idx
+                    if idx != last_idx_data:
+                        last_idx_data = idx
+                        quote_patch_wake.set()
+            except Exception:  # noqa: BLE001
+                pass
+            if stop.wait(1.5):
+                break
+
+    indices_worker = threading.Thread(
+        target=indices_live_loop, name="holdings-indices-live", daemon=True
+    )
+
     from transport.http import build_watch_request_handler
 
     def _get_last_snap() -> Any:
@@ -13725,6 +13752,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         threading.Thread(target=holding_peak_history_loop, name="holding-peak-history", daemon=True).start()
     heartbeat_worker.start()
     sectors_worker.start()
+    indices_worker.start()
     if _CONDITION_BUY_ACTIVE:
         threading.Thread(target=_DATABASE_QUOTES_CLIENT.run, name="quote-database-writer", daemon=True).start()
         threading.Thread(target=_DATABASE_QUOTES_CLIENT.refresh, name="quote-reference-restore", daemon=True).start()
@@ -13766,7 +13794,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                     panels = dict(strategy3=build_strategy3_payload(session=day, get_quote=get_quote, batch_quote=batch),
                         strategy8=build_strategy8_payload(session=day, get_quote=get_quote, batch_quote=batch),
                         strategy15=build_strategy15_payload(session=day, strategy1_rows=_collect_quote_runtime_rows(get_quote)))
-                    panels["indices"] = fetch_indices_cached()
+                    panels["indices"] = _QUOTE_RUNTIME_PANELS.get("indices") or fetch_indices_cached()
                     _QUOTE_RUNTIME_PANELS.update(panels)
                 except Exception as exc:
                     print(f"[{_now()}] 其他策略后台刷新失败: {type(exc).__name__}: {exc}")

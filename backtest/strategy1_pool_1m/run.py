@@ -140,13 +140,21 @@ def _load_pool(pool: str = POOL_STRATEGY1) -> list[dict]:
     return list(strategy1_watchlist())
 
 
+_DAILY_MEM_CACHE: dict[str, pd.DataFrame] = {}
+
+
 def _daily(sina: str, lookback_cal_days: int = 40) -> pd.DataFrame:
+    if sina in _DAILY_MEM_CACHE and not _DAILY_MEM_CACHE[sina].empty:
+        return _DAILY_MEM_CACHE[sina]
     end = pd.Timestamp.now().strftime("%Y%m%d")
     start = (pd.Timestamp.now() - pd.Timedelta(days=lookback_cal_days)).strftime(
         "%Y%m%d"
     )
     try:
-        return fetch_daily(sina, start, end)
+        df = fetch_daily(sina, start, end)
+        if not df.empty:
+            _DAILY_MEM_CACHE[sina] = df
+        return df
     except Exception as e:  # noqa: BLE001
         print(f"  日线失败 {sina}: {e}")
         return pd.DataFrame()
@@ -155,18 +163,23 @@ def _daily(sina: str, lookback_cal_days: int = 40) -> pd.DataFrame:
 def _minutes(sina: str, *, refresh: bool, days: int = 7, source: str = "auto") -> pd.DataFrame:
     """拉 1m：优先本地缓存；akshare 约近 5 日；source=panda/auto 时用 Pandadata 拉长窗实盘分钟。"""
     path = CACHE / f"{sina}_1m.parquet"
-    cached = pd.DataFrame()
+    need_days = max(1, int(days))
+    frames: list[pd.DataFrame] = []
+
     if path.exists() and not refresh:
         try:
             cached = pd.read_parquet(path)
+            if not cached.empty and "ts" in cached.columns:
+                cached["ts"] = pd.to_datetime(cached["ts"])
+                # 若本地缓存已经覆盖所需交易日，直接秒级复用，避免无谓的网络爬虫卡顿
+                unique_days = cached["ts"].dt.date.nunique()
+                if unique_days >= need_days:
+                    return cached
+                frames.append(cached)
         except Exception:  # noqa: BLE001
-            cached = pd.DataFrame()
+            pass
 
-    need_days = max(1, int(days))
     src = str(source or "auto").lower()
-    frames: list[pd.DataFrame] = []
-    if not cached.empty and "ts" in cached.columns:
-        frames.append(cached)
 
     # Pandadata 长历史（实盘库）；失败则退回 akshare
     use_panda = src in ("panda", "pandadata", "auto") and need_days > 5
