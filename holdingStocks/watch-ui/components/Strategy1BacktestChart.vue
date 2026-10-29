@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import * as echarts from 'echarts'
 
+function returnClass(value?: number): string {
+  return value == null || value === 0 ? 'text-ui-text' : value > 0 ? 'text-rose-400' : 'text-emerald-400'
+}
+function returnColor(value: number): string {
+  return value > 0 ? '#ff4d4f' : value < 0 ? '#22c55e' : '#9ca3af'
+}
+
 interface BacktestMetrics {
   strategy_final_return?: number
   sh_final_return_x2?: number
@@ -113,6 +120,10 @@ function updateChart() {
     // 1. 折线趋势对比图：策略1 累计 vs 7MA 均线 vs 上证*2
     myChart.setOption({
       backgroundColor: 'transparent',
+      visualMap: {
+        show: false, type: 'piecewise', dimension: 1, seriesIndex: [0, 1, 2, 3],
+        pieces: [{ gt: 0, color: '#ff4d4f' }, { lt: 0, color: '#22c55e' }, { value: 0, color: '#9ca3af' }],
+      },
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'cross' },
@@ -131,7 +142,7 @@ function updateChart() {
       legend: {
         type: 'scroll',
         orient: 'horizontal',
-        data: ['策略1 累计收益', '策略1 7日均线(7MA)', '上证指数×2 累计收益', '超额 Alpha'],
+        data: ['策略1 累计收益', '策略1 7日均线(7MA)', '上证指数×2 累计收益', '超额 Alpha', '策略1 单日收益', '上证指数×2 单日'],
         textStyle: { color: '#9ca3af', fontSize: 11 },
         top: 4,
         right: 8,
@@ -144,16 +155,15 @@ function updateChart() {
         axisLine: { lineStyle: { color: '#4b5563' } },
         axisLabel: { color: '#9ca3af', fontSize: 11 },
       },
-      yAxis: {
-        type: 'value',
-        scale: true,
+      yAxis: [{
+        type: 'value', name: '累计收益率', scale: true,
         splitLine: { lineStyle: { color: 'rgba(75, 85, 99, 0.25)', type: 'dashed' } },
-        axisLabel: {
-          color: '#9ca3af',
-          formatter: '{value}%',
-          fontSize: 11,
-        },
-      },
+        axisLabel: { color: '#9ca3af', formatter: '{value}%', fontSize: 11 },
+      }, {
+        type: 'value', name: '单日收益率', scale: true,
+        splitLine: { show: false },
+        axisLabel: { color: '#9ca3af', formatter: '{value}%', fontSize: 11 },
+      }],
       series: [
         {
           name: '策略1 累计收益',
@@ -203,6 +213,14 @@ function updateChart() {
           showSymbol: false,
           lineStyle: { width: 1.5, color: '#ec4899', type: 'dotted' },
           itemStyle: { color: '#ec4899' },
+        },
+        {
+          name: '策略1 单日收益', type: 'bar', yAxisIndex: 1, barMaxWidth: 18,
+          data: d.strategy_daily_pct.map(value => ({ value, itemStyle: { color: returnColor(value), opacity: 0.55 } })),
+        },
+        {
+          name: '上证指数×2 单日', type: 'bar', yAxisIndex: 1, barMaxWidth: 18,
+          data: d.sh_daily_x2_pct.map(value => ({ value, itemStyle: { color: returnColor(value), opacity: 0.25, borderColor: returnColor(value), borderWidth: 1 } })),
         },
       ],
     }, true)
@@ -274,7 +292,7 @@ function updateChart() {
           yAxisIndex: 1,
           data: d.alpha_cum_pct.map((val) => ({
             value: val,
-            itemStyle: { color: val >= 0 ? '#10b981' : '#ef4444' },
+            itemStyle: { color: returnColor(val) },
           })),
         },
       ],
@@ -323,7 +341,7 @@ function updateChart() {
         {
           name: '策略1 单日收益',
           type: 'bar',
-          data: d.strategy_daily_pct,
+          data: d.strategy_daily_pct.map(value => ({ value, itemStyle: { color: returnColor(value) } })),
           itemStyle: {
             color: '#10b981',
             borderRadius: [3, 3, 0, 0],
@@ -332,7 +350,7 @@ function updateChart() {
         {
           name: '上证指数×2 单日',
           type: 'bar',
-          data: d.sh_daily_x2_pct,
+          data: d.sh_daily_x2_pct.map(value => ({ value, itemStyle: { color: returnColor(value) } })),
           itemStyle: {
             color: '#f59e0b',
             borderRadius: [3, 3, 0, 0],
@@ -430,29 +448,36 @@ onMounted(() => {
     </div>
 
     <!-- 关键数据指标小牌 -->
-    <div v-if="latestData?.metrics" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div v-if="latestData?.metrics" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div class="rounded-lg border border-ui-hairline/60 bg-ui-surface/60 p-2 text-center">
+        <div class="text-[11px] text-ui-text-3">策略1 当日收益率</div>
+        <div class="mt-0.5 text-base font-bold" :class="returnClass(latestData.strategy_daily_pct?.at(-1))">
+          {{ latestData.strategy_daily_pct?.at(-1) == null ? '—' : `${latestData.strategy_daily_pct.at(-1)! > 0 ? '+' : ''}${latestData.strategy_daily_pct.at(-1)!.toFixed(2)}%` }}
+        </div>
+        <div class="text-[10px] text-ui-text-3">{{ latestData.dates?.at(-1) || '暂无日期' }} · 回测数据</div>
+      </div>
       <div class="rounded-lg border border-ui-hairline/60 bg-ui-surface/60 p-2 text-center">
         <div class="text-[11px] text-ui-text-3">策略1 7日累计收益</div>
-        <div class="mt-0.5 text-base font-bold" :class="(latestData.metrics.strategy_final_return ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'">
+        <div class="mt-0.5 text-base font-bold" :class="returnClass(latestData.metrics.strategy_final_return)">
           {{ (latestData.metrics.strategy_final_return ?? 0) > 0 ? '+' : '' }}{{ latestData.metrics.strategy_final_return }}%
         </div>
       </div>
       <div class="rounded-lg border border-ui-hairline/60 bg-ui-surface/60 p-2 text-center">
         <div class="text-[11px] text-ui-text-3">上证指数×2 7日收益</div>
-        <div class="mt-0.5 text-base font-bold" :class="(latestData.metrics.sh_final_return_x2 ?? 0) >= 0 ? 'text-amber-400' : 'text-rose-400'">
+        <div class="mt-0.5 text-base font-bold" :class="returnClass(latestData.metrics.sh_final_return_x2)">
           {{ (latestData.metrics.sh_final_return_x2 ?? 0) > 0 ? '+' : '' }}{{ latestData.metrics.sh_final_return_x2 }}%
         </div>
       </div>
       <div class="rounded-lg border border-ui-hairline/60 bg-ui-surface/60 p-2 text-center">
         <div class="text-[11px] text-ui-text-3">超额 Alpha (策略 - 指数×2)</div>
-        <div class="mt-0.5 text-base font-bold text-emerald-400">
+        <div class="mt-0.5 text-base font-bold" :class="returnClass(latestData.metrics.alpha)">
           {{ (latestData.metrics.alpha ?? 0) > 0 ? '+' : '' }}{{ latestData.metrics.alpha }}%
         </div>
       </div>
       <div class="rounded-lg border border-ui-hairline/60 bg-ui-surface/60 p-2 text-center">
         <div class="text-[11px] text-ui-text-3">7日最大回撤 / 回合数</div>
         <div class="mt-0.5 text-base font-bold text-ui-text">
-          {{ latestData.metrics.max_drawdown }}% / {{ latestData.metrics.n_closed }}次
+          <span :class="returnClass(latestData.metrics.max_drawdown)">{{ latestData.metrics.max_drawdown }}%</span> / {{ latestData.metrics.n_closed }}次
         </div>
       </div>
     </div>
