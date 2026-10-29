@@ -1,0 +1,20 @@
+[
+  {
+    "name": "上证指数",
+    "previous_close": 3730.92,
+    "end_close": 3681.469,
+    "return_pct": -1.3254371575911583,
+    "double_return_pct": -2.6508743151823166,
+    "strategy1_excess_pp": 0.4808276485156471,
+    "strategy16_excess_pp": -3.24783568481769
+  },
+  {
+    "name": "沪深300",
+    "previous_close": 4174.535,
+    "end_close": 4083.87,
+    "return_pct": -2.1718586621024882,
+    "double_return_pct": -4.3437173242049765,
+    "strategy1_excess_pp": 2.173670657538307,
+    "strategy16_excess_pp": -1.55499267579503
+  }
+]

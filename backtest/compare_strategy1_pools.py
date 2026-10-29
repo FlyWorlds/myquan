@@ -14,7 +14,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / 'holdingStocks')]
-from holdingStocks.watch_config import strategy1_watchlist, strategy16_watchlist
+from holdingStocks.watch_config import strategy1_watchlist, strategy16_watchlist, DEFAULT_STOP_REBUY_BOUNCE_PCT
 from holdingStocks.quote_exit import evaluate_quote_exit, overnight_note_updates
 from holdingStocks.strategy1_entry import phase_at, quota_reason
 from holdingStocks.condition_buy import auction_entry_blocked
@@ -138,7 +138,7 @@ def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
         p['qty'] -= qty
         p['available'] = max(0,p.get('available',0)-qty)
         if not p['qty']:
-            sold[code] = dict(rebuy=pnl<=.01 and any(k in reason for k in ('protect','hard','trail','gap','giveback')), ts=stamp)
+            sold[code] = dict(rebuy=pnl<=.01 and any(k in reason for k in ('protect','hard','trail','gap','giveback')), ts=stamp, exit_px=float(px))
             del positions[code]
     for day in calendar:
         sold, new_codes, metadata, quotes = {}, set(), {}, {}
@@ -200,7 +200,7 @@ def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
                     continue
                 if c not in sold and len(new_codes)>=5:
                     continue
-                target=entry_trigger_price(lows[c] if phase=='day_low_rebound' else md['opening'],entry_pct=md['ep'])
+                target=entry_trigger_price(sold[c]['exit_px'], entry_pct=DEFAULT_STOP_REBUY_BOUNCE_PCT) if c in sold else entry_trigger_price(lows[c] if phase=='day_low_rebound' else md['opening'],entry_pct=md['ep'])
                 if float(b.close)<target or auction_entry_blocked(md['opening'],md['prev_close']):
                     continue
                 if cannot_buy_limit_up(prev_close=md['prev_close'],open_px=md['opening'],high_px=highs[c],low_px=lows[c],close_px=float(b.close),limit_up_pct=.1,tick=.01):
@@ -214,7 +214,7 @@ def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
                 if c not in sold:
                     new_codes.add(c)
                 trades.append(dict(date=day,ts=stamp,time=stamp,session=day,side='buy',code=c,name=w['name'],px=px,shares=qty,
-                    kind=phase,signal_factor='factor33' if phase=='day_low_rebound' else 'factor26',source='minute_close_proxy',is_rebuy=c in sold))
+                    kind=phase,signal_factor='factor33' if phase=='day_low_rebound' else 'factor26',source='minute_close_proxy',is_rebuy=c in sold, trigger_price=target, rebuy_reference_px=sold[c]['exit_px'] if c in sold else None, rebuy_pct=DEFAULT_STOP_REBUY_BOUNCE_PCT if c in sold else None))
                 assert cash>=-1e-6 and len(positions)<=max_slots
         equity.append(dict(date=day,equity=round(value(),2),cash=round(cash,2),n_pos=len(positions),ret_pct=(value()/initial-1)*100))
     peak=initial;dd=0.

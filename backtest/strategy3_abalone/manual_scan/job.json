@@ -1,10 +1,10 @@
 {
   "state": "running",
-  "pid": 26233,
-  "started_ts": 1792999060.8744168,
-  "done": 426,
+  "pid": 60452,
+  "started_ts": 1793233638.95161,
+  "done": 48,
   "total": 645,
   "workers": 6,
   "executor": "process",
-  "message": "6路并发：已处理 426/645，前低破位 0 只"
+  "message": "6路并发：已处理 48/645，前低破位 31 只"
 }

@@ -1,0 +1,152 @@
+sh601208 15 complete days, last 2026-10-28 15:00:00
+sz002636 23 complete days, last 2026-10-28 15:00:00
+sh600552 23 complete days, last 2026-10-28 15:00:00
+sh600330 23 complete days, last 2026-10-28 15:00:00
+sz002104 14 complete days, last 2026-10-28 15:00:00
+sh600338 17 complete days, last 2026-10-28 15:00:00
+sh603301 4 complete days, last 2026-10-28 15:00:00
+sh600301 17 complete days, last 2026-10-28 15:00:00
+sh601020 17 complete days, last 2026-10-28 15:00:00
+sz002093 12 complete days, last 2026-10-28 15:00:00
+sh601609 24 complete days, last 2026-10-28 15:00:00
+sh600353 17 complete days, last 2026-10-28 15:00:00
+sz002779 14 complete days, last 2026-10-28 15:00:00
+sh601068 9 complete days, last 2026-10-28 15:00:00
+sh600967 17 complete days, last 2026-10-28 15:00:00
+sz002273 24 complete days, last 2026-10-28 15:00:00
+sz002015 8 complete days, last 2026-10-28 15:00:00
+sz002929 15 complete days, last 2026-10-28 15:00:00
+sz000581 14 complete days, last 2026-10-28 15:00:00
+sz002922 sh60151917  complete days, last17  complete days, last2026-10-28 15:00:00
+ 2026-10-28 15:00:00
+sz002152 17 complete days, last 2026-10-28 15:00:00
+sh603920 17 sh603138complete days, last  72026-10-28 15:00:00 complete days, last 2026-10-28 15:00:00
+
+sz002065 17 complete days, last 2026-10-28 15:00:00
+sz000070 23 complete days, last 2026-10-28 15:00:00
+sz002703 15 complete days, last sz0007562026-10-28 15:00:00 
+15 complete days, last 2026-10-28 15:00:00
+sz001282 8 complete days, last 2026-10-28 15:00:00
+sz002580 15 complete days, last 2026-10-28 15:00:00
+sz002962 13 complete days, last 2026-10-28 15:00:00
+sz002866 14 complete days, last 2026-10-28 15:00:00
+sz001266 15 complete days, last 2026-10-28 15:00:00
+sz002430 15 complete days, last 2026-10-28 15:00:00
+sz002415sz002453  15 12complete days, last  2026-10-28 15:00:00
+complete days, last 2026-10-28 15:00:00
+sh603042 19 complete days, last 2026-10-28 15:00:00
+sz000049 17 complete days, last 2026-10-28 15:00:00
+sz002841 15 complete days, last 2026-10-28 15:00:00
+sz000725 15 complete days, last 2026-10-28 15:00:00
+sz002558 15 complete days, last 2026-10-28 15:00:00
+sz002169 15 complete days, last 2026-10-28 15:00:00
+sz000682 14 complete days, last 2026-10-28 15:00:00
+sz000920 14 complete days, last 2026-10-28 15:00:00
+sh600072 15 complete days, last 2026-10-28 15:00:00
+sh600760 15 complete days, last 2026-10-28 15:00:00
+sh600346 15 complete days, last 2026-10-28 15:00:00
+sh603659 15 complete days, last 2026-10-28 15:00:00
+sz002253 7 complete days, last 2026-10-28 15:00:00
+sz000803sz002454 7  complete days, last9 2026-10-28 15:00:00 
+complete days, last 2026-10-28 15:00:00
+sh600549 15 complete days, last 2026-10-28 15:00:00
+sh600063 6 complete days, last 2026-10-28 15:00:00
+{
+  "audit": {
+    "requested_calendar": [
+      "2026-09-23",
+      "2026-09-24",
+      "2026-09-28",
+      "2026-09-29",
+      "2026-09-30",
+      "2026-10-08",
+      "2026-10-09",
+      "2026-10-12",
+      "2026-10-13",
+      "2026-10-14",
+      "2026-10-15",
+      "2026-10-16",
+      "2026-10-19",
+      "2026-10-20",
+      "2026-10-21",
+      "2026-10-22",
+      "2026-10-23",
+      "2026-10-26",
+      "2026-10-27",
+      "2026-10-28"
+    ],
+    "requested_days": 20,
+    "requested_window_complete": false,
+    "common_usable_calendar": [
+      "2026-10-20",
+      "2026-10-21",
+      "2026-10-22",
+      "2026-10-23",
+      "2026-10-26",
+      "2026-10-27",
+      "2026-10-28"
+    ],
+    "all_common_usable_dates": [
+      "2026-10-20",
+      "2026-10-21",
+      "2026-10-22",
+      "2026-10-23",
+      "2026-10-26",
+      "2026-10-27",
+      "2026-10-28"
+    ],
+    "failures": [],
+    "minute_api_error": "本次探测：Pandadata 200103 API访问权限不足",
+    "limitations": [
+      "当前股票池及当前冻结阈值向历史回放，存在选股/阈值前视偏差，不是历史时点选股或样本外验证",
+      "无历史竞价路径，两个池均排除因子29买卖；不等于完整策略1回测",
+      "分钟收盘报价代理，买卖按观察价；不还原逐笔成交、分钟内触达顺序及真实排队",
+      "同一分钟先处理卖出再买入，同分钟多个买点按代码排序，先后顺序会影响组合结果",
+      "补充回放允许每天最多8条缺分钟（每日≥230条且开收盘齐全），缺口不插值，可能漏掉信号；不代表严格连续完整分钟历史",
+      "保留池子各自个股阈值；资金、时段、形态过滤和卖出规则完全相同",
+      "最大回撤按日末权益计算，未平仓按收盘估值，含佣金杂费印花税和双边0.1%滑点"
+    ]
+  },
+  "summary": {
+    "strategy1": {
+      "initial_cash": 300000.0,
+      "final_equity": 293489.86,
+      "return_pct": -2.17,
+      "max_dd_pct": -4.2999,
+      "calendar": [
+        "2026-10-20",
+        "2026-10-21",
+        "2026-10-22",
+        "2026-10-23",
+        "2026-10-26",
+        "2026-10-27",
+        "2026-10-28"
+      ],
+      "n_buys": 31,
+      "n_sells": 27,
+      "n_open": 5,
+      "closed_cycles": 26,
+      "win_rate_pct": 23.08
+    },
+    "strategy16": {
+      "initial_cash": 300000.0,
+      "final_equity": 282303.87,
+      "return_pct": -5.8987,
+      "max_dd_pct": -6.4906,
+      "calendar": [
+        "2026-10-20",
+        "2026-10-21",
+        "2026-10-22",
+        "2026-10-23",
+        "2026-10-26",
+        "2026-10-27",
+        "2026-10-28"
+      ],
+      "n_buys": 28,
+      "n_sells": 23,
+      "n_open": 5,
+      "closed_cycles": 23,
+      "win_rate_pct": 26.09
+    }
+  }
+}

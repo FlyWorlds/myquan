@@ -68,3 +68,27 @@ def test_half_exit_advances_stage_and_reconciles_remaining_shares(monkeypatch):
     assert stages[:2]==[0,1]
     assert p['summary']['n_sells']==1
     assert p['accounting']['accounting_verified']
+
+
+def test_rebuy_uses_actual_stop_sale_not_intraday_low(monkeypatch):
+    import backtest.compare_strategy1_pools as replay
+    def exit_once(pos, quote, **kwargs):
+        if quote['last_ts']=='2026-10-28 10:00:00':
+            return dict(updates={},watermark={},action=dict(kind='full',reason='hard_from_cost',shares=pos['qty']))
+        return None
+    monkeypatch.setattr(replay,'evaluate_quote_exit',exit_once)
+    rows=[('2026-10-27 09:31',10,10.3,10,10.3),
+          ('2026-10-27 15:00',10.3,10.3,10.3,10.3),
+          ('2026-10-28 09:31',10.3,10.3,10.3,10.3),
+          ('2026-10-28 10:00',10.3,10.3,9,10),
+          ('2026-10-28 10:01',10,10.1,9,10.1),
+          ('2026-10-28 10:02',10.1,10.16,9,10.16),
+          ('2026-10-28 15:00',10.16,10.16,10.16,10.16)]
+    p=simulate([stock('600001',rows)],['2026-10-27','2026-10-28'])
+    rebuys=[t for t in p['trades'] if t.get('is_rebuy')]
+    assert len(rebuys)==1
+    assert rebuys[0]['ts']=='2026-10-28 10:02:00'
+    assert rebuys[0]['rebuy_reference_px']==10
+    assert rebuys[0]['trigger_price']==10.15
+    assert rebuys[0]['px']==10.16
+    assert p['accounting']['accounting_verified']
