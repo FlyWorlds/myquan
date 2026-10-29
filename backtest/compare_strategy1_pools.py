@@ -17,6 +17,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / 'holdingStocks')]
 from holdingStocks.watch_config import strategy1_watchlist, strategy16_watchlist, DEFAULT_STOP_REBUY_BOUNCE_PCT
 from holdingStocks.quote_exit import evaluate_quote_exit, overnight_note_updates
 from holdingStocks.strategy1_entry import phase_at, quota_reason
+from holdingStocks.daily_buy_quota import quota_reason as daily_fill_quota_reason
 from holdingStocks.condition_buy import auction_entry_blocked
 from strategy.binding_filters import open_break_entry_filter
 from strategy.open_break import entry_trigger_price, cannot_buy_limit_up, limit_down_state
@@ -198,7 +199,7 @@ def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
                 order=dict(strategy='strategy1',kind=phase)
                 if quota_reason(order,trades,day) or len(positions)>=max_slots:
                     continue
-                if c not in sold and len(new_codes)>=5:
+                if daily_fill_quota_reason(trades, day, is_rebuy=c in sold):
                     continue
                 target=entry_trigger_price(sold[c]['exit_px'], entry_pct=DEFAULT_STOP_REBUY_BOUNCE_PCT) if c in sold else entry_trigger_price(lows[c] if phase=='day_low_rebound' else md['opening'],entry_pct=md['ep'])
                 if float(b.close)<target or auction_entry_blocked(md['opening'],md['prev_close']):
@@ -300,7 +301,7 @@ def main():
         '', '**20日完整回测未完成：历史1分钟数据覆盖不足，不能给出有效20日收益结论。**' if not audit['requested_window_complete'] else '**20日分钟代理回测完成（竞价因子除外）。**',
         '',f'策略1池 {len(pools["strategy1"])} 只；策略16池 {len(pools["strategy16"])} 只；并集 {len(universe)} 只。均含公共自选池。',
         '', '共同可用分钟区间（每日≥230条且开收盘齐全）：'+(', '.join(common) if common else '无')+'。仅为缩短区间的补充研究，不替代请求的20日验证。',
-        '', '资金30万元，最多5只，每槽20%；9:30–10:00开盘突破最多1只，10点后低点反弹补槽；T+1，因子26多层止盈、隔夜开盘保护，止损后符合条件可买回。',
+        '', '资金30万元，最多5只，每槽20%；每日买入最多3笔，新增最多2笔、止损接回最多1笔；9:30–10:00开盘突破最多1只，10点后低点反弹补槽；T+1，因子26多层止盈、隔夜开盘保护，止损后符合条件可买回。',
         '', '| 股票池 | 补充区间收益 | 日末最大回撤 | 买入/卖出 | 完整平仓胜率 | 期末权益 |', '|---|---:|---:|---:|---:|---:|']
     for sid,res in reports.items():
         s=res['summary'];lines.append(f'| {sid} | {s["return_pct"]:.2f}% | {s["max_dd_pct"]:.2f}% | {s["n_buys"]}/{s["n_sells"]} | {s["win_rate_pct"]}% | {s["final_equity"]:,.2f} |')

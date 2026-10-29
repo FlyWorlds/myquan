@@ -1128,7 +1128,7 @@ def watchlist_codes_label(watchlist: list[dict[str, Any]] | None = None) -> str:
 # ── Paper Portfolio Capital Allocation V2（单一真源）──────────────
 # 这是 Portfolio / Risk Allocation，不是 Factor26 信号规则。
 CAPITAL_ALLOCATION_VERSION = 2
-MAX_NEW_SYMBOLS_PER_SESSION = (5 if STRATEGY_ID == "strategy1" else 2)  # 每个交易日最多新增 symbol 数
+MAX_NEW_SYMBOLS_PER_SESSION = 2  # 每个交易日最多新增 symbol 数
 MAX_POSITION_WEIGHT = 0.20  # 单票入场目标 ≤ 账户权益 20%
 MAX_POSITION_SYMBOLS = 5  # 同时持仓 symbol 上限
 ALLOW_NEGATIVE_CASH_FOR_BUY = False  # 新 BUY 不得把现金打成负
@@ -1140,7 +1140,7 @@ MAX_PORTFOLIO_SLOTS = MAX_POSITION_SYMBOLS
 RESERVE_EMPTY_SLOTS = 0  # 不再尾盘强制空槽
 MAX_OVERNIGHT_SLOTS = MAX_PORTFOLIO_SLOTS - RESERVE_EMPTY_SLOTS
 MAX_ACTIVE_SLOTS = MAX_OVERNIGHT_SLOTS  # 兼容旧名=隔夜上限
-MAX_BUYS_PER_DAY = MAX_NEW_SYMBOLS_PER_SESSION  # = 当日新开仓 unique symbols
+MAX_BUYS_PER_DAY = 3 if STRATEGY_ID == "strategy1" else MAX_NEW_SYMBOLS_PER_SESSION  # 策略1：新增2笔 + 接回1笔
 RESERVE_SLOT_HOUR = 14
 RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓
 SLOT_WEIGHT = MAX_POSITION_WEIGHT  # 入场目标权重

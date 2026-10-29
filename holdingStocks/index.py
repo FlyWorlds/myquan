@@ -5551,7 +5551,7 @@ def apply_paper_slot_buy(
                 "order_id", "signal_time", "signal_received_at", "decision_time",
                 "fill_model", "quote_source", "order_armed_at", "order_price",
                 "execution_quote_time", "execution_received_at", "observed_price", "quote_age_ms", "queue_age_ms",
-                "quote_db_revision", "quote_db_at", "signal_factor",
+                "quote_db_revision", "quote_db_at", "signal_factor", "is_rebuy",
             ) if k in execution_meta} if execution_meta else {}),
         }, holdings=data
     )
@@ -12945,7 +12945,7 @@ def _on_condition_quote(sina: str, quote: dict[str, Any], received_at: datetime)
         today_buys = {r.get("code") for r in committed.get("trades", [])
                       if str(r.get("side") or "").lower() == "buy"
                       and str(r.get("session") or r.get("time") or "")[:10] == str(trading_session_date())}
-        if len(today_buys) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
+        if STRATEGY_ID != "strategy1" and len(today_buys) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
             return
     if order and order.get("id") in _CONDITION_VERIFIED_IDS and is_trigger(order, quote, received_at, datetime.now()):
         _execute_condition_quote(code, quote, received_at)
@@ -13141,7 +13141,10 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
             reason = "SOLD_TODAY"
         is_rebuy = bool(rec and str(rec.get("session") or "") == day and stop_rebuy_allowed(rec, session=day))
         from watch_config import STOP_REBUY_EXEMPT_DAILY_CAP
-        if not reason and not (is_rebuy and STOP_REBUY_EXEMPT_DAILY_CAP) and len(today_new_symbol_codes(day)) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
+        if STRATEGY_ID == "strategy1" and not reason:
+            from daily_buy_quota import quota_reason as daily_fill_quota_reason
+            reason = daily_fill_quota_reason(getattr(_HOLDINGS_STORE, "_state", {}).get("trades", []), day, is_rebuy=is_rebuy)
+        if STRATEGY_ID != "strategy1" and not reason and not (is_rebuy and STOP_REBUY_EXEMPT_DAILY_CAP) and len(today_new_symbol_codes(day)) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
             reason = "MAX_NEW_SYMBOLS_PER_SESSION"
         if not reason and free_buy_slot_count(data) <= 0:
             reason = "MAX_POSITION_SYMBOLS"
@@ -13178,7 +13181,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
         if not is_signal_window(now) or not is_trigger(candidate, q, receipt, now):
             continue
         decision = now.strftime("%Y-%m-%d %H:%M:%S")
-        metadata = dict(signal_factor=candidate.get("signal_factor") or ("factor29" if candidate.get("kind") == "auction_open" else "factor26"), order_id=candidate["id"], signal_time=candidate["signal_time"],
+        metadata = dict(is_rebuy=is_rebuy, signal_factor=candidate.get("signal_factor") or ("factor29" if candidate.get("kind") == "auction_open" else "factor26"), order_id=candidate["id"], signal_time=candidate["signal_time"],
                         signal_received_at=candidate["signal_received_at"], decision_time=decision,
                         fill_model="paper_observed_rebound_quote" if candidate.get("kind") == "day_low_rebound" else candidate["fill_assumption"], quote_source=q.get("_quote_source"),
                         order_armed_at=candidate["armed_at"], order_price=candidate["price"],
