@@ -7,6 +7,17 @@ from strategy.pullback_wave_stop import strategy_signal
 
 NOW = datetime(2026, 10, 16, 10, 0, 1)
 class QuoteAlertTests(unittest.TestCase):
+    def test_failed_gate_clears_stale_signal_even_without_fresh_quote(self):
+        monitor=QuoteAlerts()
+        row=self.row(**{'过门OK':False,'已触买':'是','预警':'已触买·未入槽',
+            '持仓状态':'待买入','因子侧':'买入','因子价':10.25,
+            '信号时间':'2026-10-16 09:59:00','近买点':True})
+        self.enrich(monitor,row,self.quote(last_ts='2026-10-15 15:00:00'))
+        self.assertEqual(row['已触买'],'否')
+        self.assertFalse(row['预警'])
+        self.assertEqual(row['持仓状态'],'空仓')
+        self.assertNotIn('信号时间',row)
+
     def row(self, **extra):
         return dict({'代码':'000070','交易日':'2026-10-16','持仓':0,'过门OK':True,
                      '已触买':'否','已触止损':'否','持仓状态':'空仓'}, **extra)

@@ -648,12 +648,18 @@ def _entry_gate_detail(
         return True, "过门", prev_shape
     if prev_o is None or prev_c is None:
         return False, "缺前日K线", prev_shape
+    if prev_shape == "十字" and prev_entry_mode != "any":
+        if prev2_c is None or float(prev2_c) <= 0:
+            return False, "前日十字缺前收·不过门", prev_shape
+        if float(prev_c) > float(prev2_c) * 1.05 + 1e-8:
+            return False, "前日十字涨幅超过5%·不过门", prev_shape
     if not prev_day_allows_entry(
         float(prev_o),
         float(prev_c),
         prev_small_yang_pct=entry_pct,
         prev_entry_mode=prev_entry_mode,
         tick=tick,
+        prev2_close=prev2_c,
     ):
         if is_yang(float(prev_o), float(prev_c), tick=tick):
             return False, "前日大阳·不过门", prev_shape
@@ -8644,6 +8650,9 @@ def _collect_quote_runtime_rows(get_quote=None):
         if calculation_ready and daily and daily[0] == day:
             allow, gate, shape = _quote_runtime_gate(w, day, daily)
             row.update({"过门OK": allow, "过门": gate, "前日形态": shape})
+        exclusion = (data.get("buy_signal_exclusions") or {}).get(code, {})
+        if exclusion.get("session") == day:
+            row.update({"过门OK": False, "过门": exclusion.get("reason") or "今日买入信号已剔除"})
         from strategy1_entry import effective_order, phase_at, LABELS
         if order:
             order = effective_order(order, q)
@@ -12741,6 +12750,9 @@ def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dic
         return None
     last_day = _daily_last_trade_date(cached[1])
     if last_day is None or last_day < latest_completed_weekday():
+        return None
+    exclusion = ((_HOLDINGS_CACHE.get("data") or {}).get("buy_signal_exclusions") or {}).get(w["code"], {})
+    if exclusion.get("session") == day:
         return None
     entry, tick = _watch_pct(w), _watch_tick(w)
     allow, gate, shape = _entry_gate_detail(

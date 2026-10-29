@@ -1,0 +1,56 @@
+{
+  "session": "2026-10-29",
+  "sourceRevision": 26674,
+  "scope": "按新规则复算；未修改账户；未补造历史递补成交",
+  "exclude": {
+    "code": "002636",
+    "name": "金安国纪",
+    "qty": 900,
+    "price": 62.53,
+    "cashReleasedIncludingFees": "56338.68"
+  },
+  "retainedPositions": {
+    "601519": {
+      "name": "大智慧",
+      "market": "上证",
+      "qty": 6300,
+      "available": 0,
+      "cost": 8.88,
+      "today_cost": 8.88,
+      "buy_time": "2026-10-29 10:00:05",
+      "tp_stage": 0,
+      "last_tp_ts": null,
+      "note": "因子33·日内低点反弹",
+      "peak_high": 9.03,
+      "peak_high_at": "2026-10-29 11:02:03",
+      "stop_noted": false,
+      "stop_noted_px": null,
+      "stop_noted_session": null,
+      "buy_fees_remaining": 61.32,
+      "quote_exit_session": "2026-10-29",
+      "quote_session_peak": 9.03,
+      "quote_cycle_low": 8.76,
+      "overnight_peak": 8.88,
+      "overnight_peak_session": "2026-10-29",
+      "quote_exit_watermark": {
+        "cycle": "2026-10-29 10:00:05",
+        "time": "2026-10-29 11:02:03",
+        "price": 9.03,
+        "high": 9.03
+      }
+    }
+  },
+  "cashExcludingInvalidBuyBeforeAnyReplacement": "229783.10",
+  "replacementCandidate": {
+    "code": "002104",
+    "name": "恒宝股份",
+    "signalReceivedAt": "2026-10-29 10:00:08.561945",
+    "status": "可能递补，历史观察价缺失，不能确定成交价和数量"
+  },
+  "laterCandidate": {
+    "code": "603138",
+    "name": "海量数据",
+    "signalReceivedAt": "2026-10-29 10:09:42.763086"
+  },
+  "completeCounterfactualReplay": false
+}

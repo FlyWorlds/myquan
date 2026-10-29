@@ -22,6 +22,13 @@ from strategy.open_break import (
 
 
 class StrategyRuleTests(unittest.TestCase):
+    def test_doji_daily_gain_cap(self) -> None:
+        self.assertTrue(entry_filters_ok(10.5, 10.5, 10.0, 10.0))
+        self.assertFalse(entry_filters_ok(10.51, 10.51, 10.0, 10.0))
+        self.assertFalse(entry_filters_ok(11.0, 11.0, 10.0, 10.0))
+        self.assertTrue(entry_filters_ok(9.8, 9.8, 10.0, 10.0))
+        self.assertFalse(entry_filters_ok(10.0, 10.0))
+
     def test_trigger_prices_are_rounded_to_tick(self) -> None:
         levels = strategy_levels(15.05)
         self.assertEqual(levels["buy_trigger"], 15.43)

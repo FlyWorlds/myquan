@@ -2072,6 +2072,7 @@ def replay_last_factor_triggers(
         allows = prev_day_allows_entry(
             float(prev["open"]),
             float(prev["close"]),
+            prev2_close=float(prev2["close"]) if prev2 is not None else None,
             prev_small_yang_pct=entry_pct,
             prev_entry_mode=prev_entry_mode,
         )
@@ -2680,6 +2681,7 @@ def replay_factor26_1m(
         allows = prev_day_allows_entry(
             float(prev["open"]),
             float(prev["close"]),
+            prev2_close=float(prev2["close"]) if prev2 is not None else None,
             prev_small_yang_pct=entry_pct,
             prev_entry_mode=prev_entry_mode,
         )

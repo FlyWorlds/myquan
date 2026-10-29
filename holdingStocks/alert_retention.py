@@ -6,7 +6,7 @@ import threading
 from zoneinfo import ZoneInfo
 
 from trading_calendar import last_trading_day_on_or_before, previous_trading_day
-from watch_buy_signal import is_buy_hit, is_holdings_tab_signal_row
+from watch_buy_signal import is_buy_hit, is_holdings_tab_signal_row, clear_blocked_buy_signal
 
 KEY = 'watch_alert_retention'
 FIELDS = ('预警', '近买点', '近止损', '已触买', '信号时间', '已触发因子侧',
@@ -50,6 +50,12 @@ class AlertRetention:
                             and (strategy_codes is None or c in strategy_codes)}
             for row in rows:
                 code = str(row.get('代码') or '')
+                if row.get('过门OK') is not None and not bool(row.get('过门OK')):
+                    self.records.pop(code, None)
+                    for key in ('策略展示状态', '首次触买时间', '预警交易日'):
+                        row.pop(key, None)
+                    clear_blocked_buy_signal(row)
+                    continue
                 saved = self.records.get(code)
                 # Never turn a retained display signal into an order or a position.
                 entry_session = str(row.get('策略入场时间') or '')[:10]

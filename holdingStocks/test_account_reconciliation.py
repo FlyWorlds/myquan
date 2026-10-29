@@ -7,6 +7,37 @@ from account_reconciliation import account_summary, effective_deliveries, cycle_
 
 
 class ReconciliationTests(unittest.TestCase):
+    def test_buy_signal_restate_keeps_original_fill_immutable(self):
+        state = self.state()
+        buy = dict(id="b", side="buy", code="002636", qty=20, after_qty=20,
+                   price=10, time="2026-10-29 10:00:05", session="2026-10-29")
+        replacement = dict(buy, price=10.1, time="2026-10-29 09:52:57")
+        state["ledger"]["entries"] = [buy]
+        state["trades"] = [dict(id="correction", side="adjust", adjustment_kind="buy_signal_restate",
+            adjusts_entry_id="b", code="002636", qty=20, replacement_delivery=replacement)]
+        original = copy.deepcopy(state)
+        entries, issues = effective_deliveries(state)
+        self.assertFalse(issues)
+        self.assertEqual(entries[0]["price"], 10.1)
+        self.assertEqual(entries[0]["original_price"], 10)
+        self.assertEqual(state, original)
+        state["trades"][0]["replacement_delivery"]["qty"] = 21
+        self.assertTrue(effective_deliveries(state)[1])
+
+    def test_buy_void_preserves_source_and_removes_effective_delivery(self):
+        state = self.state()
+        state["holdings"]["positions"]["002636"]["qty"] = 0
+        buy = dict(id="buy1", side="buy", code="002636", qty=20, price=10,
+                   time="2026-10-29 09:30:55", reset_archived=True)
+        state["ledger"]["entries"] = [dict(buy)]
+        state["trades"] = [buy, dict(side="adjust", adjustment_kind="buy_void",
+            adjusts_entry_id="buy1", code="002636", qty=20)]
+        original = copy.deepcopy(state)
+        self.assertEqual(effective_deliveries(state), ([], []))
+        self.assertEqual(state, original)
+        state["holdings"]["positions"]["002636"]["qty"] = 20
+        self.assertTrue(effective_deliveries(state)[1])
+
     def test_snapshot_daily_quota_counts_buys_even_after_sales_and_uses_current_sell_signal(self):
         state = self.state()
         state['trades'] = [dict(code='001282', side='buy', session='2026-10-22'),

@@ -121,6 +121,41 @@ def _append_note(row: dict[str, Any], tip: str) -> None:
         row["挂单说明"] = f"{tip}；{note}" if note else tip
 
 
+def clear_blocked_buy_signal(row: dict[str, Any]) -> None:
+    """Remove stale buy UI fields without removing holdings or sell signals."""
+    if gate_ok(row) is not False:
+        return
+    for key in ("策略展示状态", "首次触买时间", "预警交易日"):
+        row.pop(key, None)
+    entry_day = str(row.get("策略入场时间") or "")[:10]
+    if (int(row.get("持仓") or 0) == 0 and entry_day
+            and entry_day == str(row.get("交易日") or "")[:10]):
+        row["策略展示状态"] = "未过门"
+    row.update({"已触买": "否", "近买点": False, "槽位候选": False, "可执行": False,
+                "预警保留": False})
+    buy_alert = "买" in alert_text(row)
+    if buy_alert:
+        row["预警"] = ""
+    if str(row.get("持仓状态") or "") == "待买入":
+        row["持仓状态"] = "今日平仓" if row.get("已实现") else "空仓"
+    for side, price in (("因子侧", "因子价"), ("已触发因子侧", "已触发因子价"),
+                        ("未触发因子侧", "未触发因子价")):
+        if row.get(side) == "买入":
+            row[side] = "-"
+            row[price] = None
+    if buy_alert or str(row.get("信号因子") or "") in ("factor26", "factor29", "factor33"):
+        for key in ("信号时间", "买信号时间", "买入信号时间"):
+            row.pop(key, None)
+        if not row.get("近止损"):
+            row["因子触发"] = "-"
+            row["当日预警"] = False
+        if "买" in str(row.get("挂单说明") or ""):
+            row["挂单说明"] = ""
+    for key in ("bg_class", "bgClass"):
+        if row.get(key) == "warn-buy":
+            row[key] = ""
+
+
 def _clear_stale_no_gate_alert(row: dict[str, Any]) -> None:
     """清掉历史「触买价·未过门」粘滞，恢复空仓展示。"""
     if not is_weak_price_buy_alert(row):
@@ -157,6 +192,7 @@ def annotate_unfilled_buy_signals(
             continue
         # 未过门 / 历史弱信号：一律清掉，不算触买、不预警
         if gate_ok(r) is False or is_weak_price_buy_alert(r):
+            clear_blocked_buy_signal(r)
             _clear_stale_no_gate_alert(r)
             r["当日预警"] = False
             r["槽位候选"] = False

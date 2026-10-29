@@ -41,8 +41,12 @@ def test_transient_signal_and_no_execution_fields():
     cache.merge([signal()], datetime(2026, 10, 16, 10))
     row = dict(代码='600000', 交易日='2026-10-16', 持仓=0, 预警='空仓', 过门OK=False, 可执行=False)
     cache.merge([row], datetime(2026, 10, 16, 16))
-    assert row['已触买'] == '是'
+    assert row['已触买'] == '否'
     assert row['可执行'] is False
+    assert '600000' not in cache.records
+    assert '策略展示状态' not in row
+    assert '首次触买时间' not in row
+    assert cache.merge([], datetime(2026, 10, 16, 16)) == []
 
 
 def test_failed_write_retried():
@@ -130,6 +134,25 @@ def test_persisted_strategy_caches_have_separate_keys():
         assert _retention_document_key() == 'watch_alert_retention_strategy1'
     with patch('watch_config.STRATEGY_ID', 'strategy16'):
         assert _retention_document_key() == 'watch_alert_retention'
+
+
+def test_failed_gate_wins_over_today_virtual_holding_and_persisted_buy():
+    stored = {}
+    def write(records):
+        stored.clear(); stored.update(deepcopy(records))
+    cache = AlertRetention(lambda: deepcopy(stored), write, strategy_id='strategy1')
+    cache.merge([signal()], datetime(2026,10,16,10))
+    row = dict(signal(), 策略状态='策略持有', 策略入场时间='2026-10-16 09:30:55',
+               策略展示状态='已触买', 首次触买时间='09:30:55')
+    row['过门OK'] = False
+    cache.merge([row], datetime(2026,10,16,11))
+    assert row['已触买'] == '否'
+    assert row['策略展示状态'] == '未过门'
+    assert '首次触买时间' not in row
+    assert row['策略状态'] == '策略持有'  # historical book remains unchanged
+    assert not stored
+    assert AlertRetention(lambda: deepcopy(stored), write, strategy_id='strategy1').merge(
+        [], datetime(2026,10,16,12)) == []
 
 
 if __name__ == '__main__':

@@ -33,6 +33,10 @@ class QuoteAlerts:
 
     def enrich(self, row, quote, *, now, signal, entry_pct, tick, official_open=None,
                blocked=False):
+        from watch_buy_signal import clear_blocked_buy_signal
+        if blocked:
+            row['过门OK'] = False
+        clear_blocked_buy_signal(row)
         session = str(row.get('交易日') or '')
         code = str(row.get('代码') or '')
         opening = float(official_open or 0)
@@ -51,6 +55,8 @@ class QuoteAlerts:
                 self._targets[code] = dict(session=session, open=opening, price=buy, tick=tick, factor=row.get('信号因子'))
             else:
                 self._targets.pop(code, None)
+                if not allowed:
+                    self._hits = {k: v for k, v in self._hits.items() if k[:2] != (session, code)}
         self.observe(code, quote, now)
         row.update({'开盘': opening, '买点': buy, '买入侧价': buy, '阈值就绪': True})
         if row.get('已实现'):

@@ -333,6 +333,7 @@ function tradeIncomePct(r: HoldingRow): number | null {
 
 /** 策略主状态：来自 Strategy Simulator（空仓/策略持有），不跟纸面 qty。 */
 function strategyStatusLabel(r: HoldingRow): string {
+  if (r.策略展示状态 === '未过门') return '未过门'
   if (r.策略展示状态 === '已触买') return '已触买'
   const sim = String(r.策略状态 || '').trim()
   if (sim === '策略持有' || sim === '空仓') return sim
@@ -376,6 +377,7 @@ function showPaperDebug(r: HoldingRow): boolean {
 }
 
 function statusClock(r: HoldingRow): string {
+  if (strategyStatusLabel(r) === '未过门') return ''
   return fmtSignalClock(r.策略入场时间) || fmtSignalClock(r.信号时间) || ''
 }
 

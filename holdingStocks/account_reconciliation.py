@@ -55,6 +55,41 @@ def effective_deliveries(state: dict[str, Any]):
     for i, trade in enumerate(state.get("trades", [])):
         if trade.get("side") != "adjust" or trade.get("reset_archived"):
             continue
+        if trade.get("adjustment_kind") == "buy_signal_restate":
+            matches = [e for e in entries if e.get("id") == trade.get("adjusts_entry_id")
+                       and e.get("side") == "buy" and e.get("code") == trade.get("code")
+                       and e.get("qty") == trade.get("qty")]
+            replacement = trade.get("replacement_delivery")
+            if (len(matches) != 1 or not isinstance(replacement, dict)
+                    or any(replacement.get(k) != matches[0].get(k) for k in ("id", "code", "side", "qty", "after_qty"))
+                    or not number(replacement.get("price")) or number(replacement["price"]) <= 0
+                    or str(replacement.get("session")) != str(matches[0].get("session"))):
+                issues.append({"kind": "invalid_buy_signal_restate", "trade_index": i})
+                continue
+            entry = matches[0]
+            replacement = copy.deepcopy(replacement)
+            replacement.update(original_price=entry["price"], original_time=entry["time"],
+                               adjustment_ids=[trade.get("id")], pnl_basis="committed_fill_plus_adjustments")
+            entries[entries.index(entry)] = replacement
+            continue
+        if trade.get("adjustment_kind") == "buy_void":
+            ref = trade.get("adjusts_entry_id")
+            matches = [e for e in entries if ref and e.get("id") == ref
+                       and e.get("side") == "buy" and e.get("code") == trade.get("code")
+                       and e.get("qty") == trade.get("qty")]
+            archived = any(t.get("id") == ref and t.get("reset_archived")
+                           for t in state.get("trades", []))
+            if len(matches) != 1 or not archived:
+                issues.append({"kind": "invalid_buy_void", "trade_index": i})
+                continue
+            entry = matches[0]
+            later = [e for e in entries if e.get("code") == entry.get("code")
+                     and str(e.get("time", "")) > str(entry.get("time", ""))]
+            if later or int(state["holdings"].get("positions", {}).get(entry["code"], {}).get("qty") or 0):
+                issues.append({"kind": "buy_void_has_later_position", "trade_index": i})
+                continue
+            entries.remove(entry)
+            continue
         ref = trade.get("adjusts_entry_id")
         old_price = number(trade.get("previous_price"))
         new_price = number(trade.get("price"))

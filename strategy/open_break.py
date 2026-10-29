@@ -22,6 +22,7 @@ STRATEGY_RULES = """
   触发：当日最高价 >= ceil(开盘价 × (1 + 阈值))，按触发价限价买入，仓位约 95%。
   过滤（须同时满足）：
     · 前一日为阴线，或「小阳」：收盘涨幅严格 < 阈值（收盘 < 开盘×(1+阈值)）
+    · 前日十字线须相对前收涨幅≤5%；缺前收不放行。
     · 禁「前面双阳且跨日≥5%」：
         前前日、前日均为阳线，且 前日收盘/前前日开盘 - 1 ≥ 5% → 今日不买
         （弱双阳跨日不足 5% 不禁；不另设单阳禁买，大阳已由「阴/小阳」过滤）
@@ -363,6 +364,7 @@ def replay_last_factor_triggers(
         allows = prev_day_allows_entry(
             float(prev["open"]),
             float(prev["close"]),
+            prev2_close=float(prev2["close"]) if prev2 is not None else None,
             prev_small_yang_pct=entry_pct,
             prev_entry_mode=prev_entry_mode,
         )
@@ -561,6 +563,7 @@ def replay_strategy_return_since(
         allows = prev_day_allows_entry(
             float(prev["open"]),
             float(prev["close"]),
+            prev2_close=float(prev2["close"]) if prev2 is not None else None,
             prev_small_yang_pct=entry_pct,
             prev_entry_mode=prev_entry_mode,
         )
@@ -627,6 +630,7 @@ def entry_filters_ok(
             prev_small_yang_pct=entry_pct,
             prev_entry_mode=prev_entry_mode,
             tick=tick,
+            prev2_close=prev2_close,
         ):
             return False
     if should_block_entry_by_yang(
@@ -675,6 +679,7 @@ def prev_day_allows_entry(
     prev_open: float,
     prev_close: float,
     *,
+    prev2_close: float | None = None,
     prev_small_yang_pct: float = PREV_SMALL_YANG_PCT,
     # yin_or_small_yang=阴线或小阳可买；yin_only=仅阴线，小阳次日不买
     prev_entry_mode: str = "yin_or_small_yang",
@@ -684,7 +689,12 @@ def prev_day_allows_entry(
         return False
     if prev_entry_mode in ("any", "limit_up_ok"):
         return True
-    # 阴线或十字：允许（十字不算阳，视同可开仓的弱势日）
+    # 十字也需限制相对前收的日涨幅，避免高开涨停被当成弱势日。
+    if is_doji(prev_open, prev_close, tick=tick):
+        if prev2_close is None or not math.isfinite(float(prev2_close)) or float(prev2_close) <= 0:
+            return False
+        return float(prev_close) <= float(prev2_close) * 1.05 + 1e-8
+    # 阴线允许；阳线继续检查实体涨幅。
     if not is_yang(prev_open, prev_close, tick=tick):
         return True
     if prev_entry_mode == "yin_only":

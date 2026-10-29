@@ -1233,6 +1233,11 @@ def build_watch_snapshot(
             ),
         )
 
+    from watch_buy_signal import clear_blocked_buy_signal
+    rows = [dict(r) for r in rows]
+    for row in rows:
+        clear_blocked_buy_signal(row)
+
     holdings = _fill_stock_names([
         _row_json(r)
         for r in filter_portfolio_holdings(rows, portfolio_codes=portfolio_codes, strategy_codes=strategy_codes)
