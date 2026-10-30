@@ -1,0 +1,112 @@
+{
+  "day": "2026-10-30",
+  "from_time": "2026-10-30 09:30:00",
+  "cutoff": "2026-10-30 10:35:00",
+  "scope": "today existing bought symbols and prerequisite overnight exits",
+  "source": "Sina 1m; timestamps are minute bar endpoints",
+  "events": [
+    {
+      "code": "002454",
+      "action": "sell",
+      "price": 4.51,
+      "time": "2026-10-30 09:30:00",
+      "rule": "shared overnight open protection"
+    },
+    {
+      "code": "600330",
+      "action": "sell",
+      "price": 18.66,
+      "time": "2026-10-30 09:30:00",
+      "rule": "shared overnight open protection"
+    },
+    {
+      "code": "601208",
+      "action": "sell",
+      "price": 32.87,
+      "time": "2026-10-30 09:30:00",
+      "rule": "shared overnight open protection"
+    },
+    {
+      "code": "002636",
+      "action": "buy",
+      "price": 57.07,
+      "order_price": 57.07,
+      "qty": 900,
+      "time": "2026-10-30 09:31:00",
+      "factor": "factor26",
+      "minute_timestamp": "bar end; subminute ordering unavailable"
+    },
+    {
+      "code": "600330",
+      "action": "buy",
+      "price": 18.59,
+      "order_price": 18.46,
+      "qty": 2900,
+      "time": "2026-10-30 10:01:00",
+      "factor": "factor33",
+      "minute_timestamp": "bar end; subminute ordering unavailable"
+    },
+    {
+      "code": "600552",
+      "action": "buy",
+      "price": 12.07,
+      "order_price": 12.07,
+      "qty": 4600,
+      "time": "2026-10-30 10:04:00",
+      "factor": "factor33",
+      "minute_timestamp": "bar end; subminute ordering unavailable"
+    }
+  ],
+  "account": {
+    "accountTotal": 280194.65,
+    "availableCash": 112627.65,
+    "marketValue": 167567.0,
+    "feeModel": "strategy.costs.v1",
+    "cost": 160796.0,
+    "paperEquityBase": 300000.0,
+    "totalPnl": -19805.35,
+    "totalPnlPct": -6.6,
+    "dayPnl": 1299.65,
+    "dayPnlPct": 0.47,
+    "accountOpen": 278895.0,
+    "positionPct": 59.8,
+    "settledCount": 3,
+    "settledPnl": -15593.26,
+    "settledDayPnl": -5295.1,
+    "settledSession": "2026-10-30",
+    "equityBasis": "cash_plus_market_value",
+    "dayPnlBasis": "committed_fills_and_adjustments_plus_position_daily_pnl",
+    "paperRevision": 27661,
+    "reconciliationIssues": [
+      {
+        "kind": "buy_void_has_later_position",
+        "trade_index": 122
+      },
+      {
+        "kind": "unsupported_adjustment",
+        "trade_index": 125
+      },
+      {
+        "kind": "unsupported_adjustment",
+        "trade_index": 126
+      },
+      {
+        "kind": "unsupported_adjustment",
+        "trade_index": 127
+      }
+    ],
+    "equityDayPnl": 1299.65,
+    "dayPnlVsEquity": -0.0
+  },
+  "cash_delta": -3025.24,
+  "source_revision": 27661,
+  "original_trade_ids": [
+    "34438ae7124c4d8d804b446a0354dcd9",
+    "42b36e29b7724fd68295a923d6e565e6",
+    "5cd3a8ebb37344fbb8fea075635ae1e5",
+    "855761e7b63645e7bbbc59e4ec92b4e4",
+    "b8c97dc0eb2145f7861551f3bef1321c",
+    "d94d7b89a6d5404eb85d4494d96a9cdd"
+  ],
+  "verified": true
+}

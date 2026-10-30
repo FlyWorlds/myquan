@@ -1,0 +1,86 @@
+{
+  "complete": true,
+  "target": "2026-10-30T09:30:00+08:00",
+  "database": "myquan",
+  "revision": 27423,
+  "all_tables_match": true,
+  "table_hashes": {
+    "app_document_writes": {
+      "count": 356853,
+      "sha256": "f9334e55acdc7b65009b7f50d30759c834cfc1e7130cd11a465f9df8e5a606bf"
+    },
+    "app_documents": {
+      "count": 26,
+      "sha256": "299db25a7167cef89127e70659706a1f436c4d57637ae82f16d3dc330af84bc4"
+    },
+    "backend_metadata": {
+      "count": 2,
+      "sha256": "cecfa66f977b9823fa85fca7e27aec38eb88c4980019805625edc0618c8d28fe"
+    },
+    "flyway_schema_history": {
+      "count": 10,
+      "sha256": "1db966bb73fec06f659a0bdb755dc4e00295986f6c013d0a2221e1442b1a7270"
+    },
+    "market_quote_latest": {
+      "count": 53,
+      "sha256": "1f6787f9a233b2811c0bd82c3001a2590da5d2b09421f005eda760899f97dcf0"
+    },
+    "paper_account_snapshots": {
+      "count": 4409,
+      "sha256": "91d3b477cc00fdd7d48556dda9c0b8a14fc19c896c1beb65cef8248651a294df"
+    },
+    "paper_account_state": {
+      "count": 1,
+      "sha256": "fdaf7b2cd01eb55afb549ff0e5b0ec60b917cbe533ef107f5ad21b2cf3e41467"
+    },
+    "paper_delivery_entries": {
+      "count": 91,
+      "sha256": "e78a204e74aadb99bba8aa4c35062862dfff3287bba0055c935bd6ca47628d37"
+    },
+    "paper_holdings": {
+      "count": 3,
+      "sha256": "97ef0de3a96c53001a7d7115bdb26c25cba0f788e8988d93aa4825b1ce622e5d"
+    },
+    "paper_holdings_sync": {
+      "count": 1,
+      "sha256": "32778b63a1212bafab89e978c1b5039c195b8e0f2111dab7fdd81d677973a3ee"
+    },
+    "paper_state_writes": {
+      "count": 27423,
+      "sha256": "515659edeaf56dd59bd446cab8ae05923d7ab74a3afa6e18eae5bbef924c0a26"
+    },
+    "paper_trade_history": {
+      "count": 130,
+      "sha256": "fa45b10139d1bb2d1299ec7e6eba677d63f99bad42ed8484dd77975a33863abf"
+    },
+    "strategy_legacy_checkpoints": {
+      "count": 79,
+      "sha256": "252f6cab5ab9187bfec8971ef0452bcfd6510519a434b71436651868849b8664"
+    },
+    "strategy_selection_groups": {
+      "count": 4,
+      "sha256": "d8163a4c31f1017329593ff8f65c6ebdde93f1c522c0d69ed39c9c17f322c1ed"
+    },
+    "strategy_selection_preferences": {
+      "count": 1,
+      "sha256": "52e3d099971f5c897afd7ddba57e619b3550f413cf090388770b81304a6104c1"
+    },
+    "strategy_sim_voided_events": {
+      "count": 75798,
+      "sha256": "61d22b0e84bbeb247ee8add8e8e0fdd94aeba60620d3be088647995dbdff8dd9"
+    },
+    "strategy_symbol_books": {
+      "count": 104,
+      "sha256": "d3995d4b155997fcfc4c8479633848e58584441137dea763f171da22184bdc91"
+    },
+    "strategy_symbol_events": {
+      "count": 156,
+      "sha256": "c3a5e1887d4a00970761d2bef2b47a6ad458d4bed756c2cab15ff008c2da1fd4"
+    }
+  },
+  "derived_view_rows": 40,
+  "safety_backup": "/Users/wangxiangyu/Documents/myquan/backend/logs/backups/20261030-102725-9f2a35",
+  "safety_backup_sha256": "525f3857268513decc223c9d7fb2ef3608fd438fea37e2336ad9ec4ebcb2731e",
+  "restored_at": "2026-10-30T10:28:12.386503+08:00",
+  "services_running": false
+}

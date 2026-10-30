@@ -1,0 +1,8 @@
+
+                       Setting The Variable Value BINLOG_ROW_METADATA = FULL, BINLOG_ROW_IMAGE = FULL.
+                       By Applying this, provide properly mapped column information on UPDATE,DELETE,INSERT.
+                        
+SCAN binlog.000246 557187869 transactions 10924 changed_keys 3766
+SCAN binlog.000249 344088124 transactions 21185 changed_keys 7088
+SCAN binlog.000250 805436973 transactions 26019 changed_keys 8666
+SCAN_DONE 8811

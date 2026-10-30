@@ -101,6 +101,66 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(issues[0]["kind"],"ambiguous_adjustment")
         self.assertIsNone(account_summary(state,self.rows(),"2026-10-14")["dayPnl"])
 
+    def test_historical_adjustment_warning_does_not_hide_today_return(self):
+        state = self.state()
+        state["trades"] = [dict(side="adjust", adjustment_kind="sell_void",
+            time="2026-10-13 16:00:00", session="2026-10-13")]
+        original = copy.deepcopy(state)
+        summary = account_summary(state, self.rows(), "2026-10-14")
+        self.assertEqual(summary["dayPnl"], 30)
+        self.assertEqual(summary["dayPnlPct"], 3)
+        self.assertEqual(summary["settledDayPnl"], 10)
+        self.assertTrue(summary["reconciliationIssues"])
+        self.assertEqual(state, original)
+        state["trades"][0]["session"] = "2026-10-14"
+        self.assertIsNone(account_summary(state, self.rows(), "2026-10-14")["dayPnl"])
+
+    def test_adjustment_warning_uses_referenced_fill_day(self):
+        state = self.state()
+        state["trades"] = [dict(side="adjust", adjustment_kind="sell_void",
+            adjusts_entry_id="a", session="2026-10-15")]
+        self.assertIsNone(account_summary(state, self.rows(), "2026-10-14")["dayPnl"])
+        state["trades"][0].pop("session")
+        state["trades"][0].pop("adjusts_entry_id")
+        self.assertIsNone(account_summary(state, self.rows(), "2026-10-14")["dayPnl"])
+
+    def test_session_replay_preserves_source_and_uses_replacement_once(self):
+        state = self.state()
+        old = state["ledger"]["entries"][0]
+        new = dict(old, id="replayed", price=11, pnl=10, day_pnl=0)
+        state["ledger"]["entries"].append(new)
+        state["trades"] = [dict(old, reset_archived=True), new,
+            dict(side="adjust", adjustment_kind="session_replay", session="2026-10-14",
+                 voided_delivery_ids=[old["id"]], replacement_delivery_ids=["replayed"])]
+        original = copy.deepcopy(state)
+        entries, issues = effective_deliveries(state)
+        self.assertEqual(entries, [new])
+        self.assertFalse(issues)
+        self.assertEqual(account_summary(state, self.rows(), "2026-10-14")["dayPnl"], 20)
+        self.assertEqual(state, original)
+        state["trades"][0].pop("reset_archived")
+        self.assertTrue(effective_deliveries(state)[1])
+        self.assertIsNone(account_summary(state, self.rows(), "2026-10-14")["dayPnl"])
+
+    def test_closed_cards_survive_rebuy_without_changing_account_inventory(self):
+        from account_reconciliation import AccountReadModel, closed_trade_rows
+        state = self.state()
+        sale = state["ledger"]["entries"][0]
+        sale.update(after_qty=0, buy_time="2026-10-13 09:32:00")
+        state["holdings"]["positions"]["002636"].update(qty=30, cost=13, buy_time="2026-10-14 11:00:00")
+        state["ledger"]["entries"].append(dict(id="rebuy", side="buy", code="002636",
+            qty=30, after_qty=30, price=13, time="2026-10-14 11:00:00", session="2026-10-14"))
+        original = copy.deepcopy(state)
+        rows = closed_trade_rows(AccountReadModel(state), "2026-10-14")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["持仓"], 0)
+        self.assertEqual(rows[0]["成交价"], 12)
+        self.assertEqual(rows[0]["当日盈亏"], 10)
+        self.assertEqual(state, original)
+        self.assertEqual(closed_trade_rows(AccountReadModel(state), "2026-10-15"), [])
+        sale["after_qty"] = 20
+        self.assertEqual(closed_trade_rows(AccountReadModel(state), "2026-10-14"), [])
+
     def test_missing_quote_or_cost_conflict_cannot_publish_partial_equity(self):
         self.assertIsNone(account_summary(self.state(),[],"2026-10-14")["accountTotal"])
         rows=self.rows()

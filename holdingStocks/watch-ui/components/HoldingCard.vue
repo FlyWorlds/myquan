@@ -5,6 +5,7 @@ import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 import { fmtPositionPct, positionPctOf } from '~/utils/position'
 import { holdingCyclePnl } from '~/utils/holdingCyclePnl'
+import { buySignalTooltip } from '~/utils/buySignalTooltip'
 
 const props = defineProps<{ row: HoldingRow; accountTotal?: number | null; dense?: boolean; band?: 'inside' | 'outside' }>()
 
@@ -68,6 +69,8 @@ const triggerTimeClass = computed(() => {
 
 const touchClock = computed(() => fmtSignalClock(props.row.买信号时间 || props.row.信号时间))
 
+const buyTooltip = computed(() => buySignalTooltip(props.row, visual.value.tier, pdg))
+
 const buyAlertPx = computed(() => {
   const px = props.row.买入侧价 ?? props.row.买点
   const n = Number(px)
@@ -108,7 +111,9 @@ const cardClass = computed(() => {
               <span class="text-[10px] font-normal text-ui-text-3">{{ row.市场 }}</span>
             </h2>
             <div class="flex flex-wrap items-center gap-1.5">
-              <span :class="band === 'outside' && visual.tier !== 'trigger-buy' ? 'signal-badge signal-badge-flat' : visual.badgeClass" :title="posStatus">{{ band === 'outside' && visual.tier !== 'trigger-buy' ? '线外' : visual.badgeText }}</span>
+              <SignalTooltip :text="buyTooltip">
+                <span :class="[band === 'outside' && visual.tier !== 'trigger-buy' ? 'signal-badge signal-badge-flat' : visual.badgeClass, buyTooltip ? 'cursor-help' : '']" :title="buyTooltip ? undefined : posStatus">{{ band === 'outside' && visual.tier !== 'trigger-buy' ? '线外' : visual.badgeText }}</span>
+              </SignalTooltip>
               <span v-if="visual.tier === 'trigger-buy' && touchClock" class="font-mono text-[11px] tabular-nums text-up">{{ touchClock }}</span>
               <span v-if="pinned" class="rounded-full border border-ui-hairline px-2 py-0.5 text-[10px] text-ui-text-2">置顶持仓</span>
               <span v-else-if="slotTrace" class="rounded-full border border-ui-hairline px-2 py-0.5 text-[10px] text-ui-text-2">今日平仓 · 不占槽</span>
@@ -117,7 +122,7 @@ const cardClass = computed(() => {
           </div>
         </div>
         <div class="sensitive shrink-0 text-right tabular-nums">
-          <div class="text-[10px] text-ui-text-3">现价</div>
+          <div class="text-[10px] text-ui-text-3">{{ slotTrace ? '平仓价' : '现价' }}</div>
           <b class="leading-tight" :class="dense ? 'text-base' : 'text-xl'">{{ fmtNum(row.现价, pdg) }}</b>
           <ChgText class="ml-2 text-xs font-semibold" :chg="row.当日涨幅">{{ fmtSignedPct(row.当日涨幅) }}</ChgText>
         </div>

@@ -191,8 +191,9 @@ export function createStatusDebouncer(debounceMs = 3_000) {
   }
 }
 
-/** Throttle price-driven movement (10s) and debounce status changes (3s); membership and row values always update immediately. */
+/** Throttle all card movement (at least 5s), including touch priority and warning bands. */
 export function createAlertPriceOrder(intervalMs = 10_000, statusDebounceMs = 3_000) {
+  intervalMs = Math.max(5_000, intervalMs)
   let order: string[] = []
   let lastSortedAt = -Infinity
   const statusDebouncer = createStatusDebouncer(statusDebounceMs)
@@ -221,19 +222,18 @@ export function createAlertPriceOrder(intervalMs = 10_000, statusDebounceMs = 3_
       }
       const stabilized = statusDebouncer.update(rows as Array<T & Record<string, any>>, now) as T[]
       const previous = new Map(order.map((code, i) => [code, i]))
-      let next = [...stabilized].sort((a, b) => {
-        const band = Number(a.预警线内 === false) - Number(b.预警线内 === false)
-        if (band) return band
-        return (previous.get(codeOf(a)) ?? Infinity) - (previous.get(codeOf(b)) ?? Infinity)
-      })
+      let next = [...stabilized].sort((a, b) =>
+        (previous.get(codeOf(a)) ?? Infinity) - (previous.get(codeOf(b)) ?? Infinity),
+      )
       if (now - lastSortedAt >= intervalMs) {
-        // Stable ties retain the previous order; touch-buy priority is applied separately.
+        // Stable ties retain the previous order. Apply every priority in this same window.
         next = next.sort((a, b) => {
           const band = Number(a.预警线内 === false) - Number(b.预警线内 === false)
           if (band) return band
           const da = distance(a), db = distance(b)
           return da === db ? 0 : da < db ? -1 : 1
         })
+        next = orderAlertCards(next)
         lastSortedAt = now
       }
       order = next.map(codeOf)

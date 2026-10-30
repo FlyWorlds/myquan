@@ -55,6 +55,26 @@ def effective_deliveries(state: dict[str, Any]):
     for i, trade in enumerate(state.get("trades", [])):
         if trade.get("side") != "adjust" or trade.get("reset_archived"):
             continue
+        if trade.get("adjustment_kind") == "session_replay":
+            refs = trade.get("voided_delivery_ids")
+            replacements = trade.get("replacement_delivery_ids")
+            day = str(trade.get("session") or "")[:10]
+            by_id = {e.get("id"): e for e in entries}
+            archived = {t.get("id") for t in state.get("trades", []) if t.get("reset_archived")}
+            valid = (isinstance(refs, list) and bool(refs) and isinstance(replacements, list)
+                     and bool(replacements) and len(set(refs)) == len(refs)
+                     and len(set(replacements)) == len(replacements)
+                     and not set(refs).intersection(replacements) and len(day) == 10
+                     and all(ref in by_id and ref in archived for ref in refs)
+                     and all(ref in by_id for ref in replacements))
+            if valid:
+                valid = all(str(by_id[ref].get("session") or by_id[ref].get("time") or "")[:10] == day
+                            and by_id[ref].get("side") in ("buy", "sell") for ref in refs + replacements)
+            if not valid:
+                issues.append({"kind": "invalid_session_replay", "trade_index": i})
+                continue
+            entries = [e for e in entries if e.get("id") not in set(refs)]
+            continue
         if trade.get("adjustment_kind") == "buy_signal_restate":
             matches = [e for e in entries if e.get("id") == trade.get("adjusts_entry_id")
                        and e.get("side") == "buy" and e.get("code") == trade.get("code")
@@ -150,6 +170,37 @@ class AccountReadModel:
         return cycle_return(self.state, row, read_model=self)
 
 
+def closed_trade_rows(model, session):
+    """Independent full-exit cards from effective fills, including symbols bought again."""
+    rows = []
+    for entry in model.entries:
+        if (entry.get("side") != "sell" or entry.get("after_qty") != 0
+                or str(entry.get("session") or entry.get("time") or "")[:10] != session):
+            continue
+        qty = int(entry.get("qty") or 0)
+        if qty <= 0:
+            continue
+        cost, pnl = number(entry.get("cost")), number(entry.get("pnl"))
+        base = cost * qty + float(entry.get("allocated_buy_fees") or 0) if cost and cost > 0 else None
+        at = entry.get("time")
+        rows.append({"记录ID": entry.get("id"), "代码": entry.get("code"),
+            "名称": entry.get("name") or entry.get("code"), "市场": entry.get("market"),
+            "交易日": session, "持仓": 0, "可用": 0, "置顶": False, "槽位占用": False,
+            "槽位留痕": True, "已实现": True, "三槽平仓": True, "持仓状态": "今日平仓",
+            "卖出数量": qty, "成本": cost, "成交价": entry.get("price"), "现价": entry.get("price"),
+            "买入时间": entry.get("buy_time"), "平仓时间": at, "卖出时间": at,
+            "信号时间": entry.get("signal_time") or at, "更新": at,
+            "预警": "已平仓", "已触买": "否", "已触止损": "是",
+            "当日盈亏": entry.get("day_pnl"), "当日盈亏%": entry.get("day_pnl_pct"),
+            "浮盈": pnl, "浮盈%": entry.get("pnl_pct"), "盈亏状态": "结算",
+            "盈亏说明": "今日卖出已结算；再次买入不覆盖本记录",
+            "挂单说明": entry.get("note") or entry.get("reason"),
+            "综合单笔收入": pnl, "综合单笔成本额": base,
+            "综合单笔持仓数量": 0, "综合单笔卖出数量": qty,
+            "综合单笔来源": "database_delivery_cycle_with_adjustments"})
+    return sorted(rows, key=lambda row: (str(row.get("平仓时间") or ""), str(row.get("代码") or ""), str(row.get("记录ID") or "")))
+
+
 def account_summary(state: dict[str, Any], rows: list[dict[str, Any]], session: str, *, read_model=None):
     from strategy.akq_math import session_day_pnl
     book = state["holdings"]
@@ -164,7 +215,22 @@ def account_summary(state: dict[str, Any], rows: list[dict[str, Any]], session: 
     market = 0.0
     daily = 0.0
     valuation_ready = True
-    daily_ready = not issues
+    # A historical reconciliation warning does not invalidate today's committed
+    # position marks and sale daily PnL. Corrections apply to the referenced fill's
+    # session, even when the correction was recorded on a later day.
+    def affects_session(issue):
+        index = issue.get("trade_index")
+        if not isinstance(index, int) or not 0 <= index < len(state.get("trades", [])):
+            return True
+        trade = state["trades"][index]
+        ref = trade.get("adjusts_entry_id")
+        targets = [e for e in entries if ref and e.get("id") == ref]
+        if not targets:
+            targets = [trade]
+        days = [str(e.get("session") or e.get("time") or "")[:10] for e in targets]
+        return any(not day or day == session for day in days)
+
+    daily_ready = not any(affects_session(issue) for issue in issues)
     expected_codes = {code for code, pos in book.get("positions", {}).items() if int(pos.get("qty") or 0) > 0}
     if set(by_code) != expected_codes or any(e["kind"] == "duplicate_position_quote" for e in issues):
         valuation_ready = daily_ready = False

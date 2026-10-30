@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HoldingRow, StrategyPicks } from '~/types/snapshot'
 import { selectionRows } from '~/utils/selectionRows'
-import { createAlertPriceOrder, createHoldingPriceOrder, orderAlertCards, stickAlertRows } from '~/utils/alertBoard'
+import { createAlertPriceOrder, stickAlertRows } from '~/utils/alertBoard'
 
 const store = useWatchStore()
 const { error: databaseError } = useDatabaseHoldings()
@@ -244,7 +244,7 @@ function closedTimeKey(r: Record<string, any>): string {
 }
 
 const closedHoldings = computed(() => {
-  const list = (snapshot.value?.holdings || []).filter((r) => {
+  const list = (snapshot.value?.closedHoldings ?? snapshot.value?.holdings ?? []).filter((r) => {
     if (Number(r.持仓) > 0) return false
     // 今日平仓：纸面卖出（已实现）或三槽留痕；策略回放止损不进
     return Boolean(r.已实现) || Boolean(r.三槽平仓)
@@ -270,44 +270,19 @@ const rawPaperHoldings = computed(() => {
   )
 })
 
-const slotHoldings = ref<HoldingRow[]>([])
-const paperHoldings = ref<HoldingRow[]>([])
+function byBuyTime(a: HoldingRow, b: HoldingRow): number {
+  const key = (row: HoldingRow) => String(row.买入时间 || row.buy_time || row.策略入场时间 || '').trim().replace('T', ' ') || '9999-99-99 99:99:99'
+  return key(a).localeCompare(key(b)) || String(a.代码 || '').localeCompare(String(b.代码 || ''))
+}
+
+const slotHoldings = computed(() => rawSlotHoldings.value.slice().sort(byBuyTime))
+const paperHoldings = computed(() => rawPaperHoldings.value.slice().sort(byBuyTime))
 const alertCards = ref<HoldingRow[]>([])
-const slotHoldingOrder = createHoldingPriceOrder(10_000, 3_000)
-const paperHoldingOrder = createHoldingPriceOrder(10_000, 3_000)
-const alertPriceOrder = createAlertPriceOrder(10_000, 3_000)
-let slotSortTimer: ReturnType<typeof setTimeout> | undefined
-let paperSortTimer: ReturnType<typeof setTimeout> | undefined
+const alertPriceOrder = createAlertPriceOrder(5_000, 3_000)
 let alertSortTimer: ReturnType<typeof setTimeout> | undefined
 onBeforeUnmount(() => {
-  if (slotSortTimer != null) clearTimeout(slotSortTimer)
-  if (paperSortTimer != null) clearTimeout(paperSortTimer)
   if (alertSortTimer != null) clearTimeout(alertSortTimer)
 })
-
-function armSlotTimer(now: number) {
-  if (!import.meta.client || slotSortTimer != null || !slotHoldings.value.length) return
-  const wait = slotHoldingOrder.remaining(now)
-  if (wait <= 0) return
-  slotSortTimer = setTimeout(() => {
-    slotSortTimer = undefined
-    const t = performance.now()
-    slotHoldings.value = slotHoldingOrder.update(rawSlotHoldings.value, t)
-    armSlotTimer(t)
-  }, wait)
-}
-
-function armPaperTimer(now: number) {
-  if (!import.meta.client || paperSortTimer != null || !paperHoldings.value.length) return
-  const wait = paperHoldingOrder.remaining(now)
-  if (wait <= 0) return
-  paperSortTimer = setTimeout(() => {
-    paperSortTimer = undefined
-    const t = performance.now()
-    paperHoldings.value = paperHoldingOrder.update(rawPaperHoldings.value, t)
-    armPaperTimer(t)
-  }, wait)
-}
 
 function armAlertTimer(now: number) {
   if (!import.meta.client || alertSortTimer != null || !alertCards.value.length) return
@@ -316,7 +291,7 @@ function armAlertTimer(now: number) {
   alertSortTimer = setTimeout(() => {
     alertSortTimer = undefined
     const t = performance.now()
-    alertCards.value = orderAlertCards(alertPriceOrder.update(alertCards.value, t))
+    alertCards.value = alertPriceOrder.update(alertCards.value, t)
     armAlertTimer(t)
   }, wait)
 }
@@ -325,12 +300,6 @@ watch(
   snapshot,
   (snap) => {
     const now = performance.now()
-    slotHoldings.value = slotHoldingOrder.update(rawSlotHoldings.value, now)
-    armSlotTimer(now)
-
-    paperHoldings.value = paperHoldingOrder.update(rawPaperHoldings.value, now)
-    armPaperTimer(now)
-
     const taken = new Set(
       [...closedHoldings.value, ...rawPaperHoldings.value].map((row) => String(row.代码 || '')),
     )
@@ -343,7 +312,7 @@ watch(
       if (code && !quotes.has(code)) quotes.set(code, row)
     }
     const latest = stickAlertRows(alertCards.value, incoming, taken, quotes)
-    alertCards.value = orderAlertCards(alertPriceOrder.update(latest, now))
+    alertCards.value = alertPriceOrder.update(latest, now)
     // Never debounce the snapshot or restart this timer on each quote.
     armAlertTimer(now)
   },
@@ -441,7 +410,7 @@ const closedCount = computed(() => closedHoldings.value.length)
                   </template>
                 </span>
               </h2>
-              <p class="text-xs text-ui-text-3">当日买入 / 持有 / 待卖出 · 仅默认策略池入槽</p>
+              <p class="text-xs text-ui-text-3">按买入时间先后排序 · 仅默认策略池入槽</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <HoldingCard v-for="row in slotHoldings" :key="'slot-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" />
@@ -455,10 +424,10 @@ const closedCount = computed(() => closedHoldings.value.length)
                   {{ closedCount }} · 不占槽
                 </span>
               </h2>
-              <p class="text-xs text-ui-text-3">仅当日四槽纸面卖出；下一交易日清空</p>
+              <p class="text-xs text-ui-text-3">保留当日平仓记录，买回后仍显示 · 不占槽</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" />
+              <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.记录ID || `${row.代码}-${row.平仓时间 || row.卖出时间 || ''}`)" :row="row" :account-total="snapshot?.account?.accountTotal" />
             </div>
           </div>
           <div v-if="alertCards.length" class="space-y-2">
@@ -467,7 +436,7 @@ const closedCount = computed(() => closedHoldings.value.length)
                 {{ slotHoldings.length || closedHoldings.length || paperHoldings.length ? '预警' : '持仓列表' }}
                 <span class="ml-1 font-normal text-ui-text-3">{{ alertCards.length }}</span>
               </h2>
-              <p class="text-xs text-ui-text-3">已买入置顶 · 触买当天固定 · 其余红色线内、灰色线外</p>
+              <p class="text-xs text-ui-text-3">排序每5秒更新 · 触买当天保留 · 红色线内、灰色线外</p>
             </div>
             <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <HoldingCard

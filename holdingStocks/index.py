@@ -2278,16 +2278,21 @@ def _iter_snapshot_price_rows(snap: dict[str, Any]):
                 yield r
 
 
-def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any]) -> bool:
+def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any], *, read_model=None) -> bool:
     """出站快照兜底：所有页面行都补齐纸面整笔收益，避免显示最后一腿收益。"""
     from day_pnl_window import apply_day_pnl_window
     changed = apply_day_pnl_window(snap)
-    model = _HOLDINGS_STORE.read_model() if database_enabled() else None
+    model = read_model if read_model is not None else (_HOLDINGS_STORE.read_model() if database_enabled() else None)
     if model is not None and snap.get("paperRevision") is not None and snap["paperRevision"] != model.state["revision"]:
         return False  # A newer ledger must not mix into an older published account frame.
     if model is not None:
         from account_reconciliation import enrich_snapshot_trade_metadata
         changed = enrich_snapshot_trade_metadata(snap, model.state) or changed
+        from account_reconciliation import closed_trade_rows
+        closed = closed_trade_rows(model, str(snap.get("clock") or "")[:10])
+        if snap.get("closedHoldings") != closed:
+            snap["closedHoldings"] = closed
+            changed = True
     for r in _iter_snapshot_price_rows(snap):
         if str(r.get("收益账本") or "") in {"strategy1_database", "strategy16_database"}:
             continue
@@ -2627,6 +2632,8 @@ def publish_watch_snapshot(
     phase_key = market_phase()
     phase_label = market_phase_label(phase_key)
     frame = next((r.get("_paper_read_model") for r in rows if r.get("_paper_read_model")), None)
+    if frame is None and database_enabled():
+        frame = _HOLDINGS_STORE.read_model()
     holdings_meta = frame.state["holdings"] if frame else load_holdings()
     from watch_config import code_key, portfolio_pool_codes, strategy_watchlist_codes
 
@@ -2747,7 +2754,9 @@ def publish_watch_snapshot(
     if signal_updated_at:
         snapshot["signalUpdatedAt"] = signal_updated_at
         snapshot["signalScanSec"] = signal_scan_sec
-    _enrich_snapshot_comprehensive_trade_returns(snapshot)
+    # Closed fills must come from the same immutable revision as the account.
+    # A quote write during enrichment must not remove the independent closed list.
+    _enrich_snapshot_comprehensive_trade_returns(snapshot, read_model=frame)
     _stamp_snapshot_liveness(snapshot, clock=clock_now)
     keep_last = False
     published = False
@@ -2923,6 +2932,8 @@ def _publish_boot_holdings_preview(*, get_quote=None) -> bool:
     rows, account = build_boot_holdings(model, session=_calendar_signal_session(),
                                        clock=_now(), get_quote=get_quote)
     snap = dict(base, holdings=rows, account=account, paperRevision=model.state["revision"])
+    from account_reconciliation import closed_trade_rows
+    snap["closedHoldings"] = closed_trade_rows(model, _calendar_signal_session())
     occupied = [r["代码"] for r in rows if int(r.get("持仓") or 0)>0]
     snap["slotMeta"] = dict(base.get("slotMeta") or {}, occupied=occupied,
                             occupiedCount=len(occupied), free=max(0, int(MAX_POSITION_SYMBOLS)-len(occupied)))

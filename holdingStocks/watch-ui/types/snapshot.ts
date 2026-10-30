@@ -485,6 +485,7 @@ export interface WatchSnapshot {
   slotMeta?: SlotMeta
   indices: IndexQuote[]
   holdings: HoldingRow[]
+  closedHoldings?: HoldingRow[]
   strategy1: HoldingRow[]
   strategy3?: Strategy3Payload
   strategy8?: Strategy8Payload

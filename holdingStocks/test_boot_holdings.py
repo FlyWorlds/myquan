@@ -91,6 +91,24 @@ class BootHoldingsTests(unittest.TestCase):
             self.assertFalse(index._publish_boot_holdings_preview())
             self.assertEqual(index._last_watch_snapshot["holdings"][0]["现价"],999)
 
+    def test_closed_history_uses_published_frame_when_database_advances(self):
+        import index
+        state = self.state()
+        state["ledger"]["entries"] = [dict(id="closed-before-rebuy", code="002841", name="Test",
+            side="sell", qty=100, after_qty=0, cost=9, price=10, pnl=100, day_pnl=50,
+            time="2026-10-14 09:30:00", session="2026-10-14")]
+        model = AccountReadModel(state)
+        snap = dict(paperRevision=4, clock="2026-10-14 10:30:00", holdings=[])
+        store = Mock()
+        store.read_model.side_effect = AssertionError("must not fetch a newer account revision")
+        with patch.object(index, "database_enabled", return_value=True), patch.object(index, "_HOLDINGS_STORE", store):
+            index._enrich_snapshot_comprehensive_trade_returns(snap, read_model=model)
+        self.assertEqual(len(snap["closedHoldings"]), 1)
+        self.assertEqual(snap["closedHoldings"][0]["记录ID"], "closed-before-rebuy")
+        self.assertEqual(snap["closedHoldings"][0]["持仓"], 0)
+        self.assertEqual(state["holdings"]["positions"]["002841"]["qty"], 100)
+        store.read_model.assert_not_called()
+
     def test_many_rows_use_one_revision_and_one_corrected_index(self):
         import index
         store=Mock()

@@ -1,0 +1,7 @@
+HASH staging
+HASH current
+Traceback (most recent call last):
+  File "/Users/wangxiangyu/Documents/myquan/reports/db_rollback_20261030_093000/apply_verified.py", line 44, in <module>
+    if q.fetchone()[0]!=manifest['restoreCheck']['revision']:raise RuntimeError('Source changed after safety backup; stopped before restore')
+                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Source changed after safety backup; stopped before restore

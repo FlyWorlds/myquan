@@ -1,0 +1,11 @@
+[停止] python（仅本启动器登记的进程）
+[停止] java（仅本启动器登记的进程）
+[停止] MySQL 与未接管的已有服务保持运行。
+BACKUP stopped current database
+SAFETY /Users/wangxiangyu/Documents/myquan/backend/logs/backups/20261030-102725-9f2a35/manifest.json
+HASH staging
+HASH current
+APPLY verified 09:30 state
+VERIFY production all base tables
+COMPLETE 2026-10-30T09:30:00+08:00 revision 27423 tables 18
+SERVICES_STOPPED_VERIFIED

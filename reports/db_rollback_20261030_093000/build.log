@@ -1,0 +1,13 @@
+RESTORED app_document_writes keys 7689 before_rows 0
+RESTORED app_documents keys 8 before_rows 8
+RESTORED market_quote_latest keys 36 before_rows 26
+RESTORED paper_account_snapshots keys 16 before_rows 0
+RESTORED paper_account_state keys 1 before_rows 1
+RESTORED paper_delivery_entries keys 99 before_rows 91
+RESTORED paper_holdings keys 7 before_rows 3
+RESTORED paper_holdings_sync keys 1 before_rows 1
+RESTORED paper_state_writes keys 760 before_rows 0
+RESTORED paper_trade_history keys 138 before_rows 130
+RESTORED strategy_symbol_books keys 35 before_rows 25
+RESTORED strategy_symbol_events keys 21 before_rows 0
+VERIFIED {"revision": 27423, "cash": 119588, "positions": {"600330": {"qty": 2700, "cost": 21.14}, "601208": {"qty": 1500, "cost": 36.58}, "002454": {"qty": 12100, "cost": 4.76}}, "latest_trade": "2026-10-29 22:18:19"}

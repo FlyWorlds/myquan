@@ -1,0 +1,74 @@
+{
+  "app_document_writes": {
+    "count": 366804,
+    "sha256": "4e7e4c279505aa60499a91bedf6b91ded510601d8cdc762a46321d9fe57d5926"
+  },
+  "app_documents": {
+    "count": 26,
+    "sha256": "5b0fd59ae9bd076510ab636b49d885c146e5e04f5fcbe1d3391a0859baa633d0"
+  },
+  "backend_metadata": {
+    "count": 2,
+    "sha256": "cecfa66f977b9823fa85fca7e27aec38eb88c4980019805625edc0618c8d28fe"
+  },
+  "flyway_schema_history": {
+    "count": 10,
+    "sha256": "1db966bb73fec06f659a0bdb755dc4e00295986f6c013d0a2221e1442b1a7270"
+  },
+  "market_quote_latest": {
+    "count": 63,
+    "sha256": "5b1ba7e25078be8f37893722c9c1df1d43b9136b5b4e5c49767d8b5e366e5874"
+  },
+  "paper_account_snapshots": {
+    "count": 4425,
+    "sha256": "fe1b0a1b0b7594308837374f982bdb7008808af7c53b642a62cd2081d01ee7e3"
+  },
+  "paper_account_state": {
+    "count": 1,
+    "sha256": "46b53dc14d120ed55c4d7dc8009fa216789f858ee25e56010415491c6cc7c04c"
+  },
+  "paper_delivery_entries": {
+    "count": 99,
+    "sha256": "2283bea17460cc47dc47a4d39eb95c054ca2be6deffb5ec0d348680bd9885050"
+  },
+  "paper_holdings": {
+    "count": 2,
+    "sha256": "ef42380e064dd98c8ef15928e34391f1e0c0000044696fab9d714989e1face14"
+  },
+  "paper_holdings_sync": {
+    "count": 1,
+    "sha256": "e8c629b1db8c7e119b6da1bb8b750d15bd38eaef8361645f85befead48ce13dd"
+  },
+  "paper_state_writes": {
+    "count": 28293,
+    "sha256": "5bcd57da257a0d3112d5696e94154799289c871a94cae5c0ada94bdb3d126989"
+  },
+  "paper_trade_history": {
+    "count": 138,
+    "sha256": "88cb56a97a9ea6f4d991b5da3e2e58b3cf4611352f67a6f36a9fc9f05c55a51c"
+  },
+  "strategy_legacy_checkpoints": {
+    "count": 79,
+    "sha256": "252f6cab5ab9187bfec8971ef0452bcfd6510519a434b71436651868849b8664"
+  },
+  "strategy_selection_groups": {
+    "count": 4,
+    "sha256": "d8163a4c31f1017329593ff8f65c6ebdde93f1c522c0d69ed39c9c17f322c1ed"
+  },
+  "strategy_selection_preferences": {
+    "count": 1,
+    "sha256": "52e3d099971f5c897afd7ddba57e619b3550f413cf090388770b81304a6104c1"
+  },
+  "strategy_sim_voided_events": {
+    "count": 75798,
+    "sha256": "61d22b0e84bbeb247ee8add8e8e0fdd94aeba60620d3be088647995dbdff8dd9"
+  },
+  "strategy_symbol_books": {
+    "count": 114,
+    "sha256": "169bd25f79b04c9b55cf07e5a55c3ac049016b2376b7ca1bcf5f966c437caa6f"
+  },
+  "strategy_symbol_events": {
+    "count": 178,
+    "sha256": "267d2c14fe3f0f7e21318965d21399000cd07f38cc95da2ec3e19c20e53f97a7"
+  }
+}

@@ -153,3 +153,32 @@ test('held alerts sort newest buy first and a closed holding leaves the board', 
   const next = stickAlertRows(rows, rows.slice(0, 2), ['NEW'])
   assert.deepEqual(orderAlertCards(next).map(row => row.代码), ['OLD', 'ALERT'])
 })
+
+
+test('all alert priorities wait for the 5s window while quotes and touches update', () => {
+  const order = createAlertPriceOrder(5_000, 3_000)
+  const initial = [{ 代码: 'A', 持仓: 0, 现价: 9.99, 买点: 10, 预警线内: true },
+    { 代码: 'B', 持仓: 0, 现价: 9.5, 买点: 10, 预警线内: true }]
+  assert.deepEqual(order.update(initial, 0).map(r => r.代码), ['A', 'B'])
+  const changed = [{ ...initial[0], 预警线内: false },
+    { ...initial[1], 现价: 10.1, 已触买: '是', 信号时间: '10:00:00' }]
+  for (const at of [100, 3100, 4999]) {
+    const rows = order.update(changed, at)
+    assert.deepEqual(rows.map(r => r.代码), ['A', 'B'])
+    assert.equal(rows[1].现价, 10.1)
+    assert.equal(rows[1].已触买, '是')
+  }
+  assert.deepEqual(order.update(changed, 5000).map(r => r.代码), ['B', 'A'])
+  const earlierTouch = [{ ...changed[0], 已触买: '是', 信号时间: '09:30:00' }, changed[1]]
+  assert.deepEqual(order.update(earlierTouch, 5001).map(r => r.代码), ['B', 'A'])
+  assert.deepEqual(order.update(earlierTouch, 9999).map(r => r.代码), ['B', 'A'])
+  assert.deepEqual(order.update(earlierTouch, 10000).map(r => r.代码), ['A', 'B'])
+})
+
+test('alert sort interval cannot be configured below five seconds', () => {
+  const order = createAlertPriceOrder(1)
+  order.update([{ 代码: 'A', 现价: 10, 买点: 10 }, { 代码: 'B', 现价: 9, 买点: 10 }], 0)
+  const changed = [{ 代码: 'A', 现价: 9, 买点: 10 }, { 代码: 'B', 现价: 10, 买点: 10 }]
+  assert.deepEqual(order.update(changed, 4999).map(r => r.代码), ['A', 'B'])
+  assert.deepEqual(order.update(changed, 5000).map(r => r.代码), ['B', 'A'])
+})

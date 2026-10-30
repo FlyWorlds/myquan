@@ -1,0 +1,26 @@
+{
+  "verified": true,
+  "samples": 120,
+  "counts": [
+    3
+  ],
+  "revisions": [
+    27975,
+    27976
+  ],
+  "first": {
+    "clock": "2026-10-30 11:06:44",
+    "revision": 27975,
+    "count": 3
+  },
+  "last": {
+    "clock": "2026-10-30 11:06:59",
+    "revision": 27976,
+    "count": 3
+  },
+  "closed_ids": [
+    "replay-70d4f3d36bb744249561d3a8bed0e0e1",
+    "replay-74740ba25d734d08bd3984cf14795609",
+    "replay-d01e9593a23c4065b00df578444ddb5a"
+  ]
+}

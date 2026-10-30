@@ -1,0 +1,44 @@
+{
+  "verified": true,
+  "scratch": "myquan_point_20261030_093000",
+  "target": "2026-10-30T09:30:00+08:00",
+  "revision": 27423,
+  "row_counts": {
+    "app_document_writes": 356853,
+    "app_documents": 26,
+    "backend_metadata": 2,
+    "flyway_schema_history": 10,
+    "market_quote_latest": 53,
+    "paper_account_snapshots": 4409,
+    "paper_account_state": 1,
+    "paper_delivery_entries": 91,
+    "paper_holdings": 3,
+    "paper_holdings_sync": 1,
+    "paper_state_writes": 27423,
+    "paper_trade_history": 130,
+    "strategy_legacy_checkpoints": 79,
+    "strategy_selection_groups": 4,
+    "strategy_selection_preferences": 1,
+    "strategy_sim_voided_events": 75798,
+    "strategy_symbol_books": 104,
+    "strategy_symbol_events": 156
+  },
+  "affected_keys": 8811,
+  "all_before_images_verified": true,
+  "cash": 119588,
+  "positions": {
+    "600330": {
+      "qty": 2700,
+      "cost": 21.14
+    },
+    "601208": {
+      "qty": 1500,
+      "cost": 36.58
+    },
+    "002454": {
+      "qty": 12100,
+      "cost": 4.76
+    }
+  },
+  "latest_trade": "2026-10-29 22:18:19"
+}
