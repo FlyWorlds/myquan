@@ -87,8 +87,8 @@ def session_open_bell_ts(session: str | None) -> str:
     clock = f"{OPEN_BELL_HOUR:02d}:{OPEN_BELL_MINUTE:02d}:00"
     return f"{sess} {clock}" if sess else clock
 
-# 策略十六「策略累计」起算日：该交易日起才 bootstrap / live 成交计收益（国庆后首个交易日）
-STRATEGY_PNL_START = "2026-10-08"
+# 策略收益起算日；策略1自2026-10-30开盘重新计收益。
+STRATEGY_PNL_START = "2026-10-30" if STRATEGY_ID == "strategy1" else "2026-10-08"
 # 账户「总收益」基准日：相对 DEFAULT_ACCOUNT_TOTAL 纸面本金（与策略累计分开）
 PAPER_PNL_START = "2026-09-09"
 

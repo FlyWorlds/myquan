@@ -217,6 +217,15 @@ def build_watch_request_handler(
                 status, data = handle_strategy16b_api(self.path)
                 self._send_json(data, status=status)
                 return
+            if path == "/api/holdings/monthly-index":
+                try:
+                    from monthly_index import monthly_index
+                    from urllib.parse import parse_qs
+                    params = parse_qs(urlparse(self.path).query)
+                    self._send_json(monthly_index(params['year'][0], params['month'][0]))
+                except Exception:
+                    self._send_json({"error": "上证指数读取失败"}, status=503)
+                return
             if path == "/api/holdings/returns-calendar" or path.startswith("/api/strategy16b/groups") or path.startswith("/api/strategy16b/replay/"):
                 try:
                     from selection_groups import backend, replay_status

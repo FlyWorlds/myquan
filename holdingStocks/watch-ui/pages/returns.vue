@@ -50,6 +50,7 @@ function shift(n: number) { if (mode.value === 'month') year.value += n; else { 
       <button class="btn" @click="percent = !percent">{{ percent ? '切换收益金额' : '切换收益率' }}</button><button class="btn" @click="chart = !chart">{{ chart ? '日历图' : '柱状图' }}</button>
       <button class="btn" @click="shift(-1)">◀</button><span class="p-2 font-bold">{{ year }}年 {{ mode === 'day' ? `${month}月` : '' }}</span><button class="btn" @click="shift(1)">▶</button><button class="btn" @click="load">刷新</button>
     </div>
+    <ClientOnly><MonthlyReturnsChart :year="year" :month="month" :rows="rows" /></ClientOnly>
     <p v-if="error" class="text-ui-danger">{{ error }}</p>
     <p class="text-xl">{{ mode === 'day' ? '本月' : '年度' }}累计：{{ fmt(percent ? total.rate : total.amount) }}<span v-if="percent && total.partial" class="ml-2 text-sm text-ui-muted">（部分记录）</span></p>
     <div v-if="!chart" class="grid gap-1" :style="{ gridTemplateColumns: `repeat(${mode === 'day' ? 7 : 4}, minmax(0,1fr))` }">
