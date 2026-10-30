@@ -1133,7 +1133,7 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
 
     def _pack(level: str, typ: str, status: str, factor_px: Any) -> dict[str, Any]:
         return {
-            "level": level,
+            "level": signal_priority(status, *(row.get(k) for k in ("预警", "因子触发", "止损原因", "卖出原因", "reason", "exit_kind", "stop_kind", "_path_stop_kind", "止损类型", "工作卖价种类"))).split()[0],
             "kind": KIND_ALERT,
             "type": typ,
             "status": status,
@@ -1344,6 +1344,9 @@ def _first_alert_records(state, session):
     return records
 
 
+from signal_priority import signal_priority
+
+
 def format_alert_message(row: dict[str, Any], *, occurred_at=None) -> str:
     info = classify_stock_alert(row)
     code = row.get("代码") or "-"
@@ -1378,6 +1381,7 @@ def format_alert_message(row: dict[str, Any], *, occurred_at=None) -> str:
 
     lines = [
         "【策略预警】",
+        f"等级：{signal_priority(status, *(row.get(k) for k in ('预警', '因子触发', '止损原因', '卖出原因', 'reason', 'exit_kind', 'stop_kind', '_path_stop_kind', '止损类型', '工作卖价种类')))}",
         f"股票：{code} {name}",
         f"状态：{status}{extra}",
         *([f"信号来源：{row['信号来源']}"] if row.get("信号来源") else []),
@@ -1619,6 +1623,7 @@ def format_buy_fill_message(
 ) -> str:
     lines = [
         "【模拟买入】",
+        "等级：P2 普通",
         f"股票：{code} {name}",
         f"成交价：{float(price):.2f}",
     ]
@@ -1650,6 +1655,7 @@ def format_sell_fill_message(
     qty: int,
     action_kind: str = "",
     reason_code: str = "",
+    priority_reason: str = "",
     before_qty: int | None = None,
     after_qty: int | None = None,
     quantity_ratio: float | None = None,
@@ -1662,6 +1668,7 @@ def format_sell_fill_message(
     fill_kind = "半仓" if half else "全仓"
     lines = [
         "【模拟卖出】",
+        f"等级：{signal_priority(reason_code, priority_reason)}",
         f"股票：{code} {name}",
         f"成交价：{float(price):.2f}",
     ]
@@ -1774,6 +1781,7 @@ def notify_trade_fill(
             qty=int(qty),
             action_kind=action_kind,
             reason_code=mapped,
+            priority_reason=f"{exit_kind} {reason}",
             before_qty=before_qty,
             after_qty=after_qty,
             quantity_ratio=ratio,

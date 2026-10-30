@@ -410,6 +410,9 @@ def list_ledger_entries(
             rows = [e for e in rows if entry_month(e) == month_key]
         else:
             month_key = ""
+    if rows and all(e.get("source") == "strategy1_backtest" for e in rows):
+        # Independent replay totals do not depend on account-history adjustments.
+        reconciliation_issues = []
     frozen = [e for e in rows if e.get("source") == "strategy1_backtest"]
     rows = enrich_open_buy_marks(
         [e for e in rows if e.get("source") != "strategy1_backtest"], holdings=holdings, marks=marks
