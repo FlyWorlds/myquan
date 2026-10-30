@@ -81,7 +81,7 @@ function monthLabel(m: string) {
       <div>
         <h1 class="text-xl font-bold">交割单 · 买卖明细</h1>
         <p class="mt-1 text-sm text-ui-text-2">
-          纸面账本 JSON（每次入槽买入 / 平仓卖出落库）
+          {{ payload?.backtest_projection?.label || '自动及手工成交历史' }}
           <template v-if="codeFilter"> · 筛选 {{ codeFilter }}</template>
           <template v-if="monthFilter"> · {{ monthLabel(monthFilter) }}</template>
         </p>

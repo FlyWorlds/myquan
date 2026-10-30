@@ -36,6 +36,7 @@ export type TradeLedgerEntry = {
 }
 
 export type TradeLedgerResponse = {
+  backtest_projection?: { label: string; start: string; end: string } | null
   fee_model?: string
   fee_rules?: string
   updated_at?: string | null

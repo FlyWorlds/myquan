@@ -387,6 +387,12 @@ def list_ledger_entries(
     else:
         data = load_ledger()
     rows = [e for e in (data.get("entries") or []) if isinstance(e, dict)]
+    backtest_projection = None
+    if database_enabled():
+        from runtime_documents import read_document
+        from backtest_deliveries import DOCUMENT_KEY, apply_projection
+        _projection_revision, projection = read_document(DOCUMENT_KEY)
+        rows, backtest_projection = apply_projection(rows, projection)
     if code:
         ck = _code_key(code)
         rows = [e for e in rows if _code_key(str(e.get("code") or "")) == ck]
@@ -404,7 +410,10 @@ def list_ledger_entries(
             rows = [e for e in rows if entry_month(e) == month_key]
         else:
             month_key = ""
-    rows = enrich_open_buy_marks(rows, holdings=holdings, marks=marks)
+    frozen = [e for e in rows if e.get("source") == "strategy1_backtest"]
+    rows = enrich_open_buy_marks(
+        [e for e in rows if e.get("source") != "strategy1_backtest"], holdings=holdings, marks=marks
+    ) + frozen
     rows = [
         e
         for _, e in sorted(
@@ -432,6 +441,7 @@ def list_ledger_entries(
         "fee_rules": fee_rules_text(),
         "paperRevision": revision,
         "reconciliationIssues": reconciliation_issues,
+        "backtest_projection": backtest_projection,
         "total": total,
         "offset": off,
         "limit": lim,
