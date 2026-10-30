@@ -19,6 +19,7 @@ function linkClass(path: string) {
         <NuxtLink to="/sectors" :class="linkClass('/sectors')">板块轮动</NuxtLink>
         <NuxtLink to="/strategies" :class="linkClass('/strategies')">策略说明</NuxtLink>
         <NuxtLink to="/factors" :class="linkClass('/factors')">因子说明</NuxtLink>
+        <NuxtLink to="/journal" :class="linkClass('/journal')">复盘笔记</NuxtLink>
       </div>
       <div class="flex items-center gap-1">
         <WechatConnect />

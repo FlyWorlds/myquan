@@ -1,10 +1,13 @@
 {
-  "state": "running",
+  "state": "done",
   "pid": 40566,
   "started_ts": 1793343784.676091,
-  "done": 496,
+  "done": 645,
   "total": 645,
   "workers": 6,
   "executor": "process",
-  "message": "6路并发：已处理 496/645，前低破位 263 只"
+  "message": "盘中扫描完成：监控 336 只，鲍鱼捞饭 0 只",
+  "as_of": "2026-10-30",
+  "finished_ts": 1793343981.2955499,
+  "elapsed_seconds": 196.6
 }

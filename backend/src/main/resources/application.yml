@@ -49,3 +49,10 @@ management:
   endpoint:
     health:
       show-details: never
+
+# Suppress routine SQL/connection logs while retaining failures.
+logging:
+  level:
+    org.springframework.jdbc: ERROR
+    com.zaxxer.hikari: ERROR
+    com.mysql.cj: ERROR

@@ -134,6 +134,13 @@ def build_watch_request_handler(
 
         def do_GET(self) -> None:  # noqa: N802
             path = self.path.split("?", 1)[0]
+            if path == "/api/review-journal":
+                from review_journal import entries
+                try:
+                    self._send_json({"items": entries()})
+                except RuntimeError:
+                    self._send_json({"error": "数据库暂不可用，请稍后重试"}, status=503)
+                return
             if path == '/api/strategy3/scan':
                 from strategy.strategies.strategy3.manual_scan import status
                 from strategy3_watch import build_strategy3_payload
@@ -298,6 +305,21 @@ def build_watch_request_handler(
             self.send_error(404, "Not Found")
 
         def do_POST(self) -> None:  # noqa: N802
+            if self.path.split("?", 1)[0] == "/api/review-journal":
+                if self.headers.get('Sec-Fetch-Site') == 'cross-site':
+                    self._send_json({'error': '禁止跨站写入'}, status=403)
+                    return
+                try:
+                    from review_journal import save
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if length <= 0 or length > 65000000:
+                        raise ValueError('上传内容过大')
+                    self._send_json(save(json.loads(self.rfile.read(length))))
+                except RuntimeError:
+                    self._send_json({"error": "数据库保存失败或发生并发修改，请重试"}, status=503)
+                except (ValueError, TypeError, KeyError) as exc:
+                    self._send_json({'error': str(exc)}, status=400)
+                return
             if self.path.split('?',1)[0]=='/api/strategy3/scan':
                 host=urlparse('http://'+self.headers.get('Host','')).hostname
                 origin=self.headers.get('Origin')

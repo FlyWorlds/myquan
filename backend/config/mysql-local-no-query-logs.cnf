@@ -1,0 +1,7 @@
+# Local-only MySQL configuration. Applied to /opt/homebrew/etc/my.cnf on this machine.
+# Binlogs are intentionally disabled: this local database does not use replication
+# or binlog-based point-in-time recovery. Keep regular database backups.
+[mysqld]
+skip-log-bin
+general_log = OFF
+slow_query_log = OFF

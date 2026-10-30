@@ -36,7 +36,7 @@ function storedBool(key: string, fallback: boolean): boolean {
 /** 策略一固定紧随持仓；其它策略保留服务端顺序。 */
 const strategyTabs = computed(() => {
   const tabs = strategies.value.length ? strategies.value : snapshot.value?.strategies || []
-  return [...tabs.filter((tab) => tab.id === 'strategy1'), ...tabs.filter((tab) => tab.id !== 'strategy1')]
+  return [...tabs.filter((tab) => tab.id === 'strategy1'), ...tabs.filter((tab) => tab.id !== 'strategy1' && tab.id !== 'strategy17')]
 })
 
 const validTabIds = computed(() => new Set(['holdings', ...strategyTabs.value.map((t) => t.id)]))
@@ -328,7 +328,7 @@ const closedCount = computed(() => closedHoldings.value.length)
       <div>
         <div class="flex flex-wrap items-center gap-2.5">
           <h1 class="text-2xl font-bold text-ui-text">持仓盯盘</h1>
-          <span class="text-sm font-bold text-red-500">严格执行量化买卖</span>
+          <span class="text-sm font-bold text-red-500">义无反顾地执行自己的决策，并坦然承担决策带来的后果。</span>
         </div>
         <p class="text-xs" :class="databaseError ? 'text-ui-danger' : 'text-ui-text-2'">
           {{ databaseError || (store.paperState ? `数据库持仓 · 版本 ${store.paperState.revision}` : '连接数据库持仓…') }}
@@ -635,22 +635,11 @@ const closedCount = computed(() => closedHoldings.value.length)
         />
         <StrategyPicksPanel :picks="strategy16bDynamicPicks" />
       </section>
-      <section v-show="activeTab === 'strategy17'">
-        <StrategyInfoPanel v-if="strategy17Tab" :tab="strategy17Tab" class="mb-4" />
-        <Strategy1Panel
-          v-if="snapshot"
-          :rows="snapshot.strategy17 || []"
-          :phase="snapshot.phase"
-          :slot-meta="snapshot.slotMeta"
-          pool-category="紫阳真君"
-          status-mode="strategy"
-        />
-        <StrategyPicksPanel :picks="strategy17Tab?.picks" />
-      </section>
+
     </template>
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘 Tab 仅展示有实时面板的策略（策略1 / 3 / 8 / 15 / 16 / 16B / 17）。因子持有模板、研究型条目见
+      盯盘 Tab 仅展示有实时面板的策略（策略1 / 3 / 8 / 15 / 16 / 16B）。因子持有模板、研究型条目见
       <NuxtLink to="/strategies" class="text-accent hover:underline">策略说明</NuxtLink>
       、
       <NuxtLink to="/factors" class="text-accent hover:underline">因子说明</NuxtLink>
