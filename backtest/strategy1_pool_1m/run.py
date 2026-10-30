@@ -143,15 +143,15 @@ def _load_pool(pool: str = POOL_STRATEGY1) -> list[dict]:
 _DAILY_MEM_CACHE: dict[str, pd.DataFrame] = {}
 
 
-def _daily(sina: str, lookback_cal_days: int = 40) -> pd.DataFrame:
-    if sina in _DAILY_MEM_CACHE and not _DAILY_MEM_CACHE[sina].empty:
+def _daily(sina: str, lookback_cal_days: int = 40, *, refresh: bool = False) -> pd.DataFrame:
+    if not refresh and sina in _DAILY_MEM_CACHE and not _DAILY_MEM_CACHE[sina].empty:
         return _DAILY_MEM_CACHE[sina]
     end = pd.Timestamp.now().strftime("%Y%m%d")
     start = (pd.Timestamp.now() - pd.Timedelta(days=lookback_cal_days)).strftime(
         "%Y%m%d"
     )
     try:
-        df = fetch_daily(sina, start, end)
+        df = fetch_daily(sina, start, end, force_refresh=refresh)
         if not df.empty:
             _DAILY_MEM_CACHE[sina] = df
         return df
@@ -1708,6 +1708,8 @@ def run(
     pool: str = POOL_STRATEGY1,
     fit_thr: bool = False,
 ) -> dict:
+    if refresh:
+        _DAILY_MEM_CACHE.clear()
     entry = float(entry_pct if entry_pct is not None else DEFAULT_ENTRY_PCT)
     pb = float(DEFAULT_PULLBACK_PCT)
     bmode = str(buy_mode or BUY_MODE_DEFAULT).strip().lower()
@@ -1769,7 +1771,7 @@ def run(
         ep = float(w.get("entry_pct") or w.get("pct") or entry)
         sp = float(pb) if is_s16 else float(w.get("stop_pct") or w.get("pct") or pb)
         print(f"· {code} {name} 开盘±{ep*100:.1f}% …", flush=True)
-        daily = _daily(sina)
+        daily = _daily(sina, refresh=refresh)
         mins = _minutes(sina, refresh=refresh, days=int(days), source=source)
         rep = replay_factor26_1m(
             daily,

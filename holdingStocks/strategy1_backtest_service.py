@@ -255,7 +255,7 @@ class Strategy1BacktestManager:
                 from run import run
 
                 print(f"[{datetime.now()}] [BACKTEST] 开始执行策略一 7 日高频回测...")
-                res = run(days=7, refresh=False, max_slots=4)
+                res = run(days=7, refresh=True, max_slots=4)
                 port = (res.get("portfolio_summary") or {})
                 equity_rows = port.get("equity") or []
                 if not equity_rows:

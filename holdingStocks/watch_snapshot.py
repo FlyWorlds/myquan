@@ -107,6 +107,21 @@ def _retag_strategy1_row(row: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _retag_strategy16_row(row: dict[str, Any]) -> dict[str, Any]:
+    """策略十六 Tab：非自选统一标「因子27」，避免热池/策略池标签串台。"""
+    out = dict(row)
+    src = str(out.get("pool_src") or "")
+    label = str(out.get("池来源") or "")
+    if src == "self" or label == "自选":
+        out["pool_src"] = "self"
+        out["池来源"] = "自选"
+    else:
+        out["pool_src"] = "factor27"
+        out["池来源"] = "因子27"
+    return out
+
+
+
 def _index_json(ix: dict[str, Any]) -> dict[str, Any]:
     return {
         "code": ix.get("code"),
@@ -217,6 +232,7 @@ def filter_portfolio_holdings(
             out["槽位留痕"] = True
             out["持仓"] = 0
             out.setdefault("持仓状态", "今日平仓")
+            out["因子侧"] = "卖出"
             alert0 = str(out.get("预警") or "").strip()
             if (not alert0) or alert0 in (
                 "-",
@@ -1193,6 +1209,7 @@ def build_watch_snapshot(
     strategy3: dict[str, Any] | None = None,
     strategy8: dict[str, Any] | None = None,
     strategy15: dict[str, Any] | None = None,
+    strategy16: list[dict[str, Any]] | None = None,
     strategy16b: list[dict[str, Any]] | None = None,
     strategy17: list[dict[str, Any]] | None = None,
     sectors: dict[str, Any] | None = None,
@@ -1261,13 +1278,19 @@ def build_watch_snapshot(
         s16_codes = core_leader_codes()
     except Exception:  # noqa: BLE001
         s16_codes = set()
-    strategy16_rows = _fill_stock_names(_sort_pool_rows(
-        [
-            _strip_holdings_pnl(r)
-            for r in rows
-            if code_key(str(r.get("代码") or "")) in s16_codes or r.get("预警保留")
-        ]
-    ))
+    if strategy16 is not None:
+        strategy16_rows = _fill_stock_names(_sort_pool_rows(
+            [_retag_strategy16_row(_strip_holdings_pnl(r)) for r in strategy16]
+        ))
+    else:
+        strategy16_rows = _fill_stock_names(_sort_pool_rows(
+            [
+                _retag_strategy16_row(_strip_holdings_pnl(r))
+                for r in rows
+                if code_key(str(r.get("代码") or "")) in s16_codes
+                or (r.get("预警保留") and str(r.get("信号策略ID") or "") == "strategy16")
+            ]
+        ))
     if strategy16b is not None:
         strategy16b_rows = _fill_stock_names([_row_json(r) for r in strategy16b])
     else:

@@ -3,33 +3,33 @@
     "window_days": 7,
     "n_pool": 25,
     "pool": "strategy1",
-    "n_with_rounds": 22,
-    "equal_weight_pnl_pct": 0.36,
+    "n_with_rounds": 21,
+    "equal_weight_pnl_pct": 0.97,
     "portfolio": {
       "window_days": 7,
       "calendar": [
-        "2026-10-21",
         "2026-10-22",
         "2026-10-23",
         "2026-10-26",
         "2026-10-27",
         "2026-10-28",
-        "2026-10-29"
+        "2026-10-29",
+        "2026-10-30"
       ],
       "max_slots": 4,
       "slot_weight": 0.2,
       "initial_cash": 300000.0,
-      "final_equity": 300609.93,
-      "return_pct": 0.2,
-      "max_dd_pct": -2.22,
-      "dd_peak_date": "2026-10-26",
-      "dd_trough_date": "2026-10-27",
-      "n_buys": 16,
+      "final_equity": 298241.74,
+      "return_pct": -0.59,
+      "max_dd_pct": -4.11,
+      "dd_peak_date": "2026-10-28",
+      "dd_trough_date": "2026-10-30",
+      "n_buys": 14,
       "n_sells": 15,
       "n_closed": 15,
-      "avg_closed_pnl_pct": 1.48,
-      "n_open": 2,
-      "n_skipped_or_queued": 21,
+      "avg_closed_pnl_pct": 0.68,
+      "n_open": 0,
+      "n_skipped_or_queued": 18,
       "exit_mode": "half_gain",
       "buy_mode": "open",
       "reserve_empty": 0,
@@ -62,27 +62,13 @@
       "pullback_pct": 0.03,
       "days_used": 7,
       "holding": false,
-      "n_trades": 4,
-      "n_rounds": 2,
-      "pnl_pct": -1.06,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": -0.46,
       "last_side": "sell",
       "last_px": 21.72,
       "last_date": "2026-10-26",
       "trades": [
-        {
-          "date": "2026-10-21",
-          "side": "buy",
-          "px": 23.1,
-          "ts": "2026-10-21 09:51:00",
-          "kind": "open"
-        },
-        {
-          "date": "2026-10-22",
-          "side": "sell",
-          "px": 22.96,
-          "ts": "2026-10-22 09:31:00",
-          "note": "t1_peak_trail"
-        },
         {
           "date": "2026-10-23",
           "side": "buy",
@@ -183,27 +169,13 @@
       "pullback_pct": 0.025,
       "days_used": 7,
       "holding": false,
-      "n_trades": 6,
-      "n_rounds": 3,
-      "pnl_pct": -4.15,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": -1.02,
       "last_side": "sell",
       "last_px": 57.73,
       "last_date": "2026-10-28",
       "trades": [
-        {
-          "date": "2026-10-21",
-          "side": "buy",
-          "px": 66.71,
-          "ts": "2026-10-21 09:54:00",
-          "kind": "open"
-        },
-        {
-          "date": "2026-10-22",
-          "side": "sell",
-          "px": 64.6,
-          "ts": "2026-10-22 09:31:00",
-          "note": "hard_from_cost"
-        },
         {
           "date": "2026-10-23",
           "side": "buy",
@@ -273,27 +245,13 @@
       "pullback_pct": 0.025,
       "days_used": 7,
       "holding": false,
-      "n_trades": 4,
-      "n_rounds": 2,
-      "pnl_pct": 0.45,
+      "n_trades": 2,
+      "n_rounds": 1,
+      "pnl_pct": 1.76,
       "last_side": "sell",
       "last_px": 9.84,
       "last_date": "2026-10-26",
       "trades": [
-        {
-          "date": "2026-10-21",
-          "side": "buy",
-          "px": 10.08,
-          "ts": "2026-10-21 10:11:00",
-          "kind": "open"
-        },
-        {
-          "date": "2026-10-22",
-          "side": "sell",
-          "px": 9.95,
-          "ts": "2026-10-22 10:09:00",
-          "note": "t1_peak_trail"
-        },
         {
           "date": "2026-10-23",
           "side": "buy",
@@ -350,27 +308,13 @@
       "pullback_pct": 0.025,
       "days_used": 7,
       "holding": false,
-      "n_trades": 5,
-      "n_rounds": 2,
-      "pnl_pct": 7.34,
+      "n_trades": 3,
+      "n_rounds": 1,
+      "pnl_pct": 9.97,
       "last_side": "sell",
       "last_px": 7.38,
       "last_date": "2026-10-27",
       "trades": [
-        {
-          "date": "2026-10-21",
-          "side": "buy",
-          "px": 6.69,
-          "ts": "2026-10-21 10:16:00",
-          "kind": "open"
-        },
-        {
-          "date": "2026-10-22",
-          "side": "sell",
-          "px": 6.53,
-          "ts": "2026-10-22 09:34:00",
-          "note": "t1_peak_trail"
-        },
         {
           "date": "2026-10-23",
           "side": "buy",
@@ -559,23 +503,23 @@
       "holding": false,
       "n_trades": 4,
       "n_rounds": 2,
-      "pnl_pct": -7.83,
+      "pnl_pct": -6.31,
       "last_side": "sell",
       "last_px": 13.01,
       "last_date": "2026-10-28",
       "trades": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "side": "buy",
-          "px": 13.98,
-          "ts": "2026-10-21 10:22:00",
+          "px": 13.67,
+          "ts": "2026-10-22 09:37:00",
           "kind": "open"
         },
         {
-          "date": "2026-10-22",
+          "date": "2026-10-23",
           "side": "sell",
-          "px": 13.4,
-          "ts": "2026-10-22 09:31:00",
+          "px": 13.32,
+          "ts": "2026-10-23 09:36:00",
           "note": "hard_from_cost"
         },
         {
@@ -601,13 +545,13 @@
       "entry_pct": 0.025,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": true,
-      "n_trades": 3,
-      "n_rounds": 1,
-      "pnl_pct": 3.51,
-      "last_side": "buy",
-      "last_px": 22.54,
-      "last_date": "2026-10-28",
+      "holding": false,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": 2.87,
+      "last_side": "sell",
+      "last_px": 22.4,
+      "last_date": "2026-10-29",
       "trades": [
         {
           "date": "2026-10-23",
@@ -629,6 +573,13 @@
           "px": 22.54,
           "ts": "2026-10-28 09:45:00",
           "kind": "open"
+        },
+        {
+          "date": "2026-10-29",
+          "side": "sell",
+          "px": 22.4,
+          "ts": "2026-10-29 09:31:00",
+          "note": "t1_peak_trail"
         }
       ]
     },
@@ -640,28 +591,13 @@
       "pullback_pct": 0.025,
       "days_used": 7,
       "holding": false,
-      "n_trades": 2,
-      "n_rounds": 1,
-      "pnl_pct": -1.51,
-      "last_side": "sell",
-      "last_px": 13.7,
-      "last_date": "2026-10-22",
-      "trades": [
-        {
-          "date": "2026-10-21",
-          "side": "buy",
-          "px": 13.91,
-          "ts": "2026-10-21 09:52:00",
-          "kind": "open"
-        },
-        {
-          "date": "2026-10-22",
-          "side": "sell",
-          "px": 13.7,
-          "ts": "2026-10-22 09:33:00",
-          "note": "t1_peak_trail"
-        }
-      ]
+      "n_trades": 0,
+      "n_rounds": 0,
+      "pnl_pct": null,
+      "last_side": null,
+      "last_px": null,
+      "last_date": null,
+      "trades": []
     },
     {
       "code": "002929",
@@ -701,13 +637,13 @@
       "entry_pct": 0.02,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": true,
-      "n_trades": 3,
-      "n_rounds": 1,
-      "pnl_pct": -1.81,
-      "last_side": "buy",
-      "last_px": 17.14,
-      "last_date": "2026-10-28",
+      "holding": false,
+      "n_trades": 4,
+      "n_rounds": 2,
+      "pnl_pct": -3.82,
+      "last_side": "sell",
+      "last_px": 16.79,
+      "last_date": "2026-10-29",
       "trades": [
         {
           "date": "2026-10-23",
@@ -729,6 +665,13 @@
           "px": 17.14,
           "ts": "2026-10-28 09:44:00",
           "kind": "open"
+        },
+        {
+          "date": "2026-10-29",
+          "side": "sell",
+          "px": 16.79,
+          "ts": "2026-10-29 10:05:00",
+          "note": "t1_peak_trail"
         }
       ]
     },
@@ -739,13 +682,13 @@
       "entry_pct": 0.025,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": false,
-      "n_trades": 2,
+      "holding": true,
+      "n_trades": 3,
       "n_rounds": 1,
       "pnl_pct": 8.46,
-      "last_side": "sell",
-      "last_px": 9.23,
-      "last_date": "2026-10-26",
+      "last_side": "buy",
+      "last_px": 8.93,
+      "last_date": "2026-10-29",
       "trades": [
         {
           "date": "2026-10-23",
@@ -760,6 +703,13 @@
           "px": 9.23,
           "ts": "2026-10-26 09:50:00",
           "note": "peak_pullback_clear"
+        },
+        {
+          "date": "2026-10-29",
+          "side": "buy",
+          "px": 8.93,
+          "ts": "2026-10-29 09:53:00",
+          "kind": "open"
         }
       ]
     },
@@ -770,28 +720,14 @@
       "entry_pct": 0.02,
       "pullback_pct": 0.025,
       "days_used": 7,
-      "holding": true,
-      "n_trades": 5,
+      "holding": false,
+      "n_trades": 4,
       "n_rounds": 2,
-      "pnl_pct": 0.9,
-      "last_side": "buy",
-      "last_px": 18.98,
-      "last_date": "2026-10-28",
+      "pnl_pct": 5.25,
+      "last_side": "sell",
+      "last_px": 19.62,
+      "last_date": "2026-10-29",
       "trades": [
-        {
-          "date": "2026-10-21",
-          "side": "buy",
-          "px": 19.89,
-          "ts": "2026-10-21 10:06:00",
-          "kind": "open"
-        },
-        {
-          "date": "2026-10-22",
-          "side": "sell",
-          "px": 19.71,
-          "ts": "2026-10-22 09:39:00",
-          "note": "t1_peak_trail"
-        },
         {
           "date": "2026-10-23",
           "side": "buy",
@@ -812,6 +748,13 @@
           "px": 18.98,
           "ts": "2026-10-28 09:48:00",
           "kind": "open"
+        },
+        {
+          "date": "2026-10-29",
+          "side": "sell",
+          "px": 19.62,
+          "ts": "2026-10-29 09:39:00",
+          "note": "vol_giveback"
         }
       ]
     },
@@ -956,87 +899,6 @@
   ],
   "portfolio_trades": [
     {
-      "date": "2026-10-21",
-      "ts": "2026-10-21 09:51:00",
-      "trigger_ts": "2026-10-21 09:51:00",
-      "side": "buy",
-      "code": "600330",
-      "name": "天通股份",
-      "px": 23.1,
-      "shares": 2500,
-      "kind": "open",
-      "source": "trigger",
-      "slots_after": 1,
-      "pnl_pct": null,
-      "exit_reason": null
-    },
-    {
-      "date": "2026-10-21",
-      "ts": "2026-10-21 09:52:00",
-      "trigger_ts": "2026-10-21 09:52:00",
-      "side": "buy",
-      "code": "002015",
-      "name": "协鑫能科",
-      "px": 13.91,
-      "shares": 4300,
-      "kind": "open",
-      "source": "trigger",
-      "slots_after": 2,
-      "pnl_pct": null,
-      "exit_reason": null
-    },
-    {
-      "date": "2026-10-21",
-      "ts": "2026-10-21 09:54:00",
-      "trigger_ts": "2026-10-21 09:54:00",
-      "side": "buy",
-      "code": "002636",
-      "name": "金安国纪",
-      "px": 66.71,
-      "shares": 900,
-      "kind": "open",
-      "source": "trigger",
-      "slots_after": 3,
-      "pnl_pct": null,
-      "exit_reason": null
-    },
-    {
-      "date": "2026-10-22",
-      "ts": "2026-10-22 09:31:00",
-      "side": "sell",
-      "code": "002636",
-      "name": "金安国纪",
-      "px": 64.6,
-      "shares": 900,
-      "pnl_pct": -0.0316,
-      "exit_reason": "hard_from_cost",
-      "slots_after": 2
-    },
-    {
-      "date": "2026-10-22",
-      "ts": "2026-10-22 09:31:00",
-      "side": "sell",
-      "code": "600330",
-      "name": "天通股份",
-      "px": 22.96,
-      "shares": 2500,
-      "pnl_pct": -0.0061,
-      "exit_reason": "t1_peak_trail",
-      "slots_after": 1
-    },
-    {
-      "date": "2026-10-22",
-      "ts": "2026-10-22 09:33:00",
-      "side": "sell",
-      "code": "002015",
-      "name": "协鑫能科",
-      "px": 13.7,
-      "shares": 4300,
-      "pnl_pct": -0.0151,
-      "exit_reason": "t1_peak_trail",
-      "slots_after": 0
-    },
-    {
       "date": "2026-10-22",
       "ts": "2026-10-22 09:37:00",
       "trigger_ts": "2026-10-22 09:37:00",
@@ -1071,7 +933,7 @@
       "code": "601519",
       "name": "大智慧",
       "px": 8.51,
-      "shares": 6900,
+      "shares": 7000,
       "kind": "open",
       "source": "trigger",
       "slots_after": 1,
@@ -1086,7 +948,7 @@
       "code": "002104",
       "name": "恒宝股份",
       "px": 9.67,
-      "shares": 6100,
+      "shares": 6200,
       "kind": "open",
       "source": "trigger",
       "slots_after": 2,
@@ -1115,7 +977,7 @@
       "code": "002104",
       "name": "恒宝股份",
       "px": 9.84,
-      "shares": 6100,
+      "shares": 6200,
       "pnl_pct": 0.0176,
       "exit_reason": "half_gain",
       "slots_after": 2
@@ -1169,7 +1031,7 @@
       "code": "601519",
       "name": "大智慧",
       "px": 9.36,
-      "shares": 3400,
+      "shares": 3500,
       "pnl_pct": 0.0999,
       "exit_reason": "ladder_half_10",
       "slots_after": 3
@@ -1206,7 +1068,7 @@
       "code": "600967",
       "name": "内蒙一机",
       "px": 13.53,
-      "shares": 4400,
+      "shares": 4500,
       "kind": "open",
       "source": "trigger",
       "slots_after": 2,
@@ -1274,7 +1136,7 @@
       "code": "600967",
       "name": "内蒙一机",
       "px": 13.01,
-      "shares": 4400,
+      "shares": 4500,
       "pnl_pct": -0.0384,
       "exit_reason": "hard_from_cost",
       "slots_after": 1
@@ -1302,7 +1164,7 @@
       "code": "002273",
       "name": "水晶光电",
       "px": 22.54,
-      "shares": 2600,
+      "shares": 2700,
       "kind": "open",
       "source": "trigger",
       "slots_after": 3,
@@ -1343,7 +1205,7 @@
       "code": "002273",
       "name": "水晶光电",
       "px": 22.4,
-      "shares": 2600,
+      "shares": 2700,
       "pnl_pct": -0.0062,
       "exit_reason": "t1_peak_trail",
       "slots_after": 2
@@ -1374,117 +1236,119 @@
       "slots_after": 2,
       "pnl_pct": null,
       "exit_reason": null
+    },
+    {
+      "date": "2026-10-29",
+      "ts": "2026-10-29 09:53:00",
+      "trigger_ts": "2026-10-29 09:53:00",
+      "side": "buy",
+      "code": "601519",
+      "name": "大智慧",
+      "px": 8.93,
+      "shares": 6800,
+      "kind": "open",
+      "source": "trigger",
+      "slots_after": 3,
+      "pnl_pct": null,
+      "exit_reason": null
+    },
+    {
+      "date": "2026-10-29",
+      "ts": "2026-10-29 10:05:00",
+      "side": "sell",
+      "code": "000581",
+      "name": "威孚高科",
+      "px": 16.79,
+      "shares": 3500,
+      "pnl_pct": -0.0204,
+      "exit_reason": "t1_peak_trail",
+      "slots_after": 2
+    },
+    {
+      "date": "2026-10-30",
+      "ts": "2026-10-30 09:31:00",
+      "side": "sell",
+      "code": "601208",
+      "name": "东材科技",
+      "px": 32.87,
+      "shares": 1600,
+      "pnl_pct": -0.1159,
+      "exit_reason": "hard_from_cost",
+      "slots_after": 1
+    },
+    {
+      "date": "2026-10-30",
+      "ts": "2026-10-30 09:31:00",
+      "side": "sell",
+      "code": "601519",
+      "name": "大智慧",
+      "px": 8.6,
+      "shares": 6800,
+      "pnl_pct": -0.037,
+      "exit_reason": "hard_from_cost",
+      "slots_after": 0
     }
   ],
   "portfolio_equity": [
     {
-      "date": "2026-10-21",
-      "equity": 298275.33,
-      "cash": 122203.33,
-      "n_pos": 3,
-      "codes": "002015,002636,600330",
-      "ret_pct": -0.57
-    },
-    {
       "date": "2026-10-22",
-      "equity": 298374.58,
-      "cash": 237529.58,
+      "equity": 301999.57,
+      "cash": 241154.57,
       "n_pos": 1,
       "codes": "600967",
-      "ret_pct": -0.54
+      "ret_pct": 0.67
     },
     {
       "date": "2026-10-23",
-      "equity": 303162.74,
-      "cash": 117107.74,
+      "equity": 306887.74,
+      "cash": 118912.74,
       "n_pos": 3,
       "codes": "002104,002922,601519",
-      "ret_pct": 1.05
+      "ret_pct": 2.3
     },
     {
       "date": "2026-10-26",
-      "equity": 304344.32,
-      "cash": 182688.32,
+      "equity": 308066.25,
+      "cash": 186410.25,
       "n_pos": 2,
       "codes": "603138,603920",
-      "ret_pct": 1.45
+      "ret_pct": 2.69
     },
     {
       "date": "2026-10-27",
-      "equity": 297589.22,
-      "cash": 126981.22,
+      "equity": 301272.67,
+      "cash": 129348.67,
       "n_pos": 3,
       "codes": "002636,002929,600967",
-      "ret_pct": -0.8
+      "ret_pct": 0.42
     },
     {
       "date": "2026-10-28",
-      "equity": 307317.03,
-      "cash": 123408.03,
+      "equity": 311020.93,
+      "cash": 124817.93,
       "n_pos": 3,
       "codes": "000581,002273,603920",
-      "ret_pct": 2.44
+      "ret_pct": 3.67
     },
     {
       "date": "2026-10-29",
-      "equity": 300609.93,
-      "cash": 185819.93,
+      "equity": 302750.94,
+      "cash": 187346.94,
       "n_pos": 2,
-      "codes": "000581,601208",
-      "ret_pct": 0.2
-    }
-  ],
-  "open_positions": [
-    {
-      "code": "000581",
-      "name": "威孚高科",
-      "buy_day": "2026-10-28",
-      "buy_px": 17.14,
-      "last_px": 16.98,
-      "shares": 3500,
-      "pnl_pct": -0.0093
+      "codes": "601208,601519",
+      "ret_pct": 0.92
     },
     {
-      "code": "601208",
-      "name": "东材科技",
-      "buy_day": "2026-10-29",
-      "buy_px": 37.18,
-      "last_px": 34.6,
-      "shares": 1600,
-      "pnl_pct": -0.0694
+      "date": "2026-10-30",
+      "equity": 298241.74,
+      "cash": 298241.74,
+      "n_pos": 0,
+      "codes": "",
+      "ret_pct": -0.59
     }
   ],
+  "open_positions": [],
   "skipped_buys": [
-    {
-      "day": "2026-10-21",
-      "ts": "2026-10-21 10:06:00",
-      "code": "002922",
-      "name": "伊戈尔",
-      "px": 19.89,
-      "kind": "open",
-      "source": "trigger",
-      "reason": "max_buys_per_day"
-    },
-    {
-      "day": "2026-10-21",
-      "ts": "2026-10-21 10:16:00",
-      "code": "002093",
-      "name": "国脉科技",
-      "px": 6.69,
-      "kind": "open",
-      "source": "trigger",
-      "reason": "max_buys_per_day"
-    },
-    {
-      "day": "2026-10-21",
-      "ts": "2026-10-21 10:22:00",
-      "code": "600967",
-      "name": "内蒙一机",
-      "px": 13.98,
-      "kind": "open",
-      "source": "trigger",
-      "reason": "max_buys_per_day"
-    },
     {
       "day": "2026-10-23",
       "ts": "2026-10-23 13:15:00",

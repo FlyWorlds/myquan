@@ -52,6 +52,19 @@ const slotTrace = computed(
         posStatus.value === '已止损')),
 )
 
+const displayFactorSide = computed(() => {
+  const isClosed = slotTrace.value || Boolean(props.row.已实现) || Boolean(props.row.三槽平仓)
+  if (isClosed) return '卖出'
+  const qty = Number(props.row.持仓 || 0)
+  if (qty > 0) {
+    const bought = String(props.row.买入时间 || props.row.buy_time || props.row.策略入场时间 || '').slice(0, 10)
+    const session = String(props.row.交易日 || '').slice(0, 10)
+    const isToday = Boolean(bought && session && bought === session) || props.row.持仓状态 === '已经买入'
+    return isToday ? '买入' : '持有'
+  }
+  return String(props.row.因子侧 || '').trim()
+})
+
 /** 持仓最高 = holdings.peak_high，与自动卖出 trailing SoT 同源；≠ 今日最高 */
 const hwmTitle = computed(() => {
   const at = props.row.持仓最高时间
@@ -158,10 +171,10 @@ const cardClass = computed(() => {
         </dl>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" :class="dense ? 'mt-1.5' : 'mt-3'">
           <span v-if="dense" class="text-ui-text-2">买入预警价 <b class="tabular-nums" :class="band === 'outside' ? 'text-ui-text-3' : 'text-up'">{{ buyAlertPx == null ? '—' : fmtNum(buyAlertPx, pdg) }}</b></span>
-          <span v-if="row['距买点%'] != null && Number(row['距买点%']) < 9000" class="text-ui-text-2">距买点 <b class="tabular-nums">{{ Number(row['距买点%']).toFixed(2) }}%</b></span>
+          <span v-if="!Number(row.持仓) && !slotTrace && row['距买点%'] != null && Number(row['距买点%']) < 9000" class="text-ui-text-2">距买点 <b class="tabular-nums">{{ Number(row['距买点%']).toFixed(2) }}%</b></span>
           <template v-if="!dense">
-            <span v-if="row.因子侧 && row.因子侧 !== '-'" class="text-ui-text-2">因子侧 {{ row.因子侧 }}</span>
-            <span v-if="row.因子触发 && row.因子触发 !== '-' && row.因子触发 !== '不可用'" class="text-ui-text-2">{{ row.因子触发 }}</span>
+            <span v-if="displayFactorSide && displayFactorSide !== '-'" class="text-ui-text-2">因子侧 {{ displayFactorSide }}</span>
+            <span v-if="!Number(row.持仓) && !slotTrace && row.因子触发 && row.因子触发 !== '-' && row.因子触发 !== '不可用'" class="text-ui-text-2">{{ row.因子触发 }}</span>
             <span v-if="row.槽位候选" class="text-accent">槽位候选</span>
             <span v-if="row.当日预警 && !row.持仓" class="text-accent">当日预警 · 未登记持仓</span>
           </template>

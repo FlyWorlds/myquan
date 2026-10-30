@@ -1859,6 +1859,71 @@ def _strategy16b_codes() -> set[str]:
     return {_code_key(str(w.get("code") or "")) for w in _strategy16b_watchlist()}
 
 
+def _strategy16_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """策略十六·核心龙头：构建独立盯盘行（公共自选 ∪ 因子27核心龙头）。自选共享行情，其余走批量行情。"""
+    from watch_config import DEFAULT_PCT, TICK_SIZE, strategy16_watchlist, load_strategy16_thr_map
+
+    watchlist = strategy16_watchlist()
+    if not watchlist:
+        return []
+    codes = {_code_key(str(w.get("code") or "")) for w in watchlist if _code_key(str(w.get("code") or ""))}
+    if not codes:
+        return []
+    rows_by_code: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        code = _code_key(str(r.get("代码") or ""))
+        if code and code in codes and code not in rows_by_code:
+            rows_by_code[code] = r
+    quote_by_code = _strategy16b_quote_map(codes)
+    thrs = load_strategy16_thr_map()
+    out: list[dict[str, Any]] = []
+    for w in watchlist:
+        code = _code_key(str(w.get("code") or ""))
+        if not code:
+            continue
+        is_self = bool(w.get("self_watch") or w.get("manual_add") or w.get("pool_src") == "self")
+        existing = rows_by_code.get(code)
+        if existing is not None:
+            row = dict(existing)
+            if is_self:
+                row["pool_src"] = "self"
+                row["池来源"] = "自选"
+            else:
+                row["pool_src"] = "factor27"
+                row["池来源"] = "因子27"
+        else:
+            pct = float(w.get("entry_pct") or w.get("pct") or thrs.get(code) or DEFAULT_PCT)
+            tick = float(w.get("tick") or TICK_SIZE)
+            row = {
+                "代码": code,
+                "名称": str(w.get("name") or code),
+                "市场": w.get("market"),
+                "交易日": _calendar_signal_session(),
+                "持仓": 0,
+                "持仓状态": "空仓",
+                "策略状态": "空仓",
+                "已触买": "否",
+                "已触止损": "否",
+                "阈值就绪": False,
+                "价位小数": _px_digits(tick),
+                "阈值%": f"±{pct * 100:.1f}",
+                "_entry_pct": pct,
+                "_tick": tick,
+                "pool_src": "self" if is_self else "factor27",
+                "池来源": "自选" if is_self else "因子27",
+                "现价": None,
+                "当日涨幅": None,
+                "昨收": None,
+            }
+        if w.get("concept"):
+            row["concept"] = w.get("concept")
+        quote = quote_by_code.get(code)
+        if quote:
+            _apply_strategy16b_display_quote(row, quote)
+        out.append(row)
+    return out
+
+
 def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     watchlist = _strategy16b_watchlist()
     if not watchlist:
@@ -2742,6 +2807,7 @@ def publish_watch_snapshot(
         strategy3=strategy3,
         strategy8=strategy8,
         strategy15=strategy15,
+        strategy16=_strategy16_rows_from_rows(rows),
         strategy16b=_strategy16b_rows_from_rows(rows),
         strategy17=strategy17_rows,
         sectors=sectors,
@@ -11506,7 +11572,13 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
     if no_buy and qty <= 0:
         # 当日已平仓/禁买：持仓态「已平仓」；信号「已触止损」
         row["持仓状态"] = STATUS_STOP_CLOSED
-        row["因子侧"] = "空仓"
+        is_sold_today = (
+            bool(row.get("已实现"))
+            or bool(row.get("三槽平仓"))
+            or int(row.get("卖出数量") or 0) > 0
+            or bool(row.get("槽位留痕"))
+        )
+        row["因子侧"] = "卖出" if is_sold_today else "空仓"
         row["建议挂单"] = None
         row["近买点"] = False
         row["可执行"] = False
@@ -11601,7 +11673,7 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
         if t1_day and sellable <= 0:
             row["持仓状态"] = "已经买入"
             row["可执行"] = False
-            row["因子侧"] = "持有"
+            row["因子侧"] = "买入"
             if hit_stop:
                 if "止损已记" not in alert and "持有·T+1" not in alert:
                     row["预警"] = "持有·T+1·止损已记"
@@ -11652,7 +11724,12 @@ def _finalize_position_row(row: dict[str, Any]) -> None:
             or alert.startswith("已触买")
         ) and pos in ("已经买入", "持有"):
             row["预警"] = pos
-        row["因子侧"] = "持有" if pos in ("已经买入", "持有") else row.get("因子侧") or "卖出"
+        if pos == "已经买入" or t1_day:
+            row["因子侧"] = "买入"
+        elif pos == "持有":
+            row["因子侧"] = "持有"
+        else:
+            row["因子侧"] = row.get("因子侧") or "卖出"
         return
 
     # 真·空仓：保留 annotate 后的触买信号，勿冲回空仓（未过门不算触买）
@@ -13346,7 +13423,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     ws_hub = LocalWsHub()
     _ws_hub = ws_hub
 
-    from watch_config import MAX_SSE_QUOTES, primary_watchlist, strategy1_watchlist, strategy_watchlist
+    from watch_config import MAX_SSE_QUOTES, primary_watchlist, strategy1_watchlist, strategy16_watchlist, strategy_watchlist
 
     _align_active_signal_scope()
     primary = primary_watchlist()
@@ -13354,11 +13431,12 @@ def cmd_watch(args: argparse.Namespace) -> None:
     held_codes = {str(code) for code, pos in live_positions.items() if int(pos.get("qty") or 0) > 0}
     primary = sorted(primary, key=lambda item: _code_key(item["code"]) not in held_codes)
     s1_wl = strategy1_watchlist()
-    # SSE 只挂热池；新浪批量 = 热池 ∪ 策略一（信号 Tab 需要对齐池名单）
+    s16_wl = strategy16_watchlist()
+    # SSE 只挂热池；新浪批量 = 热池 ∪ 策略一 ∪ 策略十六（确保各自独立 Tab 均有实时行情）
     sinas_sse = [str(w["sina"]).lower() for w in primary][: int(MAX_SSE_QUOTES)]
     seen_s = set(sinas_sse)
     sinas_batch = list(sinas_sse)
-    for w in s1_wl:
+    for w in (*s1_wl, *s16_wl):
         s = str(w["sina"]).lower()
         if s in seen_s:
             continue

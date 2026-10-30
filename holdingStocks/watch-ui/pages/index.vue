@@ -326,7 +326,10 @@ const closedCount = computed(() => closedHoldings.value.length)
   <div class="page-shell" :class="{ 'privacy-hidden': privacyHidden }">
     <header class="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-ui-hairline pb-4">
       <div>
-        <h1 class="text-2xl font-bold text-ui-text">持仓盯盘</h1>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <h1 class="text-2xl font-bold text-ui-text">持仓盯盘</h1>
+          <span class="text-sm font-bold text-red-500">严格执行量化买卖</span>
+        </div>
         <p class="text-xs" :class="databaseError ? 'text-ui-danger' : 'text-ui-text-2'">
           {{ databaseError || (store.paperState ? `数据库持仓 · 版本 ${store.paperState.revision}` : '连接数据库持仓…') }}
         </p>
