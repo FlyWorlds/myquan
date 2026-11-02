@@ -49,3 +49,6 @@ _quantskills_cache/
 # Offline notification outbox (production is stored in MySQL)
 holdingStocks/wechat_alert_state_outbox.json
 holdingStocks/wechat_alert_state_outbox.tmp
+
+# Local database rollback dumps exceed repository size limits
+/reports/db_rollback_*/*.sql
