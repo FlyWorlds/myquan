@@ -7,9 +7,33 @@ from account_reconciliation import account_summary, number
 from holding_status import held_position_status
 
 
+def cached_market_row(code, *, session, clock, get_quote=None):
+    from watch_config import sina_of
+    row = {}
+    try:
+        q = get_quote(sina_of(code)) if get_quote else None
+    except Exception:
+        q = None
+    if q and str(q.get("session") or "")[:10] == session and "daily" not in str(q.get("_quote_source") or ""):
+        try:
+            at = datetime.fromisoformat(str(q.get("last_ts") or ""))
+            valid = at.tzinfo is None and at.date().isoformat() == session and at <= datetime.fromisoformat(clock)
+        except (ValueError, TypeError):
+            valid = False
+        mark = number(q.get("last"))
+        if valid and mark is not None and mark > 0:
+            row.update({"现价": mark, "昨收": number(q.get("prev_close")),
+                        "开盘": number(q.get("open")), "今日最高": number(q.get("high")), "今日最低": number(q.get("low")),
+                        "当日涨幅": number(q.get("day_chg_pct")) if number(q.get("day_chg_pct")) is not None else
+                            ((mark / float(q["prev_close"]) - 1) * 100 if number(q.get("prev_close")) and float(q["prev_close"]) > 0 else None), "更新": q.get("last_ts"),
+                        "报价数据库版本": q.get("_database_quote_revision"),
+                        "报价用途": "历史参考" if q.get("_reference_only") else "已确认报价",
+                        })
+    return row
+
+
 def build_boot_holdings(model, *, session, clock, get_quote=None):
     from strategy.akq_math import session_day_pnl
-    from watch_config import sina_of
     rows = []
     for code, pos in model.state["holdings"].get("positions", {}).items():
         qty = int(pos.get("qty") or 0)
@@ -24,34 +48,20 @@ def build_boot_holdings(model, *, session, clock, get_quote=None):
                "持仓最高": pos.get("peak_high"), "预警": "", "bgClass": "status-hold"}
         fee = float(pos.get('buy_fees_remaining') or 0)
         row['买入剩余费用'] = fee
-        try:
-            q = get_quote(sina_of(code)) if get_quote else None
-        except Exception:
-            q = None
-        if q and str(q.get("session") or "")[:10] == session and "daily" not in str(q.get("_quote_source") or ""):
-            try:
-                at = datetime.fromisoformat(str(q.get("last_ts") or ""))
-                valid = at.tzinfo is None and at.date().isoformat() == session and at <= datetime.fromisoformat(clock)
-            except ValueError:
-                valid = False
-            mark, cost = number(q.get("last")), number(pos.get("cost"))
-            if valid and mark is not None and mark > 0:
-                row.update({"现价": mark, "昨收": number(q.get("prev_close")),
-                            "开盘": number(q.get("open")), "今日最高": number(q.get("high")), "今日最低": number(q.get("low")),
-                            "当日涨幅": number(q.get("day_chg_pct")), "更新": q.get("last_ts"),
-                            "报价数据库版本": q.get("_database_quote_revision"),
-                            "报价用途": "历史参考" if q.get("_reference_only") else "已确认报价",
-                            "市值": round(mark * qty, 2)})
-                if cost is not None and cost > 0:
-                    day, pct, _ = session_day_pnl(mark=mark, qty=qty, cost=cost,
-                            prev_close=row.get("昨收"), bought_today=str(pos.get("buy_time") or "")[:10] == session,
-                            fallback=None)
-                    base = cost*qty+fee
-                    floating = round((mark-cost)*qty-fee, 2)
-                    if str(pos.get('buy_time') or '')[:10] == session and day is not None:
-                        day = round(day-fee, 2)
-                        pct = round(day/base*100, 2)
-                    row.update({"浮盈": floating, "浮盈%": round(floating/base*100, 2),
-                                "当日盈亏": day, "当日盈亏%": pct})
+        row.update(cached_market_row(code, session=session, clock=clock, get_quote=get_quote))
+        mark, cost = number(row.get("现价")), number(pos.get("cost"))
+        if mark is not None and mark > 0:
+            row["市值"] = round(mark * qty, 2)
+            if cost is not None and cost > 0:
+                day, pct, _ = session_day_pnl(mark=mark, qty=qty, cost=cost,
+                        prev_close=row.get("昨收"), bought_today=str(pos.get("buy_time") or "")[:10] == session,
+                        fallback=None)
+                base = cost*qty+fee
+                floating = round((mark-cost)*qty-fee, 2)
+                if str(pos.get('buy_time') or '')[:10] == session and day is not None:
+                    day = round(day-fee, 2)
+                    pct = round(day/base*100, 2)
+                row.update({"浮盈": floating, "浮盈%": round(floating/base*100, 2),
+                            "当日盈亏": day, "当日盈亏%": pct})
         rows.append(row)
     return rows, account_summary(model.state, rows, session, read_model=model)

@@ -170,7 +170,7 @@ class AccountReadModel:
         return cycle_return(self.state, row, read_model=self)
 
 
-def closed_trade_rows(model, session):
+def closed_trade_rows(model, session, *, market_rows=()):
     """Independent full-exit cards from effective fills, including symbols bought again."""
     rows = []
     for entry in model.entries:
@@ -183,11 +183,28 @@ def closed_trade_rows(model, session):
         cost, pnl = number(entry.get("cost")), number(entry.get("pnl"))
         base = cost * qty + float(entry.get("allocated_buy_fees") or 0) if cost and cost > 0 else None
         at = entry.get("time")
+        protection = number(entry.get("protection_price"))
+        protection_source = "成交触发时保护线"
+        # Older fills did not store the line. Reconstruct only while the retained
+        # position watermark still belongs to this exact entry cycle.
+        pos = model.state["holdings"].get("positions", {}).get(entry.get("code"), {})
+        watermark = pos.get("quote_exit_watermark") or {}
+        detail = str(entry.get("reason_detail") or entry.get("note") or entry.get("reason") or "")
+        if (protection is None and "t1_peak_trail" in detail and cost and cost > 0
+                and entry.get("buy_time") and watermark.get("cycle") == entry.get("buy_time")
+                and str(watermark.get("time") or "") == str(entry.get("execution_quote_time") or entry.get("signal_time") or "")):
+            from strategy.pullback_wave_stop import t1_trail_stop_px
+            peak = number(pos.get("peak_high"))
+            if peak and peak > 0:
+                protection = t1_trail_stop_px(peak, cost_px=cost)
+                protection_source = "按保留的成交时持仓峰值及当前规则复算"
         rows.append({"记录ID": entry.get("id"), "代码": entry.get("code"),
             "名称": entry.get("name") or entry.get("code"), "市场": entry.get("market"),
             "交易日": session, "持仓": 0, "可用": 0, "置顶": False, "槽位占用": False,
             "槽位留痕": True, "已实现": True, "三槽平仓": True, "持仓状态": "今日平仓",
-            "卖出数量": qty, "成本": cost, "成交价": entry.get("price"), "现价": entry.get("price"),
+            "卖出原因": "跌破隔夜峰值回落保护线" if "t1_peak_trail" in detail else detail,
+            "回落止损价": protection, "回落止损价说明": protection_source if protection is not None else "触发时保护线未记录",
+            "卖出数量": qty, "成本": cost, "成交价": entry.get("price"), "现价": None,
             "买入时间": entry.get("buy_time"), "平仓时间": at, "卖出时间": at,
             "信号时间": entry.get("signal_time") or at, "更新": at,
             "预警": "已平仓", "已触买": "否", "已触止损": "是",
@@ -198,6 +215,12 @@ def closed_trade_rows(model, session):
             "综合单笔收入": pnl, "综合单笔成本额": base,
             "综合单笔持仓数量": 0, "综合单笔卖出数量": qty,
             "综合单笔来源": "database_delivery_cycle_with_adjustments"})
+    # Quotes may move after exit; committed fills and realized PnL stay frozen.
+    fields = ("现价", "昨收", "开盘", "今日最高", "今日最低", "最高", "最低", "当日涨幅", "更新", "价位小数")
+    quotes = {str(r.get("代码")): r for r in market_rows if number(r.get("现价")) is not None}
+    for row in rows:
+        source = quotes.get(str(row["代码"]), {})
+        row.update({key: source[key] for key in fields if key in source})
     return sorted(rows, key=lambda row: (str(row.get("平仓时间") or ""), str(row.get("代码") or ""), str(row.get("记录ID") or "")))
 
 

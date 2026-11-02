@@ -33,3 +33,23 @@ test('unknown purchase date is holding and never implies a same-day purchase or 
   assert.equal(holdingT1Locked({ ...tiantong, 可用: null }), false)
   assert.equal(holdingT1Locked({ ...tiantong, 可用: 0 }), false)
 })
+
+test('stop warning badge and legend share the 1% protection rule including T+1', () => {
+  for (const buy of ['2026-10-21 09:30:00', '2026-10-22 09:30:00']) {
+    const row = { ...tiantong, 买入时间: buy, 现价: 100.5, 卖出侧价: 100 }
+    assert.ok(resolveSignalVisual(row).badgeText.startsWith('止损预警'))
+    assert.ok(collectLegendIds(row).includes('warn-sell'))
+  }
+  const far = { ...tiantong, 现价: 102, 卖出侧价: 100 }
+  assert.ok(!resolveSignalVisual(far).badgeText.startsWith('止损预警'))
+  assert.ok(!collectLegendIds(far).includes('warn-sell'))
+})
+
+test('old proximity flags do not become triggered sells or override the 1% rule', () => {
+  const row = { ...tiantong, 现价: 102, 卖出侧价: 100, 近止损: true }
+  assert.equal(resolveSignalVisual(row).badgeText, '持有')
+  assert.ok(!collectLegendIds(row).includes('warn-sell'))
+  const hit = { ...row, 现价: 100.5, 已触止损: '是' }
+  assert.ok(!resolveSignalVisual(hit).badgeText.startsWith('止损预警'))
+  assert.ok(collectLegendIds(hit).includes('trigger-sell'))
+})

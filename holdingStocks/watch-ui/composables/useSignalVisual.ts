@@ -1,4 +1,5 @@
 import type { HoldingRow } from '~/types/snapshot'
+import { stopWarningDistance } from '../utils/stopWarning.ts'
 import { holdingStatus, holdingT1Locked } from '../utils/holdingStatus.ts'
 
 export type SignalTier =
@@ -75,7 +76,7 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
     alert.includes('今日已止损')
   const sellTriggered =
     !stopClosed &&
-    (alert.includes('已触止损') ||
+    (String(row.已触止损 || '') === '是' || alert.includes('已触止损') ||
       trig.startsWith('策略止损') ||
       (pos === '待卖出' && (trig.startsWith('已触发') || alert.includes('止损'))))
 
@@ -99,9 +100,14 @@ export function resolveSignalVisual(row: HoldingRow): SignalVisual {
 
   // 实仓：底色固定持仓青绿 #5eead4；止损/预警只改角标，不换整卡绿底
   // T+1 当日不可卖：角标固定「已经买入/持有·T+1」，止损已记不当成已触止损筛选
+  if (qty > 0 && !sellTriggered && stopWarningDistance(row) != null) {
+    return { tier: 'hold', rowClass: 'signal-row signal-hold-real',
+      badgeClass: 'signal-badge signal-badge-warn-sell',
+      badgeText: t1Locked ? '止损预警·T+1不可卖' : '止损预警' }
+  }
   if (qty > 0) {
     const sellHit =
-      !t1Locked && (sellTriggered || sellWarn || pos === '待卖出')
+      !t1Locked && sellTriggered
     const badgeText = t1Locked
       ? alert && alert !== '-'
         ? alert
@@ -219,6 +225,8 @@ export function collectLegendIds(row: HoldingRow): SignalLegendId[] {
   if (qty <= 0 && !buyHit && !stopClosed && pos !== '当日禁买') {
     if (pos === '待买入' || alert.includes('将买') || Boolean(row.近买点)) ids.push('warn-buy')
   }
+
+  if (!stopClosed && stopWarningDistance(row) != null && !ids.includes('trigger-sell') && !ids.includes('warn-sell')) ids.push('warn-sell')
 
   if (!ids.length) ids.push('flat')
   return ids

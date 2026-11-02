@@ -5,7 +5,7 @@
 卖出（止盈/保护）：
   · 盈利 >10%：分段止盈（10% 半仓 / 15% 全清；过 10% 后峰值回落 2% 清）
   · 盈利 3%～10%：回落一半 与 动态高点回落「0.5×近20日日频σ」并行，谁先碰到走谁
-  · 买入日收盘盈利 <3%：次日按当日动态峰值回落 2.5% 立即止损；
+  · 买入日收盘盈利 <3%：次日按当日动态峰值回落 3.0% 立即止损；
     盘中浮盈到 3% 改走中段，到 10% 改走分段
   · 任何时候亏到 2.5%：成本硬保护
 触达判定：按 **1 分钟 K 时间顺序**——先用此前最高算卖价，再抬升 peak。
@@ -95,7 +95,7 @@ STRATEGY_RULES = """
 
 【有仓 · 卖出】同分钟优先级（与 eval_multi_tp_bar 一致；全清优先于半仓）：
   0) 低开已破买点硬保护 → 开盘立刻卖（先于 T1）
-  1) 买入日收盘盈利 <3%（已记）且当日尚未 >3% → 次日动态峰值回落 2.5% 全清
+  1) 买入日收盘盈利 <3%（已记）且当日尚未 >3% → 次日动态峰值回落 3.0% 全清
   2) 阶梯：浮盈 ≥15% → 可卖全清
   3) 中赚（浮盈 >3% 且 <10%）：回落一半 与 峰值回落 0.5×20日日频σ 并行，
      从动态高点往下谁先碰到走谁（同分钟价高者先触）
@@ -104,7 +104,7 @@ STRATEGY_RULES = """
      （已半仓后再触 10% / 回落 → 剩余全清）
   · 未触达时的「工作卖价」走 working_stop_price：过 10% 展示峰值回落 2%，
     禁止用 dummy OHLC 去撞 10%/15% 阶梯目标（否则盯盘会把阶梯价当止损）
-  · 买入当日不可卖；次日未过 3% 走峰值回落 2.5%；过 3% 走中段（一半/波动先到先卖）；过 10% 走分段
+  · 买入当日不可卖；次日未过 3% 走峰值回落 3.0%；过 3% 走中段（一半/波动先到先卖）；过 10% 走分段
   · 峰值只从买入之后算，未卖出前创新高则抬升；T1 回落峰值=max(隔夜持仓高点, 当日高点)
   · 昨收/昨高只经 overnight_peak_px：函数看买入日（昨天已持有或昨天买入才并入）；漏传买入日不用昨收/昨高
   · 不得低于买点硬保护；低开已破硬保护按开盘卖（竞价核=09:30，不用首根 1m 标签）
@@ -113,7 +113,7 @@ STRATEGY_RULES = """
   · Realtime 观测层：open_protect → path → last（不等 1m close）
 
 【默认】entry 2.5%；中段门槛 3%；阶梯 10%/15%；大赚回落 2%；回落一半 50%；波动回落 50%×20日日频σ；
-       T1 峰值回落 2.5%；硬保护 2.5%。
+       T1 峰值回落 3.0%；硬保护 2.5%。
 【说明】选股/过滤用日线；正式验证回测=BT-1m；生产=REALTIME；日线=研究。
 ================================================================================
 """
@@ -317,7 +317,7 @@ def t1_trail_stop_px(
     hard_pct: float = DEFAULT_PULLBACK_PCT,
     tick: float = TICK_SIZE,
 ) -> float:
-    """隔夜未到 3%：峰值回落 2.5%，且不得低于买点硬保护。"""
+    """隔夜未到 3%：峰值回落 3.0%，且不得低于买点硬保护。"""
     trail = pullback_stop_price(session_peak, pullback_pct=t1_trail_pct, tick=tick)
     hard = cost_hard_stop_px(cost_px, hard_pct=hard_pct, tick=tick)
     if trail <= 0:
@@ -833,7 +833,7 @@ def resolve_t1_overnight_note(
 
     · 收盘盈利 ≥ 3%：不记（含盘中曾刺硬保护后又收回；次日走中段/分段）
     · 收盘盈利 < 3% 且收盘/最低亏损 ≥ hard_pct：记硬保护
-    · 其余（含小亏、盈利 <3%）：记 T1 峰值回落哨兵（价=成本），次日按动态峰值回落 2.5%
+    · 其余（含小亏、盈利 <3%）：记 T1 峰值回落哨兵（价=成本），次日按动态峰值回落 3.0%
     """
     cost = float(cost_px or 0)
     close = float(close_px or 0)
@@ -847,7 +847,7 @@ def resolve_t1_overnight_note(
     hard_px = floor_to_tick(cost * (1.0 - float(hard_pct)), tick)
     if lo <= hard_px + 1e-12 or close <= hard_px + 1e-12:
         return {"noted_px": float(hard_px), "reason": "hard_from_cost"}
-    # 哨兵价=成本：只作「已记」开关，次日不按该价成交，改走峰值回落 2.5%
+    # 哨兵价=成本：只作「已记」开关，次日不按该价成交，改走峰值回落 3.0%
     arm_px = floor_to_tick(cost, tick)
     return {
         "noted_px": float(arm_px) if arm_px > 0 else float(cost),
@@ -904,7 +904,7 @@ def stop_note_invalidated_by_recovery(
 
     · hard_from_cost：现价明显高于硬保护价 → 作废（收回）
     · t1_trail：哨兵价=成本，不是成交卖价；小幅浮盈不得当成「已收回」作废，
-      否则隔夜永远 armed=False，卖出侧锁死在成本硬保护、峰值回落 2.5% 永不生效。
+      否则隔夜永远 armed=False，卖出侧锁死在成本硬保护、峰值回落 3.0% 永不生效。
       仅涨停（或调用方另判盈≥3%）作废。
     """
     last = float(last_px or 0)
@@ -1319,7 +1319,7 @@ def path_dependent_pullback_hit(
     since_exclusive：True 时不含 since_ts 当根（半仓后从触达分钟的下一根继续）。
     shares / tp_stage：与 eval_multi_tp_bar 对齐；10% 半仓后须传剩余股数与 stage=1。
     seed_high：持仓峰值初值（成本或已记录 peak）。
-    overnight_armed：买入日收盘未到 3% → 次日峰值回落 2.5%。
+    overnight_armed：买入日收盘未到 3% → 次日峰值回落 3.0%。
     """
     pb = float(pullback_pct)
     running_high = float(seed_high) if seed_high is not None and float(seed_high) > 0 else 0.0
@@ -1752,7 +1752,7 @@ def strategy_signal(
     def _sell_note(*, near: bool = False, holding_idle: bool = False) -> str:
         labels = {
             "hard_from_cost": "买点硬保护",
-            "t1_peak_trail": "未到3%峰值回落2.5%",
+            "t1_peak_trail": f"未到3%峰值回落{DEFAULT_T1_PEAK_TRAIL_PCT*100:.1f}%",
             "half_gain": "中赚回落一半",
             "vol_giveback": "中赚波动回落",
             "peak_pullback": "大赚后峰值回落2%",

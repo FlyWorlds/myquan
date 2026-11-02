@@ -33,7 +33,7 @@ const legend = [
   { id: 'ban-buy', cls: 'signal-badge signal-badge-ban-buy', label: '今日平仓' },
   { id: 'warn-buy', cls: 'signal-badge signal-badge-warn-buy', label: '买入预警' },
   { id: 'trigger-buy', cls: 'signal-badge signal-badge-trigger-buy', label: '触买' },
-  { id: 'warn-sell', cls: 'signal-badge signal-badge-warn-sell', label: '卖出预警' },
+  { id: 'warn-sell', cls: 'signal-badge signal-badge-warn-sell', label: '止损预警' },
   { id: 'trigger-sell', cls: 'signal-badge signal-badge-trigger-sell', label: '已触止损' },
   { id: 'flat', cls: 'signal-badge signal-badge-flat', label: '空仓' },
 ] as const

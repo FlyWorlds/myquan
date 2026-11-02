@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { HoldingRow, StrategyPicks } from '~/types/snapshot'
+import { sellAlerts } from '~/utils/sellAlerts'
 import { selectionRows } from '~/utils/selectionRows'
 import { createAlertPriceOrder, stickAlertRows } from '~/utils/alertBoard'
 
@@ -257,6 +258,8 @@ const closedHoldings = computed(() => {
   })
 })
 
+const sellAlertRows = computed(() => sellAlerts(snapshot.value?.holdings || [], closedHoldings.value))
+
 function isPaperHoldRow(r: (typeof rawSlotHoldings.value)[number]) {
   return Number(r.持仓) <= 0 && String(r.持仓状态 || '') === '策略持有'
 }
@@ -278,6 +281,11 @@ function byBuyTime(a: HoldingRow, b: HoldingRow): number {
 const slotHoldings = computed(() => rawSlotHoldings.value.slice().sort(byBuyTime))
 const paperHoldings = computed(() => rawPaperHoldings.value.slice().sort(byBuyTime))
 const alertCards = ref<HoldingRow[]>([])
+const otherAlertCards = computed(() => {
+  const sellCodes = new Set(sellAlertRows.value.map(item => String(item.row.代码 || '')))
+  return alertCards.value.filter(row => !sellCodes.has(String(row.代码 || '')))
+})
+const alertPoolCount = computed(() => sellAlertRows.value.length + otherAlertCards.value.length)
 const alertPriceOrder = createAlertPriceOrder(5_000, 3_000)
 let alertSortTimer: ReturnType<typeof setTimeout> | undefined
 onBeforeUnmount(() => {
@@ -354,6 +362,7 @@ const closedCount = computed(() => closedHoldings.value.length)
         </button>
       </div>
     </header>
+
 
     <nav class="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="盯盘视图">
       <button
@@ -433,17 +442,27 @@ const closedCount = computed(() => closedHoldings.value.length)
               <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.记录ID || `${row.代码}-${row.平仓时间 || row.卖出时间 || ''}`)" :row="row" :account-total="snapshot?.account?.accountTotal" />
             </div>
           </div>
-          <div v-if="alertCards.length" class="space-y-2">
+          <div v-if="alertPoolCount" class="space-y-2">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <h2 class="text-sm font-semibold text-ui-text-2">
                 {{ slotHoldings.length || closedHoldings.length || paperHoldings.length ? '预警' : '持仓列表' }}
-                <span class="ml-1 font-normal text-ui-text-3">{{ alertCards.length }}</span>
+                <span class="ml-1 font-normal text-ui-text-3">{{ alertPoolCount }}</span>
               </h2>
               <p class="text-xs text-ui-text-3">排序每5秒更新 · 触买当天保留 · 红色线内、灰色线外</p>
             </div>
             <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <HoldingCard
-                v-for="row in alertCards"
+                v-for="item in sellAlertRows"
+                :key="'sell-' + String(item.row.记录ID || item.row.代码) + item.state"
+                dense
+                band="inside"
+                :sell-state="item.state"
+                :sell-filled="item.filled"
+                :row="item.row"
+                :account-total="snapshot?.account?.accountTotal"
+              />
+              <HoldingCard
+                v-for="row in otherAlertCards"
                 :key="'other-' + String(row.代码)"
                 dense
                 :band="row.预警线内 === false ? 'outside' : 'inside'"

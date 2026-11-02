@@ -1,4 +1,4 @@
-"""因子26：浮盈多层止盈（买同开盘突破；卖=阶梯10/15 + 中赚回落一半与波动回落谁先到走谁 + 大赚回落2% + 未到3%次日峰值回落2.5%；昨收/昨高只经 overnight_peak_px）。"""
+"""因子26：浮盈多层止盈（买同开盘突破；卖=阶梯10/15 + 中赚回落一半与波动回落谁先到走谁 + 大赚回落2% + 未到3%次日峰值回落3.0%；昨收/昨高只经 overnight_peak_px）。"""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ SPEC = FactorSpec(
         "多层止盈：买=开盘阈值 ceil(open×(1+entry))；"
         f"卖=阶梯{DEFAULT_LADDER_HALF_PCT*100:.0f}%半仓/"
         f"{DEFAULT_LADDER_FULL_PCT*100:.0f}%全清 + 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + "
-        f"大赚后峰值回落{DEFAULT_PEAK_PULLBACK_X*100:.0f}%清仓 + 买入日未到3%则次日峰值回落2.5%；"
+        f"大赚后峰值回落{DEFAULT_PEAK_PULLBACK_X*100:.0f}%清仓 + 买入日未到3%则次日峰值回落3.0%；"
         "买入日盈利≥3%不记、其余都记；"
         "成交触达按 1 分钟顺序；选股/回撤用日线；池回测近 7 日 1m；"
         f"默认 entry ±{DEFAULT_ENTRY_PCT*100:.1f}% / 回落一半 {DEFAULT_GIVEBACK_RATIO*100:.0f}% / 波动回落 {DEFAULT_VOL_GIVEBACK_RATIO*100:.0f}%×20日日频σ"

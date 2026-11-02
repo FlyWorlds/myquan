@@ -3,6 +3,10 @@ import type { TradeLedgerEntry, TradeLedgerResponse } from '~/types/trades'
 import { fmtNum } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 
+function displayReason(value?: string): string {
+  return String(value || '').replaceAll('报价驱动因子26(t1_peak_trail)', '跌破保护线（因子26·隔夜峰值回落）')
+}
+
 const route = useRoute()
 const router = useRouter()
 const { resetting, resetPaper } = usePaperReset()
@@ -224,9 +228,9 @@ function monthLabel(m: string) {
             </td>
             <td class="sensitive px-3 py-2 tabular-nums">{{ fmtMoney(e.account_cash_after) }}</td>
             <td class="max-w-[16rem] px-3 py-2 text-xs text-ui-text-2">
-              <div>{{ e.reason || '—' }}</div>
-              <div v-if="e.reason_detail && e.reason_detail !== e.reason" class="mt-0.5 text-ui-text-3">
-                {{ e.reason_detail }}
+              <div>{{ displayReason(e.reason) || '—' }}</div>
+              <div v-if="e.reason_detail && displayReason(e.reason_detail) !== displayReason(e.reason)" class="mt-0.5 text-ui-text-3">
+                {{ displayReason(e.reason_detail) }}
               </div>
             </td>
           </tr>

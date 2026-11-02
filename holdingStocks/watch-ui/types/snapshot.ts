@@ -124,6 +124,9 @@ export interface HoldingRow {
   买点?: number | null
   止损?: number | null
   买入侧价?: number | null
+  回落止损价?: number | null
+  回落止损价说明?: string
+  卖出原因?: string
   卖出侧价?: number | null
   已触买?: string
   近买点?: boolean

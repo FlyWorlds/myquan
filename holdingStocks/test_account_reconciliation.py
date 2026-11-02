@@ -156,6 +156,13 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(rows[0]["持仓"], 0)
         self.assertEqual(rows[0]["成交价"], 12)
         self.assertEqual(rows[0]["当日盈亏"], 10)
+        quoted = closed_trade_rows(AccountReadModel(state), "2026-10-14", market_rows=[
+            {"代码": "002636", "现价": 13.5, "当日涨幅": 8, "开盘": 12.2, "今日最高": 14}])[0]
+        self.assertEqual(quoted["现价"], 13.5)
+        self.assertEqual(quoted["当日涨幅"], 8)
+        self.assertEqual(quoted["成交价"], 12)
+        self.assertEqual(quoted["当日盈亏"], 10)
+        self.assertIsNone(rows[0]["现价"])
         self.assertEqual(state, original)
         self.assertEqual(closed_trade_rows(AccountReadModel(state), "2026-10-15"), [])
         sale["after_qty"] = 20

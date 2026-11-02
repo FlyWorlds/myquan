@@ -2354,7 +2354,15 @@ def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any], *, read_m
         from account_reconciliation import enrich_snapshot_trade_metadata
         changed = enrich_snapshot_trade_metadata(snap, model.state) or changed
         from account_reconciliation import closed_trade_rows
-        closed = closed_trade_rows(model, str(snap.get("clock") or "")[:10])
+        closed_session = str(snap.get("clock") or "")[:10]
+        from boot_holdings import cached_market_row
+        closed = closed_trade_rows(model, closed_session)
+        get_quote = (_DATABASE_QUOTES_CLIENT.get if _CONDITION_BUY_ACTIVE and _DATABASE_QUOTES_CLIENT is not None
+                     else _watch_feed.get_quote if _watch_feed else None)
+        quote_rows = [dict(cached_market_row(r["代码"], session=closed_session,
+            clock=snap.get("clock"), get_quote=get_quote), 代码=r["代码"]) for r in closed]
+        closed = closed_trade_rows(model, closed_session,
+            market_rows=[*list(_iter_snapshot_price_rows(snap)), *quote_rows])
         if snap.get("closedHoldings") != closed:
             snap["closedHoldings"] = closed
             changed = True
@@ -2999,7 +3007,11 @@ def _publish_boot_holdings_preview(*, get_quote=None) -> bool:
                                        clock=_now(), get_quote=get_quote)
     snap = dict(base, holdings=rows, account=account, paperRevision=model.state["revision"])
     from account_reconciliation import closed_trade_rows
-    snap["closedHoldings"] = closed_trade_rows(model, _calendar_signal_session())
+    from boot_holdings import cached_market_row
+    closed = closed_trade_rows(model, _calendar_signal_session())
+    snap["closedHoldings"] = closed_trade_rows(model, _calendar_signal_session(), market_rows=[
+        dict(cached_market_row(r["代码"], session=_calendar_signal_session(), clock=_now(),
+                              get_quote=get_quote), 代码=r["代码"]) for r in closed])
     occupied = [r["代码"] for r in rows if int(r.get("持仓") or 0)>0]
     snap["slotMeta"] = dict(base.get("slotMeta") or {}, occupied=occupied,
                             occupiedCount=len(occupied), free=max(0, int(MAX_POSITION_SYMBOLS)-len(occupied)))
@@ -6708,7 +6720,8 @@ def apply_exit_fill(
                 float(sell_qty) / float(old_qty) if old_qty > 0 else None
             ),
             target_px=float(
-                meta.get("stop")
+                (execution_meta or {}).get("protection_price")
+                or meta.get("stop")
                 or meta.get("止损")
                 or meta.get("卖出价")
                 or meta.get("exit_px")
@@ -8713,12 +8726,19 @@ def _collect_quote_runtime_rows(get_quote=None):
                 "报价数据库版本": q.get("_database_quote_revision"),
                 "报价用途": "历史参考" if q.get("_reference_only") else "已确认报价"})
         if calculation_ready and row["持仓"] > 0 and pos.get("cost") and pos.get("peak_high"):
-            _, stop = working_stop_price(cost_px=float(pos["cost"]), peak_high=float(pos["peak_high"]),
+            stop_kind, stop = working_stop_price(cost_px=float(pos["cost"]), peak_high=float(pos["peak_high"]),
                 session_peak=float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == day else 0,
                 day_open=float(q.get("open") or 0),
                 overnight_armed=bool(pos.get("stop_noted")) and str(pos.get("buy_time") or "")[:10] < day,
                 vol20_daily=_quote_daily_vol(w["sina"], day), tick=_watch_tick(w))
-            row.update({"止损": stop, "卖出侧价": stop})
+            sell_reason = {
+                "hard_from_cost": "跌破成本硬保护线",
+                "t1_peak_trail": "跌破隔夜峰值回落保护线",
+                "half_gain": "中赚回落一半",
+                "vol_giveback": "中赚波动回落",
+                "peak_pullback": "大赚后峰值回落",
+            }.get(stop_kind, "跌破保护线")
+            row.update({"止损": stop, "卖出侧价": stop, "回落止损价": stop, "卖出原因": sell_reason})
         daily = _DAILY_CACHE.get(w["sina"])
         book = data.get("condition_buy_orders") or {}
         order = (book.get("orders") or {}).get(code) if calculation_ready and book.get("session") == day else None
@@ -13028,13 +13048,15 @@ def _execute_quote_exit(code, quote, received_at):
             fill_px=action["fill_px"], qty=action["shares"], cost=pos.get("cost"),
             session=str(trading_session_date()), buy_time=pos.get("buy_time"), prev_close=quote.get("prev_close"),
             open_px=quote["open"], px_digits=2, reason=REASON_HALF if action["kind"] == "half" else REASON_STOP,
-            trade_note=f"报价驱动因子26({action['reason']})", action_kind=action["kind"],
+            trade_note=("跌破保护线（因子26·隔夜峰值回落）" if action["reason"] == "t1_peak_trail"
+                        else f"报价驱动因子26({action['reason']})"), action_kind=action["kind"],
             first_hit_ts=quote["last_ts"], exit_kind=action["reason"],
             execution_meta=dict(signal_time=quote["last_ts"], decision_time=decision,
                 signal_received_at=received_at.isoformat(sep=" ", timespec="microseconds"),
                 execution_quote_time=quote["last_ts"], observed_price=float(quote["last"]),
                 quote_db_revision=quote.get("_database_quote_revision"), quote_db_at=quote.get("_database_quote_at"),
-                fill_model="factor26_observed_quote", quote_source=quote.get("_quote_source")))
+                fill_model="factor26_observed_quote", quote_source=quote.get("_quote_source"),
+                protection_price=result.get("noted_px")))
     else:
         save_holdings(data)
 
