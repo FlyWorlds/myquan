@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { HoldingRow, StrategyPicks } from '~/types/snapshot'
+import { otherAlertRows } from '~/utils/buyAlerts'
 import { sellAlerts } from '~/utils/sellAlerts'
 import { selectionRows } from '~/utils/selectionRows'
 import { createAlertPriceOrder, stickAlertRows } from '~/utils/alertBoard'
@@ -281,11 +282,9 @@ function byBuyTime(a: HoldingRow, b: HoldingRow): number {
 const slotHoldings = computed(() => rawSlotHoldings.value.slice().sort(byBuyTime))
 const paperHoldings = computed(() => rawPaperHoldings.value.slice().sort(byBuyTime))
 const alertCards = ref<HoldingRow[]>([])
-const otherAlertCards = computed(() => {
-  const sellCodes = new Set(sellAlertRows.value.map(item => String(item.row.代码 || '')))
-  return alertCards.value.filter(row => !sellCodes.has(String(row.代码 || '')))
-})
-const alertPoolCount = computed(() => sellAlertRows.value.length + otherAlertCards.value.length)
+const buyEventCards = computed(() => snapshot.value?.buySignals || [])
+const otherAlertCards = computed(() => otherAlertRows(alertCards.value, buyEventCards.value))
+const alertPoolCount = computed(() => sellAlertRows.value.length + buyEventCards.value.length + otherAlertCards.value.length)
 const alertPriceOrder = createAlertPriceOrder(5_000, 3_000)
 let alertSortTimer: ReturnType<typeof setTimeout> | undefined
 onBeforeUnmount(() => {
@@ -309,10 +308,10 @@ watch(
   (snap) => {
     const now = performance.now()
     const taken = new Set(
-      [...closedHoldings.value, ...rawPaperHoldings.value].map((row) => String(row.代码 || '')),
+      [...rawPaperHoldings.value].map((row) => String(row.代码 || '')),
     )
     const incoming = (snap?.holdings || [])
-      .filter((row) => !taken.has(String(row.代码 || '')))
+      .filter((row) => !taken.has(String(row.代码 || '')) && !row.已实现 && !row.槽位留痕)
       .map((row) => Number(row.持仓 || 0) > 0 ? { ...row, 置顶: true } : row)
     const quotes = new Map<string, HoldingRow>()
     for (const row of [...(snap?.strategy1 || []), ...(snap?.strategy16 || [])]) {
@@ -460,6 +459,12 @@ const closedCount = computed(() => closedHoldings.value.length)
                 :sell-state="item.state"
                 :sell-filled="item.filled"
                 :row="item.row"
+                :account-total="snapshot?.account?.accountTotal"
+              />
+              <HoldingCard
+                v-for="row in buyEventCards"
+                :key="'buy-event-' + String(row.记录ID)"
+                dense band="inside" :row="row"
                 :account-total="snapshot?.account?.accountTotal"
               />
               <HoldingCard

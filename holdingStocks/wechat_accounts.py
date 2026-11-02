@@ -1,0 +1,79 @@
+"""Two explicit WeChat destinations; credentials remain in OpenClaw's account store."""
+from __future__ import annotations
+import json
+import os
+import re
+from pathlib import Path
+
+
+def delivery_configs(config):
+    if config.get('_single_destination'):
+        return [config]
+    primary = dict(config, _recipient_slot='primary', _single_destination=True)
+    result = [primary]
+    secondary = config.get('secondary')
+    if isinstance(secondary, dict) and secondary.get('enabled', True) and secondary.get('account') and secondary.get('target'):
+        if (secondary['account'], secondary['target']) != (config.get('account'), config.get('target')):
+            result.append(dict(config, **{k: secondary[k] for k in ('account', 'target')},
+                               _recipient_slot='secondary', _single_destination=True))
+    return result
+
+
+def config_for_slot(slot, config):
+    if slot not in ('primary', 'secondary'):
+        raise ValueError('未知微信连接')
+    if slot == 'primary':
+        return dict(config, _recipient_slot=slot, _single_destination=True)
+    secondary = config.get('secondary') or {}
+    return dict(config, account=secondary.get('account', ''), target=secondary.get('target', ''),
+                _recipient_slot=slot, _single_destination=True)
+
+
+def account_inventory():
+    root = Path(os.environ.get('OPENCLAW_STATE_DIR') or Path.home()/'.openclaw')/'openclaw-weixin'
+    try:
+        ids = json.loads((root/'accounts.json').read_text())
+    except (OSError, ValueError):
+        return {}
+    result = {}
+    for aid in ids if isinstance(ids, list) else []:
+        if not isinstance(aid, str) or not re.fullmatch(r'[\w.-]+', aid):
+            continue
+        try:
+            path = root/'accounts'/f'{aid}.json'
+            data = json.loads(path.read_text())
+            if data.get('token') and data.get('userId'):
+                # Only identity and update time leave the credential store.
+                result[aid] = dict(user=data['userId'], updated=path.stat().st_mtime_ns)
+        except (OSError, ValueError, TypeError):
+            continue
+    return result
+
+
+def bind_scanned_account(slot, before, after):
+    changed = [(aid, data) for aid, data in after.items() if before.get(aid) != data]
+    if len(changed) != 1:
+        raise ValueError('未能唯一确认扫码账号，请重新扫码')
+    account, data = changed[0]
+    user = str(data['user'])
+    target = user if '@' in user else user+'@im.wechat'
+    from wechat_notify import load_config, _database_documents, CONFIG_FILE
+    config = load_config()
+    if slot == 'secondary' and target == config.get('target'):
+        raise ValueError('这是第一个微信，请使用另一个微信扫码；第一个连接仍保留')
+    binding = dict(account=account, target=target, enabled=True)
+    if _database_documents():
+        from runtime_documents import read_document, write_document
+        revision, raw = read_document('wechat_notify')
+        raw = dict(raw or {})
+        if slot == 'secondary':
+            raw['secondary'] = binding
+        else:
+            raw.update(account=account, target=target)
+        write_document('wechat_notify', raw, revision)
+    else:
+        raw = json.loads(CONFIG_FILE.read_text()) if CONFIG_FILE.exists() else {}
+        if slot == 'secondary': raw['secondary'] = binding
+        else: raw.update(account=account, target=target)
+        CONFIG_FILE.write_text(json.dumps(raw, ensure_ascii=False, indent=2))
+    return binding

@@ -72,7 +72,8 @@ class QuoteAlertTests(unittest.TestCase):
         import index
         from unittest.mock import Mock
         item=dict(code='000070',sina='sz000070',name='测试',market='SZ',pct=.025)
-        book=dict(positions={},condition_buy_orders=dict(session='2026-10-16',orders={
+        book=dict(positions={},realized_today={'000070': dict(session='2026-10-16',price=10.,qty=100)},
+                  condition_buy_orders=dict(session='2026-10-16',orders={
             '000070':dict(id='audited',strategy='strategy1',open=10.,price=10.25,status='ARMED',open_audit_at='2026-10-16 09:25:00')}))
         model=Mock();model.state=dict(holdings=book,trades=[])
         store=Mock();store.read_model.return_value=model
@@ -93,6 +94,7 @@ class QuoteAlertTests(unittest.TestCase):
              patch.object(index,'datetime',wraps=datetime) as clock:
             clock.now.return_value=NOW
             rows=index._collect_quote_runtime_rows(get_quote=lambda _:self.quote())
+        self.assertFalse(rows[0].get('已实现'))
         self.assertTrue(rows[0]['当日预警'])
         self.assertTrue(rows[0]['近买点'])
         self.assertEqual(rows[0]['开盘'],10.)

@@ -7,11 +7,14 @@ import threading
 import time
 from urllib.parse import urlparse
 
+_SCAN_LOCK = threading.Lock()
+
 ACTIVE = {"starting", "waiting", "scanned", "reconnecting"}
 
 
 class WechatLogin:
-    def __init__(self):
+    def __init__(self, slot='primary'):
+        self.slot = slot
         self.lock = threading.RLock()
         self.state = dict(status="idle", message="点击生成二维码，使用微信扫码连接。", loginUrl=None)
         self.process = None
@@ -23,10 +26,17 @@ class WechatLogin:
         self.last_test_at = None
         self.test_push = dict(status="idle", message="")
 
+    def _config(self):
+        from wechat_notify import load_config
+        if self.slot == 'primary':
+            return load_config()
+        from wechat_accounts import config_for_slot
+        return config_for_slot(self.slot, load_config())
+
     def _view(self):
         from wechat_notify import get_wechat_channel_state
         delivery = get_wechat_channel_state()
-        return dict(self.state, channelReady=self.channel_ready, sessionState=self.session_state,
+        return dict(self.state, slot=self.slot, channelReady=self.channel_ready, sessionState=self.session_state,
                     lastTestAt=self.last_test_at, testPush=dict(self.test_push),
                     delivery={key: delivery.get(key) for key in (
                         "pending_notification_count", "last_success_at", "last_failure_at",
@@ -51,7 +61,18 @@ class WechatLogin:
     def _send_test(self):
         from wechat_notify import send_test_alert, classify_send_error, ERR_SESSION_INVALID
         try:
-            ok, detail = send_test_alert()
+            if self.slot == 'primary':
+                config = self._config()
+                if config.get('secondary'):
+                    from wechat_accounts import config_for_slot
+                    ok, detail = send_test_alert(config=config_for_slot('primary', config))
+                else:
+                    ok, detail = send_test_alert()
+            else:
+                config = self._config()
+                if not config.get('account') or not config.get('target'):
+                    raise ValueError('请先用第二个微信扫码连接')
+                ok, detail = send_test_alert(config=config)
             if ok:
                 message = "测试消息已发送，请查看微信。"
             elif classify_send_error(detail) == ERR_SESSION_INVALID:
@@ -77,9 +98,21 @@ class WechatLogin:
         from wechat_notify import (weixin_channel_ready, context_token_status,
                                    get_wechat_channel_state, context_token_refreshed_since, _channel_state)
         try:
-            ready, _ = weixin_channel_ready()
-            session_ready, _ = context_token_status()
-            invalid = get_wechat_channel_state()["session_invalid"]
+            if self.slot == 'secondary':
+                config = self._config()
+                if not config.get('account'):
+                    with self.lock:
+                        self.channel_ready = False
+                        self.session_state = 'missing'
+                        if self.state['status'] not in ACTIVE:
+                            self.state.update(status='idle', message='使用第二个微信扫码连接，不影响第一个微信。', loginUrl=None)
+                    return
+                ready, _ = weixin_channel_ready(config=config)
+                session_ready, _ = context_token_status(config=config)
+            else:
+                ready, _ = weixin_channel_ready()
+                session_ready, _ = context_token_status()
+            invalid = get_wechat_channel_state()["session_invalid"] if self.slot == "primary" else False
             if invalid and context_token_refreshed_since(_channel_state.token_mtime_at_invalid):
                 invalid = False
             with self.lock:
@@ -132,12 +165,24 @@ class WechatLogin:
                 self.channel_ready = False
 
     def _run(self):
+        if not _SCAN_LOCK.acquire(blocking=False):
+            with self.lock:
+                self.state.update(status='error', message='另一个微信正在扫码，请完成后再试。', loginUrl=None)
+            return
+        try:
+            self._run_locked()
+        finally:
+            _SCAN_LOCK.release()
+
+    def _run_locked(self):
         from wechat_notify import load_config, _env_with_node, _resolve_openclaw_node
         timer = None
         proc = None
         timed_out = threading.Event()
         try:
-            cfg = load_config()
+            from wechat_accounts import account_inventory, bind_scanned_account
+            before = account_inventory()
+            cfg = self._config()
             env = _env_with_node(cfg)
             exe, prefix = _resolve_openclaw_node(str(cfg.get("openclaw_bin") or "openclaw"), env)
             command = [exe, *prefix, "channels", "login", "--channel", str(cfg.get("channel") or "openclaw-weixin")]
@@ -166,10 +211,23 @@ class WechatLogin:
                         message="扫码已超时，请重新生成二维码。" if timed_out.is_set()
                         else "微信连接未完成，请重试；详细原因见服务日志。")
             if self.state["status"] == "reconnecting":
+                after = account_inventory()
+                if self.slot == 'secondary' or after != before:
+                    try:
+                        bind_scanned_account(self.slot, before, after)
+                    except ValueError as exc:
+                        if '这是第一个微信' in str(exc):
+                            # OpenClaw rotates a same-user bot login. Keep that user's
+                            # primary route working even when rejecting a duplicate slot.
+                            from wechat_notify import ensure_openclaw_gateway
+                            ensure_openclaw_gateway(config=load_config(), restart=True)
+                        with self.lock:
+                            self.state.update(status='error', message=str(exc), loginUrl=None)
+                        return
                 from wechat_notify import ensure_openclaw_gateway, wait_weixin_channel_ready
-                ready, _ = ensure_openclaw_gateway(config=load_config(), restart=True)
+                ready, _ = ensure_openclaw_gateway(config=self._config(), restart=True)
                 if ready:
-                    ready, _ = wait_weixin_channel_ready(config=load_config(), timeout_sec=45)
+                    ready, _ = wait_weixin_channel_ready(config=self._config(), timeout_sec=45)
                 with self.lock:
                     self.channel_ready = ready
                     self.checked_at = time.monotonic()
@@ -202,3 +260,4 @@ class WechatLogin:
 
 
 login = WechatLogin()
+secondary_login = WechatLogin('secondary')

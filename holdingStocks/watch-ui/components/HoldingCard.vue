@@ -4,6 +4,7 @@ import { fmtNum, fmtSignedPct, fmtSignalClock, fmtSignedMoney } from '~/utils/fo
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 import { fmtPositionPct, positionPctOf } from '~/utils/position'
+import { alertType } from '~/utils/alertType'
 import { sellProtection } from '~/utils/stopWarning'
 import { holdingCyclePnl } from '~/utils/holdingCyclePnl'
 import { buySignalTooltip } from '~/utils/buySignalTooltip'
@@ -194,6 +195,7 @@ const cardClass = computed(() => {
             <span v-if="row.当日预警 && !row.持仓" class="text-accent">当日预警 · 未登记持仓</span>
           </template>
         </div>
+        <p v-if="dense" class="mt-1 text-[11px] text-ui-text-2">预警类型：{{ alertType(row, sellState ? 'sell' : 'buy') }}</p>
         <p v-if="!dense && protection" class="mt-2 text-xs text-ui-text-2">卖出原因：{{ protection.reason }}</p>
         <p v-if="dense ? denseNote : noteText" :title="dense ? denseNote : undefined" class="text-ui-text-3" :class="dense ? 'mt-1 truncate text-[11px]' : 'mt-2 break-words text-xs leading-relaxed text-ui-text-2'">{{ dense ? denseNote : noteText }}</p>
         <footer v-if="!dense" class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-ui-hairline pt-2 text-[10px] text-ui-text-3">

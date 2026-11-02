@@ -194,6 +194,19 @@ class LoginHttpTests(unittest.TestCase):
         self.patch.stop()
         self.temp.cleanup()
 
+    def test_secondary_route_does_not_start_or_test_primary(self):
+        other = Mock()
+        other.status.return_value = dict(status='idle', slot='secondary')
+        other.start.return_value = dict(status='starting', slot='secondary')
+        with patch('wechat_login.secondary_login', other):
+            with self.opener.open(self.base+'/api/wechat/login?slot=secondary', timeout=3) as response:
+                self.assertEqual(json.load(response)['slot'], 'secondary')
+            request = Request(self.base+'/api/wechat/login?slot=secondary', data=b'', method='POST', headers={'Origin': self.base})
+            with self.opener.open(request, timeout=3) as response:
+                self.assertEqual(json.load(response)['status'], 'starting')
+        other.start.assert_called_once()
+        self.login.start.assert_not_called()
+
     def test_opening_dialog_only_reads_status_and_post_starts_login(self):
         with self.opener.open(self.base+'/api/wechat/login', timeout=3) as response:
             self.assertEqual(json.load(response)['status'], 'idle')

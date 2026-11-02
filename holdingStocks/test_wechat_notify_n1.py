@@ -67,6 +67,16 @@ class TestWechatNotifyN1(unittest.TestCase):
         self._send_patch = patch.object(wn, "send_text", side_effect=_fake_send)
         self._send_patch.start()
 
+    def test_breakout_and_rebound_have_separate_notifications_without_resending_each(self):
+        breakout = _row(已触买="是", 预警="已触买", 信号因子="factor26")
+        rebound = _row(已触买="是", 预警="已触买", 信号因子="factor33")
+        wn.notify_watch_rows([breakout], config=self._cfg)
+        wn.notify_watch_rows([rebound], config=self._cfg)
+        wn.notify_watch_rows([breakout, rebound], config=self._cfg)
+        self.assertEqual(len(self._sent), 2)
+        self.assertIn("预警类型：开盘突破", self._sent[0])
+        self.assertIn("预警类型：探底回升", self._sent[1])
+
     def test_leaving_near_buy_band_cannot_reset_notification_cooldown(self):
         row = _row(预警="将买入", 近买点=True, 持仓状态="待买入")
         wn.notify_watch_rows([row], config=self._cfg)

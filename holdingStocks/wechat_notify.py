@@ -81,6 +81,7 @@ class PendingNotification:
     enqueued_at: float = field(default_factory=time.time)
     summary: str = ""
     attempts: int = 0
+    delivered_to: list[str] = field(default_factory=list)
 
 
 _channel_state = WechatChannelState()
@@ -165,7 +166,8 @@ def _restore_outbox():
                 item = PendingNotification(**raw)
                 if not item.is_fill and ("|alert|" in item.dedupe_key or item.dedupe_key.startswith("signal|")):
                     session = datetime.fromtimestamp(item.enqueued_at).strftime("%Y-%m-%d")
-                    item.dedupe_key = _signal_key(session, item.code, _signal_kind(item.alert_type))
+                    if not item.dedupe_key.startswith("signal|"):
+                        item.dedupe_key = _signal_key(session, item.code, _signal_kind(item.alert_type))
                     existing = _pending.get(item.dedupe_key)
                     if existing is None or item.enqueued_at < existing.enqueued_at:
                         _pending[item.dedupe_key] = item
@@ -344,6 +346,7 @@ def enqueue_notification(
     bypass_storm: bool = False,
     enqueued_at: float | None = None,
     attempts: int = 0,
+    delivered_to: list[str] | None = None,
 ) -> bool:
     """主线程只入队；同 (code, alert_type) 预警覆盖旧条；成交不因预警冷却被吞。
 
@@ -354,7 +357,7 @@ def enqueue_notification(
     code_s = str(code or "").strip()
     typ = str(alert_type or "").strip() or ("fill" if is_fill else "alert")
     key = str(dedupe_key or f"{code_s}|{typ}")
-    storm_key = f"{code_s}|{typ}"
+    storm_key = key if key.startswith("signal|") else f"{code_s}|{typ}"
     now = time.time()
     if not is_fill and not bypass_storm:
         cool = max(15, int(cfg.get("alert_storm_cooldown_sec") or 45))
@@ -378,6 +381,7 @@ def enqueue_notification(
         summary=summary or f"{code_s} {typ}".strip(),
         enqueued_at=now if enqueued_at is None else enqueued_at,
         attempts=attempts,
+        delivered_to=list(delivered_to or []),
     )
     with _pending_lock:
         if key.startswith("signal|") and key in _pending and not bypass_storm:
@@ -394,6 +398,7 @@ def enqueue_notification(
                 k
                 for k, p in _pending.items()
                 if (not p.is_fill) and p.code == code_s and p.alert_type == typ
+                and not (key.startswith("signal|") and k.startswith("signal|") and k != key)
             ]
             for k in drop:
                 _pending.pop(k, None)
@@ -524,6 +529,32 @@ def recover_wechat_session(
     return False, last or "等待入站刷新超时"
 
 
+def _deliver_pending(item, config, *, send_fn=None, retries=None):
+    """Try each destination; successful recipients are not retried after partial failure."""
+    from wechat_accounts import delivery_configs
+    sender = send_fn or _send_text_direct
+    destinations = delivery_configs(config)
+    if len(destinations) == 1:
+        key = f"{destinations[0].get('account')}|{destinations[0].get('target')}"
+        if key in item.delivered_to:
+            return True, "已发送"
+        return sender(item.message, config=config, retries=retries)
+    failures = []
+    for destination in destinations:
+        key = f"{destination.get('account')}|{destination.get('target')}"
+        if key in item.delivered_to:
+            continue
+        try:
+            ok, detail = sender(item.message, config=destination, retries=retries)
+        except Exception:
+            ok, detail = False, "network timeout"
+        if ok:
+            item.delivered_to.append(key)
+        else:
+            failures.append(detail)
+    return (False, failures[0]) if failures else (True, "两个微信均已发送")
+
+
 def _flush_pending_queue(
     *,
     config: dict[str, Any] | None = None,
@@ -545,7 +576,7 @@ def _flush_pending_queue(
             break
         item.attempts += 1
         try:
-            ok, detail = sender(item.message, config=cfg, retries=1)
+            ok, detail = _deliver_pending(item, cfg, send_fn=sender, retries=1)
         except Exception:
             ok, detail = False, "network timeout"
         if ok:
@@ -569,13 +600,14 @@ def _flush_pending_queue(
                 bypass_storm=True,
                 enqueued_at=item.enqueued_at,
                 attempts=item.attempts,
+                delivered_to=item.delivered_to,
             )
             _mark_session_invalid(detail=detail)
             _wechat_log("prepare failed during flush -> session invalid")
             break
         if kind == ERR_TRANSIENT:
             try:
-                ok2, detail2 = sender(item.message, config=cfg, retries=2)
+                ok2, detail2 = _deliver_pending(item, cfg, send_fn=sender, retries=2)
             except Exception:
                 ok2, detail2 = False, "network timeout"
             if ok2:
@@ -595,6 +627,7 @@ def _flush_pending_queue(
                 bypass_storm=True,
                 enqueued_at=item.enqueued_at,
                 attempts=item.attempts,
+                delivered_to=item.delivered_to,
             )
             _wechat_log(f"flush deferred ({item.summary}): {(detail2 or '')[:120]}")
             break
@@ -619,15 +652,18 @@ def _send_text_direct(
         for i in range(n):
             ok, detail = _send_text_once(message, cfg=cfg)
             if ok:
-                _mark_send_success()
+                if cfg.get("_recipient_slot") != "secondary":
+                    _mark_send_success()
                 return True, detail
             last = detail
             kind = classify_send_error(detail)
             if kind == ERR_SESSION_INVALID:
-                _mark_session_invalid(detail=detail)
+                if cfg.get("_recipient_slot") != "secondary":
+                    _mark_session_invalid(detail=detail)
                 return False, detail
             if kind != ERR_TRANSIENT or i >= n - 1:
-                _mark_transient_failure()
+                if cfg.get("_recipient_slot") != "secondary":
+                    _mark_transient_failure()
                 break
             wait = backoff * (2**i)
             _wechat_log(f"transient failure, retry {i + 1}/{n}")
@@ -649,7 +685,8 @@ def _delivery_worker_main() -> None:
                 _worker_wake.clear()
                 continue
 
-            if _channel_state.session_invalid:
+            from wechat_accounts import delivery_configs
+            if _channel_state.session_invalid and len(delivery_configs(cfg)) == 1:
                 _maybe_action_required(cfg)
                 ok, _detail = recover_wechat_session(config=cfg, wait_sec=float(cfg.get("wait_inbound_sec") or 180))
                 if ok:
@@ -668,7 +705,7 @@ def _delivery_worker_main() -> None:
 
             item.attempts += 1
             try:
-                ok, detail = _send_text_direct(item.message, config=cfg)
+                ok, detail = _deliver_pending(item, cfg)
             except Exception:
                 ok, detail = False, "network timeout"
             if ok:
@@ -691,9 +728,21 @@ def _delivery_worker_main() -> None:
                 bypass_storm=True,
                 enqueued_at=item.enqueued_at,
                 attempts=item.attempts,
+                delivered_to=item.delivered_to,
             )
             if kind == ERR_SESSION_INVALID:
-                continue  # 下一轮进 recover
+                if len(delivery_configs(cfg)) > 1:
+                    # A second phone may still need its first inbound message.
+                    # Keep the failed destination pending until TTL without rapidly
+                    # exhausting retries or blocking the already working phone.
+                    item.attempts = max(0, item.attempts - 1)
+                    with _pending_lock:
+                        queued = _pending.get(item.dedupe_key)
+                        if queued:
+                            queued.attempts = item.attempts
+                    _persist_outbox()
+                    _worker_stop.wait(float(cfg.get("recover_poll_sec") or 8))
+                continue  # Single-destination mode enters the existing recovery path.
             # 瞬时/其它：稍后再试
             time.sleep(float(cfg.get("send_retry_backoff_sec") or 2.0))
         except Exception as e:  # noqa: BLE001
@@ -1301,13 +1350,21 @@ def _signal_kind(alert_type):
             "将半仓": "sell_half_near", "半仓止盈": "sell_half_hit"}.get(typ, typ)
 
 
+def _row_signal_kind(row, typ):
+    kind = _signal_kind(typ)
+    factor = row.get("信号因子")
+    if kind.startswith("buy_") and factor in ("factor26", "factor29", "factor33"):
+        return f"{kind}:{factor}"
+    return kind
+
+
 def _signal_key(session, code, kind):
     return f"signal|{session}|{code}|{kind}"
 
 
 def _alert_key(row: dict[str, Any]) -> str:
     info = classify_stock_alert(row) or {}
-    return _signal_key(_now()[:10], str(row.get("代码") or ""), _signal_kind(info.get("type")))
+    return _signal_key(_now()[:10], str(row.get("代码") or ""), _row_signal_kind(row, info.get("type")))
 
 
 def _first_alert_records(state, session):
@@ -1347,6 +1404,23 @@ def _first_alert_records(state, session):
 from signal_priority import signal_priority
 
 
+def alert_type_label(row, *, sell=False):
+    detail = str(row.get("卖出原因") or row.get("reason") or row.get("挂单说明") or "")
+    if sell:
+        if any(word in detail for word in ("峰值", "回落", "t1_peak_trail", "giveback", "peak_pullback")):
+            return "阶段回落（峰值）"
+        if any(word in detail for word in ("硬保护", "成本", "hard_from_cost")):
+            return "成本止损"
+        return "卖出保护"
+    factor = row.get("信号因子") or row.get("signal_factor")
+    source = str(row.get("信号来源") or detail)
+    if factor == "factor33" or any(word in source for word in ("探底", "低点反弹", "day_low_rebound", "因子33")):
+        return "探底回升"
+    if factor == "factor29" or "竞价" in source:
+        return "竞价强度"
+    return "开盘突破"
+
+
 def format_alert_message(row: dict[str, Any], *, occurred_at=None) -> str:
     info = classify_stock_alert(row)
     code = row.get("代码") or "-"
@@ -1384,6 +1458,7 @@ def format_alert_message(row: dict[str, Any], *, occurred_at=None) -> str:
         f"等级：{signal_priority(status, *(row.get(k) for k in ('预警', '因子触发', '止损原因', '卖出原因', 'reason', 'exit_kind', 'stop_kind', '_path_stop_kind', '止损类型', '工作卖价种类')))}",
         f"股票：{code} {name}",
         f"状态：{status}{extra}",
+        f"预警类型：{alert_type_label(row, sell=_signal_kind((info or {}).get('type')).startswith('sell'))}",
         *([f"信号来源：{row['信号来源']}"] if row.get("信号来源") else []),
         f"当前价：{_n(row.get('现价'))}",
         f"策略价：{_n(strat_px)}",
@@ -1608,7 +1683,12 @@ def send_text(
     · TRANSIENT：指数退避重试
     · SESSION_INVALID（prepare failed / ret=-2）：立即返回，不空转重试
     """
-    return _send_text_direct(message, config=config, retries=retries)
+    cfg = config or load_config()
+    from wechat_accounts import delivery_configs
+    if len(delivery_configs(cfg)) > 1:
+        item = PendingNotification(dedupe_key="direct", message=message, code="", alert_type="direct")
+        return _deliver_pending(item, cfg, retries=retries)
+    return _send_text_direct(message, config=cfg, retries=retries)
 
 
 def format_buy_fill_message(
@@ -1789,6 +1869,7 @@ def notify_trade_fill(
             last_px=last,
         )
         typ = "模拟卖出"
+    msg += "\n预警类型：" + alert_type_label({"signal_factor": signal_factor, "reason": f"{exit_kind} {reason}"}, sell=side_l != "buy")
     if signal_factor in ("factor29", "factor33"):
         from strategy1_entry import LABELS
         msg += "\n信号来源：" + LABELS["auction_open" if signal_factor == "factor29" else "day_low_rebound"]
@@ -1916,8 +1997,17 @@ def notify_watch_rows(
         code = str(row.get("代码") or "")
         name = str(row.get("名称") or "")
         typ = str(info.get("type") or "策略预警")
-        kind = _signal_kind(typ)
+        kind = _row_signal_kind(row, typ)
         key = _signal_key(session, code, kind)
+        # Legacy records lacked the factor in their key. Migrate matching events
+        # instead of re-notifying all of today's previously accepted breakouts.
+        if ':' in kind and key not in first_records:
+            legacy = first_records.get(_signal_key(session, code, _signal_kind(typ)))
+            if legacy:
+                text = str(legacy.get("message") or "")
+                legacy_factor = legacy.get("signal_factor") or ("factor33" if any(x in text for x in ("因子33", "探底回升", "低点反弹")) else "factor29" if "竞价" in text else "factor26")
+                if legacy_factor == row.get("信号因子"):
+                    first_records[key] = dict(legacy)
         active_keys.add(key)
         record = first_records.get(key)
         if record and record.get("accepted"):
@@ -1925,7 +2015,7 @@ def notify_watch_rows(
         if record is None:
             first_at = _now()
             record = dict(code=code, signal=kind, first_ts=now_ts, first_at=first_at,
-                source_quote_at=row.get("更新"), signal_at=row.get("信号时间"),
+                source_quote_at=row.get("更新"), signal_at=row.get("买信号时间") or row.get("信号时间"), signal_factor=row.get("信号因子"),
                 price=row.get("现价"), target=info.get("factor_px"), accepted=False,
                 message=format_alert_message(row, occurred_at=first_at), alert_type=typ)
             first_records[key] = record

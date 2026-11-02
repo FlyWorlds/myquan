@@ -162,7 +162,7 @@ def build_ledger_entry(
             "order_id", "signal_time", "signal_received_at", "decision_time",
             "fill_model", "quote_source", "order_armed_at", "order_price",
             "execution_quote_time", "execution_received_at", "observed_price", "quote_age_ms", "queue_age_ms",
-            "quote_db_revision", "quote_db_at", "protection_price",
+            "quote_db_revision", "quote_db_at", "protection_price", "signal_factor", "is_rebuy",
         ) if k in record},
     }
 

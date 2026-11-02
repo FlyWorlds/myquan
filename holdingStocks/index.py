@@ -2363,6 +2363,11 @@ def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any], *, read_m
             clock=snap.get("clock"), get_quote=get_quote), 代码=r["代码"]) for r in closed]
         closed = closed_trade_rows(model, closed_session,
             market_rows=[*list(_iter_snapshot_price_rows(snap)), *quote_rows])
+        from signal_events import buy_signal_rows
+        buys = buy_signal_rows(model, closed_session, list(_iter_snapshot_price_rows(snap)))
+        if snap.get("buySignals") != buys:
+            snap["buySignals"] = buys
+            changed = True
         if snap.get("closedHoldings") != closed:
             snap["closedHoldings"] = closed
             changed = True
@@ -8762,12 +8767,8 @@ def _collect_quote_runtime_rows(get_quote=None):
                 "已触买": "是" if order.get("status") in ("TRIGGERED", "FILLED") else "否"})
             if q.get("last") and price:
                 row["距买点%"] = (float(q["last"])/float(price)-1)*100
-        rec = (data.get("realized_today") or {}).get(code, {})
-        if rec.get("session") == day and not int(pos.get("qty") or 0):
-            row.update({"持仓状态": "今日平仓", "已实现": True, "已触止损": "是",
-                "成交价": rec.get("price"), "止损": rec.get("price"), "卖出侧价": rec.get("price"),
-                "当日盈亏": rec.get("day_pnl"), "当日盈亏%": rec.get("day_pnl_pct"),
-                "浮盈": rec.get("pnl"), "浮盈%": rec.get("pnl_pct"), "平仓时间": rec.get("time")})
+        # Full exits have independent closedHoldings cards. Do not mark the current
+        # flat candidate as realized: it may produce a new buy signal later today.
         from condition_buy import auction_entry_blocked
         official_open = order.get("open") if order else session_open_usable(q)
         phase = phase_at(datetime.now()) if STRATEGY_ID == "strategy1" else None
@@ -8801,6 +8802,14 @@ def _collect_quote_runtime_rows(get_quote=None):
                 and datetime.now().strftime("%H:%M:%S") < "09:30:00"):
             row.update({"信号因子": "factor29", "信号来源": "因子29·竞价末段强度", "预警": "因子29·待开盘卖出",
                         "近止损": True, "持仓状态": "待卖出", "挂单说明": "因子29竞价路径触发，等待9:30有效开盘行情"})
+        if row["持仓"] > 0 and str(pos.get("buy_time") or "")[:10] == day:
+            # A strategy simulator's older cycle must not overwrite the actual buy event.
+            from signal_events import buy_signal_rows
+            events = buy_signal_rows(model, day)
+            current_buy = next((event for event in reversed(events) if event["代码"] == code), None)
+            if current_buy:
+                for key in ("信号因子", "信号来源", "预警类型", "买信号时间", "信号时间", "首次触买时间"):
+                    row[key] = current_buy[key]
         _enrich_comprehensive_trade_return(row, read_model=model)
         rows.append(row)
     # Publish unfilled signals even when execution is blocked by slots/daily quota.
@@ -14188,8 +14197,9 @@ def cmd_watch(args: argparse.Namespace) -> None:
         print("\n已停止盯盘")
     finally:
         stop.set()
-        from wechat_login import login as wechat_browser_login
+        from wechat_login import login as wechat_browser_login, secondary_login
         wechat_browser_login.close()
+        secondary_login.close()
         if minute_backup_thread is not None:
             minute_backup_thread.join(timeout=22)
         try:

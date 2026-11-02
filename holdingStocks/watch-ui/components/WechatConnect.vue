@@ -12,6 +12,7 @@ type LoginState = {
   testPush?: { status: 'idle' | 'sending' | 'sent' | 'error'; message: string }
 }
 const opened = ref(false)
+const slot = ref<'primary' | 'secondary'>('primary')
 const busy = ref(false)
 const testing = ref(false)
 const error = ref('')
@@ -42,7 +43,7 @@ async function sync(start = false) {
   busy.value = true
   error.value = ''
   try {
-    const result = await $fetch<LoginState>('/api/wechat/login', {
+    const result = await $fetch<LoginState>(`/api/wechat/login?slot=${slot.value}`, {
       method: start ? 'POST' : 'GET', retry: 0, timeout: 5000,
     })
     if (opened.value && generation === requestGeneration) state.value = result
@@ -51,6 +52,16 @@ async function sync(start = false) {
   } finally {
     if (generation === requestGeneration) busy.value = false
   }
+}
+
+function selectSlot(value: 'primary' | 'secondary') {
+  slot.value = value
+  generation++
+  busy.value = false
+  testing.value = false
+  qrImage.value = ''
+  state.value = { status: 'idle', message: '', loginUrl: null }
+  void sync()
 }
 
 async function open() {
@@ -68,14 +79,14 @@ async function testPush() {
   testing.value = true
   const requestGeneration = generation
   try {
-    const result = await $fetch<LoginState>('/api/wechat/test', { method: 'POST', retry: 0, timeout: 5000 })
+    const result = await $fetch<LoginState>(`/api/wechat/test?slot=${slot.value}`, { method: 'POST', retry: 0, timeout: 5000 })
     if (opened.value && generation === requestGeneration) state.value.testPush = result.testPush
   } catch {
     if (opened.value && generation === requestGeneration) {
       state.value.testPush = { status: 'error', message: '未能确认发送状态，请稍后查看微信或重新打开窗口。' }
     }
   } finally {
-    testing.value = false
+    if (generation === requestGeneration) testing.value = false
   }
 }
 
@@ -123,6 +134,12 @@ onBeforeUnmount(() => {
           <h2 id="wechat-connect-title" class="text-lg font-semibold">微信连接</h2>
           <button ref="closeButton" type="button" class="btn btn-ghost" aria-label="关闭微信连接" @click="close">关闭</button>
         </div>
+        <div class="mt-4 flex gap-2" role="tablist" aria-label="选择微信">
+          <button type="button" class="btn btn-ghost flex-1" role="tab" :aria-selected="slot === 'primary'" :class="slot === 'primary' ? 'bg-accent/15 text-accent' : ''" @click="selectSlot('primary')">微信 1</button>
+          <button type="button" class="btn btn-ghost flex-1" role="tab" :aria-selected="slot === 'secondary'" :class="slot === 'secondary' ? 'bg-accent/15 text-accent' : ''" @click="selectSlot('secondary')">微信 2</button>
+        </div>
+        <p class="mt-3 text-xs text-ui-text-2">预警和模拟成交会推送到两个已连接的微信。每个微信需分别扫码，并给对应机器人发一条消息。</p>
+        <p v-if="slot === 'secondary'" class="mt-2 text-sm text-accent">请使用第二个微信扫码，第一个微信的推送连接会保留。</p>
         <dl class="mt-3 space-y-1 text-sm text-ui-text-2" aria-live="polite">
           <div class="flex justify-between"><dt>通道</dt><dd>{{ state.channelReady == null ? '检查中' : state.channelReady ? '运行中' : '未就绪' }}</dd></div>
           <div class="flex justify-between"><dt>消息会话</dt><dd>{{ state.sessionState === 'available' ? '已建立，发送时验证' : state.sessionState === 'invalid' ? '已失效，请给机器人发消息' : state.sessionState === 'missing' ? '待建立，请给机器人发消息' : '检查中' }}</dd></div>
@@ -136,9 +153,9 @@ onBeforeUnmount(() => {
         <a v-if="state.loginUrl" :href="state.loginUrl" target="_blank" rel="noopener noreferrer" class="mt-3 block text-center text-sm font-semibold text-accent underline">打开扫码链接 ↗</a>
         <p v-if="error" role="alert" class="mt-3 text-sm text-ui-danger">{{ error }}</p>
         <button type="button" class="btn btn-primary mt-5 w-full" :disabled="busy || active" @click="sync(true)">
-          {{ active ? (state.status === 'reconnecting' ? '正在启动微信通道…' : state.status === 'scanned' ? '等待手机确认…' : '等待微信扫码…') : state.channelReady || state.status === 'connected' ? '重新扫码连接' : '生成二维码 / 扫码链接' }}
+          {{ active ? (state.status === 'reconnecting' ? '正在启动微信通道…' : state.status === 'scanned' ? '等待手机确认…' : '等待微信扫码…') : state.channelReady || state.status === 'connected' ? '重新扫码连接' : slot === 'secondary' ? '扫码连接第二个微信' : '生成二维码 / 扫码链接' }}
         </button>
-        <button type="button" class="btn btn-ghost mt-3 w-full border border-ui-hairline" :disabled="testing || state.testPush?.status === 'sending' || active" @click="testPush">
+        <button type="button" class="btn btn-ghost mt-3 w-full border border-ui-hairline" :disabled="testing || state.testPush?.status === 'sending' || active || state.channelReady === false" @click="testPush">
           {{ testing || state.testPush?.status === 'sending' ? '正在发送测试消息…' : '测试微信推送' }}
         </button>
         <p v-if="state.testPush?.message" role="status" aria-live="polite" class="mt-3 text-sm" :class="state.testPush.status === 'error' ? 'text-ui-danger' : state.testPush.status === 'sent' ? 'text-accent' : 'text-ui-text-2'">{{ state.testPush.message }}</p>

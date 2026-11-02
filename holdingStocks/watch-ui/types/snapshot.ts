@@ -144,6 +144,7 @@ export interface HoldingRow {
   过门?: string
   过门OK?: boolean
   前日形态?: string
+  预警类型?: string
   信号因子?: string
   信号来源?: string
   阈值就绪?: boolean
@@ -489,6 +490,7 @@ export interface WatchSnapshot {
   indices: IndexQuote[]
   holdings: HoldingRow[]
   closedHoldings?: HoldingRow[]
+  buySignals?: HoldingRow[]
   strategy1: HoldingRow[]
   strategy3?: Strategy3Payload
   strategy8?: Strategy8Payload

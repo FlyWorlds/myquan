@@ -94,7 +94,12 @@ def build_watch_request_handler(
                     or self.headers.get("Sec-Fetch-Site") == "cross-site"):
                 self._send_json({"error": "local origin required"}, status=403)
                 return
-            from wechat_login import login
+            from wechat_login import login, secondary_login
+            slot = (parse_qs(urlparse(self.path).query).get('slot') or ['primary'])[0]
+            if slot not in ('primary', 'secondary'):
+                self._send_json({'error': '未知微信连接'}, status=400)
+                return
+            login = secondary_login if slot == 'secondary' else login
             self._send_json(login.send_test() if test else login.start() if start else login.status())
 
         def _self_watchlist(self, action="list") -> None:
