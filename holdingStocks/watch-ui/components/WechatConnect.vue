@@ -43,7 +43,7 @@ async function sync(start = false) {
   busy.value = true
   error.value = ''
   try {
-    const result = await $fetch<LoginState>(`/api/wechat/login?slot=${slot.value}`, {
+    const result = await $fetch<LoginState>(`/api/wechat/login?slot=${slot.value}${start && state.value.status === 'waiting' ? '&refresh=1' : ''}`, {
       method: start ? 'POST' : 'GET', retry: 0, timeout: 5000,
     })
     if (opened.value && generation === requestGeneration) state.value = result
@@ -139,7 +139,7 @@ onBeforeUnmount(() => {
           <button type="button" class="btn btn-ghost flex-1" role="tab" :aria-selected="slot === 'secondary'" :class="slot === 'secondary' ? 'bg-accent/15 text-accent' : ''" @click="selectSlot('secondary')">微信 2</button>
         </div>
         <p class="mt-3 text-xs text-ui-text-2">预警和模拟成交会推送到两个已连接的微信。每个微信需分别扫码，并给对应机器人发一条消息。</p>
-        <p v-if="slot === 'secondary'" class="mt-2 text-sm text-accent">请使用第二个微信扫码，第一个微信的推送连接会保留。</p>
+        <p v-if="slot === 'secondary'" class="mt-2 text-sm text-accent">请使用第二个微信扫码，第一个微信的推送连接会保留。两个二维码可独立生成和刷新。</p>
         <dl class="mt-3 space-y-1 text-sm text-ui-text-2" aria-live="polite">
           <div class="flex justify-between"><dt>通道</dt><dd>{{ state.channelReady == null ? '检查中' : state.channelReady ? '运行中' : '未就绪' }}</dd></div>
           <div class="flex justify-between"><dt>消息会话</dt><dd>{{ state.sessionState === 'available' ? '已建立，发送时验证' : state.sessionState === 'invalid' ? '已失效，请给机器人发消息' : state.sessionState === 'missing' ? '待建立，请给机器人发消息' : '检查中' }}</dd></div>
@@ -152,8 +152,8 @@ onBeforeUnmount(() => {
         <img v-if="qrImage && state.loginUrl" :src="qrImage" width="280" height="280" alt="使用微信扫一扫连接机器人" class="mx-auto mt-4 rounded-lg bg-white">
         <a v-if="state.loginUrl" :href="state.loginUrl" target="_blank" rel="noopener noreferrer" class="mt-3 block text-center text-sm font-semibold text-accent underline">打开扫码链接 ↗</a>
         <p v-if="error" role="alert" class="mt-3 text-sm text-ui-danger">{{ error }}</p>
-        <button type="button" class="btn btn-primary mt-5 w-full" :disabled="busy || active" @click="sync(true)">
-          {{ active ? (state.status === 'reconnecting' ? '正在启动微信通道…' : state.status === 'scanned' ? '等待手机确认…' : '等待微信扫码…') : state.channelReady || state.status === 'connected' ? '重新扫码连接' : slot === 'secondary' ? '扫码连接第二个微信' : '生成二维码 / 扫码链接' }}
+        <button type="button" class="btn btn-primary mt-5 w-full" :disabled="busy || ['starting', 'scanned', 'reconnecting'].includes(state.status)" @click="sync(true)">
+          {{ active ? (state.status === 'reconnecting' ? '正在启动微信通道…' : state.status === 'scanned' ? '等待手机确认…' : state.status === 'starting' ? '正在生成二维码…' : '重新生成本微信二维码') : state.channelReady || state.status === 'connected' ? '重新扫码连接' : slot === 'secondary' ? '扫码连接第二个微信' : '生成二维码 / 扫码链接' }}
         </button>
         <button type="button" class="btn btn-ghost mt-3 w-full border border-ui-hairline" :disabled="testing || state.testPush?.status === 'sending' || active || state.channelReady === false" @click="testPush">
           {{ testing || state.testPush?.status === 'sending' ? '正在发送测试消息…' : '测试微信推送' }}

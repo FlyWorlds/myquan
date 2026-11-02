@@ -123,6 +123,14 @@ class LoginTests(unittest.TestCase):
         self.assertNotIn('SECRET', json.dumps(login.state))
         self.assertIsNone(login.state['loginUrl'])
 
+    def test_saved_account_report_is_private_and_scoped_to_its_login_instance(self):
+        first, second = WechatLogin(), WechatLogin('secondary')
+        first._line('MYQUAN_WECHAT_ACCOUNT:bot1-im-bot')
+        second._line('MYQUAN_WECHAT_ACCOUNT:bot2-im-bot')
+        self.assertEqual(first.scanned_account_id, 'bot1-im-bot')
+        self.assertEqual(second.scanned_account_id, 'bot2-im-bot')
+        self.assertNotIn('bot1-im-bot', json.dumps(first._view()))
+
     def test_repeated_start_reuses_one_login(self):
         login = WechatLogin()
         with patch('wechat_login.threading.Thread') as thread:
@@ -138,6 +146,7 @@ class LoginTests(unittest.TestCase):
         proc.poll.return_value = 0
         proc.wait.return_value = 0
         with patch('wechat_notify.load_config', return_value={}), \
+             patch('wechat_accounts.account_inventory', return_value={}), \
              patch('wechat_notify._env_with_node', return_value={}), \
              patch('wechat_notify._resolve_openclaw_node', return_value=('node', ['cli.mjs'])), \
              patch('wechat_login.subprocess.Popen', return_value=proc) as spawn:
@@ -151,6 +160,7 @@ class LoginTests(unittest.TestCase):
         proc = Mock(stdout=io.StringIO('✅ 与微信连接成功！\n'))
         proc.poll.return_value = 0
         with patch('wechat_notify.load_config', return_value={}), \
+             patch('wechat_accounts.account_inventory', return_value={}), \
              patch('wechat_notify._env_with_node', return_value={}), \
              patch('wechat_notify._resolve_openclaw_node', return_value=('node', ['cli.mjs'])), \
              patch('wechat_login.subprocess.Popen', return_value=proc), \

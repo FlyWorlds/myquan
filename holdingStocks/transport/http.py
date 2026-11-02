@@ -100,7 +100,8 @@ def build_watch_request_handler(
                 self._send_json({'error': '未知微信连接'}, status=400)
                 return
             login = secondary_login if slot == 'secondary' else login
-            self._send_json(login.send_test() if test else login.start() if start else login.status())
+            refresh = (parse_qs(urlparse(self.path).query).get('refresh') or ['0'])[0] == '1'
+            self._send_json(login.send_test() if test else (login.start(force=True) if refresh else login.start()) if start else login.status())
 
         def _self_watchlist(self, action="list") -> None:
             origin = self.headers.get('Origin')

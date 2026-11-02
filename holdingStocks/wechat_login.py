@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import re
+import json
+from pathlib import Path
 import subprocess
 import threading
 import time
 from urllib.parse import urlparse
 
-_SCAN_LOCK = threading.Lock()
+_RELOAD_LOCK = threading.Lock()
 
 ACTIVE = {"starting", "waiting", "scanned", "reconnecting"}
 
@@ -18,6 +20,8 @@ class WechatLogin:
         self.lock = threading.RLock()
         self.state = dict(status="idle", message="点击生成二维码，使用微信扫码连接。", loginUrl=None)
         self.process = None
+        self.scanned_account_id = None
+        self.restart_requested = False
         self.closed = False
         self.probing = False
         self.checked_at = 0.0
@@ -133,11 +137,18 @@ class WechatLogin:
                 self.checked_at = time.monotonic()
                 self.probing = False
 
-    def start(self):
+    def start(self, *, force=False):
         with self.lock:
             if self.closed:
                 return dict(status="error", message="服务正在关闭，请稍后重试。", loginUrl=None)
+            if force and self.process is not None:
+                self.restart_requested = True
+                self.state.update(status='starting', loginUrl=None, message='正在重新生成本微信的二维码…')
+                if self.process.poll() is None:
+                    self.process.kill()
+                return self._view()
             if self.state["status"] not in ACTIVE and self.process is None:
+                self.scanned_account_id = None
                 self.state = dict(status="starting", message="正在生成微信二维码…", loginUrl=None)
                 self.test_push = dict(status="idle", message="")
                 self.last_test_at = None
@@ -147,6 +158,14 @@ class WechatLogin:
 
     def _line(self, raw):
         line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw).strip()
+        match = re.fullmatch(r'MYQUAN_WECHAT_ACCOUNT:([\w.-]+)', line)
+        if match:
+            with self.lock:
+                if not self.restart_requested:
+                    self.scanned_account_id = match[1]
+            return
+        if self.restart_requested:
+            return
         # Only consume explicit QR output, never forward CLI logs/tokens to the browser.
         candidate = line.split("二维码链接:", 1)[-1].strip() if "二维码链接:" in line else line
         parsed = urlparse(candidate)
@@ -165,16 +184,6 @@ class WechatLogin:
                 self.channel_ready = False
 
     def _run(self):
-        if not _SCAN_LOCK.acquire(blocking=False):
-            with self.lock:
-                self.state.update(status='error', message='另一个微信正在扫码，请完成后再试。', loginUrl=None)
-            return
-        try:
-            self._run_locked()
-        finally:
-            _SCAN_LOCK.release()
-
-    def _run_locked(self):
         from wechat_notify import load_config, _env_with_node, _resolve_openclaw_node
         timer = None
         proc = None
@@ -183,7 +192,9 @@ class WechatLogin:
             from wechat_accounts import account_inventory, bind_scanned_account
             before = account_inventory()
             cfg = self._config()
-            env = _env_with_node(cfg)
+            env = dict(_env_with_node(cfg))
+            reporter = Path(__file__).with_name('wechat_login_report.cjs')
+            env['NODE_OPTIONS'] = (env.get('NODE_OPTIONS', '') + ' --require=' + json.dumps(str(reporter))).strip()
             exe, prefix = _resolve_openclaw_node(str(cfg.get("openclaw_bin") or "openclaw"), env)
             command = [exe, *prefix, "channels", "login", "--channel", str(cfg.get("channel") or "openclaw-weixin")]
             with self.lock:
@@ -204,6 +215,8 @@ class WechatLogin:
             for line in proc.stdout:
                 self._line(line)
             proc.wait()
+            if self.restart_requested:
+                return
             with self.lock:
                 if self.state["status"] not in ("connected", "reconnecting"):
                     print(f"[WECHAT LOGIN] 登录未完成 exit={proc.returncode} timeout={timed_out.is_set()}", flush=True)
@@ -212,11 +225,14 @@ class WechatLogin:
                         else "微信连接未完成，请重试；详细原因见服务日志。")
             if self.state["status"] == "reconnecting":
                 after = account_inventory()
-                if self.slot == 'secondary' or after != before:
+                if self.scanned_account_id or self.slot == 'secondary' or after != before:
                     try:
-                        bind_scanned_account(self.slot, before, after)
+                        if self.scanned_account_id:
+                            bind_scanned_account(self.slot, before, after, account_id=self.scanned_account_id)
+                        else:
+                            bind_scanned_account(self.slot, before, after)
                     except ValueError as exc:
-                        if '这是第一个微信' in str(exc):
+                        if '这是第一个微信' in str(exc) or '这是第二个微信' in str(exc):
                             # OpenClaw rotates a same-user bot login. Keep that user's
                             # primary route working even when rejecting a duplicate slot.
                             from wechat_notify import ensure_openclaw_gateway
@@ -225,9 +241,10 @@ class WechatLogin:
                             self.state.update(status='error', message=str(exc), loginUrl=None)
                         return
                 from wechat_notify import ensure_openclaw_gateway, wait_weixin_channel_ready
-                ready, _ = ensure_openclaw_gateway(config=self._config(), restart=True)
-                if ready:
-                    ready, _ = wait_weixin_channel_ready(config=self._config(), timeout_sec=45)
+                with _RELOAD_LOCK:
+                    ready, _ = ensure_openclaw_gateway(config=self._config(), restart=True)
+                    if ready:
+                        ready, _ = wait_weixin_channel_ready(config=self._config(), timeout_sec=45)
                 with self.lock:
                     self.channel_ready = ready
                     self.checked_at = time.monotonic()
@@ -251,6 +268,12 @@ class WechatLogin:
             with self.lock:
                 if self.process is proc:
                     self.process = None
+                restart = self.restart_requested and not self.closed
+                self.restart_requested = False
+                if restart:
+                    self.state.update(status='idle', loginUrl=None)
+            if restart:
+                self.start()
 
     def close(self):
         with self.lock:
