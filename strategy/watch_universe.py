@@ -29,6 +29,23 @@ SELF_WATCHLIST_PICKS: tuple[tuple[str, str], ...] = (
     ("002636", "金安国纪"),
 )
 STRATEGY16_EXTRA_PICKS = SELF_WATCHLIST_PICKS
+_RUNTIME_SELF_PICKS = None
+_RUNTIME_REMOVED = {}
+
+
+def install_self_watchlist(data):
+    global _RUNTIME_SELF_PICKS, _RUNTIME_REMOVED
+    _RUNTIME_SELF_PICKS = tuple((str(i['code']), str(i['name'])) for i in data['items'])
+    _RUNTIME_REMOVED = dict(data.get('removed') or {})
+
+
+def current_self_watchlist():
+    return SELF_WATCHLIST_PICKS if _RUNTIME_SELF_PICKS is None else _RUNTIME_SELF_PICKS
+
+
+def removed_self_codes(session):
+    return {code for code, day in _RUNTIME_REMOVED.items() if day == session}
+
 
 POOL_SRC_FACTOR27 = "factor27"
 POOL_SRC_FACTOR28 = "factor28"
@@ -177,7 +194,7 @@ def load_ziyang_payload() -> dict[str, Any]:
 
 def self_watchlist_pick_rows() -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for code, name in SELF_WATCHLIST_PICKS:
+    for code, name in current_self_watchlist():
         rows.append(
             {
                 "code": code_key(code),
@@ -193,7 +210,7 @@ def self_watchlist_pick_rows() -> list[dict[str, Any]]:
 def self_watchlist_codes() -> set[str]:
     return {
         code_key(c)
-        for c, _ in SELF_WATCHLIST_PICKS
+        for c, _ in current_self_watchlist()
         if code_key(c) and code_key(c) != "000000"
     }
 
@@ -237,7 +254,7 @@ def research_watchlist() -> list[dict[str, Any]]:
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
 
-    for code, name in SELF_WATCHLIST_PICKS:
+    for code, name in current_self_watchlist():
         c = code_key(code)
         if not c or c == "000000" or c in seen:
             continue

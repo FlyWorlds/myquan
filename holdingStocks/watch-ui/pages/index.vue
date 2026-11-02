@@ -409,6 +409,7 @@ const closedCount = computed(() => closedHoldings.value.length)
             <IndexBar compact :indices="snapshot.indices" />
           </template>
         </AccountSummary>
+        <SelfWatchlistManager />
         <p v-if="snapshot && !snapshot.holdings?.length" class="text-sm text-ui-text-2">暂无持仓/当日预警；实仓登记或定盘池出现买入预警后显示于此。</p>
         <template v-else>
           <div v-if="slotHoldings.length" class="space-y-2">

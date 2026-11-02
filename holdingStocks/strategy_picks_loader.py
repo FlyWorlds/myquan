@@ -113,11 +113,11 @@ _POOL_CATEGORY: dict[str, str] = {
 def _self_pick_items() -> list[dict[str, Any]]:
     """公共自选 → picks 条目（带分类）。"""
     try:
-        from watch_config import SELF_WATCHLIST_PICKS, code_key
+        from watch_config import current_self_watchlist, code_key
     except Exception:  # noqa: BLE001
         return []
     out: list[dict[str, Any]] = []
-    for i, (code, name) in enumerate(SELF_WATCHLIST_PICKS, 1):
+    for i, (code, name) in enumerate(current_self_watchlist(), 1):
         c = code_key(str(code))
         if not c or c == "000000":
             continue

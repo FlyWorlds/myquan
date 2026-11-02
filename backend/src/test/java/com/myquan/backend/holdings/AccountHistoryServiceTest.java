@@ -122,4 +122,24 @@ class AccountHistoryServiceTest {
         assertThrows(ResponseStatusException.class,()->service.record(sample()));
         assertEquals(0,service.snapshots(null,1).size());
     }
+    @Test
+    void currentDayValuationAcceptsNullOrMissingSessionMetadataWithoutChangingLedger() throws Exception {
+        var s=sample();
+        var now=LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"));
+        var previous=state.read();
+        for (int i=0;i<2;i++) {
+            var book=(com.fasterxml.jackson.databind.node.ObjectNode)previous.holdings().deepCopy();
+            if (i==0) book.putNull("last_session");
+            else book.remove("last_session");
+            var original=book.deepCopy();
+            when(state.read()).thenReturn(new PaperStateService.State(1,book,previous.trades(),previous.ledger()));
+            assertEquals(true,service.record(new AccountHistoryService.Sample(now.toLocalDate(),now.plusSeconds(i),
+                    1L,s.account(),s.holdings(),s.closed())).get("recorded"));
+            assertEquals(original,book);
+            assertThrows(ResponseStatusException.class,()->service.record(new AccountHistoryService.Sample(
+                    now.toLocalDate().minusDays(1),now.minusDays(1),1L,s.account(),s.holdings(),s.closed())));
+        }
+        assertEquals(1,service.calendar(now.getYear()).size());
+    }
+
 }

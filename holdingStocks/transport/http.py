@@ -27,6 +27,7 @@ def build_watch_request_handler(
     on_paper_reset: Callable[[], Any] | None = None,
     on_front_rendered: Callable[[], bool] | None = None,
     on_selection_load: Callable[[dict], Any] | None = None,
+    self_watchlist: Any = None,
 ) -> type[SimpleHTTPRequestHandler]:
     """返回绑定依赖后的 RequestHandler 类（供 ThreadingHTTPServer 使用）。"""
 
@@ -96,6 +97,40 @@ def build_watch_request_handler(
             from wechat_login import login
             self._send_json(login.send_test() if test else login.start() if start else login.status())
 
+        def _self_watchlist(self, action="list") -> None:
+            origin = self.headers.get('Origin')
+            host = urlparse('http://' + self.headers.get('Host', '')).hostname
+            allowed = {f'http://{h}:{self.server.server_port}' for h in ('localhost', '127.0.0.1')}
+            allowed.update({'http://localhost:3000', 'http://127.0.0.1:3000'})
+            if (self.client_address[0] not in ('127.0.0.1', '::1') or host not in ('localhost', '127.0.0.1', '::1')
+                    or (origin and origin not in allowed) or self.headers.get('Sec-Fetch-Site') == 'cross-site'):
+                self._send_json({'error': '仅允许从本机页面管理自选池'}, status=403)
+                return
+            if self_watchlist is None:
+                self._send_json({'error': '自选池管理暂不可用'}, status=503)
+                return
+            try:
+                if action == 'list':
+                    result = self_watchlist.snapshot()
+                else:
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if not 0 < length <= 4096:
+                        raise ValueError('请求内容无效')
+                    body = json.loads(self.rfile.read(length))
+                    if not isinstance(body, dict):
+                        raise ValueError('请求内容无效')
+                    if action == 'preview':
+                        result = self_watchlist.preview(body.get('code'))
+                    elif action == 'confirm':
+                        result = self_watchlist.confirm(body.get('token'))
+                    else:
+                        result = self_watchlist.remove(body.get('code'))
+                self._send_json(result)
+            except (ValueError, TypeError, KeyError) as exc:
+                self._send_json({'error': str(exc)}, status=400)
+            except Exception:
+                self._send_json({'error': '行情或数据库暂不可用，请刷新后重试'}, status=503)
+
         @staticmethod
         def _content_type(path: Path) -> str:
             ext = path.suffix.lower()
@@ -133,6 +168,9 @@ def build_watch_request_handler(
             return candidate if candidate.is_file() else None
 
         def do_GET(self) -> None:  # noqa: N802
+            if self.path.split('?', 1)[0] == '/api/self-watchlist':
+                self._self_watchlist()
+                return
             path = self.path.split("?", 1)[0]
             if path == "/api/review-journal":
                 from review_journal import entries
@@ -314,6 +352,11 @@ def build_watch_request_handler(
             self.send_error(404, "Not Found")
 
         def do_POST(self) -> None:  # noqa: N802
+            watch_action = {'/api/self-watchlist/preview': 'preview', '/api/self-watchlist/confirm': 'confirm',
+                            '/api/self-watchlist/remove': 'remove'}.get(self.path.split('?', 1)[0])
+            if watch_action:
+                self._self_watchlist(watch_action)
+                return
             if self.path.split("?", 1)[0] == "/api/review-journal":
                 if self.headers.get('Sec-Fetch-Site') == 'cross-site':
                     self._send_json({'error': '禁止跨站写入'}, status=403)

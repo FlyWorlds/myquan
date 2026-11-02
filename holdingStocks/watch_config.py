@@ -39,6 +39,7 @@ from strategy.watch_universe import (
     POOL_SRC_LABEL,
     POOL_SRC_SELF,
     SELF_WATCHLIST_PICKS,
+    current_self_watchlist,
     STRATEGY16_EXTRA_PICKS,
     STRATEGY16_THR_PATH,
     ZIYANG_PICKS_PATH,
@@ -569,7 +570,7 @@ def self_watch_items(
     """公共自选池 → watch_item 列表（带池来源标签）。"""
     out: list[dict[str, Any]] = []
     thrs = load_strategy1_thr_map() if (strategy_id or STRATEGY_ID) == "strategy1" else load_strategy16_thr_map()
-    for code, name in SELF_WATCHLIST_PICKS:
+    for code, name in current_self_watchlist():
         c = code_key(code)
         if not c or c == "000000":
             continue

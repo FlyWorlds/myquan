@@ -761,7 +761,7 @@ def fetch_tencent_batch(sinas: list[str], *, timeout=(2, 3)) -> dict[str, dict[s
                     continue
                 out[code] = dict(last=last, prev_close=prev, open=opening, high=high, low=low,
                     session=timestamp.strftime("%Y-%m-%d"), last_ts=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                    _trade_quality_ok=True, _quote_source="tencent_batch")
+                    _trade_quality_ok=True, _quote_source="tencent_batch", name=fields[1])
             if out:
                 break
         except requests.RequestException:
@@ -955,6 +955,7 @@ class QuoteFeedManager:
         self.hub = QuoteHub()
         self.hub.expected_symbols = list(dict.fromkeys(self.sinas))
         self._stop = threading.Event()
+        self._symbols_lock = threading.Lock()
         self._threads: list[threading.Thread] = []
         self.sina_interval = max(1.0, float(sina_interval))
 
@@ -987,6 +988,20 @@ class QuoteFeedManager:
             f"行情源已启动: SSE×{n_sse} 热池 + 新浪批量×{n_all} "
             f"（叠加池不占 SSE）"
         )
+
+    def add_symbols(self, sinas) -> None:
+        """Subscribe new manual symbols without restarting existing quote streams."""
+        with self._symbols_lock:
+            added = [s for s in dict.fromkeys(str(s).lower() for s in sinas) if s not in self.sinas]
+            if not added:
+                return
+            self.sinas.extend(added)
+            self.hub.expected_symbols = list(dict.fromkeys(self.sinas))
+            poller = SinaBatchPoller(self.hub, added, stop=self._stop,
+                interval=self.sina_interval, always=True, on_log=self.on_log)
+            thread = threading.Thread(target=poller.run, name='manual-watch-quotes', daemon=True)
+            thread.start()
+            self._threads.append(thread)
 
     def stop(self) -> None:
         self._stop.set()

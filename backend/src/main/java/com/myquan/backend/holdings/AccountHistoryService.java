@@ -42,7 +42,8 @@ public class AccountHistoryService {
         return transactions.execute(status -> {
             jdbc.queryForMap("SELECT revision FROM paper_account_state WHERE id=1 FOR UPDATE");
             var current=state.read();
-            var storedSession=current.holdings().path("last_session").asText();
+            // A JSON null is absent metadata, not the literal trading day "null".
+            var storedSession=current.holdings().path("last_session").asText("");
             boolean sameSession=sample.tradingDay().toString().equals(storedSession);
             // Valuation is read-only; legacy session metadata may lag committed fills.
             boolean liveSession=sample.tradingDay().equals(LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")))

@@ -2798,7 +2798,9 @@ def publish_watch_snapshot(
     # Retained signals are display data; never feed them back into execution.
     from alert_retention import LIVE_ALERT_RETENTION
     rows = [dict(row) for row in rows]
-    LIVE_ALERT_RETENTION.merge(rows, strategy_codes=set(strategy_watchlist_codes()))
+    from strategy.watch_universe import removed_self_codes
+    display_strategy_codes = set(strategy_watchlist_codes()) | removed_self_codes(session_today or str(trading_session_date()))
+    LIVE_ALERT_RETENTION.merge(rows, strategy_codes=display_strategy_codes)
     snapshot = build_watch_snapshot(
         rows=rows,
         indices=indices,
@@ -2821,7 +2823,7 @@ def publish_watch_snapshot(
         sectors=sectors,
         refresh_sec=refresh_sec,
         portfolio_codes=portfolio_codes,
-        strategy_codes=strategy_watchlist_codes(),
+        strategy_codes=display_strategy_codes,
     )
     if paper_revision is not None:
         snapshot["paperRevision"] = paper_revision
@@ -13447,6 +13449,20 @@ def cmd_watch(args: argparse.Namespace) -> None:
 
     from watch_config import MAX_SSE_QUOTES, primary_watchlist, strategy1_watchlist, strategy16_watchlist, strategy_watchlist
 
+    from self_watchlist import SelfWatchlist
+    from runtime_documents import read_document, write_document
+    from strategy.watch_universe import install_self_watchlist, current_self_watchlist
+    def fetch_manual_quote(sina):
+        from quote_feed import fetch_sina_batch
+        quotes = fetch_sina_batch([sina])
+        quote = quotes.get(sina)
+        if not quote:
+            from quote_feed import fetch_tencent_batch
+            quote = fetch_tencent_batch([sina]).get(sina)
+        return quote
+    manual_watchlist = SelfWatchlist(read=read_document, write=write_document,
+        fetch=fetch_manual_quote, install=install_self_watchlist)
+    manual_watchlist.snapshot()
     _align_active_signal_scope()
     primary = primary_watchlist()
     live_positions = (_HOLDINGS_CACHE.get("data") or {}).get("positions") or {}
@@ -13801,6 +13817,14 @@ def cmd_watch(args: argparse.Namespace) -> None:
         front_rendered.set()
         return True
 
+    def manual_pool_changed():
+        _WATCH_TABS_CACHE["t"] = 0.0
+        feed.add_symbols(_sina_of(code) for code, _name in current_self_watchlist())
+        # New membership is visible immediately to the next preparation/scan loop.
+        # Retained rows are display only; removed membership is never reactivated.
+        threading.Thread(target=safe_refresh, name='manual-watch-refresh', daemon=True).start()
+    manual_watchlist.changed = manual_pool_changed
+
     _Handler = build_watch_request_handler(
         root=ROOT,
         watch_meta_file=WATCH_META_FILE,
@@ -13812,6 +13836,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
         get_factors_api=_get_factors_api_cache,
         handle_strategy16b_api=_handle_strategy16b_api,
         on_selection_load=_activate_strategy16b_selection,
+        self_watchlist=manual_watchlist,
         handle_sectors_api=_handle_sectors_api,
         watch_ui_dist_ready=_watch_ui_dist_ready,
         on_paper_reset=_on_paper_reset,
