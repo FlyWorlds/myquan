@@ -79,3 +79,4 @@ from strategy.factors.categories import list_category_catalog
 
 __all__ = ["FACTOR_REGISTRY", "get_factor", "list_factors", "list_category_catalog"]
 from strategy.factors import factor33 as _factor33  # noqa: F401
+from strategy.factors import factor34 as _factor34  # noqa: F401

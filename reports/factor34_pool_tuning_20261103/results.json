@@ -1,0 +1,618 @@
+{
+  "strategy1": {
+    "pool_count": 25,
+    "eligible_count": 86,
+    "selected": {
+      "max_age": 5,
+      "volume_multiple": 3.0,
+      "body_min": 0.03,
+      "hold_sessions": 2
+    },
+    "top5_train": [
+      {
+        "params": {
+          "max_age": 5,
+          "volume_multiple": 3.0,
+          "body_min": 0.03,
+          "hold_sessions": 2
+        },
+        "train": {
+          "n": 32,
+          "signal_dates": 23,
+          "mean": 0.0189272276577631,
+          "median": -0.009225057384144641,
+          "win": 0.4375,
+          "excess_pool": 0.02248490803024105,
+          "excess_index": 0.022904069977883305,
+          "cluster_score": 1.5671610315031945,
+          "open_count": 0,
+          "blocked": 1
+        }
+      },
+      {
+        "params": {
+          "max_age": 5,
+          "volume_multiple": 2.0,
+          "body_min": 0.05,
+          "hold_sessions": 2
+        },
+        "train": {
+          "n": 28,
+          "signal_dates": 24,
+          "mean": 0.015571205819225609,
+          "median": -0.0008076739249793796,
+          "win": 0.5,
+          "excess_pool": 0.02029817195787022,
+          "excess_index": 0.019819266286695197,
+          "cluster_score": 1.42764657873351,
+          "open_count": 0,
+          "blocked": 2
+        }
+      },
+      {
+        "params": {
+          "max_age": 5,
+          "volume_multiple": 1.5,
+          "body_min": 0.05,
+          "hold_sessions": 2
+        },
+        "train": {
+          "n": 31,
+          "signal_dates": 26,
+          "mean": 0.01235537660050192,
+          "median": -0.0026885530877145403,
+          "win": 0.4838709677419355,
+          "excess_pool": 0.017850342624483293,
+          "excess_index": 0.017418132239704384,
+          "cluster_score": 1.2985617088601615,
+          "open_count": 0,
+          "blocked": 2
+        }
+      },
+      {
+        "params": {
+          "max_age": 15,
+          "volume_multiple": 3.0,
+          "body_min": 0.03,
+          "hold_sessions": 2
+        },
+        "train": {
+          "n": 60,
+          "signal_dates": 45,
+          "mean": 0.011842225761117037,
+          "median": -0.004434087598631176,
+          "win": 0.45,
+          "excess_pool": 0.009991952702263034,
+          "excess_index": 0.014334573747440458,
+          "cluster_score": 1.1783740323556604,
+          "open_count": 0,
+          "blocked": 1
+        }
+      },
+      {
+        "params": {
+          "max_age": 10,
+          "volume_multiple": 3.0,
+          "body_min": 0.05,
+          "hold_sessions": 2
+        },
+        "train": {
+          "n": 31,
+          "signal_dates": 25,
+          "mean": 0.01567059391093661,
+          "median": -0.004315488563917391,
+          "win": 0.41935483870967744,
+          "excess_pool": 0.012477801304461201,
+          "excess_index": 0.01685497964133397,
+          "cluster_score": 1.0704652540943587,
+          "open_count": 0,
+          "blocked": 1
+        }
+      }
+    ],
+    "selection_reason": "train_only",
+    "models": {
+      "default": {
+        "train": {
+          "trade_stats": {
+            "n": 40,
+            "signal_dates": 31,
+            "mean": 0.0021106064688273503,
+            "median": -0.016138380798501384,
+            "win": 0.425,
+            "excess_pool": -0.006516779421442934,
+            "excess_index": -0.000747473032453716,
+            "cluster_score": -0.8617787164352085,
+            "open_count": 0,
+            "blocked": 2
+          },
+          "portfolio": {
+            "return_total": -0.0007969188298502239,
+            "max_drawdown": -0.030280987541838944,
+            "mean_exposure": 0.025021146760405715,
+            "pool_return": 0.7833069515456574,
+            "index_return": 0.16567100032331417,
+            "excess_pool": -0.7841038703755077,
+            "excess_index": -0.1664679191531644,
+            "pool_drawdown": -0.21485254530302034,
+            "index_drawdown": -0.09976206018243206,
+            "open_positions": []
+          }
+        },
+        "validation": {
+          "trade_stats": {
+            "n": 16,
+            "signal_dates": 15,
+            "mean": -0.01626845021928186,
+            "median": -0.027372615733947392,
+            "win": 0.4375,
+            "excess_pool": -0.02509265089423954,
+            "excess_index": -0.01696790731828142,
+            "cluster_score": -1.64965463414646,
+            "open_count": 1,
+            "blocked": 0
+          },
+          "portfolio": {
+            "return_total": -0.015037978205542424,
+            "max_drawdown": -0.017205718675349035,
+            "mean_exposure": 0.022256986967749463,
+            "pool_return": 0.4668021370907789,
+            "index_return": 0.06203882152417384,
+            "excess_pool": -0.4818401152963213,
+            "excess_index": -0.07707679972971626,
+            "pool_drawdown": -0.15553253604099393,
+            "index_drawdown": -0.07400064657706218,
+            "open_positions": [
+              {
+                "code": "600353",
+                "entry_date": "2026-06-25",
+                "planned_exit_index": 484,
+                "unrealized_mark_return": -0.11627906976744184
+              }
+            ]
+          }
+        },
+        "holdout": {
+          "trade_stats": {
+            "n": 18,
+            "signal_dates": 14,
+            "mean": 0.024578138483358034,
+            "median": 0.01855949701696702,
+            "win": 0.6666666666666666,
+            "excess_pool": 0.020780373550217033,
+            "excess_index": 0.034282820732845734,
+            "cluster_score": 1.2957190087104096,
+            "open_count": 1,
+            "blocked": 0
+          },
+          "portfolio": {
+            "return_total": 0.015344995934369665,
+            "max_drawdown": -0.009038879911492548,
+            "mean_exposure": 0.03344350380239992,
+            "pool_return": -0.1901705355188319,
+            "index_return": -0.18465683916263576,
+            "excess_pool": 0.20551553145320156,
+            "excess_index": 0.20000183509700542,
+            "pool_drawdown": -0.21440622525152242,
+            "index_drawdown": -0.18942987038953008,
+            "open_positions": [
+              {
+                "code": "002636",
+                "entry_date": "2026-11-02",
+                "planned_exit_index": 570,
+                "unrealized_mark_return": -0.027183872938301823
+              }
+            ]
+          }
+        }
+      },
+      "selected": {
+        "train": {
+          "trade_stats": {
+            "n": 32,
+            "signal_dates": 23,
+            "mean": 0.0189272276577631,
+            "median": -0.009225057384144641,
+            "win": 0.4375,
+            "excess_pool": 0.02248490803024105,
+            "excess_index": 0.022904069977883305,
+            "cluster_score": 1.5671610315031945,
+            "open_count": 0,
+            "blocked": 1
+          },
+          "portfolio": {
+            "return_total": 0.022328686359533334,
+            "max_drawdown": -0.006941926271751386,
+            "mean_exposure": 0.005005664407574951,
+            "pool_return": 0.7833069515456574,
+            "index_return": 0.16567100032331417,
+            "excess_pool": -0.7609782651861241,
+            "excess_index": -0.14334231396378083,
+            "pool_drawdown": -0.21485254530302034,
+            "index_drawdown": -0.09976206018243206,
+            "open_positions": []
+          }
+        },
+        "validation": {
+          "trade_stats": {
+            "n": 14,
+            "signal_dates": 13,
+            "mean": -0.008060912935687241,
+            "median": -0.025170920292515553,
+            "win": 0.42857142857142855,
+            "excess_pool": -0.011721978718462858,
+            "excess_index": -0.00930220902921834,
+            "cluster_score": -0.5351239742103887,
+            "open_count": 0,
+            "blocked": 0
+          },
+          "portfolio": {
+            "return_total": -0.0040490585661575595,
+            "max_drawdown": -0.015145929776825495,
+            "mean_exposure": 0.004584273513941832,
+            "pool_return": 0.4668021370907789,
+            "index_return": 0.06203882152417384,
+            "excess_pool": -0.47085119565693645,
+            "excess_index": -0.0660878800903314,
+            "pool_drawdown": -0.15553253604099393,
+            "index_drawdown": -0.07400064657706218,
+            "open_positions": []
+          }
+        },
+        "holdout": {
+          "trade_stats": {
+            "n": 5,
+            "signal_dates": 4,
+            "mean": 0.040736414993977246,
+            "median": 0.05561309039874307,
+            "win": 0.6,
+            "excess_pool": 0.02789238801809487,
+            "excess_index": 0.03886220492652777,
+            "cluster_score": 1.1687826134912638,
+            "open_count": 0,
+            "blocked": 0
+          },
+          "portfolio": {
+            "return_total": 0.007603936668799882,
+            "max_drawdown": -0.0015920925144691234,
+            "mean_exposure": 0.0022936572055754123,
+            "pool_return": -0.1901705355188319,
+            "index_return": -0.18465683916263576,
+            "excess_pool": 0.19777447218763178,
+            "excess_index": 0.19226077583143564,
+            "pool_drawdown": -0.21440622525152242,
+            "index_drawdown": -0.18942987038953008,
+            "open_positions": []
+          }
+        }
+      }
+    }
+  },
+  "strategy16": {
+    "pool_count": 34,
+    "eligible_count": 83,
+    "selected": {
+      "max_age": 10,
+      "volume_multiple": 3.0,
+      "body_min": 0.03,
+      "hold_sessions": 2
+    },
+    "top5_train": [
+      {
+        "params": {
+          "max_age": 10,
+          "volume_multiple": 3.0,
+          "body_min": 0.03,
+          "hold_sessions": 2
+        },
+        "train": {
+          "n": 58,
+          "signal_dates": 43,
+          "mean": 0.012591037551014619,
+          "median": 0.004324913364987082,
+          "win": 0.5689655172413793,
+          "excess_pool": 0.011555040047170511,
+          "excess_index": 0.017175206967679914,
+          "cluster_score": 2.2246737235413865,
+          "open_count": 2,
+          "blocked": 1
+        }
+      },
+      {
+        "params": {
+          "max_age": 10,
+          "volume_multiple": 2.0,
+          "body_min": 0.03,
+          "hold_sessions": 10
+        },
+        "train": {
+          "n": 76,
+          "signal_dates": 46,
+          "mean": 0.054134850747885994,
+          "median": 0.031000932825519967,
+          "win": 0.7236842105263158,
+          "excess_pool": 0.029855296412048052,
+          "excess_index": 0.04880548236932518,
+          "cluster_score": 2.2227054852699406,
+          "open_count": 5,
+          "blocked": 0
+        }
+      },
+      {
+        "params": {
+          "max_age": 15,
+          "volume_multiple": 2.0,
+          "body_min": 0.03,
+          "hold_sessions": 10
+        },
+        "train": {
+          "n": 81,
+          "signal_dates": 48,
+          "mean": 0.04868019676490104,
+          "median": 0.02461011790440981,
+          "win": 0.6790123456790124,
+          "excess_pool": 0.0263597797228421,
+          "excess_index": 0.0443943487239903,
+          "cluster_score": 2.166728021688463,
+          "open_count": 6,
+          "blocked": 0
+        }
+      },
+      {
+        "params": {
+          "max_age": 15,
+          "volume_multiple": 1.5,
+          "body_min": 0.03,
+          "hold_sessions": 10
+        },
+        "train": {
+          "n": 85,
+          "signal_dates": 50,
+          "mean": 0.04665390783647296,
+          "median": 0.02137995484566657,
+          "win": 0.6705882352941176,
+          "excess_pool": 0.025906360977880058,
+          "excess_index": 0.04263540884861026,
+          "cluster_score": 2.1456061063860585,
+          "open_count": 6,
+          "blocked": 0
+        }
+      },
+      {
+        "params": {
+          "max_age": 10,
+          "volume_multiple": 1.5,
+          "body_min": 0.03,
+          "hold_sessions": 10
+        },
+        "train": {
+          "n": 80,
+          "signal_dates": 49,
+          "mean": 0.05167439128734499,
+          "median": 0.026490876614819858,
+          "win": 0.7125,
+          "excess_pool": 0.02866613688578288,
+          "excess_index": 0.04627348567396693,
+          "cluster_score": 2.1378835100823306,
+          "open_count": 5,
+          "blocked": 0
+        }
+      }
+    ],
+    "selection_reason": "train_only",
+    "models": {
+      "default": {
+        "train": {
+          "trade_stats": {
+            "n": 40,
+            "signal_dates": 30,
+            "mean": 0.0143864432128275,
+            "median": 0.015717638917007948,
+            "win": 0.65,
+            "excess_pool": -0.005851634063801075,
+            "excess_index": 0.00949816782086373,
+            "cluster_score": -0.613208027460605,
+            "open_count": 1,
+            "blocked": 0
+          },
+          "portfolio": {
+            "return_total": 0.013169583857804312,
+            "max_drawdown": -0.013807368163500144,
+            "mean_exposure": 0.018527766971994642,
+            "pool_return": 0.5141291962108265,
+            "index_return": 0.16567100032331417,
+            "excess_pool": -0.5009596123530222,
+            "excess_index": -0.15250141646550985,
+            "pool_drawdown": -0.18145569256451888,
+            "index_drawdown": -0.09976206018243206,
+            "open_positions": [
+              {
+                "code": "002009",
+                "entry_date": "2025-12-31",
+                "planned_exit_index": 371,
+                "unrealized_mark_return": -0.0832656376929326
+              }
+            ]
+          }
+        },
+        "validation": {
+          "trade_stats": {
+            "n": 15,
+            "signal_dates": 15,
+            "mean": -0.00398190090555824,
+            "median": -0.04703497209719809,
+            "win": 0.4,
+            "excess_pool": 0.0011288739516445156,
+            "excess_index": -0.0037501484334175957,
+            "cluster_score": 0.05713169550015012,
+            "open_count": 0,
+            "blocked": 0
+          },
+          "portfolio": {
+            "return_total": -0.001532618747370651,
+            "max_drawdown": -0.012573806644745389,
+            "mean_exposure": 0.014454435353285425,
+            "pool_return": 0.42101881162984633,
+            "index_return": 0.06203882152417384,
+            "excess_pool": -0.422551430377217,
+            "excess_index": -0.06357144027154449,
+            "pool_drawdown": -0.10977170197338726,
+            "index_drawdown": -0.07400064657706218,
+            "open_positions": []
+          }
+        },
+        "holdout": {
+          "trade_stats": {
+            "n": 24,
+            "signal_dates": 17,
+            "mean": -0.015612653454822573,
+            "median": -0.029369156310509126,
+            "win": 0.3333333333333333,
+            "excess_pool": -0.014659646970498971,
+            "excess_index": -0.0004991617281037558,
+            "cluster_score": -0.4544562213519173,
+            "open_count": 3,
+            "blocked": 0
+          },
+          "portfolio": {
+            "return_total": -0.010293032374883881,
+            "max_drawdown": -0.019201232256226275,
+            "mean_exposure": 0.03329658715904598,
+            "pool_return": -0.08976822221452463,
+            "index_return": -0.18465683916263576,
+            "excess_pool": 0.07947518983964075,
+            "excess_index": 0.17436380678775187,
+            "pool_drawdown": -0.17438726570191165,
+            "index_drawdown": -0.18942987038953008,
+            "open_positions": [
+              {
+                "code": "000417",
+                "entry_date": "2026-11-02",
+                "planned_exit_index": 570,
+                "unrealized_mark_return": 0.05555555555555536
+              },
+              {
+                "code": "002636",
+                "entry_date": "2026-11-02",
+                "planned_exit_index": 570,
+                "unrealized_mark_return": -0.027183872938301823
+              },
+              {
+                "code": "600688",
+                "entry_date": "2026-11-02",
+                "planned_exit_index": 570,
+                "unrealized_mark_return": 0.01342281879194629
+              }
+            ]
+          }
+        }
+      },
+      "selected": {
+        "train": {
+          "trade_stats": {
+            "n": 58,
+            "signal_dates": 43,
+            "mean": 0.012591037551014619,
+            "median": 0.004324913364987082,
+            "win": 0.5689655172413793,
+            "excess_pool": 0.011555040047170511,
+            "excess_index": 0.017175206967679914,
+            "cluster_score": 2.2246737235413865,
+            "open_count": 2,
+            "blocked": 1
+          },
+          "portfolio": {
+            "return_total": 0.017319426960346496,
+            "max_drawdown": -0.005486269872955973,
+            "mean_exposure": 0.0069003367789478125,
+            "pool_return": 0.5141291962108265,
+            "index_return": 0.16567100032331417,
+            "excess_pool": -0.49680976925048004,
+            "excess_index": -0.14835157336296767,
+            "pool_drawdown": -0.18145569256451888,
+            "index_drawdown": -0.09976206018243206,
+            "open_positions": [
+              {
+                "code": "002009",
+                "entry_date": "2025-12-31",
+                "planned_exit_index": 368,
+                "unrealized_mark_return": -0.0832656376929326
+              },
+              {
+                "code": "600688",
+                "entry_date": "2025-12-31",
+                "planned_exit_index": 368,
+                "unrealized_mark_return": -0.021126760563380254
+              }
+            ]
+          }
+        },
+        "validation": {
+          "trade_stats": {
+            "n": 17,
+            "signal_dates": 16,
+            "mean": 0.0018189967122473633,
+            "median": 0.009193632538722296,
+            "win": 0.5882352941176471,
+            "excess_pool": -0.000952117659738635,
+            "excess_index": 0.0024128195120481986,
+            "cluster_score": -0.005457805524911506,
+            "open_count": 0,
+            "blocked": 0
+          },
+          "portfolio": {
+            "return_total": 0.0009861132697499553,
+            "max_drawdown": -0.00304532019224113,
+            "mean_exposure": 0.004096182371411014,
+            "pool_return": 0.42101881162984633,
+            "index_return": 0.06203882152417384,
+            "excess_pool": -0.4200326983600964,
+            "excess_index": -0.06105270825442388,
+            "pool_drawdown": -0.10977170197338726,
+            "index_drawdown": -0.07400064657706218,
+            "open_positions": []
+          }
+        },
+        "holdout": {
+          "trade_stats": {
+            "n": 18,
+            "signal_dates": 17,
+            "mean": -0.012990949811787432,
+            "median": -0.006817249711612294,
+            "win": 0.3888888888888889,
+            "excess_pool": -0.004444567047926499,
+            "excess_index": -0.004143047812805316,
+            "cluster_score": -0.3633869321555018,
+            "open_count": 2,
+            "blocked": 0
+          },
+          "portfolio": {
+            "return_total": -0.004372615522654111,
+            "max_drawdown": -0.0066454212419211345,
+            "mean_exposure": 0.006733864266024696,
+            "pool_return": -0.08976822221452463,
+            "index_return": -0.18465683916263576,
+            "excess_pool": 0.08539560669187052,
+            "excess_index": 0.18028422363998164,
+            "pool_drawdown": -0.17438726570191165,
+            "index_drawdown": -0.18942987038953008,
+            "open_positions": [
+              {
+                "code": "000417",
+                "entry_date": "2026-11-02",
+                "planned_exit_index": 567,
+                "unrealized_mark_return": 0.05555555555555536
+              },
+              {
+                "code": "600688",
+                "entry_date": "2026-11-02",
+                "planned_exit_index": 567,
+                "unrealized_mark_return": 0.01342281879194629
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

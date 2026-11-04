@@ -1,0 +1,15 @@
+{
+  "factor": "factor34",
+  "pool": "Current frozen strategy1/strategy16 including common self watchlist; selection lookahead acknowledged",
+  "train": ["2025-01-01", "2025-12-31"],
+  "validation": ["2026-01-01", "2026-06-30"],
+  "holdout": ["2026-07-01", "2026-11-02"],
+  "grid": {"lookback": [60], "max_age": [5,10,15], "volume_multiple": [1.5,2,3], "body_min": [0.03,0.05,0.07], "hold_sessions": [2,5,10,20]},
+  "selection": "Train only; at least 20 completed trades and 12 distinct signal dates; rank signal-date-clustered matched-pool excess t statistic; deterministic parameter tie break. No validation or holdout retuning.",
+  "entry": "Next market session open if quoted and gap<9.7%; no buying using final signal-day close",
+  "exit": "Hth session counting entry as day1; at close, postpone for no quote or one-price downward lock; minimum H=2",
+  "capital": "Fixed equal initial cash sleeves for each pool member, invest 95% of sleeve cash per entry, one position per stock, no overlap, no leverage; fractional adjusted-price research units, no minimum commission",
+  "costs": "strategy.costs constants; buy/sell each 0.1% slippage, commission+misc0.0096%, sell tax0.05%",
+  "benchmarks": "Per-trade same-window pool equal-weight and CSI300 price return; portfolio equal initial buy-and-hold pool and CSI300, same95% initial exposure and costs",
+  "limitations": "2026 previously inspected in prior research; historical holdout not pristine blind test; current pools not historical membership; no order book fills; daily historical risk-warning status unavailable"
+}

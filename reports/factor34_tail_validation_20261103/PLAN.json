@@ -1,0 +1,11 @@
+{
+  "purpose": "Validate previously selected parameters at a point-in-time tail entry, not tune again",
+  "date_range": ["2026-09-01", "2026-11-02"],
+  "parameters": {"strategy1": {"lookback": 60, "max_age": 5, "volume_multiple": 3.0, "body_min": 0.03}, "strategy16": {"lookback": 60, "max_age": 10, "volume_multiple": 3.0, "body_min": 0.03}},
+  "signal": "14:55 cumulative volume >= 3x most recent prior60-session minimum within max_age; 14:55 last/day open-1>=3%; one first observed raw candidate per anchor regardless of fill, daily-close confirmations do not consume anchors",
+  "entry": "Next5-minute bar open (bar labelled15:00) as execution proxy, not guaranteed trade. Exclude signal or fill within0.3percentage-points of10% upper limit (qfq reference proxy).",
+  "exit": "D1/D2/D3 close after entry date, T+1 respected; no quote/one-price downward lock defers exit",
+  "comparison": "Same-event next-day-open entry, common D2 close; same-window pool and CSI300 (index14:55 close proxy if no15:00 open)",
+  "coverage": "Require complete5m sessions, reconcile raw daily open/close and volume unit; missing evidence is unknown, not non-trigger",
+  "limitations": "Current frozen pools and previously inspected recent history; small short-window sample; no order book or latency proof, no historical ST flags, no production changes"
+}

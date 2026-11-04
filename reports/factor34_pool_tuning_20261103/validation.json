@@ -1,0 +1,11 @@
+{
+  "completed_trade_checks": 297,
+  "equity_curves_checked": 12,
+  "checks": [
+    "registered_factor_signals",
+    "T+1_and_horizon",
+    "no_overlap",
+    "fee_arithmetic",
+    "independent_cash_and_mark_NAV"
+  ]
+}

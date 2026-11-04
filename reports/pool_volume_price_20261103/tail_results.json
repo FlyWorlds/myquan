@@ -1,0 +1,54 @@
+{
+  "valid_stock_days": 450,
+  "excluded": [
+    {
+      "code": "002636",
+      "date": "2026-10-30",
+      "reason": "signal_near_limit_up"
+    },
+    {
+      "code": "002929",
+      "date": "2026-10-20",
+      "reason": "signal_near_limit_up"
+    }
+  ],
+  "events": [],
+  "summary": {
+    "1": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win": null
+    },
+    "2": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win": null
+    },
+    "3": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win": null
+    },
+    "5": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win": null
+    },
+    "10": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win": null
+    },
+    "20": {
+      "n": 0,
+      "mean": null,
+      "median": null,
+      "win": null
+    }
+  }
+}

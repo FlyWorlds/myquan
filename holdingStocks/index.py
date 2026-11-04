@@ -13059,8 +13059,7 @@ def _execute_quote_exit(code, quote, received_at):
             fill_px=action["fill_px"], qty=action["shares"], cost=pos.get("cost"),
             session=str(trading_session_date()), buy_time=pos.get("buy_time"), prev_close=quote.get("prev_close"),
             open_px=quote["open"], px_digits=2, reason=REASON_HALF if action["kind"] == "half" else REASON_STOP,
-            trade_note=("跌破保护线（因子26·隔夜峰值回落）" if action["reason"] == "t1_peak_trail"
-                        else f"报价驱动因子26({action['reason']})"), action_kind=action["kind"],
+            trade_note=EXIT_REASON_LABELS.get(action["reason"], action["reason"]), action_kind=action["kind"],
             first_hit_ts=quote["last_ts"], exit_kind=action["reason"],
             execution_meta=dict(signal_time=quote["last_ts"], decision_time=decision,
                 signal_received_at=received_at.isoformat(sep=" ", timespec="microseconds"),
@@ -13099,6 +13098,9 @@ def _execution_quote(sina):
     getter = getattr(_watch_feed, "get_execution_quote", _watch_feed.get_quote)
     result = getter(sina)
     return result if isinstance(result, dict) else None
+
+
+EXIT_REASON_LABELS = json.loads(Path(__file__).with_name("exit_reason_labels.json").read_text(encoding="utf-8"))
 
 
 @paper_mutation
@@ -13196,7 +13198,7 @@ def _settle_condition_open_protect(data: dict[str, Any], now: datetime) -> None:
         apply_exit_fill(code=code, meta=dict(name=pos.get("name") or code, market=pos.get("market") or ""),
             fill_px=q["open"], qty=sellable, cost=pos.get("cost"), session=day, buy_time=bought,
             prev_close=q.get("prev_close"), open_px=q["open"], px_digits=2,
-            reason="止损成交", trade_note="因子29·竞价末段强度·开盘卖出" if auction_armed else "低开峰值回落·9:25准备·9:30开盘成交" if armed else "开盘保护成交(实时·条件单前置)", action_kind="full",
+            reason="止损成交", trade_note=EXIT_REASON_LABELS["f29_auction_open" if auction_armed else "open_peak_sell" if armed else "open_protect"], action_kind="full",
             first_hit_ts=q["last_ts"], exit_kind="f29_auction_open" if auction_armed else "open_peak_sell" if armed else "open_protect",
             execution_meta=dict(signal_time=q["last_ts"], decision_time=_now(),
                 execution_quote_time=q["last_ts"], observed_price=float(q["last"]),

@@ -1,0 +1,2583 @@
+{
+  "start": "2026-09-01",
+  "end": "2026-11-02",
+  "qa_exclusions": [
+    {
+      "code": "000300_index",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "000417",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "000581",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "000581",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.02258204773686512
+    },
+    {
+      "code": "000676",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "000716",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "000823",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "001287",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "001400",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "001400",
+      "date": "2026-10-27",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002009",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002009",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.028943360940422047
+    },
+    {
+      "code": "002015",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002031",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002065",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002065",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.03632553972273489
+    },
+    {
+      "code": "002073",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002088",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002093",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002104",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002149",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002152",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002152",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.024855576962372727
+    },
+    {
+      "code": "002164",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002273",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002273",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.02010155544405412
+    },
+    {
+      "code": "002275",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002275",
+      "date": "2026-09-15",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002275",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.0370584048566045
+    },
+    {
+      "code": "002275",
+      "date": "2026-09-23",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002432",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002432",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.020873124064683113
+    },
+    {
+      "code": "002579",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002636",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002636",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.038780024533110136
+    },
+    {
+      "code": "002747",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002747",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.020592814887635646
+    },
+    {
+      "code": "002779",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002779",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.030704632089638473
+    },
+    {
+      "code": "002815",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002815",
+      "date": "2026-09-21",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.021053683868181627
+    },
+    {
+      "code": "002921",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002922",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "002929",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600018",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600118",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600215",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600285",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600301",
+      "date": "2026-08-21",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600330",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600338",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600353",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600552",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600688",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600967",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "600967",
+      "date": "2026-09-02",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.04088356897633727
+    },
+    {
+      "code": "601020",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "601068",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "601208",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "601519",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "601609",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "601717",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "601919",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "603138",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "603301",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "603308",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "603311",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "603311",
+      "date": "2026-09-02",
+      "reason": "volume_unit_or_coverage",
+      "error": 0.022086698533047677
+    },
+    {
+      "code": "603328",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "603330",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "603338",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    },
+    {
+      "code": "603920",
+      "date": "2026-08-28",
+      "reason": "incomplete_5m"
+    }
+  ],
+  "pools": {
+    "strategy1": {
+      "pool_count": 25,
+      "expected_stock_days": 970,
+      "valid_stock_days": 963,
+      "excluded_candidates": [],
+      "candidates": [
+        {
+          "code": "002922",
+          "name": "伊戈尔",
+          "date": "2026-11-02",
+          "anchor": "2026-10-27",
+          "age": 4,
+          "body": 0.046375266524520065,
+          "volume_multiple": 3.4720715084103486,
+          "entry_raw": 19.63,
+          "entry": 19.63,
+          "signal_price_raw": 19.63,
+          "daily_close_confirms": true,
+          "d1": null,
+          "d2": null,
+          "d3": null,
+          "next_open_d2": null
+        }
+      ],
+      "summaries": {
+        "1": {
+          "net": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "excess_pool": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "excess_index": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "distinct_signal_dates": 0,
+          "incomplete": [
+            {
+              "code": "002922",
+              "date": "2026-11-02"
+            }
+          ],
+          "overlap_skips": [],
+          "paired_tail": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_next_open": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_advantage": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          }
+        },
+        "2": {
+          "net": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "excess_pool": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "excess_index": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "distinct_signal_dates": 0,
+          "incomplete": [
+            {
+              "code": "002922",
+              "date": "2026-11-02"
+            }
+          ],
+          "overlap_skips": [],
+          "paired_tail": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_next_open": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_advantage": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          }
+        },
+        "3": {
+          "net": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "excess_pool": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "excess_index": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "distinct_signal_dates": 0,
+          "incomplete": [
+            {
+              "code": "002922",
+              "date": "2026-11-02"
+            }
+          ],
+          "overlap_skips": [],
+          "paired_tail": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_next_open": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_advantage": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          }
+        }
+      },
+      "trades": {
+        "1": [],
+        "2": [],
+        "3": []
+      }
+    },
+    "strategy16": {
+      "pool_count": 34,
+      "expected_stock_days": 1326,
+      "valid_stock_days": 1316,
+      "excluded_candidates": [
+        {
+          "code": "000417",
+          "date": "2026-09-04",
+          "reason": "anchor_history_unknown"
+        },
+        {
+          "code": "000417",
+          "date": "2026-09-07",
+          "reason": "anchor_history_unknown"
+        },
+        {
+          "code": "000417",
+          "date": "2026-10-30",
+          "reason": "near_limit_up",
+          "body": 0.05166051660516602,
+          "ratio": 3.4734773137817445
+        },
+        {
+          "code": "603328",
+          "date": "2026-09-09",
+          "reason": "near_limit_up",
+          "body": 0.09700815956482334,
+          "ratio": 4.810471471843435
+        },
+        {
+          "code": "002579",
+          "date": "2026-09-07",
+          "reason": "near_limit_up",
+          "body": 0.06965517241379304,
+          "ratio": 3.2615277260500726
+        }
+      ],
+      "candidates": [
+        {
+          "code": "002164",
+          "name": "宁波东力",
+          "date": "2026-09-21",
+          "anchor": "2026-09-15",
+          "age": 4,
+          "body": 0.057197330791229684,
+          "volume_multiple": 5.625813247354912,
+          "entry_raw": 11.1,
+          "entry": 11.1,
+          "signal_price_raw": 11.09,
+          "daily_close_confirms": true,
+          "d1": {
+            "exit_date": "2026-09-22",
+            "price": 11.74,
+            "net": 0.05481408889641726,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.001983479042112078,
+            "index_benchmark": -0.0012990358383269118,
+            "benchmark_members": 28,
+            "excess_pool": 0.05679756793852934,
+            "excess_index": 0.05611312473474417
+          },
+          "d2": {
+            "exit_date": "2026-09-23",
+            "price": 11.87,
+            "net": 0.06649431304944398,
+            "delayed_sessions": 0,
+            "pool_benchmark": 0.0022185170551852285,
+            "index_benchmark": -0.007300572463469268,
+            "benchmark_members": 28,
+            "excess_pool": 0.06427579599425874,
+            "excess_index": 0.07379488551291324
+          },
+          "d3": {
+            "exit_date": "2026-09-24",
+            "price": 13.06,
+            "net": 0.17341328798868916,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.006118747370655391,
+            "index_benchmark": -0.02447230706210024,
+            "benchmark_members": 28,
+            "excess_pool": 0.17953203535934456,
+            "excess_index": 0.1978855950507894
+          },
+          "next_open_d2": 0.04300324888535911
+        },
+        {
+          "code": "600552",
+          "name": "凯盛科技",
+          "date": "2026-09-23",
+          "anchor": "2026-09-10",
+          "age": 9,
+          "body": 0.03633314700950252,
+          "volume_multiple": 3.8916932128110346,
+          "entry_raw": 18.53,
+          "entry": 18.53,
+          "signal_price_raw": 18.54,
+          "daily_close_confirms": true,
+          "d1": {
+            "exit_date": "2026-09-24",
+            "price": 18.2,
+            "net": -0.020449631203260044,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.014471168198160926,
+            "index_benchmark": -0.019707432331238173,
+            "benchmark_members": 33,
+            "excess_pool": -0.005978463005099117,
+            "excess_index": -0.0007421988720218708
+          },
+          "d2": {
+            "exit_date": "2026-09-28",
+            "price": 17.93,
+            "net": -0.03498142238870616,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.044487716042058915,
+            "index_benchmark": -0.04143262748328391,
+            "benchmark_members": 33,
+            "excess_pool": 0.009506293653352753,
+            "excess_index": 0.00645120509457775
+          },
+          "d3": {
+            "exit_date": "2026-09-29",
+            "price": 17.2,
+            "net": -0.07427108003824578,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.031984770307194405,
+            "index_benchmark": -0.04044993670846586,
+            "benchmark_members": 33,
+            "excess_pool": -0.04228630973105138,
+            "excess_index": -0.033821143329779924
+          },
+          "next_open_d2": -0.024452032562068737
+        },
+        {
+          "code": "001400",
+          "name": "江顺科技",
+          "date": "2026-09-24",
+          "anchor": "2026-09-14",
+          "age": 8,
+          "body": 0.032826982492276,
+          "volume_multiple": 3.3633248569612206,
+          "entry_raw": 80.27,
+          "entry": 80.27,
+          "signal_price_raw": 80.23,
+          "daily_close_confirms": true,
+          "d1": {
+            "exit_date": "2026-09-28",
+            "price": 82.86,
+            "net": 0.029490799690444547,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.03246913736490106,
+            "index_benchmark": -0.025423200188434136,
+            "benchmark_members": 34,
+            "excess_pool": 0.06195993705534561,
+            "excess_index": 0.05491399987887868
+          },
+          "d2": {
+            "exit_date": "2026-09-29",
+            "price": 85.33,
+            "net": 0.06017921720475061,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.019570183543207643,
+            "index_benchmark": -0.024424097091473862,
+            "benchmark_members": 34,
+            "excess_pool": 0.07974940074795825,
+            "excess_index": 0.08460331429622447
+          },
+          "d3": {
+            "exit_date": "2026-09-30",
+            "price": 84.8,
+            "net": 0.05359425312273336,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.028958232821605683,
+            "index_benchmark": -0.021637834297478897,
+            "benchmark_members": 34,
+            "excess_pool": 0.08255248594433905,
+            "excess_index": 0.07523208742021226
+          },
+          "next_open_d2": 0.0506245156175964
+        },
+        {
+          "code": "002031",
+          "name": "巨轮智能",
+          "date": "2026-09-28",
+          "anchor": "2026-09-16",
+          "age": 7,
+          "body": 0.04716981132075482,
+          "volume_multiple": 4.774406792088027,
+          "entry_raw": 5.56,
+          "entry": 5.56,
+          "signal_price_raw": 5.55,
+          "daily_close_confirms": true,
+          "d1": {
+            "exit_date": "2026-09-29",
+            "price": 5.69,
+            "net": 0.020629880023544045,
+            "delayed_sessions": 0,
+            "pool_benchmark": 0.011220824643303939,
+            "index_benchmark": -0.0013302439937935562,
+            "benchmark_members": 34,
+            "excess_pool": 0.009409055380240106,
+            "excess_index": 0.0219601240173376
+          },
+          "d2": {
+            "exit_date": "2026-09-30",
+            "price": 5.44,
+            "net": -0.024213260575030038,
+            "delayed_sessions": 0,
+            "pool_benchmark": 0.0011638644070431914,
+            "index_benchmark": 0.0015219752711066459,
+            "benchmark_members": 34,
+            "excess_pool": -0.02537712498207323,
+            "excess_index": -0.025735235846136684
+          },
+          "d3": {
+            "exit_date": "2026-10-08",
+            "price": 5.32,
+            "net": -0.045737968062345535,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.009602555490336461,
+            "index_benchmark": -0.009358287420301759,
+            "benchmark_members": 34,
+            "excess_pool": -0.03613541257200907,
+            "excess_index": -0.03637968064204378
+          },
+          "next_open_d2": -0.004518482348104036
+        },
+        {
+          "code": "002149",
+          "name": "西部材料",
+          "date": "2026-10-08",
+          "anchor": "2026-09-30",
+          "age": 1,
+          "body": 0.07004138809296401,
+          "volume_multiple": 6.795655955376713,
+          "entry_raw": 33.61,
+          "entry": 33.55649793059535,
+          "signal_price_raw": 33.61,
+          "daily_close_confirms": true,
+          "d1": {
+            "exit_date": "2026-10-09",
+            "price": 32.65,
+            "net": -0.02963000462580123,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.012219534635739986,
+            "index_benchmark": -0.00025382466395329484,
+            "benchmark_members": 34,
+            "excess_pool": -0.017410469990061246,
+            "excess_index": -0.029376179961847937
+          },
+          "d2": {
+            "exit_date": "2026-10-12",
+            "price": 30.85,
+            "net": -0.08312666593280138,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.03760279031739176,
+            "index_benchmark": -0.007031882583250715,
+            "benchmark_members": 34,
+            "excess_pool": -0.04552387561540962,
+            "excess_index": -0.07609478334955067
+          },
+          "d3": {
+            "exit_date": "2026-10-13",
+            "price": 30.95,
+            "net": -0.08015462919352367,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.02181820348794405,
+            "index_benchmark": -0.009880195272261583,
+            "benchmark_members": 34,
+            "excess_pool": -0.05833642570557962,
+            "excess_index": -0.07027443392126209
+          },
+          "next_open_d2": -0.09906125513194708
+        },
+        {
+          "code": "600285",
+          "name": "羚锐制药",
+          "date": "2026-10-14",
+          "anchor": "2026-09-29",
+          "age": 6,
+          "body": 0.040354330708661346,
+          "volume_multiple": 7.513451474128745,
+          "entry_raw": 21.14,
+          "entry": 21.14,
+          "signal_price_raw": 21.14,
+          "daily_close_confirms": true,
+          "d1": {
+            "exit_date": "2026-10-15",
+            "price": 21.23,
+            "net": 0.0015573329208997677,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.020782429731579163,
+            "index_benchmark": -0.015263415263133573,
+            "benchmark_members": 34,
+            "excess_pool": 0.02233976265247893,
+            "excess_index": 0.01682074818403334
+          },
+          "d2": {
+            "exit_date": "2026-10-16",
+            "price": 21.06,
+            "net": -0.006462673984260703,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.024927085418153538,
+            "index_benchmark": -0.014176094711865206,
+            "benchmark_members": 34,
+            "excess_pool": 0.018464411433892835,
+            "excess_index": 0.007713420727604503
+          },
+          "d3": {
+            "exit_date": "2026-10-19",
+            "price": 21.29,
+            "net": 0.004387923593309084,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.01924187362810299,
+            "index_benchmark": -0.01324950850295814,
+            "benchmark_members": 34,
+            "excess_pool": 0.023629797221412074,
+            "excess_index": 0.017637432096267225
+          },
+          "next_open_d2": 0.0006374021902206817
+        },
+        {
+          "code": "002747",
+          "name": "埃斯顿",
+          "date": "2026-10-20",
+          "anchor": "2026-10-14",
+          "age": 4,
+          "body": 0.034768866060845616,
+          "volume_multiple": 3.8486927212439235,
+          "entry_raw": 26.19,
+          "entry": 26.19,
+          "signal_price_raw": 26.19,
+          "daily_close_confirms": true,
+          "d1": {
+            "exit_date": "2026-10-21",
+            "price": 26.08,
+            "net": -0.00687733732445972,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.003846910472035157,
+            "index_benchmark": -0.012708341412061785,
+            "benchmark_members": 34,
+            "excess_pool": -0.0030304268524245634,
+            "excess_index": 0.005831004087602065
+          },
+          "d2": {
+            "exit_date": "2026-10-22",
+            "price": 26.53,
+            "net": 0.010258598189497148,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.02984097445033508,
+            "index_benchmark": -0.03086742197496184,
+            "benchmark_members": 34,
+            "excess_pool": 0.04009957263983223,
+            "excess_index": 0.04112602016445899
+          },
+          "d3": {
+            "exit_date": "2026-10-23",
+            "price": 29.18,
+            "net": 0.11117021843835384,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.014622401024629606,
+            "index_benchmark": -0.014293029124809897,
+            "benchmark_members": 34,
+            "excess_pool": 0.12579261946298345,
+            "excess_index": 0.12546324756316374
+          },
+          "next_open_d2": 0.016078060160634955
+        },
+        {
+          "code": "002815",
+          "name": "崇达技术",
+          "date": "2026-10-23",
+          "anchor": "2026-10-15",
+          "age": 6,
+          "body": 0.04227733934611044,
+          "volume_multiple": 7.49898554394698,
+          "entry_raw": 18.48,
+          "entry": 18.48,
+          "signal_price_raw": 18.49,
+          "daily_close_confirms": true,
+          "d1": {
+            "exit_date": "2026-10-26",
+            "price": 17.37,
+            "net": -0.06259200038601731,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.025430092773355083,
+            "index_benchmark": -0.0014570247005195602,
+            "benchmark_members": 34,
+            "excess_pool": -0.03716190761266223,
+            "excess_index": -0.06113497568549775
+          },
+          "d2": {
+            "exit_date": "2026-10-27",
+            "price": 16.49,
+            "net": -0.11008302166755501,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.04050103759617157,
+            "index_benchmark": -0.014594787519066288,
+            "benchmark_members": 34,
+            "excess_pool": -0.06958198407138344,
+            "excess_index": -0.09548823414848873
+          },
+          "d3": {
+            "exit_date": "2026-10-28",
+            "price": 17.29,
+            "net": -0.06690936595706642,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.017882039407971024,
+            "index_benchmark": -0.006243462830558766,
+            "benchmark_members": 34,
+            "excess_pool": -0.049027326549095404,
+            "excess_index": -0.06066590312650766
+          },
+          "next_open_d2": -0.09390271297060138
+        },
+        {
+          "code": "600688",
+          "name": "上海石化",
+          "date": "2026-10-30",
+          "anchor": "2026-10-21",
+          "age": 7,
+          "body": 0.05944055944055937,
+          "volume_multiple": 8.689351176756036,
+          "entry_raw": 3.02,
+          "entry": 3.02,
+          "signal_price_raw": 3.03,
+          "daily_close_confirms": true,
+          "d1": {
+            "exit_date": "2026-11-02",
+            "price": 3.02,
+            "net": -0.0026885530877147623,
+            "delayed_sessions": 0,
+            "pool_benchmark": 0.010166018138809981,
+            "index_benchmark": 0.004208801310219501,
+            "benchmark_members": 34,
+            "excess_pool": -0.012854571226524744,
+            "excess_index": -0.006897354397934263
+          },
+          "d2": null,
+          "d3": null,
+          "next_open_d2": null
+        },
+        {
+          "code": "002921",
+          "name": "联诚精密",
+          "date": "2026-11-02",
+          "anchor": "2026-10-22",
+          "age": 7,
+          "body": 0.037575757575757596,
+          "volume_multiple": 3.1941173816935082,
+          "entry_raw": 17.1,
+          "entry": 17.1,
+          "signal_price_raw": 17.12,
+          "daily_close_confirms": true,
+          "d1": null,
+          "d2": null,
+          "d3": null,
+          "next_open_d2": null
+        }
+      ],
+      "summaries": {
+        "1": {
+          "net": {
+            "n": 9,
+            "mean": -0.0017494916773274946,
+            "median": -0.0026885530877147623,
+            "win": 0.4444444444444444,
+            "worst": -0.06259200038601731
+          },
+          "excess_pool": {
+            "n": 9,
+            "mean": 0.008230053815535786,
+            "median": -0.0030304268524245634,
+            "win": 0.4444444444444444,
+            "worst": -0.03716190761266223
+          },
+          "excess_index": {
+            "n": 9,
+            "mean": 0.006387587998366005,
+            "median": 0.005831004087602065,
+            "win": 0.5555555555555556,
+            "worst": -0.06113497568549775
+          },
+          "distinct_signal_dates": 9,
+          "incomplete": [
+            {
+              "code": "002921",
+              "date": "2026-11-02"
+            }
+          ],
+          "overlap_skips": [],
+          "paired_tail": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_next_open": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_advantage": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          }
+        },
+        "2": {
+          "net": {
+            "n": 8,
+            "mean": -0.015241864513082695,
+            "median": -0.01533796727964537,
+            "win": 0.375,
+            "worst": -0.11008302166755501
+          },
+          "excess_pool": {
+            "n": 8,
+            "mean": 0.008951561225053565,
+            "median": 0.013985352543622794,
+            "win": 0.625,
+            "worst": -0.06958198407138344
+          },
+          "excess_index": {
+            "n": 8,
+            "mean": 0.0020463240564503604,
+            "median": 0.0070823129110911265,
+            "win": 0.625,
+            "worst": -0.09548823414848873
+          },
+          "distinct_signal_dates": 8,
+          "incomplete": [
+            {
+              "code": "600688",
+              "date": "2026-10-30"
+            },
+            {
+              "code": "002921",
+              "date": "2026-11-02"
+            }
+          ],
+          "overlap_skips": [],
+          "paired_tail": {
+            "n": 8,
+            "mean": -0.015241864513082695,
+            "median": -0.01533796727964537,
+            "win": 0.375,
+            "worst": -0.11008302166755501
+          },
+          "paired_next_open": {
+            "n": 8,
+            "mean": -0.01394890701986376,
+            "median": -0.0019405400789416771,
+            "win": 0.5,
+            "worst": -0.09906125513194708
+          },
+          "paired_advantage": {
+            "n": 8,
+            "mean": -0.0012929574932189353,
+            "median": -0.006459769072809596,
+            "win": 0.375,
+            "worst": -0.019694778226926002
+          }
+        },
+        "3": {
+          "net": {
+            "n": 8,
+            "mean": 0.009436579986488003,
+            "median": -0.020675022234518226,
+            "win": 0.5,
+            "worst": -0.08015462919352367
+          },
+          "excess_pool": {
+            "n": 8,
+            "mean": 0.028215182928792958,
+            "median": -0.0062528076752984985,
+            "win": 0.5,
+            "worst": -0.05833642570557962
+          },
+          "excess_index": {
+            "n": 8,
+            "mean": 0.026884650138854896,
+            "median": -0.00809185561675635,
+            "win": 0.5,
+            "worst": -0.07027443392126209
+          },
+          "distinct_signal_dates": 8,
+          "incomplete": [
+            {
+              "code": "600688",
+              "date": "2026-10-30"
+            },
+            {
+              "code": "002921",
+              "date": "2026-11-02"
+            }
+          ],
+          "overlap_skips": [],
+          "paired_tail": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_next_open": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          },
+          "paired_advantage": {
+            "n": 0,
+            "mean": null,
+            "median": null,
+            "win": null,
+            "worst": null
+          }
+        }
+      },
+      "trades": {
+        "1": [
+          {
+            "code": "002164",
+            "name": "宁波东力",
+            "date": "2026-09-21",
+            "anchor": "2026-09-15",
+            "age": 4,
+            "body": 0.057197330791229684,
+            "volume_multiple": 5.625813247354912,
+            "entry_raw": 11.1,
+            "entry": 11.1,
+            "signal_price_raw": 11.09,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-22",
+              "price": 11.74,
+              "net": 0.05481408889641726,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.001983479042112078,
+              "index_benchmark": -0.0012990358383269118,
+              "benchmark_members": 28,
+              "excess_pool": 0.05679756793852934,
+              "excess_index": 0.05611312473474417
+            },
+            "d2": {
+              "exit_date": "2026-09-23",
+              "price": 11.87,
+              "net": 0.06649431304944398,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.0022185170551852285,
+              "index_benchmark": -0.007300572463469268,
+              "benchmark_members": 28,
+              "excess_pool": 0.06427579599425874,
+              "excess_index": 0.07379488551291324
+            },
+            "d3": {
+              "exit_date": "2026-09-24",
+              "price": 13.06,
+              "net": 0.17341328798868916,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.006118747370655391,
+              "index_benchmark": -0.02447230706210024,
+              "benchmark_members": 28,
+              "excess_pool": 0.17953203535934456,
+              "excess_index": 0.1978855950507894
+            },
+            "next_open_d2": 0.04300324888535911,
+            "exit_date": "2026-09-22",
+            "price": 11.74,
+            "net": 0.05481408889641726,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.001983479042112078,
+            "index_benchmark": -0.0012990358383269118,
+            "benchmark_members": 28,
+            "excess_pool": 0.05679756793852934,
+            "excess_index": 0.05611312473474417
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "date": "2026-09-23",
+            "anchor": "2026-09-10",
+            "age": 9,
+            "body": 0.03633314700950252,
+            "volume_multiple": 3.8916932128110346,
+            "entry_raw": 18.53,
+            "entry": 18.53,
+            "signal_price_raw": 18.54,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-24",
+              "price": 18.2,
+              "net": -0.020449631203260044,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.014471168198160926,
+              "index_benchmark": -0.019707432331238173,
+              "benchmark_members": 33,
+              "excess_pool": -0.005978463005099117,
+              "excess_index": -0.0007421988720218708
+            },
+            "d2": {
+              "exit_date": "2026-09-28",
+              "price": 17.93,
+              "net": -0.03498142238870616,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.044487716042058915,
+              "index_benchmark": -0.04143262748328391,
+              "benchmark_members": 33,
+              "excess_pool": 0.009506293653352753,
+              "excess_index": 0.00645120509457775
+            },
+            "d3": {
+              "exit_date": "2026-09-29",
+              "price": 17.2,
+              "net": -0.07427108003824578,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.031984770307194405,
+              "index_benchmark": -0.04044993670846586,
+              "benchmark_members": 33,
+              "excess_pool": -0.04228630973105138,
+              "excess_index": -0.033821143329779924
+            },
+            "next_open_d2": -0.024452032562068737,
+            "exit_date": "2026-09-24",
+            "price": 18.2,
+            "net": -0.020449631203260044,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.014471168198160926,
+            "index_benchmark": -0.019707432331238173,
+            "benchmark_members": 33,
+            "excess_pool": -0.005978463005099117,
+            "excess_index": -0.0007421988720218708
+          },
+          {
+            "code": "001400",
+            "name": "江顺科技",
+            "date": "2026-09-24",
+            "anchor": "2026-09-14",
+            "age": 8,
+            "body": 0.032826982492276,
+            "volume_multiple": 3.3633248569612206,
+            "entry_raw": 80.27,
+            "entry": 80.27,
+            "signal_price_raw": 80.23,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-28",
+              "price": 82.86,
+              "net": 0.029490799690444547,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.03246913736490106,
+              "index_benchmark": -0.025423200188434136,
+              "benchmark_members": 34,
+              "excess_pool": 0.06195993705534561,
+              "excess_index": 0.05491399987887868
+            },
+            "d2": {
+              "exit_date": "2026-09-29",
+              "price": 85.33,
+              "net": 0.06017921720475061,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.019570183543207643,
+              "index_benchmark": -0.024424097091473862,
+              "benchmark_members": 34,
+              "excess_pool": 0.07974940074795825,
+              "excess_index": 0.08460331429622447
+            },
+            "d3": {
+              "exit_date": "2026-09-30",
+              "price": 84.8,
+              "net": 0.05359425312273336,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.028958232821605683,
+              "index_benchmark": -0.021637834297478897,
+              "benchmark_members": 34,
+              "excess_pool": 0.08255248594433905,
+              "excess_index": 0.07523208742021226
+            },
+            "next_open_d2": 0.0506245156175964,
+            "exit_date": "2026-09-28",
+            "price": 82.86,
+            "net": 0.029490799690444547,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.03246913736490106,
+            "index_benchmark": -0.025423200188434136,
+            "benchmark_members": 34,
+            "excess_pool": 0.06195993705534561,
+            "excess_index": 0.05491399987887868
+          },
+          {
+            "code": "002031",
+            "name": "巨轮智能",
+            "date": "2026-09-28",
+            "anchor": "2026-09-16",
+            "age": 7,
+            "body": 0.04716981132075482,
+            "volume_multiple": 4.774406792088027,
+            "entry_raw": 5.56,
+            "entry": 5.56,
+            "signal_price_raw": 5.55,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-29",
+              "price": 5.69,
+              "net": 0.020629880023544045,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.011220824643303939,
+              "index_benchmark": -0.0013302439937935562,
+              "benchmark_members": 34,
+              "excess_pool": 0.009409055380240106,
+              "excess_index": 0.0219601240173376
+            },
+            "d2": {
+              "exit_date": "2026-09-30",
+              "price": 5.44,
+              "net": -0.024213260575030038,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.0011638644070431914,
+              "index_benchmark": 0.0015219752711066459,
+              "benchmark_members": 34,
+              "excess_pool": -0.02537712498207323,
+              "excess_index": -0.025735235846136684
+            },
+            "d3": {
+              "exit_date": "2026-10-08",
+              "price": 5.32,
+              "net": -0.045737968062345535,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.009602555490336461,
+              "index_benchmark": -0.009358287420301759,
+              "benchmark_members": 34,
+              "excess_pool": -0.03613541257200907,
+              "excess_index": -0.03637968064204378
+            },
+            "next_open_d2": -0.004518482348104036,
+            "exit_date": "2026-09-29",
+            "price": 5.69,
+            "net": 0.020629880023544045,
+            "delayed_sessions": 0,
+            "pool_benchmark": 0.011220824643303939,
+            "index_benchmark": -0.0013302439937935562,
+            "benchmark_members": 34,
+            "excess_pool": 0.009409055380240106,
+            "excess_index": 0.0219601240173376
+          },
+          {
+            "code": "002149",
+            "name": "西部材料",
+            "date": "2026-10-08",
+            "anchor": "2026-09-30",
+            "age": 1,
+            "body": 0.07004138809296401,
+            "volume_multiple": 6.795655955376713,
+            "entry_raw": 33.61,
+            "entry": 33.55649793059535,
+            "signal_price_raw": 33.61,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-09",
+              "price": 32.65,
+              "net": -0.02963000462580123,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.012219534635739986,
+              "index_benchmark": -0.00025382466395329484,
+              "benchmark_members": 34,
+              "excess_pool": -0.017410469990061246,
+              "excess_index": -0.029376179961847937
+            },
+            "d2": {
+              "exit_date": "2026-10-12",
+              "price": 30.85,
+              "net": -0.08312666593280138,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.03760279031739176,
+              "index_benchmark": -0.007031882583250715,
+              "benchmark_members": 34,
+              "excess_pool": -0.04552387561540962,
+              "excess_index": -0.07609478334955067
+            },
+            "d3": {
+              "exit_date": "2026-10-13",
+              "price": 30.95,
+              "net": -0.08015462919352367,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.02181820348794405,
+              "index_benchmark": -0.009880195272261583,
+              "benchmark_members": 34,
+              "excess_pool": -0.05833642570557962,
+              "excess_index": -0.07027443392126209
+            },
+            "next_open_d2": -0.09906125513194708,
+            "exit_date": "2026-10-09",
+            "price": 32.65,
+            "net": -0.02963000462580123,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.012219534635739986,
+            "index_benchmark": -0.00025382466395329484,
+            "benchmark_members": 34,
+            "excess_pool": -0.017410469990061246,
+            "excess_index": -0.029376179961847937
+          },
+          {
+            "code": "600285",
+            "name": "羚锐制药",
+            "date": "2026-10-14",
+            "anchor": "2026-09-29",
+            "age": 6,
+            "body": 0.040354330708661346,
+            "volume_multiple": 7.513451474128745,
+            "entry_raw": 21.14,
+            "entry": 21.14,
+            "signal_price_raw": 21.14,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-15",
+              "price": 21.23,
+              "net": 0.0015573329208997677,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.020782429731579163,
+              "index_benchmark": -0.015263415263133573,
+              "benchmark_members": 34,
+              "excess_pool": 0.02233976265247893,
+              "excess_index": 0.01682074818403334
+            },
+            "d2": {
+              "exit_date": "2026-10-16",
+              "price": 21.06,
+              "net": -0.006462673984260703,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.024927085418153538,
+              "index_benchmark": -0.014176094711865206,
+              "benchmark_members": 34,
+              "excess_pool": 0.018464411433892835,
+              "excess_index": 0.007713420727604503
+            },
+            "d3": {
+              "exit_date": "2026-10-19",
+              "price": 21.29,
+              "net": 0.004387923593309084,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.01924187362810299,
+              "index_benchmark": -0.01324950850295814,
+              "benchmark_members": 34,
+              "excess_pool": 0.023629797221412074,
+              "excess_index": 0.017637432096267225
+            },
+            "next_open_d2": 0.0006374021902206817,
+            "exit_date": "2026-10-15",
+            "price": 21.23,
+            "net": 0.0015573329208997677,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.020782429731579163,
+            "index_benchmark": -0.015263415263133573,
+            "benchmark_members": 34,
+            "excess_pool": 0.02233976265247893,
+            "excess_index": 0.01682074818403334
+          },
+          {
+            "code": "002747",
+            "name": "埃斯顿",
+            "date": "2026-10-20",
+            "anchor": "2026-10-14",
+            "age": 4,
+            "body": 0.034768866060845616,
+            "volume_multiple": 3.8486927212439235,
+            "entry_raw": 26.19,
+            "entry": 26.19,
+            "signal_price_raw": 26.19,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-21",
+              "price": 26.08,
+              "net": -0.00687733732445972,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.003846910472035157,
+              "index_benchmark": -0.012708341412061785,
+              "benchmark_members": 34,
+              "excess_pool": -0.0030304268524245634,
+              "excess_index": 0.005831004087602065
+            },
+            "d2": {
+              "exit_date": "2026-10-22",
+              "price": 26.53,
+              "net": 0.010258598189497148,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.02984097445033508,
+              "index_benchmark": -0.03086742197496184,
+              "benchmark_members": 34,
+              "excess_pool": 0.04009957263983223,
+              "excess_index": 0.04112602016445899
+            },
+            "d3": {
+              "exit_date": "2026-10-23",
+              "price": 29.18,
+              "net": 0.11117021843835384,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.014622401024629606,
+              "index_benchmark": -0.014293029124809897,
+              "benchmark_members": 34,
+              "excess_pool": 0.12579261946298345,
+              "excess_index": 0.12546324756316374
+            },
+            "next_open_d2": 0.016078060160634955,
+            "exit_date": "2026-10-21",
+            "price": 26.08,
+            "net": -0.00687733732445972,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.003846910472035157,
+            "index_benchmark": -0.012708341412061785,
+            "benchmark_members": 34,
+            "excess_pool": -0.0030304268524245634,
+            "excess_index": 0.005831004087602065
+          },
+          {
+            "code": "002815",
+            "name": "崇达技术",
+            "date": "2026-10-23",
+            "anchor": "2026-10-15",
+            "age": 6,
+            "body": 0.04227733934611044,
+            "volume_multiple": 7.49898554394698,
+            "entry_raw": 18.48,
+            "entry": 18.48,
+            "signal_price_raw": 18.49,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-26",
+              "price": 17.37,
+              "net": -0.06259200038601731,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.025430092773355083,
+              "index_benchmark": -0.0014570247005195602,
+              "benchmark_members": 34,
+              "excess_pool": -0.03716190761266223,
+              "excess_index": -0.06113497568549775
+            },
+            "d2": {
+              "exit_date": "2026-10-27",
+              "price": 16.49,
+              "net": -0.11008302166755501,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.04050103759617157,
+              "index_benchmark": -0.014594787519066288,
+              "benchmark_members": 34,
+              "excess_pool": -0.06958198407138344,
+              "excess_index": -0.09548823414848873
+            },
+            "d3": {
+              "exit_date": "2026-10-28",
+              "price": 17.29,
+              "net": -0.06690936595706642,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.017882039407971024,
+              "index_benchmark": -0.006243462830558766,
+              "benchmark_members": 34,
+              "excess_pool": -0.049027326549095404,
+              "excess_index": -0.06066590312650766
+            },
+            "next_open_d2": -0.09390271297060138,
+            "exit_date": "2026-10-26",
+            "price": 17.37,
+            "net": -0.06259200038601731,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.025430092773355083,
+            "index_benchmark": -0.0014570247005195602,
+            "benchmark_members": 34,
+            "excess_pool": -0.03716190761266223,
+            "excess_index": -0.06113497568549775
+          },
+          {
+            "code": "600688",
+            "name": "上海石化",
+            "date": "2026-10-30",
+            "anchor": "2026-10-21",
+            "age": 7,
+            "body": 0.05944055944055937,
+            "volume_multiple": 8.689351176756036,
+            "entry_raw": 3.02,
+            "entry": 3.02,
+            "signal_price_raw": 3.03,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-11-02",
+              "price": 3.02,
+              "net": -0.0026885530877147623,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.010166018138809981,
+              "index_benchmark": 0.004208801310219501,
+              "benchmark_members": 34,
+              "excess_pool": -0.012854571226524744,
+              "excess_index": -0.006897354397934263
+            },
+            "d2": null,
+            "d3": null,
+            "next_open_d2": null,
+            "exit_date": "2026-11-02",
+            "price": 3.02,
+            "net": -0.0026885530877147623,
+            "delayed_sessions": 0,
+            "pool_benchmark": 0.010166018138809981,
+            "index_benchmark": 0.004208801310219501,
+            "benchmark_members": 34,
+            "excess_pool": -0.012854571226524744,
+            "excess_index": -0.006897354397934263
+          }
+        ],
+        "2": [
+          {
+            "code": "002164",
+            "name": "宁波东力",
+            "date": "2026-09-21",
+            "anchor": "2026-09-15",
+            "age": 4,
+            "body": 0.057197330791229684,
+            "volume_multiple": 5.625813247354912,
+            "entry_raw": 11.1,
+            "entry": 11.1,
+            "signal_price_raw": 11.09,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-22",
+              "price": 11.74,
+              "net": 0.05481408889641726,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.001983479042112078,
+              "index_benchmark": -0.0012990358383269118,
+              "benchmark_members": 28,
+              "excess_pool": 0.05679756793852934,
+              "excess_index": 0.05611312473474417
+            },
+            "d2": {
+              "exit_date": "2026-09-23",
+              "price": 11.87,
+              "net": 0.06649431304944398,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.0022185170551852285,
+              "index_benchmark": -0.007300572463469268,
+              "benchmark_members": 28,
+              "excess_pool": 0.06427579599425874,
+              "excess_index": 0.07379488551291324
+            },
+            "d3": {
+              "exit_date": "2026-09-24",
+              "price": 13.06,
+              "net": 0.17341328798868916,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.006118747370655391,
+              "index_benchmark": -0.02447230706210024,
+              "benchmark_members": 28,
+              "excess_pool": 0.17953203535934456,
+              "excess_index": 0.1978855950507894
+            },
+            "next_open_d2": 0.04300324888535911,
+            "exit_date": "2026-09-23",
+            "price": 11.87,
+            "net": 0.06649431304944398,
+            "delayed_sessions": 0,
+            "pool_benchmark": 0.0022185170551852285,
+            "index_benchmark": -0.007300572463469268,
+            "benchmark_members": 28,
+            "excess_pool": 0.06427579599425874,
+            "excess_index": 0.07379488551291324
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "date": "2026-09-23",
+            "anchor": "2026-09-10",
+            "age": 9,
+            "body": 0.03633314700950252,
+            "volume_multiple": 3.8916932128110346,
+            "entry_raw": 18.53,
+            "entry": 18.53,
+            "signal_price_raw": 18.54,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-24",
+              "price": 18.2,
+              "net": -0.020449631203260044,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.014471168198160926,
+              "index_benchmark": -0.019707432331238173,
+              "benchmark_members": 33,
+              "excess_pool": -0.005978463005099117,
+              "excess_index": -0.0007421988720218708
+            },
+            "d2": {
+              "exit_date": "2026-09-28",
+              "price": 17.93,
+              "net": -0.03498142238870616,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.044487716042058915,
+              "index_benchmark": -0.04143262748328391,
+              "benchmark_members": 33,
+              "excess_pool": 0.009506293653352753,
+              "excess_index": 0.00645120509457775
+            },
+            "d3": {
+              "exit_date": "2026-09-29",
+              "price": 17.2,
+              "net": -0.07427108003824578,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.031984770307194405,
+              "index_benchmark": -0.04044993670846586,
+              "benchmark_members": 33,
+              "excess_pool": -0.04228630973105138,
+              "excess_index": -0.033821143329779924
+            },
+            "next_open_d2": -0.024452032562068737,
+            "exit_date": "2026-09-28",
+            "price": 17.93,
+            "net": -0.03498142238870616,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.044487716042058915,
+            "index_benchmark": -0.04143262748328391,
+            "benchmark_members": 33,
+            "excess_pool": 0.009506293653352753,
+            "excess_index": 0.00645120509457775
+          },
+          {
+            "code": "001400",
+            "name": "江顺科技",
+            "date": "2026-09-24",
+            "anchor": "2026-09-14",
+            "age": 8,
+            "body": 0.032826982492276,
+            "volume_multiple": 3.3633248569612206,
+            "entry_raw": 80.27,
+            "entry": 80.27,
+            "signal_price_raw": 80.23,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-28",
+              "price": 82.86,
+              "net": 0.029490799690444547,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.03246913736490106,
+              "index_benchmark": -0.025423200188434136,
+              "benchmark_members": 34,
+              "excess_pool": 0.06195993705534561,
+              "excess_index": 0.05491399987887868
+            },
+            "d2": {
+              "exit_date": "2026-09-29",
+              "price": 85.33,
+              "net": 0.06017921720475061,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.019570183543207643,
+              "index_benchmark": -0.024424097091473862,
+              "benchmark_members": 34,
+              "excess_pool": 0.07974940074795825,
+              "excess_index": 0.08460331429622447
+            },
+            "d3": {
+              "exit_date": "2026-09-30",
+              "price": 84.8,
+              "net": 0.05359425312273336,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.028958232821605683,
+              "index_benchmark": -0.021637834297478897,
+              "benchmark_members": 34,
+              "excess_pool": 0.08255248594433905,
+              "excess_index": 0.07523208742021226
+            },
+            "next_open_d2": 0.0506245156175964,
+            "exit_date": "2026-09-29",
+            "price": 85.33,
+            "net": 0.06017921720475061,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.019570183543207643,
+            "index_benchmark": -0.024424097091473862,
+            "benchmark_members": 34,
+            "excess_pool": 0.07974940074795825,
+            "excess_index": 0.08460331429622447
+          },
+          {
+            "code": "002031",
+            "name": "巨轮智能",
+            "date": "2026-09-28",
+            "anchor": "2026-09-16",
+            "age": 7,
+            "body": 0.04716981132075482,
+            "volume_multiple": 4.774406792088027,
+            "entry_raw": 5.56,
+            "entry": 5.56,
+            "signal_price_raw": 5.55,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-29",
+              "price": 5.69,
+              "net": 0.020629880023544045,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.011220824643303939,
+              "index_benchmark": -0.0013302439937935562,
+              "benchmark_members": 34,
+              "excess_pool": 0.009409055380240106,
+              "excess_index": 0.0219601240173376
+            },
+            "d2": {
+              "exit_date": "2026-09-30",
+              "price": 5.44,
+              "net": -0.024213260575030038,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.0011638644070431914,
+              "index_benchmark": 0.0015219752711066459,
+              "benchmark_members": 34,
+              "excess_pool": -0.02537712498207323,
+              "excess_index": -0.025735235846136684
+            },
+            "d3": {
+              "exit_date": "2026-10-08",
+              "price": 5.32,
+              "net": -0.045737968062345535,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.009602555490336461,
+              "index_benchmark": -0.009358287420301759,
+              "benchmark_members": 34,
+              "excess_pool": -0.03613541257200907,
+              "excess_index": -0.03637968064204378
+            },
+            "next_open_d2": -0.004518482348104036,
+            "exit_date": "2026-09-30",
+            "price": 5.44,
+            "net": -0.024213260575030038,
+            "delayed_sessions": 0,
+            "pool_benchmark": 0.0011638644070431914,
+            "index_benchmark": 0.0015219752711066459,
+            "benchmark_members": 34,
+            "excess_pool": -0.02537712498207323,
+            "excess_index": -0.025735235846136684
+          },
+          {
+            "code": "002149",
+            "name": "西部材料",
+            "date": "2026-10-08",
+            "anchor": "2026-09-30",
+            "age": 1,
+            "body": 0.07004138809296401,
+            "volume_multiple": 6.795655955376713,
+            "entry_raw": 33.61,
+            "entry": 33.55649793059535,
+            "signal_price_raw": 33.61,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-09",
+              "price": 32.65,
+              "net": -0.02963000462580123,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.012219534635739986,
+              "index_benchmark": -0.00025382466395329484,
+              "benchmark_members": 34,
+              "excess_pool": -0.017410469990061246,
+              "excess_index": -0.029376179961847937
+            },
+            "d2": {
+              "exit_date": "2026-10-12",
+              "price": 30.85,
+              "net": -0.08312666593280138,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.03760279031739176,
+              "index_benchmark": -0.007031882583250715,
+              "benchmark_members": 34,
+              "excess_pool": -0.04552387561540962,
+              "excess_index": -0.07609478334955067
+            },
+            "d3": {
+              "exit_date": "2026-10-13",
+              "price": 30.95,
+              "net": -0.08015462919352367,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.02181820348794405,
+              "index_benchmark": -0.009880195272261583,
+              "benchmark_members": 34,
+              "excess_pool": -0.05833642570557962,
+              "excess_index": -0.07027443392126209
+            },
+            "next_open_d2": -0.09906125513194708,
+            "exit_date": "2026-10-12",
+            "price": 30.85,
+            "net": -0.08312666593280138,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.03760279031739176,
+            "index_benchmark": -0.007031882583250715,
+            "benchmark_members": 34,
+            "excess_pool": -0.04552387561540962,
+            "excess_index": -0.07609478334955067
+          },
+          {
+            "code": "600285",
+            "name": "羚锐制药",
+            "date": "2026-10-14",
+            "anchor": "2026-09-29",
+            "age": 6,
+            "body": 0.040354330708661346,
+            "volume_multiple": 7.513451474128745,
+            "entry_raw": 21.14,
+            "entry": 21.14,
+            "signal_price_raw": 21.14,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-15",
+              "price": 21.23,
+              "net": 0.0015573329208997677,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.020782429731579163,
+              "index_benchmark": -0.015263415263133573,
+              "benchmark_members": 34,
+              "excess_pool": 0.02233976265247893,
+              "excess_index": 0.01682074818403334
+            },
+            "d2": {
+              "exit_date": "2026-10-16",
+              "price": 21.06,
+              "net": -0.006462673984260703,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.024927085418153538,
+              "index_benchmark": -0.014176094711865206,
+              "benchmark_members": 34,
+              "excess_pool": 0.018464411433892835,
+              "excess_index": 0.007713420727604503
+            },
+            "d3": {
+              "exit_date": "2026-10-19",
+              "price": 21.29,
+              "net": 0.004387923593309084,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.01924187362810299,
+              "index_benchmark": -0.01324950850295814,
+              "benchmark_members": 34,
+              "excess_pool": 0.023629797221412074,
+              "excess_index": 0.017637432096267225
+            },
+            "next_open_d2": 0.0006374021902206817,
+            "exit_date": "2026-10-16",
+            "price": 21.06,
+            "net": -0.006462673984260703,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.024927085418153538,
+            "index_benchmark": -0.014176094711865206,
+            "benchmark_members": 34,
+            "excess_pool": 0.018464411433892835,
+            "excess_index": 0.007713420727604503
+          },
+          {
+            "code": "002747",
+            "name": "埃斯顿",
+            "date": "2026-10-20",
+            "anchor": "2026-10-14",
+            "age": 4,
+            "body": 0.034768866060845616,
+            "volume_multiple": 3.8486927212439235,
+            "entry_raw": 26.19,
+            "entry": 26.19,
+            "signal_price_raw": 26.19,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-21",
+              "price": 26.08,
+              "net": -0.00687733732445972,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.003846910472035157,
+              "index_benchmark": -0.012708341412061785,
+              "benchmark_members": 34,
+              "excess_pool": -0.0030304268524245634,
+              "excess_index": 0.005831004087602065
+            },
+            "d2": {
+              "exit_date": "2026-10-22",
+              "price": 26.53,
+              "net": 0.010258598189497148,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.02984097445033508,
+              "index_benchmark": -0.03086742197496184,
+              "benchmark_members": 34,
+              "excess_pool": 0.04009957263983223,
+              "excess_index": 0.04112602016445899
+            },
+            "d3": {
+              "exit_date": "2026-10-23",
+              "price": 29.18,
+              "net": 0.11117021843835384,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.014622401024629606,
+              "index_benchmark": -0.014293029124809897,
+              "benchmark_members": 34,
+              "excess_pool": 0.12579261946298345,
+              "excess_index": 0.12546324756316374
+            },
+            "next_open_d2": 0.016078060160634955,
+            "exit_date": "2026-10-22",
+            "price": 26.53,
+            "net": 0.010258598189497148,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.02984097445033508,
+            "index_benchmark": -0.03086742197496184,
+            "benchmark_members": 34,
+            "excess_pool": 0.04009957263983223,
+            "excess_index": 0.04112602016445899
+          },
+          {
+            "code": "002815",
+            "name": "崇达技术",
+            "date": "2026-10-23",
+            "anchor": "2026-10-15",
+            "age": 6,
+            "body": 0.04227733934611044,
+            "volume_multiple": 7.49898554394698,
+            "entry_raw": 18.48,
+            "entry": 18.48,
+            "signal_price_raw": 18.49,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-26",
+              "price": 17.37,
+              "net": -0.06259200038601731,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.025430092773355083,
+              "index_benchmark": -0.0014570247005195602,
+              "benchmark_members": 34,
+              "excess_pool": -0.03716190761266223,
+              "excess_index": -0.06113497568549775
+            },
+            "d2": {
+              "exit_date": "2026-10-27",
+              "price": 16.49,
+              "net": -0.11008302166755501,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.04050103759617157,
+              "index_benchmark": -0.014594787519066288,
+              "benchmark_members": 34,
+              "excess_pool": -0.06958198407138344,
+              "excess_index": -0.09548823414848873
+            },
+            "d3": {
+              "exit_date": "2026-10-28",
+              "price": 17.29,
+              "net": -0.06690936595706642,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.017882039407971024,
+              "index_benchmark": -0.006243462830558766,
+              "benchmark_members": 34,
+              "excess_pool": -0.049027326549095404,
+              "excess_index": -0.06066590312650766
+            },
+            "next_open_d2": -0.09390271297060138,
+            "exit_date": "2026-10-27",
+            "price": 16.49,
+            "net": -0.11008302166755501,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.04050103759617157,
+            "index_benchmark": -0.014594787519066288,
+            "benchmark_members": 34,
+            "excess_pool": -0.06958198407138344,
+            "excess_index": -0.09548823414848873
+          }
+        ],
+        "3": [
+          {
+            "code": "002164",
+            "name": "宁波东力",
+            "date": "2026-09-21",
+            "anchor": "2026-09-15",
+            "age": 4,
+            "body": 0.057197330791229684,
+            "volume_multiple": 5.625813247354912,
+            "entry_raw": 11.1,
+            "entry": 11.1,
+            "signal_price_raw": 11.09,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-22",
+              "price": 11.74,
+              "net": 0.05481408889641726,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.001983479042112078,
+              "index_benchmark": -0.0012990358383269118,
+              "benchmark_members": 28,
+              "excess_pool": 0.05679756793852934,
+              "excess_index": 0.05611312473474417
+            },
+            "d2": {
+              "exit_date": "2026-09-23",
+              "price": 11.87,
+              "net": 0.06649431304944398,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.0022185170551852285,
+              "index_benchmark": -0.007300572463469268,
+              "benchmark_members": 28,
+              "excess_pool": 0.06427579599425874,
+              "excess_index": 0.07379488551291324
+            },
+            "d3": {
+              "exit_date": "2026-09-24",
+              "price": 13.06,
+              "net": 0.17341328798868916,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.006118747370655391,
+              "index_benchmark": -0.02447230706210024,
+              "benchmark_members": 28,
+              "excess_pool": 0.17953203535934456,
+              "excess_index": 0.1978855950507894
+            },
+            "next_open_d2": 0.04300324888535911,
+            "exit_date": "2026-09-24",
+            "price": 13.06,
+            "net": 0.17341328798868916,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.006118747370655391,
+            "index_benchmark": -0.02447230706210024,
+            "benchmark_members": 28,
+            "excess_pool": 0.17953203535934456,
+            "excess_index": 0.1978855950507894
+          },
+          {
+            "code": "600552",
+            "name": "凯盛科技",
+            "date": "2026-09-23",
+            "anchor": "2026-09-10",
+            "age": 9,
+            "body": 0.03633314700950252,
+            "volume_multiple": 3.8916932128110346,
+            "entry_raw": 18.53,
+            "entry": 18.53,
+            "signal_price_raw": 18.54,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-24",
+              "price": 18.2,
+              "net": -0.020449631203260044,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.014471168198160926,
+              "index_benchmark": -0.019707432331238173,
+              "benchmark_members": 33,
+              "excess_pool": -0.005978463005099117,
+              "excess_index": -0.0007421988720218708
+            },
+            "d2": {
+              "exit_date": "2026-09-28",
+              "price": 17.93,
+              "net": -0.03498142238870616,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.044487716042058915,
+              "index_benchmark": -0.04143262748328391,
+              "benchmark_members": 33,
+              "excess_pool": 0.009506293653352753,
+              "excess_index": 0.00645120509457775
+            },
+            "d3": {
+              "exit_date": "2026-09-29",
+              "price": 17.2,
+              "net": -0.07427108003824578,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.031984770307194405,
+              "index_benchmark": -0.04044993670846586,
+              "benchmark_members": 33,
+              "excess_pool": -0.04228630973105138,
+              "excess_index": -0.033821143329779924
+            },
+            "next_open_d2": -0.024452032562068737,
+            "exit_date": "2026-09-29",
+            "price": 17.2,
+            "net": -0.07427108003824578,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.031984770307194405,
+            "index_benchmark": -0.04044993670846586,
+            "benchmark_members": 33,
+            "excess_pool": -0.04228630973105138,
+            "excess_index": -0.033821143329779924
+          },
+          {
+            "code": "001400",
+            "name": "江顺科技",
+            "date": "2026-09-24",
+            "anchor": "2026-09-14",
+            "age": 8,
+            "body": 0.032826982492276,
+            "volume_multiple": 3.3633248569612206,
+            "entry_raw": 80.27,
+            "entry": 80.27,
+            "signal_price_raw": 80.23,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-28",
+              "price": 82.86,
+              "net": 0.029490799690444547,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.03246913736490106,
+              "index_benchmark": -0.025423200188434136,
+              "benchmark_members": 34,
+              "excess_pool": 0.06195993705534561,
+              "excess_index": 0.05491399987887868
+            },
+            "d2": {
+              "exit_date": "2026-09-29",
+              "price": 85.33,
+              "net": 0.06017921720475061,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.019570183543207643,
+              "index_benchmark": -0.024424097091473862,
+              "benchmark_members": 34,
+              "excess_pool": 0.07974940074795825,
+              "excess_index": 0.08460331429622447
+            },
+            "d3": {
+              "exit_date": "2026-09-30",
+              "price": 84.8,
+              "net": 0.05359425312273336,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.028958232821605683,
+              "index_benchmark": -0.021637834297478897,
+              "benchmark_members": 34,
+              "excess_pool": 0.08255248594433905,
+              "excess_index": 0.07523208742021226
+            },
+            "next_open_d2": 0.0506245156175964,
+            "exit_date": "2026-09-30",
+            "price": 84.8,
+            "net": 0.05359425312273336,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.028958232821605683,
+            "index_benchmark": -0.021637834297478897,
+            "benchmark_members": 34,
+            "excess_pool": 0.08255248594433905,
+            "excess_index": 0.07523208742021226
+          },
+          {
+            "code": "002031",
+            "name": "巨轮智能",
+            "date": "2026-09-28",
+            "anchor": "2026-09-16",
+            "age": 7,
+            "body": 0.04716981132075482,
+            "volume_multiple": 4.774406792088027,
+            "entry_raw": 5.56,
+            "entry": 5.56,
+            "signal_price_raw": 5.55,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-09-29",
+              "price": 5.69,
+              "net": 0.020629880023544045,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.011220824643303939,
+              "index_benchmark": -0.0013302439937935562,
+              "benchmark_members": 34,
+              "excess_pool": 0.009409055380240106,
+              "excess_index": 0.0219601240173376
+            },
+            "d2": {
+              "exit_date": "2026-09-30",
+              "price": 5.44,
+              "net": -0.024213260575030038,
+              "delayed_sessions": 0,
+              "pool_benchmark": 0.0011638644070431914,
+              "index_benchmark": 0.0015219752711066459,
+              "benchmark_members": 34,
+              "excess_pool": -0.02537712498207323,
+              "excess_index": -0.025735235846136684
+            },
+            "d3": {
+              "exit_date": "2026-10-08",
+              "price": 5.32,
+              "net": -0.045737968062345535,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.009602555490336461,
+              "index_benchmark": -0.009358287420301759,
+              "benchmark_members": 34,
+              "excess_pool": -0.03613541257200907,
+              "excess_index": -0.03637968064204378
+            },
+            "next_open_d2": -0.004518482348104036,
+            "exit_date": "2026-10-08",
+            "price": 5.32,
+            "net": -0.045737968062345535,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.009602555490336461,
+            "index_benchmark": -0.009358287420301759,
+            "benchmark_members": 34,
+            "excess_pool": -0.03613541257200907,
+            "excess_index": -0.03637968064204378
+          },
+          {
+            "code": "002149",
+            "name": "西部材料",
+            "date": "2026-10-08",
+            "anchor": "2026-09-30",
+            "age": 1,
+            "body": 0.07004138809296401,
+            "volume_multiple": 6.795655955376713,
+            "entry_raw": 33.61,
+            "entry": 33.55649793059535,
+            "signal_price_raw": 33.61,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-09",
+              "price": 32.65,
+              "net": -0.02963000462580123,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.012219534635739986,
+              "index_benchmark": -0.00025382466395329484,
+              "benchmark_members": 34,
+              "excess_pool": -0.017410469990061246,
+              "excess_index": -0.029376179961847937
+            },
+            "d2": {
+              "exit_date": "2026-10-12",
+              "price": 30.85,
+              "net": -0.08312666593280138,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.03760279031739176,
+              "index_benchmark": -0.007031882583250715,
+              "benchmark_members": 34,
+              "excess_pool": -0.04552387561540962,
+              "excess_index": -0.07609478334955067
+            },
+            "d3": {
+              "exit_date": "2026-10-13",
+              "price": 30.95,
+              "net": -0.08015462919352367,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.02181820348794405,
+              "index_benchmark": -0.009880195272261583,
+              "benchmark_members": 34,
+              "excess_pool": -0.05833642570557962,
+              "excess_index": -0.07027443392126209
+            },
+            "next_open_d2": -0.09906125513194708,
+            "exit_date": "2026-10-13",
+            "price": 30.95,
+            "net": -0.08015462919352367,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.02181820348794405,
+            "index_benchmark": -0.009880195272261583,
+            "benchmark_members": 34,
+            "excess_pool": -0.05833642570557962,
+            "excess_index": -0.07027443392126209
+          },
+          {
+            "code": "600285",
+            "name": "羚锐制药",
+            "date": "2026-10-14",
+            "anchor": "2026-09-29",
+            "age": 6,
+            "body": 0.040354330708661346,
+            "volume_multiple": 7.513451474128745,
+            "entry_raw": 21.14,
+            "entry": 21.14,
+            "signal_price_raw": 21.14,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-15",
+              "price": 21.23,
+              "net": 0.0015573329208997677,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.020782429731579163,
+              "index_benchmark": -0.015263415263133573,
+              "benchmark_members": 34,
+              "excess_pool": 0.02233976265247893,
+              "excess_index": 0.01682074818403334
+            },
+            "d2": {
+              "exit_date": "2026-10-16",
+              "price": 21.06,
+              "net": -0.006462673984260703,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.024927085418153538,
+              "index_benchmark": -0.014176094711865206,
+              "benchmark_members": 34,
+              "excess_pool": 0.018464411433892835,
+              "excess_index": 0.007713420727604503
+            },
+            "d3": {
+              "exit_date": "2026-10-19",
+              "price": 21.29,
+              "net": 0.004387923593309084,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.01924187362810299,
+              "index_benchmark": -0.01324950850295814,
+              "benchmark_members": 34,
+              "excess_pool": 0.023629797221412074,
+              "excess_index": 0.017637432096267225
+            },
+            "next_open_d2": 0.0006374021902206817,
+            "exit_date": "2026-10-19",
+            "price": 21.29,
+            "net": 0.004387923593309084,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.01924187362810299,
+            "index_benchmark": -0.01324950850295814,
+            "benchmark_members": 34,
+            "excess_pool": 0.023629797221412074,
+            "excess_index": 0.017637432096267225
+          },
+          {
+            "code": "002747",
+            "name": "埃斯顿",
+            "date": "2026-10-20",
+            "anchor": "2026-10-14",
+            "age": 4,
+            "body": 0.034768866060845616,
+            "volume_multiple": 3.8486927212439235,
+            "entry_raw": 26.19,
+            "entry": 26.19,
+            "signal_price_raw": 26.19,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-21",
+              "price": 26.08,
+              "net": -0.00687733732445972,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.003846910472035157,
+              "index_benchmark": -0.012708341412061785,
+              "benchmark_members": 34,
+              "excess_pool": -0.0030304268524245634,
+              "excess_index": 0.005831004087602065
+            },
+            "d2": {
+              "exit_date": "2026-10-22",
+              "price": 26.53,
+              "net": 0.010258598189497148,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.02984097445033508,
+              "index_benchmark": -0.03086742197496184,
+              "benchmark_members": 34,
+              "excess_pool": 0.04009957263983223,
+              "excess_index": 0.04112602016445899
+            },
+            "d3": {
+              "exit_date": "2026-10-23",
+              "price": 29.18,
+              "net": 0.11117021843835384,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.014622401024629606,
+              "index_benchmark": -0.014293029124809897,
+              "benchmark_members": 34,
+              "excess_pool": 0.12579261946298345,
+              "excess_index": 0.12546324756316374
+            },
+            "next_open_d2": 0.016078060160634955,
+            "exit_date": "2026-10-23",
+            "price": 29.18,
+            "net": 0.11117021843835384,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.014622401024629606,
+            "index_benchmark": -0.014293029124809897,
+            "benchmark_members": 34,
+            "excess_pool": 0.12579261946298345,
+            "excess_index": 0.12546324756316374
+          },
+          {
+            "code": "002815",
+            "name": "崇达技术",
+            "date": "2026-10-23",
+            "anchor": "2026-10-15",
+            "age": 6,
+            "body": 0.04227733934611044,
+            "volume_multiple": 7.49898554394698,
+            "entry_raw": 18.48,
+            "entry": 18.48,
+            "signal_price_raw": 18.49,
+            "daily_close_confirms": true,
+            "d1": {
+              "exit_date": "2026-10-26",
+              "price": 17.37,
+              "net": -0.06259200038601731,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.025430092773355083,
+              "index_benchmark": -0.0014570247005195602,
+              "benchmark_members": 34,
+              "excess_pool": -0.03716190761266223,
+              "excess_index": -0.06113497568549775
+            },
+            "d2": {
+              "exit_date": "2026-10-27",
+              "price": 16.49,
+              "net": -0.11008302166755501,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.04050103759617157,
+              "index_benchmark": -0.014594787519066288,
+              "benchmark_members": 34,
+              "excess_pool": -0.06958198407138344,
+              "excess_index": -0.09548823414848873
+            },
+            "d3": {
+              "exit_date": "2026-10-28",
+              "price": 17.29,
+              "net": -0.06690936595706642,
+              "delayed_sessions": 0,
+              "pool_benchmark": -0.017882039407971024,
+              "index_benchmark": -0.006243462830558766,
+              "benchmark_members": 34,
+              "excess_pool": -0.049027326549095404,
+              "excess_index": -0.06066590312650766
+            },
+            "next_open_d2": -0.09390271297060138,
+            "exit_date": "2026-10-28",
+            "price": 17.29,
+            "net": -0.06690936595706642,
+            "delayed_sessions": 0,
+            "pool_benchmark": -0.017882039407971024,
+            "index_benchmark": -0.006243462830558766,
+            "benchmark_members": 34,
+            "excess_pool": -0.049027326549095404,
+            "excess_index": -0.06066590312650766
+          }
+        ]
+      }
+    }
+  }
+}

@@ -3,8 +3,14 @@ import type { TradeLedgerEntry, TradeLedgerResponse } from '~/types/trades'
 import { fmtNum } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 
+import exitLabels from '../../../exit_reason_labels.json'
+
+const reasons: Record<string, string> = exitLabels
+
 function displayReason(value?: string): string {
-  return String(value || '').replaceAll('报价驱动因子26(t1_peak_trail)', '跌破保护线（因子26·隔夜峰值回落）')
+  return String(value || '')
+    .replace(/报价驱动因子26\((\w+)\)/g, (original, code) => reasons[code] || original)
+    .replaceAll('跌破保护线（因子26·隔夜峰值回落）', reasons.t1_peak_trail)
 }
 
 const route = useRoute()
@@ -81,6 +87,14 @@ function monthLabel(m: string) {
 
 <template>
   <div class="page-shell py-6">
+    <details class="mb-4 rounded-lg border border-ui-hairline p-3 text-sm">
+      <summary class="cursor-pointer font-semibold">策略一 · 全局止损止盈条件与卖出理由</summary>
+      <ul class="mt-2 list-disc space-y-1 pl-5">
+        <li v-for="(label, code) in reasons" :key="code">{{ label }}</li>
+      </ul>
+      <p class="mt-2">盘中以当日开盘价和当前报价的较高者判断是否超过成本 3%。超过时，中段两条保护线取较高者，峰值回落 2% 规则也须过此门槛；未超过时才检查已标记的隔夜回落。</p>
+      <p>10% 只减仓一次，直接触及 15% 优先全清。买入当天受 T+1 限制，锁仓、封死跌停时也不执行卖出。盘中跳价可能低于保护价成交；竞价条件单在 9:25 后准备，9:30 开盘窗口确认。</p>
+    </details>
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="text-xl font-bold">交割单 · 买卖明细</h1>

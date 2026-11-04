@@ -1,0 +1,22 @@
+{
+  "strategy1": {
+    "factor_id": "factor34",
+    "enabled": false,
+    "status": "research_only_failed_consistent_outperformance",
+    "lookback": 60,
+    "max_age": 5,
+    "volume_multiple": 3.0,
+    "body_min": 0.03,
+    "hold_sessions": 2
+  },
+  "strategy16": {
+    "factor_id": "factor34",
+    "enabled": false,
+    "status": "research_only_failed_consistent_outperformance",
+    "lookback": 60,
+    "max_age": 10,
+    "volume_multiple": 3.0,
+    "body_min": 0.03,
+    "hold_sessions": 2
+  }
+}
