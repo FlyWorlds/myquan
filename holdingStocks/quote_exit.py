@@ -67,12 +67,18 @@ def evaluate_quote_exit(pos: dict, quote: dict, *, session: str, now: datetime,
         # For same-day entries it can precede the purchase; keep observed prices.
         holding_peak = max(cost, float(pos.get("peak_high") or cost),
                            float(quote["high"]) if overnight else 0)
-        result = eval_factor26_quote(price=float(quote["last"]), cost_px=cost,
-            peak_before=holding_peak, shares=available or qty,
-            tp_stage=int(pos.get("tp_stage") or 0), can_sell=executable,
-            overnight_armed=overnight and bool(pos.get("stop_noted")), day_open=float(quote["open"]),
-            session_peak_before=float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == session else 0,
-            vol20_daily=vol20_daily, tick=tick)
+        if not overnight:
+            last = float(quote["last"])
+            session_peak = float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == session else 0
+            result = dict(peak_after=max(holding_peak, last),
+                          session_peak_after=max(session_peak, float(quote["open"]), last))
+        else:
+            result = eval_factor26_quote(price=float(quote["last"]), cost_px=cost,
+                peak_before=holding_peak, shares=available or qty,
+                tp_stage=int(pos.get("tp_stage") or 0), can_sell=executable,
+                overnight_armed=overnight and bool(pos.get("stop_noted")), day_open=float(quote["open"]),
+                session_peak_before=float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == session else 0,
+                vol20_daily=vol20_daily, tick=tick)
         updates = dict(quote_exit_session=session, available=min(qty, available),
                        peak_high=result["peak_after"], quote_session_peak=result["session_peak_after"])
         if result.get("tp_marked") and not available and result.get("noted_px"):

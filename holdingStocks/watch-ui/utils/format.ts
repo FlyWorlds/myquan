@@ -17,6 +17,12 @@ export function fmtSignedPct(v?: number | null, digits = 2): string {
   return `${sign}${v.toFixed(digits)}%`
 }
 
+export function fmtBuyDistance(last?: number | null, buy?: number | null): string {
+  if (!Number.isFinite(last) || !Number.isFinite(buy) || !(last && last > 0 && buy && buy > 0)) return '-'
+  const pct = (last - buy) / buy * 100
+  return pct === 0 ? '0.00%' : fmtSignedPct(pct)
+}
+
 export function fmtSignedMoney(v?: number | null, digits = 2): string {
   if (v == null) return '-'
   const sign = v >= 0 ? '+' : ''

@@ -1709,6 +1709,11 @@ def strategy_signal(
     attack_buy = float(lv["attack_buy"])
     stop_px = float(stop_px if stop_px is not None else lv["stop"])
 
+    if qty > 0 and not t0 and cost_px and is_t1_buy_day(buy_time, session):
+        stop_kind = "hard_from_cost"
+        stop_px = cost_hard_stop_px(cost_px, hard_pct=pb, tick=tick)
+        hit_stop = hit_stop is not False and last_px <= stop_px
+
     hit_open = high_px + 1e-12 >= open_buy
     hit_attack = bool(allow_attack) and attack_buy > 0 and (high_px + 1e-12 >= attack_buy)
     if hit_buy is None:

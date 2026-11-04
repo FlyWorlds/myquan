@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HoldingRow } from '~/types/snapshot'
-import { fmtNum, fmtSignedPct, fmtSignalClock, fmtSignedMoney } from '~/utils/format'
+import { fmtBuyDistance, fmtNum, fmtSignedPct, fmtSignalClock, fmtSignedMoney } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual } from '~/composables/useSignalVisual'
 import { fmtPositionPct, positionPctOf } from '~/utils/position'
@@ -187,7 +187,7 @@ const cardClass = computed(() => {
         </dl>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" :class="dense ? 'mt-1.5' : 'mt-3'">
           <span v-if="dense" class="text-ui-text-2">{{ sellState ? '卖出侧' : '买入预警价' }} <b class="tabular-nums" :class="sellState ? 'text-down' : band === 'outside' ? 'text-ui-text-3' : 'text-up'">{{ fmtNum(sellState ? protection?.price : buyAlertPx, pdg) }}</b></span>
-          <span v-if="!sellState && !Number(row.持仓) && !slotTrace && row['距买点%'] != null && Number(row['距买点%']) < 9000" class="text-ui-text-2">距买点 <b class="tabular-nums">{{ Number(row['距买点%']).toFixed(2) }}%</b></span>
+          <span v-if="!sellState && !Number(row.持仓) && !slotTrace && buyAlertPx != null && Number(row.现价) > 0" class="text-ui-text-2">距买点 <b class="tabular-nums">{{ fmtBuyDistance(row.现价, buyAlertPx) }}</b></span>
           <template v-if="!dense">
             <span v-if="displayFactorSide && displayFactorSide !== '-'" class="text-ui-text-2">因子侧 {{ displayFactorSide }}</span>
             <span v-if="!Number(row.持仓) && !slotTrace && row.因子触发 && row.因子触发 !== '-' && row.因子触发 !== '不可用'" class="text-ui-text-2">{{ row.因子触发 }}</span>

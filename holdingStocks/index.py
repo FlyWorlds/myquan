@@ -8732,12 +8732,16 @@ def _collect_quote_runtime_rows(get_quote=None):
                 "昨收": q.get("prev_close"), "当日涨幅": q.get("day_chg_pct"), "更新": q.get("last_ts"),
                 "报价数据库版本": q.get("_database_quote_revision"),
                 "报价用途": "历史参考" if q.get("_reference_only") else "已确认报价"})
-        if calculation_ready and row["持仓"] > 0 and pos.get("cost") and pos.get("peak_high"):
-            stop_kind, stop = working_stop_price(cost_px=float(pos["cost"]), peak_high=float(pos["peak_high"]),
-                session_peak=float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == day else 0,
-                day_open=float(q.get("open") or 0),
-                overnight_armed=bool(pos.get("stop_noted")) and str(pos.get("buy_time") or "")[:10] < day,
-                vol20_daily=_quote_daily_vol(w["sina"], day), tick=_watch_tick(w))
+        if calculation_ready and row["持仓"] > 0 and pos.get("cost"):
+            if str(pos.get("buy_time") or "")[:10] == day:
+                stop_kind = "hard_from_cost"
+                stop = cost_hard_stop_px(float(pos["cost"]), tick=_watch_tick(w))
+            else:
+                stop_kind, stop = working_stop_price(cost_px=float(pos["cost"]), peak_high=float(pos.get("peak_high") or 0),
+                    session_peak=float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == day else 0,
+                    day_open=float(q.get("open") or 0),
+                    overnight_armed=bool(pos.get("stop_noted")) and str(pos.get("buy_time") or "")[:10] < day,
+                    vol20_daily=_quote_daily_vol(w["sina"], day), tick=_watch_tick(w))
             sell_reason = {
                 "hard_from_cost": "跌破成本硬保护线",
                 "t1_peak_trail": "跌破隔夜峰值回落保护线",

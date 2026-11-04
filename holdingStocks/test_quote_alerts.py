@@ -62,6 +62,14 @@ class QuoteAlertTests(unittest.TestCase):
         self.assertTrue(row['近止损']);self.assertTrue(row['当日预警'])
         self.assertFalse(row['近买点'])
         self.assertEqual(row['持仓状态'],'待卖出')
+    def test_buy_day_retracement_above_cost_does_not_warn(self):
+        row = self.row(持仓=700, 成本=77.68, 持仓最高=80.12,
+                       买入时间='2026-10-16 09:45:00', 卖出侧价=78.90)
+        self.enrich(QuoteAlerts(), row, self.quote(last=78.42, high=80.12))
+        self.assertEqual(row['已触止损'], '否')
+        self.assertFalse(row['近止损'])
+        self.assertAlmostEqual(row['距止损价差'], 78.42 - 75.73, places=2)
+
     def test_old_day_hit_does_not_leak_into_next_session(self):
         monitor=QuoteAlerts();row=self.row();self.enrich(monitor,row,self.quote(last=10.26))
         later=NOW+timedelta(days=3);row=self.row(交易日=str(later.date()));q=self.quote(last=10.);q.update(session=str(later.date()),last_ts=str(later))

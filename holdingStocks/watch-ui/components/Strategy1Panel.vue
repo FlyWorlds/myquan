@@ -2,7 +2,7 @@
 import type { HoldingRow } from '~/types/snapshot'
 import { stabilizeRows } from '~/utils/stableRowOrder'
 import { createStatusDebouncer } from '~/utils/alertBoard'
-import { fmtNum, fmtSignedPct, fmtSignalClock, stockLabel } from '~/utils/format'
+import { fmtBuyDistance, fmtNum, fmtSignedPct, fmtSignalClock, stockLabel } from '~/utils/format'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { resolveSignalVisual, collectLegendIds } from '~/composables/useSignalVisual'
 import { strategyBookSingleReturn } from '~/utils/strategyBookReturn'
@@ -606,10 +606,7 @@ function tradeIncomeTitle(r: HoldingRow): string {
                 </span>
               </td>
               <td v-if="!hideBuyDistance" class="sensitive whitespace-nowrap px-3 py-1.5 align-middle tabular-nums">
-                <span v-if="r['距买点%'] != null && Number(r['距买点%']) < 9000">
-                  {{ Number(r['距买点%']).toFixed(2) }}%
-                </span>
-                <span v-else class="text-ui-text-3">-</span>
+                {{ fmtBuyDistance(r.现价, r.买入侧价 ?? r.买点) }}
               </td>
               <td class="sensitive whitespace-nowrap px-3 py-1.5 align-middle">{{ r.阈值就绪 ? fmtNum(r.开盘, r['价位小数'] ?? 2) : (r.竞价参考 != null ? fmtNum(r.竞价参考, r['价位小数'] ?? 2) : '待9:25') }}</td>
               <td class="sensitive whitespace-nowrap px-3 py-1.5 align-middle font-semibold">{{ fmtNum(r.现价, r['价位小数'] ?? 2) }}</td>
