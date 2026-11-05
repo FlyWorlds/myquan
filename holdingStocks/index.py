@@ -5676,6 +5676,7 @@ def apply_paper_slot_buy(
             qty=int(qty),
             reason=note or "买入入槽",
             signal_factor=(execution_meta or {}).get("signal_factor", ""),
+            last_px=(execution_meta or {}).get("observed_price"),
             before_qty=0,
             after_qty=int(qty),
             strategy_id=str(STRATEGY_ID),

@@ -704,10 +704,17 @@ def _delivery_worker_main() -> None:
                 continue
 
             item.attempts += 1
+            send_started = time.monotonic()
+            queue_ms = max(0.0, time.time() - item.enqueued_at) * 1000
             try:
                 ok, detail = _deliver_pending(item, cfg)
             except Exception:
                 ok, detail = False, "network timeout"
+            _wechat_log(
+                f"delivery latency ({item.summary}) queue_ms={queue_ms:.0f} "
+                f"send_ms={(time.monotonic() - send_started) * 1000:.0f} "
+                f"attempt={item.attempts} success={ok}"
+            )
             if ok:
                 _wechat_log(f"send success ({item.summary})")
                 _persist_outbox()
@@ -1714,7 +1721,10 @@ def format_buy_fill_message(
             pass
     if last_px is not None:
         try:
-            lines.append(f"当前价：{float(last_px):.2f}")
+            lines.append(f"触发时行情价：{float(last_px):.2f}")
+            reference = float(target_px if target_px is not None else price)
+            if reference > 0:
+                lines.append(f"触发时偏离目标：{(float(last_px) / reference - 1) * 100:+.2f}%")
         except (TypeError, ValueError):
             pass
     lines.extend(
