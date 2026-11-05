@@ -31,6 +31,7 @@ _MYQUAN = Path(__file__).resolve().parents[1]
 if str(_MYQUAN) not in sys.path:
     sys.path.insert(0, str(_MYQUAN))
 
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.costs import (  # noqa: E402
     ENGINE_COMMISSION_RATE as COMMISSION,
     SLIPPAGE_VALUE as SLIP,
@@ -167,7 +168,7 @@ def simulate_open_break(
             if i >= 1:
                 po, pc = float(o[i - 1]), float(c[i - 1])
                 allows = prev_day_allows_entry(
-                    po, pc, prev_small_yang_pct=thr, prev_entry_mode="yin_or_small_yang"
+                    po, pc, prev_small_yang_pct=PREV_SMALL_YANG_PCT, prev_entry_mode="yin_or_small_yang"
                 )
                 blocked = False
                 if i >= 2:
@@ -694,7 +695,7 @@ def run_portfolio(top3: pd.DataFrame, mode: str) -> tuple[pd.DataFrame, dict, pd
                 j1 = path["date_to_i"][prev_dates[-1]]
                 po, pc = float(path["open"][j1]), float(path["close"][j1])
                 allows = prev_day_allows_entry(
-                    po, pc, prev_small_yang_pct=thr, prev_entry_mode="yin_or_small_yang"
+                    po, pc, prev_small_yang_pct=PREV_SMALL_YANG_PCT, prev_entry_mode="yin_or_small_yang"
                 )
                 blocked = False
                 if len(prev_dates) >= 2:

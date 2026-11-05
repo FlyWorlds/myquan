@@ -10,6 +10,7 @@ from strategy.open_break import (
     DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
+    PREV_SMALL_YANG_PCT,
 )
 STRATEGY_ID = "strategy4"
 STRATEGY_NAME = "策略四·F4止盈动量"
@@ -27,7 +28,7 @@ FACTOR_BINDINGS = (
         role="both",
         entry_pct=DEFAULT_PCT,
         stop_pct=DEFAULT_PCT,
-        prev_small_yang_pct=DEFAULT_PCT,
+        prev_small_yang_pct=PREV_SMALL_YANG_PCT,
         prev_entry_mode="yin_or_small_yang",
         ban_double_yang=DEFAULT_BAN_DOUBLE_YANG,
         ban_single_yang=DEFAULT_BAN_SINGLE_YANG,

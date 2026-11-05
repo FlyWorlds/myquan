@@ -15,6 +15,7 @@ from strategy.open_break import (
     DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
+    PREV_SMALL_YANG_PCT,
 )
 
 STRATEGY_ID = "strategy17"
@@ -31,7 +32,7 @@ FACTOR_BINDINGS = (
         stop_pct=DEFAULT_PCT,
         pullback_pct=DEFAULT_PCT,
         giveback_ratio=0.5,
-        prev_small_yang_pct=DEFAULT_PCT,
+        prev_small_yang_pct=PREV_SMALL_YANG_PCT,
         prev_entry_mode="yin_or_small_yang",
         ban_double_yang=DEFAULT_BAN_DOUBLE_YANG,
         ban_single_yang=DEFAULT_BAN_SINGLE_YANG,

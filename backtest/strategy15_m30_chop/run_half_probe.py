@@ -20,6 +20,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.config import TIANTONG  # noqa: E402
 from strategy.data import fetch_daily  # noqa: E402
 from strategy.m30_chop import (  # noqa: E402
@@ -68,7 +69,7 @@ def _can_enter(daily: pd.DataFrame) -> dict[str, bool]:
             prev_day_allows_entry(
                 float(prev["open"]),
                 float(prev["close"]),
-                prev_small_yang_pct=PCT,
+                prev_small_yang_pct=PREV_SMALL_YANG_PCT,
                 prev_entry_mode="yin_or_small_yang",
             )
         )

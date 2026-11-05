@@ -11,6 +11,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy import HANGTIANDIANZI, run_open_break
 
 logging.disable(logging.CRITICAL)
@@ -59,7 +60,7 @@ def _print_block(title: str, result, daily: pd.DataFrame, cfg) -> dict[str, floa
         slippage_value=cfg.slippage_value,
         entry_pct=cfg.threshold_pct,
         stop_pct=cfg.threshold_pct,
-        prev_small_yang_pct=cfg.threshold_pct,
+        prev_small_yang_pct=PREV_SMALL_YANG_PCT,
     )
     return _metrics(result)
 

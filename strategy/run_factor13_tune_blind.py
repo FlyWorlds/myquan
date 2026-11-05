@@ -29,6 +29,7 @@ logging.disable(logging.CRITICAL)
 
 from backtest.factor1_monthly_top3 import simulate_open_break  # noqa: E402
 from backtest.universe_zz500_1000 import CACHE_DIR as UNIV_CACHE  # noqa: E402
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.factor13_bear_shield import (  # noqa: E402
     build_features,
     build_quarter_features,
@@ -486,7 +487,7 @@ def main() -> None:
             if oi <= 0:
                 continue
             buy = entry_trigger_price(oi, entry_pct=THR, tick=TICK_SIZE)
-            allows = prev_day_allows_entry(po, pc, prev_small_yang_pct=THR, prev_entry_mode="yin_or_small_yang")
+            allows = prev_day_allows_entry(po, pc, prev_small_yang_pct=PREV_SMALL_YANG_PCT, prev_entry_mode="yin_or_small_yang")
             blocked = False
             if j >= 2:
                 blocked = should_block_entry_by_yang(

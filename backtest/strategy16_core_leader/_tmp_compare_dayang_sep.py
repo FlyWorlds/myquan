@@ -17,6 +17,7 @@ if str(_ROOT) not in sys.path:
 sys.stdout.reconfigure(encoding="utf-8")
 
 from holdingStocks.watch_config import strategy16_watchlist  # noqa: E402
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.data import fetch_daily  # noqa: E402
 from strategy.open_break import (  # noqa: E402
     DEFAULT_BAN_DOUBLE_YANG,
@@ -48,7 +49,7 @@ def gate_current_dayang(prev, prev2, entry_pct: float) -> tuple[bool, str]:
     allows = prev_day_allows_entry(
         float(prev["open"]),
         float(prev["close"]),
-        prev_small_yang_pct=float(entry_pct),
+        prev_small_yang_pct=PREV_SMALL_YANG_PCT,
         prev_entry_mode="yin_or_small_yang",
     )
     if not allows:

@@ -30,6 +30,7 @@ from holdingStocks.watch_config import (  # noqa: E402
     code_key,
     load_core_leader_payload,
 )
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.costs import (  # noqa: E402
     ENGINE_COMMISSION_RATE as COMMISSION,
     SLIPPAGE_VALUE as SLIP,
@@ -115,7 +116,7 @@ def simulate_open_break(
             allows = prev_day_allows_entry(
                 po,
                 pc,
-                prev_small_yang_pct=thr,
+                prev_small_yang_pct=PREV_SMALL_YANG_PCT,
                 prev_entry_mode="yin_or_small_yang",
             )
             blocked = False

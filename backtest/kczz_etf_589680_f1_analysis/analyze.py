@@ -33,6 +33,7 @@ if str(_MYQUAN) not in sys.path:
 
 warnings.filterwarnings("ignore")
 
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy import BacktestConfig, run_open_break  # noqa: E402
 from strategy.backtest import OpenBreak3Strategy, metric, monthly_returns_df  # noqa: E402
 from strategy.base import run_backtest_pipeline  # noqa: E402
@@ -135,7 +136,7 @@ def _run_f1_asym(
         apply_strategy_config(strategy, params)
         strategy.entry_pct = entry
         strategy.stop_pct = stop
-        strategy.prev_small_yang_pct = entry
+        strategy.prev_small_yang_pct = PREV_SMALL_YANG_PCT
 
     r, d = run_backtest_pipeline(
         params=c,

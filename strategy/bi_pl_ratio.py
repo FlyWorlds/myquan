@@ -28,6 +28,7 @@ from strategy.open_break import (
     DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
+    PREV_SMALL_YANG_PCT,
     entry_trigger_price,
     limit_down_state,
     prev_day_allows_entry,
@@ -194,7 +195,7 @@ def replay_factor1_trades(
         allows = prev_day_allows_entry(
             float(prev["open"]),
             float(prev["close"]),
-            prev_small_yang_pct=entry_pct,
+            prev_small_yang_pct=PREV_SMALL_YANG_PCT,
             prev_entry_mode=prev_entry_mode,
         )
         blocked = False

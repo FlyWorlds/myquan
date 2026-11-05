@@ -29,6 +29,7 @@ from holdingStocks.watch_config import (
     code_key,
     sina_of,
 )
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.costs import (
     ENGINE_COMMISSION_RATE as COMMISSION,
     SLIPPAGE_VALUE as SLIP,
@@ -108,7 +109,7 @@ def simulate_open_break(
             gate_pass = prev_day_allows_entry(
                 o[i - 1],
                 c[i - 1],
-                prev_small_yang_pct=thr,
+                prev_small_yang_pct=PREV_SMALL_YANG_PCT,
                 prev_entry_mode="yin_or_small_yang",
             )
         if gate_pass and i >= 2:

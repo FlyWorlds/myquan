@@ -33,6 +33,7 @@ warnings.filterwarnings("ignore")
 logging.disable(logging.CRITICAL)
 
 from backtest.factor1_monthly_top3 import load_daily, simulate_open_break  # noqa: E402
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.costs import (  # noqa: E402
     ENGINE_COMMISSION_RATE as COMMISSION,
     SLIPPAGE_VALUE as SLIP,
@@ -280,7 +281,7 @@ def run_slots(
             thr = float(slot.thr)
             buy_px = entry_trigger_price(oi, entry_pct=thr, tick=TICK_SIZE)
             allows = prev_day_allows_entry(
-                po, pc, prev_small_yang_pct=thr, prev_entry_mode="yin_or_small_yang"
+                po, pc, prev_small_yang_pct=PREV_SMALL_YANG_PCT, prev_entry_mode="yin_or_small_yang"
             )
             blocked = False
             if j >= 2:

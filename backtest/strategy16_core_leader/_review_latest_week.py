@@ -16,6 +16,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from holdingStocks.watch_config import strategy16_watchlist
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.costs import (
     ENGINE_COMMISSION_RATE as COMMISSION,
     SLIPPAGE_VALUE as SLIP,
@@ -52,7 +53,7 @@ def check_gate_current(prev: pd.Series, prev2: pd.Series | None, entry_pct: floa
     allows = prev_day_allows_entry(
         float(prev["open"]),
         float(prev["close"]),
-        prev_small_yang_pct=float(entry_pct),
+        prev_small_yang_pct=PREV_SMALL_YANG_PCT,
         prev_entry_mode="yin_or_small_yang",
     )
     if not allows:

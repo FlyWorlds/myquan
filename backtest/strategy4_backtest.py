@@ -21,6 +21,7 @@ _MYQUAN = Path(__file__).resolve().parents[1]
 if str(_MYQUAN) not in sys.path:
     sys.path.insert(0, str(_MYQUAN))
 
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.costs import (  # noqa: E402
     ENGINE_COMMISSION_RATE as COMMISSION,
     SLIPPAGE_VALUE as SLIP,
@@ -168,7 +169,7 @@ def entry_ok_at(book: PathBook, symbol: str, thr: float, dt: pd.Timestamp) -> bo
         return False
     po, pc = float(o[j - 1]), float(c[j - 1])
     allows = prev_day_allows_entry(
-        po, pc, prev_small_yang_pct=float(thr), prev_entry_mode="yin_or_small_yang"
+        po, pc, prev_small_yang_pct=PREV_SMALL_YANG_PCT, prev_entry_mode="yin_or_small_yang"
     )
     if not allows:
         return False

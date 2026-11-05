@@ -111,6 +111,7 @@ from strategy.open_break import (
     DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
+    PREV_SMALL_YANG_PCT,
     EXIT_REASONS,
     LOT_SIZE,
     NEAR_FACTOR_PCT,
@@ -656,7 +657,7 @@ def _entry_gate_detail(
     if not prev_day_allows_entry(
         float(prev_o),
         float(prev_c),
-        prev_small_yang_pct=entry_pct,
+        prev_small_yang_pct=PREV_SMALL_YANG_PCT,
         prev_entry_mode=prev_entry_mode,
         tick=tick,
         prev2_close=prev2_c,
@@ -13329,22 +13330,13 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
         decision = now.strftime("%Y-%m-%d %H:%M:%S")
         metadata = dict(is_rebuy=is_rebuy, signal_factor=candidate.get("signal_factor") or ("factor29" if candidate.get("kind") == "auction_open" else "factor26"), order_id=candidate["id"], signal_time=candidate["signal_time"],
                         signal_received_at=candidate["signal_received_at"], decision_time=decision,
-                        fill_model="paper_observed_rebound_quote" if candidate.get("kind") == "day_low_rebound" else candidate["fill_assumption"], quote_source=q.get("_quote_source"),
+                        fill_model=candidate["fill_assumption"], quote_source=q.get("_quote_source"),
                         order_armed_at=candidate["armed_at"], order_price=candidate["price"],
                         execution_quote_time=q["last_ts"], execution_received_at=receipt.isoformat(sep=" "),
                         quote_db_revision=q.get("_database_quote_revision"), quote_db_at=q.get("_database_quote_at"),
                         observed_price=float(q["last"]), quote_age_ms=round((now-timestamp(q["last_ts"])).total_seconds()*1000),
                         queue_age_ms=round((now-receipt).total_seconds()*1000))
-        # Dynamic rebound orders enter at the observed quote; never backfill a lower threshold price.
-        fill_price = max(float(q["last"]), float(candidate["price"])) if candidate.get("kind") == "day_low_rebound" else candidate["price"]
-        if candidate.get("kind") == "day_low_rebound":
-            rebound_qty, rebound_reason = capital_buy_qty(price=buy_cash_price(fill_price), equity=equity, cash=cash,
-                weight=MAX_POSITION_WEIGHT, allow_negative_cash=False, lot=LOT_SIZE)
-            qty = min(qty, rebound_qty)
-            if rebound_reason or qty < LOT_SIZE:
-                candidate["reason"] = rebound_reason or "INSUFFICIENT_CASH"
-                changed = True
-                continue
+        fill_price = candidate["price"]
         if not is_trigger(candidate, q, receipt, datetime.now()):
             continue
         candidate.update(status="FILLED", decision_time=decision, filled_qty=qty, reason=None)

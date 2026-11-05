@@ -293,12 +293,12 @@ class TestConditionDatabase(unittest.TestCase):
             def now(cls, tz=None):
                 return late
         codes = ["000070", "001266", "002962", "600330", "603138", "600000"]
-        orders = {c: order(c, kind="day_low_rebound", signal_factor="factor33") for c in codes}
+        orders = {c: order(c, kind="day_low_rebound", open=13.85, entry_pct=.03, signal_factor="factor33") for c in codes}
         self.state["holdings"]["condition_buy_orders"]["orders"] = orders
-        q = quote(last_ts=str(late), low=9., last=9.24)
+        q = quote(last_ts=str(late), open=13.85, prev_close=13.81, low=13.70, high=14.48, last=14.47)
         self.feed.get_quote.return_value = q
         with patch.object(index, "datetime", LateClock), patch.object(index, "_now", return_value=str(late)), \
-             patch.object(index, "MAX_NEW_SYMBOLS_PER_SESSION", 5), \
+             patch("daily_buy_quota.quota_reason", return_value=None), \
              patch.object(index, "_CONDITION_VERIFIED_IDS", {o["id"] for o in orders.values()}), \
              patch("watch_config.strategy_watchlist_codes", return_value=codes):
             for code in codes:
@@ -306,7 +306,12 @@ class TestConditionDatabase(unittest.TestCase):
         self.assertEqual(len(self.state["trades"]), 5)
         self.assertEqual(len([p for p in self.state["holdings"]["positions"].values() if p["qty"]]), 5)
         self.assertTrue(all(t["signal_factor"] == "factor33" for t in self.state["trades"]))
-        self.assertTrue(all(t["price"] == 9.24 for t in self.state["trades"]))
+        for trade in self.state["trades"]:
+            self.assertEqual(trade["price"], 14.12)
+            self.assertEqual(trade["order_price"], 14.12)
+            self.assertEqual(trade["observed_price"], 14.47)
+            self.assertEqual(trade["fill_model"], "paper_stop_at_order_price")
+            self.assertEqual(self.state["holdings"]["positions"][trade["code"]]["cost"], 14.12)
         self.assertGreaterEqual(self.state["holdings"]["account_cash"], 0)
 
     def test_missing_position_mark_blocks_new_buy_without_fake_equity(self):

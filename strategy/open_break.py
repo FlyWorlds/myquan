@@ -21,7 +21,7 @@ STRATEGY_RULES = """
 【空仓 · 买入】
   触发：当日最高价 >= ceil(开盘价 × (1 + 阈值))，按触发价限价买入，仓位约 95%。
   过滤（须同时满足）：
-    · 前一日为阴线，或「小阳」：收盘涨幅严格 < 阈值（收盘 < 开盘×(1+阈值)）
+    · 前一日为阴线，或「小阳」：实体涨幅严格 < 5%（收盘 < 开盘×1.05）
     · 前日十字线须相对前收涨幅≤5%；缺前收不放行。
     · 禁「前面双阳且跨日≥5%」：
         前前日、前日均为阳线，且 前日收盘/前前日开盘 - 1 ≥ 5% → 今日不买
@@ -53,7 +53,7 @@ STRATEGY_RULES = """
 DEFAULT_PCT = 0.025
 ENTRY_PCT = DEFAULT_PCT
 STOP_PCT = DEFAULT_PCT
-PREV_SMALL_YANG_PCT = 0.025
+PREV_SMALL_YANG_PCT = 0.05  # 前日大阳门槛，独立于买入突破阈值
 TICK_SIZE = 0.01
 # 核心双阳过滤：第一根阳开盘 → 第二根阳收盘，涨幅≥该阈值才禁买
 DEFAULT_BAN_DOUBLE_YANG = True
@@ -365,7 +365,7 @@ def replay_last_factor_triggers(
             float(prev["open"]),
             float(prev["close"]),
             prev2_close=float(prev2["close"]) if prev2 is not None else None,
-            prev_small_yang_pct=entry_pct,
+            prev_small_yang_pct=PREV_SMALL_YANG_PCT,
             prev_entry_mode=prev_entry_mode,
         )
         blocked = False
@@ -564,7 +564,7 @@ def replay_strategy_return_since(
             float(prev["open"]),
             float(prev["close"]),
             prev2_close=float(prev2["close"]) if prev2 is not None else None,
-            prev_small_yang_pct=entry_pct,
+            prev_small_yang_pct=PREV_SMALL_YANG_PCT,
             prev_entry_mode=prev_entry_mode,
         )
         blocked = False
@@ -627,7 +627,7 @@ def entry_filters_ok(
         if not prev_day_allows_entry(
             float(prev_open),
             float(prev_close),
-            prev_small_yang_pct=entry_pct,
+            prev_small_yang_pct=PREV_SMALL_YANG_PCT,
             prev_entry_mode=prev_entry_mode,
             tick=tick,
             prev2_close=prev2_close,

@@ -34,6 +34,7 @@ from holdingStocks.watch_config import (  # noqa: E402
     SLOT_WEIGHT,
     strategy_watchlist,
 )
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.open_break import (  # noqa: E402
     DEFAULT_BAN_DOUBLE_YANG,
     DEFAULT_BAN_SINGLE_YANG,
@@ -232,7 +233,7 @@ def _collect_events(stocks: list[dict[str, Any]], *, days: int) -> list[dict[str
                 allows = prev_day_allows_entry(
                     float(prev["open"]),
                     float(prev["close"]),
-                    prev_small_yang_pct=ep,
+                    prev_small_yang_pct=PREV_SMALL_YANG_PCT,
                     prev_entry_mode="yin_or_small_yang",
                 )
                 if prev2 is not None:

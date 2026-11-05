@@ -8,6 +8,7 @@ from akquant import BacktestResult, CurrentClose, NextOpen, Strategy
 from strategy.backtest import OpenBreak3Strategy, print_summary
 from strategy.base import run_akquant_backtest, run_backtest_pipeline
 from strategy.config import BacktestConfig
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.momentum_strategy import (
     MomentumStrategy,
     apply_momentum_config,
@@ -36,7 +37,7 @@ def apply_strategy_config(
     strategy.entry_pct = cfg.resolved_entry_pct()
     strategy.stop_pct = cfg.resolved_stop_pct()
     strategy.stop_anchor = str(getattr(cfg, "stop_anchor", "open") or "open")
-    strategy.prev_small_yang_pct = cfg.resolved_entry_pct()
+    strategy.prev_small_yang_pct = PREV_SMALL_YANG_PCT
     strategy.tick = cfg.tick
     strategy.limit_down_pct = cfg.limit_down_pct
     strategy.t0 = cfg.t0
@@ -190,7 +191,7 @@ def run_open_break(
             "slippage_value": cfg.slippage_value,
             "entry_pct": cfg.resolved_entry_pct(),
             "stop_pct": cfg.resolved_stop_pct(),
-            "prev_small_yang_pct": cfg.resolved_entry_pct(),
+            "prev_small_yang_pct": PREV_SMALL_YANG_PCT,
         },
         report_title=f"{cfg.symbol_name} {cfg.report_title_suffix()}",
         show_report=show_report,

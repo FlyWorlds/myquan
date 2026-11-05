@@ -29,6 +29,7 @@ from strategy.open_break import (
     DEFAULT_DOUBLE_YANG_COMBINED_MIN_PCT,
     DEFAULT_DOUBLE_YANG_COMBINED_MODE,
     DEFAULT_PCT,
+    PREV_SMALL_YANG_PCT,
     NEAR_FACTOR_PCT,
     TICK_SIZE,
     bar_shape,
@@ -2079,7 +2080,7 @@ def replay_last_factor_triggers(
             float(prev["open"]),
             float(prev["close"]),
             prev2_close=float(prev2["close"]) if prev2 is not None else None,
-            prev_small_yang_pct=entry_pct,
+            prev_small_yang_pct=PREV_SMALL_YANG_PCT,
             prev_entry_mode=prev_entry_mode,
         )
         blocked = False
@@ -2688,7 +2689,7 @@ def replay_factor26_1m(
             float(prev["open"]),
             float(prev["close"]),
             prev2_close=float(prev2["close"]) if prev2 is not None else None,
-            prev_small_yang_pct=entry_pct,
+            prev_small_yang_pct=PREV_SMALL_YANG_PCT,
             prev_entry_mode=prev_entry_mode,
         )
         blocked = False

@@ -21,6 +21,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.costs import ENGINE_COMMISSION_RATE, SLIPPAGE_VALUE, stamp_tax_for_code  # noqa: E402
 from strategy.open_break import (  # noqa: E402
     DEFAULT_BAN_DOUBLE_YANG,
@@ -123,7 +124,7 @@ def _filters_ok(prev: pd.Series, prev2: pd.Series | None) -> bool:
     allows = prev_day_allows_entry(
         float(prev["open"]),
         float(prev["close"]),
-        prev_small_yang_pct=ENTRY_PCT,
+        prev_small_yang_pct=PREV_SMALL_YANG_PCT,
         prev_entry_mode="yin_or_small_yang",
     )
     if not allows:

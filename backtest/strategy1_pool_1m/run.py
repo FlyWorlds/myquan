@@ -54,6 +54,7 @@ from holdingStocks.watch_config import (  # noqa: E402
     strategy16_watchlist,
     strategy_watchlist,
 )
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy.data import fetch_daily  # noqa: E402
 from strategy.dd_alert import derive_thresholds, format_rules  # noqa: E402
 from strategy.minute import pull_akshare_1m  # noqa: E402
@@ -669,7 +670,7 @@ def simulate_portfolio_3slots(
                     allow = prev_day_allows_entry(
                         float(prev["open"]),
                         float(prev["close"]),
-                        prev_small_yang_pct=float(s["entry_pct"]),
+                        prev_small_yang_pct=PREV_SMALL_YANG_PCT,
                         prev_entry_mode="yin_or_small_yang",
                     )
                     if prev2 is not None and should_block_entry_by_yang(

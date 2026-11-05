@@ -22,6 +22,7 @@ warnings.filterwarnings("ignore")
 
 import pandas as pd  # noqa: E402
 
+from strategy.open_break import PREV_SMALL_YANG_PCT
 from strategy import KAICHENG, run_open_break  # noqa: E402
 from strategy.backtest import OpenBreak3Strategy, metric  # noqa: E402
 from strategy.base import run_backtest_pipeline  # noqa: E402
@@ -87,7 +88,7 @@ def _run_f1_asym(
         apply_strategy_config(strategy, params)
         strategy.entry_pct = entry
         strategy.stop_pct = stop
-        strategy.prev_small_yang_pct = entry
+        strategy.prev_small_yang_pct = PREV_SMALL_YANG_PCT
 
     r, _ = run_backtest_pipeline(
         params=c,
