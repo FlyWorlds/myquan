@@ -988,8 +988,18 @@ def hit_stop_alert(
     stop_kind: str | None = None,
     action_kind: str | None = None,
 ) -> str:
-    """盯盘预警：半仓写「半仓止盈」，其余写「已触止损」。"""
-    return "半仓止盈" if is_half_stop_kind(stop_kind, action_kind) else "已触止损"
+    """盯盘预警：半仓写「半仓止盈」，其余按策略信号区分「回落止盈」、「峰值止盈」或「已触止损」。"""
+    sk = str(stop_kind or "").strip()
+    ak = str(action_kind or "").strip().lower()
+    if is_half_stop_kind(sk, ak):
+        return "半仓止盈"
+    if sk in ("half_gain", "vol_giveback"):
+        return "回落止盈"
+    if sk in ("peak_pullback", "peak_pullback_clear", "peak_pullback_full"):
+        return "峰值止盈"
+    if sk in ("ladder_full_15",):
+        return "阶梯止盈"
+    return "已触止损"
 
 
 def ladder_target_price(
@@ -1132,7 +1142,7 @@ def eval_multi_tp_bar(
 
     def _full(reason: str, px: float, *, downside: bool = True) -> dict[str, Any]:
         fill = float(px)
-        if downside and bar_o > 0 and bar_o <= fill + 1e-12:
+        if not _observed_quote and downside and bar_o > 0 and bar_o <= fill + 1e-12:
             fill = float(bar_o)
         return {
             "action": {
@@ -1152,7 +1162,7 @@ def eval_multi_tp_bar(
         if sell_n >= sh:
             return _full(reason, px, downside=downside)
         fill = float(px)
-        if downside and bar_o > 0 and bar_o <= fill + 1e-12:
+        if not _observed_quote and downside and bar_o > 0 and bar_o <= fill + 1e-12:
             fill = float(bar_o)
         return {
             "action": {
@@ -1286,8 +1296,7 @@ def eval_multi_tp_bar(
 def eval_factor26_quote(*, price: float, **state: Any) -> dict[str, Any]:
     """Evaluate one observed price with the shared formulas, never daily OHLC paths.
 
-    Downside gaps fill at the observed price. Upward ladder orders retain their
-    existing paper target-price assumption; this is not an exchange fill claim.
+    Exit orders fill at the trigger protection/target price (signal price).
     """
     return eval_multi_tp_bar(bar_open=price, bar_high=price, bar_low=price,
                              _observed_quote=True, **state)
@@ -1865,9 +1874,9 @@ def strategy_signal(
             else:
                 out["actionable"] = True
                 alert = str(out.get("alert") or "")
-                if out.get("hit_stop") or "已触止损" in alert:
+                if out.get("hit_stop") or any(k in alert for k in ("已触止损", "回落止盈", "峰值止盈", "半仓止盈", "阶梯止盈")):
                     out["因子触发"] = "已触发"
-                elif out.get("near_stop") or "将止损" in alert:
+                elif out.get("near_stop") or any(k in alert for k in ("将止损", "将止盈", "将半仓")):
                     out["因子触发"] = "接近"
                 else:
                     out["因子触发"] = "未触发"
@@ -1960,11 +1969,20 @@ def strategy_signal(
             )
             return _finish(base)
         if near_stop_band:
+            near_alert = (
+                "将半仓"
+                if is_half_stop_kind(kind_now)
+                else (
+                    "将止盈"
+                    if kind_now in ("half_gain", "vol_giveback", "peak_pullback", "peak_pullback_clear", "ladder_full_15")
+                    else "将止损"
+                )
+            )
             base.update(
                 {
                     "near_stop": True,
                     "pending_sell": True,
-                    "alert": "将止损",
+                    "alert": near_alert,
                     "bg_class": "warn-sell",
                     "建议挂单": stop_px,
                     "挂单说明": _sell_note(near=True),

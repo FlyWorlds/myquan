@@ -8754,7 +8754,7 @@ def _collect_quote_runtime_rows(get_quote=None):
                 "vol_giveback": "中赚波动回落",
                 "peak_pullback": "大赚后峰值回落",
             }.get(stop_kind, "跌破保护线")
-            row.update({"止损": stop, "卖出侧价": stop, "回落止损价": stop, "卖出原因": sell_reason})
+            row.update({"止损": stop, "卖出侧价": stop, "回落止损价": stop, "卖出原因": sell_reason, "stop_kind": stop_kind})
         daily = _DAILY_CACHE.get(w["sina"])
         book = data.get("condition_buy_orders") or {}
         order = (book.get("orders") or {}).get(code) if calculation_ready and book.get("session") == day else None

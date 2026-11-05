@@ -1234,7 +1234,7 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
     if holding:
         if half_or_tp and row.get("已实现") and "将半仓" not in alert:
             # 半仓 fill 已发【模拟卖出】；剩余仓的将止损仍可预警
-            if near_stop or "将止损" in alert:
+            if near_stop or "将止损" in alert or "将止盈" in alert:
                 return _pack(
                     PRIORITY_P1,
                     "将止损",
@@ -1252,13 +1252,20 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
                 or _factor_px_for_push(row, holding=True),
             )
         if half_or_tp and not row.get("已实现"):
+            sk = str(row.get("stop_kind") or row.get("_path_stop_kind") or row.get("止损类型") or "")
+            reason_text = str(row.get("卖出原因") or row.get("reason") or row.get("挂单说明") or "")
+            factor_px = row.get("卖出价") or row.get("止损") or _factor_px_for_push(row, holding=True)
+            if "回落止盈" in alert or sk in ("half_gain", "vol_giveback") or "回落一半" in reason_text or "中赚" in reason_text:
+                return _pack(PRIORITY_P0, "回落止盈", "回落止盈已触发但尚未成交", factor_px)
+            if "峰值止盈" in alert or sk in ("peak_pullback", "peak_pullback_clear") or "大赚" in reason_text:
+                return _pack(PRIORITY_P0, "峰值止盈", "峰值止盈已触发但尚未成交", factor_px)
+            if "阶梯止盈" in alert or sk in ("ladder_full_15",):
+                return _pack(PRIORITY_P0, "阶梯止盈", "阶梯止盈已触发但尚未成交", factor_px)
             return _pack(
                 PRIORITY_P0,
                 "半仓止盈",
                 "半仓止盈已触发但尚未成交",
-                row.get("卖出价")
-                or row.get("止损")
-                or _factor_px_for_push(row, holding=True),
+                factor_px,
             )
         if (
             hit_buy
@@ -1275,26 +1282,38 @@ def classify_stock_alert(row: dict[str, Any]) -> dict[str, Any] | None:
             )
         if (
             (hit_stop or hit.startswith("策略止损") or "已触止损" in alert
+             or "回落止盈" in alert or "峰值止盈" in alert or "阶梯止盈" in alert
              or (pos == "待卖出" and hit.startswith("已触发")))
             and not row.get("已实现")
         ):
+            sk = str(row.get("stop_kind") or row.get("_path_stop_kind") or row.get("止损类型") or "")
+            reason_text = str(row.get("卖出原因") or row.get("reason") or row.get("挂单说明") or "")
+            factor_px = _factor_px_for_push(row, holding=True)
+            if "回落止盈" in alert or sk in ("half_gain", "vol_giveback") or "回落一半" in reason_text or "中赚" in reason_text:
+                return _pack(PRIORITY_P0, "回落止盈", "回落止盈已触发但尚未成交", factor_px)
+            if "峰值止盈" in alert or sk in ("peak_pullback", "peak_pullback_clear") or "大赚" in reason_text:
+                return _pack(PRIORITY_P0, "峰值止盈", "峰值止盈已触发但尚未成交", factor_px)
+            if "阶梯止盈" in alert or sk in ("ladder_full_15",):
+                return _pack(PRIORITY_P0, "阶梯止盈", "阶梯止盈已触发但尚未成交", factor_px)
             return _pack(
                 PRIORITY_P0,
                 "已触止损",
                 "卖出条件已触发但尚未成交",
-                _factor_px_for_push(row, holding=True),
+                factor_px,
             )
         if (
             near_stop
             or pos == "待卖出"
             or "将止损" in alert
+            or "将止盈" in alert
             or hit == "接近"
             or hit.startswith("接近")
         ):
+            near_typ = "将止盈" if "将止盈" in alert else "将止损"
             return _pack(
                 PRIORITY_P1,
-                "将止损",
-                "将止损",
+                near_typ,
+                near_typ,
                 _factor_px_for_push(row, holding=True),
             )
         return None
@@ -1352,9 +1371,19 @@ def _signal_kind(alert_type):
     typ = str(alert_type or "")
     if typ.startswith("已触买"):
         return "buy_hit"
-    return {"将买入": "buy_near", "将止损": "sell_near", "已触止损": "sell_hit",
-            "T1_BLOCK": "sell_hit", "跌停不可卖": "sell_hit",
-            "将半仓": "sell_half_near", "半仓止盈": "sell_half_hit"}.get(typ, typ)
+    return {
+        "将买入": "buy_near",
+        "将止损": "sell_near",
+        "将止盈": "sell_near",
+        "已触止损": "sell_hit",
+        "回落止盈": "sell_hit",
+        "峰值止盈": "sell_hit",
+        "阶梯止盈": "sell_hit",
+        "T1_BLOCK": "sell_hit",
+        "跌停不可卖": "sell_hit",
+        "将半仓": "sell_half_near",
+        "半仓止盈": "sell_half_hit",
+    }.get(typ, typ)
 
 
 def _row_signal_kind(row, typ):
@@ -1413,10 +1442,15 @@ from signal_priority import signal_priority
 
 def alert_type_label(row, *, sell=False):
     detail = str(row.get("卖出原因") or row.get("reason") or row.get("挂单说明") or "")
+    sk = str(row.get("stop_kind") or row.get("_path_stop_kind") or row.get("止损类型") or "")
     if sell:
+        if sk in ("half_gain", "vol_giveback") or "中赚" in detail or "回落一半" in detail:
+            return "回落止盈（利润保护）"
+        if sk in ("peak_pullback", "peak_pullback_clear") or "大赚" in detail:
+            return "阶段回落（峰值）"
         if any(word in detail for word in ("峰值", "回落", "t1_peak_trail", "giveback", "peak_pullback")):
             return "阶段回落（峰值）"
-        if any(word in detail for word in ("硬保护", "成本", "hard_from_cost")):
+        if sk == "hard_from_cost" or any(word in detail for word in ("硬保护", "成本", "hard_from_cost")):
             return "成本止损"
         return "卖出保护"
     factor = row.get("信号因子") or row.get("signal_factor")
@@ -1778,8 +1812,12 @@ def format_sell_fill_message(
             f"成交类型：{fill_kind}",
         ]
     )
-    if reason_code:
-        lines.append(f"原因：{reason_code}")
+    desc = str(priority_reason or "").strip()
+    reason_line = reason_code
+    if desc and desc != reason_code:
+        reason_line = f"{reason_code} ({desc})" if reason_code else desc
+    if reason_line:
+        lines.append(f"原因：{reason_line}")
     if before_qty is not None and after_qty is not None:
         lines.append(f"仓位：{int(before_qty)} → {int(after_qty)}")
     elif after_qty is not None:

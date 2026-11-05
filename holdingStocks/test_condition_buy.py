@@ -376,8 +376,10 @@ class TestConditionDatabase(unittest.TestCase):
         self.assertEqual(len(self.state["trades"]), 1)
         index._execute_quote_exit("000070", quote(last=10.7, high=11.), NOW)
         self.assertEqual(self.state["holdings"]["positions"]["000070"]["qty"], 0)
-        self.assertEqual(self.state["holdings"]["account_cash"], 309734.44)
+        self.assertEqual(self.state["holdings"]["account_cash"], 309774.38)
         self.assertEqual([t["qty"] for t in self.state["trades"]], [400, 500])
+        self.assertEqual(self.state["trades"][-1]["price"], 10.78)
+        self.assertEqual(self.state["trades"][-1]["observed_price"], 10.7)
         self.assertEqual(len(self.state["ledger"]["entries"]), 2)
         self.assertEqual(self.state["trades"][-1]["fill_model"], "factor26_observed_quote")
 

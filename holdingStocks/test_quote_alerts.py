@@ -82,7 +82,7 @@ class QuoteAlertTests(unittest.TestCase):
         item=dict(code='000070',sina='sz000070',name='测试',market='SZ',pct=.025)
         book=dict(positions={},realized_today={'000070': dict(session='2026-10-16',price=10.,qty=100)},
                   condition_buy_orders=dict(session='2026-10-16',orders={
-            '000070':dict(id='audited',strategy='strategy1',open=10.,price=10.25,status='ARMED',open_audit_at='2026-10-16 09:25:00')}))
+            '000070':dict(id='audited',strategy=index.STRATEGY_ID,open=10.,price=10.25,status='ARMED',open_audit_at='2026-10-16 09:25:00')}))
         model=Mock();model.state=dict(holdings=book,trades=[])
         store=Mock();store.read_model.return_value=model
         with patch.object(index,'_HOLDINGS_STORE',store), \
@@ -99,6 +99,8 @@ class QuoteAlertTests(unittest.TestCase):
              patch.object(index,'_today_1m_bars',side_effect=AssertionError('minute IO')), \
              patch.object(index,'_watch_daily',side_effect=AssertionError('daily IO')), \
              patch.object(index,'_apply_portfolio_slots',side_effect=AssertionError('trade write')), \
+             patch('strategy1_entry.phase_at', return_value=None), \
+             patch('quote_alerts.fresh_quote', return_value=True), \
              patch.object(index,'datetime',wraps=datetime) as clock:
             clock.now.return_value=NOW
             rows=index._collect_quote_runtime_rows(get_quote=lambda _:self.quote())

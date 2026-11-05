@@ -82,13 +82,17 @@ class QuoteAlerts:
             first_hit = self._hits.get((session, code, buy, row.get('信号因子'), row.get('攻击波起点'))) if allowed else None
         last = float(quote['last'])
         stop = row.get('卖出侧价')
+        stop_kind = row.get('stop_kind') or row.get('_path_stop_kind')
         sig = signal(open_px=opening, high_px=float(quote['high']), low_px=float(quote['low']),
             last_px=last, session=session, buy_trigger=buy, stop_px=stop, qty=qty,
             buy_time=row.get('买入时间'), vs_open_pts=(last/opening-1)*100,
             entry_pct=entry_pct, tick=tick, allow_entry=allowed,
             hit_buy=bool(first_hit) and qty == 0,
             hit_stop=bool(qty > 0 and stop and last <= float(stop) and is_signal_window(now)),
-            cost_px=row.get('成本'), peak_high=row.get('持仓最高'))
+            cost_px=row.get('成本'), peak_high=row.get('持仓最高'),
+            stop_kind=stop_kind)
+        if sig.get('stop_kind'):
+            row['stop_kind'] = sig['stop_kind']
         for key in ('因子侧','因子价','因子触发','建议挂单','距买点%','距买点价差','距止损%','距止损价差'):
             if key in sig:
                 row[key] = sig[key]

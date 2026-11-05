@@ -441,6 +441,67 @@ class TestWechatNotifyN1(unittest.TestCase):
         self.assertEqual(wn.map_fill_reason_code(exit_kind="eod_reserve"), "EOD_RESERVE")
         self.assertEqual(wn.map_fill_reason_code(action_kind="half"), "HALF")
 
+    def test_zhongjian_half_gain_alert_notifies_tp_instead_of_stop(self) -> None:
+        """中坚科技 09:32 跌破 79.48：微信推送以策略信号为准，显示回落止盈而非已触止损"""
+        row = _row(
+            代码="002779",
+            名称="中坚科技",
+            持仓=700,
+            成本=77.68,
+            持仓最高=81.29,
+            现价=78.49,
+            止损=79.48,
+            卖出侧价=79.48,
+            stop_kind="half_gain",
+            卖出原因="中赚回落一半",
+            预警="回落止盈",
+            已触止损="是",
+            持仓状态="待卖出",
+            因子触发="已触发",
+        )
+        info = wn.classify_stock_alert(row)
+        self.assertIsNotNone(info)
+        self.assertEqual(info["type"], "回落止盈")
+        self.assertEqual(info["status"], "回落止盈已触发但尚未成交")
+        self.assertEqual(info["factor_px"], 79.48)
+
+        msg = wn.format_alert_message(row)
+        self.assertIn("【策略预警】", msg)
+        self.assertIn("回落止盈（利润保护）", msg)
+        self.assertIn("状态：回落止盈已触发但尚未成交", msg)
+        self.assertIn("策略价：79.48", msg)
+        self.assertNotIn("已触止损", msg)
+        self.assertNotIn("成本止损", msg)
+
+        # 扫描推送
+        wn.notify_watch_rows([row], config=self._cfg)
+        self.assertEqual(len(self._sent), 1)
+        self.assertIn("【策略预警】", self._sent[0])
+        self.assertIn("回落止盈", self._sent[0])
+
+        # 模拟卖出成交推送：携带策略信号详细原因
+        ok = wn.notify_trade_fill(
+            side="sell",
+            code="002779",
+            name="中坚科技",
+            price=79.48,
+            target_px=79.48,
+            last_px=78.49,
+            qty=700,
+            before_qty=700,
+            after_qty=0,
+            action_kind="full",
+            exit_kind="last",
+            reason="half_gain 中赚回落一半",
+            config=self._cfg,
+        )
+        self.assertTrue(ok)
+        self.assertEqual(len(self._sent), 2)
+        fill_msg = self._sent[1]
+        self.assertIn("【模拟卖出】", fill_msg)
+        self.assertIn("成交价：79.48", fill_msg)
+        self.assertIn("half_gain 中赚回落一半", fill_msg)
+
 
 class TestApplyFillPassesExitKind(unittest.TestCase):
     def setUp(self) -> None:
