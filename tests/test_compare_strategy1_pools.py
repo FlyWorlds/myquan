@@ -92,3 +92,30 @@ def test_rebuy_uses_actual_stop_sale_not_intraday_low(monkeypatch):
     assert rebuys[0]['trigger_price']==10.15
     assert rebuys[0]['px']==10.16
     assert p['accounting']['accounting_verified']
+
+
+def test_new_morning_stop_can_change_fills_without_changing_other_rules():
+    rows=[('2026-10-27 09:31',10,10.3,10,10.3),
+          ('2026-10-27 15:00',10.3,10.3,10.3,10.3),
+          ('2026-10-28 09:31',10.3,10.3,10.19,10.19),
+          ('2026-10-28 15:00',10.19,10.3,10.19,10.3)]
+    s=[stock('600001',rows)]; days=['2026-10-27','2026-10-28']
+    a=simulate(s,days,current_attack_wave=True)
+    b=simulate(s,days,current_attack_wave=True,morning_open_stop=True,morning_stop_start='2026-10-28')
+    assert a['equity'][0]==b['equity'][0]
+    assert a['summary']['n_sells']==0 and b['summary']['n_sells']==1
+    assert b['trades'][-1]['exit_reason']=='s1_morning_open_stop'
+    assert b['trades'][-1]['px']==10.19
+    assert a['summary']['final_equity']>b['summary']['final_equity']
+
+
+def test_current_wave_waits_for_observed_fall_then_rebound():
+    rows=[('2026-10-27 09:31',10,10,10,10),
+          ('2026-10-27 10:00',10,10.3,9,10.3),
+          ('2026-10-27 10:01',10.3,10.3,10,10),
+          ('2026-10-27 10:02',10,10.3,10,10.3),
+          ('2026-10-27 15:00',10.3,10.3,10.3,10.3)]
+    r=simulate([stock('600001',rows)],['2026-10-27'],current_attack_wave=True)
+    assert len(r['trades'])==1
+    assert r['trades'][0]['ts']=='2026-10-27 10:02:00'
+    assert r['trades'][0]['trigger_price']==10.25

@@ -32,7 +32,8 @@ def overnight_note_updates(pos, quote, session):
 
 
 def evaluate_quote_exit(pos: dict, quote: dict, *, session: str, now: datetime,
-                        received_at: datetime, vol20_daily=None, tick=.01) -> dict | None:
+                        received_at: datetime, vol20_daily=None, tick=.01,
+                        morning_open_stop=False) -> dict | None:
     if not fresh_quote(quote, session, now) or not 0 <= (now-received_at).total_seconds() <= 5:
         return None
     clock = str(quote["last_ts"])[11:19]
@@ -93,9 +94,16 @@ def evaluate_quote_exit(pos: dict, quote: dict, *, session: str, now: datetime,
             elif note.get("noted_px") and (note["reason"] == "hard_from_cost" or clock >= "14:57:00"):
                 updates.update(stop_noted=True, stop_noted_px=note["noted_px"], stop_noted_session=session)
         action = result.get("action")
+        protection = None
+        if morning_open_stop and executable and now.strftime("%H:%M:%S") < "10:00:00":
+            from strategy1_exit import morning_stop_price
+            protection = morning_stop_price(float(quote["open"]), clock, tick=tick)
+            if protection is not None and float(quote["last"]) <= protection + 1e-9:
+                action = dict(kind="full", shares=available, fill_px=float(quote["last"]),
+                              reason="s1_morning_open_stop")
         if action:
             action = dict(action, shares=min(available, int(action["shares"])))
-        return dict(updates=updates, action=action,
+        return dict(updates=updates, action=action, noted_px=protection,
                     watermark=dict(cycle=pos.get("buy_time"), time=quote["last_ts"], price=quote["last"], high=quote.get("high")))
     except (KeyError, TypeError, ValueError, OverflowError):
         return None

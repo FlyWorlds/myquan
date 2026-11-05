@@ -1,0 +1,34 @@
+{
+  "days": [
+    "2026-10-30",
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05"
+  ],
+  "warmup": [],
+  "initial_cash": 300000,
+  "period_initial_equity": 300000.0,
+  "pool_size": 25,
+  "current_attack_wave": true,
+  "auction_factor29": "excluded: historical auction tick paths unavailable",
+  "execution": "completed 1m close observation; new stop fills at observed close, not threshold",
+  "fees": "existing _buy_outlay/_sell_credit incl fees/slippage",
+  "selection_bias": "current frozen pool and thresholds replayed backwards",
+  "limits": "5 slots, 20% per slot, 2 new + 1 reentry/day; T+1",
+  "new_stop_trades": [
+    {
+      "date": "2026-11-02",
+      "ts": "2026-11-02 09:31:00",
+      "time": "2026-11-02 09:31:00",
+      "session": "2026-11-02",
+      "side": "sell",
+      "code": "002636",
+      "name": "金安国纪",
+      "px": 62.81,
+      "shares": 500,
+      "pnl_pct": 0.0851762266758811,
+      "exit_reason": "s1_morning_open_stop"
+    }
+  ]
+}

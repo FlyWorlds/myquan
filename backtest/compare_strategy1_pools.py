@@ -123,7 +123,10 @@ def collect(w, out, refresh):
     return dict(w=w, minutes=m, daily=d, sources=sources, fetch_error=error)
 
 
-def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
+def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2,
+             morning_open_stop=False, current_attack_wave=False, morning_stop_start=""):
+    from holdingStocks.attack_wave import AttackWaves
+    waves = AttackWaves()
     cash, positions, marks, trades, equity = initial, {}, {}, [], []
     def value():
         return cash + sum(p['qty']*marks[c] for c,p in positions.items())
@@ -140,6 +143,8 @@ def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
         p['available'] = max(0,p.get('available',0)-qty)
         if not p['qty']:
             sold[code] = dict(rebuy=pnl<=.01 and any(k in reason for k in ('protect','hard','trail','gap','giveback')), ts=stamp, exit_px=float(px))
+            if current_attack_wave:
+                sold[code]['rebuy'] = pnl <= .01 or reason in {'vol_giveback','half_gain','peak_pullback_clear','ladder_full_15'}
             del positions[code]
     for day in calendar:
         sold, new_codes, metadata, quotes = {}, set(), {}, {}
@@ -168,6 +173,9 @@ def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
                 lows[c]=min(lows.get(c,md['opening']),float(b.low))
                 highs[c]=max(highs.get(c,md['opening']),float(b.high))
                 marks[c]=float(b.close)
+                if current_attack_wave:
+                    waves.observe(c, dict(session=day,last_ts=stamp,open=md['opening'],last=float(b.close),
+                        high=highs[c],low=lows[c]), now)
             for b in bucket.itertuples():
                 c=b.code;md=metadata[c]
                 if c not in positions:
@@ -181,7 +189,8 @@ def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
                     if protect.triggered and not locked:
                         sell(c,md['opening'],p['qty'],day+' 09:30:00','open_protect')
                         continue
-                result=evaluate_quote_exit(p,q,session=day,now=now,received_at=now,vol20_daily=md['vol'])
+                result=evaluate_quote_exit(p,q,session=day,now=now,received_at=now,vol20_daily=md['vol'],
+                                           morning_open_stop=morning_open_stop and day >= morning_stop_start)
                 if result:
                     p.update(result['updates']);p['quote_exit_watermark']=result['watermark']
                     action=result.get('action')
@@ -194,7 +203,7 @@ def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
                 continue
             for b in bucket.itertuples():
                 c=b.code;md=metadata[c];w=md['w']
-                if c in positions or not md['allowed'] or (c in sold and (not sold[c]['rebuy'] or sold[c]['ts']>=stamp)):
+                if c in positions or (not md['allowed'] and not (current_attack_wave and c in sold and sold[c]['rebuy'])) or (c in sold and (not sold[c]['rebuy'] or sold[c]['ts']>=stamp)):
                     continue
                 order=dict(strategy='strategy1',kind=phase)
                 if quota_reason(order,trades,day) or len(positions)>=max_slots:
@@ -202,6 +211,14 @@ def simulate(stocks, calendar, initial=300000., max_slots=5, weight=.2):
                 if daily_fill_quota_reason(trades, day, is_rebuy=c in sold):
                     continue
                 target=entry_trigger_price(sold[c]['exit_px'], entry_pct=DEFAULT_STOP_REBUY_BOUNCE_PCT) if c in sold else entry_trigger_price(lows[c] if phase=='day_low_rebound' else md['opening'],entry_pct=md['ep'])
+                if current_attack_wave:
+                    if c in sold and phase != 'day_low_rebound':
+                        continue
+                    if phase == 'day_low_rebound':
+                        wave = waves.states.get(c, {})
+                        if not wave.get('ready') or (c in sold and wave.get('anchor_at','') <= sold[c]['ts']):
+                            continue
+                        target = entry_trigger_price(wave['low'], entry_pct=md['ep'])
                 if float(b.close)<target or auction_entry_blocked(md['opening'],md['prev_close']):
                     continue
                 if cannot_buy_limit_up(prev_close=md['prev_close'],open_px=md['opening'],high_px=highs[c],low_px=lows[c],close_px=float(b.close),limit_up_pct=.1,tick=.01):
