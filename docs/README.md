@@ -3,6 +3,7 @@
 | 文档 | 说明 |
 |------|------|
 | [`READ.md`](../READ.md) | 项目总览、安装、运行命令、**策略/因子摘要表** |
+| [`GLOBAL_STRATEGY_OVERVIEW.md`](GLOBAL_STRATEGY_OVERVIEW.md) | **全局量化交易策略说明手册**（多策略、时序管线、买卖规则、出场风控） |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | **架构与技术栈报告**（分层、盯盘拓扑、栈清单） |
 | [`TODO.MD`](../TODO.MD) | 任务优先级、锁定项 |
 | [`STRATEGY.md`](STRATEGY.md) | 策略一及已实现策略说明 |

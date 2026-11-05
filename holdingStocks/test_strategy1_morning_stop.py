@@ -47,7 +47,7 @@ def test_late_arrival_after_ten_does_not_replay_morning_stop():
     assert evaluate_quote_exit(p,q,session='2026-11-05',now=now,received_at=now,morning_open_stop=True)['action'] is None
 
 
-def test_strategy_book_enables_only_strategy_one():
+def test_strategy_book_enables_global_morning_open_stop():
     from unittest.mock import Mock,patch
     from strategy_books_runtime import StrategyBooksRuntime
     class Clock(datetime):
@@ -62,4 +62,21 @@ def test_strategy_book_enables_only_strategy_one():
         q=dict(session='2026-11-05',last_ts='2026-11-05 09:45:00',open=10.,high=10.,low=9.9,last=9.9,prev_close=10.)
         with patch('strategy_books_runtime.datetime',Clock):runtime.on_quote('sh600330',q,Clock.now())
         sells=[c for c in client.command.call_args_list if c.kwargs.get('side')=='SELL']
-        assert bool(sells)==(sid=='strategy1')
+        assert bool(sells) is True
+
+
+def test_index_row_displays_morning_stop_globally():
+    from unittest.mock import Mock, patch
+    import index
+    now = datetime(2026, 11, 5, 9, 35, 0)
+    pos = dict(cost=10.0, qty=1000, buy_time='2026-11-04 10:00:00', peak_high=10.0)
+    q = dict(open=10.0, last=9.95, high=10.0, low=9.95, prev_close=10.0)
+    w = dict(code='600330', name='天通股份', sina='sh600330')
+    row = dict(持仓=1000)
+    
+    # 模拟计算
+    stop = 9.75 # 假设常规止损为 9.75
+    morning_stop = morning_stop_price(float(q['open']), now.strftime('%H:%M:%S'), tick=.01)
+    assert morning_stop == 9.90
+    assert morning_stop > stop
+

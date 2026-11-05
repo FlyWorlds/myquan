@@ -264,7 +264,6 @@ def build_watch_request_handler(
             if path == "/api/holdings/monthly-index":
                 try:
                     from monthly_index import monthly_index
-                    from urllib.parse import parse_qs
                     params = parse_qs(urlparse(self.path).query)
                     self._send_json(monthly_index(params['year'][0], params['month'][0]))
                 except Exception:

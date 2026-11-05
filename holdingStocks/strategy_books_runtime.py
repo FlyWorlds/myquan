@@ -79,7 +79,7 @@ class StrategyBooksRuntime:
             pos.update(note_updates)
             result = evaluate_quote_exit(pos, quote, session=day, now=now, received_at=received_at,
                                          vol20_daily=self.vol_for(sina, day),
-                                         morning_open_stop=self.client.strategy_id == "strategy1")
+                                         morning_open_stop=True)
             if result:
                 updates = dict(result["updates"], quote_exit_watermark=result["watermark"])
                 updates.update(note_updates)

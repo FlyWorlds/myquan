@@ -11,7 +11,11 @@ async function load() {
   const id = ++request
   indexRows.value = []; error.value = ''
   try {
-    const data = await $fetch<{ date: string; rate: number }[]>('/api/holdings/monthly-index', { query: { year: props.year, month: props.month }, timeout: 20000 })
+    const data = await $fetch<{ date: string; rate: number }[]>('/api/holdings/monthly-index', {
+      query: { year: props.year, month: props.month },
+      cache: 'no-store',
+      timeout: 20000
+    })
     if (id === request) indexRows.value = data
   } catch { if (id === request) error.value = '上证指数暂时无法读取' }
 }
@@ -21,10 +25,14 @@ function draw() {
   const account = new Map(props.rows.filter(r => String(r.trading_day).startsWith(prefix)).map(r => [String(r.trading_day).slice(0, 10), r]))
   const benchmark = new Map(indexRows.value.map(r => [r.date, r.rate]))
   const dates = [...new Set([...account.keys(), ...benchmark.keys()])].sort()
-  let cumulative = 1, incomplete = false
+  let started = false, cumulative = 1, incomplete = false
   const returns = dates.map(d => {
     const rate = account.get(d)?.day_pnl_pct
-    if (rate == null || !Number.isFinite(Number(rate))) { incomplete = true; return null }
+    if (rate == null || !Number.isFinite(Number(rate))) {
+      if (started) incomplete = true
+      return null
+    }
+    started = true
     if (incomplete) return null
     cumulative *= 1 + Number(rate) / 100
     return Number(((cumulative - 1) * 100).toFixed(6))
@@ -43,7 +51,7 @@ function draw() {
   }, true)
 }
 watch(() => [props.year, props.month], load)
-watch(() => [props.rows, indexRows.value], draw, { deep: true })
+watch(() => [props.rows, indexRows.value, props.year, props.month], draw, { deep: true })
 onMounted(() => { chart = echarts.init(el.value!); observer = new ResizeObserver(() => chart?.resize()); observer.observe(el.value!); draw(); void load() })
 onBeforeUnmount(() => { ++request; observer?.disconnect(); chart?.dispose() })
 </script>

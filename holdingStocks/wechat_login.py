@@ -63,30 +63,65 @@ class WechatLogin:
             return self._view()
 
     def _send_test(self):
-        from wechat_notify import send_test_alert, classify_send_error, ERR_SESSION_INVALID
+        from wechat_notify import send_test_alert, classify_send_error, ERR_SESSION_INVALID, load_config
+        from wechat_accounts import delivery_configs
         try:
-            if self.slot == 'primary':
-                config = self._config()
-                if config.get('secondary'):
-                    from wechat_accounts import config_for_slot
-                    ok, detail = send_test_alert(config=config_for_slot('primary', config))
+            cfg = load_config()
+            destinations = delivery_configs(cfg)
+            if len(destinations) > 1:
+                # 用户配置了两个微信：点击测试时两个微信均同时发送测试消息
+                results = []
+                for dest in destinations:
+                    slot_name = "微信1" if dest.get("_recipient_slot") == "primary" else "微信2"
+                    try:
+                        ok_dest, detail_dest = send_test_alert(config=dest)
+                    except Exception as exc:
+                        ok_dest, detail_dest = False, str(exc)
+                    results.append((slot_name, ok_dest, detail_dest))
+                all_ok = all(r[1] for r in results)
+                any_ok = any(r[1] for r in results)
+                ok = all_ok
+                if all_ok:
+                    message = "两个微信测试消息均已发送，请查看微信。"
                 else:
-                    ok, detail = send_test_alert()
+                    err_msgs = []
+                    for name, res_ok, detail in results:
+                        if not res_ok:
+                            if classify_send_error(detail) == ERR_SESSION_INVALID:
+                                err_msgs.append(f"{name}会话未建立(请给机器人发一条消息)")
+                            else:
+                                err_msgs.append(f"{name}发送失败")
+                        else:
+                            err_msgs.append(f"{name}已发送")
+                    message = "；".join(err_msgs)
+            elif self.slot == 'primary':
+                config = self._config()
+                ok, detail = send_test_alert()
+                if ok:
+                    message = "测试消息已发送，请查看微信。"
+                elif classify_send_error(detail) == ERR_SESSION_INVALID:
+                    message = "微信会话已失效，请先给机器人发一条消息，再重试测试推送。"
+                elif "target" in str(detail) and "未配置" in str(detail):
+                    message = "尚未配置微信接收人，请先配置接收人后重试。"
+                elif "weixin not configured" in str(detail):
+                    message = "推送账号未就绪，请重新扫码连接，并确认微信接收人配置。"
+                else:
+                    message = "测试消息发送失败，请检查微信连接后重试。"
             else:
                 config = self._config()
                 if not config.get('account') or not config.get('target'):
                     raise ValueError('请先用第二个微信扫码连接')
                 ok, detail = send_test_alert(config=config)
-            if ok:
-                message = "测试消息已发送，请查看微信。"
-            elif classify_send_error(detail) == ERR_SESSION_INVALID:
-                message = "微信会话已失效，请先给机器人发一条消息，再重试测试推送。"
-            elif "target" in str(detail) and "未配置" in str(detail):
-                message = "尚未配置微信接收人，请先配置接收人后重试。"
-            elif "weixin not configured" in str(detail):
-                message = "推送账号未就绪，请重新扫码连接，并确认微信接收人配置。"
-            else:
-                message = "测试消息发送失败，请检查微信连接后重试。"
+                if ok:
+                    message = "测试消息已发送，请查看微信。"
+                elif classify_send_error(detail) == ERR_SESSION_INVALID:
+                    message = "微信会话已失效，请先给机器人发一条消息，再重试测试推送。"
+                elif "target" in str(detail) and "未配置" in str(detail):
+                    message = "尚未配置微信接收人，请先配置接收人后重试。"
+                elif "weixin not configured" in str(detail):
+                    message = "推送账号未就绪，请重新扫码连接，并确认微信接收人配置。"
+                else:
+                    message = "测试消息发送失败，请检查微信连接后重试。"
         except Exception as exc:
             print(f"[WECHAT TEST] {type(exc).__name__}", flush=True)
             ok, message = False, "测试消息发送失败，请稍后重试。"

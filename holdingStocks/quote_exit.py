@@ -33,7 +33,7 @@ def overnight_note_updates(pos, quote, session):
 
 def evaluate_quote_exit(pos: dict, quote: dict, *, session: str, now: datetime,
                         received_at: datetime, vol20_daily=None, tick=.01,
-                        morning_open_stop=False) -> dict | None:
+                        morning_open_stop=True) -> dict | None:
     if not fresh_quote(quote, session, now) or not 0 <= (now-received_at).total_seconds() <= 5:
         return None
     clock = str(quote["last_ts"])[11:19]

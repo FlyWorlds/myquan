@@ -8747,7 +8747,7 @@ def _collect_quote_runtime_rows(get_quote=None):
                     day_open=float(q.get("open") or 0),
                     overnight_armed=bool(pos.get("stop_noted")) and str(pos.get("buy_time") or "")[:10] < day,
                     vol20_daily=_quote_daily_vol(w["sina"], day), tick=_watch_tick(w))
-            if STRATEGY_ID == "strategy1" and str(pos.get("buy_time") or "")[:10] < day:
+            if str(pos.get("buy_time") or "")[:10] < day:
                 from strategy1_exit import morning_stop_price
                 morning_stop = morning_stop_price(float(q.get("open") or 0), datetime.now().strftime("%H:%M:%S"), tick=_watch_tick(w))
                 if morning_stop is not None and morning_stop > float(stop or 0):
@@ -13041,7 +13041,7 @@ def _quote_exit_transition(pos, quote, received_at):
     freeze_overnight_peak_for_session(pos, session=day, cost=pos.get("cost"),
         prev_close=quote.get("prev_close"), open_px=quote.get("open"), qty=pos.get("qty"))
     result = evaluate_quote_exit(pos, quote, session=day, now=datetime.now(), received_at=received_at,
-                                vol20_daily=vol, morning_open_stop=STRATEGY_ID == "strategy1")
+                                vol20_daily=vol, morning_open_stop=True)
     if result:
         result["updates"].update(note_updates)
         result["updates"].update({k: pos[k] for k in ("overnight_peak", "overnight_peak_session")
