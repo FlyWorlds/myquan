@@ -70,6 +70,8 @@ class StrategyBooksRuntime:
         if str(quote["last_ts"]) < prior_ts:
             return
         qty = int(book.get("virtual_shares") or 0)
+        if order and order.get("strategy") == "strategy1" and str(book.get("exit_time") or "").startswith(day):
+            order = dict(order, reentry_after=max(str(order.get("reentry_after") or ""), str(book["exit_time"])))
         action, updates = None, {}
         if qty > 0:
             pos = dict(book, code=code, qty=qty, cost=book.get("entry_price"), buy_time=book.get("entry_time"))
@@ -101,8 +103,10 @@ class StrategyBooksRuntime:
         elif active and order and self.order_valid(order) and self.signal_window(now) and is_trigger(order, quote, received_at, now):
             from strategy1_entry import effective_order
             order = effective_order(order, quote)
-            price = max(float(quote["last"]), float(order["price"])) if order.get("kind") == "day_low_rebound" else float(order["price"])
+            price = float(order["price"])
             sold_today = str(book.get("exit_time") or "").startswith(day)
+            if sold_today and order.get("strategy") == "strategy1" and order.get("kind") == "day_low_rebound" and order.get("wave_ready"):
+                sold_today = False
             if sold_today and book.get("gap_rebuy_allowed") and order.get("kind") == "breakout":
                 sold_today = False
             if not sold_today and not cannot_buy_limit_up(prev_close=quote.get("prev_close"),

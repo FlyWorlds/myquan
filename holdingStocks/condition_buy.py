@@ -62,6 +62,8 @@ def is_trigger(order: dict, quote: dict, received_at: datetime, now: datetime) -
     if not phase_allowed(order, now):
         return False
     order = effective_order(order, quote)
+    if order.get("kind") == "day_low_rebound" and not order.get("wave_ready"):
+        return False
     if order.get("status") not in ("ARMED", "TRIGGERED"):
         return False
     if not 0 <= (now - received_at).total_seconds() <= 5:

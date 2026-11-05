@@ -1,12 +1,12 @@
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
 from database_strategy_books import StrategyBooksClient, StrategyDatabaseError, apply_database_book_to_row
 from strategy_books_runtime import StrategyBooksRuntime
 from test_condition_buy import order, quote
 
-NOW = datetime(2026, 10, 15, 10, 0)
+NOW = datetime(2026, 10, 15, 10, 1)
 
 
 class Clock(datetime):
@@ -80,7 +80,13 @@ class TestStrategyRuntime(unittest.TestCase):
     def test_pool_strategy_buys_independently_of_two_paper_slots(self):
         codes = {"000070", "001266", "002962", "600330"}
         self.runtime.prepare([order(code, kind="day_low_rebound", signal_factor="factor33") for code in codes], codes)
+        from attack_wave import AttackWaves
+        waves = AttackWaves()
+        self.enterContext(patch("attack_wave.WAVES", waves))
         for code in codes:
+            for offset, px in [(3,10.1),(2,10.),(0,10.26)]:
+                when = NOW - timedelta(seconds=offset)
+                waves.observe(code, quote(last=px, last_ts=str(when)), when)
             self.runtime.on_quote(("sh" if code.startswith("6") else "sz")+code, quote(last_ts=str(NOW)), NOW)
         self.assertEqual(self.client.command.call_count, 4)
         for call in self.client.command.call_args_list:

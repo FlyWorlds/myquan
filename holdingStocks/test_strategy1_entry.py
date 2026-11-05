@@ -27,13 +27,26 @@ def test_no_breakout_after_ten_and_no_early_rebound():
     q=quote('09:59:59')
     assert not is_trigger(order('day_low_rebound'),q,at('09:59:59'),at('09:59:59'))
 
-def test_rebound_threshold_follows_new_low_without_using_high_as_trigger():
-    o=order('day_low_rebound');q=quote()
-    assert effective_order(o,q)['price'] == 9.23
-    assert is_trigger(o,q,at('10:00:01'),at('10:00:01'))
-    assert not is_trigger(o,quote(last=9.22),at('10:00:01'),at('10:00:01'))
-    assert effective_order(o,quote(low=8, last=8.2))['price'] == 8.2
-    assert o['price'] == 10.25
+def test_rebound_uses_observed_pullback_not_day_low():
+    from attack_wave import AttackWaves
+    from unittest.mock import patch
+    waves = AttackWaves()
+    o = dict(order('day_low_rebound'), code='600967', open=12.46, entry_pct=.02)
+    with patch('attack_wave.WAVES', waves):
+        for clock, px in [('10:00:01',12.63), ('10:01:01',12.59), ('10:02:01',12.72)]:
+            q = quote(clock, open=12.46, low=12.30, high=13.2, last=px)
+            waves.observe('600967', q, at(clock))
+            assert not is_trigger(o,q,at(clock),at(clock))
+        assert effective_order(o,q)['price'] == 12.85
+        q = quote('10:03:01',open=12.46,low=12.30,high=13.2,last=12.85)
+        waves.observe('600967',q,at('10:03:01'))
+        assert is_trigger(o,q,at('10:03:01'),at('10:03:01'))
+        # Even a one-tick pullback starts a new wave, without reusing 12.59.
+        q = quote('10:04:01',open=12.46,low=12.30,high=13.2,last=12.84)
+        waves.observe('600967',q,at('10:04:01'))
+        assert effective_order(o,q)['price'] == 13.1
+        assert not is_trigger(o,q,at('10:04:01'),at('10:04:01'))
+
 
 def test_auction_only_bell_no_historical_backfill():
     o=order('auction_open');o['price']=10

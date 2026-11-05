@@ -31,6 +31,18 @@ class TestQuoteExit(unittest.TestCase):
         self.assertEqual(second["action"]["shares"], 500)
         self.assertEqual(second["action"]["fill_px"], 10.7)
 
+    def test_zhongjian_peak_protection_stays_armed_below_three_percent(self):
+        pos = dict(code="002779", qty=700, available=700, cost=77.68,
+                   buy_time="2026-10-14 10:00:00", peak_high=81.29, stop_noted=False)
+        q = quote(open=79.7, high=80.2, low=78.49, last=79.08, prev_close=80.5, last_ts=str(NOW))
+        result = evaluate_quote_exit(pos, q, session="2026-10-15", now=NOW, received_at=NOW)
+        self.assertEqual(result["action"]["reason"], "half_gain")
+        self.assertEqual(result["action"]["kind"], "full")
+        self.assertEqual(result["action"]["fill_px"], 79.08)
+        # T+1 still applies even when the same protection level is crossed.
+        pos["buy_time"] = "2026-10-15 09:31:00"
+        self.assertIsNone(evaluate_quote_exit(pos, q, session="2026-10-15", now=NOW, received_at=NOW)["action"])
+
     def test_buy_day_never_sells(self):
         self.assertIsNone(self.evaluate(9., buy_time="2026-10-15 09:31:00")["action"])
 

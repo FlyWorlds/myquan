@@ -171,7 +171,8 @@ def detect_intrabar_ambiguity(
         return empty
 
     new_high = h > peak + 1e-12
-    live_hi = max(h, day_o, bar_o)
+    # Once armed, protection follows the holding peak even below +3%.
+    live_hi = max(peak, h, day_o, bar_o)
     live_ok = pnl_exceeds(live_hi, cost, giveback_arm_pct)
     peak_incl = max(peak, h)
     peak_gain = (peak_incl / cost - 1.0) if cost > 0 and peak_incl > 0 else 0.0
@@ -1175,7 +1176,8 @@ def eval_multi_tp_bar(
             "session_peak_after": sess_after,
         }
 
-    live_hi = max(h, day_o, bar_o)
+    # Once armed, protection follows the holding peak even below +3%.
+    live_hi = max(peak, h, day_o, bar_o)
     live_ok = pnl_exceeds(live_hi, cost, giveback_arm_pct)
     peak_incl = max(peak, h)
     peak_gain = (peak_incl / cost - 1.0) if cost > 0 and peak_incl > 0 else 0.0

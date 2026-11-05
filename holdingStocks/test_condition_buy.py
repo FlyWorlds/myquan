@@ -296,6 +296,14 @@ class TestConditionDatabase(unittest.TestCase):
         orders = {c: order(c, kind="day_low_rebound", open=13.85, entry_pct=.03, signal_factor="factor33") for c in codes}
         self.state["holdings"]["condition_buy_orders"]["orders"] = orders
         q = quote(last_ts=str(late), open=13.85, prev_close=13.81, low=13.70, high=14.48, last=14.47)
+        from attack_wave import AttackWaves
+        waves = AttackWaves()
+        for code in codes:
+            for offset, px in [(3, 13.85), (2, 13.70), (0, 14.47)]:
+                when = late - timedelta(seconds=offset)
+                tick = dict(q, last=px, last_ts=str(when))
+                waves.observe(code, tick, when)
+        self.enterContext(patch("attack_wave.WAVES", waves))
         self.feed.get_quote.return_value = q
         with patch.object(index, "datetime", LateClock), patch.object(index, "_now", return_value=str(late)), \
              patch("daily_buy_quota.quota_reason", return_value=None), \

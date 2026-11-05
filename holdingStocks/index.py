@@ -6488,6 +6488,9 @@ def stop_rebuy_allowed(
         return False
     if rec.get("full_exit") is False:
         return False
+    if (STRATEGY_ID == "strategy1" and rec.get("full_exit") is True
+            and rec.get("exit_kind") in {"vol_giveback", "half_gain", "peak_pullback_clear", "ladder_full_15"}):
+        return True
     if overnight_gap_rebuy_allowed(rec, session=session):
         return True
     return bool(rec.get("allow_stop_rebuy"))
@@ -8779,9 +8782,14 @@ def _collect_quote_runtime_rows(get_quote=None):
         official_open = order.get("open") if order else session_open_usable(q)
         phase = phase_at(datetime.now()) if STRATEGY_ID == "strategy1" else None
         if STRATEGY_ID == "strategy1" and not row["持仓"]:
-            if phase == "day_low_rebound" and q.get("low"):
-                target = official_buy_trigger(float(q["low"]), entry_pct=_watch_pct(w), tick=_watch_tick(w))
-                row.update({"买点": target, "买入侧价": target, "信号因子": "factor33", "信号来源": LABELS[phase]})
+            if phase == "day_low_rebound" or (order and order.get("kind") == "day_low_rebound"):
+                wave_order = effective_order(order, q) if order and order.get("kind") == "day_low_rebound" else {}
+                target = wave_order.get("price") if wave_order.get("wave_ready") else None
+                row.update({"买点": target, "买入侧价": target, "信号因子": "factor33", "信号来源": LABELS["day_low_rebound"],
+                    "攻击波就绪": bool(wave_order.get("wave_ready")), "攻击波低点": wave_order.get("reference_low"),
+                    "攻击波起点": wave_order.get("wave_start"), "已触买": "否"})
+                if order and order.get("reentry_after") and stop_rebuy_allowed((data.get("realized_today") or {}).get(code), session=day):
+                    row.update({"过门OK": True, "过门": "清仓后攻击波接回"})
             elif order and order.get("kind") == "auction_open" and datetime.now().strftime("%H:%M:%S") <= "09:30:05":
                 row.update({"信号因子": "factor29", "信号来源": LABELS["auction_open"]})
             else:
@@ -12884,8 +12892,12 @@ def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dic
         *_prev_bars_from_daily(cached[1], day), entry_pct=entry, tick=tick,
         prev_entry_mode=str(w.get("prev_entry_mode") or "yin_or_small_yang"),
     )
-    if not allow:
+    rec = ((_HOLDINGS_CACHE.get("data") or {}).get("realized_today") or {}).get(w["code"], {})
+    rebuy = STRATEGY_ID == "strategy1" and stop_rebuy_allowed(rec, session=day)
+    if not allow and not rebuy:
         return None
+    if rebuy:
+        gate = "清仓后攻击波接回"
     audit = audit_single_stock_open(code=w["code"], expected_open=official, session=day, tick=tick)
     if not audit.get("ok"):
         return None
@@ -12899,8 +12911,10 @@ def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dic
     auction_enabled = any(b.factor_id == "factor29" and b.enabled for b in get_strategy_bindings(STRATEGY_ID))
     auction = auction_enabled and prepared_now.strftime("%H:%M:%S") < "09:30:00" and bool(f29.get("hit_buy"))
     from strategy1_entry import phase_at
+    if STRATEGY_ID == "strategy1" and phase_at(prepared_now) is None:
+        return None
     rebound = STRATEGY_ID == "strategy1" and phase_at(prepared_now) == "day_low_rebound"
-    price = official if auction else official_buy_trigger(float(q.get("low") or official) if rebound else official, entry_pct=entry, tick=tick)
+    price = official if auction else official_buy_trigger(float(q.get("last") or official) if rebound else official, entry_pct=entry, tick=tick)
     if not price:
         return None
     armed = prepared_now.isoformat(sep=" ", timespec="microseconds")
@@ -12910,6 +12924,14 @@ def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dic
     order.update(gate=gate, previous_shape=shape, previous_close=q.get("prev_close"), open_audit_at=audit.get("quote_ts"),
                  limit_up_pct=_watch_limit_down_pct(w), auction_path=path if auction else None,
                  daily_sig=_daily_frame_sig(cached[1]))
+    if rebound:
+        # Stable identity: a moving trough must not re-arm the order every tick.
+        import hashlib
+        cycle = str(rec.get("time") or "") if rebuy else ""
+        order.update(id=hashlib.sha256(f"{STRATEGY_ID}:{day}:{w['code']}:{official}:attack_v1:{cycle}".encode()).hexdigest()[:24],
+                     reentry_after=cycle, entry_rule="attack_wave_v1")
+    elif rebuy:
+        return None  # Re-entry always requires a new attack wave after 10:00.
     from condition_buy import auction_entry_blocked
     if auction_entry_blocked(official, q.get("prev_close"), limit_up_pct=order["limit_up_pct"]):
         order.update(status="BLOCKED", reason="AUCTION_NEAR_LIMIT_UP")
@@ -12960,7 +12982,7 @@ def _store_condition_drafts(drafts: list[dict[str, Any]], active_codes: set[str]
             if draft.get("status") == "BLOCKED" and old.get("status") != "BLOCKED":
                 old.update(status="BLOCKED", reason=draft.get("reason"))
                 changed = True
-        if (old.get("id") == draft["id"] and old.get("status") != "CANCELLED") or old.get("status") == "FILLED":
+        if (old.get("id") == draft["id"] and old.get("status") != "CANCELLED") or (old.get("status") == "FILLED" and not draft.get("reentry_after")):
             continue
         if (old.get("kind") == "auction_open" and datetime.now().strftime("%H:%M:%S") <= "09:30:05"
                 and old.get("status") in ("ARMED", "TRIGGERED")):
@@ -13271,7 +13293,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
         from strategy1_entry import effective_order, quota_reason
         effective = effective_order(candidate, q)
         if effective is not candidate:
-            candidate.update(price=effective["price"], reference_low=effective["reference_low"])
+            candidate.update({k: effective[k] for k in ("price", "reference_low", "wave_ready", "wave_start", "wave_low_at") if k in effective})
         reason = quota_reason(candidate, getattr(_HOLDINGS_STORE, "_state", {}).get("trades", []), day)
         prepared_daily = candidate.get("daily_sig")
         cached_daily = _DAILY_CACHE.get(_sina_of(ck))
@@ -13342,7 +13364,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
             continue
         candidate.update(status="FILLED", decision_time=decision, filled_qty=qty, reason=None)
         apply_paper_slot_buy(code=ck, meta=candidate, price=fill_price, qty=qty,
-                             note=("因子29·竞价末段强度·开盘买入" if metadata["signal_factor"] == "factor29" else "因子33·日内低点反弹" if metadata["signal_factor"] == "factor33" else "条件单触买(模拟·挂单价)"), buy_time=decision, session=day,
+                             note=("因子29·竞价末段强度·开盘买入" if metadata["signal_factor"] == "factor29" else "因子33·回落后攻击波" if metadata["signal_factor"] == "factor33" else "条件单触买(模拟·挂单价)"), buy_time=decision, session=day,
                              session_low=q["low"], official_buy=candidate["price"], session_high=q["high"],
                              execution_meta=metadata)
         print(f"[{decision}] [CONDITION_BUY] {ck} 条件单成交 {qty}股@{fill_price:.2f}，源信号 {metadata['signal_time']}")
@@ -13517,6 +13539,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
     if _CONDITION_BUY_ACTIVE:
         from database_quotes import DatabaseQuotes
         def observe_quote(sina, quote):
+            from attack_wave import WAVES
+            WAVES.observe(_code_key(sina), quote, datetime.now())
             _QUOTE_ALERTS.observe(_code_key(sina), quote, datetime.now())
             condition_worker.observe(sina, quote)
             strategy_worker.observe(sina, quote)
@@ -13599,7 +13623,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
                         if not daily or daily[0] != str(trading_session_date()) or not q or not session_open_usable(q):
                             continue
                         spec = (str(trading_session_date()), q.get("open"), _watch_pct(w), _watch_tick(w),
-                                _daily_frame_sig(daily[1]), now.strftime("%H:%M:%S") > "09:30:05", now.strftime("%H:%M:%S") >= "10:00:00")
+                                _daily_frame_sig(daily[1]), now.strftime("%H:%M:%S") > "09:30:05", now.strftime("%H:%M:%S") >= "10:00:00",
+                                ((cached_data.get("realized_today") or {}).get(code) or {}).get("time"))
                         stored_order = ((cached_data.get("condition_buy_orders") or {}).get("orders") or {}).get(code, {})
                         if ready.get(code) == spec and stored_order.get("status") != "CANCELLED":
                             continue

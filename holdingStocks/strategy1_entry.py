@@ -3,7 +3,7 @@ import math
 from strategy.open_break import entry_trigger_price
 
 LABELS = {'auction_open': '因子29·竞价末段强度', 'breakout': '因子26·开盘突破',
-          'day_low_rebound': '因子33·日内低点反弹'}
+          'day_low_rebound': '因子33·回落后攻击波'}
 
 
 def phase_at(now):
@@ -20,14 +20,15 @@ def phase_at(now):
 def effective_order(order, quote):
     if order.get('strategy') != 'strategy1' or order.get('kind') != 'day_low_rebound':
         return order
-    try:
-        low = float(quote.get('low') or 0)
-    except (TypeError, ValueError, OverflowError):
-        return order
-    if not math.isfinite(low) or low <= 0:
-        return order
+    from attack_wave import WAVES
+    wave = WAVES.snapshot(order['code'], quote)
+    since = str(order.get('reentry_after') or '')
+    ready = bool(wave.get('ready') and (not since or wave.get('anchor_at', '') > since))
+    low = wave.get('low')
+    if not low:
+        return dict(order, wave_ready=False)
     return dict(order, price=entry_trigger_price(low, entry_pct=float(order['entry_pct']), tick=float(order['tick'])),
-                reference_low=low)
+                reference_low=low, wave_ready=ready, wave_start=wave['start_at'], wave_low_at=wave['low_at'])
 
 
 def phase_allowed(order, now):

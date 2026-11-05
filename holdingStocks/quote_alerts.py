@@ -28,8 +28,13 @@ class QuoteAlerts:
                 return
             if abs(float(quote['open']) - target['open']) > target['tick'] / 10:
                 return
+            if target.get('factor') == 'factor33':
+                from attack_wave import WAVES
+                wave = WAVES.snapshot(code, quote)
+                if not wave.get('ready') or wave.get('start_at') != target.get('wave_start'):
+                    return
             if float(quote['last']) >= target['price']:
-                self._hits.setdefault((session, code, target['price'], target.get('factor')), quote['last_ts'])
+                self._hits.setdefault((session, code, target['price'], target.get('factor'), target.get('wave_start')), quote['last_ts'])
 
     def enrich(self, row, quote, *, now, signal, entry_pct, tick, official_open=None,
                blocked=False):
@@ -45,6 +50,11 @@ class QuoteAlerts:
         from watch_config import official_buy_trigger, is_signal_window, is_threshold_ready
         if not is_threshold_ready(now):
             return
+        if row.get('信号因子') == 'factor33' and not row.get('攻击波就绪'):
+            with self._lock:
+                self._targets.pop(code, None)
+            row.update({'已触买': '否', '近买点': False, '预警状态': '等待回落后的新攻击波'})
+            return
         buy = float(row.get('买点') or official_buy_trigger(opening, entry_pct=entry_pct, tick=tick))
         qty = int(row.get('持仓') or 0)
         allowed = bool(row.get('过门OK')) and not blocked and not row.get('已实现')
@@ -52,7 +62,7 @@ class QuoteAlerts:
             if self._session != session:
                 self._targets.clear(); self._hits.clear(); self._session = session
             if allowed and qty == 0:
-                self._targets[code] = dict(session=session, open=opening, price=buy, tick=tick, factor=row.get('信号因子'))
+                self._targets[code] = dict(session=session, open=opening, price=buy, tick=tick, factor=row.get('信号因子'), wave_start=row.get('攻击波起点'))
             else:
                 self._targets.pop(code, None)
                 if not allowed:
@@ -69,7 +79,7 @@ class QuoteAlerts:
             row['预警状态'] = '开盘价不一致，等待复核'
             return
         with self._lock:
-            first_hit = self._hits.get((session, code, buy, row.get('信号因子'))) if allowed else None
+            first_hit = self._hits.get((session, code, buy, row.get('信号因子'), row.get('攻击波起点'))) if allowed else None
         last = float(quote['last'])
         stop = row.get('卖出侧价')
         sig = signal(open_px=opening, high_px=float(quote['high']), low_px=float(quote['low']),
