@@ -1212,6 +1212,8 @@ def build_watch_snapshot(
     strategy16: list[dict[str, Any]] | None = None,
     strategy16b: list[dict[str, Any]] | None = None,
     strategy17: list[dict[str, Any]] | None = None,
+    strategy35: dict[str, Any] | None = None,
+    strategy36: dict[str, Any] | None = None,
     sectors: dict[str, Any] | None = None,
     refresh_sec: int = 5,
     portfolio_codes: set[str] | None = None,
@@ -1361,6 +1363,8 @@ def build_watch_snapshot(
         "strategy16": strategy16_rows,
         "strategy16b": strategy16b_rows,
         "strategy17": strategy17_rows,
+        "strategy35": _public_panel_json(strategy35 or {}),
+        "strategy36": _public_panel_json(strategy36 or {}),
         "sectors": sectors or {},
         "strategies": strategies or [],
     }

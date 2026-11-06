@@ -54,6 +54,32 @@ export function useStockProfile() {
     return readSession(c)
   }
 
+  function clear(code?: string | number | null) {
+    const c = digitsOf(code)
+    if (!c) return
+    cache.delete(c)
+    inflight.delete(c)
+    if (import.meta.client) {
+      try {
+        sessionStorage.removeItem(SS_PREFIX + c)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  async function fetchWithRetry(code: string, retries = 1, delayMs = 400): Promise<StockProfile> {
+    try {
+      return await $fetch<StockProfile>('/api/stock/profile', { query: { code } })
+    } catch (err) {
+      if (retries > 0) {
+        await new Promise((r) => setTimeout(r, delayMs))
+        return fetchWithRetry(code, retries - 1, delayMs)
+      }
+      throw err
+    }
+  }
+
   async function load(code?: string | number | null): Promise<StockProfile | null> {
     const c = digitsOf(code)
     if (!c) return null
@@ -61,7 +87,7 @@ export function useStockProfile() {
     if (hit) return hit
     const pending = inflight.get(c)
     if (pending) return pending
-    const req = $fetch<StockProfile>('/api/stock/profile', { query: { code: c } })
+    const req = fetchWithRetry(c, 1, 400)
       .then((data) => {
         if (hasValuation(data)) {
           cache.set(c, data)
@@ -72,10 +98,19 @@ export function useStockProfile() {
       })
       .catch((err) => {
         inflight.delete(c)
+        const rawMsg = err instanceof Error ? err.message : String(err || '')
+        let friendly = '基本面数据暂不可用'
+        if (
+          rawMsg.includes('Failed to fetch') ||
+          rawMsg.includes('NetworkError') ||
+          rawMsg.includes('fetch')
+        ) {
+          friendly = '网络连接波动或服务重连中'
+        }
         const failed: StockProfile = {
           code: c,
           name: c,
-          error: err instanceof Error ? err.message : 'profile unavailable',
+          error: friendly,
         }
         return failed
       })
@@ -83,5 +118,10 @@ export function useStockProfile() {
     return req
   }
 
-  return { load, peek, digitsOf, hasValuation }
+  async function reload(code?: string | number | null): Promise<StockProfile | null> {
+    clear(code)
+    return load(code)
+  }
+
+  return { load, reload, clear, peek, digitsOf, hasValuation }
 }

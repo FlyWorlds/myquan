@@ -32,6 +32,21 @@ class TestWatchSnapshotNames(unittest.TestCase):
         self.assertEqual(out[2]["名称"], "金安国纪")
         self.assertEqual(out[3]["名称"], "凯盛科技")
 
+    def test_factors_and_strategies_api_payloads(self) -> None:
+        import index
+
+        factors_data = index._load_watch_factors_api()
+        self.assertIn("categories", factors_data)
+        self.assertIn("factors", factors_data)
+        self.assertGreater(len(factors_data["factors"]), 20)
+
+        strategies_data = index._load_watch_strategy_tabs()
+        self.assertGreater(len(strategies_data), 5)
+        strat_ids = [s["id"] for s in strategies_data]
+        self.assertIn("strategy1", strat_ids)
+        self.assertIn("strategy16b", strat_ids)
+        self.assertIn("strategy35", strat_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

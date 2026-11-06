@@ -35,6 +35,10 @@
   · factor30 — 结构前低破位（底分型A→上笔→顶分型B→相邻下行破A）
   · factor31 — 放量破位后下影线/收复前低止跌
   · factor32 — 冻结结构失效、前低前高分批退出与风险仓位
+  · factor33 — 10点后日内低点反弹攻击波
+  · factor34 — 尾盘高量比抢筹与次日早盘冲高
+  · factor35 — 多维复合空仓避险因子（指数MA60破位 + 全市场广度溃败）
+  · factor36 — 科技成长多维空仓因子（创业板/深成指/科创50生命线 + 科技池微观广度）
   · cf1 — 流动性门控反转（Amihud 软门 × 短期反转）
   分类见 strategy.factors.categories
 """
@@ -80,3 +84,5 @@ from strategy.factors.categories import list_category_catalog
 __all__ = ["FACTOR_REGISTRY", "get_factor", "list_factors", "list_category_catalog"]
 from strategy.factors import factor33 as _factor33  # noqa: F401
 from strategy.factors import factor34 as _factor34  # noqa: F401
+from strategy.factors import factor35 as _factor35  # noqa: F401
+from strategy.factors import factor36 as _factor36  # noqa: F401

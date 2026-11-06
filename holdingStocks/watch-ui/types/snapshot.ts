@@ -458,6 +458,130 @@ export interface SectorsLivePayload {
   deferred?: boolean
 }
 
+export interface Strategy35HistoryPoint {
+  date: string
+  close: number
+  ma20?: number | null
+  ma60?: number | null
+  breadth: number
+  new_low: number
+  is_cash: boolean
+}
+
+export interface Strategy35BreakdownItem {
+  name: string
+  current_value?: number
+  threshold?: number
+  diff_pct?: number
+  status: string
+  ok: boolean
+  desc: string
+  index_target?: number
+  breadth_target?: number
+}
+
+export interface Strategy35Current {
+  date: string
+  is_cash: boolean
+  status_label: string
+  status_tag: string
+  reason: string
+  close: number
+  ma20: number
+  ma60: number
+  breadth: number
+  new_low_ratio: number
+  breakdown: Record<string, Strategy35BreakdownItem>
+}
+
+export interface Strategy35Thresholds {
+  trend_ma: number
+  rebound_ma: number
+  breadth_panic: number
+  extreme_panic: number
+  exit_breadth: number
+  new_low_panic: number
+}
+
+export interface Strategy35Payload {
+  error?: string | null
+  updated_at?: string
+  as_of_clock?: string
+  current?: Strategy35Current
+  thresholds?: Strategy35Thresholds
+  history?: Strategy35HistoryPoint[]
+  cash_intervals?: Array<{ start: string; end: string }>
+  backtest_summary?: Record<string, string>
+  battles?: Array<{ name: string; period: string; index_ret: string; cash_ret: string; alpha: string; desc: string }>
+  rules?: string[]
+}
+
+export interface Strategy36HistoryPoint {
+  date: string
+  cyb_close: number
+  cyb_ma20?: number | null
+  cyb_ma60?: number | null
+  sz_close?: number | null
+  sz_ma60?: number | null
+  kc_close?: number | null
+  kc_ma60?: number | null
+  tech_breadth: number
+  new_low: number
+  is_cash: boolean
+}
+
+export interface Strategy36BreakdownItem {
+  name: string
+  current_value?: number
+  threshold?: number
+  diff_pct?: number
+  status: string
+  ok: boolean
+  desc: string
+  index_target?: number
+  breadth_target?: number
+  sz_close?: number
+  sz_ma60?: number
+  kc_close?: number
+  kc_ma60?: number
+}
+
+export interface Strategy36Current {
+  date: string
+  is_cash: boolean
+  status_label: string
+  status_tag: string
+  reason: string
+  cyb_close: number
+  cyb_ma20: number
+  cyb_ma60: number
+  sz_close?: number
+  kc_close?: number
+  tech_breadth: number
+  tech_new_low: number
+  breakdown: Record<string, Strategy36BreakdownItem>
+}
+
+export interface Strategy36Thresholds {
+  trend_ma: number
+  rebound_ma: number
+  breadth_panic: number
+  extreme_panic: number
+  exit_breadth: number
+}
+
+export interface Strategy36Payload {
+  error?: string | null
+  updated_at?: string
+  as_of_clock?: string
+  current?: Strategy36Current
+  thresholds?: Strategy36Thresholds
+  history?: Strategy36HistoryPoint[]
+  cash_intervals?: Array<{ start: string; end: string }>
+  battles?: Array<{ name: string; period: string; cyb_ret: string; cash_ret: string; alpha: string; desc: string }>
+  rules?: string[]
+}
+
 export interface WatchSnapshot {
   v: number
   type: 'snapshot'
@@ -498,6 +622,8 @@ export interface WatchSnapshot {
   strategy16?: HoldingRow[]
   strategy16b?: HoldingRow[]
   strategy17?: HoldingRow[]
+  strategy35?: Strategy35Payload
+  strategy36?: Strategy36Payload
   sectors?: SectorsLivePayload
   strategies: StrategyTab[]
 }

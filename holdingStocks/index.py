@@ -849,6 +849,10 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
             tabs[-1]["reportPath"] = "docs/FACTOR27.md"
         if spec.id == "strategy17":
             tabs[-1]["reportPath"] = "docs/FACTOR28.md"
+        if spec.id == "strategy35":
+            tabs[-1]["reportPath"] = "docs/STRATEGY35.md"
+        if spec.id == "strategy36":
+            tabs[-1]["reportPath"] = "docs/STRATEGY36.md"
         from strategy_picks_loader import load_strategy_picks
 
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
@@ -900,7 +904,7 @@ def _load_watch_factors_api() -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for fspec in list_factors():
         bindings = used_by.get(str(fspec.id), [])
-        bindings.sort(key=lambda s: int(_strategy_tab_number(str(s["id"])) or 0) if str(s["id"]).startswith("strategy") else 99)
+        bindings.sort(key=lambda s: _strategy_tab_sort_value(str(s["id"]), s.get("meta") if isinstance(s.get("meta"), dict) else None))
         cat = category_of(str(fspec.id), fspec.meta)
         rows.append(
             {
@@ -2750,6 +2754,8 @@ def publish_watch_snapshot(
     strategy8: dict[str, Any] = {}
     strategy15: dict[str, Any] = {}
     strategy17_rows: list[dict[str, Any]] = []
+    strategy35_payload: dict[str, Any] = {}
+    strategy36_payload: dict[str, Any] = {}
     if _CONDITION_BUY_ACTIVE:
         include_strategy_panels = False
         previous = _QUOTE_RUNTIME_PANELS or _last_watch_snapshot or {}
@@ -2757,6 +2763,8 @@ def publish_watch_snapshot(
         strategy8 = previous.get("strategy8") or {}
         strategy15 = previous.get("strategy15") or {}
         strategy17_rows = previous.get("strategy17") or (_last_watch_snapshot or {}).get("strategy17") or []
+        strategy35_payload = previous.get("strategy35") or (_last_watch_snapshot or {}).get("strategy35") or {}
+        strategy36_payload = previous.get("strategy36") or (_last_watch_snapshot or {}).get("strategy36") or {}
     if include_strategy_panels:
         from strategy3_watch import build_strategy3_payload
         from strategy8_watch import build_strategy8_payload
@@ -2801,6 +2809,20 @@ def publish_watch_snapshot(
             strategy17_rows = cached_strategy17_rows()
         except Exception:  # noqa: BLE001
             strategy17_rows = []
+        strategy35_payload: dict[str, Any] = {}
+        try:
+            from strategy35_watch import get_strategy35_timing_payload
+
+            strategy35_payload = get_strategy35_timing_payload()
+        except Exception as e:  # noqa: BLE001
+            strategy35_payload = {"error": str(e)}
+        strategy36_payload: dict[str, Any] = {}
+        try:
+            from strategy36_watch import get_strategy36_timing_payload
+
+            strategy36_payload = get_strategy36_timing_payload()
+        except Exception as e:  # noqa: BLE001
+            strategy36_payload = {"error": str(e)}
     # Retained signals are display data; never feed them back into execution.
     from alert_retention import LIVE_ALERT_RETENTION
     rows = [dict(row) for row in rows]
@@ -2826,6 +2848,8 @@ def publish_watch_snapshot(
         strategy16=_strategy16_rows_from_rows(rows),
         strategy16b=_strategy16b_rows_from_rows(rows),
         strategy17=strategy17_rows,
+        strategy35=strategy35_payload,
+        strategy36=strategy36_payload,
         sectors=sectors,
         refresh_sec=refresh_sec,
         portfolio_codes=portfolio_codes,
@@ -2995,6 +3019,8 @@ def _seed_boot_watch_snapshot() -> None:
         "strategy15": {},
         "strategy16": [],
         "strategy17": [],
+        "strategy35": {},
+        "strategy36": {},
         "sectors": {},
         "strategies": _watch_tabs_with_live_s8({}),
     }
@@ -13972,6 +13998,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
             from strategy3_watch import build_strategy3_payload
             from strategy8_watch import build_strategy8_payload
             from strategy15_watch import build_strategy15_payload
+            from strategy35_watch import get_strategy35_timing_payload
+            from strategy36_watch import get_strategy36_timing_payload
             while not stop.is_set():
                 if not _WATCH_FRONT_READY.wait(.5):
                     continue
@@ -13980,7 +14008,9 @@ def cmd_watch(args: argparse.Namespace) -> None:
                     batch = lambda sinas: {s: _quote_from_sina_spot(q) for s, q in fetch_sina_batch(sinas).items()}
                     panels = dict(strategy3=build_strategy3_payload(session=day, get_quote=get_quote, batch_quote=batch),
                         strategy8=build_strategy8_payload(session=day, get_quote=get_quote, batch_quote=batch),
-                        strategy15=build_strategy15_payload(session=day, strategy1_rows=_collect_quote_runtime_rows(get_quote)))
+                        strategy15=build_strategy15_payload(session=day, strategy1_rows=_collect_quote_runtime_rows(get_quote)),
+                        strategy35=get_strategy35_timing_payload(),
+                        strategy36=get_strategy36_timing_payload())
                     panels["indices"] = _QUOTE_RUNTIME_PANELS.get("indices") or fetch_indices_cached()
                     _QUOTE_RUNTIME_PANELS.update(panels)
                 except Exception as exc:

@@ -46,7 +46,7 @@ const cashPct = computed(() => {
           <span class="text-sm" title="持仓+今日平仓">
             <span class="text-xs text-ui-text-2">今日 </span>
             <span class="sensitive font-semibold tabular-nums">
-              <ChgText :chg="account.dayPnl">{{ account.dayPnl == null ? '-' : `${account.dayPnl >= 0 ? '+' : ''}${fmt(account.dayPnl)}` }}</ChgText>
+              <ChgText :chg="account.dayPnl">{{ account.dayPnl == null ? (account.dayPnlStarted === false ? '盘前待竞价' : '-') : `${account.dayPnl >= 0 ? '+' : ''}${fmt(account.dayPnl)}` }}</ChgText>
               <ChgText v-if="account.dayPnlPct != null" :chg="account.dayPnlPct"> {{ (account.dayPnlPct >= 0 ? '+' : '') + account.dayPnlPct.toFixed(2) + '%' }}</ChgText>
             </span>
           </span>

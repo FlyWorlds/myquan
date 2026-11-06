@@ -296,6 +296,22 @@ def build_watch_request_handler(
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "backtest status unavailable", "detail": str(exc)}, status=500)
                 return
+            if path == "/api/strategy35/timing-state":
+                try:
+                    from strategy35_watch import get_strategy35_timing_payload
+
+                    self._send_json(get_strategy35_timing_payload())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "timing state unavailable", "detail": str(exc)}, status=500)
+                return
+            if path == "/api/strategy36/timing-state":
+                try:
+                    from strategy36_watch import get_strategy36_timing_payload
+
+                    self._send_json(get_strategy36_timing_payload())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "tech timing state unavailable", "detail": str(exc)}, status=500)
+                return
             if path == "/api/trades":
                 from trade_ledger import api_trades_payload
                 try:

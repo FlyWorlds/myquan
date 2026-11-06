@@ -313,8 +313,6 @@ def account_summary(state: dict[str, Any], rows: list[dict[str, Any]], session: 
 def cycle_return(state, row, *, read_model=None):
     code = str(row.get("代码") or row.get("code") or "")
     model = read_model or AccountReadModel(state)
-    if model.issues:
-        return None
     entries = model.by_code.get(code, [])
     pos = state["holdings"].get("positions", {}).get(code, {})
     qty = int(pos.get("qty") or 0)
@@ -325,6 +323,17 @@ def cycle_return(state, row, *, read_model=None):
     if not buys:
         return None
     buy = max(buys, key=lambda e: str(e.get("time", "")))
+    if model.issues:
+        cycle_issues = [
+            iss
+            for iss in model.issues
+            if "trade_index" in iss
+            and iss["trade_index"] < len(state.get("trades", []))
+            and state.get("trades", [])[iss["trade_index"]].get("code") == code
+            and str(state.get("trades", [])[iss["trade_index"]].get("time") or "") >= str(buy.get("time") or "")
+        ]
+        if cycle_issues:
+            return None
     sales = [e for e in entries if e.get("code") == code and e.get("side") == "sell"
              and str(e.get("time", "")) >= str(buy["time"])
              and (not e.get("buy_time") or e.get("buy_time") == buy["time"])]

@@ -150,4 +150,16 @@ const title = computed(() => {
       ({{ fmtSignedPct(pct) }})
     </ChgText>
   </span>
+  <!-- 盘前未开市友好占位 (09:15 集合竞价前) -->
+  <span
+    v-else-if="!dayReady && Number(row.持仓) > 0"
+    class="text-xs"
+    :class="block ? 'mt-0.5 block whitespace-nowrap' : 'ml-1.5 inline-flex shrink-0 flex-nowrap items-baseline gap-x-1.5 whitespace-nowrap'"
+    title="交易日 09:15 前为盘前未开市时段，交易所尚未开启今日集合竞价；09:15 启动后自动按今日分时报价动态计算并显示当日盈亏。"
+  >
+    <span class="text-[10px] font-normal text-ui-text-3">今日盈亏</span>
+    <span class="rounded bg-ui-fill-hover px-1.5 py-0.5 text-[10px] text-ui-text-3 font-mono">
+      盘前待竞价 (09:15起)
+    </span>
+  </span>
 </template>

@@ -660,11 +660,12 @@ const closedCount = computed(() => closedHoldings.value.length)
         />
         <StrategyPicksPanel :picks="strategy16bDynamicPicks" />
       </section>
-
     </template>
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘 Tab 仅展示有实时面板的策略（策略1 / 3 / 8 / 15 / 16 / 16B）。因子持有模板、研究型条目见
+      盯盘 Tab 仅展示实盘交易策略（策略1 / 3 / 8 / 15 / 16 / 16B）。多维空仓择时已升级为全局风控，请前往顶部导航
+      <NuxtLink to="/cash-gate" class="text-accent hover:underline">多维空仓</NuxtLink>
+      ；因子持有模板、研究型条目见
       <NuxtLink to="/strategies" class="text-accent hover:underline">策略说明</NuxtLink>
       、
       <NuxtLink to="/factors" class="text-accent hover:underline">因子说明</NuxtLink>

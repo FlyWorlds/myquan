@@ -7,6 +7,8 @@
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | **架构与技术栈报告**（分层、盯盘拓扑、栈清单） |
 | [`TODO.MD`](../TODO.MD) | 任务优先级、锁定项 |
 | [`STRATEGY.md`](STRATEGY.md) | 策略一及已实现策略说明 |
+| [`STRATEGY35.md`](STRATEGY35.md) | **策略三十五 多维空仓避险策略**（大盘择时、广度水位监控、为什么需要空仓诊断） |
+| [`STRATEGY36.md`](STRATEGY36.md) | **策略三十六 科技成长空仓避险策略**（创业板/科创板/深成指生命线、科技池专属广度、高Beta资产熔断避险） |
 | [`FACTOR13.md`](FACTOR13.md) | 因子13 质量带 + 熊市盾牌（锁定） |
 | [`FACTOR14.md`](FACTOR14.md) | 因子14 题材共振（策略八） |
 | [`FACTOR16.md`](FACTOR16.md) | 因子16 概念龙头评分 |
@@ -15,6 +17,7 @@
 | [`FACTOR19.md`](FACTOR19.md) | 因子19 低开反包（旧假设，未过关） |
 | [`FACTOR20.md`](FACTOR20.md) | 因子20 跌停次日开板（已否决） |
 | [`FACTOR21.md`](FACTOR21.md) | 因子21 涨停次日低开（策略十二，OOS 未过关） |
+| [`FACTOR35.md`](FACTOR35.md) | **因子35 多维复合空仓避险因子**（指数MA60破位+全市场广度溃败，样本外回撤降至-18.5%） |
 | [`strategy/README.md`](../strategy/README.md) | 因子/策略注册表、CLI |
 | [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md) | **2026-09-13 策略十六/因子26 项目审查**（现行默认；含工作止损/费用/信号） |
 | [`EXIT_RULE_ORDER.md`](EXIT_RULE_ORDER.md) | Paper 卖出规则顺序（ExitDecisionEngine 真源） |

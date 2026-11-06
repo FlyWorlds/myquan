@@ -8,7 +8,7 @@ const props = defineProps<{
   delayMs?: number
 }>()
 
-const { load, peek, digitsOf, hasValuation } = useStockProfile()
+const { load, reload, peek, digitsOf, hasValuation } = useStockProfile()
 const { show, onEnter, onLeave, onPanelEnter, onPanelLeave } = useHoverDelay(
   () => {
     if (props.delayMs != null) return props.delayMs
@@ -84,20 +84,30 @@ function unbindPositionListeners() {
   window.removeEventListener('resize', updatePanelPosition)
 }
 
-async function hydrate() {
+async function hydrate(force = false) {
   if (!enabled.value) return
-  const cached = peek(codeDigits.value)
-  if (cached) {
-    profile.value = cached
-    return
+  if (!force) {
+    const cached = peek(codeDigits.value)
+    if (cached) {
+      profile.value = cached
+      return
+    }
+    if (profile.value && hasValuation(profile.value)) return
   }
-  if (profile.value && hasValuation(profile.value)) return
   if (loading.value) return
   loading.value = true
-  profile.value = await load(codeDigits.value)
+  if (force) {
+    profile.value = await reload(codeDigits.value)
+  } else {
+    profile.value = await load(codeDigits.value)
+  }
   loading.value = false
   await nextTick()
   updatePanelPosition()
+}
+
+async function retry() {
+  await hydrate(true)
 }
 
 function prefetch() {
@@ -115,7 +125,11 @@ watch(show, async (visible) => {
     unbindPositionListeners()
     return
   }
-  void hydrate()
+  if (profile.value?.error) {
+    void hydrate(true)
+  } else {
+    void hydrate()
+  }
   await nextTick()
   updatePanelPosition()
   requestAnimationFrame(updatePanelPosition)
@@ -246,8 +260,17 @@ function relatedLabel(r: StockRelated) {
               <p v-if="profile?.full_name" class="mt-0.5 text-xs text-ui-text-3">{{ profile.full_name }}</p>
             </header>
 
-            <p v-if="loading && !profile" class="text-xs text-ui-text-3">加载基本面…</p>
-            <p v-else-if="profile?.error" class="text-xs text-ui-text-3">{{ profile.error }}</p>
+            <p v-if="loading && (!profile || profile?.error)" class="text-xs text-ui-text-3">加载基本面…</p>
+            <div v-else-if="profile?.error" class="flex items-center justify-between rounded bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300">
+              <span>{{ profile.error }}</span>
+              <button
+                type="button"
+                class="rounded bg-rose-500/20 px-2 py-0.5 text-[11px] font-medium text-rose-200 hover:bg-rose-500/30 transition-colors"
+                @click.stop="retry"
+              >
+                重试
+              </button>
+            </div>
 
             <template v-if="profile && !profile.error">
               <section class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
