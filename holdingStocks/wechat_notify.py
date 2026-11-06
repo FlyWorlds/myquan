@@ -85,6 +85,7 @@ class PendingNotification:
 
 
 _channel_state = WechatChannelState()
+_recipient_delivery: dict[str, dict[str, Any]] = {}
 _pending: OrderedDict[str, PendingNotification] = OrderedDict()
 _pending_lock = threading.RLock()
 _worker_thread: threading.Thread | None = None
@@ -101,11 +102,13 @@ def get_wechat_channel_state() -> dict[str, Any]:
         return {
             "outbox_error": _outbox_error,
             "expired_notification_count": _expired_notifications,
-            "healthy": st.healthy,
+            "healthy": st.healthy and all(s.get("healthy", True) for s in _recipient_delivery.values()),
+            "recipients": {slot: dict(status) for slot, status in _recipient_delivery.items()},
             "session_invalid": st.session_invalid,
             "last_success_at": st.last_success_at,
             "last_failure_at": st.last_failure_at,
-            "consecutive_failures": st.consecutive_failures,
+            "consecutive_failures": max([st.consecutive_failures, *(
+                int(s.get("consecutive_failures") or 0) for s in _recipient_delivery.values())]),
             "session_invalid_since": st.session_invalid_since,
             "pending_notification_count": len(_pending),
             "oldest_pending_age_sec": round(max((time.time()-item.enqueued_at for item in _pending.values()), default=0), 1),
@@ -261,6 +264,8 @@ def classify_send_error(detail: str | None) -> str:
         or ("context_token" in d and "missing" in d)
         or "context_token_invalid" in d
         or "session_invalid" in d
+        or "weixin not configured" in d
+        or "account not configured" in d
     ):
         return ERR_SESSION_INVALID
     if any(
@@ -432,18 +437,24 @@ def _prune_pending(config=None):
 
 def _pop_next_pending(*, config=None) -> PendingNotification | None:
     _prune_pending(config)
+    from wechat_accounts import delivery_configs
+    primary = delivery_configs(config or load_config())[0]
+    primary_key = f"{primary.get('account')}|{primary.get('target')}"
     with _pending_lock:
         if not _pending:
             return None
         # Preserve FIFO within a class: fills, observed triggers, risk warnings, proximity alerts.
         def priority(item):
+            # Retry a secondary-only failure after every message still owed to
+            # the primary. A bad second connection cannot monopolize the queue.
+            primary_done = primary_key in item.delivered_to
             if item.is_fill:
-                return 0
+                return (primary_done, 0)
             if "已触" in item.alert_type or "半仓" in item.alert_type:
-                return 1
+                return (primary_done, 1)
             if "止损" in item.alert_type or "不可卖" in item.alert_type:
-                return 2
-            return 3
+                return (primary_done, 2)
+            return (primary_done, 3)
         key = min(_pending, key=lambda key: priority(_pending[key]))
         return _pending.pop(key)
 
@@ -534,11 +545,6 @@ def _deliver_pending(item, config, *, send_fn=None, retries=None):
     from wechat_accounts import delivery_configs
     sender = send_fn or _send_text_direct
     destinations = delivery_configs(config)
-    if len(destinations) == 1:
-        key = f"{destinations[0].get('account')}|{destinations[0].get('target')}"
-        if key in item.delivered_to:
-            return True, "已发送"
-        return sender(item.message, config=config, retries=retries)
     failures = []
     for destination in destinations:
         key = f"{destination.get('account')}|{destination.get('target')}"
@@ -548,11 +554,24 @@ def _deliver_pending(item, config, *, send_fn=None, retries=None):
             ok, detail = sender(item.message, config=destination, retries=retries)
         except Exception:
             ok, detail = False, "network timeout"
+        slot = destination.get('_recipient_slot') or 'primary'
+        # Record each phone separately; primary success must not hide secondary failure.
+        error = ERR_OK if ok else classify_send_error(detail)
+        if not ok and 'not configured' in str(detail).lower():
+            error = 'ACCOUNT_NOT_CONFIGURED'
+        with _pending_lock:
+            previous = _recipient_delivery.get(slot, {})
+            _recipient_delivery[slot] = dict(healthy=ok, last_result_at=time.time(),
+                last_success_at=time.time() if ok else previous.get('last_success_at'),
+                last_failure_at=previous.get('last_failure_at') if ok else time.time(),
+                consecutive_failures=0 if ok else previous.get('consecutive_failures', 0)+1,
+                error=error)
+        _wechat_log(f"recipient={slot} success={ok} error={error} ({item.summary})")
         if ok:
             item.delivered_to.append(key)
         else:
             failures.append(detail)
-    return (False, failures[0]) if failures else (True, "两个微信均已发送")
+    return (False, failures[0]) if failures else (True, "所有配置微信均已发送")
 
 
 def _flush_pending_queue(
@@ -797,6 +816,7 @@ def reset_wechat_delivery_state_for_tests() -> None:
     global _channel_state, _expired_notifications, _outbox_persisted, _outbox_restored, _outbox_error
     _outbox_persisted, _outbox_restored, _outbox_error = None, False, None
     _channel_state = WechatChannelState()
+    _recipient_delivery.clear()
     _expired_notifications = 0
     _worker_stop.clear()
     _worker_wake.clear()
@@ -1723,6 +1743,8 @@ def _send_text_once(
 
     _LAST_SEND_TS = time.time()
     out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+    if classify_send_error(out) == ERR_SESSION_INVALID:
+        return False, out
     ok = proc.returncode == 0 and (
         "Sent via" in out or "sent" in out.lower() or not out
     )

@@ -23,11 +23,14 @@ def delivery_configs(config):
     def _resolve_account(account: str | None, target: str | None) -> str:
         if not target:
             return account or ''
-        if account and account in inv and inv[account].get('user') == target:
+        def target_of(data):
+            user = str(data.get('user') or '')
+            return user if '@' in user else user+'@im.wechat'
+        if account and account in inv and target_of(inv[account]) == target:
             return account
         # 根据 target 自动匹配最新的有效 account
-        for aid, data in inv.items():
-            if data.get('user') == target:
+        for aid, data in sorted(inv.items(), key=lambda item: item[1].get('updated', 0), reverse=True):
+            if target_of(data) == target:
                 return aid
         return account or ''
 

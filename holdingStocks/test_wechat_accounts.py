@@ -206,3 +206,75 @@ def test_login_reporter_exposes_only_its_account_id(tmp_path):
                             capture_output=True, text=True, check=True)
     assert result.stdout.strip() == 'MYQUAN_WECHAT_ACCOUNT:bot2'
     assert 'SECRET' not in result.stdout and 'private-user' not in result.stdout
+
+
+def test_rebound_account_uses_latest_matching_identity_without_exposing_credentials():
+    cfg=config(); cfg['secondary']['account']='removed'
+    inventory={'bot1':dict(user='user1',updated=1), 'older':dict(user='user2',updated=2), 'newer':dict(user='user2',updated=3)}
+    with patch('wechat_accounts.account_inventory',return_value=inventory):
+        resolved=delivery_configs(cfg)
+    assert resolved[0]['account']=='bot1'
+    assert resolved[1]['account']=='newer'
+    assert cfg['secondary']['account']=='removed'
+
+
+def test_secondary_failure_is_visible_even_when_primary_succeeds():
+    import wechat_notify as n
+    n.reset_wechat_delivery_state_for_tests()
+    item=n.PendingNotification(dedupe_key='fill|buy',message='test',code='600330',alert_type='fill')
+    def sender(message,*,config,retries=None):
+        return (config['_recipient_slot']=='primary','account not configured')
+    with patch('wechat_accounts.account_inventory',return_value={}):
+        assert not n._deliver_pending(item,config(),send_fn=sender)[0]
+    state=n.get_wechat_channel_state()
+    assert not state['healthy']
+    assert state['recipients']['primary']['healthy']
+    assert state['recipients']['secondary']['error']=='ACCOUNT_NOT_CONFIGURED'
+    assert state['consecutive_failures']==1
+    assert len(item.delivered_to)==1
+    n.reset_wechat_delivery_state_for_tests()
+
+
+def test_single_destination_sends_resolved_account():
+    import wechat_notify as n
+    from unittest.mock import Mock
+    cfg=dict(account='gone',target='user1@im.wechat',enabled=True)
+    item=n.PendingNotification(dedupe_key='fill|buy',message='test',code='600330',alert_type='fill')
+    sender=Mock(return_value=(True,'ok'))
+    with patch('wechat_accounts.account_inventory',return_value={'new':dict(user='user1',updated=2)}):
+        assert n._deliver_pending(item,cfg,send_fn=sender)[0]
+    assert sender.call_args.kwargs['config']['account']=='new'
+    assert item.delivered_to==['new|user1@im.wechat']
+    n.reset_wechat_delivery_state_for_tests()
+
+
+def test_missing_context_must_not_be_reported_as_success():
+    import subprocess
+    import wechat_notify as n
+    output=subprocess.CompletedProcess([],0,stdout='contextToken missing, sending without context\nSent via openclaw-weixin',stderr='')
+    with patch.object(n,'_send_via_node_argv',return_value=output),patch.object(n,'_LAST_SEND_TS',0):
+        ok,detail=n._send_text_once('test',cfg=dict(target='user',account='bot'))
+    assert not ok and n.classify_send_error(detail)==n.ERR_SESSION_INVALID
+
+
+def test_send_business_receipt_policy(tmp_path):
+    import subprocess,json
+    from repair_wechat_send_receipt import repair,OLD,NEW
+    path=tmp_path/'api.ts';path.write_text(OLD)
+    assert repair(path) and not repair(path)
+    assert path.with_suffix('.ts.before-myquan-receipt').read_text()==OLD
+    # Execute the exact inserted JavaScript with mocked HTTP replies, no network/send.
+    script='const run = new (Object.getPrototypeOf(async function(){}).constructor)("apiFetch","params","buildBaseInfo","DEFAULT_API_TIMEOUT_MS",'+json.dumps(NEW)+');\n'
+    script+='for(const [body,expected] of [[{ret:0},true],[{ret:0,errcode:0},true],[{ret:-2},false],[{ret:0,errcode:40014},false],[{},true],[null,false]]) { let ok=true;try{await run(async()=>JSON.stringify(body),{body:{}},()=>({}),1000)}catch{ok=false}if(ok!==expected)throw Error(JSON.stringify(body)); }'
+    subprocess.run(['node','--input-type=module','-e',script],check=True,capture_output=True,text=True)
+
+
+def test_secondary_retry_cannot_jump_a_new_primary_signal():
+    import wechat_notify as n
+    n.reset_wechat_delivery_state_for_tests()
+    cfg=config()
+    with patch.object(n,'_persist_outbox'),patch('wechat_accounts.account_inventory',return_value={}):
+        n.enqueue_notification(message='old',dedupe_key='old-fill',code='600330',alert_type='模拟买入',is_fill=True,delivered_to=['bot1|user1@im.wechat'],config=cfg)
+        n.enqueue_notification(message='new',dedupe_key='new-trigger',code='600552',alert_type='已触买',config=cfg)
+        assert n._pop_next_pending(config=cfg).dedupe_key=='new-trigger'
+    n.reset_wechat_delivery_state_for_tests()
