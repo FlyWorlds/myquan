@@ -701,8 +701,9 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
 
 # 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
 WATCH_LIVE_TAB_IDS = frozenset(
-    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy16b", "strategy17"}
+    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy16b", "strategy17", "strategy37"}
 )
+
 
 _REGISTRY_KIND_ZH = {
     "watch": "盯盘",
@@ -853,6 +854,15 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
             tabs[-1]["reportPath"] = "docs/STRATEGY35.md"
         if spec.id == "strategy36":
             tabs[-1]["reportPath"] = "docs/STRATEGY36.md"
+        if spec.id == "strategy37":
+            tabs[-1]["reportPath"] = "docs/STRATEGY37.md"
+            try:
+                from strategy37_watch import load_backtest_summary as load_s37_summary
+
+                tabs[-1]["backtest"] = load_s37_summary()
+            except Exception:
+                tabs[-1]["backtest"] = {}
+
         from strategy_picks_loader import load_strategy_picks
 
         tabs[-1]["picks"] = load_strategy_picks(spec.id)
@@ -2756,6 +2766,7 @@ def publish_watch_snapshot(
     strategy17_rows: list[dict[str, Any]] = []
     strategy35_payload: dict[str, Any] = {}
     strategy36_payload: dict[str, Any] = {}
+    strategy37_payload: dict[str, Any] = {}
     if _CONDITION_BUY_ACTIVE:
         include_strategy_panels = False
         previous = _QUOTE_RUNTIME_PANELS or _last_watch_snapshot or {}
@@ -2765,6 +2776,8 @@ def publish_watch_snapshot(
         strategy17_rows = previous.get("strategy17") or (_last_watch_snapshot or {}).get("strategy17") or []
         strategy35_payload = previous.get("strategy35") or (_last_watch_snapshot or {}).get("strategy35") or {}
         strategy36_payload = previous.get("strategy36") or (_last_watch_snapshot or {}).get("strategy36") or {}
+        strategy37_payload = previous.get("strategy37") or (_last_watch_snapshot or {}).get("strategy37") or {}
+
     if include_strategy_panels:
         from strategy3_watch import build_strategy3_payload
         from strategy8_watch import build_strategy8_payload
@@ -2823,6 +2836,14 @@ def publish_watch_snapshot(
             strategy36_payload = get_strategy36_timing_payload()
         except Exception as e:  # noqa: BLE001
             strategy36_payload = {"error": str(e)}
+        strategy37_payload: dict[str, Any] = {}
+        try:
+            from strategy37_watch import get_strategy37_watch_payload
+
+            strategy37_payload = get_strategy37_watch_payload()
+        except Exception as e:  # noqa: BLE001
+            strategy37_payload = {"error": str(e)}
+
     # Retained signals are display data; never feed them back into execution.
     from alert_retention import LIVE_ALERT_RETENTION
     rows = [dict(row) for row in rows]
@@ -2850,7 +2871,9 @@ def publish_watch_snapshot(
         strategy17=strategy17_rows,
         strategy35=strategy35_payload,
         strategy36=strategy36_payload,
+        strategy37=strategy37_payload,
         sectors=sectors,
+
         refresh_sec=refresh_sec,
         portfolio_codes=portfolio_codes,
         strategy_codes=display_strategy_codes,
@@ -3021,7 +3044,9 @@ def _seed_boot_watch_snapshot() -> None:
         "strategy17": [],
         "strategy35": {},
         "strategy36": {},
+        "strategy37": {},
         "sectors": {},
+
         "strategies": _watch_tabs_with_live_s8({}),
     }
     if database_enabled():

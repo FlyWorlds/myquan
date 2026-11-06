@@ -166,15 +166,21 @@ def _minutes(sina: str, *, refresh: bool, days: int = 7, source: str = "auto") -
     path = CACHE / f"{sina}_1m.parquet"
     need_days = max(1, int(days))
     frames: list[pd.DataFrame] = []
+    fresh_panda = False
 
-    if path.exists() and not refresh:
+    if path.exists():
         try:
             cached = pd.read_parquet(path)
             if not cached.empty and "ts" in cached.columns:
                 cached["ts"] = pd.to_datetime(cached["ts"])
                 # 若本地缓存已经覆盖所需交易日，直接秒级复用，避免无谓的网络爬虫卡顿
                 unique_days = cached["ts"].dt.date.nunique()
-                if unique_days >= need_days:
+                latest = cached["ts"].max()
+                now = pd.Timestamp.now(tz="Asia/Shanghai")
+                local_latest = latest.tz_convert("Asia/Shanghai") if latest.tzinfo else latest.tz_localize("Asia/Shanghai")
+                closed_today = (now.hour >= 15 and local_latest.date() == now.date()
+                                and (local_latest.hour, local_latest.minute) >= (15, 0))
+                if unique_days >= need_days and (not refresh or closed_today):
                     return cached
                 frames.append(cached)
         except Exception:  # noqa: BLE001
@@ -227,12 +233,19 @@ def _minutes(sina: str, *, refresh: bool, days: int = 7, source: str = "auto") -
                         pdf[c] = pd.to_numeric(pdf[c], errors="coerce")
                 pdf = pdf.dropna(subset=["ts", "open", "high", "low", "close"])
                 frames.append(pdf[["ts", "open", "high", "low", "close"]].copy())
+                fresh_panda = True
                 print(f"  [panda] {sina} 1m rows={len(pdf)}")
         except Exception as e:  # noqa: BLE001
             if src in ("panda", "pandadata"):
                 print(f"  [panda] {sina} 失败: {e}")
 
-    if src in ("auto", "ak", "akshare") and (not frames or need_days <= 7):
+    # A complete fresh Panda response already covers the requested window.
+    panda_complete = fresh_panda and bool(frames) and any(
+        "ts" in frame and pd.to_datetime(frame["ts"]).dt.date.nunique() >= need_days
+        and str(pd.to_datetime(frame["ts"]).max())[:10] == pd.Timestamp.today().strftime("%Y-%m-%d")
+        for frame in frames[-1:]
+    )
+    if src in ("auto", "ak", "akshare") and not panda_complete:
         em = _em(sina[2:] if len(sina) >= 8 else sina)
         try:
             df = pull_akshare_1m(em_symbol=em, sina_symbol=sina, adjust="")
@@ -243,6 +256,11 @@ def _minutes(sina: str, *, refresh: bool, days: int = 7, source: str = "auto") -
 
     if not frames:
         return pd.DataFrame()
+    for frame in frames:
+        ts = pd.to_datetime(frame["ts"])
+        if ts.dt.tz is not None:
+            ts = ts.dt.tz_convert("Asia/Shanghai").dt.tz_localize(None)
+        frame["ts"] = ts
     out = pd.concat(frames, ignore_index=True)
     out["ts"] = pd.to_datetime(out["ts"])
     out = out.sort_values("ts").drop_duplicates(subset=["ts"], keep="last")
@@ -1708,6 +1726,7 @@ def run(
     tag: str | None = None,
     pool: str = POOL_STRATEGY1,
     fit_thr: bool = False,
+    progress=None,
 ) -> dict:
     if refresh:
         _DAILY_MEM_CACHE.clear()
@@ -1765,15 +1784,21 @@ def run(
         f"三槽≤{max_slots} · 先触发先买 · 买={buy_label}{s16_thr_note}"
     )
 
-    for w in pool_rows:
+    for stock_index, w in enumerate(pool_rows):
         code = str(w.get("code") or "").zfill(6)
         name = str(w.get("name") or code)
         sina = str(w.get("sina") or _sina(code)).lower()
         ep = float(w.get("entry_pct") or w.get("pct") or entry)
         sp = float(pb) if is_s16 else float(w.get("stop_pct") or w.get("pct") or pb)
         print(f"· {code} {name} 开盘±{ep*100:.1f}% …", flush=True)
+        if progress:
+            progress("日线行情", stock_index, len(pool_rows), f"{code} {name}")
         daily = _daily(sina, refresh=refresh)
+        if progress:
+            progress("分钟行情", stock_index, len(pool_rows), f"{code} {name}")
         mins = _minutes(sina, refresh=refresh, days=int(days), source=source)
+        if progress:
+            progress("个股回放", stock_index, len(pool_rows), f"{code} {name}")
         rep = replay_factor26_1m(
             daily,
             mins,
@@ -1816,6 +1841,8 @@ def run(
             }
         )
 
+    if progress:
+        progress("组合回放", len(pool_rows), len(pool_rows), "")
     print("\n组合三槽回放…", flush=True)
     port = simulate_portfolio_3slots(
         stock_payload,
@@ -2049,7 +2076,7 @@ def run(
     )
     if eq_pnl is not None:
         print(f"个股等权已平仓（无槽约束）{eq_pnl:.2f}%（{len(finished)} 只）")
-    return summary
+    return {**summary, "portfolio_equity": port.get("equity") or []}
 
 
 def main() -> None:

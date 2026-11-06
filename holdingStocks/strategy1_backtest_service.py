@@ -167,7 +167,10 @@ class Strategy1BacktestManager:
     _lock = threading.Lock()
     _running = False
     _started_at: str | None = None
+    _started_monotonic: float = 0.0
     _last_error: str | None = None
+    _progress: dict[str, Any] = {"stage": "就绪", "completed": 0, "total": 0, "stock": "", "percent": 0}
+    _progress_at = 0.0
 
     @classmethod
     def load_history(cls) -> dict[str, Any]:
@@ -225,7 +228,15 @@ class Strategy1BacktestManager:
     def get_status(cls) -> dict[str, Any]:
         """获取当前执行状态与最新数据。"""
         store = cls.load_history()
+        now_mono = time.monotonic()
+        elapsed = int(now_mono - cls._started_monotonic) if cls._running and cls._started_monotonic > 0 else 0
+        waiting = int(now_mono - cls._progress_at) if cls._running and cls._progress_at > 0 else 0
         return {
+            "progress": {
+                **cls._progress,
+                "waiting_seconds": waiting,
+                "elapsed_seconds": elapsed,
+            },
             "running": cls._running,
             "started_at": cls._started_at,
             "error": cls._last_error,
@@ -235,63 +246,134 @@ class Strategy1BacktestManager:
 
     @classmethod
     def trigger_backtest(cls, force: bool = False) -> dict[str, Any]:
-        """触发执行回测，支持覆盖当天数据。"""
-        if cls._running:
-            return {
-                "ok": False,
-                "message": "回测任务正在后台执行中，请稍候...",
-                "status": cls.get_status(),
-            }
+        # Reserve before starting the worker: simultaneous POSTs must not launch duplicate jobs.
+        with cls._lock:
+            accepted = not cls._running
+            if accepted:
+                cls._running = True
+                cls._started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cls._started_monotonic = time.monotonic()
+                cls._last_error = None
+                cls._progress = {"stage": "启动回测", "completed": 0, "total": 30, "stock": "初始化引擎", "percent": 1}
+                cls._progress_at = time.monotonic()
+        if accepted:
+            threading.Thread(target=cls._worker, name="strategy1-backtest-worker", daemon=True).start()
+        return {"ok": accepted, "message": "已启动回测" if accepted else "回测正在执行", "status": cls.get_status()}
 
-        def _worker():
-            cls._running = True
-            cls._started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cls._last_error = None
-            try:
-                import sys
-                s1_dir = str(_ROOT / "backtest" / "strategy1_pool_1m")
-                if s1_dir not in sys.path:
-                    sys.path.insert(0, s1_dir)
-                from run import run
-
-                print(f"[{datetime.now()}] [BACKTEST] 开始执行策略一 7 日高频回测...")
-                res = run(days=7, refresh=True, max_slots=4)
-                port = (res.get("portfolio_summary") or {})
-                equity_rows = port.get("equity") or []
-                if not equity_rows:
-                    csv_path = _ROOT / "backtest" / "strategy1_pool_1m" / "portfolio_equity.csv"
-                    if csv_path.exists():
-                        equity_rows = pd.read_csv(csv_path).to_dict(orient="records")
-
-                sh_df = _get_sh_index_7d()
-                comp = calculate_7d_comparison(equity_rows, sh_df, port)
-
-                today = datetime.now().strftime("%Y-%m-%d")
-                payload = {
-                    "date": today,
-                    "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    **comp,
-                }
-
-                # 写入历史并覆盖当天
-                store = cls.load_history()
-                store.setdefault("history", {})[today] = payload
-                store["latest"] = payload
-
-                HISTORY_FILE.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
-                print(f"[{datetime.now()}] [BACKTEST] 策略一 7 日回测完成并更新至 {HISTORY_FILE.name}")
-            except Exception as exc:
-                import traceback
-                traceback.print_exc()
+    @classmethod
+    def _worker(cls):
+        import multiprocessing
+        import queue
+        ctx = multiprocessing.get_context("spawn")
+        events = ctx.Queue()
+        process = ctx.Process(target=_run_backtest_process, args=(events,), daemon=True)
+        started = time.monotonic()
+        try:
+            process.start()
+            while True:
+                if time.monotonic() - cls._progress_at > 180 or time.monotonic() - started > 1800:
+                    raise TimeoutError(f"回测超时：{cls._progress.get('stage')} {cls._progress.get('stock', '')}；请检查行情源后重试")
+                try:
+                    kind, value = events.get(timeout=0.5)
+                except queue.Empty:
+                    if not process.is_alive():
+                        raise RuntimeError(f"回测进程异常退出（{process.exitcode}）")
+                    continue
+                if kind == "progress":
+                    with cls._lock:
+                        cls._progress = value
+                        cls._progress_at = time.monotonic()
+                elif kind == "error":
+                    raise RuntimeError(value)
+                elif kind == "result":
+                    store = cls.load_history()
+                    store.setdefault("history", {})[value["date"]] = value
+                    store["latest"] = value
+                    with cls._lock:
+                        temp = HISTORY_FILE.with_suffix(".tmp")
+                        temp.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
+                        temp.replace(HISTORY_FILE)
+                        cls._progress = {
+                            "stage": "完成",
+                            "completed": cls._progress.get("total", 30),
+                            "total": cls._progress.get("total", 30),
+                            "stock": "回测完毕",
+                            "percent": 100,
+                        }
+                    break
+        except Exception as exc:
+            with cls._lock:
                 cls._last_error = str(exc)
-                print(f"[BACKTEST] 回测异常: {exc}")
-            finally:
+        finally:
+            if process.pid:
+                if process.is_alive():
+                    process.terminate()
+                process.join(timeout=5)
+                if process.is_alive():
+                    process.kill()
+                    process.join()
+            events.close()
+            with cls._lock:
                 cls._running = False
 
-        t = threading.Thread(target=_worker, name="strategy1-backtest-worker", daemon=True)
-        t.start()
-        return {
-            "ok": True,
-            "message": "已在后台启动回测任务",
-            "status": cls.get_status(),
-        }
+
+def _run_backtest_process(events):
+    """Isolated process bounds stalled vendor calls without leaving a writer thread alive."""
+    try:
+        import requests
+        original = requests.sessions.Session.request
+
+        def bounded_request(self, method, url, **kwargs):
+            if kwargs.get("timeout") is None:
+                kwargs["timeout"] = (10, 30)
+            return original(self, method, url, **kwargs)
+
+        requests.sessions.Session.request = bounded_request
+        from backtest.strategy1_pool_1m.run import run
+
+        total_stocks = 0
+
+        def progress(stage, completed, total, stock=""):
+            nonlocal total_stocks
+            if total > 0:
+                total_stocks = total
+            tot = total_stocks or total or 1
+            if stage in ("启动回测", "准备数据"):
+                pct = 2
+            elif stage == "日线行情":
+                pct = min(85, int((completed / tot) * 85 + (0.1 / tot) * 85))
+            elif stage == "分钟行情":
+                pct = min(85, int((completed / tot) * 85 + (0.5 / tot) * 85))
+            elif stage == "个股回放":
+                pct = min(85, int((completed / tot) * 85 + (0.9 / tot) * 85))
+            elif stage == "组合回放":
+                pct = 90
+            elif stage == "上证指数行情":
+                pct = 96
+            elif stage == "完成":
+                pct = 100
+            else:
+                pct = min(95, int((completed / tot) * 85))
+            pct = max(1, min(100, pct))
+            events.put(("progress", dict(
+                stage=stage,
+                completed=completed,
+                total=tot,
+                stock=stock,
+                percent=pct,
+            )))
+
+        res = run(days=7, refresh=True, max_slots=4, progress=progress)
+        equity_rows = res.get("portfolio_equity") or []
+        if not equity_rows:
+            raise ValueError("本次回测没有有效行情，保留上次结果")
+        progress("上证指数行情", res.get("n_pool", 0), res.get("n_pool", 0), "计算Alpha超额曲线")
+        sh_df = _get_sh_index_7d()
+        dates = [str(r["date"])[:10] for r in equity_rows][-7:]
+        if len(dates) != 7 or sh_df.empty or not set(dates).issubset(set(sh_df["date"])):
+            raise ValueError("策略或指数行情不足/日期不匹配，保留上次结果")
+        comp = calculate_7d_comparison(equity_rows, sh_df, res.get("portfolio") or {})
+        today = datetime.now().strftime("%Y-%m-%d")
+        events.put(("result", {"date": today, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), **comp}))
+    except BaseException as exc:
+        events.put(("error", str(exc)))

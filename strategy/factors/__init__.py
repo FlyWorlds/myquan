@@ -86,3 +86,4 @@ from strategy.factors import factor33 as _factor33  # noqa: F401
 from strategy.factors import factor34 as _factor34  # noqa: F401
 from strategy.factors import factor35 as _factor35  # noqa: F401
 from strategy.factors import factor36 as _factor36  # noqa: F401
+from strategy.factors import factor37 as _factor37  # noqa: F401

@@ -312,6 +312,15 @@ def build_watch_request_handler(
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "tech timing state unavailable", "detail": str(exc)}, status=500)
                 return
+            if path == "/api/strategy37/payload":
+                try:
+                    from strategy37_watch import get_strategy37_watch_payload
+
+                    self._send_json(get_strategy37_watch_payload())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy37 payload unavailable", "detail": str(exc)}, status=500)
+                return
+
             if path == "/api/trades":
                 from trade_ledger import api_trades_payload
                 try:

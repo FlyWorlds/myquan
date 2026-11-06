@@ -1,75 +1,15 @@
 {
   "horizon": "rolling_3m",
   "label": "2026 援军战法定盘池",
-  "as_of": "2026-10-27",
-  "built_at": "2026-10-27T11:24:27",
+  "as_of": "2026-11-06",
+  "built_at": "2026-11-06T17:18:00",
   "source": "strategy1_quality_band_factor13a_16",
-  "n_picks": 24,
-  "target_pool": 24,
-  "note": "援军战法 2026 定盘池（24 只）· 算法与策略十六对齐",
+  "n_picks": 30,
+  "target_pool": 30,
+  "note": "援军战法 2026 定盘池（30 只）· 算法与策略十六对齐",
   "picks": [
     {
       "rank": 1,
-      "code": "600330",
-      "symbol": "600330",
-      "name": "天通股份",
-      "concept": "磁性材料 / 蓝宝石",
-      "theme": "磁性材料 / 蓝宝石",
-      "price": 21.19,
-      "chg_pct": 146.81,
-      "amount": null,
-      "thr": 0.03,
-      "sharpe": 2.1577,
-      "category": "自选",
-      "pool_src": "self"
-    },
-    {
-      "rank": 2,
-      "code": "600552",
-      "symbol": "600552",
-      "name": "凯盛科技",
-      "concept": "UTG玻璃 / 柔性屏",
-      "theme": "UTG玻璃 / 柔性屏",
-      "price": 12.99,
-      "chg_pct": 41.21,
-      "amount": null,
-      "thr": 0.025,
-      "sharpe": 1.2041,
-      "category": "自选",
-      "pool_src": "self"
-    },
-    {
-      "rank": 3,
-      "code": "601208",
-      "symbol": "601208",
-      "name": "东材科技",
-      "concept": "光刻胶 / 复合铜箔",
-      "theme": "光刻胶 / 复合铜箔",
-      "price": 36.0,
-      "chg_pct": 100.23,
-      "amount": null,
-      "thr": 0.025,
-      "sharpe": 1.9917,
-      "category": "自选",
-      "pool_src": "self"
-    },
-    {
-      "rank": 4,
-      "code": "002636",
-      "symbol": "002636",
-      "name": "金安国纪",
-      "concept": "PCB概念 / 覆铜板",
-      "theme": "PCB概念 / 覆铜板",
-      "price": 54.4,
-      "chg_pct": 214.75,
-      "amount": null,
-      "thr": 0.025,
-      "sharpe": 2.809,
-      "category": "自选",
-      "pool_src": "self"
-    },
-    {
-      "rank": 5,
       "code": "600338",
       "symbol": "600338",
       "name": "西藏珠峰",
@@ -84,7 +24,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 6,
+      "rank": 2,
       "code": "002104",
       "symbol": "002104",
       "name": "恒宝股份",
@@ -99,7 +39,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 7,
+      "rank": 3,
       "code": "603301",
       "symbol": "603301",
       "name": "振德医疗",
@@ -114,7 +54,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 8,
+      "rank": 4,
       "code": "600301",
       "symbol": "600301",
       "name": "华锡有色",
@@ -129,7 +69,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 9,
+      "rank": 5,
       "code": "002093",
       "symbol": "002093",
       "name": "国脉科技",
@@ -144,7 +84,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 10,
+      "rank": 6,
       "code": "601020",
       "symbol": "601020",
       "name": "华钰矿业",
@@ -159,7 +99,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 11,
+      "rank": 7,
       "code": "601609",
       "symbol": "601609",
       "name": "金田股份",
@@ -174,7 +114,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 12,
+      "rank": 8,
       "code": "600353",
       "symbol": "600353",
       "name": "旭光电子",
@@ -189,7 +129,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 13,
+      "rank": 9,
       "code": "002779",
       "symbol": "002779",
       "name": "中坚科技",
@@ -204,7 +144,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 14,
+      "rank": 10,
       "code": "601068",
       "symbol": "601068",
       "name": "中铝国际",
@@ -219,7 +159,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 15,
+      "rank": 11,
       "code": "600967",
       "symbol": "600967",
       "name": "内蒙一机",
@@ -234,7 +174,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 16,
+      "rank": 12,
       "code": "002273",
       "symbol": "002273",
       "name": "水晶光电",
@@ -249,7 +189,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 17,
+      "rank": 13,
       "code": "002015",
       "symbol": "002015",
       "name": "协鑫能科",
@@ -264,7 +204,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 18,
+      "rank": 14,
       "code": "002929",
       "symbol": "002929",
       "name": "润建股份",
@@ -279,7 +219,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 19,
+      "rank": 15,
       "code": "000581",
       "symbol": "000581",
       "name": "威孚高科",
@@ -294,7 +234,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 20,
+      "rank": 16,
       "code": "601519",
       "symbol": "601519",
       "name": "大智慧",
@@ -309,7 +249,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 21,
+      "rank": 17,
       "code": "002922",
       "symbol": "002922",
       "name": "伊戈尔",
@@ -324,7 +264,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 22,
+      "rank": 18,
       "code": "002152",
       "symbol": "002152",
       "name": "广电运通",
@@ -339,7 +279,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 23,
+      "rank": 19,
       "code": "603920",
       "symbol": "603920",
       "name": "世运电路",
@@ -354,7 +294,7 @@
       "pool_src": "strategy1_pool"
     },
     {
-      "rank": 24,
+      "rank": 20,
       "code": "002065",
       "symbol": "002065",
       "name": "东华软件",
@@ -367,6 +307,156 @@
       "sharpe": -0.3761,
       "category": "策略池",
       "pool_src": "strategy1_pool"
+    },
+    {
+      "code": "601138",
+      "symbol": "601138",
+      "name": "工业富联",
+      "concept": "AI服务器 / 云计算",
+      "theme": "AI服务器 / 云计算",
+      "price": 40.71,
+      "chg_pct": -8.08,
+      "amount": null,
+      "thr": 0.025,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 21
+    },
+    {
+      "code": "000063",
+      "symbol": "000063",
+      "name": "中兴通讯",
+      "concept": "5G通信 / 算力设备",
+      "theme": "5G通信 / 算力设备",
+      "price": 28.2,
+      "chg_pct": -2.25,
+      "amount": null,
+      "thr": 0.02,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 22
+    },
+    {
+      "code": "002230",
+      "symbol": "002230",
+      "name": "科大讯飞",
+      "concept": "人工智能 / 大模型",
+      "theme": "人工智能 / 大模型",
+      "price": 38.25,
+      "chg_pct": -2.3,
+      "amount": null,
+      "thr": 0.025,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 23
+    },
+    {
+      "code": "600418",
+      "symbol": "600418",
+      "name": "江淮汽车",
+      "concept": "华为智选 / 新能源汽车",
+      "theme": "华为智选 / 新能源汽车",
+      "price": 19.16,
+      "chg_pct": -2.1,
+      "amount": null,
+      "thr": 0.03,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 24
+    },
+    {
+      "code": "600111",
+      "symbol": "600111",
+      "name": "北方稀土",
+      "concept": "稀土永磁 / 关键矿产",
+      "theme": "稀土永磁 / 关键矿产",
+      "price": 36.34,
+      "chg_pct": -1.33,
+      "amount": null,
+      "thr": 0.025,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 25
+    },
+    {
+      "code": "601899",
+      "symbol": "601899",
+      "name": "紫金矿业",
+      "concept": "铜金矿业 / 战略资源",
+      "theme": "铜金矿业 / 战略资源",
+      "price": 28.28,
+      "chg_pct": -4.07,
+      "amount": null,
+      "thr": 0.02,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 26
+    },
+    {
+      "code": "601360",
+      "symbol": "601360",
+      "name": "三六零",
+      "concept": "数字安全 / 大模型",
+      "theme": "数字安全 / 大模型",
+      "price": 8.22,
+      "chg_pct": -2.61,
+      "amount": null,
+      "thr": 0.025,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 27
+    },
+    {
+      "code": "002466",
+      "symbol": "002466",
+      "name": "天齐锂业",
+      "concept": "锂矿锂盐 / 能源材料",
+      "theme": "锂矿锂盐 / 能源材料",
+      "price": 37.16,
+      "chg_pct": -2.26,
+      "amount": null,
+      "thr": 0.03,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 28
+    },
+    {
+      "code": "600588",
+      "symbol": "600588",
+      "name": "用友网络",
+      "concept": "企业软件 / 信创工程",
+      "theme": "企业软件 / 信创工程",
+      "price": 9.21,
+      "chg_pct": -4.36,
+      "amount": null,
+      "thr": 0.025,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 29
+    },
+    {
+      "code": "600733",
+      "symbol": "600733",
+      "name": "北汽蓝谷",
+      "concept": "华为享界 / 智能汽车",
+      "theme": "华为享界 / 智能汽车",
+      "price": 4.21,
+      "chg_pct": -2.55,
+      "amount": null,
+      "thr": 0.03,
+      "sharpe": 1.25,
+      "category": "策略池",
+      "pool_src": "strategy1_pool",
+      "rank": 30
     }
   ]
 }

@@ -582,6 +582,49 @@ export interface Strategy36Payload {
   rules?: string[]
 }
 
+export interface Strategy37Row {
+  代码: string
+  名称: string
+  symbol: string
+  日期: string
+  买入价: number
+  收盘价: number
+  跌停价: number
+  脱离中枢天数: number
+  中枢ZD?: number
+  中枢ZG?: number
+  'd1收益%'?: number | null
+  'd3收益%'?: number | null
+  'd5收益%'?: number | null
+  状态: string
+}
+
+export interface Strategy37Kpi {
+  optimal_window: string
+  optimal_holding: string
+  tune_d5_win_rate: number
+  tune_d5_mean_ret: number
+  tune_d5_pf: number
+  oos_d5_win_rate: number
+  oos_d5_mean_ret: number
+  oos_d5_pf: number
+  limit_down_d1_win_rate: number
+  limit_down_d1_mean_ret: number
+  limit_down_d1_pf: number
+}
+
+export interface Strategy37Payload {
+  error?: string | null
+  strategyId?: string
+  strategyName?: string
+  rules?: string
+  params?: Record<string, any>
+  kpi?: Strategy37Kpi
+  summary?: Record<string, any>
+  rows?: Strategy37Row[]
+}
+
+
 export interface WatchSnapshot {
   v: number
   type: 'snapshot'
@@ -624,6 +667,8 @@ export interface WatchSnapshot {
   strategy17?: HoldingRow[]
   strategy35?: Strategy35Payload
   strategy36?: Strategy36Payload
+  strategy37?: Strategy37Payload
   sectors?: SectorsLivePayload
+
   strategies: StrategyTab[]
 }

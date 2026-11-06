@@ -36,7 +36,18 @@ interface BacktestPayload {
   metrics: BacktestMetrics
 }
 
+interface BacktestProgress {
+  stage: string
+  completed: number
+  total: number
+  stock: string
+  percent?: number
+  waiting_seconds?: number
+  elapsed_seconds?: number
+}
+
 interface BacktestApiResponse {
+  progress?: BacktestProgress
   running: boolean
   started_at?: string
   error?: string
@@ -48,31 +59,51 @@ const chartEl = ref<HTMLElement | null>(null)
 let myChart: echarts.ECharts | null = null
 
 const activeChartTab = ref<'line' | 'kline' | 'daily'>('line')
+const progress = ref<BacktestProgress>()
+const errorMessage = ref('')
 const loading = ref(false)
 const running = ref(false)
 const latestData = ref<BacktestPayload | null>(null)
 const lastUpdatedAt = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
+const progressPercent = computed(() => {
+  if (!progress.value) return 0
+  if (typeof progress.value.percent === 'number') return Math.max(0, Math.min(100, progress.value.percent))
+  if (progress.value.total > 0) {
+    return Math.min(100, Math.round((progress.value.completed / progress.value.total) * 100))
+  }
+  return 0
+})
+
 async function fetchStatus() {
   try {
-    const res = await fetch('/api/strategy1/backtest')
-    if (!res.ok) return
+    const res = await fetch('/api/strategy1/backtest', { signal: AbortSignal.timeout(10000) })
+    if (!res.ok) throw new Error(`状态查询失败 (${res.status})`)
     const data: BacktestApiResponse = await res.json()
     running.value = Boolean(data.running)
+    loading.value = false
+    progress.value = data.progress
+    errorMessage.value = data.error || ''
     if (data.latest) {
       latestData.value = data.latest
       lastUpdatedAt.value = data.latest.updated_at || data.latest.date || ''
       updateChart()
     }
-    if (running.value && !pollTimer) {
-      pollTimer = setInterval(fetchStatus, 3000)
-    } else if (!running.value && pollTimer) {
+    if (running.value) {
+      if (!pollTimer) {
+        pollTimer = setInterval(fetchStatus, 1000)
+      }
+    } else if (pollTimer) {
       clearInterval(pollTimer)
       pollTimer = null
       loading.value = false
     }
   } catch (err) {
+    errorMessage.value = '回测状态连接中断，正在重试；后台状态尚未确认。'
+    if (!pollTimer && running.value) {
+      pollTimer = setInterval(fetchStatus, 1500)
+    }
     console.error('Failed to load strategy1 backtest:', err)
   }
 }
@@ -81,17 +112,22 @@ async function triggerBacktest() {
   if (loading.value || running.value) return
   loading.value = true
   running.value = true
+  errorMessage.value = ''
   try {
-    const res = await fetch('/api/strategy1/backtest', { method: 'POST' })
+    const res = await fetch('/api/strategy1/backtest', { method: 'POST', signal: AbortSignal.timeout(10000) })
     if (res.ok) {
+      await fetchStatus()
       if (!pollTimer) {
-        pollTimer = setInterval(fetchStatus, 3000)
+        pollTimer = setInterval(fetchStatus, 1000)
       }
     } else {
+      errorMessage.value = `启动回测失败 (${res.status})`
       loading.value = false
       running.value = false
     }
   } catch (err) {
+    errorMessage.value = '启动请求未确认，正在查询后台状态。'
+    if (!pollTimer) pollTimer = setInterval(fetchStatus, 1500)
     console.error('Trigger backtest error:', err)
     loading.value = false
     running.value = false
@@ -428,23 +464,82 @@ onMounted(() => {
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-xs font-bold text-accent transition hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/15 px-3 py-1.5 text-xs font-bold text-accent transition hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-75"
           :disabled="loading || running"
           @click="triggerBacktest"
         >
           <svg
             v-if="loading || running"
-            class="h-3.5 w-3.5 animate-spin"
+            class="h-3.5 w-3.5 animate-spin text-accent"
             viewBox="0 0 24 24"
             fill="none"
           >
             <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" />
             <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
           </svg>
-          <span v-if="loading || running">回测计算中 (覆盖当天)...</span>
+          <span v-if="loading || running">
+            回测中 {{ progressPercent }}% ({{ progress?.completed || 0 }}/{{ progress?.total || 30 }})
+          </span>
           <span v-else>⚡ 运行最近7天回测</span>
         </button>
       </div>
+    </div>
+
+    <!-- 真实进度面板 -->
+    <div
+      v-if="running && progress"
+      class="mt-3 rounded-xl border border-accent/40 bg-accent/10 p-3 text-xs text-ui-text shadow-sm"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center rounded-md bg-accent/20 px-2 py-0.5 font-bold text-accent">
+            {{ progress.stage || '执行中' }}
+          </span>
+          <span v-if="progress.stock" class="font-medium text-ui-text">
+            {{ progress.stock }}
+          </span>
+          <span class="text-ui-text-3">
+            (已处理 {{ progress.completed }}/{{ progress.total || 30 }} 只)
+          </span>
+        </div>
+        <div class="flex items-center gap-3 font-mono text-ui-text-2">
+          <span v-if="progress.elapsed_seconds != null && progress.elapsed_seconds > 0">耗时: {{ progress.elapsed_seconds }}s</span>
+          <span class="text-sm font-extrabold text-accent">{{ progressPercent }}%</span>
+        </div>
+      </div>
+
+      <!-- 高对比度渐变动态进度条 -->
+      <div class="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-ui-surface-3/80">
+        <div
+          class="h-full rounded-full bg-gradient-to-r from-teal-400 via-emerald-400 to-accent transition-all duration-300 ease-out"
+          :style="{ width: `${Math.max(4, progressPercent)}%` }"
+        ></div>
+      </div>
+
+      <div class="mt-1.5 flex items-center justify-between text-[11px] text-ui-text-3">
+        <span>真实1分钟颗粒度仿真 · 包含开盘突破、分时止盈与组合资金撮合</span>
+        <span v-if="progress.waiting_seconds && progress.waiting_seconds > 2">当前环节已等待: {{ progress.waiting_seconds }}s</span>
+      </div>
+    </div>
+
+    <!-- 异常警示 -->
+    <div
+      v-if="errorMessage"
+      class="mt-3 flex items-center justify-between rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-400"
+      role="alert"
+    >
+      <div class="flex items-center gap-2">
+        <span>⚠️ {{ errorMessage }}</span>
+      </div>
+      <button
+        type="button"
+        class="rounded bg-rose-500/20 px-2 py-0.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/30"
+        @click="triggerBacktest"
+      >
+        重试
+      </button>
     </div>
 
     <!-- 关键数据指标小牌 -->

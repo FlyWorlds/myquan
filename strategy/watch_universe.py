@@ -21,13 +21,8 @@ STRATEGY1_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy1_pool" / "picks_poo
 STRATEGY1_THR_PATH = _MYQUAN_ROOT / "backtest" / "strategy1_pool" / "thr_2026.json"
 ZIYANG_PICKS_PATH = _MYQUAN_ROOT / "backtest" / "strategy17_ziyang" / "picks_3m.json"
 
-# 公共自选池（非因子选股）：所有策略交易/盯盘宇宙均并入。
-SELF_WATCHLIST_PICKS: tuple[tuple[str, str], ...] = (
-    ("600330", "天通股份"),
-    ("600552", "凯盛科技"),
-    ("601208", "东材科技"),
-    ("002636", "金安国纪"),
-)
+# 公共自选池（非因子选股）：所有策略交易/盯盘宇宙均并入（已清空自选股）。
+SELF_WATCHLIST_PICKS: tuple[tuple[str, str], ...] = ()
 STRATEGY16_EXTRA_PICKS = SELF_WATCHLIST_PICKS
 _RUNTIME_SELF_PICKS = None
 _RUNTIME_REMOVED = {}

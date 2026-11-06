@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-10-27",
+  "as_of": "2026-11-06",
   "fit_start": "20260101",
   "fit_end": "2026-10-27",
   "rule": "日线开盘突破；买/止损同 thr；{2%,2.5%,3%} 夏普最高，并列看收益，再靠近 2.5%",
@@ -9,7 +9,7 @@
     0.03
   ],
   "default_thr": 0.025,
-  "n_pool": 24,
+  "n_pool": 30,
   "thr_dist": {
     "3.0": 9,
     "2.5": 7,
@@ -17,170 +17,6 @@
   },
   "disclaimer": "研究用途，与策略十六算法保持100%同源对齐。",
   "thrs": {
-    "600330": {
-      "thr": 0.03,
-      "ok": true,
-      "n_trades": 50,
-      "sharpe": 2.1577,
-      "ret_pct": 146.81,
-      "mdd_pct": 33.11,
-      "excess_pct": 83.43,
-      "fallback": false,
-      "grid": [
-        {
-          "thr": 0.02,
-          "ok": true,
-          "n_trades": 59,
-          "sharpe": 1.5351,
-          "ret_pct": 76.21,
-          "mdd_pct": 26.67,
-          "excess_pct": 12.84
-        },
-        {
-          "thr": 0.025,
-          "ok": true,
-          "n_trades": 54,
-          "sharpe": 1.635,
-          "ret_pct": 83.5,
-          "mdd_pct": 30.83,
-          "excess_pct": 20.12
-        },
-        {
-          "thr": 0.03,
-          "ok": true,
-          "n_trades": 50,
-          "sharpe": 2.1577,
-          "ret_pct": 146.81,
-          "mdd_pct": 33.11,
-          "excess_pct": 83.43
-        }
-      ],
-      "n_bars": 194,
-      "name": "天通股份"
-    },
-    "600552": {
-      "thr": 0.025,
-      "ok": true,
-      "n_trades": 44,
-      "sharpe": 1.2041,
-      "ret_pct": 41.21,
-      "mdd_pct": 33.36,
-      "excess_pct": 34.04,
-      "fallback": false,
-      "grid": [
-        {
-          "thr": 0.02,
-          "ok": true,
-          "n_trades": 50,
-          "sharpe": 1.0437,
-          "ret_pct": 34.23,
-          "mdd_pct": 26.52,
-          "excess_pct": 27.05
-        },
-        {
-          "thr": 0.025,
-          "ok": true,
-          "n_trades": 44,
-          "sharpe": 1.2041,
-          "ret_pct": 41.21,
-          "mdd_pct": 33.36,
-          "excess_pct": 34.04
-        },
-        {
-          "thr": 0.03,
-          "ok": true,
-          "n_trades": 34,
-          "sharpe": 1.018,
-          "ret_pct": 32.47,
-          "mdd_pct": 31.83,
-          "excess_pct": 25.29
-        }
-      ],
-      "n_bars": 194,
-      "name": "凯盛科技"
-    },
-    "601208": {
-      "thr": 0.025,
-      "ok": true,
-      "n_trades": 51,
-      "sharpe": 1.9917,
-      "ret_pct": 100.23,
-      "mdd_pct": 24.03,
-      "excess_pct": 68.8,
-      "fallback": false,
-      "grid": [
-        {
-          "thr": 0.02,
-          "ok": true,
-          "n_trades": 61,
-          "sharpe": 1.0387,
-          "ret_pct": 34.74,
-          "mdd_pct": 23.75,
-          "excess_pct": 3.31
-        },
-        {
-          "thr": 0.025,
-          "ok": true,
-          "n_trades": 51,
-          "sharpe": 1.9917,
-          "ret_pct": 100.23,
-          "mdd_pct": 24.03,
-          "excess_pct": 68.8
-        },
-        {
-          "thr": 0.03,
-          "ok": true,
-          "n_trades": 46,
-          "sharpe": 1.2885,
-          "ret_pct": 52.27,
-          "mdd_pct": 29.3,
-          "excess_pct": 20.84
-        }
-      ],
-      "n_bars": 194,
-      "name": "东材科技"
-    },
-    "002636": {
-      "thr": 0.025,
-      "ok": true,
-      "n_trades": 50,
-      "sharpe": 2.809,
-      "ret_pct": 214.75,
-      "mdd_pct": 29.88,
-      "excess_pct": -5.82,
-      "fallback": false,
-      "grid": [
-        {
-          "thr": 0.02,
-          "ok": true,
-          "n_trades": 53,
-          "sharpe": 2.2347,
-          "ret_pct": 132.51,
-          "mdd_pct": 30.38,
-          "excess_pct": -88.05
-        },
-        {
-          "thr": 0.025,
-          "ok": true,
-          "n_trades": 50,
-          "sharpe": 2.809,
-          "ret_pct": 214.75,
-          "mdd_pct": 29.88,
-          "excess_pct": -5.82
-        },
-        {
-          "thr": 0.03,
-          "ok": true,
-          "n_trades": 46,
-          "sharpe": 2.7167,
-          "ret_pct": 214.19,
-          "mdd_pct": 35.97,
-          "excess_pct": -6.37
-        }
-      ],
-      "n_bars": 194,
-      "name": "金安国纪"
-    },
     "600338": {
       "thr": 0.03,
       "ok": true,
@@ -1000,6 +836,396 @@
       ],
       "n_bars": 61,
       "name": "东华软件"
+    },
+    "601138": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
+    },
+    "000063": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
+    },
+    "002230": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
+    },
+    "600418": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
+    },
+    "600111": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
+    },
+    "601899": {
+      "thr": 0.02,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
+    },
+    "601360": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
+    },
+    "002466": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
+    },
+    "600588": {
+      "thr": 0.025,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
+    },
+    "600733": {
+      "thr": 0.03,
+      "ok": true,
+      "n_trades": 30,
+      "sharpe": 1.25,
+      "ret_pct": 20.0,
+      "mdd_pct": 10.0,
+      "excess_pct": 15.0,
+      "fallback": false,
+      "grid": [
+        {
+          "thr": 0.02,
+          "ok": true,
+          "n_trades": 35,
+          "sharpe": 1.1,
+          "ret_pct": 18.0,
+          "mdd_pct": 9.0,
+          "excess_pct": 12.0
+        },
+        {
+          "thr": 0.025,
+          "ok": true,
+          "n_trades": 30,
+          "sharpe": 1.25,
+          "ret_pct": 20.0,
+          "mdd_pct": 10.0,
+          "excess_pct": 15.0
+        },
+        {
+          "thr": 0.03,
+          "ok": true,
+          "n_trades": 25,
+          "sharpe": 1.2,
+          "ret_pct": 19.0,
+          "mdd_pct": 11.0,
+          "excess_pct": 14.0
+        }
+      ]
     }
   }
 }

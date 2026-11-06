@@ -43,5 +43,52 @@ class TestStrategy1BacktestService(unittest.TestCase):
         self.assertIn("sh_cum_x2_pct", status["latest"])
 
 
+class TestBacktestLifecycle(unittest.TestCase):
+    def test_duplicate_trigger_is_reserved_before_thread_runs(self):
+        from unittest.mock import patch
+        manager = Strategy1BacktestManager
+        with patch.object(manager, '_running', False), patch.object(manager, 'get_status', return_value={}), patch('threading.Thread') as thread:
+            self.assertTrue(manager.trigger_backtest()['ok'])
+            self.assertFalse(manager.trigger_backtest()['ok'])
+            self.assertEqual(thread.call_count, 1)
+
+    def test_failed_worker_keeps_history_and_resets_running(self):
+        from unittest.mock import patch, MagicMock
+        import tempfile
+        from pathlib import Path
+        manager = Strategy1BacktestManager
+        events = MagicMock()
+        events.get.return_value = ('error', '行情超时')
+        process = MagicMock()
+        process.pid = 123
+        process.is_alive.return_value = False
+        ctx = MagicMock()
+        ctx.Queue.return_value = events
+        ctx.Process.return_value = process
+        with tempfile.TemporaryDirectory() as directory:
+            history = Path(directory) / 'history.json'
+            history.write_text('{"latest": {"date": "2026-10-30"}}')
+            with patch('multiprocessing.get_context', return_value=ctx), patch('holdingStocks.strategy1_backtest_service.HISTORY_FILE', history), patch.object(manager, '_running', True), patch.object(manager, '_progress_at', __import__('time').monotonic()):
+                manager._worker()
+                self.assertFalse(manager._running)
+                self.assertEqual(manager._last_error, '行情超时')
+                self.assertEqual(history.read_text(), '{"latest": {"date": "2026-10-30"}}')
+
+    def test_stalled_worker_is_terminated(self):
+        from unittest.mock import patch, MagicMock
+        manager = Strategy1BacktestManager
+        process = MagicMock()
+        process.pid = 123
+        process.is_alive.return_value = True
+        ctx = MagicMock()
+        ctx.Process.return_value = process
+        with patch('multiprocessing.get_context', return_value=ctx), patch.object(manager, '_running', True), patch.object(manager, '_progress_at', 0):
+            manager._worker()
+            self.assertFalse(manager._running)
+            self.assertIn('超时', manager._last_error)
+            process.terminate.assert_called_once()
+            process.kill.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
