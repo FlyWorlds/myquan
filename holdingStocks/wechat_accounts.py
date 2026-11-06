@@ -13,12 +13,32 @@ _BIND_LOCK = threading.RLock()
 def delivery_configs(config):
     if config.get('_single_destination'):
         return [config]
-    primary = dict(config, _recipient_slot='primary', _single_destination=True)
+    
+    # 自动校准 account_inventory 中的最新有效账号，防止重新扫码后凭证文件名更新导致不匹配
+    try:
+        inv = account_inventory()
+    except Exception:
+        inv = {}
+
+    def _resolve_account(account: str | None, target: str | None) -> str:
+        if not target:
+            return account or ''
+        if account and account in inv and inv[account].get('user') == target:
+            return account
+        # 根据 target 自动匹配最新的有效 account
+        for aid, data in inv.items():
+            if data.get('user') == target:
+                return aid
+        return account or ''
+
+    primary_acc = _resolve_account(config.get('account'), config.get('target'))
+    primary = dict(config, account=primary_acc, _recipient_slot='primary', _single_destination=True)
     result = [primary]
     secondary = config.get('secondary')
-    if isinstance(secondary, dict) and secondary.get('enabled', True) and secondary.get('account') and secondary.get('target'):
-        if (secondary['account'], secondary['target']) != (config.get('account'), config.get('target')):
-            result.append(dict(config, **{k: secondary[k] for k in ('account', 'target')},
+    if isinstance(secondary, dict) and secondary.get('enabled', True) and secondary.get('target'):
+        sec_acc = _resolve_account(secondary.get('account'), secondary.get('target'))
+        if (sec_acc, secondary['target']) != (primary.get('account'), primary.get('target')):
+            result.append(dict(config, account=sec_acc, target=secondary['target'],
                                _recipient_slot='secondary', _single_destination=True))
     return result
 
