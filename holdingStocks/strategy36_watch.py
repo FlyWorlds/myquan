@@ -54,6 +54,49 @@ def _load_tech_data_and_generate_signals() -> pd.DataFrame:
     df["sz_close"] = df["sz_close"].ffill()
     df["kc_close"] = df["kc_close"].ffill()
 
+    # 盘中实时行情无缝合并：盘中交易时段动态滚入最新指数点位与科技微观广度
+    try:
+        from datetime import datetime
+        from holdingStocks.quote_feed import fetch_sina_batch
+        from holdingStocks.watch_config import calendar_is_trading_day
+
+        now = datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
+        if calendar_is_trading_day(now):
+            spots = fetch_sina_batch(["sz399006", "sz399001", "sh000688"])
+            cyb_spot = spots.get("sz399006", {})
+            cyb_last = cyb_spot.get("last")
+            if cyb_last and float(cyb_last) > 0:
+                cyb_c = float(cyb_last)
+                sz_c = float(spots.get("sz399001", {}).get("last") or df.iloc[-1]["sz_close"])
+                kc_c = float(spots.get("sh000688", {}).get("last") or df.iloc[-1]["kc_close"])
+
+                # 估算今日盘中实时微观广度
+                cyb_prev = float(cyb_spot.get("prev_close") or df.iloc[-1]["cyb_close"])
+                cyb_ret = (cyb_c / cyb_prev - 1.0) if cyb_prev > 0 else 0.0
+                last_br = float(df.iloc[-1]["breadth_ma20"])
+                today_br = float(np.clip(last_br + cyb_ret * 0.7, 0.02, 0.98))
+
+                if df.iloc[-1]["date"] == today_str:
+                    df.loc[df.index[-1], "cyb_close"] = cyb_c
+                    df.loc[df.index[-1], "sz_close"] = sz_c
+                    df.loc[df.index[-1], "kc_close"] = kc_c
+                    df.loc[df.index[-1], "breadth_ma20"] = today_br
+                else:
+                    new_row = {
+                        "date": today_str,
+                        "cyb_close": cyb_c,
+                        "cyb_volume": float(df.iloc[-1].get("cyb_volume", 0)),
+                        "sz_close": sz_c,
+                        "kc_close": kc_c,
+                        "breadth_ma20": today_br,
+                        "breadth_ma60": float(df.iloc[-1].get("breadth_ma60", 0.3)),
+                        "new_low_ratio": float(df.iloc[-1].get("new_low_ratio", 0.0)),
+                    }
+                    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    except Exception:
+        pass
+
     # 科技池波动弹性：科技股 Beta 高，低位超跌更深，高位冲顶更高
     # 科技广度由横截面广度与创业板动量修正合成
     df["breadth_ma20"] = df["breadth_ma20"].ffill()
@@ -247,6 +290,7 @@ def get_strategy36_timing_payload(force_refresh: bool = False) -> dict[str, Any]
             "name": f"右侧企稳解除确认 (创业板MA{DEFAULT_REBOUND_MA} & 广度>{DEFAULT_TECH_EXIT_BREADTH*100:.0f}%)",
             "current_index": round(cyb_c, 2),
             "index_target": round(cyb_m20, 2),
+            "index_diff_pts": round(cyb_c - cyb_m20, 2) if cyb_m20 else 0.0,
             "index_diff_pct": round((cyb_c - cyb_m20) / cyb_m20 * 100.0, 2) if cyb_m20 else 0.0,
             "index_ok": bool(cyb_c >= cyb_m20),
             "current_breadth": round(tech_breadth * 100.0, 1),
@@ -255,10 +299,11 @@ def get_strategy36_timing_payload(force_refresh: bool = False) -> dict[str, Any]
             "breadth_ok": bool(tech_breadth >= DEFAULT_TECH_EXIT_BREADTH),
             "status": "已达成" if exit_ok else "未满足",
             "ok": exit_ok,
+            "is_intraday": bool(str(latest["date"]) == time.strftime("%Y-%m-%d")),
             "desc": (
-                f"需创业板收复 20日线({cyb_m20:.1f}) 且科技广度重回 {DEFAULT_TECH_EXIT_BREADTH*100:.0f}% 以上方可解除防守"
+                f"需创业板收复20日线({cyb_m20:.2f}，尚差 {cyb_m20 - cyb_c:.2f} 点 / {(cyb_c - cyb_m20)/cyb_m20*100:+.2f}%) 且科技广度重回 {DEFAULT_TECH_EXIT_BREADTH*100:.0f}% 以上(当前 {tech_breadth*100:.1f}%) 方可解除防守"
                 if not exit_ok
-                else "创业板已收复20日线且科技广度健康回升，右侧买入信号解除限制"
+                else f"创业板已收复20日线({cyb_c:.2f} >= {cyb_m20:.2f}) 且科技广度健康回升({tech_breadth*100:.1f}% >= {DEFAULT_TECH_EXIT_BREADTH*100:.0f}%)，右侧买入信号限制已解除"
             ),
         },
     }

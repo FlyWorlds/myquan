@@ -62,41 +62,93 @@ NEW_FIND = r'''export function findAccountIdsByContextToken(accountIds, userId) 
     return accountIds.filter((id) => Boolean(getContextToken(id, userId)));
 }'''
 
+NEW_GET_TS = r'''/** Retrieve the cached context token for a given account+user pair. */
+export function getContextToken(accountId: string, userId: string): string | undefined {
+  // myquan-patch: disk-fallback-v1
+  // CLI / isolated sends never call startAccount.restore — fall back to disk.
+  const primaryKey = contextTokenKey(accountId, userId);
+  const candidates: string[] = [];
+  if (userId) {
+    candidates.push(userId);
+    if (String(userId).includes("@")) {
+      candidates.push(String(userId).split("@")[0]);
+    } else {
+      candidates.push(`${userId}@im.wechat`);
+    }
+  }
+  const seen = new Set<string>();
+  for (const uid of candidates) {
+    if (!uid || seen.has(uid)) continue;
+    seen.add(uid);
+    const k = contextTokenKey(accountId, uid);
+    let val = contextTokenStore.get(k);
+    if (val === undefined) {
+      restoreContextTokens(accountId);
+      val = contextTokenStore.get(k);
+    }
+    if (val !== undefined) {
+      if (k !== primaryKey) {
+        contextTokenStore.set(primaryKey, val);
+      }
+      logger.debug(`getContextToken: key=${primaryKey} found=true storeSize=${contextTokenStore.size}`);
+      return val;
+    }
+  }
+  logger.debug(`getContextToken: key=${primaryKey} found=false storeSize=${contextTokenStore.size}`);
+  return undefined;
+}'''
+
+NEW_FIND_TS = r'''export function findAccountIdsByContextToken(
+  accountIds: string[],
+  userId: string,
+): string[] {
+  // myquan-patch: disk-fallback-v1
+  return accountIds.filter((id) => Boolean(getContextToken(id, userId)));
+}'''
+
 GET_RE = re.compile(
     r"/\*\* Retrieve the cached context token for a given account\+user pair\. \*/\s*"
-    r"export function getContextToken\(accountId, userId\) \{.*?\n\}",
+    r"export function getContextToken\([a-zA-Z0-9_: ,]+\)(?::\s*[a-zA-Z0-9_| ]+)?\s*\{.*?\n\}",
     re.DOTALL,
 )
 FIND_RE = re.compile(
-    r"export function findAccountIdsByContextToken\(accountIds, userId\) \{.*?\n\}",
+    r"export function findAccountIdsByContextToken\([a-zA-Z0-9_: ,\n\r\t]+\)(?::\s*[a-zA-Z0-9_| \[\]]+)?\s*\{.*?\n\}",
     re.DOTALL,
 )
 
 
-def _plugin_inbound_js() -> Path | None:
+def _plugin_inbound_files() -> list[Path]:
+    results = []
+    ext_ts = Path.home() / ".openclaw" / "extensions" / "openclaw-weixin" / "src" / "messaging" / "inbound.ts"
+    if ext_ts.is_file():
+        results.append(ext_ts)
+
     root = Path.home() / ".openclaw" / "npm" / "projects"
-    if not root.is_dir():
-        return None
-    matches = sorted(
-        root.glob(
-            "tencent-weixin-openclaw-weixin-*/node_modules/"
-            "@tencent-weixin/openclaw-weixin/dist/src/messaging/inbound.js"
+    if root.is_dir():
+        matches = sorted(
+            root.glob(
+                "tencent-weixin-openclaw-weixin-*/node_modules/"
+                "@tencent-weixin/openclaw-weixin/dist/src/messaging/inbound.js"
+            )
         )
-    )
-    return matches[-1] if matches else None
+        if matches:
+            results.append(matches[-1])
+    return results
 
 
 def patch_file(path: Path) -> str:
     text = path.read_text(encoding="utf-8")
+    is_ts = path.suffix == ".ts"
     if MARKER in text and "restoreContextTokens(accountId)" in text:
-        # already patched; still refresh bodies for idempotent upgrades
-        pass
+        return "already"
     if not GET_RE.search(text):
         raise RuntimeError(f"未找到 getContextToken 函数: {path}")
     if not FIND_RE.search(text):
         raise RuntimeError(f"未找到 findAccountIdsByContextToken 函数: {path}")
-    text2 = GET_RE.sub(NEW_GET, text, count=1)
-    text2 = FIND_RE.sub(NEW_FIND, text2, count=1)
+    new_get = NEW_GET_TS if is_ts else NEW_GET
+    new_find = NEW_FIND_TS if is_ts else NEW_FIND
+    text2 = GET_RE.sub(new_get, text, count=1)
+    text2 = FIND_RE.sub(new_find, text2, count=1)
     if text2 == text and MARKER in text:
         return "already"
     if MARKER not in text2:
@@ -155,15 +207,15 @@ def prune_broken_accounts() -> str:
 
 
 def main() -> int:
-    path = _plugin_inbound_js()
-    if path is None:
-        print("ERROR: 未找到 openclaw-weixin inbound.js", file=sys.stderr)
+    files = _plugin_inbound_files()
+    if not files:
+        print("ERROR: 未找到 openclaw-weixin inbound 文件", file=sys.stderr)
         return 1
-    status = patch_file(path)
+    for path in files:
+        status = patch_file(path)
+        print(f"inbound: {status} -> {path}")
     prune = prune_broken_accounts()
-    print(f"inbound.js: {status} -> {path}")
     print(f"accounts.json: {prune}")
-    print("请执行: openclaw gateway restart")
     return 0
 
 

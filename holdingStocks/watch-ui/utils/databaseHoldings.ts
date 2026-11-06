@@ -33,21 +33,32 @@ export function mergeDatabaseHoldings(raw: WatchSnapshot, state: DatabasePaperSt
       ...(confirmedClose ? { 信号时间: sellTime, 卖信号时间: sellTime } : {}),
       买入时间: pos?.buy_time ?? null, 名称: pos?.name || row.名称,
       ...(!unchanged ? { 已实现: false,
-        当日盈亏: null, '当日盈亏%': null, 综合单笔收入: null, '综合单笔收入%': null } : {}),
+        ...(qty <= 0 ? { 当日盈亏: null, '当日盈亏%': null } : {}),
+        综合单笔收入: null, '综合单笔收入%': null } : {}),
       ...(!sameCycleRevision ? { 综合单笔收入: null, '综合单笔收入%': null,
         综合单笔成本额: null, 综合单笔卖出数量: null, 综合单笔持仓数量: null, 综合单笔来源: null } : {}),
       ...(qty > 0 ? { 浮盈: pnl, '浮盈%': basis > 0 && pnl != null ? pnl/basis*100 : null }
         : row.已实现 && unchanged ? {} : { 浮盈: null, '浮盈%': null }) }
   })
   const known = new Set(rows.map((row) => row.代码))
+  const rawByCode = new Map((raw.holdings || []).map((r) => [String(r.代码 || ''), r]))
   for (const [code, pos] of Object.entries(positions)) {
     if (pos.qty <= 0 || known.has(code)) continue
     compatible = false
-    rows.unshift({ 代码: code, 名称: pos.name || code, 市场: pos.market, 持仓: pos.qty,
+    const existing = rawByCode.get(code)
+    rows.unshift({
+      ...(existing || {}),
+      代码: code,
+      名称: pos.name || existing?.名称 || code,
+      市场: pos.market || existing?.市场,
+      持仓: pos.qty,
       置顶: true,
-      可用: pos.available ?? null, 成本: pos.cost ?? null, 买入时间: pos.buy_time ?? null,
+      可用: pos.available ?? null,
+      成本: pos.cost ?? null,
+      买入时间: pos.buy_time ?? null,
       交易日: session,
-      持仓状态: holdingStatus({ 持仓: pos.qty, 买入时间: pos.buy_time }, session) })
+      持仓状态: holdingStatus({ 持仓: pos.qty, 买入时间: pos.buy_time }, session)
+    })
   }
   const account = compatible ? raw.account : { ...raw.account,
     availableCash: state.holdings.account_cash, accountTotal: state.holdings.account_total,

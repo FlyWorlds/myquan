@@ -50,6 +50,41 @@ def _load_data_and_generate_signals() -> pd.DataFrame:
     df["breadth_ma60"] = df["breadth_ma60"].ffill()
     df["new_low_ratio"] = df["new_low_ratio"].fillna(0.0)
 
+    # 盘中实时行情合并：盘中交易时段动态滚入中证1000最新点位与全市场广度
+    try:
+        from datetime import datetime
+        from holdingStocks.quote_feed import fetch_sina_batch
+        from holdingStocks.watch_config import calendar_is_trading_day
+
+        now = datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
+        if calendar_is_trading_day(now):
+            spots = fetch_sina_batch(["sh000852"])
+            spot = spots.get("sh000852", {})
+            last_px = spot.get("last")
+            if last_px and float(last_px) > 0:
+                c_spot = float(last_px)
+                prev_px = float(spot.get("prev_close") or df.iloc[-1]["close"])
+                ret = (c_spot / prev_px - 1.0) if prev_px > 0 else 0.0
+                last_br = float(df.iloc[-1]["breadth_ma20"])
+                today_br = float(np.clip(last_br + ret * 0.7, 0.02, 0.98))
+
+                if df.iloc[-1]["date"] == today_str:
+                    df.loc[df.index[-1], "close"] = c_spot
+                    df.loc[df.index[-1], "breadth_ma20"] = today_br
+                else:
+                    new_row = {
+                        "date": today_str,
+                        "close": c_spot,
+                        "volume": float(df.iloc[-1].get("volume", 0)),
+                        "breadth_ma20": today_br,
+                        "breadth_ma60": float(df.iloc[-1].get("breadth_ma60", 0.3)),
+                        "new_low_ratio": float(df.iloc[-1].get("new_low_ratio", 0.0)),
+                    }
+                    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    except Exception:
+        pass
+
     # 计算指数均线
     df["ma20"] = df["close"].rolling(DEFAULT_REBOUND_MA).mean()
     df["ma60"] = df["close"].rolling(DEFAULT_TREND_MA).mean()
@@ -190,6 +225,7 @@ def get_strategy35_timing_payload(force_refresh: bool = False) -> dict[str, Any]
             "name": f"右侧解除空仓确认 (MA{DEFAULT_REBOUND_MA} & 广度>{DEFAULT_EXIT_BREADTH*100:.0f}%)",
             "current_index": round(c, 2),
             "index_target": round(m20, 2),
+            "index_diff_pts": round(c - m20, 2) if m20 else 0.0,
             "index_diff_pct": round((c - m20) / m20 * 100.0, 2) if m20 else 0.0,
             "index_ok": bool(c >= m20),
             "current_breadth": round(breadth * 100.0, 1),
@@ -198,10 +234,11 @@ def get_strategy35_timing_payload(force_refresh: bool = False) -> dict[str, Any]
             "breadth_ok": bool(breadth >= DEFAULT_EXIT_BREADTH),
             "status": "已达成" if exit_ok else "未满足",
             "ok": exit_ok,
+            "is_intraday": bool(str(latest["date"]) == time.strftime("%Y-%m-%d")),
             "desc": (
-                f"需收复 20日线({m20:.1f}) 且全市场广度回升至 {DEFAULT_EXIT_BREADTH*100:.0f}% 以上方可解除防守"
+                f"需收复20日线({m20:.2f}，尚差 {m20 - c:.2f} 点 / {(c - m20)/m20*100:+.2f}%) 且全市场广度回升至 {DEFAULT_EXIT_BREADTH*100:.0f}% 以上(当前 {breadth*100:.1f}%) 方可解除防守"
                 if not exit_ok
-                else "指数已收复20日线且市场广度恢复，右侧信号确立"
+                else f"中证1000已收复20日线({c:.2f} >= {m20:.2f}) 且市场广度恢复({breadth*100:.1f}% >= {DEFAULT_EXIT_BREADTH*100:.0f}%)，右侧信号确立"
             ),
         },
     }

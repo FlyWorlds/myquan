@@ -1514,8 +1514,32 @@ def format_alert_message(row: dict[str, Any], *, occurred_at=None) -> str:
 def _env_with_node(cfg: dict[str, Any]) -> dict[str, str]:
     env = dict(os.environ)
     node_dir = str(cfg.get("node_bin_dir") or "").strip()
+    extra_dirs: list[str] = []
     if node_dir and Path(node_dir).is_dir():
-        env["PATH"] = node_dir + os.pathsep + env.get("PATH", "")
+        extra_dirs.append(node_dir)
+
+    # 自动探测常见 nvm / pnpm / homebrew 路径，保障各类后台运行环境均能找到 openclaw 和 node
+    home = Path.home()
+    pnpm_dir = home / "Library" / "pnpm"
+    if pnpm_dir.is_dir():
+        extra_dirs.append(str(pnpm_dir))
+
+    nvm_node_root = home / ".nvm" / "versions" / "node"
+    if nvm_node_root.is_dir():
+        for p in sorted(nvm_node_root.glob("*/bin"), reverse=True):
+            if (p / "node").is_file():
+                extra_dirs.append(str(p))
+                break
+
+    for std_bin in ("/opt/homebrew/bin", "/usr/local/bin", str(home / ".local" / "bin")):
+        if Path(std_bin).is_dir():
+            extra_dirs.append(std_bin)
+
+    cur_path = env.get("PATH", "")
+    for d in extra_dirs:
+        if d not in cur_path.split(os.pathsep):
+            cur_path = d + os.pathsep + cur_path
+    env["PATH"] = cur_path
     return env
 
 

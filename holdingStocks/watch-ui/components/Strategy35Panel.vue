@@ -589,7 +589,15 @@ onUnmounted(() => {
         <!-- 维度 4: 右侧企稳解除进度 -->
         <div class="rounded-xl border border-ui-hairline/70 bg-ui-surface/60 p-3">
           <div class="flex items-center justify-between text-xs text-ui-text-3">
-            <span>右侧企稳解除</span>
+            <div class="flex items-center gap-1.5 font-medium">
+              <span>右侧企稳解除</span>
+              <span
+                v-if="effectivePayload.current.breakdown.exit_progress.is_intraday"
+                class="rounded bg-sky-500/20 px-1 py-0.2 text-[9px] font-mono text-sky-400"
+              >
+                盘中实时
+              </span>
+            </div>
             <span
               class="rounded px-1.5 py-0.5 text-[10px] font-bold"
               :class="effectivePayload.current.breakdown.exit_progress.ok ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'"
@@ -608,7 +616,7 @@ onUnmounted(() => {
                   class="ml-1 text-[11px] font-bold"
                   :class="(effectivePayload.current.breakdown.exit_progress.current_index ?? effectivePayload.current.close) >= effectivePayload.current.breakdown.exit_progress.index_target ? 'text-emerald-400' : 'text-red-400'"
                 >
-                  {{ (effectivePayload.current.breakdown.exit_progress.current_index ?? effectivePayload.current.close) >= effectivePayload.current.breakdown.exit_progress.index_target ? '✓已收复' : '✗跌破' }}
+                  {{ (effectivePayload.current.breakdown.exit_progress.current_index ?? effectivePayload.current.close) >= effectivePayload.current.breakdown.exit_progress.index_target ? '✓已收复' : `${(((effectivePayload.current.breakdown.exit_progress.current_index ?? effectivePayload.current.close) - effectivePayload.current.breakdown.exit_progress.index_target) / effectivePayload.current.breakdown.exit_progress.index_target * 100).toFixed(1)}%` }}
                 </span>
               </span>
             </div>

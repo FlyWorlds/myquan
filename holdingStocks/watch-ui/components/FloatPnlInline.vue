@@ -73,7 +73,13 @@ const dayPnl = computed(() => {
   if (v != null && !Number.isNaN(Number(v))) return Number(v)
   if (qty <= 0) return null
   if (!Number.isFinite(last) || last <= 0) return null
-  const prev = Number(props.row.昨收)
+  let prev = Number(props.row.昨收)
+  if (!Number.isFinite(prev) || prev <= 0) {
+    const chgPct = Number(props.row.当日涨幅)
+    if (Number.isFinite(chgPct) && chgPct > -100) {
+      prev = last / (1 + chgPct / 100)
+    }
+  }
   if (!Number.isFinite(prev) || prev <= 0) return null
   return Math.round((last - prev) * qty * 100) / 100
 })
@@ -90,9 +96,17 @@ const pct = computed(() => {
   }
   const v = props.row['当日盈亏%']
   if (v != null && !Number.isNaN(Number(v))) return Number(v)
+  const chg = props.row.当日涨幅
+  if (chg != null && !Number.isNaN(Number(chg))) return Number(chg)
   if (qty <= 0 || dayPnl.value == null) return null
   if (!Number.isFinite(last) || last <= 0) return null
-  const prev = Number(props.row.昨收)
+  let prev = Number(props.row.昨收)
+  if (!Number.isFinite(prev) || prev <= 0) {
+    const chgPct = Number(props.row.当日涨幅)
+    if (Number.isFinite(chgPct) && chgPct > -100) {
+      prev = last / (1 + chgPct / 100)
+    }
+  }
   if (!Number.isFinite(prev) || prev <= 0) return null
   return Math.round((last / prev - 1) * 10000) / 100
 })
@@ -161,5 +175,15 @@ const title = computed(() => {
     <span class="rounded bg-ui-fill-hover px-1.5 py-0.5 text-[10px] text-ui-text-3 font-mono">
       盘前待竞价 (09:15起)
     </span>
+  </span>
+  <!-- 持仓行情同步中兜底 -->
+  <span
+    v-else-if="Number(row.持仓) > 0"
+    class="text-xs"
+    :class="block ? 'mt-0.5 block whitespace-nowrap' : 'ml-1.5 inline-flex shrink-0 flex-nowrap items-baseline gap-x-1.5 whitespace-nowrap'"
+    title="今日盈亏计算中（等待即时行情分笔报价）"
+  >
+    <span class="text-[10px] font-normal text-ui-text-3">今日盈亏</span>
+    <span class="text-ui-text-3 font-mono text-xs">—</span>
   </span>
 </template>
