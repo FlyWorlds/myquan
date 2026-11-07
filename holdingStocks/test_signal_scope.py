@@ -2,7 +2,13 @@ import copy
 import unittest
 from unittest.mock import patch
 
-from signal_scope import align_signal_scope, retained_inventory_codes
+from signal_scope import (
+    align_signal_scope,
+    retained_inventory_codes,
+    unclosed_lifecycle_codes,
+    purge_closed_signals_at_next_session,
+    purge_stale_unheld_signals,
+)
 
 
 class SignalScopeTests(unittest.TestCase):
@@ -15,7 +21,7 @@ class SignalScopeTests(unittest.TestCase):
             condition_buy_orders=dict(orders={
                 '600004':dict(strategy='strategy16',status='ARMED'),
                 '600005':dict(strategy='strategy1',status='ARMED'),
-                '600006':dict(strategy='strategy1',status='TRIGGERED')}))
+                '600006':dict(strategy='strategy1',status='ARMED')}))
         original = copy.deepcopy(data)
         self.assertTrue(align_signal_scope(data,strategy_id='strategy1',strategy_codes={'600005'},session='2026-10-28'))
         self.assertEqual(data['positions'],original['positions'])
@@ -74,3 +80,73 @@ class SignalScopeTests(unittest.TestCase):
             index._stamp_snapshot_liveness(snap,clock='2026-10-28 10:00:00')
         self.assertEqual(snap['conditionBuy']['orders'],[new])
         self.assertNotIn('条件买入价',snap['holdings'][0])
+
+    def test_closure_principle_preserves_unclosed_buy_signals_on_pool_switch(self):
+        # 闭环原则：策略换池时，已有持仓(603138)与已触发买入尚未完成卖出(002093)的股票，必须保留在监听队列中
+        holdings = {
+            "positions": {
+                "603138": {"qty": 4000, "cost": 15.0},
+                "002093": {"qty": 0},  # 虽未登记实仓，但已触发买入信号且尚未平仓
+                "600001": {"qty": 0},  # 纯未触发的旧候选
+            },
+            "condition_buy_orders": {
+                "orders": {
+                    "603138": {"status": "FILLED", "strategy": "strategy1"},
+                    "002093": {"status": "TRIGGERED", "strategy": "strategy1"},
+                    "600001": {"status": "ARMED", "strategy": "strategy1"},
+                }
+            },
+            "realized_today": {},
+        }
+        # 新目标池不包含 603138, 002093, 600001
+        new_strategy_codes = {"603206", "000601"}
+        session = "2026-11-06"
+
+        retained = retained_inventory_codes(holdings, session)
+        self.assertIn("603138", retained)
+        self.assertIn("002093", retained)
+        self.assertNotIn("600001", retained)
+
+        align_signal_scope(holdings, strategy_id="strategy1", strategy_codes=new_strategy_codes, session=session)
+        # 验证 603138 与 002093 均保留在 portfolio_pool 中继续拉行情
+        self.assertIn("603138", holdings["portfolio_pool"])
+        self.assertIn("002093", holdings["portfolio_pool"])
+        # 纯未触发的 600001 挂单被取消
+        self.assertEqual(holdings["condition_buy_orders"]["orders"]["600001"]["status"], "CANCELLED")
+
+    def test_delayed_cleanup_and_next_session_reset(self):
+        # 延迟清理与次日重置：
+        # 当日触发卖出的股票，当日必须保留供用户核对；次日 9:00 重置时才执行销毁清理
+        holdings = {
+            "positions": {
+                "603138": {"qty": 0, "cost": None, "note": "10点前跌破开盘-1%止损@14.8"},
+            },
+            "condition_buy_orders": {
+                "session": "2026-11-06",
+                "orders": {
+                    "603138": {"status": "FILLED", "strategy": "strategy1"},
+                }
+            },
+            "realized_today": {
+                "603138": {"session": "2026-11-06", "reason": "止损卖出", "full_exit": True, "qty": 4000}
+            },
+            "alert_sticky": {"603138": {"sticky": True}},
+            "portfolio_pool": ["603138", "603206"],
+        }
+        # 1. 在卖出当日 (2026-11-06)：retained 必须包含 603138，保证当日视觉留存
+        retained_today = retained_inventory_codes(holdings, "2026-11-06")
+        self.assertIn("603138", retained_today)
+
+        # 2. 到了下一个交易日早盘 9:00 (2026-11-09)：触发次日重置清理
+        new_active_codes = {"603206", "000601"}  # 新目标池不含 603138
+        next_session = "2026-11-09"
+
+        # 执行次日 9:00 重置清理
+        changed = purge_closed_signals_at_next_session(holdings, active_strategy_codes=new_active_codes, session=next_session)
+        self.assertTrue(changed)
+
+        # 昨天已完成卖出闭环的 603138，在次日 9:00 正式被销毁清理
+        orders = holdings["condition_buy_orders"]["orders"]
+        self.assertNotIn("603138", orders)
+        self.assertNotIn("603138", holdings["alert_sticky"])
+        self.assertNotIn("603138", holdings["portfolio_pool"])

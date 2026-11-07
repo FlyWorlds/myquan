@@ -36,6 +36,39 @@ class AlertRetention:
         self.lock = threading.RLock()
         self.dirty = False
 
+    def remove_code(self, code):
+        with self.lock:
+            if not self.loaded and self.read:
+                self.records = self.read() or {}
+                self.loaded = True
+            c = str(code)
+            if c in self.records:
+                self.records.pop(c, None)
+                self.dirty = True
+                if self.write:
+                    self.write(deepcopy(self.records))
+                    self.dirty = False
+
+    def purge_closed_at_next_session(self, active_strategy_codes, unclosed_codes):
+        with self.lock:
+            if not self.loaded and self.read:
+                self.records = self.read() or {}
+                self.loaded = True
+            allowed = {str(c) for c in (active_strategy_codes or set())}
+            unclosed = {str(c) for c in (unclosed_codes or set())}
+            # 只有既不在新目标池、又已经完成卖出闭环（不在 unclosed 中）的股票，才在次日 9:00 彻底销毁
+            to_remove = [c for c in self.records if c not in allowed and c not in unclosed]
+            if to_remove:
+                for c in to_remove:
+                    self.records.pop(c, None)
+                self.dirty = True
+                if self.write:
+                    self.write(deepcopy(self.records))
+                    self.dirty = False
+
+    def purge_unheld_foreign(self, active_strategy_codes, held_codes):
+        return self.purge_closed_at_next_session(active_strategy_codes, held_codes)
+
     def merge(self, rows, now=None, strategy_codes=None):
         session = retention_session(now)
         with self.lock:
@@ -104,6 +137,8 @@ class AlertRetention:
                         row['信号时间'] = saved['fields'].get('信号时间') or row.get('买入时间')
             seen = {str(r.get('代码') or '') for r in rows}
             for code, saved in self.records.items():
+                if strategy_codes is not None and code not in strategy_codes:
+                    continue
                 if code not in seen:
                     restored = deepcopy(saved.get('row') or dict(saved['fields'], 代码=code))
                     restored.update(持仓=0, 当日预警=True, 预警保留=True, 预警交易日=session, 信号策略ID=self.strategy_id)

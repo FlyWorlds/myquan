@@ -120,6 +120,16 @@ def save(draft_id):
         write(ACTIVE, payload)
         draft['saved_at'] = now
         write(STATE/'draft.json', draft)
+        # 闭环原则：换池时对齐信号范围；凡是已有持仓或已触发买入尚未卖出的股票，强制保留在监听队列中
+        try:
+            from holdingStocks.index import load_holdings, save_holdings, trading_session_date
+            from holdingStocks.signal_scope import align_signal_scope
+            hdata = load_holdings()
+            new_codes = {str(p['code']) for p in picks}
+            if align_signal_scope(hdata, strategy_id='strategy1', strategy_codes=new_codes, session=str(trading_session_date())):
+                save_holdings(hdata)
+        except Exception as e:  # noqa: BLE001
+            print(f"Align signal scope on save pool failed: {e}")
     return status()
 
 

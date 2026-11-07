@@ -4658,6 +4658,13 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
     _purge_stale_realized(data, sess)
     reset_container(data, "alert_sticky", {})
     data["watch_status_reset_session"] = sess
+    # 买卖解耦架构：盘前彻底清理旧池子里所有未持仓的过期买入信号
+    try:
+        from signal_scope import purge_stale_unheld_signals
+        from watch_config import strategy1_codes
+        purge_stale_unheld_signals(data, active_strategy_codes=strategy1_codes(data), session=sess)
+    except Exception as e:  # noqa: BLE001
+        print(f"[{_now()}] 9:00 清理过期未持仓信号异常（继续）: {e}")
     # 非实仓仓位：清掉策略展示用粘滞字段（不改 qty>0）
     for code, pos in list((data.get("positions") or {}).items()):
         if not isinstance(pos, dict):
@@ -6697,6 +6704,7 @@ def apply_exit_fill(
         pos["stop_noted_px"] = None
         pos["stop_noted_session"] = None
         pos["note"] = f"{reason}@{rec['price']} ({session})"
+        # 延迟清理原则：触发卖出信号与平仓当日严禁从系统中清理，必须在前端界面持续展示该卖出信号状态，以便用户盘中核对；次交易日 9:00 重置时统一执行销毁清理。
     else:
         raw_avail = pos.get("available")
         if raw_avail is not None:
