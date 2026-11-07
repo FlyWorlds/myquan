@@ -14,6 +14,11 @@ from pathlib import Path
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
+try:
+    from trading_calendar import effective_watch_session, is_trading_day
+except ImportError:
+    from holdingStocks.trading_calendar import effective_watch_session, is_trading_day
+
 REFERENCE = 'https://quotapass.com/'
 CACHE = Path(__file__).resolve().parent / 'logs' / 'market_radar_cache.json'
 POOL_TYPES = {'sealed': 'getTopicZTPool', 'broken': 'getTopicZBPool', 'down': 'getTopicDTPool'}
@@ -252,7 +257,8 @@ class RadarService:
         self.busy, self.attempt, self.data, self.error = False, 0., None, None
         try:
             cached = json.loads(CACHE.read_text())
-            if cached.get('version') == 1 and cached.get('mode') == 'provider' and cached.get('trade_date') == now().date().isoformat() and isinstance(cached.get('stocks'), list):
+            target_sess = effective_watch_session(now())
+            if cached.get('version') == 1 and cached.get('trade_date') == target_sess and isinstance(cached.get('stocks'), list):
                 self.data = cached
         except (OSError, ValueError):
             pass
@@ -266,32 +272,68 @@ class RadarService:
             tmp = CACHE.with_suffix('.tmp')
             tmp.write_text(json.dumps(value, ensure_ascii=False, allow_nan=False))
             tmp.replace(CACHE)
-        except Exception:
+        except Exception as exc:
             with self.lock:
-                self.error = '当日实时数据暂不可用，已隐藏无法确认的涨停状态。'
+                # 若已有当前有效会话缓存，失败时保留已有数据，不强行抹除
+                target_sess = effective_watch_session(now())
+                if not (self.data and self.data.get('trade_date') == target_sess):
+                    self.error = f'当日实时数据暂不可用: {exc}'
         finally:
             with self.lock:
                 self.busy = False
 
     def get(self, force=False):
+        now_dt = now()
+        target_session = effective_watch_session(now_dt)
+        is_trade_day = is_trading_day(now_dt.date())
+        clock_str = now_dt.strftime('%H:%M:%S')
+        is_market_hours = is_trade_day and '09:15:00' <= clock_str < '15:05:00'
+
         with self.lock:
-            elapsed = time.monotonic()-self.attempt
-            if not self.busy and elapsed >= (5 if force else 15):
-                self.busy, self.attempt = True, time.monotonic()
-                threading.Thread(target=self._refresh, daemon=True, name='market-radar').start()
+            # 仅在盘中开市阶段或强制刷新时，发起实时轮询
+            if is_market_hours or force:
+                elapsed = time.monotonic() - self.attempt
+                if not self.busy and elapsed >= (5 if force else 15):
+                    self.busy, self.attempt = True, time.monotonic()
+                    threading.Thread(target=self._refresh, daemon=True, name='market-radar').start()
+
             payload = copy.deepcopy(self.data or {})
-            historical = payload.get('trade_date') != now().date().isoformat()
+            data_session = payload.get('trade_date')
+
+            # 判断数据有效性：
+            # 在非交易日或下一个交易日 9:00 前，只要数据属于有效会话期（如周六周日展示周五数据），必须完整保留
+            session_matched = (data_session == target_session)
+            if not is_market_hours and session_matched and isinstance(payload.get('stocks'), list) and payload.get('stocks'):
+                # 盘后 / 非交易日有效留存展示期
+                payload.update(
+                    refreshing=self.busy,
+                    historical=False,
+                    stale=False,
+                    refresh_sec=15,
+                    status='current',
+                    error=None,
+                )
+                return payload
+
+            # 盘中交易时间要求实时新鲜度
             try:
-                age = (now()-datetime.strptime(payload['fetched_at'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=ZoneInfo('Asia/Shanghai'))).total_seconds()
+                age = (now_dt - datetime.strptime(payload['fetched_at'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=ZoneInfo('Asia/Shanghai'))).total_seconds()
             except (ValueError, KeyError):
                 age = math.inf
-            unavailable = not self.data or historical or age > 45 or self.error is not None or payload.get('mode') != 'provider'
+
+            unavailable = not self.data or not session_matched or (is_market_hours and age > 45) or self.error is not None
             if unavailable:
-                payload = dict(stocks=[], broken=[], themes=[], industries=[],
-                    error=self.error or '实时数据暂不可用，未展示昨日或过期涨停池。')
-            payload.update(refreshing=self.busy, historical=False,
-                stale=unavailable, refresh_sec=15,
-                status='unavailable' if unavailable else 'current')
+                payload = dict(
+                    stocks=[], broken=[], themes=[], industries=[],
+                    error=self.error or ('新交易日 9:00 已重置，等待今日开盘数据…' if not session_matched else '实时数据暂不可用')
+                )
+            payload.update(
+                refreshing=self.busy,
+                historical=False,
+                stale=unavailable,
+                refresh_sec=15,
+                status='unavailable' if unavailable else 'current'
+            )
             return payload
 
 

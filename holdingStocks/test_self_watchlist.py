@@ -144,16 +144,16 @@ def test_http_confirmation_flow_and_origin_checks(tmp_path):
         with urlopen(req, timeout=3) as response:
             return json.load(response)
     try:
-        assert len(call()['items']) == 4
+        initial_len = len(call()['items'])
         preview = call('/preview', {'code': '600000'})
         assert store.data is None
         with pytest.raises(HTTPError) as exc:
             call('/confirm', {'token': preview['token']}, {'Origin': 'https://untrusted.example'})
         assert exc.value.code == 403 and store.data is None
         added = call('/confirm', {'token': preview['token']})
-        assert added['ok'] and len(added['items']) == 5
+        assert added['ok'] and len(added['items']) == initial_len + 1
         removed = call('/remove', {'code': '600000'})
-        assert removed['ok'] and len(removed['items']) == 4
+        assert removed['ok'] and len(removed['items']) == initial_len
         assert store.data['removed']['600000'] == '2026-11-02'
         with pytest.raises(HTTPError) as exc:
             call('/confirm', {'token': 'invented-token'})

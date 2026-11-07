@@ -79,6 +79,60 @@ def build_strategy3_payload(rows=None, *, session=None, get_quote=None, batch_qu
                         '价位可用':plan['allowed']})
         result.append(row)
     result.sort(key=lambda r:(not r.get('候选信号',False),not r.get('破位预警',False),r['代码']))
+
+    # 公共自选池额外追加合并：不挤占原有策略候选配额
+    try:
+        from watch_config import current_self_watchlist, code_key
+        existing_codes = {code_key(r.get('代码', '')) for r in result}
+        self_items = list(current_self_watchlist())
+        for code, name in self_items:
+            c = code_key(code)
+            if not c or c == '000000':
+                continue
+            if c in existing_codes:
+                for r in result:
+                    if code_key(r.get('代码', '')) == c:
+                        r['池来源'] = '自选'
+                        r['self_watch'] = True
+                continue
+            existing_codes.add(c)
+            symbol = ('sh' if c.startswith('6') else 'sz') + c
+            cached = SCAN_OUT / ('intraday_features' if intraday else 'features') / f'{symbol}.parquet'
+            f = pd.read_parquet(cached) if cached.exists() else pd.DataFrame()
+            if len(f):
+                f = f[f.date <= cutoff]
+            self_row = {
+                '代码': c, '名称': name, '状态': '自选监控', '可操作': False,
+                '数据截至': str(cutoff.date()), '池来源': '自选', 'self_watch': True,
+                '挂单说明': '公共自选池额外监控，不占用策略候选配额',
+            }
+            if len(f):
+                r_feat = f.iloc[-1]
+                state = ('破位后量价观察' if r_feat.broken else '相邻下行笔未破前低' if r_feat.down_leg else '等待底分型→上笔→顶分型')
+                if r_feat.broken and r_feat.recovered: state = '破前低后收复'
+                elif r_feat.broken and r_feat.shadow: state = '破位后长下影'
+                elif r_feat.broken and r_feat.small_bear: state = '破位后阴线缩短'
+                plan = risk_levels(float(r_feat.close) * (1 + SLIPPAGE_VALUE), feature=r_feat, **policy.dict())
+                passed = structure_signal(r_feat, **rule)['passed'] and exhaustion_signal(r_feat, **rule)['passed']
+                self_row.update({
+                    '状态': state, '前底日期': r_feat.anchor_date, '顶分型日期': r_feat.top_date,
+                    '破位预警': False, '前底': None if pd.isna(r_feat.anchor) else float(r_feat.anchor),
+                    '破位深度': float(r_feat.depth), '三日动量': float(r_feat.mom3),
+                    '加速下跌': bool(r_feat.accelerated), '止跌确认': bool(r_feat.higher_low),
+                    '候选信号': bool(passed and plan['allowed']), '现价': float(r_feat.close),
+                    '量比': float(r_feat.vol_ratio), '破位最大量比': float(r_feat.break_volume),
+                    '下影占比': float(r_feat.lower_shadow), '阴线实体ATR': float(r_feat.body_atr),
+                    '前高': None if pd.isna(r_feat.peak) else float(r_feat.peak),
+                    '止跌低点': None if pd.isna(r_feat.trough) else float(r_feat.trough),
+                    '参考止损': plan.get('stop_px'), '第一目标': plan.get('target_px'),
+                    '第二目标': plan.get('second_target_px'), '止损距离': plan.get('risk_pct'),
+                    '空间风险比': plan.get('reward_risk'), '入场位置': plan.get('location'),
+                    '价位可用': plan['allowed']
+                })
+            result.append(self_row)
+    except Exception:
+        pass
+
     comparisons=[];failed=None
     panic_study=_load(SCAN_OUT/'panic_study.json',{})
     study_date=scan.get('history_as_of') if intraday else scan.get('as_of')

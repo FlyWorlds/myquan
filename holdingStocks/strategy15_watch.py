@@ -25,7 +25,9 @@ def build_strategy15_payload(
         lianban=sent.get("mkt_lianban"),
     )
     f25_on = bool(policy.use_factor22)
-    pool = strategy_watchlist_codes()
+    from watch_config import current_self_watchlist
+    self_codes = {code_key(c) for c, _ in current_self_watchlist()}
+    pool = strategy_watchlist_codes() | self_codes
     rows_out: list[dict[str, Any]] = []
     for r in strategy1_rows or []:
         if r.get("error"):

@@ -144,10 +144,23 @@ const strategy16bDynamicRows = computed(() => {
   const snapRows = snapshot.value?.strategy16b || []
   const resultRows = strategy16bResult.value?.rows || []
   const mergedRows = [...resultRows, ...snapRows]
-  if (strategy16bResult.value) return selectionRows(strategy16bResult.value.picks, mergedRows)
-  if (snapRows.length) return snapRows
-  const codes = new Set((strategy16bDynamicPicks.value?.items || []).map((it) => String(it.code || '').slice(-6)))
-  return (snapshot.value?.strategy16 || []).filter((row) => codes.has(String(row.代码 || '')))
+  let base: any[] = []
+  if (strategy16bResult.value) {
+    base = selectionRows(strategy16bResult.value.picks, mergedRows)
+  } else if (snapRows.length) {
+    base = snapRows
+  } else {
+    const codes = new Set((strategy16bDynamicPicks.value?.items || []).map((it) => String(it.code || '').slice(-6)))
+    base = (snapshot.value?.strategy16 || []).filter((row) => codes.has(String(row.代码 || '')))
+  }
+  // 公共自选池额外追加合并：不占策略限定配额
+  const seenCodes = new Set(base.map((r) => String(r.代码 || '').slice(-6)))
+  const poolForSelf = (snapshot.value?.strategy16 || snapshot.value?.strategy1 || snapRows) as any[]
+  const selfRows = poolForSelf.filter((r) => {
+    const isSelf = r.pool_src === 'self' || r.池来源 === '自选' || r.self_watch
+    return isSelf && !seenCodes.has(String(r.代码 || '').slice(-6))
+  })
+  return [...base, ...selfRows]
 })
 
 function strategy16bQuery() {
@@ -510,7 +523,6 @@ const closedCount = computed(() => closedHoldings.value.length)
           day-change-after-name
           trade-sides-after-day-high
         />
-        <StrategyPicksPanel :picks="strategy1Tab?.picks" />
       </section>
 
       <section v-show="activeTab === 'strategy3'">
@@ -521,7 +533,6 @@ const closedCount = computed(() => closedHoldings.value.length)
           :payload="snapshot.strategy3"
           :phase="snapshot.phase"
         />
-        <StrategyPicksPanel :picks="strategy3Tab?.picks" />
       </section>
 
       <section v-show="activeTab === 'strategy8'">
@@ -532,7 +543,6 @@ const closedCount = computed(() => closedHoldings.value.length)
           :payload="snapshot.strategy8"
           :phase="snapshot.phase"
         />
-        <StrategyPicksPanel :picks="strategy8Tab?.picks" />
       </section>
       <section v-show="activeTab === 'strategy15'">
         <StrategyInfoPanel v-if="strategy15Tab" :tab="strategy15Tab" class="mb-4" />
@@ -541,7 +551,6 @@ const closedCount = computed(() => closedHoldings.value.length)
           :payload="snapshot.strategy15"
           :phase="snapshot.phase"
         />
-        <StrategyPicksPanel :picks="strategy15Tab?.picks" />
       </section>
       <section v-show="activeTab === 'strategy16'">
         <StrategyInfoPanel v-if="strategy16Tab" :tab="strategy16Tab" class="mb-4" />
@@ -558,8 +567,6 @@ const closedCount = computed(() => closedHoldings.value.length)
           day-change-after-name
           trade-sides-after-day-high
         />
-
-        <StrategyPicksPanel :picks="strategy16Tab?.picks" />
       </section>
       <section v-show="activeTab === 'strategy16b'">
         <StrategyInfoPanel v-if="strategy16bTab" :tab="strategy16bTab" class="mb-4" />
@@ -661,7 +668,6 @@ const closedCount = computed(() => closedHoldings.value.length)
           pool-category="条件选股"
           status-mode="strategy"
         />
-        <StrategyPicksPanel :picks="strategy16bDynamicPicks" />
       </section>
 
       <section v-show="activeTab === 'strategy37'">
@@ -672,7 +678,6 @@ const closedCount = computed(() => closedHoldings.value.length)
           :payload="snapshot.strategy37"
           :phase="snapshot.phase"
         />
-        <StrategyPicksPanel :picks="strategy37Tab?.picks" />
       </section>
     </template>
 

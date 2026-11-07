@@ -422,6 +422,48 @@ def build_strategy8_payload(
 
     theme_date = scanned.get("themeDate")
     live = bool(scanned.get("live"))
+
+    # 公共自选池额外追加合并：不挤占题材联动原有配额
+    try:
+        from watch_config import current_self_watchlist, code_key
+        existing_codes = {str(r.get("代码") or "").zfill(6) for r in rows}
+        self_items = list(current_self_watchlist())
+        self_sinas = [sina_of(c).lower() for c, _ in self_items]
+        if batch_quote and self_sinas:
+            more_quotes = batch_quote(self_sinas)
+            quotes.update({k.lower(): v for k, v in more_quotes.items()})
+
+        for code, name in self_items:
+            c = str(code).zfill(6)
+            if c in existing_codes:
+                for r in rows:
+                    if str(r.get("代码") or "").zfill(6) == c:
+                        r["池来源"] = "自选"
+                        r["self_watch"] = True
+                continue
+            existing_codes.add(c)
+            s = sina_of(c).lower()
+            q = quotes.get(s) or {}
+            rows.append({
+                "代码": c,
+                "名称": name,
+                "题材": "自选观察",
+                "类型": "自选",
+                "池来源": "自选",
+                "self_watch": True,
+                "题材涨停数": "-",
+                "可操作": False,
+                "买点": "-",
+                "止损": "-",
+                "因子侧": "自选池",
+                "挂单说明": "公共自选池额外监控，不占用题材联动配额",
+                "现价": q.get("last"),
+                "当日涨幅": q.get("day_chg_pct"),
+            })
+            name_map[c] = name
+    except Exception:
+        pass
+
     return {
         "sentiment": sentiment,
         "hotThemes": scanned.get("hotThemes") or [],

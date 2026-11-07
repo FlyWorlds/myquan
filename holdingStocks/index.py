@@ -1799,7 +1799,7 @@ def _strategy16b_picks_from_payload(
 
 def _strategy16b_watch_items_from_payload(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     try:
-        from watch_config import load_strategy16_thr_map, meta_for_code
+        from watch_config import load_strategy16_thr_map, meta_for_code, merge_self_watchlist
     except Exception:  # noqa: BLE001
         return []
     thrs = load_strategy16_thr_map()
@@ -1827,7 +1827,7 @@ def _strategy16b_watch_items_from_payload(payload: Mapping[str, Any]) -> list[di
             item["entry_pct"] = float(thr)
             item["stop_pct"] = float(DEFAULT_PCT)
         out.append(item)
-    return out
+    return merge_self_watchlist(out, strategy_id="strategy16b")
 
 
 def _set_strategy16b_dynamic(params: Mapping[str, Any], payload: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -1959,9 +1959,12 @@ def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
         code = _code_key(str(w.get("code") or ""))
         if not code:
             continue
-        existing = rows_by_code.get(code)
+        is_self = bool(w.get("self_watch") or w.get("manual_add") or w.get("pool_src") == "self")
         if existing is not None:
             row = dict(existing)
+            if is_self:
+                row["pool_src"] = "self"
+                row["池来源"] = "自选"
         else:
             pct = float(w.get("entry_pct") or w.get("pct") or DEFAULT_PCT)
             tick = float(w.get("tick") or TICK_SIZE)
@@ -1984,8 +1987,8 @@ def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
                 "当日涨幅": None,
                 "昨收": None,
             }
-        row["pool_src"] = "strategy16b"
-        row["池来源"] = "条件选股"
+        row["pool_src"] = "self" if is_self else "strategy16b"
+        row["池来源"] = "自选" if is_self else "条件选股"
         if w.get("concept"):
             row["concept"] = w.get("concept")
         quote = quote_by_code.get(code)
@@ -2779,6 +2782,18 @@ def publish_watch_snapshot(
         strategy35_payload = previous.get("strategy35") or (_last_watch_snapshot or {}).get("strategy35") or {}
         strategy36_payload = previous.get("strategy36") or (_last_watch_snapshot or {}).get("strategy36") or {}
         strategy37_payload = previous.get("strategy37") or (_last_watch_snapshot or {}).get("strategy37") or {}
+        if not strategy8:
+            try:
+                from strategy8_watch import build_strategy8_payload
+                strategy8 = build_strategy8_payload(session=session_today or None, get_quote=get_quote, batch_quote=_batch_quote)
+            except Exception:
+                pass
+        if not strategy37_payload:
+            try:
+                from strategy37_watch import get_strategy37_watch_payload
+                strategy37_payload = get_strategy37_watch_payload()
+            except Exception:
+                pass
 
     if include_strategy_panels:
         from strategy3_watch import build_strategy3_payload
@@ -14070,6 +14085,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
             from strategy15_watch import build_strategy15_payload
             from strategy35_watch import get_strategy35_timing_payload
             from strategy36_watch import get_strategy36_timing_payload
+            from strategy37_watch import get_strategy37_watch_payload
             while not stop.is_set():
                 if not _WATCH_FRONT_READY.wait(.5):
                     continue
@@ -14080,7 +14096,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
                         strategy8=build_strategy8_payload(session=day, get_quote=get_quote, batch_quote=batch),
                         strategy15=build_strategy15_payload(session=day, strategy1_rows=_collect_quote_runtime_rows(get_quote)),
                         strategy35=get_strategy35_timing_payload(),
-                        strategy36=get_strategy36_timing_payload())
+                        strategy36=get_strategy36_timing_payload(),
+                        strategy37=get_strategy37_watch_payload())
                     panels["indices"] = _QUOTE_RUNTIME_PANELS.get("indices") or fetch_indices_cached()
                     _QUOTE_RUNTIME_PANELS.update(panels)
                 except Exception as exc:

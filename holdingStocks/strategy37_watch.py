@@ -76,6 +76,45 @@ def get_strategy37_watch_payload() -> dict[str, Any]:
     tune_stats = s_3m.get("tune_2023_2025", {})
     test_stats = s_3m.get("test_2025_now", {})
 
+    # 公共自选池额外追加合并：不挤占原有策略信号配额
+    try:
+        from watch_config import current_self_watchlist, code_key
+        existing_codes = {code_key(str(r.get("代码") or "")) for r in recent_signals}
+        self_items = list(current_self_watchlist())
+        extra_rows = []
+        for code, name in self_items:
+            c = code_key(code)
+            if not c or c == "000000":
+                continue
+            if c in existing_codes:
+                for r in recent_signals:
+                    if code_key(str(r.get("代码") or "")) == c:
+                        r["池来源"] = "自选"
+                        r["self_watch"] = True
+                continue
+            existing_codes.add(c)
+            extra_rows.append({
+                "代码": c,
+                "名称": name,
+                "symbol": ("sh" if c.startswith("6") else "sz") + c,
+                "日期": "自选监控",
+                "买入价": None,
+                "收盘价": None,
+                "跌停价": None,
+                "脱离中枢天数": 0,
+                "中枢ZD": 0.0,
+                "中枢ZG": 0.0,
+                "d1收益%": None,
+                "d3收益%": None,
+                "d5收益%": None,
+                "状态": "自选池额外监控",
+                "池来源": "自选",
+                "self_watch": True,
+            })
+        final_rows = recent_signals + extra_rows
+    except Exception:
+        final_rows = recent_signals
+
     return {
         "strategyId": "strategy37",
         "strategyName": "策略三十七·跌停开板缠论反转策略",
@@ -104,7 +143,7 @@ def get_strategy37_watch_payload() -> dict[str, Any]:
             "limit_down_d1_pf": 4.01,
         },
         "summary": summary,
-        "rows": recent_signals,
+        "rows": final_rows,
     }
 
 
