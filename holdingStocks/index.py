@@ -192,6 +192,7 @@ from watch_config import (
     primary_watchlist,
     normalize_signal_session,
     trading_session_date,
+    effective_watch_session,
     calc_day_pnl as _calc_day_pnl,
     code_key as _code_key,
     empty_position as _empty_position,
@@ -1031,9 +1032,10 @@ def _handle_sectors_api(path: str) -> tuple[int, dict[str, Any]]:
     return 404, {"error": "not found"}
 
 
-def _calendar_signal_session() -> str:
-    """账户日初/结算用的日历信号日（周一～周五为当日；周末锚定上周五）。"""
-    return current_trading_session()
+def _calendar_signal_session(now: Any | None = None) -> str:
+    """账户日初/结算用的日历信号日（非交易日及交易日9:00前锚定上一交易日；9:00后切到新交易日）。"""
+    from watch_config import effective_watch_session
+    return effective_watch_session(now)
 
 
 def _promote_quote_session(session: Any) -> str:
@@ -2369,7 +2371,7 @@ def _enrich_snapshot_comprehensive_trade_returns(snap: dict[str, Any], *, read_m
         from account_reconciliation import enrich_snapshot_trade_metadata
         changed = enrich_snapshot_trade_metadata(snap, model.state) or changed
         from account_reconciliation import closed_trade_rows
-        closed_session = str(snap.get("clock") or "")[:10]
+        closed_session = _calendar_signal_session(snap.get("clock"))
         from boot_holdings import cached_market_row
         closed = closed_trade_rows(model, closed_session)
         get_quote = (_DATABASE_QUOTES_CLIENT.get if _CONDITION_BUY_ACTIVE and _DATABASE_QUOTES_CLIENT is not None
@@ -4716,8 +4718,8 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
 
 
 def ensure_watch_status_reset_today(*, session: str | None = None) -> None:
-    """启动时若已过 9:15 且本日未重置，则补跑一次。休市日不补跑。"""
-    from watch_config import AUCTION_START_HOUR, AUCTION_START_MINUTE, _clock_minutes
+    """启动时若已过 9:00 且本日未重置，则补跑一次。休市日不补跑。"""
+    from watch_config import RESET_HOUR, RESET_MINUTE, _clock_minutes
 
     if not calendar_is_trading_day():
         return
@@ -4725,8 +4727,8 @@ def ensure_watch_status_reset_today(*, session: str | None = None) -> None:
     data = load_holdings()
     if str(data.get("watch_status_reset_session") or "") == sess:
         return
-    a15 = int(AUCTION_START_HOUR) * 60 + int(AUCTION_START_MINUTE)
-    if _clock_minutes() < a15:
+    r_min = int(RESET_HOUR) * 60 + int(RESET_MINUTE)
+    if _clock_minutes() < r_min:
         return
     reset_watch_status_at_auction(session=sess)
 
@@ -8529,10 +8531,33 @@ def pct_vs_open(open_px: float, px: float) -> float | None:
     return round(float(v), 2)
 
 
-def fetch_indices() -> list[dict[str, Any]]:
-    """拉取上证指数 / 深证成指：最新点数、涨跌点数、涨跌幅。
+def _fetch_tencent_index(code: str) -> dict[str, Any] | None:
+    try:
+        import urllib.request
+        url = f"http://qt.gtimg.cn/q={code.lower()}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            text = resp.read().decode("gbk", errors="ignore")
+            parts = text.split("~")
+            if len(parts) > 33:
+                price = float(parts[3])
+                chg_points = float(parts[31]) if parts[31] else 0.0
+                chg_pct = float(parts[32]) if parts[32] else 0.0
+                if price > 0:
+                    return {
+                        "price": price,
+                        "chg_points": chg_points,
+                        "chg_pct": chg_pct,
+                    }
+    except Exception:
+        pass
+    return None
 
-    优先新浪批量（与个股同一通道）；akshare 表代码常不带 sh/sz 前缀，对不上就「未找到」。
+
+def fetch_indices() -> list[dict[str, Any]]:
+    """拉取盯盘指数（中证全指 / 上证指数 / 深证成指）：最新点数、涨跌点数、涨跌幅。
+
+    优先新浪批量，未命中时尝试腾讯行情接口，最后备用 akshare。
     """
     blanks = [
         {
@@ -8556,6 +8581,18 @@ def fetch_indices() -> list[dict[str, Any]]:
     for item, blank in zip(INDEX_WATCH, blanks, strict=True):
         spot = batch.get(str(item["code"]).lower())
         parsed = _index_from_sina_spot(item, spot) if spot else None
+        if parsed is None:
+            t_spot = _fetch_tencent_index(item["code"])
+            if t_spot:
+                parsed = {
+                    "code": item["code"],
+                    "name": item["name"],
+                    "market": item["market"],
+                    "price": t_spot["price"],
+                    "chg_points": t_spot["chg_points"],
+                    "chg_pct": t_spot["chg_pct"],
+                    "error": None,
+                }
         if parsed is not None:
             out.append(parsed)
         else:

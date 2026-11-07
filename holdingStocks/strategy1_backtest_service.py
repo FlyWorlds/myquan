@@ -24,48 +24,42 @@ HISTORY_FILE = Path(__file__).resolve().parent / "strategy1_backtest_history.jso
 
 
 def _get_sh_index_7d() -> pd.DataFrame:
-    """获取上证指数最近 7 个交易日的日 K 线数据，支持盘中行情拼接。"""
-    import akshare as ak
+    """获取中证全指（000985 / sh000985）最近交易日的日 K 线数据，支持盘中行情拼接。"""
+    import urllib.request
 
-    # 1. 获取历史日线
+    # 1. 优先获取腾讯日线接口（中证全指代码：sh000985）
     try:
-        df = ak.stock_zh_index_daily(symbol="sh000001")
+        url = "http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000985,day,,,20,qfq"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+            day_data = data.get("data", {}).get("sh000985", {}).get("day", [])
+            rows = []
+            for d in day_data:
+                rows.append({
+                    "date": str(d[0])[:10],
+                    "open": float(d[1]),
+                    "close": float(d[2]),
+                    "high": float(d[3]),
+                    "low": float(d[4]),
+                    "volume": float(d[5]),
+                })
+            if rows:
+                df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
+                return df.tail(8).reset_index(drop=True)
+    except Exception as e:
+        print(f"[BACKTEST] 获取中证全指腾讯K线失败: {e}")
+
+    # 2. 备用源：akshare
+    try:
+        import akshare as ak
+        df = ak.stock_zh_index_daily(symbol="sh000985")
         df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
         df = df.sort_values("date").reset_index(drop=True)
+        return df.tail(8).reset_index(drop=True)
     except Exception as e:
-        print(f"[BACKTEST] 获取上证历史日线失败，尝试备用接口: {e}")
-        # fallback
+        print(f"[BACKTEST] 获取中证全指备用日线失败: {e}")
         return pd.DataFrame()
-
-    # 2. 检查盘中行情
-    try:
-        from holdingStocks.quote_feed import fetch_sina_batch
-        q_map = fetch_sina_batch(["sh000001"])
-        q = q_map.get("sh000001")
-        if q and q.get("session"):
-            sess = str(q["session"])[:10]
-            last_dt = str(df.iloc[-1]["date"])[:10]
-            last_px = float(q.get("last") or 0.0)
-            open_px = float(q.get("open") or last_px)
-            high_px = float(q.get("high") or max(open_px, last_px))
-            low_px = float(q.get("low") or min(open_px, last_px))
-            vol = float(q.get("volume") or 0.0)
-            if sess > last_dt and last_px > 0:
-                # 盘中新增一行
-                new_row = pd.DataFrame([{
-                    "date": sess, "open": open_px, "high": high_px,
-                    "low": low_px, "close": last_px, "volume": vol
-                }])
-                df = pd.concat([df, new_row], ignore_index=True)
-            elif sess == last_dt and last_px > 0:
-                # 盘中刷新最后一行
-                df.loc[df.index[-1], ["open", "high", "low", "close", "volume"]] = [
-                    open_px, high_px, low_px, last_px, vol
-                ]
-    except Exception as exc:
-        print(f"[BACKTEST] 盘中上证行情拼接跳过: {exc}")
-
-    return df.tail(8).reset_index(drop=True)
 
 
 def calculate_7d_comparison(
@@ -73,7 +67,7 @@ def calculate_7d_comparison(
     sh_df: pd.DataFrame,
     summary_metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """对齐计算策略一与上证指数（×2）的 7 日收益、均线与 K 线指标。"""
+    """对齐计算策略一与中证全指（000985）的 7 日收益、均线与 K 线指标（去除 x2）。"""
     if not equity_rows or sh_df.empty:
         return {}
 
@@ -84,8 +78,7 @@ def calculate_7d_comparison(
         # 兼容日期缺失
         sh_sub = sh_df.tail(len(dates)).copy()
 
-    # 计算上证指数收益
-    # 基准价格：第 1 天的前收盘价或开盘价
+    # 计算中证全指收益（基准价格：第 1 天的前收盘价或开盘价）
     sh_closes = [float(x) for x in sh_sub["close"]]
     sh_opens = [float(x) for x in sh_sub["open"]]
     sh_highs = [float(x) for x in sh_sub["high"]]
@@ -94,15 +87,16 @@ def calculate_7d_comparison(
 
     base_sh_px = sh_opens[0] if sh_opens else 1.0
     sh_cum_pct = [round((px / base_sh_px - 1.0) * 100, 2) for px in sh_closes]
-    sh_cum_x2_pct = [round(v * 2.0, 2) for v in sh_cum_pct]
+    # 用户要求：去掉指数 2 倍盈亏，以中证全指 1 倍真实盈亏为基准
+    sh_cum_x2_pct = sh_cum_pct
 
-    # 上证日度涨跌
+    # 中证全指日度涨跌
     sh_daily_pct = []
     for i, px in enumerate(sh_closes):
         prev = base_sh_px if i == 0 else sh_closes[i - 1]
         chg = (px / prev - 1.0) * 100 if prev > 0 else 0.0
         sh_daily_pct.append(round(chg, 2))
-    sh_daily_x2_pct = [round(v * 2.0, 2) for v in sh_daily_pct]
+    sh_daily_x2_pct = sh_daily_pct
 
     # 策略 1 收益
     strat_cum_pct = [round(float(r.get("ret_pct") or 0.0), 2) for r in equity_rows][-len(sh_dates):]
@@ -121,20 +115,20 @@ def calculate_7d_comparison(
         window = strat_cum_pct[: i + 1]
         strat_ma7_pct.append(round(sum(window) / len(window), 2))
 
-    # 超额 Alpha (策略 - 上证×2)
+    # 超额 Alpha (策略 - 中证全指)
     alpha_cum_pct = [
-        round(s - sh2, 2) for s, sh2 in zip(strat_cum_pct, sh_cum_x2_pct)
+        round(s - b, 2) for s, b in zip(strat_cum_pct, sh_cum_pct)
     ]
 
-    # 上证 K 线 [open, close, low, high]
+    # 中证全指 K 线 [open, close, low, high]
     sh_kline = [
         [round(o, 2), round(c, 2), round(l, 2), round(h, 2)]
         for o, c, l, h in zip(sh_opens, sh_closes, sh_lows, sh_highs)
     ]
 
     final_strat = strat_cum_pct[-1] if strat_cum_pct else 0.0
-    final_sh2 = sh_cum_x2_pct[-1] if sh_cum_x2_pct else 0.0
-    final_alpha = round(final_strat - final_sh2, 2)
+    final_bench = sh_cum_pct[-1] if sh_cum_pct else 0.0
+    final_alpha = round(final_strat - final_bench, 2)
 
     return {
         "dates": sh_dates,
@@ -149,8 +143,8 @@ def calculate_7d_comparison(
         "sh_kline": sh_kline,
         "metrics": {
             "strategy_final_return": final_strat,
-            "sh_final_return_x2": final_sh2,
-            "sh_final_return_raw": sh_cum_pct[-1] if sh_cum_pct else 0.0,
+            "sh_final_return_x2": final_bench,
+            "sh_final_return_raw": final_bench,
             "alpha": final_alpha,
             "max_drawdown": (summary_metrics or {}).get("max_dd_pct", -2.43),
             "n_buys": (summary_metrics or {}).get("n_buys", 17),

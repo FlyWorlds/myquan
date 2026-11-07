@@ -131,3 +131,37 @@ def normalize_signal_session(session: Any | None = None, *, now: Any | None = No
     except (TypeError, ValueError):
         return str(trading_session_date(now))
     return str(last_trading_day_on_or_before(day))
+
+
+def effective_watch_session(now: Any | None = None) -> str:
+    """当前盯盘展示、统计与对账所锚定的交易日 session。
+
+    规则：
+    · 非交易日（周末、法定休市日）：锚定上一个已完成交易日（如周六周日锚定上周五）。
+    · 交易日 09:00 之前：尚未进入早盘重置节点，属于上一个交易日的复盘展示期，锚定上一交易日。
+    · 交易日 09:00 及之后：早盘重置已触发，锚定当前交易日。
+    """
+    if now is None:
+        ts = datetime.now()
+    elif isinstance(now, datetime):
+        ts = now
+    elif isinstance(now, date):
+        ts = datetime.combine(now, time(9, 30))
+    else:
+        raw = str(now).strip().replace("T", " ")
+        try:
+            if len(raw) >= 19:
+                ts = datetime.strptime(raw[:19], "%Y-%m-%d %H:%M:%S")
+            elif len(raw) >= 16:
+                ts = datetime.strptime(raw[:16], "%Y-%m-%d %H:%M")
+            else:
+                ts = datetime.combine(_to_date(raw), time(9, 30))
+        except Exception:
+            ts = datetime.now()
+    d = ts.date()
+    if not is_trading_day(d):
+        return str(last_trading_day_on_or_before(d))
+    if (ts.hour, ts.minute) < (9, 0):
+        return str(previous_trading_day(d))
+    return str(d)
+

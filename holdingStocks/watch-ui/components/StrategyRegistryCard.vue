@@ -77,7 +77,7 @@ const showBacktestChart = ref(true)
           <span class="text-ui-text-2">选股/信号</span> <b>{{ tab.picks.items.length }} 条</b>
         </div>
         <div v-if="tab.id === 'strategy1'" class="mt-2 flex items-center justify-between border-t border-ui-hairline/60 pt-2 text-xs">
-          <span class="text-ui-text-2">7日高频回测 vs 上证指数×2</span>
+          <span class="text-ui-text-2">7日表现回溯 vs 中证全指</span>
           <button
             type="button"
             class="text-accent hover:underline font-semibold"

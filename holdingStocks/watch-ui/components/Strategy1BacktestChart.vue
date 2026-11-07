@@ -178,7 +178,7 @@ function updateChart() {
       legend: {
         type: 'scroll',
         orient: 'horizontal',
-        data: ['策略1 累计收益', '策略1 7日均线(7MA)', '上证指数×2 累计收益', '超额 Alpha', '策略1 单日收益', '上证指数×2 单日'],
+        data: ['策略1 累计收益', '策略1 7日均线(7MA)', '中证全指 累计收益', '超额 Alpha', '策略1 单日收益', '中证全指 单日'],
         textStyle: { color: '#9ca3af', fontSize: 11 },
         top: 4,
         right: 8,
@@ -232,9 +232,9 @@ function updateChart() {
           itemStyle: { color: '#06b6d4' },
         },
         {
-          name: '上证指数×2 累计收益',
+          name: '中证全指 累计收益',
           type: 'line',
-          data: d.sh_cum_x2_pct,
+          data: d.sh_cum_pct || d.sh_cum_x2_pct,
           smooth: true,
           showSymbol: true,
           symbolSize: 5,
@@ -255,8 +255,8 @@ function updateChart() {
           data: d.strategy_daily_pct.map(value => ({ value, itemStyle: { color: returnColor(value), opacity: 0.55 } })),
         },
         {
-          name: '上证指数×2 单日', type: 'bar', yAxisIndex: 1, barMaxWidth: 18,
-          data: d.sh_daily_x2_pct.map(value => ({ value, itemStyle: { color: returnColor(value), opacity: 0.25, borderColor: returnColor(value), borderWidth: 1 } })),
+          name: '中证全指 单日', type: 'bar', yAxisIndex: 1, barMaxWidth: 18,
+          data: (d.sh_daily_pct || d.sh_daily_x2_pct).map(value => ({ value, itemStyle: { color: returnColor(value), opacity: 0.25, borderColor: returnColor(value), borderWidth: 1 } })),
         },
       ],
     }, true)
@@ -271,7 +271,7 @@ function updateChart() {
       legend: {
         type: 'scroll',
         orient: 'horizontal',
-        data: ['上证指数 K线', '超额 Alpha(%)'],
+        data: ['中证全指 K线', '超额 Alpha(%)'],
         textStyle: { color: '#9ca3af', fontSize: 11 },
         top: 4,
         right: 8,
@@ -311,7 +311,7 @@ function updateChart() {
       ],
       series: [
         {
-          name: '上证指数 K线',
+          name: '中证全指 K线',
           type: 'candlestick',
           data: d.sh_kline,
           itemStyle: {
@@ -334,7 +334,7 @@ function updateChart() {
       ],
     }, true)
   } else {
-    // 3. 每日对比柱状图：策略1 单日收益 vs 上证指数*2 单日
+    // 3. 每日对比柱状图：策略1 单日收益 vs 中证全指 单日
     myChart.setOption({
       backgroundColor: 'transparent',
       tooltip: {
@@ -354,7 +354,7 @@ function updateChart() {
       legend: {
         type: 'scroll',
         orient: 'horizontal',
-        data: ['策略1 单日收益', '上证指数×2 单日'],
+        data: ['策略1 单日收益', '中证全指 单日'],
         textStyle: { color: '#9ca3af', fontSize: 11 },
         top: 4,
         right: 8,
@@ -384,9 +384,9 @@ function updateChart() {
           },
         },
         {
-          name: '上证指数×2 单日',
+          name: '中证全指 单日',
           type: 'bar',
-          data: d.sh_daily_x2_pct.map(value => ({ value, itemStyle: { color: returnColor(value) } })),
+          data: (d.sh_daily_pct || d.sh_daily_x2_pct).map(value => ({ value, itemStyle: { color: returnColor(value) } })),
           itemStyle: {
             color: '#f59e0b',
             borderRadius: [3, 3, 0, 0],
@@ -455,7 +455,7 @@ onMounted(() => {
         <span class="inline-flex items-center justify-center rounded-lg bg-emerald-500/15 px-2 py-1 text-xs font-bold text-emerald-400">
           7日高频仿真
         </span>
-        <h3 class="text-sm font-bold text-ui-text">策略1 vs 上证指数×2 表现对比</h3>
+        <h3 class="text-sm font-bold text-ui-text">策略1 vs 中证全指 表现对比</h3>
         <span v-if="lastUpdatedAt" class="text-xs text-ui-text-3">
           (更新: {{ lastUpdatedAt }})
         </span>
@@ -558,13 +558,13 @@ onMounted(() => {
         </div>
       </div>
       <div class="rounded-lg border border-ui-hairline/60 bg-ui-surface/60 p-2 text-center">
-        <div class="text-[11px] text-ui-text-3">上证指数×2 7日收益</div>
+        <div class="text-[11px] text-ui-text-3">中证全指 7日收益</div>
         <div class="mt-0.5 text-base font-bold" :class="returnClass(latestData.metrics.sh_final_return_x2)">
           {{ (latestData.metrics.sh_final_return_x2 ?? 0) > 0 ? '+' : '' }}{{ latestData.metrics.sh_final_return_x2 }}%
         </div>
       </div>
       <div class="rounded-lg border border-ui-hairline/60 bg-ui-surface/60 p-2 text-center">
-        <div class="text-[11px] text-ui-text-3">超额 Alpha (策略 - 指数×2)</div>
+        <div class="text-[11px] text-ui-text-3">超额 Alpha (策略 - 中证全指)</div>
         <div class="mt-0.5 text-base font-bold" :class="returnClass(latestData.metrics.alpha)">
           {{ (latestData.metrics.alpha ?? 0) > 0 ? '+' : '' }}{{ latestData.metrics.alpha }}%
         </div>
@@ -595,7 +595,7 @@ onMounted(() => {
             :class="activeChartTab === 'kline' ? 'bg-accent/20 text-accent font-bold' : 'text-ui-text-3 hover:text-ui-text'"
             @click="activeChartTab = 'kline'"
           >
-            上证K线 & 超额Alpha
+            中证全指K线 & 超额Alpha
           </button>
           <button
             type="button"

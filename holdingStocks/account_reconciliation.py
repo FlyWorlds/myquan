@@ -22,7 +22,11 @@ def enrich_snapshot_trade_metadata(snapshot, state):
     """Read-only display metadata from the same committed account revision."""
     if snapshot.get("paperRevision") != state["revision"]:
         return False
-    day = str(snapshot.get("clock") or "")[:10]
+    try:
+        from trading_calendar import effective_watch_session
+        day = effective_watch_session(snapshot.get("clock"))
+    except Exception:
+        day = str(snapshot.get("clock") or "")[:10]
     if not day:
         return False
     opened = sorted({str(t["code"]) for t in state.get("trades", [])

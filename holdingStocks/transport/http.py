@@ -171,7 +171,14 @@ def build_watch_request_handler(
                 candidate.relative_to(watch_ui_dist.resolve())
             except ValueError:
                 return None
-            return candidate if candidate.is_file() else None
+            if candidate.is_file():
+                return candidate
+            if candidate.is_dir() and (candidate / "index.html").is_file():
+                return candidate / "index.html"
+            return None
+
+        def do_HEAD(self) -> None:  # noqa: N802
+            self.do_GET()
 
         def do_GET(self) -> None:  # noqa: N802
             if self.path.split('?', 1)[0] == '/api/self-watchlist':

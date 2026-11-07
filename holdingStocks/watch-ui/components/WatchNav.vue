@@ -17,6 +17,7 @@ function linkClass(path: string) {
         <NuxtLink to="/theme-heat" :class="linkClass('/theme-heat')">题材热度</NuxtLink>
         <NuxtLink to="/returns" :class="linkClass('/returns')">收益日历</NuxtLink>
         <NuxtLink to="/trades" :class="linkClass('/trades')">交割单</NuxtLink>
+        <NuxtLink to="/analytics" :class="linkClass('/analytics')">资产分析</NuxtLink>
         <NuxtLink to="/sectors" :class="linkClass('/sectors')">板块轮动</NuxtLink>
         <NuxtLink to="/strategies" :class="linkClass('/strategies')">策略说明</NuxtLink>
         <NuxtLink to="/factors" :class="linkClass('/factors')">因子说明</NuxtLink>

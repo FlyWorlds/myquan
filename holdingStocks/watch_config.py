@@ -68,6 +68,8 @@ STRATEGY_NAME = "策略一·援军战法"
 USE_FACTOR4 = False
 
 # 早盘节点（A 股集合竞价 + 连续竞价）
+RESET_HOUR = 9
+RESET_MINUTE = 0  # 9:00 早盘重置定时任务：清空前一交易日平仓、信号与今日盈亏
 AUCTION_START_HOUR = 9
 AUCTION_START_MINUTE = 15  # 9:15 起拉竞价行情；报单可撤
 AUCTION_NO_CANCEL_HOUR = 9
@@ -98,15 +100,17 @@ OPEN_PRICE_REFRESH_HOUR = AUCTION_OPEN_HOUR
 OPEN_PRICE_REFRESH_MINUTE = AUCTION_OPEN_MINUTE
 
 # watch 里程碑：(时, 分, 日志标签, 动作)
-# reseed=9:15 全日状态重置 + 昨仓今日盈亏按昨收；open=9:25 开盘阈值；refresh=刷新快照
+# reseed=9:00 早盘状态重置 + 清空前一交易日平仓与信号；open=9:25 开盘阈值；refresh=刷新快照
 AUCTION_MILESTONES: tuple[tuple[int, int, str, str], ...] = (
-    (9, 15, "竞价开始·状态重置·今日盈亏按昨收", "reseed"),
-    (9, 20, "竞价·不可撤单", "refresh"),
-    (9, 25, "开盘价确定·算阈值/过门", "open"),
-    (9, 30, "连续竞价·信号触发", "refresh"),
+    (RESET_HOUR, RESET_MINUTE, "早盘重置·清空前一交易日平仓与信号", "reseed"),
+    (AUCTION_START_HOUR, AUCTION_START_MINUTE, "竞价开始·拉取竞价行情", "refresh"),
+    (AUCTION_NO_CANCEL_HOUR, AUCTION_NO_CANCEL_MINUTE, "竞价·不可撤单", "refresh"),
+    (AUCTION_OPEN_HOUR, AUCTION_OPEN_MINUTE, "开盘价确定·算阈值/过门", "open"),
+    (SIGNAL_ACTIVE_HOUR, SIGNAL_ACTIVE_MINUTE, "连续竞价·信号触发", "refresh"),
 )
 
 INDEX_WATCH: list[dict[str, str]] = [
+    {"code": "sh000985", "name": "中证全指", "market": "中证"},
     {"code": "sh000001", "name": "上证指数", "market": "上证"},
     {"code": "sz399001", "name": "深证成指", "market": "深证"},
 ]
@@ -185,6 +189,17 @@ def normalize_signal_session(session: Any | None = None, *, now: Any | None = No
         from holdingStocks.trading_calendar import normalize_signal_session as _normalize_signal_session
 
     return _normalize_signal_session(session, now=now)
+
+
+def effective_watch_session(now: Any | None = None) -> str:
+    """当前盯盘展示、统计与对账所锚定的交易日 session。"""
+    try:
+        from trading_calendar import effective_watch_session as _effective_watch_session
+    except ModuleNotFoundError:
+        from holdingStocks.trading_calendar import effective_watch_session as _effective_watch_session
+
+    return _effective_watch_session(now)
+
 
 
 def market_phase(now: Any | None = None) -> str:

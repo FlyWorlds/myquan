@@ -33,6 +33,8 @@ from typing import Any
 from watch_config import (
     AUCTION_START_HOUR,
     AUCTION_START_MINUTE,
+    RESET_HOUR,
+    RESET_MINUTE,
     _clock_minutes,
     calendar_is_trading_day,
     normalize_signal_session,
@@ -57,15 +59,15 @@ def previous_trading_session(session: Any | None = None) -> str:
 
 
 def preserve_previous_session_quote(now: Any | None = None) -> bool:
-    """交易日 00:00–09:15：页面展示仍沿用上一交易日收盘行情。
+    """交易日 00:00–09:00 及非交易日整天：页面展示仍沿用上一交易日收盘行情。
 
-    9:15 是项目内日内状态重置点；此前虽然日历 session 已切到新交易日，
-    但集合竞价尚未开始，不应把上一收盘涨跌幅清成 0。
+    9:00 是项目内日内状态重置点；此前虽然日历 session 可能跨日，
+    但在交易日 09:00 重置前以及非交易日全天，应沿用上一交易日收盘行情。
     """
     if not calendar_is_trading_day(now):
-        return False
-    auction_start = AUCTION_START_HOUR * 60 + AUCTION_START_MINUTE
-    return _clock_minutes(now) < auction_start
+        return True
+    reset_start = RESET_HOUR * 60 + RESET_MINUTE
+    return _clock_minutes(now) < reset_start
 
 
 def promote_quote_session(session: Any, *, now: Any | None = None) -> str:

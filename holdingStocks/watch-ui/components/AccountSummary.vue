@@ -74,6 +74,7 @@ const cashPct = computed(() => {
             </span>
           </span>
           <NuxtLink to="/trades" class="self-center text-xs text-accent hover:underline">交割单 →</NuxtLink>
+          <NuxtLink to="/analytics" class="self-center text-xs text-accent hover:underline">资产分析 →</NuxtLink>
           <button
             type="button"
             class="self-center text-xs text-down hover:underline disabled:opacity-50"
