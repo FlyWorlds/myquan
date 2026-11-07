@@ -647,8 +647,9 @@ WATCHLIST: list[dict[str, Any]] = []
 
 def strategy1_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """策略一定盘池：夏普自适应最优阈值 ∪ 公共自选池，算法与表格元素与策略十六完全对齐。"""
-    thrs = load_strategy1_thr_map()
     payload = load_strategy1_payload()
+    thrs = ({str(p["code"]): float(p["thr"]) for p in payload.get("picks", [])}
+            if payload.get("selection_id") else load_strategy1_thr_map())
     seen: set[str] = set()
     factor_rows: list[dict[str, Any]] = []
     picks = payload.get("picks") or []
@@ -689,7 +690,7 @@ def strategy1_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str
                 item["entry_pct"] = float(thr)
                 item["stop_pct"] = float(DEFAULT_PCT)
             factor_rows.append(item)
-    if "603138" not in seen:
+    if "603138" not in seen and not payload.get("selection_id"):
         item = meta_for_code("603138", holdings)
         item.update(name="海量数据", universe="strategy1", pool_src="strategy1_pool", 池来源="策略池")
         threshold = float(thrs.get("603138", DEFAULT_PCT))

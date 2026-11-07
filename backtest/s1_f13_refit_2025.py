@@ -1,8 +1,8 @@
 """策略一（因子1+2+13A+16）· 宽宇宙 · 2025-2026调参 / 2026至今OOS。
 
-选股链：因子13A 质量带（网格调参）→ 因子16（闭环盈亏比/胜率排序）→ 固定 10 只。
+选股链：因子13A 质量带（网格调参）→ 因子16（闭环盈亏比/胜率排序）→ 固定 30 只。
 宇宙：沪深300 + 中证500 + 中证1000 + 中证1500（并集去重，主板选股）。
-无置顶；及格才入池。
+质量带通过者优先；数量不足时放宽补足。
 
 用法:
   python backtest/s1_f13_refit_2025.py
@@ -66,13 +66,13 @@ FIT_START, FIT_END = "20250101", "20261231"
 OOS_START = "20260101"
 THR_GRID = (0.02, 0.025, 0.03)
 INITIAL_CASH = 100_000.0
-POOL_SIZE = 20
+POOL_SIZE = 30
 CANDIDATE_POOL = 80  # 13A 初选池 → 因子16 缩至 POOL_SIZE
 MAX_PRICE = 100.0  # 百元股不选（最新收盘价）
 F13A_FIT_END = "20251231"
 MIN_OOS_TRADES = 3
 
-# 放宽质量带；网格固定 Top10
+# 放宽质量带；网格固定 Top30
 RELAXED_SHARPE_BANDS = [
     (0.5, 2.5),
     (0.7, 2.2),
@@ -384,7 +384,7 @@ def _f13a_candidates(panel: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 
 
 def _select_pool_f13a_f16(panel: pd.DataFrame, cfg: dict, oos_end: str) -> pd.DataFrame:
-    """因子13A 过门 → 因子16 按 OOS 盈亏比/胜率排序取 Top10。"""
+    """因子13A 过门 → 因子16 按 OOS 盈亏比/胜率排序取 Top30。"""
     rule = _cfg_to_f13_rule(cfg)
     cands = _f13a_candidates(panel, cfg)
     rows: list[dict[str, Any]] = []

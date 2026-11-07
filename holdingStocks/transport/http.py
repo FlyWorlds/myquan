@@ -288,6 +288,10 @@ def build_watch_request_handler(
             if path == "/api/factors":
                 self._send_json(get_factors_api())
                 return
+            if path == "/api/strategy1/selection":
+                from holdingStocks.strategy1_selection import status
+                self._send_json(status())
+                return
             if path == "/api/strategy1/backtest":
                 try:
                     from strategy1_backtest_service import Strategy1BacktestManager
@@ -448,6 +452,22 @@ def build_watch_request_handler(
                     self._send_json({"error": str(exc)}, status=400)
                 except Exception:
                     self._send_json({"error": "数据库保存或回测启动失败"}, status=503)
+                return
+            if path in ("/api/strategy1/selection/run", "/api/strategy1/selection/save"):
+                if self.headers.get('Sec-Fetch-Site') == 'cross-site':
+                    self._send_json({'error': '禁止跨站写入'}, status=403)
+                    return
+                try:
+                    from holdingStocks.strategy1_selection import start, save
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if length <= 0 or length > 4096:
+                        raise ValueError('请求内容无效')
+                    body = json.loads(self.rfile.read(length))
+                    self._send_json(start(body.get('indices')) if path.endswith('/run') else save(body.get('draft_id')))
+                except (ValueError, TypeError, AttributeError) as exc:
+                    self._send_json({'error': str(exc)}, status=400)
+                except Exception:
+                    self._send_json({'error': '选股操作失败，请重试'}, status=500)
                 return
             if path == "/api/strategy1/backtest":
                 try:

@@ -59,7 +59,9 @@ def _count_trades(holding: np.ndarray) -> int:
 def process_symbol(task: dict) -> list[dict]:
     symbol = task["symbol"]
     name = task.get("name", "")
-    daily = load_daily(symbol)
+    daily = task.get("daily")
+    if daily is None:
+        daily = load_daily(symbol)
     if daily is None or daily.empty:
         return []
     dates = pd.DatetimeIndex(daily["date"])
@@ -68,7 +70,7 @@ def process_symbol(task: dict) -> list[dict]:
     l = daily["low"].to_numpy(float)
     c = daily["close"].to_numpy(float)
     rows = []
-    for y in YEARS:
+    for y in task.get("years", YEARS):
         mask = dates.year == y
         idx = np.where(mask)[0]
         if len(idx) < MIN_BARS:

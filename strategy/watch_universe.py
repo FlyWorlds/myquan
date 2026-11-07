@@ -141,7 +141,10 @@ _S1_THR_MAP_CACHE: dict[str, Any] = {"mtime": None, "data": {}}
 
 
 def load_strategy1_thr_map() -> dict[str, float]:
-    """策略一夏普自适应最优阈值映射，算法对齐策略十六。"""
+    """已保存选股批次的阈值与名单原子生效；旧池兼容独立阈值文件。"""
+    payload = load_strategy1_payload()
+    if payload.get("selection_id"):
+        return {str(p["code"]): float(p["thr"]) for p in payload.get("picks", [])}
     try:
         mtime = STRATEGY1_THR_PATH.stat().st_mtime
     except OSError:

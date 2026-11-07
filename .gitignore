@@ -52,3 +52,6 @@ holdingStocks/wechat_alert_state_outbox.tmp
 
 # Local database rollback dumps exceed repository size limits
 /reports/db_rollback_*/*.sql
+
+# Local selection drafts and worker state
+holdingStocks/.strategy1_selection/

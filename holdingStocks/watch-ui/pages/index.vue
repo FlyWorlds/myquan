@@ -496,6 +496,7 @@ const closedCount = computed(() => closedHoldings.value.length)
 
       <section v-show="activeTab === 'strategy1'">
         <StrategyInfoPanel v-if="strategy1Tab" :tab="strategy1Tab" class="mb-4" />
+        <Strategy1Selection />
         <Strategy1Panel
           v-if="snapshot"
           :rows="snapshot.strategy1 || []"
