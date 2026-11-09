@@ -1274,6 +1274,7 @@ def build_watch_snapshot(
             _retag_strategy1_row(_strip_holdings_pnl(r))
             for r in rows
             if code_key(str(r.get("代码") or "")) in s1_codes
+            or (r.get("预警保留") and str(r.get("信号策略ID") or "") == "strategy1")
         ]
     ))
     try:

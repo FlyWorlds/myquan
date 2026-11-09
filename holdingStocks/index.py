@@ -441,12 +441,54 @@ def _set_watch_boot_primary_only(on: bool) -> None:
     _set_watch_boot_stage("primary" if on else "full")
 
 
-def _set_watch_boot_stage(stage: str) -> None:
-    """盯盘冷启动分层：holdings 首屏 → primary 默认策略 → full 全量。"""
-    global _WATCH_BOOT_STAGE
-    if stage not in {"holdings", "primary", "full"}:
+_BOOT_STARTED_AT: float = time.perf_counter()
+_BOOT_PROGRESS: dict[str, Any] = {
+    "stage": "init",
+    "step": 1,
+    "totalSteps": 4,
+    "percent": 15,
+    "message": "正在初始化数据库账户与交易宇宙…",
+    "elapsedSec": 0.0,
+}
+
+
+def update_boot_progress(stage: str, step: int, percent: int, message: str) -> None:
+    global _BOOT_PROGRESS, _WATCH_BOOT_STAGE, _last_watch_snapshot
+    if stage not in {"init", "holdings", "primary", "full"}:
         stage = "full"
     _WATCH_BOOT_STAGE = stage
+    elapsed = round(time.perf_counter() - _BOOT_STARTED_AT, 1)
+    _BOOT_PROGRESS = {
+        "stage": stage,
+        "step": step,
+        "totalSteps": 4,
+        "percent": percent,
+        "message": message,
+        "elapsedSec": elapsed,
+    }
+    with _WATCH_SNAP_LOCK:
+        if isinstance(_last_watch_snapshot, dict):
+            snap = dict(_last_watch_snapshot)
+            if percent < 100:
+                snap["boot"] = True
+                snap["bootProgress"] = _BOOT_PROGRESS
+            else:
+                snap.pop("boot", None)
+                snap["bootProgress"] = None
+            _last_watch_snapshot = snap
+            _broadcast_watch_snapshot(snap)
+
+
+def _set_watch_boot_stage(stage: str) -> None:
+    """盯盘冷启动分层：holdings 首屏 → primary 默认策略 → full 全量。"""
+    steps = {"holdings": (2, 40, "已载入实仓与预警，正在预热持仓实时报价…"),
+             "primary": (3, 75, "持仓行情已就绪，正在计算核心策略池指标与阈值…"),
+             "full": (4, 100, "全部策略数据就绪，正在开启实时行情推流…")}
+    if stage in steps:
+        step, pct, msg = steps[stage]
+        update_boot_progress(stage, step, pct, msg)
+    else:
+        update_boot_progress("full", 4, 100, "全部策略数据就绪…")
 
 
 def _watch_include_strategy_panels() -> bool:
@@ -462,11 +504,8 @@ def _holding_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str,
     holdings = holdings or {}
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
-    if STRATEGY_ID == "strategy1":
-        from signal_scope import retained_inventory_codes
-        codes = retained_inventory_codes(holdings, str(trading_session_date()))
-    else:
-        codes = portfolio_pool_codes(holdings)
+    from signal_scope import retained_inventory_codes
+    codes = retained_inventory_codes(holdings, str(trading_session_date()))
     for code in sorted(codes):
         c = _code_key(str(code))
         if not c or c in seen:
@@ -1960,6 +1999,7 @@ def _strategy16b_rows_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
         if not code:
             continue
         is_self = bool(w.get("self_watch") or w.get("manual_add") or w.get("pool_src") == "self")
+        existing = rows_by_code.get(code)
         if existing is not None:
             row = dict(existing)
             if is_self:
@@ -2897,6 +2937,12 @@ def publish_watch_snapshot(
     )
     if paper_revision is not None:
         snapshot["paperRevision"] = paper_revision
+    if _WATCH_BOOT_STAGE != "full":
+        snapshot["boot"] = True
+        snapshot["bootProgress"] = dict(_BOOT_PROGRESS)
+    else:
+        snapshot.pop("boot", None)
+        snapshot.pop("bootProgress", None)
     if signal_updated_at:
         snapshot["signalUpdatedAt"] = signal_updated_at
         snapshot["signalScanSec"] = signal_scan_sec
@@ -3038,6 +3084,7 @@ def _seed_boot_watch_snapshot() -> None:
         "phaseKey": market_phase(),
         "refreshSec": 5,
         "boot": True,
+        "bootProgress": dict(_BOOT_PROGRESS),
         "strategy": {
             "id": STRATEGY_ID,
             "name": STRATEGY_NAME,
@@ -4673,11 +4720,11 @@ def reset_watch_status_at_auction(*, session: str | None = None) -> dict[str, An
     _purge_stale_realized(data, sess)
     reset_container(data, "alert_sticky", {})
     data["watch_status_reset_session"] = sess
-    # 买卖解耦架构：盘前彻底清理旧池子里所有未持仓的过期买入信号
+    # 买卖解耦架构：盘前彻底清理旧池子里所有未持仓的过期买入信号（全局规则，涵盖所有活跃策略）
     try:
         from signal_scope import purge_stale_unheld_signals
-        from watch_config import strategy1_codes
-        purge_stale_unheld_signals(data, active_strategy_codes=strategy1_codes(data), session=sess)
+        from watch_config import all_active_strategy_codes
+        purge_stale_unheld_signals(data, active_strategy_codes=all_active_strategy_codes(data), session=sess)
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 9:00 清理过期未持仓信号异常（继续）: {e}")
     # 非实仓仓位：清掉策略展示用粘滞字段（不改 qty>0）

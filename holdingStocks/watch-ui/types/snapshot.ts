@@ -631,6 +631,14 @@ export interface WatchSnapshot {
   ts: number
   /** 冷启动占位：API/WS 已通，首屏快照尚未算完 */
   boot?: boolean
+  bootProgress?: {
+    stage?: string
+    step?: number
+    totalSteps?: number
+    percent?: number
+    message?: string
+    elapsedSec?: number
+  }
   updatedAt?: string
   clock?: string
   phase?: string

@@ -410,10 +410,36 @@ const closedCount = computed(() => closedHoldings.value.length)
 
     <div
       v-else-if="bootWarming"
-      class="mb-3 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-ui-text-2"
+      class="mb-4 overflow-hidden rounded-xl border border-accent/40 bg-ui-surface p-4 shadow-sm"
     >
-      <span class="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-ui-text-3 border-t-accent" />
-      行情预热中（午休/收盘也可用）· 首屏数据稍后自动刷新
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ui-text-3 border-t-accent" />
+          <span class="text-sm font-semibold text-ui-text">
+            系统正在启动与预热行情
+            <span v-if="snapshot?.bootProgress?.step" class="ml-1 text-xs font-normal text-ui-text-2">
+              (第 {{ snapshot.bootProgress.step }}/{{ snapshot.bootProgress.totalSteps || 4 }} 步)
+            </span>
+          </span>
+        </div>
+        <div class="flex items-center gap-3 text-xs tabular-nums text-ui-text-3">
+          <span v-if="snapshot?.bootProgress?.elapsedSec != null">已耗时 {{ snapshot.bootProgress.elapsedSec }}s</span>
+          <span class="font-bold text-accent">{{ snapshot?.bootProgress?.percent ?? 30 }}%</span>
+        </div>
+      </div>
+
+      <!-- 动态进度条 -->
+      <div class="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-ui-hairline">
+        <div
+          class="h-full rounded-full bg-accent transition-all duration-300"
+          :style="{ width: `${snapshot?.bootProgress?.percent ?? 30}%` }"
+        />
+      </div>
+
+      <div class="mt-2 flex flex-wrap items-center justify-between gap-1 text-xs text-ui-text-2">
+        <span>{{ snapshot?.bootProgress?.message || '行情预热中（午休/收盘也可用）· 首屏数据稍后自动刷新' }}</span>
+        <span class="text-[11px] text-ui-text-3">非开市时段自动拉取上个交易日收盘基准，准备完毕后自动进入盯盘</span>
+      </div>
     </div>
 
     <template v-if="!loading">

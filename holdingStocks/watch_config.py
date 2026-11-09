@@ -777,41 +777,13 @@ def is_default_strategy_pool_code(code: str) -> bool:
 
 
 def prune_portfolio_pool(holdings: dict[str, Any]) -> list[str]:
-    """对齐默认策略池：剔除旧策略遗留空壳；保留实仓 / 当日已实现 / 用户有成本登记。
+    """对齐默认策略池：全局闭环原则（面向所有策略生效）。
 
-    换因子27 名单时：**qty>0 的持仓即使已不在新池也保留**，不得因换票砍仓。
+    凡是已有持仓、已触发买入尚未平仓、或当日卖出留存的股票，坚决保留在监听队列中。
     返回新的 portfolio_pool 列表（已写回 holdings）。
     """
-    if STRATEGY_ID == "strategy1":
-        from signal_scope import retained_inventory_codes
-        pruned = sorted(strategy_watchlist_codes(holdings) | retained_inventory_codes(holdings, str(trading_session_date())))
-        holdings["portfolio_pool"] = pruned
-        return pruned
-    sw = strategy_watchlist_codes()
-    positions = holdings.get("positions") or {}
-    realized = holdings.get("realized_today") or {}
-    keep: set[str] = set()
-    for raw in holdings.get("portfolio_pool") or []:
-        c = code_key(str(raw))
-        if not c:
-            continue
-        pos = positions.get(c) if isinstance(positions.get(c), dict) else {}
-        if c in sw:
-            keep.add(c)
-        elif int((pos or {}).get("qty") or 0) > 0:
-            keep.add(c)
-        elif c in realized and realized.get(c):
-            keep.add(c)
-        elif (pos or {}).get("cost") is not None or (pos or {}).get("buy_time"):
-            keep.add(c)
-    # 实仓 / 当日已实现即使未写进列表也保留
-    for code, pos in positions.items():
-        if isinstance(pos, dict) and int(pos.get("qty") or 0) > 0:
-            keep.add(code_key(str(code)))
-    for code, rec in realized.items():
-        if rec:
-            keep.add(code_key(str(code)))
-    pruned = sorted(keep)
+    from signal_scope import retained_inventory_codes
+    pruned = sorted(strategy_watchlist_codes(holdings) | retained_inventory_codes(holdings, str(trading_session_date())))
     holdings["portfolio_pool"] = pruned
     return pruned
 
@@ -893,11 +865,8 @@ def primary_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, 
             if thr is not None:
                 item.update(pct=float(thr), entry_pct=float(thr), stop_pct=float(DEFAULT_PCT))
             out.append(item)
-    if STRATEGY_ID == "strategy1":
-        from signal_scope import retained_inventory_codes
-        extra_codes = retained_inventory_codes(holdings, str(trading_session_date()))
-    else:
-        extra_codes = portfolio_pool_codes(holdings)
+    from signal_scope import retained_inventory_codes
+    extra_codes = retained_inventory_codes(holdings, str(trading_session_date()))
     for code in sorted(extra_codes):
         if code in seen:
             continue
@@ -906,6 +875,25 @@ def primary_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, 
         item.update(universe=STRATEGY_ID, signal_strategy_id=STRATEGY_ID)
         out.append(item)
     return merge_self_watchlist(out, holdings)
+
+
+def all_active_strategy_codes(holdings: dict[str, Any] | None = None) -> set[str]:
+    """获取所有活跃策略池（策略1、策略16、策略16b等）及自选股的代码并集。"""
+    codes = set(strategy_watchlist_codes(holdings))
+    try:
+        codes |= strategy1_codes(holdings)
+    except Exception:
+        pass
+    try:
+        codes |= core_leader_codes()
+    except Exception:
+        pass
+    try:
+        from watch_config import self_watchlist_codes
+        codes |= set(self_watchlist_codes())
+    except Exception:
+        pass
+    return {code_key(c) for c in codes}
 
 
 def overlay_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
