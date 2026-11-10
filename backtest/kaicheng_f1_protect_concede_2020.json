@@ -1,0 +1,18 @@
+{
+  "start": "2020-01-02",
+  "end": "2026-08-26",
+  "strat_tot": 1369.88,
+  "bh_tot": 204.01,
+  "excess": 1165.88,
+  "s_mdd": -30.46,
+  "h_mdd": -55.16,
+  "fanghu": 253.03,
+  "rangli": 240.24,
+  "ratio": 1.053,
+  "fanghu_net": 232.36,
+  "rangli_net": 133.39,
+  "ratio_net": 1.742,
+  "year_fanghu": 164.58,
+  "year_rangli": 65.97,
+  "year_ratio": 2.495
+}
