@@ -1,0 +1,18 @@
+{
+  "symbol": "600330.SH",
+  "name": "天通股份",
+  "h1_2026": {
+    "revenue": 1754000000.0,
+    "revenue_yoy": 0.1075,
+    "np_parent": -282000000.0,
+    "np_yoy": -6.3667,
+    "np_deduct": -302000000.0,
+    "gross_margin": 0.2166,
+    "net_margin": -0.1633,
+    "roe": -0.0369,
+    "asset_liab": 0.3251,
+    "ocf": 41650000.0,
+    "impairment_asset": -199000000.0,
+    "impairment_credit": -193700000.0
+  }
+}
