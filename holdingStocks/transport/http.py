@@ -192,6 +192,20 @@ def build_watch_request_handler(
                 except RuntimeError:
                     self._send_json({"error": "数据库暂不可用，请稍后重试"}, status=503)
                 return
+            if path == "/api/trading-plans":
+                from trading_plans import list_plans
+                try:
+                    self._send_json({"items": list_plans()})
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=500)
+                return
+            if path == "/api/project-todos":
+                from project_todos import list_todos
+                try:
+                    self._send_json({"items": list_todos()})
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=500)
+                return
             if path == '/api/strategy3/scan':
                 from strategy.strategies.strategy3.manual_scan import status
                 from strategy3_watch import build_strategy3_payload
@@ -311,7 +325,8 @@ def build_watch_request_handler(
                 try:
                     from strategy35_watch import get_strategy35_timing_payload
 
-                    self._send_json(get_strategy35_timing_payload())
+                    self._send_json(get_strategy35_timing_payload(
+                        force_refresh=(parse_qs(urlparse(self.path).query).get("refresh") == ["1"])))
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "timing state unavailable", "detail": str(exc)}, status=500)
                 return
@@ -319,7 +334,8 @@ def build_watch_request_handler(
                 try:
                     from strategy36_watch import get_strategy36_timing_payload
 
-                    self._send_json(get_strategy36_timing_payload())
+                    self._send_json(get_strategy36_timing_payload(
+                        force_refresh=(parse_qs(urlparse(self.path).query).get("refresh") == ["1"])))
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "tech timing state unavailable", "detail": str(exc)}, status=500)
                 return
@@ -412,6 +428,36 @@ def build_watch_request_handler(
                     self._send_json({"error": "数据库保存失败或发生并发修改，请重试"}, status=503)
                 except (ValueError, TypeError, KeyError) as exc:
                     self._send_json({'error': str(exc)}, status=400)
+                return
+            if self.path.split("?", 1)[0] == "/api/trading-plans":
+                if self.headers.get('Sec-Fetch-Site') == 'cross-site':
+                    self._send_json({'error': '禁止跨站写入'}, status=403)
+                    return
+                try:
+                    from trading_plans import save_plan
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if length <= 0 or length > 10000000:
+                        raise ValueError('上传内容过大')
+                    self._send_json(save_plan(json.loads(self.rfile.read(length))))
+                except (ValueError, TypeError, KeyError) as exc:
+                    self._send_json({'error': str(exc)}, status=400)
+                except Exception as exc:
+                    self._send_json({'error': str(exc)}, status=500)
+                return
+            if self.path.split("?", 1)[0] == "/api/project-todos":
+                if self.headers.get('Sec-Fetch-Site') == 'cross-site':
+                    self._send_json({'error': '禁止跨站写入'}, status=403)
+                    return
+                try:
+                    from project_todos import save_todo
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if length <= 0 or length > 10000000:
+                        raise ValueError('上传内容过大')
+                    self._send_json(save_todo(json.loads(self.rfile.read(length))))
+                except (ValueError, TypeError, KeyError) as exc:
+                    self._send_json({'error': str(exc)}, status=400)
+                except Exception as exc:
+                    self._send_json({'error': str(exc)}, status=500)
                 return
             if self.path.split('?',1)[0]=='/api/strategy3/scan':
                 host=urlparse('http://'+self.headers.get('Host','')).hostname

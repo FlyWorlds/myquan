@@ -35,6 +35,18 @@ function storedBool(key: string, fallback: boolean): boolean {
   return fallback
 }
 
+const showPlanModal = ref(false)
+const pendingPlanCount = ref(0)
+async function fetchPlanCount() {
+  try {
+    const res = await $fetch<{ items: any[] }>('/api/trading-plans')
+    pendingPlanCount.value = (res.items || []).filter(x => x.status === 'pending').length
+  } catch {
+    /* ignore */
+  }
+}
+onMounted(fetchPlanCount)
+
 /** 策略一固定紧随持仓；其它策略保留服务端顺序。 */
 const strategyTabs = computed(() => {
   const tabs = strategies.value.length ? strategies.value : snapshot.value?.strategies || []
@@ -371,6 +383,23 @@ const closedCount = computed(() => closedHoldings.value.length)
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <!-- 交易计划按钮（开盘前必看，高亮显眼设计） -->
+        <button
+          type="button"
+          class="btn-plan-hero"
+          title="开盘交易计划（支持编辑、删除、置顶）"
+          @click="showPlanModal = true"
+        >
+          <span class="text-base leading-none">📋</span>
+          <span class="font-bold tracking-wide">交易计划</span>
+          <span
+            v-if="pendingPlanCount > 0"
+            class="plan-count-badge"
+          >
+            {{ pendingPlanCount }}
+          </span>
+        </button>
+
         <button type="button" class="btn btn-ghost" @click="store.togglePrivacy()">
           {{ privacyHidden ? '显示持仓' : '隐藏持仓' }}
         </button>
@@ -719,5 +748,73 @@ const closedCount = computed(() => closedHoldings.value.length)
       。
       当前 Tab：{{ activeTab === 'holdings' ? '持仓' : tabLabel(activeTab) }}。
     </p>
+
+    <!-- 开盘交易计划弹窗 -->
+    <div
+      v-if="showPlanModal"
+      class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
+      @keydown.esc="showPlanModal = false"
+    >
+      <div class="bg-ui-surface border border-ui-border rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col p-5 sm:p-6 shadow-2xl relative overflow-hidden">
+        <div class="overflow-y-auto flex-1 pr-1">
+          <TradingPlanManager
+            :compact="true"
+            @close="showPlanModal = false"
+            @update:count="cnt => pendingPlanCount = cnt"
+          />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.btn-plan-hero {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(217, 119, 6, 0.28));
+  border: 1.5px solid #f59e0b;
+  color: #fbbf24;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-plan-hero:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(217, 119, 6, 0.45));
+  border-color: #fbbf24;
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.5);
+  transform: translateY(-1px);
+}
+
+.plan-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+</style>

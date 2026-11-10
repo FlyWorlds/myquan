@@ -224,12 +224,12 @@ onMounted(() => {
 
     <!-- Tab 1: 全市场多维空仓面板 -->
     <section v-show="activeTab === 'market'">
-      <Strategy35Panel :payload="marketPayload" />
+      <Strategy35Panel :payload="marketPayload" @refreshed="marketPayload = $event" />
     </section>
 
     <!-- Tab 2: 科技成长多维空仓面板 -->
     <section v-show="activeTab === 'tech'">
-      <Strategy36Panel :payload="techPayload" />
+      <Strategy36Panel :payload="techPayload" @refreshed="techPayload = $event" />
     </section>
   </main>
 </template>

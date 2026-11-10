@@ -1,0 +1,69 @@
+{
+  "scope": "isolated stop rule; hypothetical equal exposure to each stock-day; NOT actual positions or portfolio returns",
+  "dates": [
+    "2026-10-27",
+    "2026-10-28",
+    "2026-10-29",
+    "2026-10-30",
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05"
+  ],
+  "stocks": 55,
+  "stock_days": 440,
+  "excluded": [],
+  "conflicts_first_source_kept": [],
+  "modes": {
+    "original": {
+      "stops": 203,
+      "mean_return10_pct": 0.2888748527913127,
+      "mean_delta10_pp": 0.0,
+      "mean_delta15_pp": 0.0,
+      "better10": 0,
+      "worse10": 0,
+      "worst_delta10_pp": 0.0,
+      "best_delta10_pp": 0.0,
+      "avoided_original_stops": 0,
+      "new_stops": 0
+    },
+    "delay_only": {
+      "stops": 189,
+      "mean_return10_pct": 0.3299973612507064,
+      "mean_delta10_pp": 0.04112250845939365,
+      "mean_delta15_pp": 0.04348082215965777,
+      "better10": 59,
+      "worse10": 68,
+      "worst_delta10_pp": -3.784313725490196,
+      "best_delta10_pp": 5.867475973697534,
+      "avoided_original_stops": 14,
+      "new_stops": 0
+    },
+    "ref0935": {
+      "stops": 180,
+      "mean_return10_pct": 0.26637394023597427,
+      "mean_delta10_pp": -0.02250091255533839,
+      "mean_delta15_pp": 0.1899015657099001,
+      "better10": 107,
+      "worse10": 135,
+      "worst_delta10_pp": -7.950598224623717,
+      "best_delta10_pp": 5.939524838012966,
+      "avoided_original_stops": 77,
+      "new_stops": 54
+    }
+  },
+  "early_original": {
+    "count": 131,
+    "recovered_above_sale_at_0935": 76,
+    "recovered_above_sale_at_1000": 84,
+    "ref0935_no_stop": 56
+  },
+  "assumptions": [
+    "minute close proxy, no tick paths",
+    "no fees, slippage, limit-down liquidity, T+1 or other exit rules modeled",
+    "no stop by 10:00: mark at 10:00 or hold to 15:00 for separate sensitivity",
+    "current frozen pools: selection bias; short period; days and symbols correlated",
+    "09:30 auction close as official open proxy, otherwise first 09:31 bar open",
+    "09:35 close only used after completion; new anchor remains fixed until 10:00"
+  ]
+}

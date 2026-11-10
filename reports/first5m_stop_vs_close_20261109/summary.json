@@ -1,0 +1,55 @@
+{
+  "all_stock_days": 440,
+  "stocks": 55,
+  "dates": [
+    "2026-10-27",
+    "2026-10-28",
+    "2026-10-29",
+    "2026-10-30",
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05"
+  ],
+  "triggered": {
+    "n": 205,
+    "close_better": 116,
+    "close_worse": 88,
+    "same": 1,
+    "mean_close_return_pct": -0.9582161249548177,
+    "mean_delta_pp": 0.041783875045182585,
+    "median_delta_pp": 0.16782246879334567,
+    "best_delta_pp": 4.854875283446717,
+    "worst_delta_pp": -6.88235294117646
+  },
+  "strict_before_0935_sensitivity": {
+    "n": 197,
+    "close_better": 112,
+    "close_worse": 84,
+    "same": 1,
+    "mean_close_return_pct": -0.95663856565122,
+    "mean_delta_pp": 0.04336143434878028,
+    "median_delta_pp": 0.20283436669619065,
+    "best_delta_pp": 4.854875283446717,
+    "worst_delta_pp": -6.88235294117646
+  },
+  "mean_delta_all_stock_days_pp": 0.019467487236960068,
+  "method": "low(09:31..09:35)<open*0.99; A exact theoretical open*0.99 fill; B same triggered cohort exit at completed 09:35 close; normalize by open; hypothetical equal opening notional; not portfolio return",
+  "limitations": [
+    "No fees/slippage/liquidity or other exit rules; exact threshold fill is user-specified ideal assumption",
+    "No actual position filter, no T+1 execution simulation, frozen historical pools and short correlated sample",
+    "09:30 auction close as open proxy, else 09:31 open; first completed 5m ends at09:35",
+    "Exact 99% price can be off tick; tick-floor sensitivity separately shown"
+  ],
+  "tick_floor_sensitivity": {
+    "n": 191,
+    "close_better": 102,
+    "close_worse": 86,
+    "same": 3,
+    "mean_close_return_pct": -1.059174596487913,
+    "mean_delta_pp": -0.029749970223787087,
+    "median_delta_pp": 0.1581027667984156,
+    "best_delta_pp": 4.875283446712015,
+    "worst_delta_pp": -6.88235294117646
+  }
+}

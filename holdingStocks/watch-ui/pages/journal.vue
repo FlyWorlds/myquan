@@ -1,5 +1,20 @@
 <script setup lang="ts">
-useHead({ title: '复盘笔记 · 持仓盯盘' })
+const route = useRoute()
+const currentTab = ref<'journal' | 'plan' | 'todos'>((route.query.tab === 'plan') ? 'plan' : (route.query.tab === 'todos') ? 'todos' : 'journal')
+watch(() => route.query.tab, (t) => {
+  if (t === 'plan') currentTab.value = 'plan'
+  else if (t === 'todos') currentTab.value = 'todos'
+  else if (t === 'journal') currentTab.value = 'journal'
+})
+useHead({
+  title: computed(() =>
+    currentTab.value === 'plan'
+      ? '交易计划 · 复盘手记'
+      : currentTab.value === 'todos'
+        ? '改造跟踪 · 复盘手记'
+        : '复盘笔记 · 持仓盯盘',
+  ),
+})
 type Entry = { liked?: boolean; likes?: number; id: string; title: string; date: string; content: string; images: string[]; comments: { id: string; text: string; date: string }[] }
 const fileInput = ref<HTMLInputElement | null>(null)
 const pendingDelete = ref<Entry | null>(null)
@@ -44,9 +59,57 @@ function closeEditor() { if (window.confirm('放弃本次尚未保存的修改�
 <template>
  <main class="page-shell journal">
   <header class="hero">
-   <div><span class="eyebrow">TRADING JOURNAL / 交易手记</span><h1>复盘笔记<span class="hero-dot">.</span></h1><p>记录判断，回看交易，让经验慢慢成为自己的方法。</p></div>
-   <button v-if="!editing" class="primary" @click="edit()">＋ 写复盘笔记</button>
+   <div>
+     <span class="eyebrow">TRADING JOURNAL / 交易手记</span>
+     <h1>{{ currentTab === 'plan' ? '交易计划' : currentTab === 'todos' ? '改造跟踪' : '复盘笔记' }}<span class="hero-dot">.</span></h1>
+     <p>{{ currentTab === 'plan' ? '开盘前拟定计划，明确买点、止损与仓位，知行合一。' : currentTab === 'todos' ? '量化交易系统架构优化、性能加速与策略演进事项台账。' : '记录判断，回看交易，让经验慢慢成为自己的方法。' }}</p>
+   </div>
+   <button v-if="currentTab === 'journal' && !editing" class="primary" @click="edit()">＋ 写复盘笔记</button>
   </header>
+
+  <!-- 复盘、计划与改造跟踪 Tab 切换 -->
+  <nav class="journal-tab-nav" role="tablist">
+    <button
+      type="button"
+      role="tab"
+      class="tab-btn"
+      :class="{ active: currentTab === 'journal' }"
+      @click="currentTab = 'journal'"
+    >
+      📖 复盘笔记 ({{ items.length }})
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="tab-btn plan-tab-btn"
+      :class="{ active: currentTab === 'plan' }"
+      @click="currentTab = 'plan'"
+    >
+      📋 交易计划
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="tab-btn todo-tab-btn"
+      :class="{ active: currentTab === 'todos' }"
+      @click="currentTab = 'todos'"
+    >
+      🛠️ 改造跟踪
+    </button>
+  </nav>
+
+  <!-- 交易计划 Tab 内容 -->
+  <section v-if="currentTab === 'plan'" class="paper plan-section">
+    <TradingPlanManager />
+  </section>
+
+  <!-- 改造跟踪 Tab 内容 -->
+  <section v-else-if="currentTab === 'todos'" class="paper plan-section">
+    <ProjectTodoManager />
+  </section>
+
+  <!-- 复盘笔记 Tab 内容 -->
+  <section v-else>
   <p v-if="error" class="error" role="alert">{{ error }} <button v-if="!editing" @click="load">重试</button></p>
   <template v-if="!selected && !editing">
    <section class="toolbar"><div><strong>我的复盘</strong><span> {{ filtered.length }} 篇记录</span></div><label>搜索<input v-model="query" placeholder="标题、正文关键词"></label><label>开始日期<input v-model="start" type="date"></label><label>结束日期<input v-model="end" type="date" :min="start"></label><button @click="start = ''; end = ''; query = ''">重置</button></section>
@@ -67,6 +130,7 @@ function closeEditor() { if (window.confirm('放弃本次尚未保存的修改�
    <div class="section-heading"><button @click="selected = null">← 全部笔记</button><div class="row-actions"><button :disabled="busy" :class="{ liked: selected.liked }" :aria-pressed="!!selected.liked" @click="act(selected, 'like')">{{ selected.liked ? '♥ 已赞' : '♡ 点赞' }} {{ selected.likes || 0 }}</button><button @click="edit(selected)">编辑笔记 ↗</button><button class="delete-link" @click="pendingDelete = selected">删除</button></div></div><time>{{ selected.date }} · 复盘笔记</time><h1>{{ selected.title }}</h1><p class="body">{{ selected.content }}</p><div class="detail-images"><a v-for="(src, i) in selected.images" :key="i" :href="src" target="_blank" rel="noopener"><img :src="src" :alt="`复盘配图 ${i + 1}`"></a></div>
    <section class="comments"><h2>留言与思考 <small>{{ selected.comments.length }}</small></h2><p v-if="!selected.comments.length" class="muted">回看时的新想法，也值得留下。</p><div v-for="c in selected.comments" :key="c.id" class="comment"><time>{{ new Date(c.date).toLocaleString('zh-CN') }}</time><p>{{ c.text }}</p></div><form @submit.prevent="submit(true)"><label>添加留言<textarea v-model="comment" required maxlength="2000" rows="3" placeholder="写下新的观察或补充…" /></label><button class="primary" :disabled="busy || !comment.trim()">{{ busy ? '提交中…' : '发布评论' }}</button></form></section>
   </article>
+  </section>
   <div v-if="pendingDelete" class="modal-backdrop" @keydown.esc="!busy && (pendingDelete = null)"><section class="delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title"><span class="delete-symbol">!</span><h2 id="delete-title">删除这篇复盘笔记？</h2><p>「{{ pendingDelete.title }}」将从文章列表移除，相关图片和评论也将不再显示。</p><div class="row-actions"><button autofocus :disabled="busy" @click="pendingDelete = null">保留笔记</button><button class="danger-button" :disabled="busy" @click="act(pendingDelete, 'delete')">{{ busy ? '删除中…' : '确认删除' }}</button></div><p v-if="error" role="alert" class="error">{{ error }}</p></section></div>
  </main>
 </template>
@@ -80,4 +144,45 @@ function closeEditor() { if (window.confirm('放弃本次尚未保存的修改�
 .detail .body{font-size:20px;line-height:1.9}
 .excerpt{font-size:17px;line-height:1.8}
 @media(max-width:700px){.paper textarea{font-size:18px;padding:16px}.detail .body{font-size:18px}}
+
+.journal-tab-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--ui-border, rgba(128, 128, 128, 0.2));
+  padding-bottom: 12px;
+}
+.tab-btn {
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ui-text-3, #9ca3af);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.tab-btn:hover {
+  color: var(--ui-text-1, #f3f4f6);
+  background: rgba(255, 255, 255, 0.04);
+}
+.tab-btn.active {
+  color: #14b8a6;
+  background: rgba(20, 184, 166, 0.12);
+  border-color: rgba(20, 184, 166, 0.3);
+}
+.plan-tab-btn.active {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.todo-tab-btn.active {
+  color: #818cf8;
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+.plan-section {
+  padding: 28px 32px;
+}
 </style>

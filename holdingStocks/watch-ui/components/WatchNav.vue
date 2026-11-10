@@ -21,7 +21,9 @@ function linkClass(path: string) {
         <NuxtLink to="/sectors" :class="linkClass('/sectors')">板块轮动</NuxtLink>
         <NuxtLink to="/strategies" :class="linkClass('/strategies')">策略说明</NuxtLink>
         <NuxtLink to="/factors" :class="linkClass('/factors')">因子说明</NuxtLink>
-        <NuxtLink to="/journal" :class="linkClass('/journal')">复盘笔记</NuxtLink>
+        <NuxtLink to="/journal" :class="route.path === '/journal' && route.query.tab !== 'plan' && route.query.tab !== 'todos' ? 'nav-link nav-link-active' : 'nav-link'">复盘笔记</NuxtLink>
+        <NuxtLink to="/journal?tab=plan" :class="route.path === '/journal' && route.query.tab === 'plan' ? 'nav-link nav-link-active text-amber-300 font-semibold' : 'nav-link text-amber-400/90'">📋 交易计划</NuxtLink>
+        <NuxtLink to="/journal?tab=todos" :class="route.path === '/journal' && route.query.tab === 'todos' ? 'nav-link nav-link-active text-indigo-300 font-semibold' : 'nav-link text-indigo-400/90'">🛠️ 改造跟踪</NuxtLink>
       </div>
       <div class="flex items-center gap-1">
         <WechatConnect />

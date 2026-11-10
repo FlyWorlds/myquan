@@ -8,6 +8,9 @@ const props = defineProps<{
   phase?: string
 }>()
 
+const emit = defineEmits<{ refreshed: [payload: Strategy35Payload] }>()
+const refreshError = ref('')
+const refreshedAt = ref('')
 const localPayload = ref<Strategy35Payload | null>(null)
 const loading = ref(false)
 const activeChartTab = ref<'breadth' | 'index'>('breadth')
@@ -16,19 +19,25 @@ const chartEl = ref<HTMLElement | null>(null)
 let myChart: echarts.ECharts | null = null
 
 const effectivePayload = computed(() => {
-  return props.payload?.current ? props.payload : localPayload.value
+  return localPayload.value ?? props.payload
 })
 
 async function fetchTimingState() {
+  if (loading.value) return
   loading.value = true
+  refreshError.value = ''
   try {
-    const res = await fetch('/api/strategy35/timing-state')
-    if (res.ok) {
-      localPayload.value = await res.json()
-      updateChart()
-    }
+    const res = await fetch('/api/strategy35/timing-state?refresh=1', { cache: 'no-store' })
+    if (!res.ok) throw new Error(`刷新失败（HTTP ${res.status}）`)
+    const data = await res.json()
+    if (data.error || !data.current) throw new Error(data.error || '未返回有效诊断数据')
+    localPayload.value = data
+    emit('refreshed', data)
+    refreshedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    await nextTick()
+    updateChart()
   } catch (err) {
-    console.error('Failed to load strategy35 timing state:', err)
+    refreshError.value = err instanceof Error ? err.message : '刷新失败，请稍后重试'
   } finally {
     loading.value = false
   }
@@ -392,7 +401,8 @@ watch(activeChartTab, () => {
 
 watch(
   () => props.payload,
-  () => {
+  (payload) => {
+    localPayload.value = payload ?? null
     nextTick(updateChart)
   },
   { deep: true },
@@ -422,6 +432,8 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-4">
+    <p v-if="refreshError" role="alert" class="text-sm text-red-500">{{ refreshError }}；保留上次成功数据。</p>
+    <p v-else-if="refreshedAt" role="status" class="text-xs text-ui-text-3">诊断已刷新 {{ refreshedAt }}；数据未变化时结论可能相同。</p>
     <!-- 1. 当前空仓状态醒目看板与深度诊断 -->
     <div
       class="card rounded-2xl p-4 sm:p-5 border transition-all"
@@ -462,7 +474,7 @@ onUnmounted(() => {
             @click="fetchTimingState"
           >
             <span :class="loading ? 'animate-spin' : ''">↻</span>
-            <span>刷新诊断</span>
+            <span>{{ loading ? '刷新中…' : '刷新诊断' }}</span>
           </button>
         </div>
       </div>
