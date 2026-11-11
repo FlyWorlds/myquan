@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-# 手工列表时代（commit 前）的正式策略 id
+# 当前注册的正式策略 id
 _EXPECTED_IDS = frozenset(
     {
         "strategy1",
@@ -14,13 +14,13 @@ _EXPECTED_IDS = frozenset(
         "strategy5",
         "strategy6",
         "strategy7",
-        "strategy8",
         "strategy9",
         "strategy12",
-        "strategy15",
-        "strategy16",
-        "strategy16b",
         "strategy17",
+        "strategy35",
+        "strategy36",
+        "strategy37",
+        "strategy38",
     }
 )
 
@@ -41,14 +41,6 @@ class TestStrategyAutoDiscovery(unittest.TestCase):
 
         spec = get_strategy_spec("strategy1")
         self.assertTrue(spec.meta.get("default") is True)
-
-    def test_strategy16b_registered_next_to_strategy16(self) -> None:
-        from strategy.core.strategy_registry import get_strategy_spec
-
-        spec = get_strategy_spec("strategy16b")
-        self.assertEqual(spec.name, "策略十六B·条件选股")
-        self.assertTrue(spec.meta.get("watch_tab") is True)
-        self.assertTrue(spec.meta.get("custom_select_ui") is True)
 
 
 if __name__ == "__main__":

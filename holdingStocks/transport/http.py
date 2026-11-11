@@ -347,6 +347,23 @@ def build_watch_request_handler(
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "strategy37 payload unavailable", "detail": str(exc)}, status=500)
                 return
+            if path == "/api/strategy38/payload":
+                try:
+                    from strategy38_watch import get_strategy38_watch_payload
+
+                    self._send_json(get_strategy38_watch_payload())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy38 payload unavailable", "detail": str(exc)}, status=500)
+                return
+
+            if path == "/api/strategy38/backtest":
+                try:
+                    from strategy38_backtest_service import Strategy38BacktestManager
+
+                    self._send_json(Strategy38BacktestManager.get_status())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy38 backtest status unavailable", "detail": str(exc)}, status=500)
+                return
 
             if path == "/api/trades":
                 from trade_ledger import api_trades_payload
@@ -529,6 +546,16 @@ def build_watch_request_handler(
                     self._send_json(Strategy1BacktestManager.trigger_backtest())
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "backtest trigger failed", "detail": str(exc)}, status=500)
+                return
+            if path == "/api/strategy38/backtest":
+                try:
+                    from strategy38_backtest_service import Strategy38BacktestManager
+
+                    length = int(self.headers.get("content-length", 0))
+                    body = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    self._send_json(Strategy38BacktestManager.trigger_backtest(body))
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy38 backtest trigger failed", "detail": str(exc)}, status=500)
                 return
             if path == "/api/holdings/reset":
                 if on_paper_reset is None:

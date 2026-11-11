@@ -30,7 +30,7 @@ const kindBadgeClass = computed(() => {
   return map[String(props.tab.registry_kind || '')] || 'bg-ui-fill-active text-ui-text-3'
 })
 
-const showBacktestChart = ref(true)
+const showBacktestChart = ref(false)
 </script>
 
 <template>

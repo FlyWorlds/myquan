@@ -78,6 +78,35 @@ class TestWechatSessionRecovery(unittest.TestCase):
         self.assertIsNone(wn._pop_next_pending(config=self._cfg))
         self.assertEqual(wn.get_wechat_channel_state()["expired_notification_count"], 1)
 
+    def test_previous_day_fills_are_not_replayed_before_open(self):
+        from datetime import datetime
+        yesterday = datetime(2026, 11, 10, 9, 30, 2).timestamp()
+        today = datetime(2026, 11, 11, 9, 17).timestamp()
+        wn.enqueue_notification(message="old sell", dedupe_key="old-sell", code="002298",
+                                is_fill=True, config=self._cfg, enqueued_at=yesterday)
+        with patch.object(wn.time, "time", return_value=today), patch.object(wn, "_send_text_direct") as sender:
+            self.assertEqual(wn._flush_pending_queue(config=self._cfg), 0)
+            sender.assert_not_called()
+        self.assertEqual(wn._peek_pending_count(), 0)
+        self.assertEqual(wn.get_wechat_channel_state()["expired_notification_count"], 1)
+
+    def test_restored_previous_day_fill_expires_but_current_fill_remains(self):
+        from datetime import datetime
+        yesterday = datetime(2026, 11, 10, 14, 55).timestamp()
+        today = datetime(2026, 11, 11, 9, 31).timestamp()
+        wn.enqueue_notification(message="old", dedupe_key="old", code="002298", is_fill=True,
+                                config=self._cfg, enqueued_at=yesterday)
+        wn._persist_outbox()
+        with wn._pending_lock:
+            wn._pending.clear()
+        wn._outbox_restored = False
+        wn._restore_outbox()
+        wn.enqueue_notification(message="today", dedupe_key="today", code="603657", is_fill=True,
+                                config=self._cfg, enqueued_at=today)
+        with patch.object(wn.time, "time", return_value=today + 1):
+            self.assertEqual(wn._pop_next_pending(config=self._cfg).dedupe_key, "today")
+            self.assertIsNone(wn._pop_next_pending(config=self._cfg))
+
     def test_retry_keeps_original_age_and_attempt_count(self):
         old = time.time()-170
         wn.enqueue_notification(message="alert", dedupe_key="retry", config=self._cfg, enqueued_at=old)

@@ -66,7 +66,7 @@ const hasAny = computed(() => REGISTRY_SECTIONS.some((sec) => sectionItems(sec.k
         </header>
         <div
           v-if="sectionItems(sec.kind).length"
-          class="grid gap-3 overflow-visible md:grid-cols-2 xl:grid-cols-3"
+          class="grid gap-3 overflow-visible md:grid-cols-2 xl:grid-cols-3 items-start"
         >
           <StrategyRegistryCard
             v-for="tab in sectionItems(sec.kind)"

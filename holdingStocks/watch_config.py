@@ -326,8 +326,8 @@ def trust_quote_day_high(ts: Any) -> bool:
 
 
 def is_exit_executable(now: Any | None = None) -> bool:
-    """纸面 SELL / apply_exit_fill 仅连续竞价可执行（= is_signal_window）。"""
-    return is_signal_window(now)
+    """纸面 SELL / apply_exit_fill：支持 09:25 开盘价出炉后直接执行及连续竞价执行。"""
+    return is_signal_window(now) or is_auction_result(now)
 
 
 def is_auction_observe(now: Any | None = None) -> bool:
@@ -336,7 +336,7 @@ def is_auction_observe(now: Any | None = None) -> bool:
 
 
 def is_auction_result(now: Any | None = None) -> bool:
-    """09:25 ≤ t < 09:30：开盘价已出，可预警/挂单意图，仍不可实际 SELL。"""
+    """09:25 ≤ t < 09:30：开盘价已出，开盘保护与竞价卖出可直接执行。"""
     return market_phase(now) == "open_set"
 
 
@@ -362,15 +362,31 @@ def pre_continuous_stop_ui(
             "bg_class": "warn-sell",
             "可执行": False,
         }
-    # open_set 及其它 demote 窗口（盘前）
+    # open_set 阶段（09:25~09:30）：开盘价已出，允许直接卖出与执行报单
+    if ph == "open_set":
+        return {
+            "持仓状态": "待卖出",
+            "alert": "竞价半仓已触发" if half else "竞价卖出已触发",
+            "因子触发": "已触发",
+            "挂单说明": (
+                "开盘价已定格：半仓卖出已触发，请在9:30前报单"
+                if half
+                else "开盘价已定格：卖出已触发，请在9:30前报单"
+            ),
+            "pending_sell": True,
+            "near_stop": True,
+            "bg_class": "warn-sell",
+            "可执行": True,
+        }
+    # 其它盘前窗口
     return {
         "持仓状态": "已经买入",
         "alert": "竞价半仓预警" if half else "竞价止损预警",
         "因子触发": "接近",
         "挂单说明": (
-            "9:25 可挂单；9:30 起才结算半仓"
+            "9:25 可挂单；9:25 起按开盘价结算半仓"
             if half
-            else "9:25 可挂单；9:30 起才结算止损"
+            else "9:25 可挂单；9:25 起按开盘价结算止损"
         ),
         "pending_sell": True,
         "near_stop": True,

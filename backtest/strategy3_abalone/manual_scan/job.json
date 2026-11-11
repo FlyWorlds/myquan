@@ -1,13 +1,13 @@
 {
   "state": "done",
-  "pid": 58025,
-  "started_ts": 1793601668.7593658,
+  "pid": 18415,
+  "started_ts": 1794318516.23053,
   "done": 645,
   "total": 645,
   "workers": 6,
   "executor": "process",
-  "message": "盘中扫描完成：监控 266 只，鲍鱼捞饭 7 只",
-  "as_of": "2026-11-02",
-  "finished_ts": 1793601904.029674,
-  "elapsed_seconds": 235.3
+  "message": "扫描完成：监控 132 只，鲍鱼捞饭 1 只",
+  "as_of": "2026-11-10",
+  "finished_ts": 1794318908.957898,
+  "elapsed_seconds": 392.7
 }

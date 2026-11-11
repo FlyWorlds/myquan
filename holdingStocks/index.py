@@ -741,7 +741,7 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
 
 # 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
 WATCH_LIVE_TAB_IDS = frozenset(
-    {"strategy1", "strategy3", "strategy8", "strategy15", "strategy16", "strategy16b", "strategy17", "strategy37"}
+    {"strategy1", "strategy3", "strategy17", "strategy37", "strategy38"}
 )
 
 
@@ -900,6 +900,14 @@ def _load_watch_strategy_tabs() -> list[dict[str, Any]]:
                 from strategy37_watch import load_backtest_summary as load_s37_summary
 
                 tabs[-1]["backtest"] = load_s37_summary()
+            except Exception:
+                tabs[-1]["backtest"] = {}
+        if spec.id == "strategy38":
+            tabs[-1]["reportPath"] = "docs/STRATEGY38.md"
+            try:
+                from strategy38_watch import load_backtest_summary as load_s38_summary
+
+                tabs[-1]["backtest"] = load_s38_summary()
             except Exception:
                 tabs[-1]["backtest"] = {}
 
@@ -1593,7 +1601,10 @@ def _refresh_watch_tabs_background():
 
 
 def _watch_tabs_with_live_s8(strategy8: dict[str, Any]) -> list[dict[str, Any]]:
-    from strategy8_watch import live_picks_from_payload
+    try:
+        from strategy8_watch import live_picks_from_payload
+    except Exception:
+        live_picks_from_payload = None
     from strategy_picks_loader import merge_public_self_picks
 
     now_m = time.monotonic()
@@ -1609,7 +1620,7 @@ def _watch_tabs_with_live_s8(strategy8: dict[str, Any]) -> list[dict[str, Any]]:
             _WATCH_TABS_CACHE["tabs"] = cached
     tabs = [dict(t) for t in cached]
     for t in tabs:
-        if t.get("id") == "strategy8":
+        if t.get("id") == "strategy8" and live_picks_from_payload:
             t["picks"] = merge_public_self_picks(
                 live_picks_from_payload(strategy8), "strategy8"
             )
@@ -2812,6 +2823,7 @@ def publish_watch_snapshot(
     strategy35_payload: dict[str, Any] = {}
     strategy36_payload: dict[str, Any] = {}
     strategy37_payload: dict[str, Any] = {}
+    strategy38_payload: dict[str, Any] = {}
     if _CONDITION_BUY_ACTIVE:
         include_strategy_panels = False
         previous = _QUOTE_RUNTIME_PANELS or _last_watch_snapshot or {}
@@ -2822,6 +2834,7 @@ def publish_watch_snapshot(
         strategy35_payload = previous.get("strategy35") or (_last_watch_snapshot or {}).get("strategy35") or {}
         strategy36_payload = previous.get("strategy36") or (_last_watch_snapshot or {}).get("strategy36") or {}
         strategy37_payload = previous.get("strategy37") or (_last_watch_snapshot or {}).get("strategy37") or {}
+        strategy38_payload = previous.get("strategy38") or (_last_watch_snapshot or {}).get("strategy38") or {}
         if not strategy8:
             try:
                 from strategy8_watch import build_strategy8_payload
@@ -2834,12 +2847,16 @@ def publish_watch_snapshot(
                 strategy37_payload = get_strategy37_watch_payload()
             except Exception:
                 pass
+        if not strategy38_payload:
+            try:
+                from strategy38_watch import get_strategy38_watch_payload
+                strategy38_payload = get_strategy38_watch_payload()
+            except Exception:
+                pass
 
     if include_strategy_panels:
-        from strategy3_watch import build_strategy3_payload
-        from strategy8_watch import build_strategy8_payload
-
         try:
+            from strategy3_watch import build_strategy3_payload
             strategy3 = build_strategy3_payload(
                 session=session_today or None,
                 get_quote=get_quote,
@@ -2849,11 +2866,14 @@ def publish_watch_snapshot(
             print(f"[{_now()}] 策略三快照失败（继续盯盘）: {e}")
             strategy3 = {"error": str(e), "rows": []}
         try:
+            from strategy8_watch import build_strategy8_payload
             strategy8 = build_strategy8_payload(
                 session=session_today or None,
                 get_quote=get_quote,
                 batch_quote=_batch_quote,
             )
+        except Exception:  # noqa: BLE001
+            strategy8 = {}
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 策略八快照失败（继续盯盘）: {e}")
             strategy8 = {"error": str(e), "rows": []}
@@ -2900,6 +2920,13 @@ def publish_watch_snapshot(
             strategy37_payload = get_strategy37_watch_payload()
         except Exception as e:  # noqa: BLE001
             strategy37_payload = {"error": str(e)}
+        strategy38_payload: dict[str, Any] = {}
+        try:
+            from strategy38_watch import get_strategy38_watch_payload
+
+            strategy38_payload = get_strategy38_watch_payload()
+        except Exception as e:  # noqa: BLE001
+            strategy38_payload = {"error": str(e)}
 
     # Retained signals are display data; never feed them back into execution.
     from alert_retention import LIVE_ALERT_RETENTION
@@ -2929,6 +2956,7 @@ def publish_watch_snapshot(
         strategy35=strategy35_payload,
         strategy36=strategy36_payload,
         strategy37=strategy37_payload,
+        strategy38=strategy38_payload,
         sectors=sectors,
 
         refresh_sec=refresh_sec,
@@ -3109,6 +3137,7 @@ def _seed_boot_watch_snapshot() -> None:
         "strategy35": {},
         "strategy36": {},
         "strategy37": {},
+        "strategy38": {},
         "sectors": {},
 
         "strategies": _watch_tabs_with_live_s8({}),
@@ -5226,9 +5255,11 @@ def _demote_pre_signal_window(
         out["pending_sell"] = True
         out["near_stop"] = True
         out["bg_class"] = ui["bg_class"]
-        out["持仓状态"] = ui["持仓状态"]  # 已经买入，不是待卖出
+        out["持仓状态"] = ui["持仓状态"]
         out["因子触发"] = ui["因子触发"]
-        out["可执行"] = False
+        out["可执行"] = bool(ui.get("可执行"))
+        if out["可执行"]:
+            out["hit_stop"] = True
         note = str(out.get("挂单说明") or "")
         suffix = str(ui.get("挂单说明") or "")
         if suffix and suffix not in note:
@@ -9945,6 +9976,7 @@ def collect_rows(
                 buy_time=buy_time,
                 session=str(q["session"]),
             )
+            _open_set_ok = bool(phase_now == "open_set" or is_auction_result())
             if (
                 f29.get("hit_sell")
                 and qty > 0
@@ -9952,7 +9984,7 @@ def collect_rows(
                 and not t1_today
                 and official_open
                 and preview_ok
-                and signal_ok
+                and (signal_ok or _open_set_ok)
                 and not _exit_dec.get("hit")
             ):
                 _exit_dec = dict(_exit_dec or {})
@@ -9966,9 +9998,9 @@ def collect_rows(
                         "open_bell": True,
                     }
                 )
-            # open_bell sticky / 09:30 时刻仅连续竞价后写入，避免竞价期伪触发时间
-            if _exit_dec.get("open_bell") and signal_ok:
-                _bell = session_open_bell_ts(str(q["session"]))
+            # 09:25后开盘价确立或连续竞价均可写入触发时间
+            if _exit_dec.get("open_bell") and (signal_ok or _open_set_ok):
+                _bell = q.get("last_ts") or session_open_bell_ts(str(q["session"]))
                 row["_open_bell"] = True
                 _stamp_stop_touched(
                     sticky,
@@ -13339,17 +13371,19 @@ def _prepare_open_peak_sells():
 
 
 def _settle_condition_open_protect(data: dict[str, Any], now: datetime) -> None:
-    """At the bell, apply the existing overnight-open rule before allocating buys."""
+    """开盘保护/竞价卖出结算：支持 09:25 开盘价出炉后直接执行结算，避免 9:30 反应不及。"""
     from condition_buy import fresh_quote
     from quote_exit import overnight_note_updates
     from open_peak_sell import open_peak_sell_ready
     from strategy.exit_rules.overnight_open_protect import evaluate_overnight_open_protect
     day = str(trading_session_date())
-    if not is_signal_window(now) or not "09:30:00" <= now.strftime("%H:%M:%S") <= "09:30:05":
+    clock = now.strftime("%H:%M:%S")
+    if not ("09:25:00" <= clock <= "09:30:05" or is_signal_window(now)):
         return
     for code in list(data.get("positions") or {}):
         now = datetime.now()
-        if not is_signal_window(now) or not "09:30:00" <= now.strftime("%H:%M:%S") <= "09:30:05":
+        clock = now.strftime("%H:%M:%S")
+        if not ("09:25:00" <= clock <= "09:30:05" or is_signal_window(now)):
             return
         pos = (data.get("positions") or {}).get(code, {})
         qty = int(pos.get("qty") or 0)
@@ -13357,7 +13391,7 @@ def _settle_condition_open_protect(data: dict[str, Any], now: datetime) -> None:
         if qty <= 0 or not bought or bought[:10] >= day or pos.get("hold_lock"):
             continue
         q = _execution_quote(_sina_of(code))
-        if not q or not fresh_quote(q, day, now) or not "09:30:00" <= str(q.get("last_ts") or "")[11:19] <= "09:30:05":
+        if not q or not fresh_quote(q, day, now) or not "09:25:00" <= str(q.get("last_ts") or "")[11:19] <= "09:30:05":
             continue
         from strategy.board_rules import limit_down_pct_of
         locked = limit_down_state(prev_close=q.get("prev_close"), open_px=q["open"],
@@ -13734,6 +13768,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 try:
                     if time.monotonic() >= peak_sell_prepare_after:
                         _prepare_open_peak_sells()
+                        _execute_condition_open_protect()
                         peak_sell_prepare_after = time.monotonic() + 1
                     items = strategy_watchlist()
                     active = {_code_key(w["code"]) for w in items}
@@ -14127,24 +14162,38 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 stop.wait(1)
         threading.Thread(target=strategy_books_sync, name="strategy-books-sync", daemon=True).start()
         def other_panels_loop():
-            from strategy3_watch import build_strategy3_payload
-            from strategy8_watch import build_strategy8_payload
-            from strategy15_watch import build_strategy15_payload
-            from strategy35_watch import get_strategy35_timing_payload
-            from strategy36_watch import get_strategy36_timing_payload
-            from strategy37_watch import get_strategy37_watch_payload
             while not stop.is_set():
                 if not _WATCH_FRONT_READY.wait(.5):
                     continue
                 try:
                     day = _calendar_signal_session()
                     batch = lambda sinas: {s: _quote_from_sina_spot(q) for s, q in fetch_sina_batch(sinas).items()}
-                    panels = dict(strategy3=build_strategy3_payload(session=day, get_quote=get_quote, batch_quote=batch),
-                        strategy8=build_strategy8_payload(session=day, get_quote=get_quote, batch_quote=batch),
-                        strategy15=build_strategy15_payload(session=day, strategy1_rows=_collect_quote_runtime_rows(get_quote)),
-                        strategy35=get_strategy35_timing_payload(),
-                        strategy36=get_strategy36_timing_payload(),
-                        strategy37=get_strategy37_watch_payload())
+                    panels = {}
+                    try:
+                        from strategy3_watch import build_strategy3_payload
+                        panels["strategy3"] = build_strategy3_payload(session=day, get_quote=get_quote, batch_quote=batch)
+                    except Exception:
+                        pass
+                    try:
+                        from strategy35_watch import get_strategy35_timing_payload
+                        panels["strategy35"] = get_strategy35_timing_payload()
+                    except Exception:
+                        pass
+                    try:
+                        from strategy36_watch import get_strategy36_timing_payload
+                        panels["strategy36"] = get_strategy36_timing_payload()
+                    except Exception:
+                        pass
+                    try:
+                        from strategy37_watch import get_strategy37_watch_payload
+                        panels["strategy37"] = get_strategy37_watch_payload()
+                    except Exception:
+                        pass
+                    try:
+                        from strategy38_watch import get_strategy38_watch_payload
+                        panels["strategy38"] = get_strategy38_watch_payload()
+                    except Exception:
+                        pass
                     panels["indices"] = _QUOTE_RUNTIME_PANELS.get("indices") or fetch_indices_cached()
                     _QUOTE_RUNTIME_PANELS.update(panels)
                 except Exception as exc:

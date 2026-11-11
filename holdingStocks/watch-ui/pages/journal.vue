@@ -112,7 +112,15 @@ function closeEditor() { if (window.confirm('放弃本次尚未保存的修改�
   <section v-else>
   <p v-if="error" class="error" role="alert">{{ error }} <button v-if="!editing" @click="load">重试</button></p>
   <template v-if="!selected && !editing">
-   <section class="toolbar"><div><strong>我的复盘</strong><span> {{ filtered.length }} 篇记录</span></div><label>搜索<input v-model="query" placeholder="标题、正文关键词"></label><label>开始日期<input v-model="start" type="date"></label><label>结束日期<input v-model="end" type="date" :min="start"></label><button @click="start = ''; end = ''; query = ''">重置</button></section>
+   <section class="toolbar">
+     <div><strong>我的复盘</strong><span> {{ filtered.length }} 篇记录</span></div>
+     <label>搜索<input v-model="query" placeholder="标题、正文关键词"></label>
+     <div class="date-filter-box">
+       <span class="date-filter-label">日期筛选</span>
+       <AppDatePicker mode="range" v-model:start="start" v-model:end="end" placeholder="全部日期范围" />
+     </div>
+     <button @click="start = ''; end = ''; query = ''">重置</button>
+   </section>
    <p v-if="start && end && start > end" class="error">结束日期不能早于开始日期。</p>
    <div v-if="loading" class="empty">正在打开你的复盘笔记…</div>
    <div v-else-if="!filtered.length" class="empty"><span>✎</span><h2>{{ items.length ? '没有符合条件的笔记' : '从今天的交易，写下第一篇复盘' }}</h2><p>记录入场理由、执行过程，以及下次想做得更好的地方。</p><button class="primary" @click="edit()">开始记录</button></div>
@@ -120,7 +128,12 @@ function closeEditor() { if (window.confirm('放弃本次尚未保存的修改�
   </template>
   <section v-if="editing" class="paper">
    <div class="section-heading"><h2>{{ draft.id ? '编辑复盘' : '新的复盘笔记' }}</h2><button :disabled="busy" @click="closeEditor">取消</button></div>
-   <form @submit.prevent="submit()"><label>复盘日期<input v-model="draft.date" type="date" required></label><label>标题<input v-model="draft.title" maxlength="120" required placeholder="用一句话，概括今天的收获" class="title-input"></label><label>正文<textarea v-model="draft.content" required maxlength="100000" rows="16" placeholder="今天的市场表现如何？\n我的交易计划与实际执行有哪些差异？\n哪些判断值得保留，哪些需要调整？" /></label>
+   <form @submit.prevent="submit()">
+     <div class="mb-4">
+       <label class="block text-xs text-ui-text-3 mb-1">复盘日期</label>
+       <AppDatePicker v-model="draft.date" placeholder="选择复盘所属日期" />
+     </div>
+     <label>标题<input v-model="draft.title" maxlength="120" required placeholder="用一句话，概括今天的收获" class="title-input"></label><label>正文<textarea v-model="draft.content" required maxlength="100000" rows="16" placeholder="今天的市场表现如何？\n我的交易计划与实际执行有哪些差异？\n哪些判断值得保留，哪些需要调整？" /></label>
     <div class="upload-zone"><div class="upload-icon">▧</div><div class="upload-copy"><strong>为复盘添加图片</strong><p>交易截图、行情走势，把关键时刻一起留下</p><small>{{ draft.images.length }}/9 张 · PNG / JPG / WebP / GIF · 每张最多 5MB</small></div><button type="button" class="upload-button" :disabled="busy || draft.images.length >= 9" @click="fileInput?.click()">＋ 添加图片</button><input ref="fileInput" class="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple :disabled="busy" aria-label="上传复盘图片" @change="upload"></div>
     <div class="gallery"><figure v-for="(src, i) in draft.images" :key="i"><img :src="src" :alt="`图片 ${i + 1}`"><button type="button" :disabled="busy" @click="draft.images.splice(i, 1)">移除图片</button></figure></div>
     <div class="actions"><span>把今天的思考，留给未来的自己。</span><button class="primary" :disabled="busy">{{ busy ? '正在保存…' : draft.id ? '保存修改' : '发布笔记' }}</button></div>
@@ -151,6 +164,26 @@ function closeEditor() { if (window.confirm('放弃本次尚未保存的修改�
   margin-bottom: 24px;
   border-bottom: 1px solid var(--ui-border, rgba(128, 128, 128, 0.2));
   padding-bottom: 12px;
+}
+
+.date-filter-box {
+  min-width: 250px;
+}
+.date-filter-label {
+  font-size: 11px;
+  display: block;
+  opacity: 0.6;
+  margin-bottom: 7px;
+}
+.date-field-group {
+  max-width: 280px;
+  margin-bottom: 20px;
+}
+.date-field-title {
+  font-size: 13px;
+  display: block;
+  opacity: 0.8;
+  margin-bottom: 6px;
 }
 .tab-btn {
   padding: 8px 18px;

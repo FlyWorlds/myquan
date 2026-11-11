@@ -1,4 +1,4 @@
-"""策略十七·紫阳真君：因子28 席位池 + 因子26/2 买卖（因子22 默认关）。"""
+"""策略十七·紫阳真君：紫阳东路席位池 + 因子26/2 买卖（因子22 默认关）。"""
 
 from __future__ import annotations
 
@@ -50,9 +50,9 @@ register_strategy(
             "default": False,
             "mode": "watch_overlay",
             "watch_tab": True,
-            "universe": "factor28",
+            "universe": "ziyang",
             "horizon": "rolling_3m",
-            "factors": ("factor26", "factor2", "factor28", "factor22"),
+            "factors": ("factor26", "factor2", "factor22"),
             "seat": "国泰海通证券股份有限公司武汉紫阳东路证券营业部",
         },
     ),

@@ -84,6 +84,7 @@ const strategy16Tab = computed(() => strategyTabs.value.find((t) => t.id === 'st
 const strategy16bTab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy16b'))
 const strategy17Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy17'))
 const strategy37Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy37'))
+const strategy38Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy38'))
 
 
 type Strategy16BPriceMax = '50' | '100' | '200' | 'none'
@@ -734,11 +735,21 @@ const closedCount = computed(() => closedHoldings.value.length)
           :phase="snapshot.phase"
         />
       </section>
+
+      <section v-show="activeTab === 'strategy38'">
+        <StrategyInfoPanel v-if="strategy38Tab" :tab="strategy38Tab" class="mb-4" />
+        <Strategy38Panel
+          v-if="snapshot"
+          :tab="strategy38Tab"
+          :payload="snapshot.strategy38"
+          :phase="snapshot.phase"
+        />
+      </section>
     </template>
 
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘 Tab 仅展示实盘交易策略（策略1 / 3 / 8 / 15 / 16 / 16B / 37）。多维空仓择时已升级为全局风控，请前往顶部导航
+      盯盘 Tab 仅展示实盘交易策略（策略1 / 3 / 17 / 37 / 38）。多维空仓择时已升级为全局风控，请前往顶部导航
 
       <NuxtLink to="/cash-gate" class="text-accent hover:underline">多维空仓</NuxtLink>
       ；因子持有模板、研究型条目见

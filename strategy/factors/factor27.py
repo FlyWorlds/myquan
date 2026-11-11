@@ -65,7 +65,6 @@ SPEC = FactorSpec(
         "price_max": DEFAULT_PRICE_MAX,
         "horizon": "rolling_3m",
         "picks_path": str(DEFAULT_PICKS_PATH.as_posix()),
-        "strategy": "strategy16",
         "docs": "docs/FACTOR27.md",
         "refresh": build_quarter_pool,
     },

@@ -624,6 +624,79 @@ export interface Strategy37Payload {
   rows?: Strategy37Row[]
 }
 
+export interface Strategy38Step1 {
+  status: string
+  veto_cash: boolean
+  is_cash: boolean
+  tier: number
+  tier_name: string
+  position_ratio: number
+  reason: string
+  breadth: number
+  close: number
+  ma60: number
+}
+
+export interface Strategy38Step2 {
+  total_raw?: number
+  count: number
+  status: string
+}
+
+export interface Strategy38Order {
+  code: string
+  name: string
+  last_close: number
+  buy_trigger_price: number
+  support_buy_price: number
+  stop_loss_price: number
+  volume_ratio: number
+  breakout_date: string
+  anchor_date: string
+  confirm_logic: string
+  status: string
+}
+
+export interface Strategy38Row {
+  代码: string
+  名称: string
+  最新价: number
+  突破买入价: number
+  回踩买入价: number
+  止损保护价: number
+  放量倍数: string
+  起爆日期: string
+  起爆涨幅: string
+  买点确认逻辑: string
+  状态: string
+  symbol: string
+}
+
+export interface Strategy38Kpi {
+  step1_status?: string
+  step1_tier?: string
+  step2_pool_count?: number
+  step3_candidate_count?: number
+  step4_order_count?: number
+  avg_volume_multiple?: number
+}
+
+export interface Strategy38Payload {
+  error?: string | null
+  strategyId?: string
+  strategyName?: string
+  summary?: string
+  executed?: boolean
+  step1?: Strategy38Step1
+  step2?: Strategy38Step2
+  step3?: any[]
+  step4?: Strategy38Order[]
+  orders?: Strategy38Order[]
+  rows?: Strategy38Row[]
+  kpi?: Strategy38Kpi
+  backtest?: Record<string, any>
+}
+
 
 export interface WatchSnapshot {
   v: number
@@ -676,6 +749,7 @@ export interface WatchSnapshot {
   strategy35?: Strategy35Payload
   strategy36?: Strategy36Payload
   strategy37?: Strategy37Payload
+  strategy38?: Strategy38Payload
   sectors?: SectorsLivePayload
 
   strategies: StrategyTab[]

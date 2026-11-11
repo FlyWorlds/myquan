@@ -1,4 +1,4 @@
-"""策略十七·紫阳真君 · 因子绑定（宇宙=因子28；买卖走因子26）。"""
+"""策略十七·紫阳真君 · 因子绑定（宇宙=紫阳真君席位池；买卖走因子26）。"""
 
 from __future__ import annotations
 
@@ -55,13 +55,6 @@ FACTOR_BINDINGS = (
             f"(年均值{_TH.avg_yearly_max_dd*100:.0f}% / 历史最大{_TH.hist_max_dd*100:.0f}%)；"
             "回测不注资"
         ),
-        enabled=True,
-    ),
-    bind_factor(
-        "factor28",
-        label="紫阳真君近3个月池",
-        role="universe",
-        filter_desc="国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交并集（买或卖任一出现）",
         enabled=True,
     ),
     bind_factor(

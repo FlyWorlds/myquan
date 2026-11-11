@@ -196,22 +196,12 @@ class StrategyRuleTests(unittest.TestCase):
         self.assertEqual(sig["action"], "near_max")
 
         ids = {b.factor_id for b in get_strategy_bindings("strategy1")}
-        self.assertEqual(ids, {"factor26", "factor2", "factor13a", "factor16", "factor22"})
+        self.assertEqual(ids, {"factor26", "factor2", "factor13a", "factor16", "factor33", "factor29"})
         b2 = next(b for b in get_strategy_bindings("strategy1") if b.factor_id == "factor2")
         self.assertFalse(b2.params.get("overlay"))
         self.assertEqual(get_strategy("strategy1").name, "援军战法")
         self.assertEqual(get_strategy("援军战法").id, "strategy1")
-        ids16 = {b.factor_id for b in get_strategy_bindings("strategy16")}
-        self.assertEqual(ids16, {"factor26", "factor2", "factor27"})
-        ids16b = {b.factor_id for b in get_strategy_bindings("strategy16b")}
-        self.assertEqual(ids16b, ids16)
-        all16 = {
-            b.factor_id: b
-            for b in get_strategy("strategy16").bindings(enabled_only=False)
-        }
-        self.assertIn("factor22", all16)
-        self.assertFalse(all16["factor22"].enabled)
-        self.assertTrue(get_strategy_spec("strategy16").meta.get("default"))
+        self.assertTrue(get_strategy_spec("strategy1").meta.get("default"))
 
     def test_strategy3_is_independent_daily_reversal(self) -> None:
         from strategy import get_strategy, get_strategy_bindings

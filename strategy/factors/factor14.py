@@ -32,7 +32,6 @@ SPEC = FactorSpec(
         "kind": "theme_resonance",
         "min_theme_lu": 3,
         "concept_source": "tdx_members_index",
-        "strategy": "strategy8",
     },
 )
 

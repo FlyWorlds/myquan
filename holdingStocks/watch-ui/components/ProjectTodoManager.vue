@@ -551,11 +551,10 @@ async function confirmDelete() {
           <div class="grid grid-cols-2 gap-3 items-center">
             <div>
               <label class="block text-ui-text-3 mb-1">目标排期 / 截止日期</label>
-              <input
+              <AppDatePicker
                 v-model="draft.target_date"
-                type="date"
-                class="form-input"
-              >
+                placeholder="选择截止日期 (选填)"
+              />
             </div>
             <div class="pt-5 flex items-center gap-2">
               <label class="flex items-center gap-2 cursor-pointer select-none">

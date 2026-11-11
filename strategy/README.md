@@ -39,7 +39,6 @@ strategy/
 │   ├── factor2.py        # 回撤加减仓预警
 │   ├── factor3.py        # 动量（截面 / 单票时序）
 │   ├── factor4.py        # 牛市持股 regime
-│   ├── factor5.py        # Serenity 公开前瞻主题 → A 股研究候选池
 │   ├── factor6.py        # 组合动量 ETF 轮动
 │   ├── factor7.py        # 行业 ETF 普通动量 + 改进残差动量
 │   └── factor8.py        # CZSC 缠论结构与一/二/三类买卖点
@@ -55,7 +54,6 @@ strategy/
 ├── dd_topup.py           # 旧版权益注资叠加（可选）
 ├── bull_regime.py        # 因子4 牛市判定
 ├── momentum.py           # 因子3 动量族
-├── serenity_factor5.py   # 因子5：公开帖解析 / 主题映射 / 动态候选快照
 ├── etf_combo_momentum.py # 因子6：宽基 ETF 组合动量轮动
 ├── industry_residual_momentum.py # 因子7：行业 ETF 双动量月频 Top3
 ├── chan/                 # 策略二 CZSC 适配 / 状态机 / 因子挖掘
@@ -74,7 +72,6 @@ strategy/
 | **factor2** | 因子2-回撤预警 | 回撤补仓 | 回撤加减仓**预警** | `dd_alert.py`：默认加仓≥20% / 减仓≤10%；**回测不注资**。旧注资见 `dd_topup.py` |
 | **factor3** | 因子3-动量 | 动量 | 截面选股 / 单票择时 | `momentum.py`：组合默认截面反转打分；单票可用 `dist_hl` 等（收盘确认→次日开盘） |
 | **factor4** | 因子4-牛市持股 | 止盈持股 | 牛市持股修复 | `bull_regime.py`：牛市 regime 内暂停/放宽因子1止损；可选空仓开盘建仓。叠在因子1上用 |
-| **factor5** | 因子5-Serenity前瞻主题 | 情绪题材 | 动态 A 股**研究候选池** | `serenity_factor5.py`：Serenity 公开帖 → 前瞻看多主题 → A 股概念代理；不复制美股代码、不直接交易 |
 | **factor6** | 因子6-组合动量ETF轮动 | 动量 | 宽基 ETF 轮动 | `etf_combo_momentum.py`：短窗+长窗 ROC 合成分数，收盘 TopK，动量失效空仓；次日开盘执行 |
 | **factor7** | 因子7-行业ETF双动量 | 动量 | 月频行业主线轮动 | `industry_residual_momentum.py`：12月普通+100月PCA残差各50%；月末Top3 |
 | **factor8** | 因子8-缠论结构 | 缠论 | 结构买卖点 | `chan/`：一/二/三类买卖点；供策略二 |
@@ -99,7 +96,6 @@ strategy/
 | **factor25** | 因子25-30分钟震荡减磨损 | 止盈持股 | 策略十五震荡叠加 | 30m 确认止损 + 动态半仓 + 卖飞回补；见 [`docs/FACTOR25.md`](../docs/FACTOR25.md) |
 | **factor26** | 因子26-多层止盈 | 开盘执行 | 策略一主因子 | 日线选过滤；买=开盘阈值 1m；卖=硬保护2.5% + 中赚3–10%回落一半与0.5×20日日频σ谁先到走谁 + 阶梯10%/15% + 大赚后回落2%清 + 买入日未到3%则次日峰值回落2.5%（昨收/昨高只经 `overnight_peak_px`，仅昨日策略持有/买入才并入）；买入日盈利≥3%不记、其余都记（盯盘唯一落库口：硬保护/T1 哨兵，已记价≤成本；涨停/中段卖价不得记）；**盯盘与 1m 回测 10% 均减半**（`tp_stage`）；已平仓留痕价同 1m 触达；池回测近 7 日；见 [`docs/FACTOR26.md`](../docs/FACTOR26.md) |
 | **factor27** | 因子27-核心龙头 | 情绪题材 | 策略十六宇宙 | 通达信概念成交额≥中位数（最多扫 Top40）；每概念≤2；池约30只；主板非ST非科创创业、现价<100；滚动近3个月冻结；HQ/东财失败则轮动缓存活跃度+新浪现价；**0票不覆盖**旧池；交易宇宙另并**公共自选池**（全策略共用）；当前 as_of **2026-09-30** 见 [`docs/FACTOR27.md`](../docs/FACTOR27.md) |
-| **factor28** | 因子28-紫阳真君 | 情绪题材 | 策略十七宇宙 | 国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交并集；按上榜日数/买入额排序；见 [`docs/FACTOR28.md`](../docs/FACTOR28.md) |
 | **factor29** | 因子29-竞价末段强度 | 开盘执行 | 策略十六买卖 | 仅 9:20–9:25 指示路径；基准=窗口首个有效价；达个股阈值则武装。成交价=单股复核后的正式开盘（如圣阳/金安买点=18.53/60.00），禁止用最终开盘反造信号；见 [`docs/FACTOR29.md`](../docs/FACTOR29.md) |
 | **cf1** | 因子CF1-流动性门控反转 | 反转 | 截面研究因子 | Amihud 软门 + 成交额地板 + 涨跌停/一字 + 收盘低于60日均线；波动门未通过验证。T 收盘→T+1 开盘 |
 
@@ -122,12 +118,10 @@ for f in list_factors():
 | **strategy4** | 策略四·F4止盈动量 | factor1 + factor4 + factor10 | ✅ | 开盘突破 + 牛市放宽止损 + 20%昨高全清 + 周频动量 Top5；**不是**近高等权持有；旧 run 别名 `run_strategy9` / `s9` / `策略九` |
 | **strategy5** | 策略五·近高Top5等权持有 | factor11 | ✅ | 周频 3日动量 Top20 → 5日近高 Top5，下一周等权持有；一字涨停开盘买不进、一字跌停封单卖不出；旧号 `strategy10` / `s10` / `near_high`；研究，非组合默认 |
 | **strategy6** | 策略六·反转池近高 | factor12 | ✅ 研究 | 20日反转 Top20 → 5日近高 Top5 等权持有；IS 优于策略五，2024–2025 未确认，**不替换**策略五 |
-| **strategy8** | 策略八·题材联动 | factor14 + factor1 | ✅ 研究 | **当日涨停定题材**（盯盘实时重算）→联动票当日±阈值；2025→ +6.1%（±2.5%）/ +9.1%（±3%）；`backtest/strategy8_theme_linkage/` |
 | **strategy12** | 策略十二·涨停次日低开 | factor18 + factor21 | ❌ 盲测未过关 | v6 昨开板+上证昨收≤−2% 空仓；调参 2020–2024 +645%/夏普 1.23，盲测 2025→ +3.6%/回撤 55%；`backtest/strategy12_emotion_gate/` |
-| **strategy15** | 策略十五·连板减磨损 | factor1 + factor22 + factor23 + factor24 + factor25 | ✅ 盯盘 | 因子1 建仓；震荡 F25(30m) 确认止损/动态半仓/回补；高潮关接回；盯盘 Tab |
-| **strategy16** | 策略十六·核心龙头 | factor27 + factor26 + factor29 + factor2（factor22 默认关） | ✅ 默认 | 因子27池 ∪ 公共自选；阈值只认 `thr_2026.json`。9:15–9:19 竞价 OHLC 不参与买卖；**因子29** 只用 9:20–9:25 路径决定是否按**正式开盘**买卖。9:25 重置正式 OHLC，9:30 须有新报价；候选触买后单独拉该股票行情，正式开盘与聚合开盘一致才过门，Paper 落账前再强制复核。未武装因子29时仍走因子26开盘突破。隔夜保护卖出后可盘中过门回买 |
-| **strategy16b** | 策略十六B·条件选股 | factor27 + factor26 + factor29 + factor2（factor22 默认关） | ✅ 盯盘 | 买卖内核同策略16；选股条件可在页面配置后从全A重筛，进入策略16B Tab / 动态观察池，**不覆盖**策略16正式池、**不入默认四槽** |
-| **strategy17** | 策略十七·紫阳真君 | factor28 + factor26 + factor2（factor22 默认关） | ✅ 盯盘 | 国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交池；买卖同因子26内核；**非默认交易池**（不入四槽）；盯盘 Tab |
+| **strategy17** | 策略十七·紫阳真君 | factor26 + factor2（factor22 默认关） | ✅ 盯盘 | 国泰海通/国泰君安武汉紫阳东路近3个月龙虎榜成交池；买卖同因子26内核；**非默认交易池**（不入四槽）；盯盘 Tab |
+| **strategy37** | 策略三十七·跌停开板缠论反转 | factor8 | ✅ 盯盘 | 跌停开板撬板与缠论中枢背驰买入；调参/验证d5正期望；盯盘 Tab |
+| **strategy38** | 策略三十八·地量起爆多维选股 | factor35 + factor13a + factor34 + factor8 + factor33 | ✅ 盯盘 | 日线选股四步流：Step1 因子35大盘一票否决；Step2 因子13A主板基本面清洗；Step3 因子34长周期缩量+底部倍量长阳起爆；Step4 因子8/33缠论结构确认与次日挂单买点生成；首页策略 Tab |
 
 策略七 CLI（`run_strategy7`）已归入 **因子17**，Web 策略栏不展示。
 策略九 CLI（`run_strategy9_emotion`）已归入 **因子18**，Web 策略栏不展示。
@@ -178,9 +172,7 @@ cd backtest && python strategy2.py all --limit 80
 
 ```bash
 python -m strategy.strategies.strategy3.factor_mining
-python backtest/strategy8_theme_linkage/run.py --start 20250101
 python -c "from strategy import run_strategy3; run_strategy3()"
-python -c "from strategy import run_strategy8; run_strategy8(start='20250101')"
 python backtest/strategy12_emotion_gate/tune.py
 python backtest/strategy12_emotion_gate/run.py
 python -c "from strategy import run_strategy12; run_strategy12()"
@@ -188,7 +180,7 @@ python backtest/strategy9_limit_down_emotion/run.py --start 20200101
 python -c "from strategy import run_strategy9_emotion; run_strategy9_emotion()"
 ```
 
-策略三：主板动态扫描，结构前低破位 + 放量止跌 + 冻结止损/A-B目标；过期/缺失行情不发当日信号，当前覆盖见 `backtest/strategy3_abalone/market_scan/REPORT.md`。策略八：题材联动（**当日涨停定题材**，盯盘随涨停实时重算 + 因子14 + 因子1 当日阈值，因子15 默认关），报告见 `backtest/strategy8_theme_linkage/REPORT.md`。策略十二：因子18 恐慌空仓 × 因子21 涨停次日低开（v6：昨开板 + 上证昨收≤−2% 空仓，开盘买 T+1 清），调参窗强、**盲测回撤未过关**，报告见 `backtest/strategy12_emotion_gate/REPORT.md`。
+策略三：主板动态扫描，结构前低破位 + 放量止跌 + 冻结止损/A-B目标；过期/缺失行情不发当日信号，当前覆盖见 `backtest/strategy3_abalone/market_scan/REPORT.md`。策略十二：因子18 恐慌空仓 × 因子21 涨停次日低开（v6：昨开板 + 上证昨收≤−2% 空仓，开盘买 T+1 清），调参窗强、**盲测回撤未过关**，报告见 `backtest/strategy12_emotion_gate/REPORT.md`。
 
 ### 因子13 · 熊市盾牌 thr\* Top3（🔒 锁定，研究）
 
@@ -313,18 +305,6 @@ python holdingStocks/migrate_runtime_documents.py
 2. **改百分比**：只改 `DEFAULT_*` 或该策略 `bindings` / `BacktestConfig`  
 3. **新策略组合**：新 `strategies/strategyN`，复用已有因子、换 params  
 
-### 因子5更新
-
-因子5依赖 `.cursor/skills/serenity-research-model` 的公开材料与语义规则。每日在公开归档更新后运行：
-
-```bash
-python -m strategy.run_factor5_serenity --refresh
-# 事件驱动回测：发帖次交易日开盘入槽，因子1止损后每日补空槽
-python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 --stop-pct 0.025
-```
-
-它会更新 `strategy/runs/factor5_serenity_thesis_picks_latest.csv`：默认分析**上一 A 股交易日 15:00（Asia/Shanghai）之后至当前时点**发布的全部 Serenity 公开帖，再通过 Serenity Research Model Skill 做主题提取、引用污染清洗和语义复核，最后映射为 A 股研究池。候选总数最多 5 只、单主题最多 2 只，并按主题信号强度轮询分配席位。周末会自然覆盖周五收盘后的帖子。没有合格新帖时，候选池为空，不延续旧主题。回测中信号按下一交易日开盘进入、每笔持有期由策略参数指定。映射是概念代理，不代表 Serenity 点名、持有或推荐相应 A 股公司；候选池不能直接当成买卖指令。
-
 ## 兼容
 
 | 旧 API | 说明 |
@@ -337,12 +317,7 @@ python -m strategy.backtest_factor5_serenity --start 20260101 --max-positions 5 
 | `run_strategy5` | 因子11 近高 Top5 等权持有；`start` / `end` / `stage1_k` / `stage2_k`；旧名 `run_strategy10` |
 | `run_strategy6` | 因子12 反转池近高 Top5 等权持有；研究候选，不替换策略五 |
 | `run_strategy12` | 因子18 恐慌空仓 + 因子21 涨停次日低开（v6 昨开板+指数昨收门）；`backtest/strategy12_emotion_gate/run.py`（盲测未过关） |
-| `run_strategy15` | 连板减磨损（F23/F24 + 震荡 F25 30m；回测 `backtest/strategy15_m30_chop/run.py`）；盯盘 `strategy15` Tab |
-| `run_core_leader_pool` | 策略十六近3个月选股：`python strategy/run_core_leader_pool.py` → `backtest/strategy16_core_leader/picks_quarter.json` |
 | `run_ziyang_pool` | 策略十七紫阳真君池：`python strategy/run_ziyang_pool.py` → `backtest/strategy17_ziyang/picks_3m.json` |
-| `compare_f22`（策略十六） | 三槽有/无 F22 同日再买对照：`PYTHONPATH=. python backtest/strategy16_core_leader/compare_f22.py --days 7` → `COMPARE_F22.md` |
-| `compare_open_rebuy` | 卖出后开盘阈值同日再买：`…/compare_open_rebuy.py --days 7`；全池等权加 `--all-pool` → `COMPARE_OPEN_REBUY_ALL.md` |
-| `compare_hard_gap` | 低开破硬保护立刻卖 vs 开盘再下杀1%：`PYTHONPATH=. python backtest/strategy1_pool_1m/compare_hard_gap.py --pool strategy16 --days 7` → `COMPARE_HARD_GAP.md` |
 | `run_strategy9_emotion` | 因子18 家数对照上证（CLI，Web 不展示） |
 | `run_strategy2` | 因子8缠论选股；`panel` / `panel_path` / `factor_column` / `start` / `end` |
 | `OpenBreak3Strategy` | = Strategy1 执行类 |

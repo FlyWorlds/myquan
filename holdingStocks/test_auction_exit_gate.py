@@ -47,11 +47,12 @@ class TestMarketPhaseAuctionGates(unittest.TestCase):
             _at(9, 15),
             _at(9, 20),
             _at(9, 24, 59),
-            _at(9, 25),
-            _at(9, 29, 59),
         ):
             self.assertFalse(is_exit_executable(t), t)
             self.assertFalse(is_signal_window(t), t)
+        # 09:25后开盘价确立，支持直接卖出
+        self.assertTrue(is_exit_executable(_at(9, 25)))
+        self.assertTrue(is_exit_executable(_at(9, 29, 59)))
         self.assertTrue(is_exit_executable(_at(9, 30)))
         self.assertTrue(is_exit_executable(_at(9, 30, 1)))
         self.assertTrue(is_auction_observe(_at(9, 20)))
@@ -80,7 +81,7 @@ class TestQuoteDayHighTrust(unittest.TestCase):
 
 class TestPreContinuousUi(unittest.TestCase):
     def test_demote_never_pending_sell_status(self) -> None:
-        for ph in ("auction_cancel", "auction_locked", "open_set"):
+        for ph in ("auction_cancel", "auction_locked"):
             out = idx._demote_pre_signal_window(
                 {
                     "alert": "已触止损",
@@ -93,18 +94,28 @@ class TestPreContinuousUi(unittest.TestCase):
             self.assertEqual(out["持仓状态"], "已经买入", ph)
             self.assertFalse(out["hit_stop"])
             self.assertTrue(out["pending_sell"])
-            self.assertNotEqual(out["alert"], "待卖出")
-            if ph in ("auction_cancel", "auction_locked"):
-                self.assertEqual(out["alert"], "竞价观察")
-            else:
-                self.assertEqual(out["alert"], "竞价止损预警")
+            self.assertEqual(out["alert"], "竞价观察")
+        # open_set 09:25后开盘价确立，支持直接作为待卖出触发
+        out_open = idx._demote_pre_signal_window(
+            {
+                "alert": "已触止损",
+                "hit_stop": True,
+                "因子触发": "已触发",
+                "持仓状态": "待卖出",
+            },
+            phase="open_set",
+        )
+        self.assertEqual(out_open["持仓状态"], "待卖出")
+        self.assertTrue(out_open["hit_stop"])
+        self.assertEqual(out_open["alert"], "竞价卖出已触发")
 
     def test_pre_continuous_stop_ui_labels(self) -> None:
         obs = pre_continuous_stop_ui(phase="auction_locked")
         self.assertEqual(obs["持仓状态"], "已经买入")
         self.assertEqual(obs["alert"], "竞价观察")
         res = pre_continuous_stop_ui(phase="open_set")
-        self.assertEqual(res["alert"], "竞价止损预警")
+        self.assertEqual(res["alert"], "竞价卖出已触发")
+        self.assertEqual(res["持仓状态"], "待卖出")
 
 
 class TestPaperExitAuctionGate(unittest.TestCase):

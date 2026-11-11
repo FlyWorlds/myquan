@@ -74,5 +74,5 @@ def test_tail_observable_volume_freshness_and_consumption():
 def test_registration_is_research_only():
     assert get_factor('factor34').meta['auto_trade'] is False
     from strategy import get_strategy_bindings
-    for strategy in ['strategy1','strategy16']:
+    for strategy in ['strategy1']:
         assert not any(b.factor_id=='factor34' and b.enabled for b in get_strategy_bindings(strategy))

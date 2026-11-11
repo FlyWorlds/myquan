@@ -14,11 +14,16 @@ import pandas as pd
 
 from stock_names import lookup_names_for_codes, resolve_stock_name
 from strategy.open_break import DEFAULT_PCT, TICK_SIZE, strategy_levels
-from strategy.strategies.strategy8.concept_index import (
-    load_concept_maps,
-    members_index_mtime,
-    theme_lu_stats,
-)
+try:
+    from strategy.strategies.strategy8.concept_index import (
+        load_concept_maps,
+        members_index_mtime,
+        theme_lu_stats,
+    )
+except ImportError:
+    load_concept_maps = lambda: ({}, {})  # type: ignore
+    members_index_mtime = lambda: 0  # type: ignore
+    theme_lu_stats = lambda *args, **kwargs: {}  # type: ignore
 from market_sentiment_watch import (
     _factor1_params as _s3_factor1_params,
     _gate_rules_text,

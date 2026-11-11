@@ -4,7 +4,7 @@ import type { TradeLedgerEntry, TradeLedgerResponse } from '~/types/trades'
 import type { DailyPoint } from '~/components/AssetAnalysisChart.vue'
 import { baiduStockUrl } from '~/utils/stockLink'
 import { fmtPositionPct, positionPctOf } from '~/utils/position'
-import exitLabels from '../../../exit_reason_labels.json'
+import exitLabels from '../../exit_reason_labels.json'
 
 const reasons: Record<string, string> = exitLabels
 

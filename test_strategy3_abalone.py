@@ -59,7 +59,6 @@ def test_registry_clears_old_factor1():
     from strategy import get_strategy, get_strategy_bindings
     assert get_strategy('strategy3').name == '策略三·鲍鱼捞饭'
     assert {b.factor_id for b in get_strategy_bindings('strategy3')} == {'factor30','factor31','factor32'}
-    assert any(b.factor_id == 'factor1' for b in get_strategy_bindings('strategy8'))
 
 
 def test_partial_take_profit_and_addition_only_once():

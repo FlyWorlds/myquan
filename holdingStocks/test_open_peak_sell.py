@@ -16,7 +16,8 @@ class TestOpenPeakSell(unittest.TestCase):
     def test_prepare_then_execute_at_open(self):
         order = self.draft()
         self.assertIsNotNone(order)
-        self.assertFalse(open_peak_sell_ready(order, self.pos, self.q, session='2026-10-20', now=self.now))
+        # 业务更新：09:25 开盘价出炉后直接允许卖出，避免 9:30 反应不及
+        self.assertTrue(open_peak_sell_ready(order, self.pos, self.q, session='2026-10-20', now=self.now))
         self.now = self.now.replace(minute=30, second=2)
         self.q.update(last_ts=str(self.now), last=37.6, low=37.6)
         self.assertTrue(open_peak_sell_ready(order, self.pos, self.q, session='2026-10-20', now=self.now))

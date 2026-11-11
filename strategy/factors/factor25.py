@@ -165,7 +165,6 @@ SPEC = FactorSpec(
         "category": "take_profit",
         "overlay": "factor1_m30",
         "status": "research",
-        "backtest": "backtest/strategy15_m30_chop/",
         "default_trail_arm_pct": DEFAULT_TRAIL_ARM_PCT,
         "default_reclaim_band": DEFAULT_RECLAIM_BAND,
     },

@@ -7,8 +7,8 @@
   · core/                           — 协议 / MarketContext / Decision / 注册表
   · backtest.py / runner.py         — 执行层（下单与回测）
 
-默认生效：策略十六·核心龙头（strategy16）= 因子27 + 因子26 + 因子2 + 因子22。
-因子 1–14 均保留。现行策略：1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 / 9 / 12 / 15 / 16。旧号 strategy9/10/11 中 strategy9 亦指策略四 run 别名。
+默认生效：策略一·援军战法（strategy1）= 因子26 + 因子2 + 因子13a + 因子16。
+因子 1–37 模块化。现行策略：1 / 2 / 3 / 4 / 5 / 6 / 7 / 9 / 12 / 17 / 35 / 36 / 37 / 38。旧号 strategy9/10/11 中 strategy9 亦指策略四 run 别名。
 策略三：鲍鱼捞饭（日线新低破位止跌，策略16股票池，研究）。
 策略五：因子11 两段近高（3日动量→5日近高 Top5）等权持有（研究，非默认）。
 策略六：因子12 反转池近高（研究候选，2024–2025 未确认）。
@@ -119,10 +119,9 @@ from strategy.strategies.strategy4 import run_strategy4, run_strategy9  # noqa: 
 from strategy.strategies.strategy5 import run_strategy5, run_strategy10  # noqa: E402
 from strategy.strategies.strategy6 import run_strategy6  # noqa: E402
 from strategy.strategies.strategy7 import run_strategy7, run_strategy11  # noqa: E402
-from strategy.strategies.strategy8 import run_strategy8  # noqa: E402
 from strategy.strategies.strategy9 import run_strategy9_emotion  # noqa: E402
 from strategy.strategies.strategy12 import run_strategy12  # noqa: E402
-from strategy.strategies.strategy15 import run_strategy15  # noqa: E402
+from strategy.strategies.strategy38 import run_strategy38  # noqa: E402
 
 __all__ = [
     "DEFAULT_PCT",
@@ -204,13 +203,12 @@ __all__ = [
     "run_strategy5",
     "run_strategy6",
     "run_strategy7",
-    "run_strategy8",
     "run_strategy9",
     "run_strategy9_emotion",
     "run_strategy10",
     "run_strategy11",
     "run_strategy12",
-    "run_strategy15",
+    "run_strategy38",
     "apply_strategy_config",
     "build_open_break_strategy",
     "metric",

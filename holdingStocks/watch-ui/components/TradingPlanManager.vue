@@ -468,12 +468,10 @@ async function confirmDelete() {
             </div>
             <div>
               <label class="block text-ui-text-3 mb-1">计划所属交易日</label>
-              <input
+              <AppDatePicker
                 v-model="draft.date"
-                type="date"
-                required
-                class="form-input"
-              >
+                placeholder="选择交易日"
+              />
             </div>
           </div>
 

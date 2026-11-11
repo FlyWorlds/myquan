@@ -430,7 +430,13 @@ def _prune_pending(config=None):
         now = time.time()
         for key, item in list(_pending.items()):
             ttl = float(cfg.get("fill_ttl_sec", 86400) if item.is_fill else cfg.get("alert_ttl_sec", 180))
-            if now - item.enqueued_at > max(1, ttl) or item.attempts >= int(cfg.get("max_delivery_attempts", 12)):
+            # A fill is a trading-session event, not a 24-hour reminder. In
+            # particular, restoring yesterday's outbox before today's open must
+            # never replay yesterday's buy/sell as an actionable notification.
+            prior_session = (item.is_fill or bool(item.code)) and (
+                datetime.fromtimestamp(item.enqueued_at).date() < datetime.fromtimestamp(now).date()
+            )
+            if prior_session or now - item.enqueued_at > max(1, ttl) or item.attempts >= int(cfg.get("max_delivery_attempts", 12)):
                 del _pending[key]
                 _expired_notifications += 1
 

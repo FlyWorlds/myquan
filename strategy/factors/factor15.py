@@ -48,7 +48,6 @@ SPEC = FactorSpec(
         "kind": "theme_promo_gap",
         "gap_min": GAP_MIN,
         "gap_max": GAP_MAX,
-        "strategy": "strategy8",
     },
 )
 

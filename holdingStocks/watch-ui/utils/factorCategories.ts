@@ -17,7 +17,6 @@ const FACTOR_CATEGORY_BY_ID: Record<string, string> = {
   factor2: 'drawdown',
   factor3: 'momentum',
   factor4: 'take_profit',
-  factor5: 'sentiment',
   factor6: 'momentum',
   factor7: 'momentum',
   factor8: 'chan',
