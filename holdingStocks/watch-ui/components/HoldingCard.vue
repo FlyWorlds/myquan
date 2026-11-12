@@ -10,6 +10,7 @@ import { holdingCyclePnl } from '~/utils/holdingCyclePnl'
 import { buySignalTooltip } from '~/utils/buySignalTooltip'
 
 const props = defineProps<{ row: HoldingRow; accountTotal?: number | null; dense?: boolean; band?: 'inside' | 'outside'; sellState?: string; sellFilled?: boolean }>()
+const emit = defineEmits<{ (e: 'sell', row: HoldingRow): void }>()
 
 const stickyNote = ref('')
 const noteText = computed(() => {
@@ -203,7 +204,16 @@ const cardClass = computed(() => {
             <span class="inline-flex items-baseline gap-1.5">触发时间 <time class="font-mono font-semibold tabular-nums" :class="triggerTimeClass">{{ fmtSignalClock(row.信号时间) || '—' }}</time></span>
             <span>更新 {{ row.更新 || '—' }}</span>
           </div>
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <button
+              v-if="Number(row.持仓) > 0 && !slotTrace"
+              type="button"
+              class="rounded bg-red-500/15 hover:bg-red-500 text-red-400 hover:text-white px-2 py-0.5 text-[11px] font-bold border border-red-500/30 transition cursor-pointer"
+              title="手动卖出平仓并结算盈亏"
+              @click.stop="emit('sell', row)"
+            >
+              🔴 卖出平仓
+            </button>
             <a :href="baiduStockUrl(row.代码, row.名称)" target="_blank" rel="noopener" class="hover:text-accent">行情 ↗</a>
             <NuxtLink :to="`/trades?code=${row.代码}`" class="hover:text-accent">交割 ↗</NuxtLink>
           </div>

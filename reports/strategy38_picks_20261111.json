@@ -1,0 +1,77 @@
+{
+  "as_of": "2026-11-11 18:14:03",
+  "total_scanned_files": 150,
+  "step1_cash_gate": {
+    "status": "VETO_CASH",
+    "veto_cash": true,
+    "is_cash": true,
+    "tier": 2,
+    "tier_name": "轻仓防守态 (30%)",
+    "position_ratio": 0.3,
+    "reason": "指数破位MA60且全市场广度恶化(站上20日线20.6%)，触发复合空仓防守",
+    "breadth": 0.20588235294117646,
+    "close": 6650.138,
+    "ma60": 7286.7372166666655
+  },
+  "candidates_count": 5,
+  "top_orders": [
+    {
+      "code": "600478",
+      "name": "科力远",
+      "last_close": 3.48,
+      "breakout_close": 3.6,
+      "breakout_open": 3.26,
+      "breakout_low": 3.23,
+      "buy_trigger_price": 3.58,
+      "support_buy_price": 3.43,
+      "stop_loss_price": 3.2,
+      "volume_ratio": 11.7,
+      "breakout_date": "2026-11-05",
+      "anchor_date": "2026-11-03",
+      "confirm_logic": "日线放量11.7倍确立缠论底分型向上笔；次日盘中突破攻击位 3.58 元触买，或回踩支撑 3.43 元分批接回；跌破起爆低点 3.20 元严格止损。",
+      "status": "READY_TO_BUY"
+    },
+    {
+      "code": "600531",
+      "name": "豫光金铅",
+      "last_close": 10.07,
+      "breakout_close": 10.18,
+      "breakout_open": 9.69,
+      "breakout_low": 9.59,
+      "buy_trigger_price": 10.33,
+      "support_buy_price": 9.93,
+      "stop_loss_price": 9.49,
+      "volume_ratio": 3.31,
+      "breakout_date": "2026-11-04",
+      "anchor_date": "2026-10-27",
+      "confirm_logic": "日线放量3.31倍确立缠论底分型向上笔；次日盘中突破攻击位 10.33 元触买，或回踩支撑 9.93 元分批接回；跌破起爆低点 9.49 元严格止损。",
+      "status": "READY_TO_BUY"
+    },
+    {
+      "code": "600301",
+      "name": "华锡有色",
+      "last_close": 44.08,
+      "breakout_close": 45.0,
+      "breakout_open": 42.85,
+      "breakout_low": 42.4,
+      "buy_trigger_price": 45.19,
+      "support_buy_price": 43.92,
+      "stop_loss_price": 41.98,
+      "volume_ratio": 3.02,
+      "breakout_date": "2026-11-04",
+      "anchor_date": "2026-10-21",
+      "confirm_logic": "日线放量3.02倍确立缠论底分型向上笔；次日盘中突破攻击位 45.19 元触买，或回踩支撑 43.92 元分批接回；跌破起爆低点 41.98 元严格止损。",
+      "status": "READY_TO_BUY"
+    }
+  ],
+  "sync_self_watchlist": {
+    "success": true,
+    "revision": 3,
+    "added_codes": [
+      "600478",
+      "600531",
+      "600301"
+    ],
+    "total_items": 4
+  }
+}

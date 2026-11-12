@@ -186,6 +186,8 @@ from watch_config import (
     STRATEGY_PNL_START,
     PAPER_PNL_START,
     USE_FACTOR4,
+    ENABLE_1M_RULES,
+    is_boduan_mode,
     WATCHLIST,
     effective_watchlist,
     overlay_watchlist,
@@ -3574,6 +3576,10 @@ def _resolve_hit_stop_path_dependent(
     cost_px：买入成本（浮盈回落一半锚；勿把 peak 当成本）。
     shares / tp_stage：对齐 eval_multi_tp_bar，10% 只减半。
     """
+    # 全局买卖规则去 1 分钟：禁用 1 分钟拉取与 1m 路径回放
+    if not ENABLE_1M_RULES:
+        need_accurate = False
+
     bars = quote.get("_day_bars")
     if not isinstance(bars, pd.DataFrame) or bars.empty:
         bars = pd.DataFrame()
@@ -3587,7 +3593,7 @@ def _resolve_hit_stop_path_dependent(
     except (TypeError, ValueError, KeyError):
         last, high = 0.0, 0.0
 
-    if bars is not None and not bars.empty:
+    if ENABLE_1M_RULES and bars is not None and not bars.empty:
         forming = _bars_cover_current_minute(bars)
         pd_hit = path_dependent_pullback_hit(
             bars,
@@ -8469,6 +8475,10 @@ def fetch_today_quote(sina: str) -> dict[str, Any]:
         raise RuntimeError("策略16实时进程禁止分钟行情拼接；请使用报价缓存")
     today = str(trading_session_date())
     spot = fetch_sina_spot(sina)
+    if not ENABLE_1M_RULES and spot:
+        q = _quote_from_sina_spot(spot)
+        q["_day_bars"] = pd.DataFrame()
+        return q
 
     day = pd.DataFrame()
     prev_close: float | None = None
@@ -9323,7 +9333,8 @@ def collect_rows(
             path_buy_px = None
             path_buy_ts = None
             if (
-                str(FACTOR_ID).lower() in ("factor26", "f26", "26")
+                ENABLE_1M_RULES
+                and str(FACTOR_ID).lower() in ("factor26", "f26", "26")
                 and threshold_ok
                 and hit_open
                 and qty_early <= 0
@@ -9372,8 +9383,8 @@ def collect_rows(
                     hit_base_stop = False
                     path_touch_stop = 0.0
                 else:
-                    # 仅实仓/纸面持仓拉 1m。空仓勿拉（akshare 单票超时可达 ~90s）。
-                    need_m1 = True
+                    # 全局去 1 分钟规则：ENABLE_1M_RULES 为 False 时不拉 1m K 线，直接走现价判定
+                    need_m1 = bool(ENABLE_1M_RULES)
                     path_res = _resolve_hit_stop_path_dependent(
                         sina=str(w["sina"]),
                         session=str(q["session"]),
@@ -11558,7 +11569,7 @@ def _closed_1m_bars(row: dict[str, Any]) -> pd.DataFrame | None:
     cached = _peek_cached_today_1m(sina, sess)
     if cached is not None:
         return cached
-    if os.environ.get("PYTEST_CURRENT_TEST"):
+    if not ENABLE_1M_RULES or os.environ.get("PYTEST_CURRENT_TEST"):
         return None
     day = _today_1m_bars(sina, sess)
     if isinstance(day, pd.DataFrame) and not day.empty:
@@ -12528,6 +12539,116 @@ def cmd_sell(args: argparse.Namespace) -> None:
     )
 
 
+def manual_api_buy(code: str, price: float, qty: int, note: str = "") -> dict[str, Any]:
+    """供前端调用的手动买入入池 API。"""
+    raw_c = str(code).strip()
+    if not raw_c.isdigit() or len(raw_c) != 6 or raw_c == "000000":
+        raise ValueError("请输入有效的6位股票代码")
+    c = _code_key(code)
+    if not c or len(c) != 6:
+        raise ValueError("请输入有效的6位股票代码")
+    if price <= 0 or qty <= 0:
+        raise ValueError("买入价格与数量必须大于 0")
+    if qty % 100 != 0:
+        raise ValueError("买入数量必须为 100 的整数倍")
+
+    meta = _find_meta(c)
+
+    class Args:
+        pass
+
+    args = Args()
+    args.code = c
+    args.price = price
+    args.qty = qty
+    args.note = note or "手动买入建仓"
+
+    cmd_buy(args)
+
+    # 顺便将该股票加入自选池（若尚未存在），确保前端盯盘立即显示该票
+    try:
+        from runtime_documents import read_document, write_document
+        rev, doc = read_document("manual_self_watchlist")
+        if doc and isinstance(doc, dict):
+            items = list(doc.get("items") or [])
+            if not any(it.get("code") == c for it in items):
+                now_str = _now()
+                items.append({
+                    "code": c,
+                    "name": meta["name"],
+                    "addedAt": now_str,
+                    "source": "manual_trade_buy",
+                    "verifiedQuote": {
+                        "code": c,
+                        "name": meta["name"],
+                        "price": price,
+                        "prevClose": price,
+                        "source": "manual_buy",
+                    },
+                    "note": note or "手动买入建仓入池",
+                })
+                doc["items"] = items
+                write_document("manual_self_watchlist", doc, rev)
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "code": c,
+        "name": meta["name"],
+        "market": meta.get("market") or "",
+        "price": price,
+        "qty": qty,
+        "message": f"成功买入 {meta['name']}({c}) {qty} 股 @ {price:.2f} 元",
+    }
+
+
+def manual_api_sell(code: str, price: float, qty: int, note: str = "") -> dict[str, Any]:
+    """供前端调用的手动卖出平仓 API。"""
+    raw_c = str(code).strip()
+    if not raw_c.isdigit() or len(raw_c) != 6 or raw_c == "000000":
+        raise ValueError("请输入有效的6位股票代码")
+    c = _code_key(code)
+    if not c or len(c) != 6:
+        raise ValueError("请输入有效的6位股票代码")
+    if price <= 0 or qty <= 0:
+        raise ValueError("卖出价格与数量必须大于 0")
+
+    meta = _find_meta(c)
+    data = load_holdings()
+    pos = (data.get("positions") or {}).get(c)
+    if not pos or int(pos.get("qty") or 0) <= 0:
+        raise ValueError(f"{meta.get('name', c)}({c}) 当前无持仓，无法卖出")
+    held_qty = int(pos.get("qty") or 0)
+    if qty > held_qty:
+        raise ValueError(f"卖出数量 {qty} 超过当前持仓数量 {held_qty}")
+
+    cost = float(pos.get("cost") or price)
+    pnl = round((price - cost) * qty, 2)
+    pnl_pct = round(((price - cost) / cost * 100), 2) if cost > 0 else 0.0
+
+    class Args:
+        pass
+
+    args = Args()
+    args.code = c
+    args.price = price
+    args.qty = qty
+    args.note = note or "手动卖出平仓"
+
+    cmd_sell(args)
+    return {
+        "success": True,
+        "code": c,
+        "name": meta["name"],
+        "price": price,
+        "qty": qty,
+        "pnl": pnl,
+        "pnl_pct": pnl_pct,
+        "message": f"成功卖出 {meta['name']}({c}) {qty} 股，实现盈亏 ¥{pnl:+.2f} ({pnl_pct:+.2f}%)",
+    }
+
+
 @paper_mutation
 def cmd_clear(args: argparse.Namespace) -> None:
     meta = _find_meta(args.code)
@@ -12699,6 +12820,141 @@ def cmd_history(_: argparse.Namespace) -> None:
 
 
 _last_auction_skip_log: float = 0.0
+_LAST_BODUAN_EOD_PUSH_SESSION: str | None = None
+
+
+def _maybe_eod_boduan_notify(
+    rows: list[dict[str, Any]],
+    *,
+    wechat: bool = True,
+    now: datetime | None = None,
+    force_test: bool = False,
+) -> bool:
+    """波段模式下：交易日 14:40~14:55 尾盘综合决策提醒（每日推送一次）。"""
+    global _LAST_BODUAN_EOD_PUSH_SESSION
+    if not wechat and not force_test:
+        return False
+    from watch_config import is_boduan_mode
+    if not is_boduan_mode() and not force_test:
+        return False
+
+    current_time = now or datetime.now()
+    clock_str = current_time.strftime("%H:%M:%S")
+    # 尾盘时间门控：14:40:00 ~ 14:55:00
+    if not force_test and not ("14:40:00" <= clock_str <= "14:55:00"):
+        return False
+
+    session_day = str(trading_session_date(current_time))
+    if not force_test and _LAST_BODUAN_EOD_PUSH_SESSION == session_day:
+        return False
+
+    # 1. 宏观风控
+    try:
+        from strategy.strategies.strategy38.scanner import load_macro_environment
+        from strategy.strategies.strategy38.pipeline import evaluate_market_cash_gate
+        cache_dir = Path(__file__).resolve().parents[1] / "data_cache"
+        macro = load_macro_environment(cache_dir)
+        gate = evaluate_market_cash_gate(
+            close_price=macro["close"],
+            ma20=macro["ma20"],
+            ma60=macro["ma60"],
+            market_breadth_ma20=macro["breadth"],
+        )
+        gate_summary = f"{gate['tier_name']} (建议仓位: {int(gate['position_ratio']*100)}%)"
+    except Exception:
+        gate_summary = "正常运行 (默认进攻态)"
+
+    # 2. 持仓分析
+    try:
+        holdings = load_holdings()
+        positions = holdings.get("positions") or {}
+    except Exception:
+        positions = {}
+    held_codes = {str(k) for k, v in positions.items() if int(v.get("qty") or 0) > 0}
+
+    row_map = {str(r.get("代码") or ""): r for r in rows}
+
+    pos_lines = []
+    for code in held_codes:
+        pos = positions.get(code) or {}
+        r = row_map.get(code) or {}
+        cost = float(pos.get("cost") or 0.0)
+        price = float(r.get("现价") or 0.0)
+        if price <= 0:
+            # 盘后或离线时，尝试从行情服务或昨收兜底
+            try:
+                q = fetch_today_quote(sina_of(code))
+                price = float(q.get("last") or q.get("close") or q.get("prev_close") or 0.0)
+            except Exception:
+                price = float(r.get("昨收") or cost)
+        name = str(r.get("名称") or pos.get("name") or code)
+        ret_pct = ((price - cost) / cost * 100) if cost > 0 else 0.0
+
+        if ret_pct <= -2.5:
+            advice = "🚨 浮亏触及保护线(-2.5%)，建议尾盘平仓离场"
+        elif ret_pct >= 10.0:
+            advice = "💰 达到大赚档位(+10%)，建议尾盘锁定部分利润"
+        elif ret_pct >= 3.0:
+            advice = "📈 盈利运行中，移动止盈保护成本，继续持有"
+        else:
+            advice = "持仓观察中，跟踪日K向上笔"
+
+        sign = "+" if ret_pct >= 0 else ""
+        pos_lines.append(f"• {name}({code}): 现价{price:.2f}元 (成本{cost:.2f}元, {sign}{ret_pct:.1f}%)\n  -> {advice}")
+
+    if not pos_lines:
+        pos_lines.append("• 当前无持仓，轻仓待机中")
+
+    # 3. 候选/自选起爆池跟踪
+    from strategy.watch_universe import current_self_watchlist
+    self_picks = current_self_watchlist()
+    cand_lines = []
+    for code, name in self_picks:
+        if code in held_codes:
+            continue
+        r = row_map.get(code) or {}
+        price = float(r.get("现价") or 0.0)
+        change = float(r.get("涨跌幅") or 0.0)
+        if price <= 0:
+            try:
+                q = fetch_today_quote(sina_of(code))
+                price = float(q.get("last") or q.get("close") or q.get("prev_close") or 0.0)
+                change = float(q.get("pct_chg") or 0.0)
+            except Exception:
+                pass
+        sign = "+" if change >= 0 else ""
+        cand_lines.append(f"• {name}({code}): 现价{price:.2f}元 ({sign}{change:.2f}%)")
+
+    msg_parts = [
+        "【📊 14:40 尾盘波段决策提醒】",
+        f"时间：{current_time.strftime('%Y-%m-%d %H:%M')}",
+        f"宏观风控：{gate_summary}",
+        "------------------------",
+        "【持仓波段状态】",
+        "\n".join(pos_lines),
+    ]
+    if cand_lines:
+        msg_parts.extend([
+            "------------------------",
+            "【波段自选跟踪】",
+            "\n".join(cand_lines[:5]),
+        ])
+    msg_parts.extend([
+        "------------------------",
+        "💡 半自动API提示：尾盘日K实体已定型，可在 14:45~14:55 前从容确认或操作挂单。",
+    ])
+
+    full_msg = "\n".join(msg_parts)
+    print(f"[{_now()}] 准备发送尾盘波段提醒:\n{full_msg}")
+    from wechat_notify import send_text
+    ok, detail = send_text(full_msg)
+    if ok:
+        _LAST_BODUAN_EOD_PUSH_SESSION = session_day
+        print(f"[{_now()}] ✅ 14:40 尾盘波段微信提醒推送成功！")
+        return True
+    else:
+        print(f"[{_now()}] ❌ 14:40 尾盘波段微信提醒推送失败: {detail}")
+        return False
 
 
 def _refresh_once(
@@ -12739,6 +12995,10 @@ def _refresh_once(
                 print(f"[{_now()}] 微信本轮推送 {len(pushed)} 条")
         except Exception as e:  # noqa: BLE001
             print(f"[{_now()}] 微信预警推送异常: {e}")
+        try:
+            _maybe_eod_boduan_notify(rows, wechat=wechat)
+        except Exception as e:  # noqa: BLE001
+            print(f"[{_now()}] 尾盘波段微信提醒异常: {e}")
     elif wechat and not calendar_is_trading_day():
         now_m = time.monotonic()
         if now_m - _last_auction_skip_log >= 60.0:
@@ -12996,6 +13256,16 @@ def cmd_wechat_test(_: argparse.Namespace) -> None:
             _out(detail[:300])
     else:
         _out(f"[{_now()}] 微信自检失败: {(detail or '')[:400]}")
+
+
+def cmd_boduan_eod_test(_: argparse.Namespace) -> None:
+    rows = collect_rows()
+    print(f"[{_now()}] 正在触发 14:40 尾盘波段决策微信推送测试...")
+    ok = _maybe_eod_boduan_notify(rows, wechat=True, force_test=True)
+    if ok:
+        print(f"[{_now()}] 尾盘波段测试推送完成！")
+    else:
+        print(f"[{_now()}] 尾盘波段测试推送未发出或失败。")
         raise SystemExit(1)
 
 
@@ -13104,7 +13374,10 @@ def _condition_draft(w: dict[str, Any], q: dict[str, Any], now: datetime) -> dic
                          auction_low=path.get("low"), threshold_pct=entry, tick=tick)
     prepared_now = datetime.now()
     from strategy import get_strategy_bindings
-    auction_enabled = any(b.factor_id == "factor29" and b.enabled for b in get_strategy_bindings(STRATEGY_ID))
+    from watch_config import is_boduan_mode
+    if is_boduan_mode() and prepared_now.strftime("%H:%M:%S") < "09:30:00":
+        return None  # 波段模式：彻底关闭早盘9:25集合竞价抢买
+    auction_enabled = (not is_boduan_mode()) and any(b.factor_id == "factor29" and b.enabled for b in get_strategy_bindings(STRATEGY_ID))
     auction = auction_enabled and prepared_now.strftime("%H:%M:%S") < "09:30:00" and bool(f29.get("hit_buy"))
     from strategy1_entry import phase_at
     if STRATEGY_ID == "strategy1" and phase_at(prepared_now) is None:
@@ -13715,7 +13988,8 @@ def cmd_watch(args: argparse.Namespace) -> None:
         sina_interval=1.0,
     )
     _watch_feed = feed
-    _CONDITION_BUY_ACTIVE = str(STRATEGY_ID) in {"strategy1", "strategy16"}
+    from watch_config import AUTO_BUY_ENABLED
+    _CONDITION_BUY_ACTIVE = bool(AUTO_BUY_ENABLED) and str(STRATEGY_ID) in {"strategy1", "strategy16"}
     _CONDITION_VERIFIED_IDS.clear()
     _QUOTE_EXIT_OBSERVED.clear()
     _QUOTE_RUNTIME_PANELS.clear()
@@ -14486,6 +14760,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     wt = sub.add_parser("wechat-test", help="微信通道自检（不走大模型）")
     wt.set_defaults(func=cmd_wechat_test)
+
+    bet = sub.add_parser("boduan-eod-test", help="测试 14:40 尾盘波段决策微信推送")
+    bet.set_defaults(func=cmd_boduan_eod_test)
 
     rs = sub.add_parser(
         "review-schedule",

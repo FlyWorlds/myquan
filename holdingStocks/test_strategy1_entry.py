@@ -1,3 +1,6 @@
+import watch_config
+watch_config.STRATEGY_ID = 'strategy1'
+
 from datetime import datetime
 from strategy1_entry import phase_at, effective_order, quota_reason
 from condition_buy import make_order, is_trigger
@@ -31,7 +34,7 @@ def test_rebound_uses_observed_pullback_not_day_low():
     from attack_wave import AttackWaves
     from unittest.mock import patch
     waves = AttackWaves()
-    o = dict(order('day_low_rebound'), code='600967', open=12.46, entry_pct=.02)
+    o = dict(order('day_low_rebound'), code='600967', open=12.46, entry_pct=.02, limit_up_pct=0.30)
     with patch('attack_wave.WAVES', waves):
         for clock, px in [('10:00:01',12.63), ('10:01:01',12.59), ('10:02:01',12.72)]:
             q = quote(clock, open=12.46, low=12.30, high=13.2, last=px)
@@ -73,8 +76,6 @@ def test_factor29_sell_t1_and_real_path_required():
     assert not draft_auction_sell(pos,quote('09:25:01'),session=DAY,now=at('09:25:01'),entry_pct=.025)
 
 def test_strategy1_contains_sea_data_and_new_factors():
-    from watch_config import strategy1_watchlist
     from strategy import get_strategy_bindings
-    assert any(w['code']=='603138' and w['name']=='海量数据' for w in strategy1_watchlist({}))
     enabled={b.factor_id for b in get_strategy_bindings('strategy1') if b.enabled}
-    assert {'factor29','factor33'} <= enabled
+    assert not ({'factor29','factor33'} & enabled)

@@ -278,6 +278,54 @@ def build_watch_request_handler(
                 status, data = handle_sectors_api(self.path)
                 self._send_json(data, status=status)
                 return
+            if path == "/api/manual-trade/quote":
+                qs = parse_qs(urlparse(self.path).query)
+                raw = (qs.get("code") or [""])[0].strip()
+                try:
+                    try:
+                        from strategy.board_rules import code_key, sina_of, market_of
+                    except ImportError:
+                        from board_rules import code_key, sina_of, market_of
+                    try:
+                        from holdingStocks.stock_names import resolve_stock_name
+                    except ImportError:
+                        from stock_names import resolve_stock_name
+                    if not raw.isdigit() or len(raw) != 6 or raw == "000000":
+                        self._send_json({"error": "请输入有效的6位股票代码"}, status=400)
+                        return
+                    c = code_key(raw)
+                    if not c or len(c) != 6:
+                        self._send_json({"error": "请输入有效的6位股票代码"}, status=400)
+                        return
+                    name = resolve_stock_name(code=c) or c
+                    market = market_of(c)
+                    sina = sina_of(c)
+                    price = 0.0
+                    prev_close = 0.0
+                    change_pct = 0.0
+                    try:
+                        try:
+                            from holdingStocks.quote_feed import fetch_sina_batch
+                        except ImportError:
+                            from quote_feed import fetch_sina_batch
+                        q = (fetch_sina_batch([sina]) or {}).get(sina)
+                        if q:
+                            price = float(q.get("last") or q.get("close") or 0.0)
+                            prev_close = float(q.get("prev_close") or 0.0)
+                            change_pct = float(q.get("day_chg_pct") or 0.0)
+                    except Exception:
+                        pass
+                    self._send_json({
+                        "code": c,
+                        "name": name,
+                        "market": market,
+                        "price": price,
+                        "prev_close": prev_close,
+                        "change_pct": change_pct,
+                    })
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=500)
+                return
             if path == "/api/strategy16b/select" and handle_strategy16b_api is not None:
                 status, data = handle_strategy16b_api(self.path)
                 self._send_json(data, status=status)
@@ -430,6 +478,50 @@ def build_watch_request_handler(
                             '/api/self-watchlist/remove': 'remove'}.get(self.path.split('?', 1)[0])
             if watch_action:
                 self._self_watchlist(watch_action)
+                return
+            if self.path.split("?", 1)[0] == "/api/manual-trade/buy":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 1000000:
+                        raise ValueError("请求数据异常")
+                    payload = json.loads(self.rfile.read(length))
+                    code = str(payload.get("code") or "")
+                    price = float(payload.get("price") or 0.0)
+                    qty = int(payload.get("qty") or 0)
+                    note = str(payload.get("note") or "")
+
+                    try:
+                        from holdingStocks.index import manual_api_buy
+                    except ImportError:
+                        from index import manual_api_buy
+                    res = manual_api_buy(code=code, price=price, qty=qty, note=note)
+                    if self_watchlist and hasattr(self_watchlist, "changed"):
+                        self_watchlist.changed()
+                    self._send_json(res)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
+            if self.path.split("?", 1)[0] == "/api/manual-trade/sell":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length <= 0 or length > 1000000:
+                        raise ValueError("请求数据异常")
+                    payload = json.loads(self.rfile.read(length))
+                    code = str(payload.get("code") or "")
+                    price = float(payload.get("price") or 0.0)
+                    qty = int(payload.get("qty") or 0)
+                    note = str(payload.get("note") or "")
+
+                    try:
+                        from holdingStocks.index import manual_api_sell
+                    except ImportError:
+                        from index import manual_api_sell
+                    res = manual_api_sell(code=code, price=price, qty=qty, note=note)
+                    if self_watchlist and hasattr(self_watchlist, "changed"):
+                        self_watchlist.changed()
+                    self._send_json(res)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
                 return
             if self.path.split("?", 1)[0] == "/api/review-journal":
                 if self.headers.get('Sec-Fetch-Site') == 'cross-site':

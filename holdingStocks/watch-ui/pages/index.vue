@@ -4,6 +4,8 @@ import { otherAlertRows } from '~/utils/buyAlerts'
 import { sellAlerts } from '~/utils/sellAlerts'
 import { selectionRows } from '~/utils/selectionRows'
 import { createAlertPriceOrder, stickAlertRows } from '~/utils/alertBoard'
+import ManualBuyModal from '~/components/ManualBuyModal.vue'
+import ManualSellModal from '~/components/ManualSellModal.vue'
 
 const store = useWatchStore()
 const { error: databaseError } = useDatabaseHoldings()
@@ -37,6 +39,20 @@ function storedBool(key: string, fallback: boolean): boolean {
 
 const showPlanModal = ref(false)
 const pendingPlanCount = ref(0)
+const showManualBuyModal = ref(false)
+const activeSellRow = ref<HoldingRow | null>(null)
+
+async function onTradeSuccess() {
+  try {
+    const res = await $fetch<any>('/api/snapshot', { query: { t: Date.now() } })
+    if (res && res.type === 'snapshot') {
+      store.setSnapshot(res)
+    }
+  } catch {
+    /* ws will push shortly */
+  }
+}
+
 async function fetchPlanCount() {
   try {
     const res = await $fetch<{ items: any[] }>('/api/trading-plans')
@@ -384,6 +400,17 @@ const closedCount = computed(() => closedHoldings.value.length)
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <!-- 手动买入建仓按钮（新增，高亮醒目） -->
+        <button
+          type="button"
+          class="btn-buy-hero"
+          title="手动录入股票买入建仓，自动入池并计算盈亏"
+          @click="showManualBuyModal = true"
+        >
+          <span class="text-base leading-none">➕</span>
+          <span class="font-bold tracking-wide">手动买入建仓</span>
+        </button>
+
         <!-- 交易计划按钮（开盘前必看，高亮显眼设计） -->
         <button
           type="button"
@@ -496,7 +523,7 @@ const closedCount = computed(() => closedHoldings.value.length)
               <p class="text-xs text-ui-text-3">按买入时间先后排序 · 仅默认策略池入槽</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in slotHoldings" :key="'slot-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" />
+              <HoldingCard v-for="row in slotHoldings" :key="'slot-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" @sell="activeSellRow = $event" />
             </div>
           </div>
           <div v-if="closedHoldings.length" class="space-y-2">
@@ -510,7 +537,7 @@ const closedCount = computed(() => closedHoldings.value.length)
               <p class="text-xs text-ui-text-3">保留当日平仓记录，买回后仍显示 · 不占槽</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.记录ID || `${row.代码}-${row.平仓时间 || row.卖出时间 || ''}`)" :row="row" :account-total="snapshot?.account?.accountTotal" />
+              <HoldingCard v-for="row in closedHoldings" :key="'closed-' + String(row.记录ID || `${row.代码}-${row.平仓时间 || row.卖出时间 || ''}`)" :row="row" :account-total="snapshot?.account?.accountTotal" @sell="activeSellRow = $event" />
             </div>
           </div>
           <div v-if="alertPoolCount" class="space-y-2">
@@ -531,12 +558,14 @@ const closedCount = computed(() => closedHoldings.value.length)
                 :sell-filled="item.filled"
                 :row="item.row"
                 :account-total="snapshot?.account?.accountTotal"
+                @sell="activeSellRow = $event"
               />
               <HoldingCard
                 v-for="row in buyEventCards"
                 :key="'buy-event-' + String(row.记录ID)"
                 dense band="inside" :row="row"
                 :account-total="snapshot?.account?.accountTotal"
+                @sell="activeSellRow = $event"
               />
               <HoldingCard
                 v-for="row in otherAlertCards"
@@ -545,6 +574,7 @@ const closedCount = computed(() => closedHoldings.value.length)
                 :band="row.预警线内 === false ? 'outside' : 'inside'"
                 :row="row"
                 :account-total="snapshot?.account?.accountTotal"
+                @sell="activeSellRow = $event"
               />
             </div>
           </div>
@@ -557,7 +587,7 @@ const closedCount = computed(() => closedHoldings.value.length)
               <p class="text-xs text-ui-text-3">日线回放仍持有、未入四槽 · 与策略十六「策略持有」同步</p>
             </div>
             <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <HoldingCard v-for="row in paperHoldings" :key="'paper-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" />
+              <HoldingCard v-for="row in paperHoldings" :key="'paper-' + String(row.代码)" :row="row" :account-total="snapshot?.account?.accountTotal" @sell="activeSellRow = $event" />
             </div>
           </div>
         </template>
@@ -776,10 +806,52 @@ const closedCount = computed(() => closedHoldings.value.length)
         </div>
       </div>
     </div>
+
+    <!-- 手动买入建仓弹窗 -->
+    <ManualBuyModal
+      v-if="showManualBuyModal"
+      :account-total="snapshot?.account?.accountTotal"
+      :account-cash="snapshot?.account?.availableCash ?? snapshot?.account?.accountTotal"
+      @close="showManualBuyModal = false"
+      @success="onTradeSuccess"
+    />
+
+    <!-- 手动卖出平仓弹窗 -->
+    <ManualSellModal
+      v-if="activeSellRow"
+      :row="activeSellRow"
+      :account-total="snapshot?.account?.accountTotal"
+      @close="activeSellRow = null"
+      @success="onTradeSuccess"
+    />
   </div>
 </template>
 
 <style scoped>
+.btn-buy-hero {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(220, 38, 38, 0.32));
+  border: 1.5px solid #ef4444;
+  color: #fca5a5;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-buy-hero:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.32), rgba(220, 38, 38, 0.5));
+  border-color: #f87171;
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.5);
+  transform: translateY(-1px);
+}
+
 .btn-plan-hero {
   position: relative;
   display: inline-flex;

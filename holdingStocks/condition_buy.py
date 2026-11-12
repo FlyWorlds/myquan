@@ -36,10 +36,11 @@ def fresh_quote(quote: dict, session: str, now: datetime, max_age: float = 5.0) 
 
 def make_order(*, code: str, session: str, open_px: float, price: float, entry_pct: float,
                tick: float, armed_at: str, quote_at: str, name: str, market: str,
-               kind: str = "breakout") -> dict:
+               kind: str = "breakout", strategy: str | None = None) -> dict:
     from watch_config import STRATEGY_ID
-    identity = f"{STRATEGY_ID}:{session}:{code}:{open_px:.4f}:{price:.4f}:{kind}"
-    return dict(id=hashlib.sha256(identity.encode()).hexdigest()[:24], strategy=STRATEGY_ID,
+    strat = strategy or STRATEGY_ID
+    identity = f"{strat}:{session}:{code}:{open_px:.4f}:{price:.4f}:{kind}"
+    return dict(id=hashlib.sha256(identity.encode()).hexdigest()[:24], strategy=strat,
                 code=code, name=name, market=market, session=session, open=open_px,
                 price=price, entry_pct=entry_pct, tick=tick, armed_at=armed_at,
                 armed_quote_at=quote_at, status="ARMED", kind=kind,

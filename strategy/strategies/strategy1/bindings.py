@@ -77,9 +77,9 @@ FACTOR_BINDINGS = (
         enabled=True,
     ),
     bind_factor(
-        "factor33", label="日内低点反弹", role="entry", enabled=True,
+        "factor33", label="日内低点反弹", role="entry", enabled=False,
         window_start="10:00:00", threshold_source="strategy1_symbol_entry_pct",
-        filter_desc="10点后仅按当日最低价反弹个股阈值买入，可补满剩余槽；竞价/开盘突破各限1只",
+        filter_desc="10点后仅按当日最低价反弹个股阈值买入（已解除/禁用）",
     ),
     bind_factor(
         "factor29",
@@ -89,8 +89,8 @@ FACTOR_BINDINGS = (
         window_start="09:20:00",
         window_end="09:25:00",
         execution="official_open_after_single_stock_audit",
-        filter_desc="9:20–9:25实际竞价路径达到个股阈值武装买卖；正式开盘复核后成交，卖出遵守T+1；信号标记因子29",
-        enabled=True,
+        filter_desc="9:20–9:25实际竞价路径达到个股阈值武装买卖（已解除/禁用）",
+        enabled=False,
     ),
     bind_factor(
         "factor22",

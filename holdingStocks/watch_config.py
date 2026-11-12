@@ -56,16 +56,27 @@ from strategy.watch_universe import (
     ziyang_codes,
 )
 
-# 默认定盘：策略一·援军战法（因子26执行；因子22研究项默认关闭）
-STRATEGY_ID = "strategy1"
-FACTOR_ID = "factor26"
-FACTOR2_ID = "factor2"
+# 默认定盘：策略三十八·地量起爆波段战法（中线波段，日K形态与尾盘14:40决策；关闭早盘9:25高频抢买）
+STRATEGY_ID = "strategy38"
+FACTOR_ID = "factor34"
+FACTOR2_ID = "factor35"
 FACTOR22_ID = "factor22"
 FACTOR29_ID = "factor29"
-FACTOR4_ID = "factor4"
-STRATEGY_NAME = "策略一·援军战法"
+FACTOR4_ID = "factor8"
+STRATEGY_NAME = "策略三十八·地量起爆波段战法"
 # 策略三（旧号策略七）才叠因子4；默认核心龙头关闭
 USE_FACTOR4 = False
+
+# 交易模式：关闭后台短线自动买入入池（改为纯手动录入买入/卖出，实时计算收益）
+AUTO_BUY_ENABLED = False
+
+# 全局买卖规则：彻底去掉基于 1 分钟线做高频买卖决策（改为基于实时现价/日线形态/尾盘决策，不再拉取 1 分钟 K 线回放）
+ENABLE_1M_RULES = False
+
+
+def is_boduan_mode() -> bool:
+    """是否波段模式（以日K形态与尾盘14:40决策为主，关闭早盘9:25高频秒级抢买）。"""
+    return str(STRATEGY_ID) in {"strategy38", "strategy3", "boduan"}
 
 # 早盘节点（A 股集合竞价 + 连续竞价）
 RESET_HOUR = 9
@@ -735,10 +746,28 @@ def strategy1_codes(holdings: dict[str, Any] | None = None) -> set[str]:
     return {code_key(w["code"]) for w in strategy1_watchlist(holdings)}
 
 
+def strategy38_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """策略三十八·地量起爆波段池：当前持仓 + 公共自选池。"""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    if holdings:
+        positions = holdings.get("positions") or {}
+        for c, pos in positions.items():
+            ck = code_key(c)
+            if ck and ck not in seen and int(pos.get("qty") or 0) > 0:
+                seen.add(ck)
+                item = meta_for_code(ck, holdings)
+                item["universe"] = "strategy38"
+                out.append(item)
+    return merge_self_watchlist(out, holdings, strategy_id="strategy38")
+
+
 def strategy_watchlist(holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """当前默认策略池（始终含公共自选池）。"""
     if STRATEGY_ID == "strategy16":
         return strategy16_watchlist(holdings)
+    if STRATEGY_ID == "strategy38":
+        return strategy38_watchlist(holdings)
     return strategy1_watchlist(holdings)
 
 
@@ -837,6 +866,9 @@ def meta_for_code(code: str, holdings: dict[str, Any] | None = None) -> dict[str
     不走策略一遗留池 ``WATCHLIST_STRATEGY1`` / ``_WATCH_PCT`` / 置顶名单里的 pct。
     """
     c = code_key(code)
+    if STRATEGY_ID == "strategy38":
+        name, _market = _name_for_code(c, holdings)
+        return watch_item(c, name, pct=float(DEFAULT_PCT), limit_down_pct=limit_down_pct_of(c))
     if STRATEGY_ID == "strategy16":
         name, _market = _name_for_code(c, holdings)
         thrs = load_strategy16_thr_map()
