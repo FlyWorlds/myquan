@@ -102,7 +102,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="rounded-md px-4 py-1.5 font-bold transition"
-          :class="activeTab === 'live' ? 'bg-accent text-white shadow' : 'text-ui-text-3 hover:text-ui-text'"
+          :class="activeTab === 'live' ? 'bg-accent/20 text-accent font-bold shadow-sm' : 'text-ui-text-3 hover:text-ui-text'"
           @click="activeTab = 'live'"
         >
           实时盯盘信号与四步漏斗
@@ -110,7 +110,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="rounded-md px-4 py-1.5 font-bold transition ml-1"
-          :class="activeTab === 'backtest' ? 'bg-accent text-white shadow' : 'text-ui-text-3 hover:text-ui-text'"
+          :class="activeTab === 'backtest' ? 'bg-accent/20 text-accent font-bold shadow-sm' : 'text-ui-text-3 hover:text-ui-text'"
           @click="activeTab = 'backtest'"
         >
           ⚡ 策略多维参数回测平台
@@ -314,7 +314,7 @@ onBeforeUnmount(() => {
         {{ isVetoCash ? '因大盘触发一票否决空仓避险，策略返回空名单' : '暂无触发地量倍量起爆的候选标的' }}
       </div>
 
-      <div v-else class="watch-table-wrap">
+      <div v-else class="watch-table-wrap-scroll mt-1 max-h-[40rem]">
         <table class="watch-sticky-table text-xs">
           <thead>
             <tr>

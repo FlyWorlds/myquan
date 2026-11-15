@@ -765,7 +765,7 @@ onMounted(() => {
       </div>
 
       <!-- 交易记录明细 -->
-      <div v-if="activeTableTab === 'trades'" class="watch-table-wrap mt-3 max-h-80 overflow-auto">
+      <div v-if="activeTableTab === 'trades'" class="watch-table-wrap-scroll mt-3 max-h-[40rem]">
         <table class="watch-sticky-table text-xs">
           <thead>
             <tr>
@@ -803,7 +803,7 @@ onMounted(() => {
       </div>
 
       <!-- 单股收益贡献明细 -->
-      <div v-else class="watch-table-wrap mt-3 max-h-80 overflow-auto">
+      <div v-else class="watch-table-wrap-scroll mt-3 max-h-[40rem]">
         <table class="watch-sticky-table text-xs">
           <thead>
             <tr>
