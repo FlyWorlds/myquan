@@ -110,7 +110,131 @@ const showAdvanced = ref(false)
 
 // 视图切换
 const activeChartTab = ref<'equity' | 'drawdown' | 'daily'>('equity')
-const activeTableTab = ref<'trades' | 'stocks'>('trades')
+const activeTableTab = ref<'trades' | 'stocks' | 'candidates'>('trades')
+
+interface ScreenCandidate {
+  code: string
+  name: string
+  date: string
+  volume_ratio: number
+  close: number
+  change_pct: number
+  body_return_pct: number
+  volume: number
+  raw_volume?: number
+  mean_volume: number
+  volume_method: string
+  is_projected?: boolean
+  symbol: string
+  status: string
+  reason: string
+}
+
+interface ScreenResult {
+  ok: boolean
+  target_date: string
+  is_fallback: boolean
+  date_desc: string
+  matches_count: number
+  candidates: ScreenCandidate[]
+  message?: string
+}
+
+const screening = ref(false)
+const screenResult = ref<ScreenResult | null>(null)
+const screenSuccessMsg = ref('')
+
+const screenCandidates = computed(() => screenResult.value?.candidates || [])
+const currentScreenDateLabel = computed(() => screenResult.value?.target_date || targetDateInfo.value.label)
+
+// 动态计算目标交易日：休息日自动回退至上个交易日周五；盘中显示同花顺预测量
+const targetDateInfo = computed(() => {
+  const now = new Date()
+  const day = now.getDay() // 0:周日, 6:周六
+  const isWeekend = day === 0 || day === 6
+  const hour = now.getHours()
+  const isIntraday = !isWeekend && hour >= 9 && hour < 15
+
+  if (isWeekend) {
+    const diff = day === 0 ? 2 : 1
+    const fri = new Date(now.getTime() - diff * 24 * 3600 * 1000)
+    const friStr = `${String(fri.getMonth() + 1).padStart(2, '0')}-${String(fri.getDate()).padStart(2, '0')}`
+    return {
+      label: `上个交易日(${friStr})`,
+      isFallback: true,
+      tooltip: `当前为周末休市，自动锁定上个交易日周五(${friStr})。纯形态选股，无需经过 Step 4 挂单平仓与止盈止损。`,
+    }
+  }
+
+  if (isIntraday) {
+    return {
+      label: '今日(同花顺预测量)',
+      isFallback: false,
+      tooltip: '盘中未收盘，自动应用同花顺 U 型分时加权预测全天成交量，提前锁定今日放量标的。纯形态选股，无需经过 Step 4。',
+    }
+  }
+
+  return {
+    label: '今日',
+    isFallback: false,
+    tooltip: '根据当前参数直接扫描今日放量股票，纯形态选股，无需经过 Step 4。',
+  }
+})
+
+async function triggerScreenToday() {
+  screening.value = true
+  errorMessage.value = ''
+  screenSuccessMsg.value = ''
+  try {
+    const res = await $fetch<ScreenResult>('/api/strategy38/screen-today', {
+      method: 'POST',
+      body: {
+        universe: form.universe,
+        volume_multiple: form.volume_multiple,
+        lookback: form.lookback,
+        ban_st: form.ban_st,
+        mainboard_only: form.mainboard_only,
+        min_price: form.min_price,
+        max_price: form.max_price,
+      },
+    })
+    if (!res || !res.ok) {
+      throw new Error((res as any)?.error || '筛选失败')
+    }
+    screenResult.value = res
+    screenSuccessMsg.value = res.message || `已完成筛选：共 ${res.matches_count} 只符合条件的放量标的`
+    activeTableTab.value = 'candidates'
+  } catch (err: any) {
+    errorMessage.value = err?.message || '筛选今日放量股票失败'
+  } finally {
+    screening.value = false
+  }
+}
+
+const syncSelfLoading = ref<Record<string, boolean>>({})
+const syncedSelfCodes = ref<Set<string>>(new Set())
+
+async function addToSelfWatch(code: string) {
+  if (syncedSelfCodes.value.has(code) || syncSelfLoading.value[code]) return
+  syncSelfLoading.value[code] = true
+  try {
+    const prevRes = await $fetch<{ token?: string }>('/api/self-watchlist/preview', {
+      method: 'POST',
+      body: { code },
+    })
+    if (prevRes?.token) {
+      await $fetch('/api/self-watchlist/confirm', {
+        method: 'POST',
+        body: { token: prevRes.token },
+      })
+      syncedSelfCodes.value.add(code)
+    }
+  } catch (err: any) {
+    console.warn('加入自选池失败:', err)
+  } finally {
+    syncSelfLoading.value[code] = false
+  }
+}
 
 const chartEl = ref<HTMLElement | null>(null)
 let myChart: echarts.ECharts | null = null
@@ -410,15 +534,29 @@ onMounted(() => {
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="text-xs text-accent hover:underline"
+            class="text-xs text-accent hover:underline mr-1"
             @click="showAdvanced = !showAdvanced"
           >
             {{ showAdvanced ? '收起高级变量 ▲' : '展开漏斗详细变量 ▼' }}
           </button>
+
+          <!-- 扫描放量股票（无需经过 Step 4 挂单平仓与止损） -->
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/50 bg-teal-500/20 px-3 py-1.5 text-xs font-bold text-teal-300 transition hover:bg-teal-500/30 hover:border-teal-500 disabled:cursor-not-allowed disabled:opacity-60 shadow-sm"
+            :disabled="loading || running || screening"
+            :title="targetDateInfo.tooltip"
+            @click="triggerScreenToday"
+          >
+            <span v-if="screening" class="inline-block animate-spin">⌛</span>
+            <span v-else>🔍</span>
+            <span>{{ screening ? '正在筛选放量股票…' : `扫描${targetDateInfo.label}放量股票` }}</span>
+          </button>
+
           <button
             type="button"
             class="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/20 px-3.5 py-1.5 text-xs font-bold text-accent transition hover:bg-accent/30 disabled:cursor-not-allowed disabled:opacity-60"
-            :disabled="loading || running"
+            :disabled="loading || running || screening"
             @click="triggerBacktest"
           >
             <svg
@@ -761,6 +899,14 @@ onMounted(() => {
           >
             单股累计收益贡献排行榜 (共 {{ latestData?.stock_contributions?.length || 0 }} 只)
           </button>
+          <button
+            type="button"
+            class="text-xs font-bold transition ml-4"
+            :class="activeTableTab === 'candidates' ? 'text-teal-400 border-b-2 border-teal-400 pb-1' : 'text-ui-text-3 hover:text-ui-text'"
+            @click="activeTableTab = 'candidates'"
+          >
+            🎯 触发放量起爆标的池 (共 {{ screenCandidates.length }} 只 · {{ currentScreenDateLabel }})
+          </button>
         </div>
       </div>
 
@@ -786,7 +932,19 @@ onMounted(() => {
               :key="`${t.code}-${t.entry_date}-${idx}`"
               class="border-t border-ui-hairline hover:bg-ui-surface-2/40"
             >
-              <td class="px-3 py-2 font-semibold text-accent">{{ t.code }} · {{ t.name }}</td>
+              <td class="px-3 py-2 font-semibold">
+                <StockNameHover :code="t.code" :name="t.name">
+                  <a
+                    :href="baiduStockUrl(t.code, t.name)"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-accent hover:underline inline-flex items-center gap-1 font-bold"
+                  >
+                    <span>{{ stockLabel(t.code, t.name) }}</span>
+                    <span class="text-[10px] text-accent/70 hover:text-accent">↗</span>
+                  </a>
+                </StockNameHover>
+              </td>
               <td class="px-3 py-2 text-ui-text-2">{{ t.entry_date }}</td>
               <td class="px-3 py-2">{{ t.entry_price.toFixed(2) }}</td>
               <td class="px-3 py-2 text-ui-text-2">{{ t.exit_date }}</td>
@@ -803,7 +961,7 @@ onMounted(() => {
       </div>
 
       <!-- 单股收益贡献明细 -->
-      <div v-else class="watch-table-wrap-scroll mt-3 max-h-[40rem]">
+      <div v-else-if="activeTableTab === 'stocks'" class="watch-table-wrap-scroll mt-3 max-h-[40rem]">
         <table class="watch-sticky-table text-xs">
           <thead>
             <tr>
@@ -820,7 +978,19 @@ onMounted(() => {
               :key="s.code"
               class="border-t border-ui-hairline hover:bg-ui-surface-2/40"
             >
-              <td class="px-3 py-2 font-semibold text-ui-text">{{ s.code }} · {{ s.name }}</td>
+              <td class="px-3 py-2 font-semibold text-ui-text">
+                <StockNameHover :code="s.code" :name="s.name">
+                  <a
+                    :href="baiduStockUrl(s.code, s.name)"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-ui-text hover:text-accent hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>{{ stockLabel(s.code, s.name) }}</span>
+                    <span class="text-[10px] text-accent/70 hover:text-accent">↗</span>
+                  </a>
+                </StockNameHover>
+              </td>
               <td class="px-3 py-2 font-bold" :class="returnClass(s.total_pnl_pct)">
                 {{ s.total_pnl_pct > 0 ? '+' : '' }}{{ s.total_pnl_pct.toFixed(2) }}%
               </td>
@@ -832,6 +1002,101 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- 纯形态放量筛选标的明细（无需经过 Step 4 挂单平仓与止损） -->
+      <div v-else-if="activeTableTab === 'candidates'" class="space-y-3 mt-3">
+        <!-- 筛选提示条 -->
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-teal-500/10 border border-teal-500/25 px-3 py-2 text-xs text-teal-300">
+          <div class="flex items-center gap-1.5">
+            <span class="font-bold">⚡ 纯形态放量选股结果：</span>
+            <span>{{ screenSuccessMsg || `目标交易日 ${currentScreenDateLabel} · 放量倍数 ≥ ${form.volume_multiple}x (${form.lookback}日均量)` }}</span>
+          </div>
+          <div class="text-[11px] text-teal-200/80">
+            仅执行 Step 1~3 形态筛选 · 无需经过 Step 4 挂单平仓与止损
+          </div>
+        </div>
+
+        <div v-if="!screenCandidates.length" class="p-8 text-center text-xs text-ui-text-3 border border-dashed border-ui-hairline rounded-lg">
+          暂无匹配标的。请点击右上角【{{ `扫描${targetDateInfo.label}放量股票` }}】执行扫描，或适当调低成交量倍数（如从 2.1x 调至 1.8x）。
+        </div>
+
+        <div v-else class="watch-table-wrap-scroll max-h-[40rem]">
+          <table class="watch-sticky-table text-xs">
+            <thead>
+              <tr>
+                <th class="px-3 py-2.5">代码 / 标的 (点击看行情)</th>
+                <th class="px-3 py-2.5">起爆/触发日期</th>
+                <th class="px-3 py-2.5">放量倍数</th>
+                <th class="px-3 py-2.5">收盘现价</th>
+                <th class="px-3 py-2.5">当日涨跌幅</th>
+                <th class="px-3 py-2.5">成交量测算</th>
+                <th class="px-3 py-2.5 min-w-[200px]">信号诊断说明</th>
+                <th class="px-3 py-2.5 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="c in screenCandidates"
+                :key="`${c.code}-${c.date}`"
+                class="border-t border-ui-hairline hover:bg-ui-surface-2/40"
+              >
+                <!-- 股票标的 (点击打开外部链接) -->
+                <td class="px-3 py-2.5 font-semibold">
+                  <StockNameHover :code="c.code" :name="c.name">
+                    <a
+                      :href="baiduStockUrl(c.code, c.name)"
+                      target="_blank"
+                      rel="noopener"
+                      class="text-teal-400 hover:text-teal-300 hover:underline inline-flex items-center gap-1 font-bold"
+                    >
+                      <span>{{ stockLabel(c.code, c.name) }}</span>
+                      <span class="text-[10px] text-teal-400/70 hover:text-teal-300">↗</span>
+                    </a>
+                  </StockNameHover>
+                </td>
+                <td class="px-3 py-2.5 text-ui-text-2">{{ c.date }}</td>
+                <!-- 放量倍数高亮徽章 -->
+                <td class="px-3 py-2.5">
+                  <span
+                    class="rounded px-2 py-0.5 font-mono font-bold text-xs"
+                    :class="c.volume_ratio >= 3.0 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'"
+                  >
+                    {{ c.volume_ratio.toFixed(2) }}x
+                  </span>
+                </td>
+                <td class="px-3 py-2.5 font-semibold text-ui-text font-mono">¥{{ c.close.toFixed(2) }}</td>
+                <td class="px-3 py-2.5 font-bold font-mono" :class="returnClass(c.change_pct)">
+                  {{ c.change_pct > 0 ? '+' : '' }}{{ c.change_pct.toFixed(2) }}%
+                </td>
+                <td class="px-3 py-2.5 text-ui-text-3 font-mono text-[11px]">
+                  <div>量: {{ (c.volume / 10000).toFixed(0) }}万手</div>
+                  <div class="text-[10px] text-ui-text-3/70">{{ c.volume_method }}</div>
+                </td>
+                <td class="px-3 py-2.5 text-ui-text-2 text-[11px]">
+                  {{ c.reason }}
+                </td>
+                <td class="px-3 py-2.5 text-center">
+                  <button
+                    type="button"
+                    class="rounded border px-2 py-1 text-[11px] font-medium transition"
+                    :class="
+                      syncedSelfCodes.has(c.code)
+                        ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                        : 'border-ui-hairline hover:border-accent hover:text-accent'
+                    "
+                    :disabled="syncedSelfCodes.has(c.code) || syncSelfLoading[c.code]"
+                    @click="addToSelfWatch(c.code)"
+                  >
+                    <span v-if="syncSelfLoading[c.code]">⌛</span>
+                    <span v-else-if="syncedSelfCodes.has(c.code)">✓ 已在自选</span>
+                    <span v-else>+ 关注</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

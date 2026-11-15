@@ -47,6 +47,34 @@ async function fetchPlanCount() {
 }
 onMounted(fetchPlanCount)
 
+// 多账户切换与记忆
+const { reloadSnapshot } = useWatchWs()
+const {
+  accounts: accountsList,
+  activeAccountId: currentAccountId,
+  initActiveAccount,
+  fetchAccounts,
+  switchAccount,
+} = useAccounts()
+
+onMounted(() => {
+  initActiveAccount()
+  void fetchAccounts()
+  if (currentAccountId.value && currentAccountId.value !== 'acc_default') {
+    void reloadSnapshot(currentAccountId.value)
+  }
+})
+
+function onAccountChange(aid: string) {
+  void switchAccount(aid)
+  void reloadSnapshot(aid)
+}
+
+function onAccountRefresh() {
+  void fetchAccounts()
+  void reloadSnapshot(currentAccountId.value)
+}
+
 /** 策略一固定紧随持仓；其它策略保留服务端顺序。 */
 const strategyTabs = computed(() => {
   const tabs = strategies.value.length ? strategies.value : snapshot.value?.strategies || []
@@ -496,6 +524,14 @@ const closedCount = computed(() => closedHoldings.value.length)
 
     <template v-if="!loading">
       <section v-show="activeTab === 'holdings'" class="space-y-4">
+        <!-- 多账户胶囊切换与管理 -->
+        <AccountSwitcher
+          :accounts="accountsList"
+          :active-account-id="currentAccountId"
+          @change="onAccountChange"
+          @refresh="onAccountRefresh"
+        />
+
         <AccountSummary v-if="snapshot" :account="snapshot.account" :holdings="snapshot.holdings">
           <template v-if="snapshot.indices?.length" #aside>
             <IndexBar compact :indices="snapshot.indices" />

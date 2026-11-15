@@ -25,7 +25,12 @@ export const useWatchStore = defineStore('watch', () => {
   const snapshot = computed<WatchSnapshot | null>(() => {
     const raw = rawSnapshot.value
     const state = paperState.value
-    if (!raw || !state) return raw
+    if (!raw) return null
+    // 如果当前快照是针对特定子账户的，直接使用原始快照，避免被默认主账户的数据库持仓冲刷
+    if (raw.active_account_id && raw.active_account_id !== 'acc_default') {
+      return raw
+    }
+    if (!state) return raw
     return mergeDatabaseHoldings(raw, state)
   })
   const strategies = ref<StrategyTab[]>([])
@@ -61,6 +66,7 @@ export const useWatchStore = defineStore('watch', () => {
   const wsDisconnected = computed(() => isFeedAlertStatus(wsStatus.value))
 
   return {
+    rawSnapshot,
     snapshot,
     paperState,
     setPaperState,

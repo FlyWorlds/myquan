@@ -1,0 +1,10 @@
+{
+  "account_id": "acc_default",
+  "updated_at": "2026-11-15 19:07:40",
+  "account_total": 300000.0,
+  "account_cash": 300000.0,
+  "paper_equity_base": 300000.0,
+  "positions": {},
+  "closed_today": {},
+  "realized_today": {}
+}

@@ -9,10 +9,31 @@ const props = defineProps<{
   phase?: string
 }>()
 
-const step1 = computed(() => props.payload?.step1)
-const step2 = computed(() => props.payload?.step2)
-const kpi = computed(() => props.payload?.kpi)
-const rows = computed<Strategy38Row[]>(() => props.payload?.rows || [])
+const localPayload = ref<Strategy38Payload | null>(null)
+const currentPayload = computed(() => localPayload.value || props.payload)
+
+const step1 = computed(() => currentPayload.value?.step1)
+const step2 = computed(() => currentPayload.value?.step2)
+const kpi = computed(() => currentPayload.value?.kpi)
+const rows = computed<Strategy38Row[]>(() => {
+  const p = currentPayload.value
+  if (!p) return []
+  const list = (p.rows && p.rows.length) ? p.rows : ((p as any).orders || (p as any).candidates || [])
+  return list.map((r: any) => ({
+    代码: String(r.代码 || r.code || ''),
+    名称: String(r.名称 || r.name || ''),
+    最新价: r.最新价 ?? r.last_close ?? 0,
+    突破买入价: r.突破买入价 ?? r.buy_trigger_price ?? 0,
+    回踩买入价: r.回踩买入价 ?? r.support_buy_price ?? 0,
+    止损保护价: r.止损保护价 ?? r.stop_loss_price ?? 0,
+    放量倍数: r.放量倍数 != null ? String(r.放量倍数) : (r.volume_ratio ? `${r.volume_ratio}x` : '—'),
+    起爆日期: r.起爆日期 || r.breakout_date || '—',
+    起爆涨幅: r.起爆涨幅 != null ? String(r.起爆涨幅) : (r.body_return ? `${(r.body_return * 100).toFixed(2)}%` : '—'),
+    状态: r.状态 || r.status || 'READY_TO_BUY',
+    买点确认逻辑: r.买点确认逻辑 || r.confirm_logic || '',
+    symbol: r.symbol || r.code || '',
+  }))
+})
 
 const isVetoCash = computed(() => Boolean(step1.value?.veto_cash))
 const activeTab = ref<'live' | 'backtest'>('live')
@@ -21,8 +42,6 @@ const scanning = ref(false)
 const syncSelf = ref(false)
 const scanProgress = ref<{ stage: string; percent: number; completed?: number; total?: number } | null>(null)
 const scanError = ref('')
-const localPayload = ref<Strategy38Payload | null>(null)
-const currentPayload = computed(() => localPayload.value || props.payload)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -342,9 +361,10 @@ onBeforeUnmount(() => {
                     :href="baiduStockUrl(r.代码, r.名称)"
                     target="_blank"
                     rel="noopener"
-                    class="font-semibold text-accent hover:underline"
+                    class="font-semibold text-accent hover:underline inline-flex items-center gap-1"
                   >
-                    {{ stockLabel(r.代码, r.名称) }}
+                    <span>{{ stockLabel(r.代码, r.名称) }}</span>
+                    <span class="text-[10px] text-accent/70 hover:text-accent">↗</span>
                   </a>
                 </StockNameHover>
               </td>

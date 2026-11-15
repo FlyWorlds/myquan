@@ -31,6 +31,7 @@ export function useWatchWs() {
   const store = useWatchStore()
   const renderConfig = useRuntimeConfig()
   const nuxtApp = useNuxtApp()
+  const { activeAccountId } = useAccounts()
 
   async function notifyRendered(data: WatchSnapshot) {
     if (data.boot) {
@@ -73,6 +74,29 @@ export function useWatchWs() {
 
   function applySnapshot(data: WatchSnapshot) {
     if (data.type !== 'snapshot') return
+
+    const curAid =
+      activeAccountId.value ||
+      (import.meta.client ? localStorage.getItem('myquan_active_account_id') : null) ||
+      'acc_default'
+
+    // 如果用户当前切换在子账户，且推送未指定子账户或推送的是默认账户，保护子账户持仓与资产不被覆盖
+    if (curAid !== 'acc_default') {
+      if (!data.active_account_id || data.active_account_id !== curAid) {
+        const curSnap = store.rawSnapshot
+        if (curSnap && curSnap.holdings) {
+          data = {
+            ...data,
+            active_account_id: curAid,
+            holdings: curSnap.holdings,
+            closedHoldings: curSnap.closedHoldings,
+            account: curSnap.account,
+            slotMeta: curSnap.slotMeta,
+          }
+        }
+      }
+    }
+
     const sameTs = data.ts != null && lastTs != null && data.ts === lastTs
     const sameAt =
       data.updatedAt != null &&
@@ -90,14 +114,17 @@ export function useWatchWs() {
     void notifyRendered(data)
   }
 
-  async function fallbackSync() {
+  async function fallbackSync(accountId?: string) {
     try {
       const config = useRuntimeConfig()
       const base = import.meta.dev
         ? `http://${config.public.watchApiHost || '127.0.0.1'}:${config.public.watchApiPort || '8765'}`
         : ''
+      const query: Record<string, any> = { t: Date.now() }
+      const aid = accountId || (import.meta.client ? localStorage.getItem('myquan_active_account_id') : null)
+      if (aid) query.account_id = aid
       const data = await $fetch<WatchSnapshot>(`${base}/api/snapshot`, {
-        query: { t: Date.now() },
+        query,
         cache: 'no-store',
       })
       applySnapshot(data)
@@ -108,6 +135,12 @@ export function useWatchWs() {
       }
       store.setWsStatus('推送断开，等待重连…')
     }
+  }
+
+  async function reloadSnapshot(accountId?: string) {
+    lastTs = null
+    lastUpdatedAt = null
+    await fallbackSync(accountId)
   }
 
   function scheduleReconnect() {
@@ -228,5 +261,5 @@ export function useWatchWs() {
     void start()
   }
 
-  return { start, stop }
+  return { start, stop, reloadSnapshot }
 }

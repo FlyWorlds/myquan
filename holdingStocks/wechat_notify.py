@@ -1793,9 +1793,17 @@ def format_buy_fill_message(
     strategy_id: str = "",
     target_px: float | None = None,
     last_px: float | None = None,
+    account_id: str = "",
 ) -> str:
+    acc_tag = ""
+    if account_id:
+        try:
+            from account_manager import format_account_tag
+            acc_tag = f" · {format_account_tag(account_id).strip('【】')}"
+        except Exception:
+            pass
     lines = [
-        "【模拟买入】",
+        f"【模拟买入{acc_tag}】",
         "等级：P2 普通",
         f"股票：{code} {name}",
         f"成交价：{float(price):.2f}",
@@ -1837,13 +1845,21 @@ def format_sell_fill_message(
     quantity_ratio: float | None = None,
     target_px: float | None = None,
     last_px: float | None = None,
+    account_id: str = "",
 ) -> str:
+    acc_tag = ""
+    if account_id:
+        try:
+            from account_manager import format_account_tag
+            acc_tag = f" · {format_account_tag(account_id).strip('【】')}"
+        except Exception:
+            pass
     half = str(action_kind or "").lower() == "half" or (
         quantity_ratio is not None and float(quantity_ratio) < 1.0 - 1e-12
     )
     fill_kind = "半仓" if half else "全仓"
     lines = [
-        "【模拟卖出】",
+        f"【模拟卖出{acc_tag}】",
         f"等级：{signal_priority(reason_code, priority_reason)}",
         f"股票：{code} {name}",
         f"成交价：{float(price):.2f}",

@@ -1,3 +1,28 @@
+export interface AccountRiskRules {
+  max_position_pct?: number
+  stop_loss_pct?: number
+  max_hold_days?: number
+  cash_gate_sensitive?: boolean
+  take_profit_mode?: string
+}
+
+export interface AccountProfile {
+  id: string
+  name: string
+  type: 'long_term' | 'short_term'
+  is_default?: boolean
+  initial_capital: number
+  color?: string
+  description?: string
+  mounted_strategies?: string[]
+  risk_rules?: AccountRiskRules
+  created_at?: string
+  account_total?: number
+  available_cash?: number
+  market_value?: number
+  positions_count?: number
+}
+
 export interface WatchAccount {
   dayPnlStarted?: boolean
   totalPnl?: number | null
@@ -753,4 +778,7 @@ export interface WatchSnapshot {
   sectors?: SectorsLivePayload
 
   strategies: StrategyTab[]
+
+  accounts?: AccountProfile[]
+  active_account_id?: string
 }

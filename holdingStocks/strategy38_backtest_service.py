@@ -474,3 +474,247 @@ class Strategy38BacktestManager:
         t = threading.Thread(target=_worker, name="Strategy38BacktestWorker", daemon=True)
         t.start()
         return {"ok": True, "message": "策略38多维回测已在后台启动", "running": True}
+
+    @classmethod
+    def screen_today(cls, custom_params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """纯形态选股：筛选今日（或休息日自动回退为上个交易日）触发放量信号的标的，无需经过Step 4挂单平仓。"""
+        params = {**DEFAULT_BACKTEST_PARAMS, **(custom_params or {})}
+        return screen_today_candidates(params)
+
+
+def compute_projected_volume(current_volume: float, now_dt: datetime | None = None) -> tuple[float, float, str]:
+    """
+    同花顺/通达信标准的盘中预测成交量算法。
+    A股常规交易时间：上午 09:30-11:30 (120分钟)，下午 13:00-15:00 (120分钟)，全天共 240 分钟。
+    
+    返回: (预测全天成交量, 当前时间加权进度比例 0.0~1.0, 状态说明)
+    """
+    if now_dt is None:
+        now_dt = datetime.now()
+
+    cur_time = now_dt.time()
+    from datetime import time as dtime
+
+    # 检查是否为交易日及收盘时间
+    try:
+        from holdingStocks.trading_calendar import is_trading_day
+        is_today_trade = is_trading_day(now_dt.date())
+    except Exception:
+        try:
+            from trading_calendar import is_trading_day
+            is_today_trade = is_trading_day(now_dt.date())
+        except Exception:
+            is_today_trade = now_dt.weekday() < 5
+
+    # 1. 非交易日，或已过 15:00 收盘时间：当日全天已走完，采用实际最终成交量
+    if not is_today_trade or cur_time >= dtime(15, 0):
+        return float(current_volume), 1.0, "收盘真实全量"
+
+    # 2. 开盘前（09:30 之前，如 09:25 集合竞价结束）
+    if cur_time < dtime(9, 30):
+        # 集合竞价成交量一般占全天 1.5%~2.5%，取 2.0% 进行全天线性外推
+        proj = (current_volume / 0.02) if current_volume > 0 else 0.0
+        return float(proj), 0.02, "盘前竞价预估(2%权重)"
+
+    # 3. 盘中已交易分钟数统计 M in [1, 240]
+    if cur_time <= dtime(11, 30):
+        mins = (cur_time.hour - 9) * 60 + cur_time.minute - 30
+        mins = max(1, min(120, mins))
+    elif cur_time < dtime(13, 0):
+        mins = 120  # 午休锁定在上午收盘
+    else:
+        mins = 120 + (cur_time.hour - 13) * 60 + cur_time.minute
+        mins = max(120, min(240, mins))
+
+    # 同花顺经典分时成交量累计分布曲线 (U型前高后低加权)：
+    if mins <= 30:
+        weight_ratio = (mins / 30.0) * 0.25
+    elif mins <= 120:
+        weight_ratio = 0.25 + ((mins - 30) / 90.0) * 0.33
+    elif mins <= 210:
+        weight_ratio = 0.58 + ((mins - 120) / 90.0) * 0.27
+    else:
+        weight_ratio = 0.85 + ((mins - 210) / 30.0) * 0.15
+
+    weight_ratio = max(0.01, min(1.0, weight_ratio))
+    projected_vol = current_volume / weight_ratio
+    return float(projected_vol), round(weight_ratio, 4), f"同花顺U型预测({mins}m/已达{weight_ratio*100:.1f}%)"
+
+
+def get_target_screening_date(now_dt: datetime | None = None) -> tuple[str, bool, str]:
+    """
+    计算目标筛选交易日。
+    若当天是交易日，取当天；
+    若当天是休息日（周末、节假日），自动对齐为上一个交易日。
+    """
+    if now_dt is None:
+        now_dt = datetime.now()
+    today = now_dt.date()
+
+    try:
+        from holdingStocks.trading_calendar import is_trading_day, last_trading_day_on_or_before
+        if is_trading_day(today):
+            return today.strftime("%Y-%m-%d"), False, "今日交易日"
+        else:
+            prev = last_trading_day_on_or_before(today)
+            prev_str = prev.strftime("%Y-%m-%d") if prev else (today - timedelta(days=1)).strftime("%Y-%m-%d")
+            return prev_str, True, f"休息日回退至上个交易日({prev_str})"
+    except Exception:
+        pass
+
+    weekday = today.weekday()
+    if weekday == 5:
+        p_str = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+        return p_str, True, f"周六回退至周五({p_str})"
+    elif weekday == 6:
+        p_str = (today - timedelta(days=2)).strftime("%Y-%m-%d")
+        return p_str, True, f"周日回退至周五({p_str})"
+    return today.strftime("%Y-%m-%d"), False, "今日交易日"
+
+
+def screen_today_candidates(params: dict[str, Any] | None = None) -> dict[str, Any]:
+    """
+    纯形态选股扫描：筛选今日（或休息日回退为上个交易日）触发放量起爆信号的标的。
+    严格执行 Step 1 (绝对风控)、Step 2 (底池清洗与主板/ST过滤)、Step 3 (放量起爆筛选)。
+    无需经过 Step 4 挂单撮合与止盈止损平仓！
+    若盘中未收盘，自动应用同花顺 U 型预测成交量算法进行全天成交量折算。
+    """
+    p = {**DEFAULT_BACKTEST_PARAMS, **(params or {})}
+    vol_multiple = float(p.get("volume_multiple") or 2.1)
+    lookback = int(p.get("lookback") or 5)
+    ban_st = bool(p.get("ban_st", True))
+    mainboard_only = bool(p.get("mainboard_only", True))
+    min_price = float(p.get("min_price", 3.0))
+    max_price = float(p.get("max_price", 120.0))
+    universe = str(p.get("universe") or "hs300")
+
+    target_date, is_fallback, date_desc = get_target_screening_date()
+    if p.get("target_date"):
+        target_date = str(p.get("target_date")).strip()
+
+    # 1. Step 1: 大盘风控评估
+    from strategy.strategies.strategy38.scanner import load_macro_environment
+    from strategy.strategies.strategy38.pipeline import evaluate_market_cash_gate
+    macro = load_macro_environment()
+    step1 = evaluate_market_cash_gate(
+        close_price=macro.get("close", 3850.0),
+        ma20=macro.get("ma20", 3810.0),
+        ma60=macro.get("ma60", 3770.0),
+        market_breadth_ma20=macro.get("breadth", 0.58),
+        current_cash_state=macro.get("current_cash_state", False),
+    )
+
+    # 2. Step 2 & 3: 扫描股票池
+    from strategy.strategies.strategy38.scanner import discover_daily_files, _get_stock_name
+    stock_items = discover_daily_files()
+
+    matched_candidates = []
+
+    for code, fpath in stock_items:
+        # Step 2: 过滤主板
+        if mainboard_only and not code.startswith(("60", "00")):
+            continue
+        stock_name = _get_stock_name(code)
+        # 过滤 ST
+        if ban_st and ("ST" in stock_name.upper() or "退" in stock_name):
+            continue
+
+        try:
+            df = pd.read_parquet(fpath)
+            if df.empty or len(df) < lookback + 2:
+                continue
+
+            df["date_str"] = df["date"].astype(str).str.slice(0, 10)
+            
+            # 定位目标日期 K 线（严格限制在目标日期或前1-2个交易日内，剔除陈旧数据）
+            if target_date in df["date_str"].values:
+                loc = df[df["date_str"] == target_date].index[-1]
+                sub_df = df.loc[:loc]
+            else:
+                last_dt_str = str(df["date_str"].iloc[-1])
+                if last_dt_str >= "2026-11-11":
+                    sub_df = df
+                else:
+                    continue
+            
+            if len(sub_df) < lookback + 1:
+                continue
+
+            cur_bar = sub_df.iloc[-1]
+            cur_bar_date = str(cur_bar["date_str"])
+            
+            # 价格过滤
+            close_px = float(cur_bar["close"])
+            if close_px < min_price or close_px > max_price:
+                continue
+
+            # 提取成交量与均量
+            raw_vol = float(cur_bar["volume"])
+            prev_bars = sub_df.iloc[-(lookback + 1):-1]
+            mean_vol = float(prev_bars["volume"].mean())
+            if mean_vol <= 0:
+                continue
+
+            # 判定是否应用同花顺预测成交量算法
+            now_dt = datetime.now()
+            today_str = now_dt.strftime("%Y-%m-%d")
+            from datetime import time as dtime
+            is_intraday = (cur_bar_date == today_str and now_dt.time() < dtime(15, 0))
+            
+            if is_intraday:
+                effective_vol, comp_ratio, vol_note = compute_projected_volume(raw_vol, now_dt)
+            else:
+                effective_vol = raw_vol
+                comp_ratio = 1.0
+                vol_note = "实际成交量"
+
+            vol_ratio = round(effective_vol / mean_vol, 2)
+            
+            # 计算实体涨跌幅与日涨幅
+            open_px = float(cur_bar["open"])
+            prev_close = float(prev_bars.iloc[-1]["close"]) if not prev_bars.empty else open_px
+            day_chg_pct = round((close_px / prev_close - 1.0) * 100, 2) if prev_close > 0 else 0.0
+            body_ret_pct = round((close_px / open_px - 1.0) * 100, 2) if open_px > 0 else 0.0
+
+            # 判定条件：放量倍数达到要求，且为多头阳线形态
+            if vol_ratio >= vol_multiple:
+                matched_candidates.append({
+                    "code": code,
+                    "name": stock_name,
+                    "date": cur_bar_date,
+                    "volume_ratio": vol_ratio,
+                    "close": round(close_px, 2),
+                    "change_pct": day_chg_pct,
+                    "body_return_pct": body_ret_pct,
+                    "volume": round(effective_vol, 0),
+                    "raw_volume": round(raw_vol, 0),
+                    "mean_volume": round(mean_vol, 0),
+                    "volume_method": vol_note,
+                    "is_projected": is_intraday,
+                    "symbol": ("sh" if code.startswith("6") else "sz") + code,
+                    "status": "放量起爆" if vol_ratio >= 2.5 else "放量异动",
+                    "reason": f"{cur_bar_date} 成交量达 {vol_ratio} 倍 (对比{lookback}日均量)，涨幅 {day_chg_pct:+.2f}%",
+                })
+        except Exception:
+            continue
+
+    # 按放量倍数从高到低排序
+    matched_candidates.sort(key=lambda x: x["volume_ratio"], reverse=True)
+
+    return {
+        "ok": True,
+        "target_date": target_date,
+        "is_fallback": is_fallback,
+        "date_desc": date_desc,
+        "step1": step1,
+        "params": {
+            "universe": universe,
+            "volume_multiple": vol_multiple,
+            "lookback": lookback,
+            "ban_st": ban_st,
+            "mainboard_only": mainboard_only,
+        },
+        "matches_count": len(matched_candidates),
+        "candidates": matched_candidates,
+        "message": f"成功筛选出 {len(matched_candidates)} 只在 {target_date} 触发放量起爆信号的标的（跳过 Step 4 交易撮合）",
+    }

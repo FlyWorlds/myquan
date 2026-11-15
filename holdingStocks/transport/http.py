@@ -383,6 +383,17 @@ def build_watch_request_handler(
                     self._send_json({"error": "strategy38 backtest status unavailable", "detail": str(exc)}, status=500)
                 return
 
+            if path == "/api/strategy38/screen-today":
+                try:
+                    from strategy38_backtest_service import Strategy38BacktestManager
+
+                    query = parse_qs(urlparse(self.path).query)
+                    opts = {k: v[0] for k, v in query.items()}
+                    self._send_json(Strategy38BacktestManager.screen_today(opts))
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy38 screen today unavailable", "detail": str(exc)}, status=500)
+                return
+
             if path == "/api/trades":
                 from trade_ledger import api_trades_payload
                 try:
@@ -414,6 +425,16 @@ def build_watch_request_handler(
                 except Exception:
                     self._send_json({"error":"account history unavailable"},status=503)
                 return
+            if path == "/api/accounts":
+                try:
+                    from account_manager import list_accounts_summary, get_active_account_id
+                    self._send_json({
+                        "accounts": list_accounts_summary(),
+                        "active_account_id": get_active_account_id(),
+                    })
+                except Exception as exc:
+                    self._send_json({"error": f"获取账户列表失败: {exc}"}, status=500)
+                return
             if path in ("/api/snapshot", f"/{watch_meta_file.name}"):
                 with snap_lock:
                     snap = get_last_snapshot()
@@ -432,6 +453,93 @@ def build_watch_request_handler(
                 if snap is None:
                     self._send_json({"error": "snapshot unavailable"}, status=503)
                     return
+
+                try:
+                    from account_manager import (
+                        list_accounts_summary,
+                        get_active_account_id,
+                        get_account_holdings_data,
+                        DEFAULT_ACCOUNT_ID,
+                    )
+                    query = parse_qs(urlparse(self.path).query)
+                    req_aid = (query.get("account_id") or [""])[0] or get_active_account_id()
+                    accounts_summary = list_accounts_summary()
+                    snap = dict(snap)
+                    snap["accounts"] = accounts_summary
+                    snap["active_account_id"] = req_aid
+
+                    # 如果请求的是非默认子账户，装载其专属持仓与资产视图
+                    if req_aid != DEFAULT_ACCOUNT_ID:
+                        sub_h = get_account_holdings_data(req_aid)
+                        curr_acc = next((a for a in accounts_summary if a["id"] == req_aid), None)
+                        init_cap = float((curr_acc or {}).get("initial_capital", 100000.0))
+                        sub_cash = float(sub_h.get("account_cash", init_cap))
+
+                        # 将子账户 positions 转换为前端展示格式
+                        sub_holdings_list = []
+                        total_mv = 0.0
+                        total_day_pnl = 0.0
+                        total_float_pnl = 0.0
+                        for code, pos in (sub_h.get("positions") or {}).items():
+                            if not isinstance(pos, dict):
+                                continue
+                            qty = int(pos.get("qty") or 0)
+                            if qty <= 0:
+                                continue
+                            cost = float(pos.get("cost") or 0.0)
+                            name = pos.get("name") or code
+                            # 尝试获取现价
+                            price = cost
+                            if isinstance(snap.get("holdings"), list):
+                                for def_h in snap["holdings"]:
+                                    if def_h.get("代码") == code and def_h.get("现价"):
+                                        price = float(def_h["现价"])
+                                        break
+                            mv = qty * price
+                            fpnl = (price - cost) * qty
+                            fpnl_pct = round(((price - cost) / cost * 100), 2) if cost > 0 else 0.0
+                            total_mv += mv
+                            total_float_pnl += fpnl
+                            sub_holdings_list.append({
+                                "代码": code,
+                                "名称": name,
+                                "市场": pos.get("market") or "深证" if code.startswith(("0", "3")) else "上证",
+                                "持仓": qty,
+                                "可用": int(pos.get("available") or qty),
+                                "成本": cost,
+                                "现价": price,
+                                "市值": mv,
+                                "浮盈": fpnl,
+                                "浮盈%": fpnl_pct,
+                                "当日盈亏": fpnl,
+                                "当日盈亏%": fpnl_pct,
+                                "买入时间": pos.get("buy_time") or "-",
+                                "持仓状态": "已经买入",
+                                "已实现": False,
+                                "置顶": False,
+                                "bgClass": "status-hold",
+                            })
+
+                        sub_total = sub_cash + total_mv
+                        snap["holdings"] = sub_holdings_list
+                        snap["closedHoldings"] = sub_h.get("closed_today") or []
+                        snap["account"] = {
+                            "accountTotal": round(sub_total, 2),
+                            "availableCash": round(sub_cash, 2),
+                            "marketValue": round(total_mv, 2),
+                            "paperEquityBase": round(init_cap, 2),
+                            "totalPnl": round(sub_total - init_cap, 2),
+                            "totalPnlPct": round(((sub_total - init_cap) / init_cap * 100), 2) if init_cap > 0 else 0.0,
+                            "dayPnl": round(total_day_pnl, 2),
+                            "dayPnlPct": 0.0,
+                            "positionPct": round((total_mv / sub_total * 100), 1) if sub_total > 0 else 0.0,
+                            "mountedStrategies": (curr_acc or {}).get("mounted_strategies", []),
+                            "accountType": (curr_acc or {}).get("type", "short_term"),
+                            "accountName": (curr_acc or {}).get("name", "子账户"),
+                        }
+                except Exception as exc:
+                    print(f"[HTTP] 组装多账户快照失败: {exc}")
+
                 self._send_json(snap)
                 return
             ui_file = self._resolve_ui_file(path)
@@ -587,6 +695,17 @@ def build_watch_request_handler(
                     self._send_json({"error": "strategy38 backtest trigger failed", "detail": str(exc)}, status=500)
                 return
 
+            if path == "/api/strategy38/screen-today":
+                try:
+                    from strategy38_backtest_service import Strategy38BacktestManager
+
+                    length = int(self.headers.get("content-length", 0))
+                    body = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    self._send_json(Strategy38BacktestManager.screen_today(body))
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy38 screen today failed", "detail": str(exc)}, status=500)
+                return
+
             if path == "/api/strategy38/scan":
                 try:
                     from strategy.strategies.strategy38.scanner import Strategy38ScanManager
@@ -608,6 +727,62 @@ def build_watch_request_handler(
                         {"error": "reset failed", "detail": type(exc).__name__},
                         status=500,
                     )
+                return
+            if path == "/api/accounts":
+                try:
+                    from account_manager import create_account
+                    length = int(self.headers.get("Content-Length", "0"))
+                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    res = create_account(payload)
+                    self._send_json(res)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
+            if path == "/api/accounts/switch":
+                try:
+                    from account_manager import set_active_account_id
+                    length = int(self.headers.get("Content-Length", "0"))
+                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    aid = payload.get("account_id") or ""
+                    res = set_active_account_id(aid)
+                    self._send_json({"status": "success", "active_account_id": res})
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
+            if path == "/api/accounts/update":
+                try:
+                    from account_manager import update_account
+                    length = int(self.headers.get("Content-Length", "0"))
+                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    aid = payload.get("account_id") or ""
+                    res = update_account(aid, payload)
+                    self._send_json(res)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
+            if path == "/api/accounts/delete":
+                try:
+                    from account_manager import delete_account
+                    length = int(self.headers.get("Content-Length", "0"))
+                    payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    aid = payload.get("account_id") or ""
+                    res = delete_account(aid)
+                    self._send_json(res)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
+                return
+            self.send_error(404, "Not Found")
+
+        def do_DELETE(self) -> None:  # noqa: N802
+            path = self.path.split("?", 1)[0]
+            if path.startswith("/api/accounts/"):
+                aid = path.replace("/api/accounts/", "").strip()
+                try:
+                    from account_manager import delete_account
+                    res = delete_account(aid)
+                    self._send_json(res)
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=400)
                 return
             self.send_error(404, "Not Found")
 
