@@ -158,6 +158,8 @@ def effective_deliveries(state: dict[str, Any]):
             entry["day_pnl_pct"] = None  # Old rounded percentages do not define an exact denominator.
         entry.setdefault("adjustment_ids", []).append(token)
         entry["pnl_basis"] = "committed_fill_plus_adjustments"
+    archived_trade_ids = {t.get("id") for t in state.get("trades", []) if t.get("reset_archived") and t.get("id")}
+    entries = [e for e in entries if e.get("id") not in archived_trade_ids]
     return entries, issues
 
 
@@ -177,9 +179,12 @@ class AccountReadModel:
 def closed_trade_rows(model, session, *, market_rows=()):
     """Independent full-exit cards from effective fills, including symbols bought again."""
     rows = []
+    archived_ids = {t.get("id") for t in model.state.get("trades", []) if t.get("reset_archived") and t.get("id")}
     for entry in model.entries:
         if (entry.get("side") != "sell" or entry.get("after_qty") != 0
                 or str(entry.get("session") or entry.get("time") or "")[:10] != session):
+            continue
+        if entry.get("id") in archived_ids:
             continue
         qty = int(entry.get("qty") or 0)
         if qty <= 0:
@@ -225,6 +230,13 @@ def closed_trade_rows(model, session, *, market_rows=()):
     for row in rows:
         source = quotes.get(str(row["代码"]), {})
         row.update({key: source[key] for key in fields if key in source})
+    # 同一标的及买入周期的平仓记录去重，保留最新生效的一笔
+    deduped = {}
+    for row in rows:
+        key = (str(row.get("代码") or ""), str(row.get("买入时间") or ""))
+        if key not in deduped or str(row.get("平仓时间") or "") >= str(deduped[key].get("平仓时间") or ""):
+            deduped[key] = row
+    rows = list(deduped.values())
     return sorted(rows, key=lambda row: (str(row.get("平仓时间") or ""), str(row.get("代码") or ""), str(row.get("记录ID") or "")))
 
 

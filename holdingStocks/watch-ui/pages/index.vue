@@ -274,12 +274,21 @@ function closedTimeKey(r: Record<string, any>): string {
 }
 
 const closedHoldings = computed(() => {
-  const list = (snapshot.value?.closedHoldings ?? snapshot.value?.holdings ?? []).filter((r) => {
+  const rawList = (snapshot.value?.closedHoldings ?? snapshot.value?.holdings ?? []).filter((r) => {
     if (Number(r.持仓) > 0) return false
     // 今日平仓：纸面卖出（已实现）或三槽留痕；策略回放止损不进
     return Boolean(r.已实现) || Boolean(r.三槽平仓)
   })
-  return list.slice().sort((a, b) => {
+  const deduped = new Map<string, typeof rawList[0]>()
+  for (const r of rawList) {
+    const code = String(r.代码 || '')
+    if (!code) continue
+    const existing = deduped.get(code)
+    if (!existing || closedTimeKey(r) >= closedTimeKey(existing)) {
+      deduped.set(code, r)
+    }
+  }
+  return Array.from(deduped.values()).sort((a, b) => {
     const ta = closedTimeKey(a)
     const tb = closedTimeKey(b)
     if (ta !== tb) return ta.localeCompare(tb)
@@ -311,7 +320,18 @@ const slotHoldings = computed(() => rawSlotHoldings.value.slice().sort(byBuyTime
 const paperHoldings = computed(() => rawPaperHoldings.value.slice().sort(byBuyTime))
 const alertCards = ref<HoldingRow[]>([])
 const buyEventCards = computed(() => snapshot.value?.buySignals || [])
-const otherAlertCards = computed(() => otherAlertRows(alertCards.value, buyEventCards.value))
+const otherAlertCards = computed(() => {
+  const sellCodes = new Set(sellAlertRows.value.map((item) => String(item.row.代码 || '')))
+  const slotCodes = new Set(slotHoldings.value.map((item) => String(item.代码 || '')))
+  const candidates = otherAlertRows(alertCards.value, buyEventCards.value)
+  const seen = new Set<string>()
+  return candidates.filter((row) => {
+    const c = String(row.代码 || '')
+    if (!c || sellCodes.has(c) || slotCodes.has(c) || seen.has(c)) return false
+    seen.add(c)
+    return true
+  })
+})
 const alertPoolCount = computed(() => sellAlertRows.value.length + buyEventCards.value.length + otherAlertCards.value.length)
 const alertPriceOrder = createAlertPriceOrder(5_000, 3_000)
 let alertSortTimer: ReturnType<typeof setTimeout> | undefined
@@ -335,9 +355,11 @@ watch(
   snapshot,
   (snap) => {
     const now = performance.now()
-    const taken = new Set(
-      [...rawPaperHoldings.value].map((row) => String(row.代码 || '')),
-    )
+    const taken = new Set([
+      ...rawPaperHoldings.value.map((row) => String(row.代码 || '')),
+      ...rawSlotHoldings.value.map((row) => String(row.代码 || '')),
+      ...closedHoldings.value.map((row) => String(row.代码 || '')),
+    ])
     const incoming = (snap?.holdings || [])
       .filter((row) => !taken.has(String(row.代码 || '')) && !row.已实现 && !row.槽位留痕)
       .map((row) => Number(row.持仓 || 0) > 0 ? { ...row, 置顶: true } : row)

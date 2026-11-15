@@ -1,0 +1,21 @@
+{
+  "updated_at": "2026-11-14 00:06:09",
+  "events": [
+    {
+      "event_id": "24df5e2c-b2f1-5d97-9d91-3ac2f3c0d632",
+      "strategy_id": "strategy16",
+      "symbol": "603042",
+      "side": "BUY",
+      "trigger_price": 14.64,
+      "trigger_time": "2026-10-13 14:40:00",
+      "quote_timestamp": "2026-10-13 14:40:00",
+      "reason": "live_quote",
+      "trading_session_date": "2026-10-13",
+      "buy_level": 14.64,
+      "entry_pct": 0.02,
+      "execution_model": "quote_touch_row_levels",
+      "voided_at": "2026-11-14 00:06:09",
+      "void_reason": "BUY_NOT_PRINTED"
+    }
+  ]
+}
