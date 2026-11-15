@@ -72,6 +72,13 @@ class StrategyBooksRuntime:
         qty = int(book.get("virtual_shares") or 0)
         if order and order.get("strategy") == "strategy1" and str(book.get("exit_time") or "").startswith(day):
             order = dict(order, reentry_after=max(str(order.get("reentry_after") or ""), str(book["exit_time"])))
+        def buy_window(at):
+            from trading_calendar import is_trading_day
+            return self.signal_window(at) or bool(
+                order and order.get("kind") == "auction_open"
+                and "09:25:00" <= at.strftime("%H:%M:%S") < "09:30:00"
+                and is_trading_day(at))
+
         action, updates = None, {}
         if qty > 0:
             pos = dict(book, code=code, qty=qty, cost=book.get("entry_price"), buy_time=book.get("entry_time"))
@@ -101,7 +108,7 @@ class StrategyBooksRuntime:
                     action = dict(kind="full", shares=qty, fill_px=quote["open"], reason="open_protect")
             if updates.get("peak_high", 0) > float(book.get("peak_high") or 0):
                 updates["peak_high_at"] = quote["last_ts"]
-        elif active and order and self.order_valid(order) and self.signal_window(now) and is_trigger(order, quote, received_at, now):
+        elif active and order and self.order_valid(order) and buy_window(now) and is_trigger(order, quote, received_at, now):
             from strategy1_entry import effective_order
             order = effective_order(order, quote)
             price = float(order["price"])
@@ -116,14 +123,14 @@ class StrategyBooksRuntime:
                 shares = math.floor(float(book.get("virtual_cash", 100000.))* .95 / price / 100)*100
                 if shares >= 100:
                     action = dict(kind="buy", shares=shares, fill_px=price, reason="prepared_quote_order:" + str(order.get("signal_factor") or "factor26"))
-        if action and not self.signal_window(now):
+        if action and not (buy_window(now) if action["kind"] == "buy" else self.signal_window(now)):
             action = None
         decision_now = datetime.now()
         if (not fresh_quote(quote, day, decision_now)
                 or not 0 <= (decision_now-received_at).total_seconds() <= 5):
             return
         now = decision_now
-        if action and not self.signal_window(now):
+        if action and not (buy_window(now) if action["kind"] == "buy" else self.signal_window(now)):
             return
         if action:
             self.client.command(code, book, quote=quote, now=now,

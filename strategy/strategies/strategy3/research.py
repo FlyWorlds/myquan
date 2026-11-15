@@ -46,8 +46,12 @@ def simulate(frames, policy=Policy(), start='2020-01-01', end='2026-10-21', init
                 reason = '日低破位次开止损'
             elif policy.stop_trigger == 'intraday' and age == 1 and prev.low <= stop_level:
                 reason = 'T+1次开止损'
+            elif (getattr(policy, 'trailing_drawdown', 0) > 0 and pos.get('peak', 0) > 0 and
+                  ((pos['peak'] - avg) / avg >= getattr(policy, 'trailing_profit_threshold', 0.0)) and
+                  ((pos['peak'] - prev.close) / pos['peak'] >= policy.trailing_drawdown)):
+                reason = f"峰值回撤{policy.trailing_drawdown*100:.1f}%出场"
             elif age >= policy.hold:
-                reason = '到期'
+                reason = f"持股到期({policy.hold}天)平仓"
             elif policy.take > 0 and prev.close >= (pos['target_px'] if policy.take_mode in ('anchor','swing_top','structure') else avg * (1+policy.take)) and not pos['reduced']:
                 reason = '分批止盈'
             elif pos['reduced'] and pos.get('second_target_px') and prev.close >= pos['second_target_px']:

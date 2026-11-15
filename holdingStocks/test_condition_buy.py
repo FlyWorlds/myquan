@@ -204,6 +204,30 @@ class TestConditionDatabase(unittest.TestCase):
         self.assertEqual(trade["quote_age_ms"], 0)
         self.assertEqual(self.state["ledger"]["entries"][0]["execution_quote_time"], str(NOW))
 
+    def test_auction_commits_at_0925_while_continuous_window_is_closed(self):
+        early = datetime(2026, 10, 15, 9, 25, 3)
+        class AuctionClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return early
+        orders = self.state["holdings"]["condition_buy_orders"]["orders"]
+        orders["001266"].update(kind="auction_open", price=10., signal_factor="factor29")
+        q = quote(last_ts=str(early), last=10., high=10., low=10.)
+        with patch.object(index, "datetime", AuctionClock), \
+             patch.object(index, "is_signal_window", return_value=False), \
+             patch.object(index, "calendar_is_trading_day", return_value=True):
+            index._execute_condition_quote("000070", q, early)
+            self.assertEqual(self.state["trades"], [])
+            index._execute_condition_quote("001266", q, early)
+            index._execute_condition_quote("001266", q, early)
+        self.assertEqual(len(self.state["trades"]), 1)
+        trade = self.state["trades"][0]
+        self.assertEqual(trade["signal_factor"], "factor29")
+        self.assertEqual(trade["time"], str(early))
+        self.assertEqual(trade["execution_quote_time"], str(early))
+        self.assertEqual(trade["price"], 10.)
+        self.assertEqual(self.state["ledger"]["entries"][0]["order_id"], trade["order_id"])
+
     def test_waiting_for_open_settlement_cannot_reuse_a_stale_clock(self):
         clock = [NOW]
         class SlowClock(datetime):

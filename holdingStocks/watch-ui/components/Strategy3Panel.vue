@@ -66,18 +66,58 @@ const stopLabel = computed(() => {
 })
 const pct = (v?: number | null) => v == null ? '—' : `${(v * 100).toFixed(1)}%`
 const num = (v?: number | null) => v == null ? '—' : v.toFixed(2)
+const activeTab = ref<'monitor' | 'backtest'>('monitor')
 </script>
 
 <template>
   <div class="space-y-4">
-    <section class="card p-4">
-      <div class="flex flex-wrap justify-between gap-2">
-        <h3 class="text-base font-bold">鲍鱼捞饭 · 日线破位止跌</h3>
-        <div class="flex items-center gap-3">
-          <span class="text-xs text-amber-600">手动监控 · 不自动买入</span>
-          <button class="rounded-lg bg-accent px-3 py-2 text-sm text-white disabled:opacity-50" :disabled="scanning" @click="startScan">{{ scanning ? '扫描中…' : '扫描中证1000监控票' }}</button>
-        </div>
+    <!-- 顶部视图切换：实时监控 vs 多维回测 -->
+    <div class="flex items-center justify-between border-b border-ui-hairline pb-2">
+      <div class="inline-flex rounded-lg bg-ui-surface-2/60 p-1 text-xs">
+        <button
+          type="button"
+          class="rounded-md px-4 py-1.5 font-bold transition"
+          :class="activeTab === 'monitor' ? 'bg-accent text-white shadow' : 'text-ui-text-3 hover:text-ui-text'"
+          @click="activeTab = 'monitor'"
+        >
+          实时监控与恐慌度
+        </button>
+        <button
+          type="button"
+          class="rounded-md px-4 py-1.5 font-bold transition ml-1"
+          :class="activeTab === 'backtest' ? 'bg-accent text-white shadow' : 'text-ui-text-3 hover:text-ui-text'"
+          @click="activeTab = 'backtest'"
+        >
+          ⚡ 策略3多维参数回测平台
+        </button>
       </div>
+      <span class="text-xs text-ui-text-3">
+        {{ activeTab === 'monitor' ? '中证1000日线破位止跌形态观察' : '支持持股时间与峰值/成本回撤条件自定义回测' }}
+      </span>
+    </div>
+
+    <!-- 多维回测控制台视图 -->
+    <div v-if="activeTab === 'backtest'">
+      <Strategy3BacktestConsole />
+    </div>
+
+    <!-- 实时监控视图 -->
+    <div v-else class="space-y-4">
+      <section class="card p-4">
+        <div class="flex flex-wrap justify-between gap-2">
+          <h3 class="text-base font-bold">鲍鱼捞饭 · 日线破位止跌</h3>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-amber-600">手动监控 · 不自动买入</span>
+            <button
+              type="button"
+              class="rounded-lg bg-ui-surface-2 border border-accent/40 text-accent px-3 py-2 text-sm font-bold hover:bg-accent hover:text-white transition"
+              @click="activeTab = 'backtest'"
+            >
+              ⚡ 运行策略3回测
+            </button>
+            <button class="rounded-lg bg-accent px-3 py-2 text-sm text-white disabled:opacity-50" :disabled="scanning" @click="startScan">{{ scanning ? '扫描中…' : '扫描中证1000监控票' }}</button>
+          </div>
+        </div>
       <p class="mt-2 text-sm text-ui-text-2">底分型 A → 向上一笔 → 顶分型 B → 相邻下行笔破 A → 量价衰竭观察</p>
       <div class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2">
         <p class="text-sm">{{ job.message || '尚未扫描，股票池为空' }}<template v-if="job.total">（{{ job.done || 0 }}/{{ job.total }}）</template></p>
@@ -141,5 +181,6 @@ const num = (v?: number | null) => v == null ? '—' : v.toFixed(2)
         </tr><tr v-if="!rows.length"><td colspan="14" class="p-6 text-center text-ui-text-3">暂无监控票；点击上方按钮扫描，有破前低预警的票才进入列表</td></tr></tbody>
       </table></div>
     </section>
+    </div>
   </div>
 </template>

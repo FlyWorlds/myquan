@@ -36,6 +36,8 @@ class Policy:
     stop_buffer_atr: float = .3
     stop_buffer_pct: float = 0.
     stop_trigger: str = "close"
+    trailing_drawdown: float = 0.
+    trailing_profit_threshold: float = 0.
 
     def dict(self):
         return asdict(self)

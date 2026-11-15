@@ -16,6 +16,82 @@ const rows = computed<Strategy38Row[]>(() => props.payload?.rows || [])
 
 const isVetoCash = computed(() => Boolean(step1.value?.veto_cash))
 const activeTab = ref<'live' | 'backtest'>('live')
+
+const scanning = ref(false)
+const syncSelf = ref(false)
+const scanProgress = ref<{ stage: string; percent: number; completed?: number; total?: number } | null>(null)
+const scanError = ref('')
+const localPayload = ref<Strategy38Payload | null>(null)
+const currentPayload = computed(() => localPayload.value || props.payload)
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+async function checkScanStatus() {
+  try {
+    const res = await fetch('/api/strategy38/scan')
+    if (!res.ok) return
+    const data = await res.json()
+    scanning.value = Boolean(data.running)
+    if (data.progress) scanProgress.value = data.progress
+    if (data.error) scanError.value = data.error
+    if (!data.running && scanning.value) {
+      scanning.value = false
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+      await refreshPayload()
+    }
+  } catch {}
+}
+
+async function refreshPayload() {
+  try {
+    const res = await fetch('/api/strategy38/payload')
+    if (res.ok) {
+      localPayload.value = await res.json()
+    }
+  } catch {}
+}
+
+async function triggerScan() {
+  if (scanning.value) return
+  scanning.value = true
+  scanError.value = ''
+  try {
+    const res = await fetch('/api/strategy38/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ top_n: 15, recent_hit_days: 5, sync_self: syncSelf.value }),
+    })
+    const data = await res.json()
+    if (!res.ok || data.error) throw new Error(data.error || '扫描触发失败')
+    if (!pollTimer) {
+      pollTimer = setInterval(async () => {
+        try {
+          const r = await fetch('/api/strategy38/scan')
+          if (r.ok) {
+            const s = await r.json()
+            scanning.value = Boolean(s.running)
+            if (s.progress) scanProgress.value = s.progress
+            if (!s.running) {
+              if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+              await refreshPayload()
+            }
+          }
+        } catch {}
+      }, 1500)
+    }
+  } catch (err: any) {
+    scanning.value = false
+    scanError.value = err?.message || '网络异常'
+  }
+}
+
+onMounted(() => {
+  void checkScanStatus()
+})
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 </script>
 
 <template>
@@ -102,15 +178,46 @@ const activeTab = ref<'live' | 'backtest'>('live')
     </div>
 
     <!-- 策略四步流转架构说明横幅 -->
-    <div class="card p-4">
-      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-ui-hairline pb-3">
+    <div class="card p-4 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ui-hairline pb-3">
         <div class="flex items-center gap-2">
           <span class="rounded bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">执行流水线</span>
           <h3 class="text-sm font-semibold">日线四步闭环漏斗架构</h3>
+          <span v-if="currentPayload?.as_of" class="text-xs text-ui-text-3 font-normal">
+            (快照时间: {{ currentPayload.as_of }})
+          </span>
         </div>
-        <div class="text-xs text-ui-text-3">
-          交易阶段：<span class="font-semibold text-ui-text">{{ phase || '盘中监控' }}</span>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="inline-flex items-center gap-1.5 text-xs text-ui-text-2 cursor-pointer">
+            <input v-model="syncSelf" type="checkbox" class="accent-accent rounded" />
+            <span>入选标的自动同步自选池</span>
+          </label>
+          <button
+            type="button"
+            class="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white shadow hover:opacity-90 transition disabled:opacity-50 flex items-center gap-1.5"
+            :disabled="scanning"
+            @click="triggerScan"
+          >
+            <span v-if="scanning" class="inline-block animate-spin">⌛</span>
+            <span v-else>🔍</span>
+            <span>{{ scanning ? '全市场扫描中…' : '重新扫描全市场起爆标的' }}</span>
+          </button>
         </div>
+      </div>
+
+      <!-- 扫描进度条与错误反馈 -->
+      <div v-if="scanning && scanProgress" class="rounded-lg bg-accent/10 border border-accent/20 p-2.5 text-xs space-y-1">
+        <div class="flex justify-between items-center text-accent">
+          <span class="font-bold">{{ scanProgress.stage }}</span>
+          <span>{{ scanProgress.percent }}%</span>
+        </div>
+        <div class="h-1.5 w-full bg-ui-hairline rounded-full overflow-hidden">
+          <div class="h-full bg-accent transition-all duration-300" :style="{ width: `${scanProgress.percent}%` }" />
+        </div>
+      </div>
+
+      <div v-if="scanError" class="rounded-lg bg-red-500/10 border border-red-500/30 p-2 text-xs text-red-400">
+        {{ scanError }}
       </div>
 
       <div class="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">

@@ -1,0 +1,85 @@
+{
+  "latest": {
+    "params": {
+      "universe": "zz1000",
+      "start_date": "2026-11-13",
+      "end_date": "2026-11-13",
+      "benchmark": "000852",
+      "initial_capital": 1000000,
+      "max_positions": 5,
+      "single_position_max_pct": 0.2,
+      "max_hold_days": 10,
+      "enable_trailing_drawdown": true,
+      "trailing_drawdown_pct": 0.08,
+      "trailing_profit_threshold": 0.02,
+      "stop_loss_pct": -0.05,
+      "take_profit_pct": 0.1,
+      "commission_rate": 0.00015,
+      "stamp_tax_rate": 0.0005,
+      "slippage_rate": 0.001
+    },
+    "updated_at": "2026-11-13 12:01:02",
+    "is_single_day": true,
+    "target_day": "2026-11-13",
+    "summary": {
+      "strategy_return_pct": 0.0,
+      "benchmark_return_pct": 0.0,
+      "alpha_pct": 0.0,
+      "annualized_return_pct": 0.0,
+      "max_drawdown_pct": 0.0,
+      "sharpe_ratio": 0.0,
+      "calmar_ratio": 0.0,
+      "win_rate_pct": 0.0,
+      "profit_factor": 0.0,
+      "total_trades": 0,
+      "win_trades": 0,
+      "loss_trades": 0,
+      "avg_holding_days": 0.0,
+      "max_holding_days": 10,
+      "initial_capital": 1000000.0,
+      "final_capital": 1000000.0,
+      "universe_count": 645,
+      "today_signal_count": 0
+    },
+    "dates": [
+      "2026-11-13"
+    ],
+    "equity_curve": [
+      0.0
+    ],
+    "benchmark_curve": [
+      0.0
+    ],
+    "alpha_curve": [
+      0.0
+    ],
+    "drawdown_curve": [
+      0.0
+    ],
+    "daily_returns": [
+      0.0
+    ],
+    "trades": [],
+    "today_signals": [],
+    "exit_reason_breakdown": [],
+    "stock_contributions": []
+  },
+  "params": {
+    "universe": "zz1000",
+    "start_date": "2026-11-13",
+    "end_date": "2026-11-13",
+    "benchmark": "000852",
+    "initial_capital": 1000000,
+    "max_positions": 5,
+    "single_position_max_pct": 0.2,
+    "max_hold_days": 10,
+    "enable_trailing_drawdown": true,
+    "trailing_drawdown_pct": 0.08,
+    "trailing_profit_threshold": 0.02,
+    "stop_loss_pct": -0.05,
+    "take_profit_pct": 0.1,
+    "commission_rate": 0.00015,
+    "stamp_tax_rate": 0.0005,
+    "slippage_rate": 0.001
+  }
+}

@@ -58,6 +58,9 @@ def auction_entry_blocked(open_px, prev_close, *, limit_up_pct=.10) -> bool:
 
 
 def is_trigger(order: dict, quote: dict, received_at: datetime, now: datetime) -> bool:
+    # 午后 13:00 后严禁新开仓买入
+    if now.strftime("%H:%M:%S") >= "13:00:00":
+        return False
     from strategy1_entry import effective_order, phase_allowed
     if not phase_allowed(order, now):
         return False
@@ -81,10 +84,11 @@ def is_trigger(order: dict, quote: dict, received_at: datetime, now: datetime) -
         if not armed or not at or not boundary or at < armed or at <= boundary:
             return False
         clock = at.strftime("%H:%M:%S")
-        if not ("09:30:00" <= clock <= "11:30:00" or "13:00:00" <= clock < "15:00:00"):
+        start = "09:25:00" if order.get("kind") == "auction_open" else "09:30:00"
+        if not (start <= clock <= "11:30:00"):
             return False
-        # An open-fill auction order must have been prepared before the open and
-        # observed immediately at the bell; late quotes cannot backfill that price.
+        # Auction orders require pre-bell preparation and a fresh official-open
+        # observation from 09:25; late quotes cannot backfill that price.
         if order.get("kind") == "auction_open" and not (
                 armed.strftime("%H:%M:%S") < "09:30:00" and clock <= "09:30:05"):
             return False

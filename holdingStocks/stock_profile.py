@@ -537,8 +537,8 @@ def _fetch_survey(code: str) -> dict[str, Any]:
 def _fetch_quote_tencent(code: str) -> dict[str, Any]:
     """腾讯行情接口（http://qt.gtimg.cn）：单次请求返回总市值/流通市值/PE(动)/PE(TTM)/PB/涨跌幅。"""
     sina = _sina_of(code).lower()
-    # 优先 http 避免代理及特定 macOS 环境下 TLS 握手的 SSLEOFError
-    urls = [f"http://qt.gtimg.cn/q={sina}", f"https://qt.gtimg.cn/q={sina}"]
+    # 优先 https://web.sqt.gtimg.cn，避免特定网络环境下普通接口超时
+    urls = [f"https://web.sqt.gtimg.cn/q={sina}", f"http://qt.gtimg.cn/q={sina}", f"https://qt.gtimg.cn/q={sina}"]
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
         "Referer": "http://gu.qq.com/",

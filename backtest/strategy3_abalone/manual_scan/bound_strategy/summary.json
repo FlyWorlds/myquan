@@ -1,0 +1,15 @@
+{
+  "total_return_pct": 9.722366334050104,
+  "max_drawdown_pct": -11.553866421690607,
+  "sharpe_ratio": 0.528343615044307,
+  "n_trades": 218,
+  "win_rate": 0.42660550458715596,
+  "mean_hold_days": 8.53211009174312,
+  "open_positions": 5,
+  "final_nav": 1097223.663340501,
+  "start": "2025-01-02",
+  "end": "2026-11-02",
+  "universe_count": 643,
+  "universe": "manual",
+  "universe_note": "当前行情齐备子集，有覆盖/名单偏差；不代表完整历史成分股回测"
+}

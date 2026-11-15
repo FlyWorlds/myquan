@@ -690,13 +690,17 @@ def patch_row_live_quote(
         changed = True
     row["_open_finalized"] = open_finalized
     if quote:
-        row["_quote_ts"] = str(
+        q_time = str(
             quote.get("last_ts")
             or quote.get("ts")
             or quote.get("time")
             or quote.get("timestamp")
             or ""
         )
+        row["_quote_ts"] = q_time
+        if q_time and row.get("更新") != q_time:
+            row["更新"] = q_time
+            changed = True
     # 快刷也必须同步重算核定买点；否则全量扫描留下的竞价旧买点会继续喂给 simulator。
     # 因子29 武装后买点锁定正式开盘，不得被突破阈值盖掉。
     if open_finalized and open_px is not None:
@@ -977,8 +981,10 @@ def patch_snapshot_live_quotes(
         sina_of = _sina_of
 
     def _q_for(row: dict[str, Any]) -> dict[str, Any] | None:
-        code = str(row.get("代码") or "")
-        if not code:
+        raw_code = str(row.get("代码") or row.get("code") or row.get("symbol") or "")
+        from watch_config import code_key
+        code = code_key(raw_code)
+        if not code or code == "000000":
             return None
         try:
             return get_quote(sina_of(code))
@@ -992,6 +998,16 @@ def patch_snapshot_live_quotes(
             changed = True
     snap["holdings"] = holdings
 
+    # 今日平仓与当日预警卡片
+    for key in ("buySignals", "closedHoldings"):
+        sub_list = list(snap.get(key) or [])
+        if not sub_list:
+            continue
+        for r in sub_list:
+            if isinstance(r, dict) and patch_row_live_quote(r, _q_for(r), enrich_hold_pnl=False):
+                changed = True
+        snap[key] = sub_list
+
     for key in ("strategy1", "strategy16", "strategy16b", "strategy17"):
         rows = list(snap.get(key) or [])
         if not rows:
@@ -1002,6 +1018,47 @@ def patch_snapshot_live_quotes(
             ):
                 changed = True
         snap[key] = rows
+
+    # strategy3 可能是 dict 包 rows
+    s3 = snap.get("strategy3")
+    if isinstance(s3, dict):
+        s3_rows = list(s3.get("rows") or [])
+        for r in s3_rows:
+            if isinstance(r, dict) and patch_row_live_quote(r, _q_for(r), enrich_hold_pnl=False):
+                changed = True
+        s3["rows"] = s3_rows
+    elif isinstance(s3, list):
+        for r in s3:
+            if isinstance(r, dict) and patch_row_live_quote(r, _q_for(r), enrich_hold_pnl=False):
+                changed = True
+
+    # strategy37
+    s37 = snap.get("strategy37")
+    if isinstance(s37, dict):
+        s37_rows = list(s37.get("rows") or [])
+        for r in s37_rows:
+            if isinstance(r, dict) and patch_row_live_quote(r, _q_for(r), enrich_hold_pnl=False):
+                changed = True
+        s37["rows"] = s37_rows
+
+    # strategy38
+    s38 = snap.get("strategy38")
+    if isinstance(s38, dict):
+        for sub_key in ("rows", "candidates", "orders"):
+            sub_rows = list(s38.get(sub_key) or [])
+            for r in sub_rows:
+                if isinstance(r, dict) and patch_row_live_quote(r, _q_for(r), enrich_hold_pnl=False):
+                    changed = True
+            s38[sub_key] = sub_rows
+
+    # strategy8
+    s8 = snap.get("strategy8")
+    if isinstance(s8, dict):
+        s8_rows = list(s8.get("rows") or [])
+        for r in s8_rows:
+            if isinstance(r, dict) and patch_row_live_quote(r, _q_for(r), enrich_hold_pnl=False):
+                changed = True
+        s8["rows"] = s8_rows
 
     # strategy15 可能是 list 或 dict.rows
     s15 = snap.get("strategy15")

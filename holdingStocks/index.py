@@ -2808,7 +2808,10 @@ def publish_watch_snapshot(
     except Exception as e:  # noqa: BLE001
         print(f"[{_now()}] 日结算记录失败（继续）: {e}")
     def _batch_quote(sinas: list[str]) -> dict[str, dict[str, Any]]:
-        batch = fetch_sina_batch([s.lower() for s in sinas])
+        from quote_feed import fetch_tencent_batch
+        batch = fetch_tencent_batch([s.lower() for s in sinas])
+        if not batch:
+            batch = fetch_sina_batch([s.lower() for s in sinas], timeout=1.5)
         out: dict[str, dict[str, Any]] = {}
         for s in sinas:
             spot = batch.get(s.lower())
@@ -2835,24 +2838,6 @@ def publish_watch_snapshot(
         strategy36_payload = previous.get("strategy36") or (_last_watch_snapshot or {}).get("strategy36") or {}
         strategy37_payload = previous.get("strategy37") or (_last_watch_snapshot or {}).get("strategy37") or {}
         strategy38_payload = previous.get("strategy38") or (_last_watch_snapshot or {}).get("strategy38") or {}
-        if not strategy8:
-            try:
-                from strategy8_watch import build_strategy8_payload
-                strategy8 = build_strategy8_payload(session=session_today or None, get_quote=get_quote, batch_quote=_batch_quote)
-            except Exception:
-                pass
-        if not strategy37_payload:
-            try:
-                from strategy37_watch import get_strategy37_watch_payload
-                strategy37_payload = get_strategy37_watch_payload()
-            except Exception:
-                pass
-        if not strategy38_payload:
-            try:
-                from strategy38_watch import get_strategy38_watch_payload
-                strategy38_payload = get_strategy38_watch_payload()
-            except Exception:
-                pass
 
     if include_strategy_panels:
         try:
@@ -2976,6 +2961,14 @@ def publish_watch_snapshot(
         snapshot["signalScanSec"] = signal_scan_sec
     # Closed fills must come from the same immutable revision as the account.
     # A quote write during enrichment must not remove the independent closed list.
+    active_quote_fn = get_quote or (_watch_feed.get_quote if _watch_feed else None)
+    if active_quote_fn is not None:
+        try:
+            from watch_snapshot import patch_snapshot_live_quotes
+            from watch_config import sina_of
+            patch_snapshot_live_quotes(snapshot, get_quote=active_quote_fn, sina_of=sina_of)
+        except Exception:
+            pass
     _enrich_snapshot_comprehensive_trade_returns(snapshot, read_model=frame)
     _stamp_snapshot_liveness(snapshot, clock=clock_now)
     keep_last = False
@@ -6113,7 +6106,12 @@ def _apply_portfolio_slots(
 
     bought_codes: list[str] = []
     skipped: list[dict[str, Any]] = []
-    if phase_now == "continuous" and free > 0 and buys_left > 0 and not _CONDITION_BUY_ACTIVE:
+    now_hms = datetime.now().strftime("%H:%M:%S")
+    if now_hms >= "13:00:00":
+        for _rank, _dist, code, r in candidates:
+            if _row_hit_buy(r):
+                _mark_slot_buy_skip(r, "NOON_BUY_PROHIBITED", "午后13:00后严禁新开仓追高")
+    elif phase_now == "continuous" and free > 0 and buys_left > 0 and not _CONDITION_BUY_ACTIVE:
         # 入槽：只吃「已触买」。先平再买；第一梯队现价、其后新触发买点
         hit_queue = [
             (rank, dist, code, r)
@@ -8635,21 +8633,25 @@ def pct_vs_open(open_px: float, px: float) -> float | None:
 def _fetch_tencent_index(code: str) -> dict[str, Any] | None:
     try:
         import urllib.request
-        url = f"http://qt.gtimg.cn/q={code.lower()}"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            text = resp.read().decode("gbk", errors="ignore")
-            parts = text.split("~")
-            if len(parts) > 33:
-                price = float(parts[3])
-                chg_points = float(parts[31]) if parts[31] else 0.0
-                chg_pct = float(parts[32]) if parts[32] else 0.0
-                if price > 0:
-                    return {
-                        "price": price,
-                        "chg_points": chg_points,
-                        "chg_pct": chg_pct,
-                    }
+        for ep in ("https://web.sqt.gtimg.cn", "http://qt.gtimg.cn"):
+            try:
+                url = f"{ep}/q={code.lower()}"
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=1.5) as resp:
+                    text = resp.read().decode("gbk", errors="ignore")
+                    parts = text.split("~")
+                    if len(parts) > 33:
+                        price = float(parts[3])
+                        chg_points = float(parts[31]) if parts[31] else 0.0
+                        chg_pct = float(parts[32]) if parts[32] else 0.0
+                        if price > 0:
+                            return {
+                                "price": price,
+                                "chg_points": chg_points,
+                                "chg_pct": chg_pct,
+                            }
+            except Exception:
+                continue
     except Exception:
         pass
     return None
@@ -8658,7 +8660,7 @@ def _fetch_tencent_index(code: str) -> dict[str, Any] | None:
 def fetch_indices() -> list[dict[str, Any]]:
     """拉取盯盘指数（中证全指 / 上证指数 / 深证成指）：最新点数、涨跌点数、涨跌幅。
 
-    优先新浪批量，未命中时尝试腾讯行情接口，最后备用 akshare。
+    优先腾讯批量行情接口（web.sqt.gtimg.cn 毫秒级响应），次选新浪批量，最后备用 akshare。
     """
     blanks = [
         {
@@ -8672,14 +8674,55 @@ def fetch_indices() -> list[dict[str, Any]]:
         }
         for x in INDEX_WATCH
     ]
-    batch: dict[str, dict[str, Any]] = {}
-    try:
-        batch = fetch_sina_batch([x["code"] for x in INDEX_WATCH])
-    except Exception:  # noqa: BLE001
-        batch = {}
+    # 优先腾讯极速批量接口 (通常 <0.15s)
+    codes_str = ",".join(x["code"].lower() for x in INDEX_WATCH)
     out: list[dict[str, Any]] = []
     missing: list[dict[str, str]] = []
-    for item, blank in zip(INDEX_WATCH, blanks, strict=True):
+    try:
+        import urllib.request
+        url = f"https://web.sqt.gtimg.cn/q={codes_str}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            text = resp.read().decode("gbk", errors="ignore")
+            lines_by_code: dict[str, list[str]] = {}
+            for line in text.splitlines():
+                if '="' in line:
+                    k = line.split('="')[0].split("_")[-1].lower()
+                    lines_by_code[k] = line.split("~")
+            for item in INDEX_WATCH:
+                parts = lines_by_code.get(str(item["code"]).lower()) or []
+                if len(parts) > 33:
+                    try:
+                        px = float(parts[3])
+                        if px > 0:
+                            out.append({
+                                "code": item["code"],
+                                "name": item["name"],
+                                "market": item["market"],
+                                "price": px,
+                                "chg_points": float(parts[31]) if parts[31] else 0.0,
+                                "chg_pct": float(parts[32]) if parts[32] else 0.0,
+                                "error": None,
+                            })
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                missing.append(item)
+    except Exception:
+        missing = list(INDEX_WATCH)
+        out = []
+
+    if not missing:
+        return out
+
+    batch: dict[str, dict[str, Any]] = {}
+    try:
+        batch = fetch_sina_batch([x["code"] for x in missing], timeout=2.0)
+    except Exception:  # noqa: BLE001
+        batch = {}
+    still_missing: list[dict[str, str]] = []
+    for item in missing:
+        blank = next((b for b in blanks if b["code"] == item["code"]), item)
         spot = batch.get(str(item["code"]).lower())
         parsed = _index_from_sina_spot(item, spot) if spot else None
         if parsed is None:
@@ -8697,10 +8740,11 @@ def fetch_indices() -> list[dict[str, Any]]:
         if parsed is not None:
             out.append(parsed)
         else:
-            missing.append(item)
+            still_missing.append(item)
             out.append(dict(blank, error="未找到指数"))
-    if not missing:
+    if not still_missing:
         return out
+    missing = still_missing
 
     try:
         with AKSHARE_CALL_LOCK:
@@ -8900,8 +8944,25 @@ def _collect_quote_runtime_rows(get_quote=None):
     slots_for_rows = slot_meta(data)
     day = _calendar_signal_session()
     calculation_ready = is_threshold_ready()
-    quote_fn = (_DATABASE_QUOTES_CLIENT.get if _CONDITION_BUY_ACTIVE and _DATABASE_QUOTES_CLIENT is not None
-                else get_quote or (_watch_feed.get_quote if _watch_feed else lambda _: None))
+    def _live_quote_fn(sina: str) -> dict[str, Any] | None:
+        q = None
+        if _CONDITION_BUY_ACTIVE and _DATABASE_QUOTES_CLIENT is not None:
+            try:
+                q = _DATABASE_QUOTES_CLIENT.get(sina)
+            except Exception:
+                pass
+        if not q and _watch_feed is not None:
+            try:
+                q = _watch_feed.get_quote(sina)
+            except Exception:
+                pass
+        if not q and get_quote is not None:
+            try:
+                q = get_quote(sina)
+            except Exception:
+                pass
+        return q
+    quote_fn = _live_quote_fn
     held_rows, _ = build_boot_holdings(model, session=day, clock=_now(), get_quote=quote_fn)
     by_code = {r["代码"]: r for r in held_rows}
     books = _STRATEGY_BOOKS_CLIENT.snapshot() if _STRATEGY_BOOKS_CLIENT else {}
@@ -13302,6 +13363,9 @@ def _on_condition_quote(sina: str, quote: dict[str, Any], received_at: datetime)
     held = (data.get("positions") or {}).get(code, {})
     if int(held.get("qty") or 0) > 0:
         _execute_quote_exit_if_needed(code, quote, received_at)
+    # 午后 13:00 后严禁新开仓追高（持仓空出也不买入）
+    if datetime.now().strftime("%H:%M:%S") >= "13:00:00":
+        return
     order = ((data.get("condition_buy_orders") or {}).get("orders") or {}).get(code)
     committed = getattr(_HOLDINGS_STORE, "_state", None)
     if isinstance(committed, dict):
@@ -13439,13 +13503,20 @@ def _execute_condition_open_protect() -> None:
         _settle_condition_open_protect(load_holdings(), datetime.now())
 
 
+def _condition_buy_execution_window(now: datetime) -> bool:
+    """Auction buys start at 09:25; individual orders still enforce their phase."""
+    if "09:25:00" <= now.strftime("%H:%M:%S") < "09:30:00":
+        return calendar_is_trading_day(now)
+    return is_signal_window(now) and now.strftime("%H:%M:%S") < "13:00:00"
+
+
 @paper_mutation
 def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: datetime) -> None:
     """Only this path buys in watch mode; limits and fill share one DB mutation."""
     from condition_buy import fresh_quote, is_trigger
 
     now = datetime.now()
-    if not _CONDITION_BUY_ACTIVE or not is_signal_window(now):
+    if not _CONDITION_BUY_ACTIVE or not _condition_buy_execution_window(now):
         return
     data = load_holdings()
     day = str(trading_session_date())
@@ -13458,7 +13529,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
         return
     _settle_condition_open_protect(data, now)
     now = datetime.now()
-    if not is_signal_window(now):
+    if not _condition_buy_execution_window(now):
         return
     # Each committed exit replaces nested state objects; never mutate the old order reference.
     book = data.get("condition_buy_orders") or {}
@@ -13478,7 +13549,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
                      key=lambda o: int(o.get("sequence") or 0))
     for candidate in pending:
         now = datetime.now()
-        if not is_signal_window(now):
+        if not _condition_buy_execution_window(now):
             break
         if candidate.get("id") not in _CONDITION_VERIFIED_IDS:
             continue
@@ -13546,7 +13617,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
                 changed = True
             continue
         now = datetime.now()
-        if not is_signal_window(now) or not is_trigger(candidate, q, receipt, now):
+        if not _condition_buy_execution_window(now) or not is_trigger(candidate, q, receipt, now):
             continue
         decision = now.strftime("%Y-%m-%d %H:%M:%S")
         metadata = dict(is_rebuy=is_rebuy, signal_factor=candidate.get("signal_factor") or ("factor29" if candidate.get("kind") == "auction_open" else "factor26"), order_id=candidate["id"], signal_time=candidate["signal_time"],
@@ -13698,7 +13769,7 @@ def cmd_watch(args: argparse.Namespace) -> None:
     primary = sorted(primary, key=lambda item: _code_key(item["code"]) not in held_codes)
     s1_wl = strategy1_watchlist()
     s16_wl = strategy16_watchlist()
-    # SSE 只挂热池；新浪批量 = 热池 ∪ 策略一 ∪ 策略十六（确保各自独立 Tab 均有实时行情）
+    # SSE 只挂热池；批量轮询 = 热池 ∪ 策略一 ∪ 策略十六 ∪ 持仓标的 ∪ 自选 ∪ 策略3/37/38（确保所有 Tab 均有实时秒级跳动行情）
     sinas_sse = [str(w["sina"]).lower() for w in primary][: int(MAX_SSE_QUOTES)]
     seen_s = set(sinas_sse)
     sinas_batch = list(sinas_sse)
@@ -13708,6 +13779,54 @@ def cmd_watch(args: argparse.Namespace) -> None:
             continue
         seen_s.add(s)
         sinas_batch.append(s)
+
+    # 扩展全站策略池与持仓代码到极速批量订阅池
+    try:
+        # 持仓代码
+        for c in live_positions.keys():
+            s = _sina_of(c).lower()
+            if s and s not in seen_s:
+                seen_s.add(s)
+                sinas_batch.append(s)
+        # 自选股
+        from watch_config import current_self_watchlist
+        for c, _ in current_self_watchlist():
+            s = _sina_of(c).lower()
+            if s and s not in seen_s:
+                seen_s.add(s)
+                sinas_batch.append(s)
+        # 策略3标的
+        from strategy.strategies.strategy3.manual_scan import OUT as S3_OUT
+        s3_f = S3_OUT / "snapshot.json"
+        if s3_f.exists():
+            for r in (json.loads(s3_f.read_text()).get("rows") or []):
+                cd = r.get("code")
+                if cd:
+                    s = _sina_of(cd).lower()
+                    if s and s not in seen_s:
+                        seen_s.add(s)
+                        sinas_batch.append(s)
+        # 策略37标的
+        from strategy37_watch import load_recent_signals
+        for r in load_recent_signals(50):
+            cd = r.get("代码")
+            if cd:
+                s = _sina_of(cd).lower()
+                if s and s not in seen_s:
+                    seen_s.add(s)
+                    sinas_batch.append(s)
+        # 策略38标的
+        from strategy38_watch import get_strategy38_watch_payload
+        p38 = get_strategy38_watch_payload()
+        for r in (p38.get("rows") or []) + (p38.get("candidates") or []) + (p38.get("orders") or []):
+            cd = r.get("代码") or r.get("code")
+            if cd:
+                s = _sina_of(cd).lower()
+                if s and s not in seen_s:
+                    seen_s.add(s)
+                    sinas_batch.append(s)
+    except Exception as e:
+        print(f"[{_now()}] 扩展行情订阅池失败（继续）: {e}")
     feed = QuoteFeedManager(
         sinas_batch,
         sse_sinas=sinas_sse,
@@ -14162,17 +14281,16 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 stop.wait(1)
         threading.Thread(target=strategy_books_sync, name="strategy-books-sync", daemon=True).start()
         def other_panels_loop():
+            from quote_feed import fetch_tencent_batch
+            batch = lambda sinas: {s.lower(): dict(q, _quote_source="tencent_batch") for s, q in fetch_tencent_batch(sinas).items()}
             while not stop.is_set():
-                if not _WATCH_FRONT_READY.wait(.5):
-                    continue
                 try:
                     day = _calendar_signal_session()
-                    batch = lambda sinas: {s: _quote_from_sina_spot(q) for s, q in fetch_sina_batch(sinas).items()}
                     panels = {}
                     try:
                         from strategy3_watch import build_strategy3_payload
                         panels["strategy3"] = build_strategy3_payload(session=day, get_quote=get_quote, batch_quote=batch)
-                    except Exception:
+                    except Exception as e:
                         pass
                     try:
                         from strategy35_watch import get_strategy35_timing_payload
@@ -14194,11 +14312,17 @@ def cmd_watch(args: argparse.Namespace) -> None:
                         panels["strategy38"] = get_strategy38_watch_payload()
                     except Exception:
                         pass
+                    try:
+                        from strategy8_watch import build_strategy8_payload
+                        panels["strategy8"] = build_strategy8_payload(session=day, get_quote=get_quote, batch_quote=batch)
+                    except Exception:
+                        pass
                     panels["indices"] = _QUOTE_RUNTIME_PANELS.get("indices") or fetch_indices_cached()
                     _QUOTE_RUNTIME_PANELS.update(panels)
+                    quote_patch_wake.set()
                 except Exception as exc:
                     print(f"[{_now()}] 其他策略后台刷新失败: {type(exc).__name__}: {exc}")
-                stop.wait(30)
+                stop.wait(10)
         threading.Thread(target=other_panels_loop, name="quote-runtime-panels", daemon=True).start()
         print("条件买单已启用：9:25后过门空仓武装；9:30起新鲜报价≥挂单价，按首次接收触发顺序模拟成交；旧全量扫描不再自动买入")
     url = _watch_browser_url(

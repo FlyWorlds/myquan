@@ -12,7 +12,7 @@ def phase_at(now):
         return 'auction_open'
     if '09:30:00' <= clock < '10:00:00':
         return 'breakout'
-    if '10:00:00' <= clock <= '11:30:00' or '13:00:00' <= clock < '15:00:00':
+    if '10:00:00' <= clock <= '11:30:00':
         return 'day_low_rebound'
     return None
 
@@ -35,9 +35,9 @@ def phase_allowed(order, now):
     if order.get('strategy') != 'strategy1':
         return True
     kind = order.get('kind')
-    # Auction is prepared during 09:25–09:30 and settled using the first audited bell quote.
+    # Audited official-open quotes may settle auction orders from 09:25.
     if kind == 'auction_open':
-        return '09:30:00' <= now.strftime('%H:%M:%S') <= '09:30:05'
+        return '09:25:00' <= now.strftime('%H:%M:%S') <= '09:30:05'
     return kind == phase_at(now)
 
 

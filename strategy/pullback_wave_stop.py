@@ -177,6 +177,11 @@ def detect_intrabar_ambiguity(
     peak_incl = max(peak, h)
     peak_gain = (peak_incl / cost - 1.0) if cost > 0 and peak_incl > 0 else 0.0
     hard_px = cost_hard_stop_px(cost, hard_pct=hard_pct, tick=tick)
+    # 浮盈保本锁定：只要盘中浮盈累积达到或超过 5.0%，止损线自动上移到成本价（保本线）
+    breakeven_locked = (peak_gain >= 0.05 - 1e-12) or (live_hi >= cost * 1.05 - 1e-12)
+    if breakeven_locked:
+        cost_line = floor_to_tick(cost, tick)
+        hard_px = max(hard_px, cost_line)
     gap_mode = str(hard_gap_mode or HARD_GAP_IMMEDIATE).strip().lower()
     if gap_mode not in HARD_GAP_MODES:
         gap_mode = HARD_GAP_IMMEDIATE
@@ -740,15 +745,21 @@ def working_stop_price(
     live_ok = pnl_exceeds(peak, cost, giveback_arm_pct)
     peak_gain = peak / cost - 1.0
     hard = cost_hard_stop_px(cost, hard_pct=hard_pct, tick=tick)
+    breakeven_locked = peak_gain >= 0.05 - 1e-12
+    if breakeven_locked:
+        hard = max(hard, floor_to_tick(cost, tick))
     if overnight_armed and (not live_ok):
         sess = max(float(session_peak or 0), float(day_open or 0), peak)
-        return "t1_peak_trail", t1_trail_stop_px(
+        trail = t1_trail_stop_px(
             sess,
             cost_px=cost,
             t1_trail_pct=t1_trail_pct,
             hard_pct=hard_pct,
             tick=tick,
         )
+        if breakeven_locked:
+            trail = max(trail, floor_to_tick(cost, tick))
+        return "t1_peak_trail", trail
     if live_ok and peak_gain < DEFAULT_LADDER_HALF_PCT - 1e-12:
         kind, px = mid_gain_first_stop(
             peak,
@@ -759,11 +770,16 @@ def working_stop_price(
             tick=tick,
         )
         if px > 0:
+            if breakeven_locked:
+                px = max(px, floor_to_tick(cost, tick))
             return (kind or "half_gain"), float(px)
-        return "hard_from_cost", hard
+        return ("breakeven_lock" if breakeven_locked else "hard_from_cost"), hard
     if live_ok and peak_gain + 1e-12 >= DEFAULT_LADDER_HALF_PCT:
-        return "peak_pullback", peak_pullback_half_price(peak, tick=tick)
-    return "hard_from_cost", hard
+        pb_px = peak_pullback_half_price(peak, tick=tick)
+        if breakeven_locked:
+            pb_px = max(pb_px, floor_to_tick(cost, tick))
+        return "peak_pullback", pb_px
+    return ("breakeven_lock" if breakeven_locked else "hard_from_cost"), hard
 
 
 def mid_gain_first_hit(
@@ -1192,6 +1208,11 @@ def eval_multi_tp_bar(
     peak_incl = max(peak, h)
     peak_gain = (peak_incl / cost - 1.0) if cost > 0 and peak_incl > 0 else 0.0
     hard_px = cost_hard_stop_px(cost, hard_pct=hard_pct, tick=tick)
+    # 浮盈保本锁定：只要盘中浮盈累积达到或超过 5.0%，止损线自动上移到成本价（保本线）
+    breakeven_locked = (peak_gain >= 0.05 - 1e-12) or (live_hi >= cost * 1.05 - 1e-12)
+    if breakeven_locked:
+        cost_line = floor_to_tick(cost, tick)
+        hard_px = max(hard_px, cost_line)
     gap_mode = str(hard_gap_mode or HARD_GAP_IMMEDIATE).strip().lower()
     if gap_mode not in HARD_GAP_MODES:
         gap_mode = HARD_GAP_IMMEDIATE
@@ -1261,12 +1282,15 @@ def eval_multi_tp_bar(
     )
     if mid_hit is not None:
         reason, px = mid_hit
+        if breakeven_locked:
+            px = max(px, floor_to_tick(cost, tick))
         if can_sell:
             return _finish(_full(reason, px, downside=True))
         return _finish({**empty, "peak_after": max(peak, h)})
     if hard_px > 0 and lo <= hard_px + 1e-12:
+        reason = "breakeven_lock" if (breakeven_locked and abs(hard_px - floor_to_tick(cost, tick)) <= 1e-9) else "hard_from_cost"
         if can_sell:
-            return _finish(_full("hard_from_cost", hard_px, downside=True))
+            return _finish(_full(reason, hard_px, downside=True))
         return _finish(_mark(hard_px))
 
     # 4) 大赚：10% 半仓优先；≥10% 后峰值回落 X 清仓

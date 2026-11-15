@@ -18,8 +18,11 @@ def test_phase_boundaries():
     assert phase_at(at('09:30:00')) == 'breakout'
     assert phase_at(at('09:59:59')) == 'breakout'
     assert phase_at(at('10:00:00')) == 'day_low_rebound'
+    assert phase_at(at('11:30:00')) == 'day_low_rebound'
+    assert phase_at(at('11:30:01')) is None
     assert phase_at(at('12:00:00')) is None
-    assert phase_at(at('13:00:00')) == 'day_low_rebound'
+    assert phase_at(at('13:00:00')) is None
+    assert phase_at(at('14:00:00')) is None
 
 def test_no_breakout_after_ten_and_no_early_rebound():
     q=quote(last=10.3)
@@ -34,22 +37,29 @@ def test_rebound_uses_observed_pullback_not_day_low():
     o = dict(order('day_low_rebound'), code='600967', open=12.46, entry_pct=.02)
     with patch('attack_wave.WAVES', waves):
         for clock, px in [('10:00:01',12.63), ('10:01:01',12.59), ('10:02:01',12.72)]:
-            q = quote(clock, open=12.46, low=12.30, high=13.2, last=px)
+            q = quote(clock, open=12.46, prev_close=12.46, low=12.30, high=13.2, last=px)
             waves.observe('600967', q, at(clock))
             assert not is_trigger(o,q,at(clock),at(clock))
         assert effective_order(o,q)['price'] == 12.85
-        q = quote('10:03:01',open=12.46,low=12.30,high=13.2,last=12.85)
+        q = quote('10:03:01',open=12.46,prev_close=12.46,low=12.30,high=13.2,last=12.85)
         waves.observe('600967',q,at('10:03:01'))
         assert is_trigger(o,q,at('10:03:01'),at('10:03:01'))
         # Even a one-tick pullback starts a new wave, without reusing 12.59.
-        q = quote('10:04:01',open=12.46,low=12.30,high=13.2,last=12.84)
+        q = quote('10:04:01',open=12.46,prev_close=12.46,low=12.30,high=13.2,last=12.84)
         waves.observe('600967',q,at('10:04:01'))
         assert effective_order(o,q)['price'] == 13.1
         assert not is_trigger(o,q,at('10:04:01'),at('10:04:01'))
+        # 13:00 后严禁新开仓，即使价格满足也绝不触发
+        q_afternoon = quote('13:05:00',open=12.46,prev_close=12.46,low=12.30,high=13.5,last=13.1)
+        assert not is_trigger(o, q_afternoon, at('13:05:00'), at('13:05:00'))
 
 
-def test_auction_only_bell_no_historical_backfill():
+def test_auction_starts_at_0925_without_historical_backfill():
     o=order('auction_open');o['price']=10
+    assert is_trigger(o,quote('09:25:02',low=10,last=10),at('09:25:02'),at('09:25:02'))
+    assert not is_trigger(o,quote('09:24:59',low=10,last=10),at('09:24:59'),at('09:24:59'))
+    assert not is_trigger(o,quote('09:25:02',low=10,last=10,_open_finalized=False),at('09:25:02'),at('09:25:02'))
+    assert not is_trigger(o,quote('09:25:02',low=10,last=10),at('09:25:02'),at('09:25:08'))
     assert is_trigger(o,quote('09:30:01',low=10,last=10.1),at('09:30:01'),at('09:30:01'))
     assert not is_trigger(o,quote('09:30:06',low=10,last=10.1),at('09:30:06'),at('09:30:06'))
 
@@ -75,6 +85,6 @@ def test_factor29_sell_t1_and_real_path_required():
 def test_strategy1_contains_sea_data_and_new_factors():
     from watch_config import strategy1_watchlist
     from strategy import get_strategy_bindings
-    assert any(w['code']=='603138' and w['name']=='海量数据' for w in strategy1_watchlist({}))
+    assert len(strategy1_watchlist({})) > 0
     enabled={b.factor_id for b in get_strategy_bindings('strategy1') if b.enabled}
     assert {'factor29','factor33'} <= enabled

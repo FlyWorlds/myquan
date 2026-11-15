@@ -537,20 +537,24 @@ class EastmoneySseFeed:
         self.on_log = on_log or (lambda _m: None)
 
     def run(self) -> None:
-        backoff = 1.0
+        backoff = 10.0
         url_i = 0
+        last_log_t = 0.0
         while not self.stop.is_set():
             url = _EM_SSE_URLS[url_i % len(_EM_SSE_URLS)]
             url_i += 1
             try:
                 self._stream_once(url)
-                backoff = 1.0
+                backoff = 10.0
             except Exception as e:  # noqa: BLE001
                 self.hub.mark_sse_down()
-                self.on_log(f"SSE {self.sina} 断开: {e}")
+                now_t = time.monotonic()
+                if now_t - last_log_t > 30.0:
+                    self.on_log(f"SSE {self.sina} 暂不可用（由极速批量兜底）: {e}")
+                    last_log_t = now_t
                 if self.stop.wait(backoff):
                     break
-                backoff = min(30.0, backoff * 1.8)
+                backoff = min(120.0, backoff * 1.5)
 
     def _stream_once(self, url: str) -> None:
         params = {
@@ -567,7 +571,7 @@ class EastmoneySseFeed:
             params=params,
             headers=_EM_HEADERS,
             stream=True,
-            timeout=(8, 60),
+            timeout=(2, 60),
         ) as resp:
             resp.raise_for_status()
             self.on_log(f"SSE 已连接 {self.sina} via {url.split('/')[2]}")
@@ -723,49 +727,50 @@ def fetch_sina_batch(sinas: list[str], *, timeout=8) -> dict[str, dict[str, Any]
     return out
 
 
-def fetch_tencent_batch(sinas: list[str], *, timeout=(2, 3)) -> dict[str, dict[str, Any]]:
+def fetch_tencent_batch(sinas: list[str], *, timeout=(2, 3), chunk_size: int = 60) -> dict[str, dict[str, Any]]:
     """Independent fallback with exchange timestamps and original OHLC fields."""
     out = {}
     if not sinas:
         return out
-    # Use a separate HTTPS host when the primary financial quote hosts are unavailable.
-    for endpoint in ("https://web.sqt.gtimg.cn", "https://qt.gtimg.cn"):
-        try:
-            proxies = {}
-            if sys.platform == "darwin":
-                # Unrelated *_PROXY variables can hide macOS proxy settings in urllib.
-                from urllib.request import getproxies_macosx_sysconf
-                proxies = {k: v for k, v in getproxies_macosx_sysconf().items() if k in ("http", "https")}
-            response = _quote_http_get(f"{endpoint}/q={','.join(sinas)}", timeout=timeout,
-                                    proxies=proxies)
-            response.raise_for_status()
-            for line in response.content.decode("gbk", "ignore").splitlines():
-                if '="' not in line:
-                    continue
-                left, raw = line.split('="', 1)
-                code = left.split("_")[-1].lower()
-                fields = raw.rstrip('";').split("~")
-                if code not in sinas or len(fields) < 35:
-                    continue
-                stamp = fields[30]
-                if len(stamp) != 14 or not stamp.isdigit():
-                    continue
-                try:
-                    timestamp = datetime.strptime(stamp, "%Y%m%d%H%M%S")
-                    last, prev, opening, high, low = [float(fields[i]) for i in (3, 4, 5, 33, 34)]
-                except (ValueError, TypeError):
-                    continue
-                if not all(math.isfinite(x) and x > 0 for x in (last, prev, opening, high, low)):
-                    continue
-                if low > min(opening, last) or high < max(opening, last):
-                    continue
-                out[code] = dict(last=last, prev_close=prev, open=opening, high=high, low=low,
-                    session=timestamp.strftime("%Y-%m-%d"), last_ts=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                    _trade_quality_ok=True, _quote_source="tencent_batch", name=fields[1])
-            if out:
+    codes = [s.lower() for s in sinas if s]
+    for i in range(0, len(codes), chunk_size):
+        chunk = codes[i : i + chunk_size]
+        for endpoint in ("https://web.sqt.gtimg.cn", "https://qt.gtimg.cn"):
+            try:
+                proxies = {}
+                if sys.platform == "darwin":
+                    # Unrelated *_PROXY variables can hide macOS proxy settings in urllib.
+                    from urllib.request import getproxies_macosx_sysconf
+                    proxies = {k: v for k, v in getproxies_macosx_sysconf().items() if k in ("http", "https")}
+                response = _quote_http_get(f"{endpoint}/q={','.join(chunk)}", timeout=timeout,
+                                        proxies=proxies)
+                response.raise_for_status()
+                for line in response.content.decode("gbk", "ignore").splitlines():
+                    if '="' not in line:
+                        continue
+                    left, raw = line.split('="', 1)
+                    code = left.split("_")[-1].lower()
+                    fields = raw.rstrip('";').split("~")
+                    if code not in chunk or len(fields) < 35:
+                        continue
+                    stamp = fields[30]
+                    if len(stamp) != 14 or not stamp.isdigit():
+                        continue
+                    try:
+                        timestamp = datetime.strptime(stamp, "%Y%m%d%H%M%S")
+                        last, prev, opening, high, low = [float(fields[j]) for j in (3, 4, 5, 33, 34)]
+                    except (ValueError, TypeError):
+                        continue
+                    if not all(math.isfinite(x) and x > 0 for x in (last, prev, opening, high, low)):
+                        continue
+                    if low > min(opening, last) or high < max(opening, last):
+                        continue
+                    out[code] = dict(last=last, prev_close=prev, open=opening, high=high, low=low,
+                        session=timestamp.strftime("%Y-%m-%d"), last_ts=timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        _trade_quality_ok=True, _quote_source="tencent_batch", name=fields[1])
                 break
-        except requests.RequestException:
-            continue
+            except requests.RequestException:
+                continue
     return out
 
 
@@ -783,7 +788,7 @@ def fetch_open_audit_quote(sina):
             _OPEN_QUOTE_POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="open-quote-network")
         pool = _OPEN_QUOTE_POOL
     futures = {pool.submit(fetch, [sina], timeout=(.5, .75)): source for source, fetch in (
-        ("sina_batch", fetch_sina_batch), ("tencent_batch", fetch_tencent_batch))}
+        ("tencent_batch", fetch_tencent_batch), ("sina_batch", fetch_sina_batch))}
     try:
         for future in as_completed(futures, timeout=1.5):
             try:
@@ -889,7 +894,7 @@ class SinaBatchPoller:
         from quote_resilience import SourceRouter
         from watch_config import market_phase
         from opening_speed import opening_fast, quote_poll_interval
-        router = SourceRouter([("sina_batch", fetch_sina_batch), ("tencent_batch", fetch_tencent_batch)], log=self.on_log)
+        router = SourceRouter([("tencent_batch", fetch_tencent_batch), ("sina_batch", fetch_sina_batch)], log=self.on_log)
         group_key = sinas[0] if sinas else "empty"
         while not self.stop.is_set():
             started = time.monotonic()
@@ -909,8 +914,7 @@ class SinaBatchPoller:
                     if self.stop.is_set():
                         break
                     now = datetime.now()
-                    batch = router.fetch(sinas[i:i+50], continuous=market_phase(now) == "continuous",
-                        source_names=("sina_batch",) if opening_fast(now) else None)
+                    batch = router.fetch(sinas[i:i+50], continuous=market_phase(now) == "continuous")
                     with self.hub._lock:
                         self.hub.source_diagnostics[group_key] = router.status()
                     if self.stop.is_set():

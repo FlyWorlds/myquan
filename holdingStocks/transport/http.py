@@ -356,6 +356,24 @@ def build_watch_request_handler(
                     self._send_json({"error": "strategy38 payload unavailable", "detail": str(exc)}, status=500)
                 return
 
+            if path == "/api/strategy38/scan":
+                try:
+                    from strategy.strategies.strategy38.scanner import Strategy38ScanManager
+
+                    self._send_json(Strategy38ScanManager.get_status())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy38 scan status unavailable", "detail": str(exc)}, status=500)
+                return
+
+            if path == "/api/strategy3/backtest":
+                try:
+                    from strategy3_backtest_service import Strategy3BacktestManager
+
+                    self._send_json(Strategy3BacktestManager.get_status())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy3 backtest status unavailable", "detail": str(exc)}, status=500)
+                return
+
             if path == "/api/strategy38/backtest":
                 try:
                     from strategy38_backtest_service import Strategy38BacktestManager
@@ -547,6 +565,17 @@ def build_watch_request_handler(
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "backtest trigger failed", "detail": str(exc)}, status=500)
                 return
+            if path == "/api/strategy3/backtest":
+                try:
+                    from strategy3_backtest_service import Strategy3BacktestManager
+
+                    length = int(self.headers.get("content-length", 0))
+                    body = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    self._send_json(Strategy3BacktestManager.trigger_backtest(body))
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy3 backtest trigger failed", "detail": str(exc)}, status=500)
+                return
+
             if path == "/api/strategy38/backtest":
                 try:
                     from strategy38_backtest_service import Strategy38BacktestManager
@@ -556,6 +585,17 @@ def build_watch_request_handler(
                     self._send_json(Strategy38BacktestManager.trigger_backtest(body))
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "strategy38 backtest trigger failed", "detail": str(exc)}, status=500)
+                return
+
+            if path == "/api/strategy38/scan":
+                try:
+                    from strategy.strategies.strategy38.scanner import Strategy38ScanManager
+
+                    length = int(self.headers.get("content-length", 0))
+                    body = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    self._send_json(Strategy38ScanManager.trigger_scan(body))
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy38 scan trigger failed", "detail": str(exc)}, status=500)
                 return
             if path == "/api/holdings/reset":
                 if on_paper_reset is None:

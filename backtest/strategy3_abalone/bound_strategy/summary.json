@@ -8,5 +8,8 @@
   "open_positions": 1,
   "final_nav": 1111275.4836499123,
   "start": "2025-01-02",
-  "end": "2026-10-21"
+  "end": "2026-10-21",
+  "universe_count": 30,
+  "universe": "legacy30",
+  "universe_note": "原固定池研究"
 }

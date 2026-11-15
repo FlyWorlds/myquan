@@ -1,0 +1,29 @@
+{
+  "rule": {
+    "support": "chan",
+    "window": 10,
+    "trigger": "shadow",
+    "volume": 1.5
+  },
+  "policy": {
+    "depth": 0.0,
+    "hold": 20,
+    "stop": 0.04,
+    "take": 0.1,
+    "mode": "stabilize",
+    "acceleration": false,
+    "initial": 1.0,
+    "add_drop": 0.03,
+    "reduce": 0.5,
+    "slot": 0.2,
+    "stop_mode": "cost",
+    "take_mode": "structure",
+    "risk_budget": 0.005,
+    "min_rr": 0.0,
+    "max_entry_risk": 0.08,
+    "stop_buffer_atr": 0.3,
+    "stop_buffer_pct": 0.0,
+    "stop_trigger": "intraday"
+  },
+  "status": "research_only"
+}

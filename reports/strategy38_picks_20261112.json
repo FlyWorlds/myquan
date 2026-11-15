@@ -1,0 +1,163 @@
+{
+  "as_of": "2026-11-12 23:55:33",
+  "total_scanned_files": 100,
+  "step1_cash_gate": {
+    "status": "PASS",
+    "veto_cash": false,
+    "is_cash": false,
+    "tier": 4,
+    "tier_name": "全力进攻态 (100%)",
+    "position_ratio": 1.0,
+    "reason": "指数稳居MA60生命线上方且广度健康(55.0%)，多头共振全速运行",
+    "breadth": 0.55,
+    "close": 6650.138,
+    "ma60": 7286.7372166666655
+  },
+  "step2_quality_pool": {
+    "total_raw": 100,
+    "count": 86,
+    "status": "PASS"
+  },
+  "candidates_count": 3,
+  "candidates": [
+    {
+      "code": "000409",
+      "name": "云鼎科技",
+      "anchor_date": "2026-08-21",
+      "anchor_age": 7,
+      "breakout_date": "2026-09-01",
+      "volume_ratio": 10.09,
+      "body_return": 0.0598,
+      "breakout_close": 9.39,
+      "breakout_open": 8.86,
+      "breakout_high": 9.7,
+      "breakout_low": 8.86,
+      "last_close": 9.23,
+      "last_date": "2026-09-02"
+    },
+    {
+      "code": "000519",
+      "name": "中兵红箭",
+      "anchor_date": "2026-08-26",
+      "anchor_age": 5,
+      "breakout_date": "2026-09-02",
+      "volume_ratio": 5.98,
+      "body_return": 0.0772,
+      "breakout_close": 15.62,
+      "breakout_open": 14.5,
+      "breakout_high": 15.66,
+      "breakout_low": 14.45,
+      "last_close": 15.8,
+      "last_date": "2026-09-04"
+    },
+    {
+      "code": "000417",
+      "name": "合百集团",
+      "anchor_date": "2026-10-20",
+      "anchor_age": 8,
+      "breakout_date": "2026-10-30",
+      "volume_ratio": 3.52,
+      "body_return": 0.0517,
+      "breakout_close": 5.7,
+      "breakout_open": 5.42,
+      "breakout_high": 5.7,
+      "breakout_low": 5.41,
+      "last_close": 6.0,
+      "last_date": "2026-11-04"
+    }
+  ],
+  "orders": [
+    {
+      "code": "000409",
+      "name": "云鼎科技",
+      "last_close": 9.23,
+      "buy_trigger_price": 9.47,
+      "support_buy_price": 9.12,
+      "stop_loss_price": 8.77,
+      "volume_ratio": 10.09,
+      "breakout_date": "2026-09-01",
+      "anchor_date": "2026-08-21",
+      "confirm_logic": "日线放量10.09倍确立缠论底分型向上笔；次日盘中突破攻击位 9.47 元触买，或回踩支撑 9.12 元分批接回；跌破起爆低点 8.77 元严格止损。",
+      "status": "READY_TO_BUY"
+    },
+    {
+      "code": "000519",
+      "name": "中兵红箭",
+      "last_close": 15.8,
+      "buy_trigger_price": 16.21,
+      "support_buy_price": 15.06,
+      "stop_loss_price": 14.31,
+      "volume_ratio": 5.98,
+      "breakout_date": "2026-09-02",
+      "anchor_date": "2026-08-26",
+      "confirm_logic": "日线放量5.98倍确立缠论底分型向上笔；次日盘中突破攻击位 16.21 元触买，或回踩支撑 15.06 元分批接回；跌破起爆低点 14.31 元严格止损。",
+      "status": "READY_TO_BUY"
+    },
+    {
+      "code": "000417",
+      "name": "合百集团",
+      "last_close": 6.0,
+      "buy_trigger_price": 6.16,
+      "support_buy_price": 5.56,
+      "stop_loss_price": 5.36,
+      "volume_ratio": 3.52,
+      "breakout_date": "2026-10-30",
+      "anchor_date": "2026-10-20",
+      "confirm_logic": "日线放量3.52倍确立缠论底分型向上笔；次日盘中突破攻击位 6.16 元触买，或回踩支撑 5.56 元分批接回；跌破起爆低点 5.36 元严格止损。",
+      "status": "READY_TO_BUY"
+    }
+  ],
+  "rows": [
+    {
+      "代码": "000409",
+      "名称": "云鼎科技",
+      "最新价": 9.23,
+      "突破买入价": 9.47,
+      "回踩买入价": 9.12,
+      "止损保护价": 8.77,
+      "放量倍数": "10.09x",
+      "起爆日期": "2026-09-01",
+      "起爆涨幅": "5.98%",
+      "买点确认逻辑": "日线放量10.09倍确立缠论底分型向上笔；次日盘中突破攻击位 9.47 元触买，或回踩支撑 9.12 元分批接回；跌破起爆低点 8.77 元严格止损。",
+      "状态": "READY_TO_BUY",
+      "symbol": "sz000409"
+    },
+    {
+      "代码": "000519",
+      "名称": "中兵红箭",
+      "最新价": 15.8,
+      "突破买入价": 16.21,
+      "回踩买入价": 15.06,
+      "止损保护价": 14.31,
+      "放量倍数": "5.98x",
+      "起爆日期": "2026-09-02",
+      "起爆涨幅": "7.72%",
+      "买点确认逻辑": "日线放量5.98倍确立缠论底分型向上笔；次日盘中突破攻击位 16.21 元触买，或回踩支撑 15.06 元分批接回；跌破起爆低点 14.31 元严格止损。",
+      "状态": "READY_TO_BUY",
+      "symbol": "sz000519"
+    },
+    {
+      "代码": "000417",
+      "名称": "合百集团",
+      "最新价": 6.0,
+      "突破买入价": 6.16,
+      "回踩买入价": 5.56,
+      "止损保护价": 5.36,
+      "放量倍数": "3.52x",
+      "起爆日期": "2026-10-30",
+      "起爆涨幅": "5.17%",
+      "买点确认逻辑": "日线放量3.52倍确立缠论底分型向上笔；次日盘中突破攻击位 6.16 元触买，或回踩支撑 5.56 元分批接回；跌破起爆低点 5.36 元严格止损。",
+      "状态": "READY_TO_BUY",
+      "symbol": "sz000417"
+    }
+  ],
+  "kpi": {
+    "step1_status": "安全放行",
+    "step1_tier": "全力进攻态 (100%)",
+    "step2_pool_count": 86,
+    "step3_candidate_count": 3,
+    "step4_order_count": 3,
+    "avg_volume_multiple": 6.53
+  },
+  "sync_self_watchlist": null
+}
