@@ -13,7 +13,7 @@ function linkClass(path: string) {
       <div class="flex flex-wrap items-center gap-1">
         <NuxtLink to="/" :class="linkClass('/')">持仓盯盘</NuxtLink>
         <NuxtLink to="/cash-gate" :class="linkClass('/cash-gate')">多维空仓</NuxtLink>
-        <NuxtLink to="/limit-alerts" :class="linkClass('/limit-alerts')">涨停预警</NuxtLink>
+        <NuxtLink to="/limit-alerts" :class="linkClass('/limit-alerts')">短线情绪</NuxtLink>
         <NuxtLink to="/theme-heat" :class="linkClass('/theme-heat')">题材热度</NuxtLink>
         <NuxtLink to="/returns" :class="linkClass('/returns')">收益日历</NuxtLink>
         <NuxtLink to="/trades" :class="linkClass('/trades')">交割单</NuxtLink>
@@ -22,7 +22,14 @@ function linkClass(path: string) {
         <NuxtLink to="/strategies" :class="linkClass('/strategies')">策略说明</NuxtLink>
         <NuxtLink to="/factors" :class="linkClass('/factors')">因子说明</NuxtLink>
         <NuxtLink to="/journal" :class="route.path === '/journal' && route.query.tab !== 'plan' && route.query.tab !== 'todos' ? 'nav-link nav-link-active' : 'nav-link'">复盘笔记</NuxtLink>
-        <NuxtLink to="/journal?tab=plan" :class="route.path === '/journal' && route.query.tab === 'plan' ? 'nav-link nav-link-active text-amber-300 font-semibold' : 'nav-link text-amber-400/90'">📋 交易计划</NuxtLink>
+        <NuxtLink to="/journal?tab=plan" class="inline-flex items-center gap-1.5" :class="route.path === '/journal' && route.query.tab === 'plan' ? 'nav-link nav-link-active text-amber-300 font-semibold' : 'nav-link text-amber-400/90'">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            <path d="M9 14l2 2 4-4" />
+          </svg>
+          <span>交易计划</span>
+        </NuxtLink>
         <NuxtLink to="/journal?tab=todos" :class="route.path === '/journal' && route.query.tab === 'todos' ? 'nav-link nav-link-active text-indigo-300 font-semibold' : 'nav-link text-indigo-400/90'">🛠️ 改造跟踪</NuxtLink>
       </div>
       <div class="flex items-center gap-1">

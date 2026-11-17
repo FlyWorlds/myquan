@@ -65,13 +65,22 @@ def test_auction_starts_at_0925_without_historical_backfill():
 
 def test_early_each_one_late_reuses_all_unused_slots():
     trades=[dict(side='buy',session=DAY,time=DAY+' 09:30:01',signal_factor='factor29')]
+    # 竞价已买 1 只
     assert quota_reason(order('auction_open'),trades,DAY) == 'ENTRY_PHASE_QUOTA'
+    # 竞价买了，突破还可以买 1 只
     assert quota_reason(order('breakout'),trades,DAY) is None
     trades.append(dict(side='buy',session=DAY,time=DAY+' 09:31:00',signal_factor='factor26'))
+    # 突破也买了 1 只，突破不能再买
     assert quota_reason(order('breakout'),trades,DAY) == 'ENTRY_PHASE_QUOTA'
-    for i in range(5):
-        assert quota_reason(order('day_low_rebound'),trades,DAY) is None
-        trades.append(dict(side='buy',session=DAY,signal_factor='factor33'))
+    # 关键规则：如果竞价买了且突破买了，当天总新增满2槽，探底回升就不买！
+    assert quota_reason(order('day_low_rebound'),trades,DAY) == 'ENTRY_PHASE_QUOTA'
+
+    # 若竞价没买，探底回升可以买 1 槽
+    trades_no_auction = [dict(side='buy',session=DAY,time=DAY+' 09:32:00',signal_factor='factor26')]
+    assert quota_reason(order('day_low_rebound'), trades_no_auction, DAY) is None
+    # 但探底回升最多买 1 槽
+    trades_no_auction.append(dict(side='buy',session=DAY,time=DAY+' 10:05:00',signal_factor='factor33'))
+    assert quota_reason(order('day_low_rebound'), trades_no_auction, DAY) == 'ENTRY_PHASE_QUOTA'
 
 def test_factor29_sell_t1_and_real_path_required():
     pos=dict(qty=100,buy_time='2026-10-27 10:00:00')
@@ -88,3 +97,37 @@ def test_strategy1_contains_sea_data_and_new_factors():
     assert len(strategy1_watchlist({})) > 0
     enabled={b.factor_id for b in get_strategy_bindings('strategy1') if b.enabled}
     assert {'factor29','factor33'} <= enabled
+
+
+def test_dip_rebound_break_open():
+    """测试因子33：必须低开、最低价 < 开盘价-3%、回升突破开盘价才触发买入，且以信号价格成交。"""
+    from attack_wave import AttackWaves
+    from unittest.mock import patch
+    waves = AttackWaves()
+    o = dict(order('day_low_rebound'), code='601020', open=10.00, prev_close=10.20, entry_pct=.015, tick=.01)
+    with patch('attack_wave.WAVES', waves):
+        # 1. 平开或高开，直接不满足低开铁律
+        o_high = dict(o, open=10.25, prev_close=10.20)
+        q_high = quote('10:00:01', open=10.25, prev_close=10.20, low=9.80, high=10.30, last=10.26)
+        waves.observe('601020', q_high, at('10:00:01'))
+        assert not effective_order(o_high, q_high)['wave_ready']
+
+        # 2. 低开但探底不足 -3%（如最低价 9.75 > 10.00*0.97），不满足探底铁律
+        q_not_deep = quote('10:00:01', open=10.00, prev_close=10.20, low=9.75, high=10.05, last=10.02)
+        waves.observe('601020', q_not_deep, at('10:00:01'))
+        assert not effective_order(o, q_not_deep)['wave_ready']
+
+        # 3. 低开且最低价 9.68（探底 -3.2% < -3%），但在 9.85 时未突破开盘价 10.00，不触发
+        q1 = quote('10:00:01', open=10.00, prev_close=10.20, low=9.68, high=9.95, last=9.85)
+        waves.observe('601020', q1, at('10:00:01'))
+        eff1 = effective_order(o, q1)
+        assert eff1['price'] == 10.01
+        assert not is_trigger(o, q1, at('10:00:01'), at('10:00:01'))
+
+        # 4. 随后拉升到 10.02，突破开盘价 10.01！触发买入！
+        q2 = quote('10:10:01', open=10.00, prev_close=10.20, low=9.68, high=10.10, last=10.02)
+        waves.observe('601020', q2, at('10:10:01'))
+        eff2 = effective_order(o, q2)
+        assert eff2['price'] == 10.01
+        assert is_trigger(o, q2, at('10:10:01'), at('10:10:01'))
+

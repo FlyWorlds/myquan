@@ -96,10 +96,11 @@ const form = reactive({
   lookback: 60,
   max_age: 10,
   volume_multiple: 2.0,
-  body_min: 0.05,
+  body_min: 0.05, // 阳线实体涨幅阈值 (0表示不限，0.02, 0.03, 0.05, 0.07)
+  min_close_position: 0.0, // 收盘强弱度/光头度 (0表示不限，0.60, 0.75, 0.90)
   recent_hit_days: 3,
   // Step 4
-  buy_mode: 'breakout',
+  buy_mode: 'breakout', // 'open' | 'breakout' | 'pullback' | 'dryup'
   take_profit_pct: 0.08,
   stop_loss_pct: -0.04,
   max_hold_days: 5,
@@ -118,8 +119,15 @@ interface ScreenCandidate {
   date: string
   volume_ratio: number
   close: number
+  high?: number
+  low?: number
   change_pct: number
   body_return_pct: number
+  close_pos_pct?: number
+  suggested_buy?: number
+  stop_base_price?: number
+  trigger_desc?: string
+  buy_mode?: string
   volume: number
   raw_volume?: number
   mean_volume: number
@@ -161,23 +169,27 @@ const targetDateInfo = computed(() => {
     const friStr = `${String(fri.getMonth() + 1).padStart(2, '0')}-${String(fri.getDate()).padStart(2, '0')}`
     return {
       label: `上个交易日(${friStr})`,
+      shortDate: friStr,
       isFallback: true,
       tooltip: `当前为周末休市，自动锁定上个交易日周五(${friStr})。纯形态选股，无需经过 Step 4 挂单平仓与止盈止损。`,
     }
   }
 
+  const todayStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   if (isIntraday) {
     return {
       label: '今日(同花顺预测量)',
+      shortDate: `${todayStr}预测量`,
       isFallback: false,
       tooltip: '盘中未收盘，自动应用同花顺 U 型分时加权预测全天成交量，提前锁定今日放量标的。纯形态选股，无需经过 Step 4。',
     }
   }
 
   return {
-    label: '今日',
+    label: `今日(${todayStr})`,
+    shortDate: todayStr,
     isFallback: false,
-    tooltip: '根据当前参数直接扫描今日放量股票，纯形态选股，无需经过 Step 4。',
+    tooltip: '根据当前参数直接筛选今日放量股票，纯形态选股，无需经过 Step 4。',
   }
 })
 
@@ -192,6 +204,9 @@ async function triggerScreenToday() {
         universe: form.universe,
         volume_multiple: form.volume_multiple,
         lookback: form.lookback,
+        body_min: form.body_min,
+        min_close_position: form.min_close_position,
+        buy_mode: form.buy_mode,
         ban_st: form.ban_st,
         mainboard_only: form.mainboard_only,
         min_price: form.min_price,
@@ -540,17 +555,39 @@ onMounted(() => {
             {{ showAdvanced ? '收起高级变量 ▲' : '展开漏斗详细变量 ▼' }}
           </button>
 
-          <!-- 扫描放量股票（无需经过 Step 4 挂单平仓与止损） -->
+          <!-- 信号选股（纯形态筛选，无需经过 Step 4 挂单平仓与止损） -->
           <button
             type="button"
-            class="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/50 bg-teal-500/20 px-3 py-1.5 text-xs font-bold text-teal-300 transition hover:bg-teal-500/30 hover:border-teal-500 disabled:cursor-not-allowed disabled:opacity-60 shadow-sm"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/50 bg-teal-500/20 px-3.5 py-1.5 text-xs font-bold text-teal-300 transition hover:bg-teal-500/30 hover:border-teal-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 shadow-sm"
             :disabled="loading || running || screening"
             :title="targetDateInfo.tooltip"
             @click="triggerScreenToday"
           >
-            <span v-if="screening" class="inline-block animate-spin">⌛</span>
-            <span v-else>🔍</span>
-            <span>{{ screening ? '正在筛选放量股票…' : `扫描${targetDateInfo.label}放量股票` }}</span>
+            <!-- 运行中状态图标：专业旋转环 -->
+            <svg
+              v-if="screening"
+              class="h-3.5 w-3.5 animate-spin text-teal-300"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" />
+              <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+            </svg>
+            <!-- 常态图标：专业量化脉冲信号波形 SVG（Activity/Pulse），彻底去掉 emoji 放大镜 -->
+            <svg
+              v-else
+              class="h-3.5 w-3.5 text-teal-300"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 12h3l2-6 4 12 3-8 2 2h4" />
+            </svg>
+            <span>{{ screening ? '正在信号选股…' : '信号选股' }}</span>
+            <span v-if="!screening" class="text-[10px] opacity-80 font-normal">({{ targetDateInfo.shortDate || targetDateInfo.label }})</span>
           </button>
 
           <button
@@ -568,10 +605,18 @@ onMounted(() => {
               <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" />
               <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
             </svg>
+            <svg
+              v-else
+              class="h-3.5 w-3.5 text-accent"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
             <span v-if="loading || running">
               回测中 {{ progress?.percent || 0 }}%
             </span>
-            <span v-else>⚡ 运行多维参数回测</span>
+            <span v-else>运行多维参数回测</span>
           </button>
         </div>
       </div>
@@ -703,11 +748,49 @@ onMounted(() => {
               v-model.number="form.volume_multiple"
               type="range"
               min="1.5"
-              max="3.5"
+              max="5.0"
               step="0.1"
               class="mt-1 w-full accent-accent"
             />
-            <div class="mt-1.5 flex items-center justify-between">
+            <div class="mt-1 flex items-center justify-between text-[10px] text-ui-text-3">
+              <button
+                type="button"
+                :class="form.volume_multiple === 1.8 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.volume_multiple = 1.8"
+              >
+                温和1.8x
+              </button>
+              <button
+                type="button"
+                :class="form.volume_multiple === 2.0 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.volume_multiple = 2.0"
+              >
+                标准2.0x
+              </button>
+              <button
+                type="button"
+                :class="form.volume_multiple === 2.5 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.volume_multiple = 2.5"
+              >
+                强力2.5x
+              </button>
+              <button
+                type="button"
+                :class="form.volume_multiple === 3.0 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.volume_multiple = 3.0"
+              >
+                主升3.0x
+              </button>
+              <button
+                type="button"
+                :class="form.volume_multiple === 5.0 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.volume_multiple = 5.0"
+              >
+                巨量5.0x
+              </button>
+            </div>
+
+            <div class="mt-2.5 flex items-center justify-between">
               <span class="text-ui-text-3">长周期缩量窗口:</span>
               <span class="font-bold text-accent">{{ form.lookback }}日</span>
             </div>
@@ -720,17 +803,189 @@ onMounted(() => {
               class="mt-1 w-full accent-accent"
             />
             <div class="mt-1 flex items-center justify-between text-[10px] text-ui-text-3">
-              <button type="button" class="hover:text-accent" @click="form.lookback = 5">极短5日</button>
-              <button type="button" class="hover:text-accent" @click="form.lookback = 20">月度20日</button>
-              <button type="button" class="hover:text-accent" @click="form.lookback = 60">季度60日</button>
-              <button type="button" class="hover:text-accent" @click="form.lookback = 90">半年90日</button>
+              <button
+                type="button"
+                :class="form.lookback === 5 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.lookback = 5"
+              >
+                极短5日
+              </button>
+              <button
+                type="button"
+                :class="form.lookback === 20 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.lookback = 20"
+              >
+                月度20日
+              </button>
+              <button
+                type="button"
+                :class="form.lookback === 60 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.lookback = 60"
+              >
+                季度60日
+              </button>
+              <button
+                type="button"
+                :class="form.lookback === 90 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.lookback = 90"
+              >
+                半年90日
+              </button>
+            </div>
+
+            <!-- 因子1: 阳线实体涨幅阈值 (支持不选) -->
+            <div class="mt-2.5 flex items-center justify-between">
+              <span class="text-ui-text-3">阳线实体涨幅:</span>
+              <span class="font-bold text-accent">
+                {{ form.body_min <= 0 ? '不限(放行所有)' : `≥ +${(form.body_min * 100).toFixed(1)}%` }}
+              </span>
+            </div>
+            <input
+              v-model.number="form.body_min"
+              type="range"
+              min="0.0"
+              max="0.09"
+              step="0.005"
+              class="mt-1 w-full accent-accent"
+            />
+            <div class="mt-1 flex items-center justify-between text-[10px] text-ui-text-3">
+              <button
+                type="button"
+                :class="form.body_min <= 0 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.body_min = 0"
+              >
+                不限
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.body_min - 0.02) < 0.001 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.body_min = 0.02"
+              >
+                微阳+2%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.body_min - 0.03) < 0.001 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.body_min = 0.03"
+              >
+                中阳+3%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.body_min - 0.05) < 0.001 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.body_min = 0.05"
+              >
+                大阳+5%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.body_min - 0.07) < 0.001 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.body_min = 0.07"
+              >
+                主升+7%
+              </button>
+            </div>
+
+            <!-- 因子2: 收盘强弱度 / 光头度 (支持不选) -->
+            <div class="mt-2.5 flex items-center justify-between">
+              <span class="text-ui-text-3">收盘位置(光头度):</span>
+              <span class="font-bold text-accent">
+                {{ form.min_close_position <= 0 ? '不限(允许上影)' : `≥ ${(form.min_close_position * 100).toFixed(0)}%` }}
+              </span>
+            </div>
+            <input
+              v-model.number="form.min_close_position"
+              type="range"
+              min="0.0"
+              max="0.95"
+              step="0.05"
+              class="mt-1 w-full accent-accent"
+            />
+            <div class="mt-1 flex items-center justify-between text-[10px] text-ui-text-3">
+              <button
+                type="button"
+                :class="form.min_close_position <= 0 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.min_close_position = 0"
+              >
+                不限
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.min_close_position - 0.60) < 0.01 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.min_close_position = 0.60"
+              >
+                中强>60%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.min_close_position - 0.75) < 0.01 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.min_close_position = 0.75"
+              >
+                强势>75%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.min_close_position - 0.90) < 0.01 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.min_close_position = 0.90"
+              >
+                光头>90%
+              </button>
             </div>
           </div>
 
           <!-- Step 4 执行与风控 -->
           <div class="rounded-lg border border-ui-hairline/60 bg-ui-surface-2/30 p-2.5">
             <div class="font-semibold text-ui-text mb-1.5">Step 4: 挂单与止盈止损</div>
+
+            <!-- 因子5: 次日买入介入模式 -->
             <div class="flex items-center justify-between">
+              <span class="text-ui-text-3">次日买入模式:</span>
+              <span class="font-bold text-accent">
+                {{ form.buy_mode === 'open' ? '开盘价' : form.buy_mode === 'breakout' ? '突破前高' : form.buy_mode === 'pullback' ? '半分位低吸' : '缩量二波' }}
+              </span>
+            </div>
+            <div class="mt-1 grid grid-cols-2 gap-1 text-[11px]">
+              <button
+                type="button"
+                class="rounded border px-1.5 py-0.5 text-center transition"
+                :class="form.buy_mode === 'open' ? 'border-accent bg-accent/20 font-bold text-accent' : 'border-ui-hairline hover:border-accent/50 text-ui-text-3'"
+                @click="form.buy_mode = 'open'"
+              >
+                不限/开盘价
+              </button>
+              <button
+                type="button"
+                class="rounded border px-1.5 py-0.5 text-center transition"
+                :class="form.buy_mode === 'breakout' ? 'border-accent bg-accent/20 font-bold text-accent' : 'border-ui-hairline hover:border-accent/50 text-ui-text-3'"
+                @click="form.buy_mode = 'breakout'"
+              >
+                突破前高追
+              </button>
+              <button
+                type="button"
+                class="rounded border px-1.5 py-0.5 text-center transition"
+                :class="form.buy_mode === 'pullback' ? 'border-accent bg-accent/20 font-bold text-accent' : 'border-ui-hairline hover:border-accent/50 text-ui-text-3'"
+                @click="form.buy_mode = 'pullback'"
+              >
+                半分位低吸
+              </button>
+              <button
+                type="button"
+                class="rounded border px-1.5 py-0.5 text-center transition"
+                :class="form.buy_mode === 'dryup' ? 'border-accent bg-accent/20 font-bold text-accent' : 'border-ui-hairline hover:border-accent/50 text-ui-text-3'"
+                @click="form.buy_mode = 'dryup'"
+              >
+                缩量二波确认
+              </button>
+            </div>
+            <div class="mt-1 text-[10px] text-ui-text-3 truncate">
+              <span v-if="form.buy_mode === 'open'">次日 09:25 开盘集合竞价直接买入（基准对照）</span>
+              <span v-else-if="form.buy_mode === 'breakout'">次日盘中突破放量日最高价 (+0.01) 顺势追入</span>
+              <span v-else-if="form.buy_mode === 'pullback'">次日回踩起爆实体 50% 黄金位低吸挂单</span>
+              <span v-else-if="form.buy_mode === 'dryup'">放量次日缩量且不破低点，T+2 尾盘确认买入</span>
+            </div>
+
+            <div class="mt-2.5 flex items-center justify-between">
               <span class="text-ui-text-3">目标止盈率:</span>
               <span class="font-bold text-ui-danger">+{{ (form.take_profit_pct * 100).toFixed(1) }}%</span>
             </div>
@@ -738,22 +993,119 @@ onMounted(() => {
               v-model.number="form.take_profit_pct"
               type="range"
               min="0.04"
-              max="0.15"
-              step="0.01"
+              max="0.20"
+              step="0.005"
               class="mt-1 w-full accent-ui-danger"
             />
-            <div class="mt-1.5 flex items-center justify-between">
+            <div class="mt-1 flex items-center justify-between text-[10px] text-ui-text-3">
+              <button
+                type="button"
+                :class="Math.abs(form.take_profit_pct - 0.06) < 0.001 ? 'text-ui-danger font-bold' : 'hover:text-ui-danger'"
+                @click="form.take_profit_pct = 0.06"
+              >
+                敏捷+6%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.take_profit_pct - 0.08) < 0.001 ? 'text-ui-danger font-bold' : 'hover:text-ui-danger'"
+                @click="form.take_profit_pct = 0.08"
+              >
+                标准+8%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.take_profit_pct - 0.10) < 0.001 ? 'text-ui-danger font-bold' : 'hover:text-ui-danger'"
+                @click="form.take_profit_pct = 0.10"
+              >
+                主升+10%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.take_profit_pct - 0.15) < 0.001 ? 'text-ui-danger font-bold' : 'hover:text-ui-danger'"
+                @click="form.take_profit_pct = 0.15"
+              >
+                波段+15%
+              </button>
+            </div>
+
+            <div class="mt-2.5 flex items-center justify-between">
               <span class="text-ui-text-3">严格止损率:</span>
               <span class="font-bold text-ui-success">{{ (form.stop_loss_pct * 100).toFixed(1) }}%</span>
             </div>
             <input
               v-model.number="form.stop_loss_pct"
               type="range"
-              min="-0.08"
+              min="-0.10"
               max="-0.02"
               step="0.005"
               class="mt-1 w-full accent-ui-success"
             />
+            <div class="mt-1 flex items-center justify-between text-[10px] text-ui-text-3">
+              <button
+                type="button"
+                :class="Math.abs(form.stop_loss_pct - (-0.03)) < 0.001 ? 'text-ui-success font-bold' : 'hover:text-ui-success'"
+                @click="form.stop_loss_pct = -0.03"
+              >
+                紧密-3%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.stop_loss_pct - (-0.04)) < 0.001 ? 'text-ui-success font-bold' : 'hover:text-ui-success'"
+                @click="form.stop_loss_pct = -0.04"
+              >
+                标准-4%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.stop_loss_pct - (-0.065)) < 0.001 ? 'text-ui-success font-bold' : 'hover:text-ui-success'"
+                @click="form.stop_loss_pct = -0.065"
+              >
+                底线-6.5%
+              </button>
+              <button
+                type="button"
+                :class="Math.abs(form.stop_loss_pct - (-0.08)) < 0.001 ? 'text-ui-success font-bold' : 'hover:text-ui-success'"
+                @click="form.stop_loss_pct = -0.08"
+              >
+                宽幅-8%
+              </button>
+            </div>
+
+            <!-- 最大持仓天数 -->
+            <div class="mt-2.5 flex items-center justify-between">
+              <span class="text-ui-text-3">最大持仓天数:</span>
+              <span class="font-bold text-accent">{{ form.max_hold_days }}天</span>
+            </div>
+            <div class="mt-1 flex items-center justify-between text-[10px] text-ui-text-3">
+              <button
+                type="button"
+                :class="form.max_hold_days === 2 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.max_hold_days = 2"
+              >
+                超短2天
+              </button>
+              <button
+                type="button"
+                :class="form.max_hold_days === 3 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.max_hold_days = 3"
+              >
+                短线3天
+              </button>
+              <button
+                type="button"
+                :class="form.max_hold_days === 5 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.max_hold_days = 5"
+              >
+                标准5天
+              </button>
+              <button
+                type="button"
+                :class="form.max_hold_days === 10 ? 'text-accent font-bold' : 'hover:text-accent'"
+                @click="form.max_hold_days = 10"
+              >
+                波段10天
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1009,7 +1361,10 @@ onMounted(() => {
         <!-- 筛选提示条 -->
         <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-teal-500/10 border border-teal-500/25 px-3 py-2 text-xs text-teal-300">
           <div class="flex items-center gap-1.5">
-            <span class="font-bold">⚡ 纯形态放量选股结果：</span>
+            <svg class="h-3.5 w-3.5 text-teal-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12h3l2-6 4 12 3-8 2 2h4" />
+            </svg>
+            <span class="font-bold">纯形态放量选股结果：</span>
             <span>{{ screenSuccessMsg || `目标交易日 ${currentScreenDateLabel} · 放量倍数 ≥ ${form.volume_multiple}x (${form.lookback}日均量)` }}</span>
           </div>
           <div class="text-[11px] text-teal-200/80">
@@ -1018,7 +1373,7 @@ onMounted(() => {
         </div>
 
         <div v-if="!screenCandidates.length" class="p-8 text-center text-xs text-ui-text-3 border border-dashed border-ui-hairline rounded-lg">
-          暂无匹配标的。请点击右上角【{{ `扫描${targetDateInfo.label}放量股票` }}】执行扫描，或适当调低成交量倍数（如从 2.1x 调至 1.8x）。
+          暂无匹配标的。请点击右上角【信号选股】执行形态筛选，或适当放宽上方漏斗参数条件。
         </div>
 
         <div v-else class="watch-table-wrap-scroll max-h-[40rem]">
@@ -1026,12 +1381,14 @@ onMounted(() => {
             <thead>
               <tr>
                 <th class="px-3 py-2.5">代码 / 标的 (点击看行情)</th>
-                <th class="px-3 py-2.5">起爆/触发日期</th>
+                <th class="px-3 py-2.5">触发日期</th>
                 <th class="px-3 py-2.5">放量倍数</th>
-                <th class="px-3 py-2.5">收盘现价</th>
-                <th class="px-3 py-2.5">当日涨跌幅</th>
+                <th class="px-3 py-2.5">现价 / 涨幅</th>
+                <th class="px-3 py-2.5">阳线实体</th>
+                <th class="px-3 py-2.5">收盘位置(光头度)</th>
+                <th class="px-3 py-2.5">建议买入参考价</th>
                 <th class="px-3 py-2.5">成交量测算</th>
-                <th class="px-3 py-2.5 min-w-[200px]">信号诊断说明</th>
+                <th class="px-3 py-2.5 min-w-[180px]">信号诊断说明</th>
                 <th class="px-3 py-2.5 text-center">操作</th>
               </tr>
             </thead>
@@ -1065,9 +1422,33 @@ onMounted(() => {
                     {{ c.volume_ratio.toFixed(2) }}x
                   </span>
                 </td>
-                <td class="px-3 py-2.5 font-semibold text-ui-text font-mono">¥{{ c.close.toFixed(2) }}</td>
-                <td class="px-3 py-2.5 font-bold font-mono" :class="returnClass(c.change_pct)">
-                  {{ c.change_pct > 0 ? '+' : '' }}{{ c.change_pct.toFixed(2) }}%
+                <td class="px-3 py-2.5 font-mono">
+                  <div class="font-semibold text-ui-text">¥{{ c.close.toFixed(2) }}</div>
+                  <div class="text-[11px] font-bold" :class="returnClass(c.change_pct)">
+                    {{ c.change_pct > 0 ? '+' : '' }}{{ c.change_pct.toFixed(2) }}%
+                  </div>
+                </td>
+                <!-- 阳线实体 -->
+                <td class="px-3 py-2.5 font-mono text-[11px]">
+                  <span :class="c.body_return_pct >= 5.0 ? 'text-ui-danger font-bold' : c.body_return_pct > 0 ? 'text-ui-danger' : 'text-ui-text-3'">
+                    {{ c.body_return_pct > 0 ? '+' : '' }}{{ c.body_return_pct.toFixed(2) }}%
+                  </span>
+                </td>
+                <!-- 收盘强弱 / 光头度 -->
+                <td class="px-3 py-2.5 font-mono text-[11px]">
+                  <span v-if="c.close_pos_pct != null" :class="c.close_pos_pct >= 85 ? 'text-amber-300 font-bold' : c.close_pos_pct <= 50 ? 'text-ui-text-3' : 'text-ui-text-2'">
+                    {{ c.close_pos_pct.toFixed(0) }}%
+                    <span v-if="c.close_pos_pct >= 85" class="ml-0.5 rounded bg-amber-500/20 px-1 py-0.2 text-[9px] text-amber-300">光头</span>
+                    <span v-else-if="c.close_pos_pct <= 50" class="ml-0.5 text-[9px] text-ui-text-3">长上影</span>
+                  </span>
+                  <span v-else class="text-ui-text-3">—</span>
+                </td>
+                <!-- 建议买点 -->
+                <td class="px-3 py-2.5 text-[11px]">
+                  <div v-if="c.suggested_buy" class="font-bold text-accent font-mono">¥{{ c.suggested_buy.toFixed(2) }}</div>
+                  <div class="text-[10px] text-ui-text-3 truncate max-w-[150px]" :title="c.trigger_desc">
+                    {{ c.trigger_desc || '次日介入' }}
+                  </div>
                 </td>
                 <td class="px-3 py-2.5 text-ui-text-3 font-mono text-[11px]">
                   <div>量: {{ (c.volume / 10000).toFixed(0) }}万手</div>
@@ -1088,7 +1469,15 @@ onMounted(() => {
                     :disabled="syncedSelfCodes.has(c.code) || syncSelfLoading[c.code]"
                     @click="addToSelfWatch(c.code)"
                   >
-                    <span v-if="syncSelfLoading[c.code]">⌛</span>
+                    <svg
+                      v-if="syncSelfLoading[c.code]"
+                      class="h-3 w-3 animate-spin inline-block text-accent"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" />
+                      <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+                    </svg>
                     <span v-else-if="syncedSelfCodes.has(c.code)">✓ 已在自选</span>
                     <span v-else>+ 关注</span>
                   </button>

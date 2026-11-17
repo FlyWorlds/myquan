@@ -9,7 +9,7 @@ override for future years.
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -164,4 +164,102 @@ def effective_watch_session(now: Any | None = None) -> str:
     if (ts.hour, ts.minute) < (9, 0):
         return str(previous_trading_day(d))
     return str(d)
+
+
+def sentiment_session_context(now: Any | None = None) -> dict[str, Any]:
+    """短线情绪栏的时间节点与交易日状态把控设计模式。
+
+    时钟节点控制规范：
+    1. 节假日/周末：算上一个交易日（休市复盘展示）；
+    2. 交易日 00:00 ~ 09:20 之前：算上一个交易日（盘前复盘展示，严禁拿当日未开盘空数据覆盖）；
+    3. 交易日 09:20 ~ 09:25：集合竞价过渡阶段；
+    4. 交易日 09:25 及之后到 24:00：算当天。
+       - 09:25 ~ 15:05：盘中实时分笔更新，显示当时更新的最新实时数据；
+       - 15:05 ~ 24:00：今日已收盘，定格展示全天情绪终值与风控结论。
+    """
+    if now is None:
+        ts = datetime.now()
+    elif isinstance(now, datetime):
+        ts = now
+    elif isinstance(now, date):
+        ts = datetime.combine(now, time(9, 30))
+    else:
+        raw = str(now).strip().replace("T", " ")
+        try:
+            if len(raw) >= 19:
+                ts = datetime.strptime(raw[:19], "%Y-%m-%d %H:%M:%S")
+            elif len(raw) >= 16:
+                ts = datetime.strptime(raw[:16], "%Y-%m-%d %H:%M")
+            else:
+                ts = datetime.combine(_to_date(raw), time(9, 30))
+        except Exception:
+            ts = datetime.now()
+
+    d = ts.date()
+    hm = (ts.hour, ts.minute)
+
+    # 1. 节假日 / 周末
+    if not is_trading_day(d):
+        target_date = str(last_trading_day_on_or_before(d - timedelta(days=1)))
+        return {
+            "target_date": target_date,
+            "is_today": False,
+            "is_live": False,
+            "phase": "holiday_closed",
+            "phase_label": "非交易日休市",
+            "tip": f"节假日休市：定格展示上一个交易日({target_date})的情绪终值与连板梯队",
+            "now_str": ts.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    # 2. 交易日 00:00 ~ 09:20 盘前
+    if hm < (9, 20):
+        target_date = str(previous_trading_day(d))
+        return {
+            "target_date": target_date,
+            "is_today": False,
+            "is_live": False,
+            "phase": "pre_market_replay",
+            "phase_label": "盘前复盘锁定",
+            "tip": f"盘前未开盘(0:00~9:20)：锁定展示上一个交易日({target_date})情绪终值，9:25后切换当日实时数据",
+            "now_str": ts.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    # 3. 交易日 09:20 ~ 09:25 集合竞价撮合
+    if hm < (9, 25):
+        target_date = str(d)
+        return {
+            "target_date": target_date,
+            "is_today": True,
+            "is_live": False,
+            "phase": "auction_transition",
+            "phase_label": "集合竞价撮合中",
+            "tip": "早盘9:20~9:25集合竞价撮合中，9:25产出今日首笔实时涨跌停板",
+            "now_str": ts.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    # 4. 交易日 09:25 ~ 15:05 盘中实时更新时段
+    if hm < (15, 5):
+        target_date = str(d)
+        return {
+            "target_date": target_date,
+            "is_today": True,
+            "is_live": True,
+            "phase": "intraday_live",
+            "phase_label": "盘中实时更新",
+            "tip": "交易时段：实时更新当前最新分笔涨跌停家数、连板梯队与题材共振",
+            "now_str": ts.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    # 5. 交易日 15:05 ~ 24:00 收盘后定格
+    target_date = str(d)
+    return {
+        "target_date": target_date,
+        "is_today": True,
+        "is_live": False,
+        "phase": "post_market_closed",
+        "phase_label": "已收盘定格",
+        "tip": f"今日已收盘：定格展示今日({target_date})全天短线情绪终值与风控结论",
+        "now_str": ts.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
 

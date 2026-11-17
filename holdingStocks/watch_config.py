@@ -1149,19 +1149,42 @@ def watchlist_codes_label(watchlist: list[dict[str, Any]] | None = None) -> str:
 # ── Paper Portfolio Capital Allocation V2（单一真源）──────────────
 # 这是 Portfolio / Risk Allocation，不是 Factor26 信号规则。
 CAPITAL_ALLOCATION_VERSION = 2
-MAX_NEW_SYMBOLS_PER_SESSION = 2  # 每个交易日最多新增 symbol 数
+MAX_NEW_SYMBOLS_PER_SESSION = 2  # 默认基准（动态由 dynamic_max_new_symbols_per_session 联动多维空仓）
 MAX_POSITION_WEIGHT = 0.20  # 单票入场目标 ≤ 账户权益 20%
 MAX_POSITION_SYMBOLS = 5  # 同时持仓 symbol 上限
 ALLOW_NEGATIVE_CASH_FOR_BUY = False  # 新 BUY 不得把现金打成负
 ALLOW_PYRAMIDING = False  # 已有 qty>0 不加仓
 LOT_SIZE = 100  # A 股一手
 
+
+def dynamic_max_new_symbols_per_session() -> int:
+    """与多维空仓（strategy35）建议防守仓位动态联动：
+    - 仓位建议 < 60%：当天新增不超过 2 槽（单日上限 2 只）
+    - 仓位建议 >= 60%：当天新增可达 3 槽（单日上限 3 只）
+    """
+    try:
+        from strategy35_watch import get_strategy35_timing_payload
+        p = get_strategy35_timing_payload()
+        ratio = float((p.get("current") or {}).get("position_ratio", 0.30))
+        return 3 if ratio >= 0.60 else 2
+    except Exception:
+        return 2
+
+
+def dynamic_max_buys_per_day() -> int:
+    """单日总买入上限（含 1 笔止损接回配额）：
+    - 防守态 (<=30%): 2 新 + 1 接回 = 3 只
+    - 进攻/减速态 (>30%): 3 新 + 1 接回 = 4 只
+    """
+    return dynamic_max_new_symbols_per_session() + 1
+
+
 # 兼容旧槽位字段名 → 一律映射到 V2（勿在别处再写魔法数）
 MAX_PORTFOLIO_SLOTS = MAX_POSITION_SYMBOLS
 RESERVE_EMPTY_SLOTS = 0  # 不再尾盘强制空槽
 MAX_OVERNIGHT_SLOTS = MAX_PORTFOLIO_SLOTS - RESERVE_EMPTY_SLOTS
 MAX_ACTIVE_SLOTS = MAX_OVERNIGHT_SLOTS  # 兼容旧名=隔夜上限
-MAX_BUYS_PER_DAY = 3 if STRATEGY_ID == "strategy1" else MAX_NEW_SYMBOLS_PER_SESSION  # 策略1：新增2笔 + 接回1笔
+MAX_BUYS_PER_DAY = 3 if STRATEGY_ID == "strategy1" else MAX_NEW_SYMBOLS_PER_SESSION  # 策略1：默认新增2笔 + 接回1笔
 RESERVE_SLOT_HOUR = 14
 RESERVE_SLOT_MINUTE = 50  # 14:50 起按隔夜上限控新开仓
 SLOT_WEIGHT = MAX_POSITION_WEIGHT  # 入场目标权重
@@ -1302,13 +1325,15 @@ def slot_meta(holdings: dict[str, Any], *, now: Any | None = None) -> dict[str, 
     occupied = occupied_slot_codes(holdings)
     n = len(occupied)
     reserve_mode = is_reserve_slot_window(now)
+    dyn_new = dynamic_max_new_symbols_per_session()
+    dyn_buys = dynamic_max_buys_per_day() if STRATEGY_ID == "strategy1" else dyn_new
     return {
         "max": int(MAX_PORTFOLIO_SLOTS),
         "reserve": int(RESERVE_EMPTY_SLOTS),
         "overnightMax": int(MAX_OVERNIGHT_SLOTS),
         "activeMax": int(MAX_OVERNIGHT_SLOTS),  # 兼容旧字段=隔夜上限
-        "maxBuysPerDay": int(MAX_BUYS_PER_DAY),
-        "maxNewSymbolsPerSession": int(MAX_NEW_SYMBOLS_PER_SESSION),
+        "maxBuysPerDay": int(dyn_buys),
+        "maxNewSymbolsPerSession": int(dyn_new),
         "maxPositionWeight": float(MAX_POSITION_WEIGHT),
         "maxPositionSymbols": int(MAX_POSITION_SYMBOLS),
         "allowNegativeCashBuy": bool(ALLOW_NEGATIVE_CASH_FOR_BUY),
@@ -1574,7 +1599,8 @@ def slot_fill_decision(
     if freed and trig and trig < freed:
         if last > cap + 1e-12:
             return None
-        px = floor_to_tick(last, tick)
+        # 用户要求：量化触买入的股票一律以信号价格买入
+        px = floor_to_tick(sig, tick)
         if px <= 0:
             return None
         reject = buy_fill_reject_reason(
@@ -1583,14 +1609,9 @@ def slot_fill_decision(
             session_high=session_high,
             session_low=low if low > 0 else None,
         )
-        if reject == "FILL_BELOW_BUY" and session_high_prints_buy(
-            session_high=session_high,
-            official_buy=official_buy,
-        ):
-            reject = None
         if reject:
             return None
-        return {"fill_px": round(float(px), 4), "kind": "last"}
+        return {"fill_px": round(float(px), 4), "kind": "signal"}
     px = floor_to_tick(sig, tick)
     if px <= 0:
         return None

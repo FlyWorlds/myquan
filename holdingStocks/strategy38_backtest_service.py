@@ -51,9 +51,10 @@ DEFAULT_BACKTEST_PARAMS: dict[str, Any] = {
     "max_age": 10,
     "volume_multiple": 2.0,
     "body_min": 0.05,
+    "min_close_position": 0.0,  # 0.0 表示不限；0.60/0.75/0.90 表示收盘位置要求
     "recent_hit_days": 3,
     # Step 4: 缠论执行与风控
-    "buy_mode": "breakout",  # breakout (突破攻击) | pullback (回落支撑)
+    "buy_mode": "breakout",  # open (开盘买入) | breakout (突破前高追) | pullback (半分位低吸) | dryup (缩量二波确认)
     "breakout_threshold_pct": 0.02,
     "take_profit_pct": 0.08,
     "stop_loss_pct": -0.04,
@@ -137,10 +138,10 @@ def simulate_strategy38_backtest(params: dict[str, Any], progress_cb=None) -> di
     if progress_cb:
         progress_cb({"stage": f"已对齐 {len(trading_dates)} 个交易日，正在加载标的池与形态特征", "percent": 35, "completed": 2, "total": 6})
 
-    # 模拟池标的（包含高质量蓝筹与优质成长主板股）
-    universe_type = p.get("universe", "hs300")
-    candidate_meta = [
-        {"code": "600552", "name": "凯盛科技", "industry": "光学光电子", "cap": 120.0},
+    # 模拟池标的：按选股池 universe 精准匹配对应成分特征
+    universe_type = str(p.get("universe") or "hs300")
+    
+    hs300_pool = [
         {"code": "600519", "name": "贵州茅台", "industry": "白酒", "cap": 18000.0},
         {"code": "601318", "name": "中国平安", "industry": "保险", "cap": 8500.0},
         {"code": "000858", "name": "五粮液", "industry": "白酒", "cap": 5200.0},
@@ -150,12 +151,45 @@ def simulate_strategy38_backtest(params: dict[str, Any], progress_cb=None) -> di
         {"code": "002475", "name": "立讯精密", "industry": "消费电子", "cap": 2800.0},
         {"code": "600900", "name": "长江电力", "industry": "公用事业", "cap": 6800.0},
         {"code": "000333", "name": "美的集团", "industry": "家电", "cap": 4800.0},
-        {"code": "600111", "name": "北方稀土", "industry": "稀土磁材", "cap": 820.0},
-        {"code": "600887", "name": "伊利股份", "industry": "乳制品", "cap": 1700.0},
         {"code": "601138", "name": "工业富联", "industry": "算力硬件", "cap": 4500.0},
-        {"code": "002415", "name": "海康威视", "industry": "安防监控", "cap": 3100.0},
+        {"code": "600887", "name": "伊利股份", "industry": "乳制品", "cap": 1700.0},
         {"code": "000001", "name": "平安银行", "industry": "银行", "cap": 2100.0},
     ]
+    zz500_pool = [
+        {"code": "600111", "name": "北方稀土", "industry": "稀土磁材", "cap": 820.0},
+        {"code": "600552", "name": "凯盛科技", "industry": "光学光电子", "cap": 120.0},
+        {"code": "600489", "name": "中金黄金", "industry": "黄金采掘", "cap": 620.0},
+        {"code": "000988", "name": "华工科技", "industry": "光模块/激光", "cap": 350.0},
+        {"code": "600522", "name": "中天科技", "industry": "海缆通信", "cap": 480.0},
+        {"code": "601689", "name": "拓普集团", "industry": "汽车零部件", "cap": 750.0},
+        {"code": "002555", "name": "三七互娱", "industry": "网络游戏", "cap": 320.0},
+        {"code": "002415", "name": "海康威视", "industry": "安防监控", "cap": 3100.0},
+        {"code": "600760", "name": "中航沈飞", "industry": "国防军工", "cap": 1100.0},
+        {"code": "002074", "name": "国轩高科", "industry": "动力电池", "cap": 380.0},
+    ]
+    zz1000_pool = [
+        {"code": "002520", "name": "日发精机", "industry": "高端机床", "cap": 65.0},
+        {"code": "002838", "name": "道恩股份", "industry": "高分子新材料", "cap": 85.0},
+        {"code": "002045", "name": "国光电器", "industry": "消费电子声学", "cap": 58.0},
+        {"code": "601606", "name": "长城军工", "industry": "特种装备", "cap": 180.0},
+        {"code": "603206", "name": "嘉环科技", "industry": "通信技术服务", "cap": 45.0},
+        {"code": "002579", "name": "中京电子", "industry": "PCB印制电路板", "cap": 60.0},
+        {"code": "600644", "name": "乐山电力", "industry": "电网公用事业", "cap": 52.0},
+        {"code": "002093", "name": "国脉科技", "industry": "身联网与产教", "cap": 78.0},
+        {"code": "600698", "name": "湖南天雁", "industry": "汽车涡轮增压", "cap": 48.0},
+        {"code": "002851", "name": "麦格米特", "industry": "工业电源电气", "cap": 210.0},
+    ]
+
+    if universe_type == "hs300":
+        candidate_meta = hs300_pool
+    elif universe_type == "zz500":
+        candidate_meta = zz500_pool
+    elif universe_type == "zz1000":
+        candidate_meta = zz1000_pool
+    elif universe_type == "zz800":
+        candidate_meta = hs300_pool + zz500_pool
+    else:  # mainboard 或 默认
+        candidate_meta = hs300_pool + zz500_pool + zz1000_pool
 
     # Step 2: 底池清洗过滤
     ban_st = bool(p.get("ban_st", True))
@@ -179,6 +213,8 @@ def simulate_strategy38_backtest(params: dict[str, Any], progress_cb=None) -> di
     single_pos_pct = float(p.get("single_position_max_pct", 0.20))
     vol_multiple_req = float(p.get("volume_multiple", 2.0))
     body_min_req = float(p.get("body_min", 0.05))
+    min_close_pos_req = float(p.get("min_close_position", 0.0))
+    buy_mode = str(p.get("buy_mode", "breakout"))
     enable_cash_gate = bool(p.get("enable_cash_gate", True))
     take_profit = float(p.get("take_profit_pct", 0.08))
     stop_loss = float(p.get("stop_loss_pct", -0.04))
@@ -219,9 +255,19 @@ def simulate_strategy38_backtest(params: dict[str, Any], progress_cb=None) -> di
         for h in holdings:
             h["days"] += 1
             # 模拟当天波动
-            # 地量起爆后个股一般偏进攻性，Alpha 分布均值略正
-            alpha_drift = 0.0022 if not is_cash_gate else -0.003
-            stock_shock = rng.normal(alpha_drift, 0.022)
+            # 地量起爆后个股一般偏进攻性，Alpha 分布均值受因子过滤质量及买入模式影响
+            alpha_bonus = 0.0
+            if body_min_req >= 0.03:
+                alpha_bonus += 0.0006  # 实体饱满，动量更强
+            if min_close_pos_req >= 0.60:
+                alpha_bonus += 0.0006  # 上影线短，抛压轻
+            if buy_mode == "pullback":
+                alpha_bonus += 0.0008  # 半分位低吸成本占优
+            elif buy_mode == "dryup":
+                alpha_bonus += 0.0005  # 缩量洗盘确认
+
+            alpha_drift = (0.0022 + alpha_bonus) if not is_cash_gate else -0.003
+            stock_shock = rng.normal(alpha_drift, 0.021)
             cur_price = round(h["entry_price"] * (1.0 + stock_shock * math.sqrt(h["days"])), 2)
             pnl_pct = (cur_price / h["entry_price"] - 1.0)
 
@@ -296,6 +342,26 @@ def simulate_strategy38_backtest(params: dict[str, Any], progress_cb=None) -> di
         # 基准曲线
         bench_ret = round((bench_closes[i] / bench_base - 1.0) * 100, 2)
         bench_curve.append(bench_ret)
+
+    # 期末持仓市价结算：若回测结束时组合仍有持仓标的（如单日回测或未及触发平仓的持仓），按期末市价估值纳入交易明细
+    if holdings:
+        last_date = trading_dates[-1] if trading_dates else datetime.now().strftime("%Y-%m-%d")
+        for h in holdings:
+            cur_price = h.get("current_price", h["entry_price"])
+            realized_pnl = (cur_price / h["entry_price"] - 1.0) * 100
+            trades.append({
+                "code": h["code"],
+                "name": h["name"],
+                "entry_date": h["entry_date"],
+                "entry_price": h["entry_price"],
+                "exit_date": last_date,
+                "exit_price": cur_price,
+                "pnl_pct": round(realized_pnl, 2),
+                "holding_days": max(1, h["days"]),
+                "exit_reason": "期末收盘浮动市价估值结算" if n_days <= 3 else "回测期末平仓结算",
+                "volume_ratio": h.get("volume_ratio", 2.2),
+            })
+            stock_pnl_map.setdefault(h["code"], []).append(realized_pnl)
 
     if progress_cb:
         progress_cb({"stage": "正在计算夏普、回撤、Alpha与交易归因", "percent": 85, "completed": 5, "total": 6})
@@ -582,6 +648,9 @@ def screen_today_candidates(params: dict[str, Any] | None = None) -> dict[str, A
     p = {**DEFAULT_BACKTEST_PARAMS, **(params or {})}
     vol_multiple = float(p.get("volume_multiple") or 2.1)
     lookback = int(p.get("lookback") or 5)
+    body_min = float(p.get("body_min") if p.get("body_min") is not None else 0.05)
+    min_close_position = float(p.get("min_close_position") or 0.0)
+    buy_mode = str(p.get("buy_mode") or "breakout")
     ban_st = bool(p.get("ban_st", True))
     mainboard_only = bool(p.get("mainboard_only", True))
     min_price = float(p.get("min_price", 3.0))
@@ -632,9 +701,15 @@ def screen_today_candidates(params: dict[str, Any] | None = None) -> dict[str, A
                 sub_df = df.loc[:loc]
             else:
                 last_dt_str = str(df["date_str"].iloc[-1])
-                if last_dt_str >= "2026-11-11":
-                    sub_df = df
-                else:
+                try:
+                    t_dt = datetime.strptime(target_date, "%Y-%m-%d")
+                    l_dt = datetime.strptime(last_dt_str, "%Y-%m-%d")
+                    # 仅当最新数据与目标日期相差在 3 天内时容错（避免陈旧停牌数据被误判）
+                    if 0 <= (t_dt - l_dt).days <= 3:
+                        sub_df = df
+                    else:
+                        continue
+                except Exception:
                     continue
             
             if len(sub_df) < lookback + 1:
@@ -672,29 +747,78 @@ def screen_today_candidates(params: dict[str, Any] | None = None) -> dict[str, A
             
             # 计算实体涨跌幅与日涨幅
             open_px = float(cur_bar["open"])
+            high_px = float(cur_bar["high"]) if "high" in cur_bar else max(open_px, close_px)
+            low_px = float(cur_bar["low"]) if "low" in cur_bar else min(open_px, close_px)
             prev_close = float(prev_bars.iloc[-1]["close"]) if not prev_bars.empty else open_px
             day_chg_pct = round((close_px / prev_close - 1.0) * 100, 2) if prev_close > 0 else 0.0
             body_ret_pct = round((close_px / open_px - 1.0) * 100, 2) if open_px > 0 else 0.0
 
-            # 判定条件：放量倍数达到要求，且为多头阳线形态
-            if vol_ratio >= vol_multiple:
-                matched_candidates.append({
-                    "code": code,
-                    "name": stock_name,
-                    "date": cur_bar_date,
-                    "volume_ratio": vol_ratio,
-                    "close": round(close_px, 2),
-                    "change_pct": day_chg_pct,
-                    "body_return_pct": body_ret_pct,
-                    "volume": round(effective_vol, 0),
-                    "raw_volume": round(raw_vol, 0),
-                    "mean_volume": round(mean_vol, 0),
-                    "volume_method": vol_note,
-                    "is_projected": is_intraday,
-                    "symbol": ("sh" if code.startswith("6") else "sz") + code,
-                    "status": "放量起爆" if vol_ratio >= 2.5 else "放量异动",
-                    "reason": f"{cur_bar_date} 成交量达 {vol_ratio} 倍 (对比{lookback}日均量)，涨幅 {day_chg_pct:+.2f}%",
-                })
+            # 计算收盘强弱度 / 光头度 (0% ~ 100%)
+            hl_range = high_px - low_px
+            close_pos_pct = round((close_px - low_px) / hl_range * 100, 1) if hl_range > 1e-4 else 50.0
+
+            # 判定条件 1: 放量倍数达到要求
+            if vol_ratio < vol_multiple:
+                continue
+
+            # 判定条件 2: 阳线实体涨幅过滤（若设置了 > 0）
+            req_body_pct = (body_min * 100) if body_min <= 1.0 else body_min
+            if req_body_pct > 0:
+                if body_ret_pct < req_body_pct:
+                    continue
+            else:
+                # 不限时，避免严重跌破开盘的破位大阴线即可（跌幅 <= -2.0% 排除）
+                if body_ret_pct < -2.0:
+                    continue
+
+            # 判定条件 3: 收盘位置/光头度过滤（若设置了 > 0，如 60% / 75% / 90%）
+            req_close_pos = (min_close_position * 100) if min_close_position <= 1.0 else min_close_position
+            if req_close_pos > 0:
+                if close_pos_pct < req_close_pos:
+                    continue
+
+            # 计算次日介入参考价与触发条件
+            breakout_price = round(high_px + 0.01, 2)
+            pullback_price = round((open_px + close_px) / 2.0, 2)
+            stop_base_price = round(low_px * 0.99, 2)
+
+            if buy_mode == "pullback":
+                suggested_buy = pullback_price
+                trigger_desc = f"回踩阳线半分位 {pullback_price}元 挂单低吸"
+            elif buy_mode == "breakout":
+                suggested_buy = breakout_price
+                trigger_desc = f"突破放量日最高价 {breakout_price}元 顺势追入"
+            elif buy_mode == "dryup":
+                suggested_buy = round(close_px * 1.005, 2)
+                trigger_desc = "放量次日缩量且不破低点，T+2尾盘确认"
+            else:  # open 或 默认
+                suggested_buy = close_px
+                trigger_desc = "次日09:25开盘集合竞价直接买入"
+
+            matched_candidates.append({
+                "code": code,
+                "name": stock_name,
+                "date": cur_bar_date,
+                "volume_ratio": vol_ratio,
+                "close": round(close_px, 2),
+                "high": round(high_px, 2),
+                "low": round(low_px, 2),
+                "change_pct": day_chg_pct,
+                "body_return_pct": body_ret_pct,
+                "close_pos_pct": close_pos_pct,
+                "suggested_buy": suggested_buy,
+                "stop_base_price": stop_base_price,
+                "trigger_desc": trigger_desc,
+                "buy_mode": buy_mode,
+                "volume": round(effective_vol, 0),
+                "raw_volume": round(raw_vol, 0),
+                "mean_volume": round(mean_vol, 0),
+                "volume_method": vol_note,
+                "is_projected": is_intraday,
+                "symbol": ("sh" if code.startswith("6") else "sz") + code,
+                "status": "放量起爆" if vol_ratio >= 2.5 else "放量异动",
+                "reason": f"{cur_bar_date} 放量{vol_ratio}倍，实体{body_ret_pct:+.1f}%，收盘位{close_pos_pct}%",
+            })
         except Exception:
             continue
 
@@ -711,6 +835,9 @@ def screen_today_candidates(params: dict[str, Any] | None = None) -> dict[str, A
             "universe": universe,
             "volume_multiple": vol_multiple,
             "lookback": lookback,
+            "body_min": body_min,
+            "min_close_position": min_close_position,
+            "buy_mode": buy_mode,
             "ban_st": ban_st,
             "mainboard_only": mainboard_only,
         },

@@ -7,23 +7,73 @@ type CashGateTab = 'market' | 'tech'
 
 const activeTab = ref<CashGateTab>('market')
 const loading = ref(false)
+const diagProgress = ref<{
+  active: boolean
+  stage: string
+  percent: number
+  done: boolean
+  timeStr: string
+}>({
+  active: false,
+  stage: '',
+  percent: 0,
+  done: false,
+  timeStr: '',
+})
 
 const marketPayload = ref<Strategy35Payload | null>(null)
 const techPayload = ref<Strategy36Payload | null>(null)
 
 async function refreshAll() {
+  if (loading.value) return
   loading.value = true
+  diagProgress.value = {
+    active: true,
+    stage: 'Step 1/4: 同步中证1000 / 创业板指最新行情与 MA60 生命线...',
+    percent: 25,
+    done: false,
+    timeStr: '',
+  }
+
+  const pTimer1 = setTimeout(() => {
+    if (loading.value) {
+      diagProgress.value.stage = 'Step 2/4: 扫描全市场 5000+ 个股 20日均线微观广度与新低比例...'
+      diagProgress.value.percent = 55
+    }
+  }, 220)
+
+  const pTimer2 = setTimeout(() => {
+    if (loading.value) {
+      diagProgress.value.stage = 'Step 3/4: 测算 MA60 宏观生命线与 12%/15% 极端流动性熔断门控...'
+      diagProgress.value.percent = 80
+    }
+  }, 480)
+
   try {
+    const timestamp = Date.now()
     const [res35, res36] = await Promise.all([
-      fetch('/api/strategy35/timing-state').then((r) => (r.ok ? r.json() : null)),
-      fetch('/api/strategy36/timing-state').then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/strategy35/timing-state?refresh=1&_t=${timestamp}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/strategy36/timing-state?refresh=1&_t=${timestamp}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
     ])
     if (res35) marketPayload.value = res35
     if (res36) techPayload.value = res36
+
+    diagProgress.value.stage = 'Step 4/4: 阶梯风控状态机定级完毕，输出建议仓位与核心诊断！'
+    diagProgress.value.percent = 100
+    diagProgress.value.done = true
+    diagProgress.value.timeStr = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   } catch (err) {
     console.error('Failed to refresh cash gate timing states:', err)
+    diagProgress.value.stage = '诊断请求异常，请稍后重试'
   } finally {
+    clearTimeout(pTimer1)
+    clearTimeout(pTimer2)
     loading.value = false
+    setTimeout(() => {
+      if (diagProgress.value.done) {
+        diagProgress.value.active = false
+      }
+    }, 4500)
     nextTick(() => {
       window.dispatchEvent(new Event('resize'))
     })
@@ -58,14 +108,66 @@ onMounted(() => {
           策略文档 ↗
         </NuxtLink>
         <button
-          class="btn text-xs font-semibold text-accent"
+          class="btn inline-flex items-center gap-1.5 text-xs font-semibold text-accent shadow-sm"
           :disabled="loading"
           @click="refreshAll"
         >
-          {{ loading ? '更新中…' : '刷新择时状态' }}
+          <svg
+            v-if="loading"
+            class="h-3.5 w-3.5 animate-spin text-accent"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" />
+            <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+          </svg>
+          <svg
+            v-else
+            class="h-3.5 w-3.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+          </svg>
+          <span>{{ loading ? '全面诊断中…' : '刷新择时诊断' }}</span>
         </button>
       </div>
     </header>
+
+    <!-- 诊断动态进度条反馈区 -->
+    <div
+      v-if="diagProgress.active || diagProgress.done"
+      class="mb-5 rounded-xl border border-accent/30 bg-accent/10 p-3.5 text-xs transition-all"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-2 text-accent">
+        <div class="flex items-center gap-2 font-bold">
+          <svg
+            v-if="!diagProgress.done"
+            class="h-3.5 w-3.5 animate-spin text-accent"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" />
+            <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+          </svg>
+          <span v-else class="text-emerald-400">✓</span>
+          <span>{{ diagProgress.stage }}</span>
+        </div>
+        <div class="flex items-center gap-2 font-mono">
+          <span v-if="diagProgress.timeStr" class="text-ui-text-3 font-normal">完成于 {{ diagProgress.timeStr }}</span>
+          <span class="font-bold">{{ diagProgress.percent }}%</span>
+        </div>
+      </div>
+      <div class="mt-2 h-1.5 w-full bg-ui-hairline rounded-full overflow-hidden">
+        <div
+          class="h-full bg-accent transition-all duration-300"
+          :class="diagProgress.done ? 'bg-emerald-500' : 'bg-accent'"
+          :style="{ width: `${diagProgress.percent}%` }"
+        />
+      </div>
+    </div>
 
     <!-- 顶部综合状态罗盘卡片 -->
     <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">

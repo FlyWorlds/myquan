@@ -347,6 +347,46 @@ def build_watch_request_handler(
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "strategy37 payload unavailable", "detail": str(exc)}, status=500)
                 return
+            if path == "/api/strategy2/payload":
+                try:
+                    from strategy2_watch import get_strategy2_watch_payload
+
+                    self._send_json(get_strategy2_watch_payload())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy2 payload unavailable", "detail": str(exc)}, status=500)
+                return
+
+            if path == "/api/strategy2/scan":
+                try:
+                    from strategy2_watch import MANAGER
+
+                    self._send_json(MANAGER.get_status())
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy2 scan status unavailable", "detail": str(exc)}, status=500)
+                return
+
+            if path == "/api/strategy2/chart":
+                try:
+                    from strategy2_watch import get_strategy2_chart_data
+
+                    query = parse_qs(urlparse(self.path).query)
+                    code = str(query.get("code", [""])[0])
+                    name = str(query.get("name", [""])[0])
+                    is_sector = str(query.get("is_sector", ["false"])[0]).lower() in ("true", "1")
+                    self._send_json(get_strategy2_chart_data(code, name, is_sector))
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy2 chart unavailable", "detail": str(exc)}, status=500)
+                return
+
+            if path == "/api/strategy2/sectors":
+                try:
+                    from strategy2_watch import CORE_SECTORS
+
+                    self._send_json({"sectors": CORE_SECTORS})
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy2 sectors unavailable", "detail": str(exc)}, status=500)
+                return
+
             if path == "/api/strategy38/payload":
                 try:
                     from strategy38_watch import get_strategy38_watch_payload
@@ -374,7 +414,7 @@ def build_watch_request_handler(
                     self._send_json({"error": "strategy3 backtest status unavailable", "detail": str(exc)}, status=500)
                 return
 
-            if path == "/api/strategy38/backtest":
+            if path in ("/api/strategy38/backtest", "/api/strategy38/backtest/status"):
                 try:
                     from strategy38_backtest_service import Strategy38BacktestManager
 
@@ -682,6 +722,32 @@ def build_watch_request_handler(
                     self._send_json(Strategy3BacktestManager.trigger_backtest(body))
                 except Exception as exc:  # noqa: BLE001
                     self._send_json({"error": "strategy3 backtest trigger failed", "detail": str(exc)}, status=500)
+                return
+
+            if path == "/api/strategy2/scan":
+                try:
+                    from strategy2_watch import MANAGER
+
+                    length = int(self.headers.get("content-length", 0))
+                    body = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    scope = str(body.get("scope", "sectors"))
+                    target_concept = str(body.get("target_concept", ""))
+                    subset = body.get("symbol_subset")
+                    MANAGER.run_scan_async(scope=scope, target_concept=target_concept, symbol_subset=subset)
+                    self._send_json({"status": "scanning", "scope": scope, "target_concept": target_concept})
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy2 scan trigger failed", "detail": str(exc)}, status=500)
+                return
+
+            if path == "/api/strategy2/backtest":
+                try:
+                    from strategy2_watch import run_strategy2_backtest
+
+                    length = int(self.headers.get("content-length", 0))
+                    body = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    self._send_json(run_strategy2_backtest(body))
+                except Exception as exc:  # noqa: BLE001
+                    self._send_json({"error": "strategy2 backtest failed", "detail": str(exc)}, status=500)
                 return
 
             if path == "/api/strategy38/backtest":

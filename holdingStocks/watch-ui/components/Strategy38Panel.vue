@@ -128,11 +128,14 @@ onBeforeUnmount(() => {
         </button>
         <button
           type="button"
-          class="rounded-md px-4 py-1.5 font-bold transition ml-1"
+          class="inline-flex items-center gap-1.5 rounded-md px-4 py-1.5 font-bold transition ml-1"
           :class="activeTab === 'backtest' ? 'bg-accent/20 text-accent font-bold shadow-sm' : 'text-ui-text-3 hover:text-ui-text'"
           @click="activeTab = 'backtest'"
         >
-          ⚡ 策略多维参数回测平台
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg>
+          <span>策略多维参数回测平台</span>
         </button>
       </div>
       <span class="text-xs text-ui-text-3">
@@ -213,13 +216,34 @@ onBeforeUnmount(() => {
           </label>
           <button
             type="button"
-            class="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white shadow hover:opacity-90 transition disabled:opacity-50 flex items-center gap-1.5"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/50 bg-teal-500/20 px-3.5 py-1.5 text-xs font-bold text-teal-300 shadow-sm transition hover:bg-teal-500/30 hover:border-teal-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="scanning"
             @click="triggerScan"
           >
-            <span v-if="scanning" class="inline-block animate-spin">⌛</span>
-            <span v-else>🔍</span>
-            <span>{{ scanning ? '全市场扫描中…' : '重新扫描全市场起爆标的' }}</span>
+            <!-- 运行中状态图标：矢量旋转环 -->
+            <svg
+              v-if="scanning"
+              class="h-3.5 w-3.5 animate-spin text-teal-300"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" />
+              <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+            </svg>
+            <!-- 常态图标：专业量化脉冲信号波形 SVG（Activity/Pulse） -->
+            <svg
+              v-else
+              class="h-3.5 w-3.5 text-teal-300"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 12h3l2-6 4 12 3-8 2 2h4" />
+            </svg>
+            <span>{{ scanning ? '全市场信号选股中…' : '信号选股' }}</span>
           </button>
         </div>
       </div>

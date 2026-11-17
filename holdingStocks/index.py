@@ -231,6 +231,8 @@ from watch_config import (
     MAX_ACTIVE_SLOTS,
     MAX_BUYS_PER_DAY,
     MAX_NEW_SYMBOLS_PER_SESSION,
+    dynamic_max_new_symbols_per_session,
+    dynamic_max_buys_per_day,
     MAX_POSITION_WEIGHT,
     MAX_POSITION_SYMBOLS,
     ALLOW_NEGATIVE_CASH_FOR_BUY,
@@ -741,7 +743,7 @@ _FACTOR_ROLE_ZH: dict[str, str] = {
 
 # 盯盘首页 Tab：仅有实时面板/与当日行情相关的完整策略
 WATCH_LIVE_TAB_IDS = frozenset(
-    {"strategy1", "strategy3", "strategy17", "strategy37", "strategy38"}
+    {"strategy1", "strategy2", "strategy3", "strategy17", "strategy37", "strategy38"}
 )
 
 
@@ -2820,6 +2822,7 @@ def publish_watch_snapshot(
         return out
 
     strategy3: dict[str, Any] = {}
+    strategy2_payload: dict[str, Any] = {}
     strategy8: dict[str, Any] = {}
     strategy15: dict[str, Any] = {}
     strategy17_rows: list[dict[str, Any]] = []
@@ -2830,6 +2833,7 @@ def publish_watch_snapshot(
     if _CONDITION_BUY_ACTIVE:
         include_strategy_panels = False
         previous = _QUOTE_RUNTIME_PANELS or _last_watch_snapshot or {}
+        strategy2_payload = previous.get("strategy2") or (_last_watch_snapshot or {}).get("strategy2") or {}
         strategy3 = previous.get("strategy3") or {}
         strategy8 = previous.get("strategy8") or {}
         strategy15 = previous.get("strategy15") or {}
@@ -2912,6 +2916,13 @@ def publish_watch_snapshot(
             strategy38_payload = get_strategy38_watch_payload()
         except Exception as e:  # noqa: BLE001
             strategy38_payload = {"error": str(e)}
+        strategy2_payload: dict[str, Any] = {}
+        try:
+            from strategy2_watch import get_strategy2_watch_payload
+
+            strategy2_payload = get_strategy2_watch_payload()
+        except Exception as e:  # noqa: BLE001
+            strategy2_payload = {"error": str(e)}
 
     # Retained signals are display data; never feed them back into execution.
     from alert_retention import LIVE_ALERT_RETENTION
@@ -2932,6 +2943,7 @@ def publish_watch_snapshot(
             "factorsLabel": _STRATEGY_FACTORS_LABEL,
         },
         strategies=_watch_tabs_with_live_s8(strategy8),
+        strategy2=strategy2_payload,
         strategy3=strategy3,
         strategy8=strategy8,
         strategy15=strategy15,
@@ -3122,6 +3134,7 @@ def _seed_boot_watch_snapshot() -> None:
         "indices": [],
         "holdings": [],
         "strategy1": [],
+        "strategy2": {},
         "strategy3": {},
         "strategy8": {},
         "strategy15": {},
@@ -6038,7 +6051,7 @@ def _apply_portfolio_slots(
     buy_ranks = today_slot_buy_ranks(session)
     new_today = today_new_symbol_codes(session)
     buys_done = len(new_today)
-    buys_left = max(0, int(MAX_NEW_SYMBOLS_PER_SESSION) - buys_done)
+    buys_left = max(0, dynamic_max_new_symbols_per_session() - buys_done)
 
     try:
         from watch_config import strategy_watchlist_codes
@@ -6127,7 +6140,7 @@ def _apply_portfolio_slots(
             if free_buy_slot_count(data) <= 0:
                 break
             opened = today_new_symbol_codes(session)
-            if len(opened) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
+            if len(opened) >= dynamic_max_new_symbols_per_session():
                 break
             freed_at = peek_slot_freed_at(data, session)
 
@@ -6469,7 +6482,7 @@ def _apply_portfolio_slots(
     meta["skipped"] = skipped
     opened_now = today_new_symbol_codes(session)
     meta["buysToday"] = len(opened_now)
-    meta["buysLeft"] = max(0, int(MAX_NEW_SYMBOLS_PER_SESSION) - len(opened_now))
+    meta["buysLeft"] = max(0, dynamic_max_new_symbols_per_session() - len(opened_now))
     meta["newSymbolsToday"] = opened_now
     meta["newSymbolsLeft"] = meta["buysLeft"]
     meta["session"] = session
@@ -9088,7 +9101,7 @@ def _collect_quote_runtime_rows(get_quote=None):
               if str(t.get("side") or "").lower() == "buy"
               and str(t.get("session") or t.get("time") or "")[:10] == day
               and not t.get("reset_archived")}
-    signal_slots["buysLeft"] = max(0, int(MAX_NEW_SYMBOLS_PER_SESSION) - len(opened))
+    signal_slots["buysLeft"] = max(0, dynamic_max_new_symbols_per_session() - len(opened))
     _annotate_unfilled_buy_signals(rows, signal_slots)
     return rows
 
@@ -11130,7 +11143,7 @@ def collect_rows(
         slot_info["session"] = sess_q
         slot_info["buysToday"] = len(opened_q)
         slot_info["buysLeft"] = max(
-            0, int(MAX_NEW_SYMBOLS_PER_SESSION) - len(opened_q)
+            0, dynamic_max_new_symbols_per_session() - len(opened_q)
         )
         slot_info["newSymbolsToday"] = opened_q
         slot_info["newSymbolsLeft"] = slot_info["buysLeft"]
@@ -13255,6 +13268,9 @@ def _store_condition_drafts(drafts: list[dict[str, Any]], active_codes: set[str]
         stored = (book.get("orders") or {}).get(draft["code"], {})
         if stored.get("id") == draft["id"] and draft["code"] in active_codes:
             _CONDITION_VERIFIED_IDS.add(draft["id"])
+    for o in orders.values():
+        if isinstance(o, dict) and o.get("code") in active_codes and o.get("status") in ("ARMED", "TRIGGERED") and o.get("id"):
+            _CONDITION_VERIFIED_IDS.add(o["id"])
 
 
 @paper_mutation
@@ -13372,7 +13388,7 @@ def _on_condition_quote(sina: str, quote: dict[str, Any], received_at: datetime)
         today_buys = {r.get("code") for r in committed.get("trades", [])
                       if str(r.get("side") or "").lower() == "buy"
                       and str(r.get("session") or r.get("time") or "")[:10] == str(trading_session_date())}
-        if STRATEGY_ID != "strategy1" and len(today_buys) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
+        if STRATEGY_ID != "strategy1" and len(today_buys) >= dynamic_max_new_symbols_per_session():
             return
     if order and order.get("id") in _CONDITION_VERIFIED_IDS and is_trigger(order, quote, received_at, datetime.now()):
         _execute_condition_quote(code, quote, received_at)
@@ -13583,7 +13599,7 @@ def _execute_condition_quote(code: str, quote: dict[str, Any], received_at: date
         if STRATEGY_ID == "strategy1" and not reason:
             from daily_buy_quota import quota_reason as daily_fill_quota_reason
             reason = daily_fill_quota_reason(getattr(_HOLDINGS_STORE, "_state", {}).get("trades", []), day, is_rebuy=is_rebuy)
-        if STRATEGY_ID != "strategy1" and not reason and not (is_rebuy and STOP_REBUY_EXEMPT_DAILY_CAP) and len(today_new_symbol_codes(day)) >= int(MAX_NEW_SYMBOLS_PER_SESSION):
+        if STRATEGY_ID != "strategy1" and not reason and not (is_rebuy and STOP_REBUY_EXEMPT_DAILY_CAP) and len(today_new_symbol_codes(day)) >= dynamic_max_new_symbols_per_session():
             reason = "MAX_NEW_SYMBOLS_PER_SESSION"
         if not reason and free_buy_slot_count(data) <= 0:
             reason = "MAX_POSITION_SYMBOLS"
@@ -13836,6 +13852,10 @@ def cmd_watch(args: argparse.Namespace) -> None:
     _watch_feed = feed
     _CONDITION_BUY_ACTIVE = str(STRATEGY_ID) in {"strategy1", "strategy16"}
     _CONDITION_VERIFIED_IDS.clear()
+    cached_orders = ((_HOLDINGS_CACHE.get("data") or {}).get("condition_buy_orders") or {}).get("orders") or {}
+    for o_item in cached_orders.values():
+        if isinstance(o_item, dict) and o_item.get("status") in ("ARMED", "TRIGGERED") and o_item.get("id"):
+            _CONDITION_VERIFIED_IDS.add(o_item["id"])
     _QUOTE_EXIT_OBSERVED.clear()
     _QUOTE_RUNTIME_PANELS.clear()
     from condition_buy import ConditionBuyWorker

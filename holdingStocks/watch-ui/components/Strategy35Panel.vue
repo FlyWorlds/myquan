@@ -15,6 +15,18 @@ const localPayload = ref<Strategy35Payload | null>(null)
 const loading = ref(false)
 const activeChartTab = ref<'breadth' | 'index'>('breadth')
 
+const diagProgress = ref<{
+  active: boolean
+  stage: string
+  percent: number
+  done: boolean
+}>({
+  active: false,
+  stage: '',
+  percent: 0,
+  done: false,
+})
+
 const chartEl = ref<HTMLElement | null>(null)
 let myChart: echarts.ECharts | null = null
 
@@ -26,20 +38,53 @@ async function fetchTimingState() {
   if (loading.value) return
   loading.value = true
   refreshError.value = ''
+  diagProgress.value = {
+    active: true,
+    stage: 'Step 1/4: 同步中证1000指数日线与 60日生命线...',
+    percent: 25,
+    done: false,
+  }
+
+  const p1 = setTimeout(() => {
+    if (loading.value) {
+      diagProgress.value.stage = 'Step 2/4: 计算全市场 5000+ 个股 20日均线微观广度与新低比例...'
+      diagProgress.value.percent = 55
+    }
+  }, 200)
+
+  const p2 = setTimeout(() => {
+    if (loading.value) {
+      diagProgress.value.stage = 'Step 3/4: 宏观 MA60 与 12% 极端流动性熔断测试...'
+      diagProgress.value.percent = 80
+    }
+  }, 450)
+
   try {
-    const res = await fetch('/api/strategy35/timing-state?refresh=1', { cache: 'no-store' })
+    const timestamp = Date.now()
+    const res = await fetch(`/api/strategy35/timing-state?refresh=1&_t=${timestamp}`, { cache: 'no-store' })
     if (!res.ok) throw new Error(`刷新失败（HTTP ${res.status}）`)
     const data = await res.json()
     if (data.error || !data.current) throw new Error(data.error || '未返回有效诊断数据')
     localPayload.value = data
     emit('refreshed', data)
     refreshedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    diagProgress.value.stage = 'Step 4/4: 全局多维空仓诊断完成，风控仓位建议已更新！'
+    diagProgress.value.percent = 100
+    diagProgress.value.done = true
     await nextTick()
     updateChart()
   } catch (err) {
     refreshError.value = err instanceof Error ? err.message : '刷新失败，请稍后重试'
+    diagProgress.value.stage = '诊断失败：' + (err instanceof Error ? err.message : '网络异常')
   } finally {
+    clearTimeout(p1)
+    clearTimeout(p2)
     loading.value = false
+    setTimeout(() => {
+      if (diagProgress.value.done) {
+        diagProgress.value.active = false
+      }
+    }, 4000)
   }
 }
 
@@ -469,13 +514,49 @@ onUnmounted(() => {
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="inline-flex items-center gap-1.5 rounded-lg border border-ui-hairline/80 bg-ui-surface/80 px-3 py-1.5 text-xs font-medium text-ui-text hover:bg-ui-surface hover:text-accent transition"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-ui-hairline/80 bg-ui-surface/80 px-3 py-1.5 text-xs font-medium text-ui-text hover:bg-ui-surface hover:text-accent transition shadow-sm"
             :disabled="loading"
             @click="fetchTimingState"
           >
-            <span :class="loading ? 'animate-spin' : ''">↻</span>
-            <span>{{ loading ? '刷新中…' : '刷新诊断' }}</span>
+            <svg
+              v-if="loading"
+              class="h-3.5 w-3.5 animate-spin text-accent"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25" />
+              <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+            </svg>
+            <svg
+              v-else
+              class="h-3.5 w-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+            </svg>
+            <span>{{ loading ? '全面诊断中…' : '刷新诊断' }}</span>
           </button>
+        </div>
+      </div>
+
+      <!-- 诊断阶段进度流转指示条 -->
+      <div
+        v-if="diagProgress.active || diagProgress.done"
+        class="mt-3 rounded-lg border border-accent/25 bg-accent/10 p-2.5 text-xs"
+      >
+        <div class="flex justify-between items-center text-accent">
+          <span class="font-bold">{{ diagProgress.stage }}</span>
+          <span class="font-mono font-bold">{{ diagProgress.percent }}%</span>
+        </div>
+        <div class="mt-1.5 h-1.5 w-full bg-ui-hairline rounded-full overflow-hidden">
+          <div
+            class="h-full transition-all duration-300"
+            :class="diagProgress.done ? 'bg-emerald-500' : 'bg-accent'"
+            :style="{ width: `${diagProgress.percent}%` }"
+          />
         </div>
       </div>
 

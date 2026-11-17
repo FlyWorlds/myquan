@@ -185,7 +185,12 @@ async function confirmDelete() {
     <div class="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-ui-border">
       <div class="flex items-center gap-3">
         <h2 class="text-xl font-bold flex items-center gap-2">
-          <span class="text-amber-400">📋</span> 开盘交易计划
+          <svg class="h-5 w-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            <path d="M9 14l2 2 4-4" />
+          </svg>
+          <span>开盘交易计划</span>
         </h2>
         <div class="flex items-center gap-1 text-xs">
           <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">

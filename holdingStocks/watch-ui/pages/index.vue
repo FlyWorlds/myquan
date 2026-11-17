@@ -105,6 +105,7 @@ function tabLabel(id: string) {
 }
 
 const strategy1Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy1'))
+const strategy2Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy2'))
 const strategy3Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy3'))
 const strategy8Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy8'))
 const strategy15Tab = computed(() => strategyTabs.value.find((t) => t.id === 'strategy15'))
@@ -437,11 +438,23 @@ const closedCount = computed(() => closedHoldings.value.length)
         <!-- 交易计划按钮（开盘前必看，高亮显眼设计） -->
         <button
           type="button"
-          class="btn-plan-hero"
+          class="btn-plan-hero group"
           title="开盘交易计划（支持编辑、删除、置顶）"
           @click="showPlanModal = true"
         >
-          <span class="text-base leading-none">📋</span>
+          <svg
+            class="h-4 w-4 text-amber-300 transition-transform group-hover:scale-110"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            <path d="M9 14l2 2 4-4" />
+          </svg>
           <span class="font-bold tracking-wide">交易计划</span>
           <span
             v-if="pendingPlanCount > 0"
@@ -457,6 +470,8 @@ const closedCount = computed(() => closedHoldings.value.length)
       </div>
     </header>
 
+    <!-- 多维空仓全局风控与仓位控制警示条 -->
+    <CashGateAlertBanner :account="snapshot?.account" />
 
     <nav class="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="盯盘视图">
       <button
@@ -639,6 +654,15 @@ const closedCount = computed(() => closedHoldings.value.length)
         />
       </section>
 
+      <section v-show="activeTab === 'strategy2'">
+        <StrategyInfoPanel v-if="strategy2Tab" :tab="strategy2Tab" class="mb-4" />
+        <Strategy2Panel
+          v-if="snapshot"
+          :tab="strategy2Tab"
+          :payload="(snapshot as any)?.strategy2"
+        />
+      </section>
+
       <section v-show="activeTab === 'strategy3'">
         <StrategyInfoPanel v-if="strategy3Tab" :tab="strategy3Tab" class="mb-4" />
         <Strategy3Panel
@@ -807,7 +831,7 @@ const closedCount = computed(() => closedHoldings.value.length)
 
 
     <p class="mt-6 text-xs leading-relaxed text-ui-text-3">
-      盯盘 Tab 仅展示实盘交易策略（策略1 / 3 / 17 / 37 / 38）。多维空仓择时已升级为全局风控，请前往顶部导航
+      盯盘 Tab 仅展示实盘交易策略（策略1 / 2 / 3 / 17 / 37 / 38）。多维空仓择时已升级为全局风控，请前往顶部导航
 
       <NuxtLink to="/cash-gate" class="text-accent hover:underline">多维空仓</NuxtLink>
       ；因子持有模板、研究型条目见

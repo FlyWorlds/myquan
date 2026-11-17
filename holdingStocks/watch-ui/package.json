@@ -22,7 +22,9 @@
   },
   "devDependencies": {
     "@nuxtjs/tailwindcss": "^6.14.0",
+    "@oxc-parser/binding-darwin-arm64": "^0.159.0",
     "@types/qrcode": "^1.5.5",
+    "oxc-parser": "^0.143.0",
     "typescript": "~5.8.3"
   }
 }
