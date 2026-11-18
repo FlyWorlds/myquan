@@ -271,10 +271,18 @@ class TestIndexWiring(unittest.TestCase):
         self._saved = dict(index._HOLDINGS_CACHE)
         index._HOLDINGS_CACHE.clear()
         index._HOLDINGS_CACHE.update({"data": None, "mtime": 0.0})
+        self._saved_store = index._HOLDINGS_STORE
         self._patch = mock.patch.object(index, "HOLDINGS_FILE", self.path)
         self._patch.start()
+        # 强制单测使用 local_json 内存/文件存储，严防污染实时数据库
+        index._HOLDINGS_STORE = hs.HoldingsStore(
+            index._HOLDINGS_CACHE,
+            path=lambda: self.path,
+            normalize=lambda d: index._normalize_holdings(d),
+        )
 
     def tearDown(self) -> None:
+        self.index._HOLDINGS_STORE = self._saved_store
         self._patch.stop()
         self.index._HOLDINGS_CACHE.clear()
         self.index._HOLDINGS_CACHE.update(self._saved)

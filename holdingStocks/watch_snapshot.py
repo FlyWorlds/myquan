@@ -513,7 +513,6 @@ def apply_day_linked_account_equity(account: dict[str, Any]) -> dict[str, Any]:
     acc = dict(account or {})
     day = acc.get("dayPnl")
     open_eq = acc.get("accountOpen")
-    acc["dayPnlPct"] = account_today_return_pct(day, open_eq)
     if acc.get("equityBasis") == "cash_plus_market_value":
         # Database cash is authoritative; never synthesize it from daily PnL.
         cash = acc.get("availableCash")
@@ -526,11 +525,30 @@ def apply_day_linked_account_equity(account: dict[str, Any]) -> dict[str, Any]:
                 acc["totalPnl"] = round(total - float(base), 2)
                 acc["totalPnlPct"] = round(acc["totalPnl"] / float(base) * 100.0, 2)
             acc["positionPct"] = round(float(mv) / total * 100.0, 1) if total > 0 else None
+
+            # 校验并校准日初资产 open_eq：
+            # 若 open_eq 缺失、非正、或与当前总资产偏离过大（偏离超 35%，明显属于历史结算漏计现金等损坏数据），
+            # 则以 (total - day) 动态校准真实日初资产。
+            try:
+                open_f = float(open_eq) if open_eq is not None else 0.0
+            except (TypeError, ValueError):
+                open_f = 0.0
+            day_f = float(day) if day is not None else 0.0
+
+            if open_f <= 0 or abs(total - open_f) > total * 0.35:
+                calibrated_open = round(total - day_f, 2)
+                if calibrated_open > 0:
+                    open_eq = calibrated_open
+                    acc["accountOpen"] = calibrated_open
+
             if open_eq is not None:
                 acc["equityDayPnl"] = round(total - float(open_eq), 2)
                 if day is not None:
                     acc["dayPnlVsEquity"] = round(float(day) - acc["equityDayPnl"], 2)
+
+        acc["dayPnlPct"] = account_today_return_pct(day, open_eq)
         return acc
+    acc["dayPnlPct"] = account_today_return_pct(day, open_eq)
     if day is None or open_eq is None:
         return acc
     try:

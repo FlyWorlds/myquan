@@ -213,6 +213,7 @@ from watch_config import (
     reprintable_buy_cost,
     is_auction_quote_ts,
     timestamp_in_signal_window,
+    _quote_clock_hms,
     trust_quote_day_high,
     is_threshold_ready,
     market_phase,
@@ -2589,6 +2590,19 @@ def _sync_snapshot_hwm_locked(
             positions[code] = pos
             old_peak = float(pos.get("peak_high") or 0)
         # 竞价虚拟价不得抬 HWM；开盘后前几秒 API high 仍可能是竞价残留
+        # 但 09:25:00 之后，集合竞价确立的开盘价 open_h 是权威真实印出成交价
+        quote_hms = _quote_clock_hms(quote_at)
+        now_hms = datetime.now().strftime("%H:%M:%S")
+        eff_hms = quote_hms or now_hms
+        is_auction_unsettled = bool(
+            (quote_hms and "09:15:00" <= quote_hms < "09:25:00")
+            or (not quote_hms and is_auction_observe())
+        )
+        is_open_settled = (not is_auction_unsettled) and bool(
+            is_auction_result()
+            or is_signal_window()
+            or (eff_hms and "09:25:00" <= eff_hms <= "15:00:00")
+        )
         quote_in_cont = timestamp_in_signal_window(quote_at)
         if is_signal_window() and quote_in_cont:
             snap_h = usable_session_high(
@@ -2614,11 +2628,57 @@ def _sync_snapshot_hwm_locked(
                     positions[code] = pos
             except TemporalIntegrityError as te:
                 print(f"[{_now()}] {te.code} HWM raise blocked {code}: {te}")
+        elif is_open_settled and not t1_today and open_h > 0 and open_h > old_peak:
+            # 09:25:00 集合竞价开盘价确立，允许隔夜仓以此真实开盘价抬升峰值
+            stamp_ts = quote_at if (quote_hms and "09:25:00" <= quote_hms <= "15:00:00") else (f"{sess} 09:25:00" if sess else _now())
+            stamp_dec = max(decision_at, stamp_ts) if decision_at else stamp_ts
+            try:
+                if _stamp_position_peak_high(
+                    pos, open_h, at=stamp_ts, decision_at=stamp_dec
+                ):
+                    dirty = True
+                    changed = True
+                    positions[code] = pos
+            except TemporalIntegrityError as te:
+                print(f"[{_now()}] {te.code} 09:25 open HWM raise blocked {code}: {te}")
         pos["last_quote_at"] = quote_at
         before_hwm = r.get("持仓最高")
         _attach_hwm_row_fields(r, pos, px_digits=px_digits)
         if r.get("持仓最高") != before_hwm:
             changed = True
+        # 刷新该行卖出侧展示价与卖出原因（同源即时生效，不滞后）
+        if qty > 0 and cost_h > 0:
+            eff_peak = float(pos.get("peak_high") or r.get("持仓最高") or 0)
+            if t1_today:
+                s_kind = "hard_from_cost"
+                s_px = cost_hard_stop_px(cost_h, tick=0.01)
+            else:
+                from strategy.pullback_wave_stop import working_stop_price
+                vol_fn = globals().get("_vol20_daily_for") or (lambda *_: 0.03)
+                s_kind, s_px = working_stop_price(
+                    cost_px=cost_h,
+                    peak_high=eff_peak,
+                    session_peak=max(float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == sess else 0, eff_peak),
+                    day_open=open_h,
+                    overnight_armed=bool(pos.get("stop_noted")),
+                    vol20_daily=vol_fn(sina_of(code), sess) if sess else 0.03,
+                    tick=0.01,
+                )
+            s_reason = {
+                "s1_morning_open_stop": "10点前跌至当日开盘价下方1%",
+                "hard_from_cost": "跌破成本硬保护线",
+                "t1_peak_trail": "跌破隔夜峰值回落保护线",
+                "half_gain": "中赚回落一半",
+                "vol_giveback": "中赚波动回落",
+                "peak_pullback": "大赚后峰值回落",
+            }.get(s_kind, "跌破保护线")
+            if r.get("卖出侧价") != s_px or r.get("卖出原因") != s_reason:
+                r["止损"] = s_px
+                r["卖出侧价"] = s_px
+                r["回落止损价"] = s_px
+                r["卖出原因"] = s_reason
+                r["stop_kind"] = s_kind
+                changed = True
     if dirty:
         save_holdings(data)
     return changed
@@ -2834,6 +2894,13 @@ def publish_watch_snapshot(
         include_strategy_panels = False
         previous = _QUOTE_RUNTIME_PANELS or _last_watch_snapshot or {}
         strategy2_payload = previous.get("strategy2") or (_last_watch_snapshot or {}).get("strategy2") or {}
+        if not strategy2_payload:
+            try:
+                from strategy2_watch import get_strategy2_watch_payload
+
+                strategy2_payload = get_strategy2_watch_payload()
+            except Exception:
+                strategy2_payload = {}
         strategy3 = previous.get("strategy3") or {}
         strategy8 = previous.get("strategy8") or {}
         strategy15 = previous.get("strategy15") or {}
@@ -4551,12 +4618,21 @@ def _ensure_account_open_session(
     """跨日或首次：锁定日初总资产。优先昨收结算；有实仓时禁止「仅现金」日初。"""
     open_session = str(data.get("account_total_open_session") or "")
     existing = _account_total_open(data)
+    # 防御：如果已存在的日初资产与当前账户总资产相差过大（差超35%），说明之前写入了漏现金的破损日初，允许重新校准
     if open_session == session and existing is not None:
-        if _equity_is_cash_only(data, existing):
+        if account_total and account_total > 0 and abs(account_total - existing) > account_total * 0.35:
+            pass
+        elif _equity_is_cash_only(data, existing):
             data["account_total_open"] = round(float(DEFAULT_ACCOUNT_TOTAL), 2)
             save_holdings(data)
-        return
+            return
+        else:
+            return
     lock_total = _prev_settlement_account_total(data, session)
+    # 防御：若上日结算总资产明显破损（与当前总资产偏差超35%），废弃并使用 account_total
+    if lock_total is not None and account_total and account_total > 0:
+        if abs(account_total - lock_total) > account_total * 0.35:
+            lock_total = account_total
     if lock_total is None or lock_total <= 0:
         lock_total = account_total
     if lock_total is None or lock_total <= 0:
@@ -9005,9 +9081,40 @@ def _collect_quote_runtime_rows(get_quote=None):
                 stop_kind = "hard_from_cost"
                 stop = cost_hard_stop_px(float(pos["cost"]), tick=_watch_tick(w))
             else:
-                stop_kind, stop = working_stop_price(cost_px=float(pos["cost"]), peak_high=float(pos.get("peak_high") or 0),
-                    session_peak=float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == day else 0,
-                    day_open=float(q.get("open") or 0),
+                cur_peak = float(pos.get("peak_high") or 0)
+                open_px = float(q.get("open") or 0)
+                last_px = float(q.get("last") or 0)
+                high_px = float(q.get("high") or 0)
+                effective_peak = cur_peak
+                quote_hms = _quote_clock_hms(q.get("last_ts"))
+                now_hms = datetime.now().strftime("%H:%M:%S")
+                eff_hms = quote_hms or now_hms
+                is_auction_unsettled = bool(
+                    (quote_hms and "09:15:00" <= quote_hms < "09:25:00")
+                    or (not quote_hms and is_auction_observe())
+                )
+                is_open_settled = (not is_auction_unsettled) and bool(
+                    is_auction_result()
+                    or is_signal_window()
+                    or (eff_hms and "09:25:00" <= eff_hms <= "15:00:00")
+                )
+                if is_open_settled:
+                    if open_px > effective_peak:
+                        effective_peak = open_px
+                    if is_signal_window() or ("09:30:00" <= now_hms):
+                        if last_px > effective_peak:
+                            effective_peak = last_px
+                        if trust_quote_day_high(q.get("last_ts")) and high_px > effective_peak:
+                            effective_peak = high_px
+                if effective_peak > 0:
+                    effective_peak_fmt = round(effective_peak, _px_digits(_watch_tick(w)))
+                    row["持仓最高"] = effective_peak_fmt
+                    row["峰值"] = effective_peak_fmt
+                stop_kind, stop = working_stop_price(
+                    cost_px=float(pos["cost"]),
+                    peak_high=float(effective_peak or 0),
+                    session_peak=max(float(pos.get("quote_session_peak") or 0) if pos.get("quote_exit_session") == day else 0, float(effective_peak or 0)),
+                    day_open=open_px,
                     overnight_armed=bool(pos.get("stop_noted")) and str(pos.get("buy_time") or "")[:10] < day,
                     vol20_daily=_quote_daily_vol(w["sina"], day), tick=_watch_tick(w))
             if str(pos.get("buy_time") or "")[:10] < day:
@@ -9501,6 +9608,18 @@ def collect_rows(
                                 last_h = 0.0
                             old_peak = float(pos_early.get("peak_high") or 0)
                             quote_at_h = _bar_ts_str(q.get("last_ts")) or ""
+                            quote_hms_c = _quote_clock_hms(quote_at_h)
+                            now_hms_c = datetime.now().strftime("%H:%M:%S")
+                            eff_hms_c = quote_hms_c or now_hms_c
+                            is_auction_unsettled_c = bool(
+                                (quote_hms_c and "09:15:00" <= quote_hms_c < "09:25:00")
+                                or (not quote_hms_c and is_auction_observe())
+                            )
+                            is_open_settled_c = (not is_auction_unsettled_c) and bool(
+                                is_auction_result()
+                                or is_signal_window()
+                                or (eff_hms_c and "09:25:00" <= eff_hms_c <= "15:00:00")
+                            )
                             live_hwm = bool(
                                 is_signal_window()
                                 and timestamp_in_signal_window(quote_at_h)
@@ -9529,15 +9648,19 @@ def collect_rows(
                                 path_running_high=rh,
                                 trust_api_high=trust_quote_day_high(quote_at_h),
                             )
+                            allow_open_peak = bool(
+                                is_open_settled_c and open_h > 0 and (not t1_today_early)
+                            )
+                            allow_day_high = bool(
+                                (live_hwm or allow_open_peak) and (not t1_today_early)
+                            )
                             new_peak = raise_position_peak_high(
                                 persisted_peak=old_peak,
                                 entry_price=cost_h,
                                 quote_last=last_h if live_hwm else None,
-                                quote_day_high=snap_h if live_hwm else None,
+                                quote_day_high=snap_h if allow_day_high else None,
                                 path_running_high=max(float(seed_h or 0), rh),
-                                allow_quote_day_high=bool(
-                                    live_hwm and (not t1_today_early)
-                                ),
+                                allow_quote_day_high=allow_day_high,
                             )
                             if new_peak > old_peak + 1e-9:
                                 at_ts = (
@@ -9545,6 +9668,9 @@ def collect_rows(
                                     or _bar_ts_str(path_res.get("touch_ts"))
                                     or _now()
                                 )
+                                sess_day = str(q.get("session") or "")[:10]
+                                if allow_open_peak and not live_hwm and sess_day and at_ts < f"{sess_day} 09:25:00":
+                                    at_ts = f"{sess_day} 09:25:00"
                                 decision_at = at_ts
                                 try:
                                     from temporal_integrity import (
@@ -14125,6 +14251,46 @@ def cmd_watch(args: argparse.Namespace) -> None:
                 elif action == "open":
                     safe_open_refresh()
                     print(f"[{_now()}] 早盘节点 · {label}")
+
+                    def _track_open_prices() -> None:
+                        for _retry in range(12):
+                            if stop.wait(2.5):
+                                break
+                            try:
+                                h_data = load_holdings()
+                                held_codes = [
+                                    c
+                                    for c, p in (h_data.get("positions") or {}).items()
+                                    if int(p.get("qty") or 0) > 0
+                                ]
+                                if not held_codes:
+                                    break
+                                snap = _last_watch_snapshot or {}
+                                rows_map = {
+                                    r.get("代码"): r
+                                    for r in snap.get("holdings") or []
+                                }
+                                all_opened = True
+                                for c in held_codes:
+                                    r_h = rows_map.get(c, {})
+                                    if float(r_h.get("开盘") or 0) <= 0:
+                                        all_opened = False
+                                        break
+                                safe_open_refresh()
+                                quote_patch_wake.set()
+                                if all_opened:
+                                    print(
+                                        f"[{_now()}] 9:25 集合竞价开盘价已全量捕获并完成卖出侧重算"
+                                    )
+                                    break
+                            except Exception as err:
+                                print(f"[{_now()}] 9:25 开盘追踪异常: {err}")
+
+                    threading.Thread(
+                        target=_track_open_prices,
+                        name="auction-open-tracker",
+                        daemon=True,
+                    ).start()
                 else:
                     safe_refresh()
                     print(f"[{_now()}] 早盘节点 · {label}")
@@ -14330,6 +14496,11 @@ def cmd_watch(args: argparse.Namespace) -> None:
                     try:
                         from strategy38_watch import get_strategy38_watch_payload
                         panels["strategy38"] = get_strategy38_watch_payload()
+                    except Exception:
+                        pass
+                    try:
+                        from strategy2_watch import get_strategy2_watch_payload
+                        panels["strategy2"] = get_strategy2_watch_payload()
                     except Exception:
                         pass
                     try:

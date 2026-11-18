@@ -1,4 +1,4 @@
-"""策略二 · 缠论结构因子绑定。"""
+"""策略二 · 缠论图形形态全景扫描与盯盘策略因子绑定。"""
 
 from __future__ import annotations
 
@@ -11,18 +11,18 @@ STRATEGY_NAME = "策略二·缠论"
 FACTOR_BINDINGS = (
     bind_factor(
         "factor8",
-        label="缠论小转大一买候选/二买确认",
+        label="缠论底背驰1买与类2买主升",
         role="both",
         base_freq="日线",
-        confirm_freq="30分钟",
+        confirm_freq="日线/30分钟",
         higher_freq="日线",
-        candidate_timeout_bars=20,
-        entry_rule="xiaozhuan_buy1_then_buy2",
-        strengthen_rule="buy3",
-        exit_rules=("sell2", "sell3"),
+        candidate_timeout_bars=25,
+        entry_rule="chan_divergence_buy1_then_buy2",
+        strengthen_rule="volume_expansion_above_pivot",
+        exit_rules=("break_pullback_stop", "target_take_profit", "sell2"),
         top_k=10,
-        target_pct=0.10,
-        filter_desc="30分钟小转大一买入候选、二买确认；日线三买增强；日线二卖或三卖退出；截面排序用冻结因子组合",
+        target_pct=0.15,
+        filter_desc="出中枢下跌笔创出新低，MACD绿柱面积明显缩小形成动能底背驰(1买)；随后走出放量反弹浪，回踩不破1买低点(低点抬高)，底分型拐点确立类2买主升",
         enabled=True,
     ),
 )
